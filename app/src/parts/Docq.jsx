@@ -1,6 +1,7 @@
 // A client's document inbox: files sent in by office automation, waiting to be read. cid "" = matched to no client.
 // Was docqPanel() in src/js/19; reading them (readDocq, readDocqNow, setAsideDocq, assignDocq) stays there.
 import ListTable from "./ListTable.jsx";
+import Button from "./Button.jsx";
 const KIND = { bill: "bill", purchase: "bill", bank: "bank statement", sales: "sales invoice" };
 const ago = (t) => {
   if (!t) return "";
@@ -33,7 +34,7 @@ function FileCell({ d, cid }) {
 function Acts({ d, cid }) {
   const st = docqState(d), exp = docqExpired(d);
   return <>
-    {!(st === "reading" || st === "dup" || exp) && <><button className="btn small" onClick={() => readDocqNow(d.id, cid)}>{st === "failed" ? "Try again" : "Read"}</button>{" "}</>}
+    {!(st === "reading" || st === "dup" || exp) && <><Button className="btn small" onClick={() => readDocqNow(d.id, cid)}>{st === "failed" ? "Try again" : "Read"}</Button>{" "}</>}
     {cid === "" && <><select value="" onChange={(e) => e.target.value && assignDocq(d.id, e.target.value)} aria-label="Assign to a client">
       <option value="">Assign to…</option>{sortedCompanies().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>{" "}</>}
@@ -49,7 +50,7 @@ export default function DocqPanel({ cid = "" }) {
     <section className="docq">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <h3 style={{ margin: 0 }}>{"\u{1F4E5} Inbox · " + list.length + " waiting"}</h3>
-        <button className="btn small primary" onClick={() => readDocq(list.map((d) => d.id), cid)}>Read all {list.length}</button>
+        <Button className="btn small primary" onClick={() => readDocq(list.map((d) => d.id), cid)}>Read all {list.length}</Button>
       </div>
       <p className="note" style={{ margin: "4px 0 8px" }}>Files your office sent in automatically (through a drop key). They are read the same way as an upload, and charged the same.</p>
       {/* the one list table (spec K6): received (date), the file, who sent it, then the rest */}

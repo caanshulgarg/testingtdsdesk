@@ -1,5 +1,6 @@
 import { ListRows } from "./ListTable.jsx";
 import NoticeLine from "./NoticeLine.jsx";
+import Button from "./Button.jsx";
 // Small notes shared by several screens: ledgers still to confirm (TDS, GST), filed GST returns the books no longer
 // match, whether the TDS and GST work is saved for the firm, Tally having changed since a tab was worked out, a new
 // client's first steps, and bringing in day books for several clients at once. Was ledgerBanner, gstDriftNote,
@@ -13,7 +14,7 @@ export function LedgerBanner({ b, which }) {
   // one row (round 3, 05-Oct-2026); the ledgers' names on hover
   return <NoticeLine sev="bad" data-ledger-banner="" style={{ marginBottom: 12 }} text={p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed: the figures use guesses and the return files wait."}
     how={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "") + ". Confirm them on the Tally ledgers tab."}>
-    <button className="btn small" onClick={() => booksTabGo("ledgers")}>Confirm them</button></NoticeLine>;
+    <Button className="btn small" onClick={() => booksTabGo("ledgers")}>Confirm them</Button></NoticeLine>;
 }
 
 // filed GST returns that the books no longer match
@@ -23,7 +24,7 @@ export function GstDriftNote({ b }) {
   if (!d.length) return null;
   return <div className="bk-warn" role="status">{d.slice(0, 3).map((x, i) => <p key={i}>{GSTAmend.driftLine(x)}</p>)}
     {d.length > 3 && <p>{(d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed."}</p>}
-    <button className="btn small" onClick={() => booksTabGo("gst", "amend")}>See the amendments</button></div>;
+    <Button className="btn small" onClick={() => booksTabGo("gst", "amend")}>See the amendments</Button></div>;
 }
 
 // whether the TDS and GST work is kept for the firm, or only in this browser
@@ -53,7 +54,7 @@ export function OnbCard({ co }) {
   return <section className="dash-card onb"><div className="onb-h"><div><h3>{"Getting " + co.name + " ready"}</h3><p className="note" style={{ margin: 0 }}>{n + " of " + st.length + " done"}</p></div><button className="linkbtn" onClick={() => onbHide()}>Hide this</button></div>
     <div className="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax={st.length} aria-valuenow={n}><i style={{ width: Math.round(n / st.length * 100) + "%" }}></i></div>
     <ol className="onb-list">{st.map((s) => <li key={s.id} className={s.done ? "done" : ""}><span className="onb-n" aria-hidden="true">{s.done ? "✓" : ""}</span><div><b>{s.t}</b><span>{s.d}</span></div>
-      {!s.done && <button className="btn small" onClick={() => s.btn[1].act ? doAct(s.btn[1].act) : goClient(s.btn[1].go)}>{s.btn[0]}</button>}</li>)}</ol></section>;
+      {!s.done && <Button className="btn small" onClick={() => s.btn[1].act ? doAct(s.btn[1].act) : goClient(s.btn[1].go)}>{s.btn[0]}</Button>}</li>)}</ol></section>;
 }
 
 // day books for several clients at once: each file's company matched to a client, checked, then brought in
@@ -68,7 +69,7 @@ export function MultiUpload() {
       {m.rows.map((r, i) => <tr key={i}><td>{r.f.name}<div className="nr">{Math.round(r.f.size / 1048576) + " MB"}</div></td><td>{r.name || "—"}{r.gstin && <div className="nr">{r.gstin}</div>}</td>
         <td>{r.status === "waiting" && !m.busy ? <select aria-label={"Client for " + r.f.name} value={r.cid || ""} onChange={(ev) => MultiUp.setClient(i, ev.target.value)}><option value="">— choose —</option>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
           : (((S.companies || {})[r.cid] || {}).name || "—")}</td><td className={r.ok ? "" : /not taken/.test(r.status) ? "bad" : ""}>{r.status}</td></tr>)}</ListRows>
-    <div className="row" style={{ gap: 8, marginTop: 8 }}>{m.busy ? <span className="lt-progress" data-progress=""><span className="note">{"Bringing in " + Math.min((m.done || 0) + 1, m.total || 1) + " of " + (m.total || 1) + (m.at ? ": " + m.at : "") + "…"}</span><progress max={m.total || 1} value={m.done || 0} /></span> : <><button className="btn primary" onClick={() => MultiUp.start()}>Bring them in</button>{pick("Choose other files", "btn small")}<button className="btn small" onClick={() => doAct("multiClose")}>Close</button></>}</div></div>;
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>{m.busy ? <span className="lt-progress" data-progress=""><span className="note">{"Bringing in " + Math.min((m.done || 0) + 1, m.total || 1) + " of " + (m.total || 1) + (m.at ? ": " + m.at : "") + "…"}</span><progress max={m.total || 1} value={m.done || 0} /></span> : <><Button className="btn primary" onClick={() => MultiUp.start()}>Bring them in</Button>{pick("Choose other files", "btn small")}<Button className="btn small" onClick={() => doAct("multiClose")}>Close</Button></>}</div></div>;
 }
 
 // fast-sync: what FinCom's server is doing for this client (a day book being read in, the kept day books read again),

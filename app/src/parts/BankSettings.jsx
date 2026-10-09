@@ -8,6 +8,7 @@
 import LedgerSelect from "./LedgerSelect.jsx";
 import Confirm, { BankLedger } from "./Confirm.jsx";
 import Loading from "./Loading.jsx";
+import Button from "./Button.jsx";
 
 const Btn = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => bankAct(act)}>{children}</button>;
 
@@ -68,7 +69,7 @@ function RuleRow({ r, scope, co }) {
     <td>{r.then.action === "ignore" ? <span className="tag">set aside</span> : <>{bad ? <span className="tag bad">{led + " not in Tally"}</span> : (led || "—")}{n > 0 && <div className="nr">{"split into " + (n + 1) + " lines"}</div>}{!r.then.ready && <div className="nr">shown for checking, not auto-ready</div>}</>}</td>
     <td className="n">{p.n ? <b>{p.n}</b> : "0"}<div className="nr">now showing</div></td>
     <td className="n">{(r.stats && r.stats.used) || 0}{r.stats && r.stats.over ? <div className="nr bad">{r.stats.over + " changed by hand"}</div> : null}</td>
-    <td style={{ whiteSpace: "nowrap" }}><button className="btn small" onClick={() => ruleAct("edit", r.id)}>Change</button>{" "}<button className="linkbtn" onClick={() => ruleAct("toggle", r.id)}>{r.off ? "Use" : "Pause"}</button>{" "}
+    <td style={{ whiteSpace: "nowrap" }}><Button className="btn small" onClick={() => ruleAct("edit", r.id)}>Change</Button>{" "}<button className="linkbtn" onClick={() => ruleAct("toggle", r.id)}>{r.off ? "Use" : "Pause"}</button>{" "}
       {scope === "client" && <><button className="linkbtn" onClick={() => ruleAct("copy", r.id)}>Copy to…</button>{" "}</>}<button className="linkbtn" onClick={() => ruleAct("del", r.id)}>Delete</button></td></tr>;
 }
 

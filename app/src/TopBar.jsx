@@ -8,6 +8,13 @@ import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
+// Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
+// style (Radix's menu, as Arc's DropdownMenu, whose trigger and items do not fit the firm button and its menu)
+import { Tabs, TabsList, TabsTrigger } from "@/registry/components/tabs/tabs";
+import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
+import * as Menu from "@radix-ui/react-dropdown-menu";
+import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
+import Button from "./parts/Button.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Your Tally connection", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1): each page is called what the sidebar calls it
@@ -45,10 +52,10 @@ function MainAction() {
   const bt = S.tab === "books" ? booksTab() : "", up = uploadKind();
   // one primary a page (spec K2): the review table's own Approve is its primary, so Upload is a plain button there
   const own = up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft";
-  if (up) { const [label, title, go] = UPLOADS[up]; return <button className={"btn small" + (own ? "" : " primary")} data-upload={up} title={title} onClick={go}>{label}</button>; }
-  if (bt === "letters") return <button className="btn small" onClick={() => ltrMode("confirm")}>New confirmation</button>;   // the letters' own Print is the page's primary
+  if (up) { const [label, title, go] = UPLOADS[up]; return <Button className={"btn small" + (own ? "" : " primary")} data-upload={up} title={title} onClick={go}>{label}</Button>; }
+  if (bt === "letters") return <Button className="btn small" onClick={() => ltrMode("confirm")}>New confirmation</Button>;   // the letters' own Print is the page's primary
   // while the copy of the books is empty, "Read the books from Tally" on the page is its one primary (one primary in every state)
-  if (bt === "reports") return <button className={"btn small" + (S.books && (S.books.vouchers || []).length ? " primary" : "")} onClick={() => doAct("keepNow")}>Refresh books</button>;
+  if (bt === "reports") return <Button className={"btn small" + (S.books && (S.books.vouchers || []).length ? " primary" : "")} onClick={() => doAct("keepNow")}>Refresh books</Button>;
   return null;
 }
 
@@ -59,8 +66,8 @@ function ClientHeader() {
   const head = (
     <Title title={title} sub={co.name}>
       <div className="tbar-actions">
-        {inbox > 0 && !setup && S.tab !== "clientInbox" && <button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</button>}
-        {setup && <button className="btn small" onClick={() => toggleSetup()}>Back to the work</button>}
+        {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
+        {setup && <Button className="btn small" onClick={() => toggleSetup()}>Back to the work</Button>}
       </div>
     </Title>
   );
@@ -75,11 +82,16 @@ function ClientHeader() {
   const side = bills ? [["duplicate", "Duplicates"], ["deleted", "Deleted"]].concat(cnt("rejected") ? [["rejected", "No entry"]] : []) : [];
   const onSide = bills && S.tab === "invoices" && side.some(([id]) => id === S.filter);
   const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
+  // Arc's Tabs: a tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
+  // (activationMode "manual"), so going along the tabs never opens a page on the way
+  const cur = onSide ? S.filter : now || "";
   return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
+    <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsList aria-label="Status">
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <button key={id} aria-selected={now === id && !onSide} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
-        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</button>)}
-    {side.map(([id, label]) => <button key={id} aria-selected={onSide && S.filter === id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></button>)}
+      <TabsTrigger key={id} value={id} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
+        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsTrigger>)}
+    {side.map(([id, label]) => <TabsTrigger key={id} value={id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsTrigger>)}
+    </TabsList></Tabs>
   </nav></>;
 }
 
@@ -146,24 +158,28 @@ function TopRight() {
       <SaveState />
       <Bell />
       <TallySign />
-      <button className="firmbtn" onClick={() => doAct("firmMenu")} title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
-        <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
-        {bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
-      </button>
+      <Menu.Root open={!!S.firmMenu && !signInNeeded()} onOpenChange={(o) => { if (o !== !!S.firmMenu) doAct(o ? "firmMenu" : "firmMenuClose"); }} modal={false}>
+        <Menu.Trigger asChild><button className="firmbtn" title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
+          <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
+          {bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
+        </button></Menu.Trigger>
+        <FirmMenu />
+      </Menu.Root>
       {/* the page's one primary action, always at the far right, in the same place on every page (spec I, K2) */}
       {inCo && !isSetupTab(S.tab) && <MainAction />}
     </div>
   );
 }
 
-function TallyPanel() {
+// the Tally panel: Arc's Drawer from the right, open while S.tallyPanel is. It leaves the page usable (not modal): a click
+// elsewhere closes it, except on the Tally sign itself, whose click closes it as before
+function TallyPanel({ open }) {
   const co = S.view === "company" ? CO() : null, live = bridgeLive(co), st = Bridge.st || {};
-  const close = () => doAct("tallyPanelClose");
-  return <>
-    <button className="menu-scrim" onClick={close} aria-label="Close" />
-    <div className="tallypanel" role="dialog" aria-label="Tally connection">
-      <div className="fm-head"><b>Tally connection</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
-      <div className="tp-body">
+  const close = () => { if (S.tallyPanel) doAct("tallyPanelClose"); };
+  return <Drawer open={open} onOpenChange={(o) => { if (!o) close(); }} modal={false}>
+    <DrawerContent className="tallypanel" title="Tally connection" closeLabel="Close" aria-describedby={undefined}
+      onInteractOutside={(ev) => { if (ev.target && ev.target.closest && ev.target.closest(".tsign-wrap")) ev.preventDefault(); }}>
+      {open && <><div className="tp-body">
         <TallyDetail s={tallySign(co)} />
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
@@ -174,27 +190,27 @@ function TallyPanel() {
         </> : <p className="note">FinCom Bridge is not set up on this computer. Install FinCom Bridge from the Tally page on the computer where TallyPrime runs, then come back here.</p>}
       </div>
       <div className="tp-foot">
-        <button className="btn small" onClick={() => doAct("tallyGuide")}>Connection guide</button>
-        <button className="btn small" onClick={() => navHome("tally")}>Everything sent to Tally</button>
-      </div>
-    </div>
-  </>;
+        <Button className="btn small" onClick={() => doAct("tallyGuide")}>Connection guide</Button>
+        <Button className="btn small" onClick={() => navHome("tally")}>Everything sent to Tally</Button>
+      </div></>}
+    </DrawerContent>
+  </Drawer>;
 }
 
+// the firm menu under the firm button: open while S.firmMenu is (doAct firmMenu / firmMenuClose), Radix's menu in Arc's style
 function FirmMenu() {
   const a = S.account, bal = accountBalance();
-  return <>
-    <button className="menu-scrim" onClick={() => doAct("firmMenuClose")} aria-label="Close" />
-    <div className="firmmenu" role="menu">
-      <div className="fm-head"><b>{S.firm.firmName || "Firm"}</b>{a && a.me && <span className="note">{(a.me.email || "") + " · " + (a.me.role || "")}</span>}</div>
+  const item = (label, go, extra) => <Menu.Item asChild onSelect={go}><button type="button" className={"fm-item " + menu.item}>{label}{extra}</button></Menu.Item>;
+  return <Menu.Portal><Menu.Content className={"firmmenu " + menu.menu} sideOffset={6} align="end" collisionPadding={12} loop>
+      <Menu.Label className="fm-head"><b>{S.firm.firmName || "Firm"}</b>{a && a.me && <span className="note">{(a.me.email || "") + " · " + (a.me.role || "")}</span>}</Menu.Label>
       {a && a.firm && <div className="fm-plan"><span>{planName(a.firm.plan) || "Plan"}</span>{bal != null && <b>credit {money(bal)}</b>}</div>}
-      <button className="fm-item" onClick={() => doAct("openSettings")}>Settings</button>
-      <button className="fm-item" onClick={() => navHome("tally")}>Tally <TallyPill prefix="" /></button>
-      <button className="fm-item" onClick={() => navHome("inbox")}>Inbox for all clients</button>
-      <button className="fm-item" onClick={() => navHome("clients")}>All clients</button>
-      {Cloud.on() && <button className="fm-item" onClick={() => doAct("signOutNow")}>Sign out</button>}
-    </div>
-  </>;
+      <Menu.Separator className={menu.separator} />
+      {item("Settings", () => doAct("openSettings"))}
+      {item("Tally ", () => navHome("tally"), <TallyPill prefix="" />)}
+      {item("Inbox for all clients", () => navHome("inbox"))}
+      {item("All clients", () => navHome("clients"))}
+      {Cloud.on() && item("Sign out", () => doAct("signOutNow"))}
+  </Menu.Content></Menu.Portal>;
 }
 
 export default function TopBar() {
@@ -208,7 +224,6 @@ export default function TopBar() {
         {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} />}
         <TopRight />
       </div>, document.getElementById("cobar"))}
-    {S.tallyPanel && !hide && <TallyPanel />}
-    {S.firmMenu && !hide && <FirmMenu />}
+    <TallyPanel open={!!S.tallyPanel && !hide} />
   </>;
 }

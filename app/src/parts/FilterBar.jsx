@@ -1,5 +1,6 @@
 // The bar above a table of the books' pages: find, choices, how many are shown, clear, print, Excel. The filter is
 // kept in S[id] (S.r1F for GSTR-1, …) through setFilter / clearFilter (src/js/27). Was filterBar() (src/js/18).
+import Button from "./Button.jsx";
 export default function FilterBar({ id, placeholder = "Find", table, title, excel, count, selects = [] }) {
   const f = S[id] || {};
   return (
@@ -11,8 +12,8 @@ export default function FilterBar({ id, placeholder = "Find", table, title, exce
         </select>))}
       <span className="note">{count || ""}</span>
       {Object.keys(f).some((k) => f[k]) && <button className="linkbtn" onClick={() => clearFilter(id)}>Clear</button>}
-      <button className="btn small" onClick={() => printTable(table, title)}>Print or save as PDF</button>
-      {excel && <button className="btn small" onClick={() => doAct(excel)}>Excel</button>}
+      <Button className="btn small" onClick={() => printTable(table, title)}>Print or save as PDF</Button>
+      {excel && <Button className="btn small" onClick={() => doAct(excel)}>Excel</Button>}
     </div>
   );
 }

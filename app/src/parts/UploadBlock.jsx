@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DropZone from "./DropZone.jsx";
 import { ReadingCheck, UploadOptions } from "./Reading.jsx";
+import Button from "./Button.jsx";
 
 export default function UploadBlock() {
   const co = CO(), f = freeRate(co);
@@ -15,9 +16,9 @@ export default function UploadBlock() {
     {f && <p className="note" style={{ margin: "6px 0 0" }}>Read free for this client: <b>{f.pct}%</b> of {f.n} bills ({f.google} by Google OCR, {f.claude} by Claude)</p>}
     <UploadOptions />
     <div className="row" style={{ marginTop: 8 }}>
-      <button className="btn small" onClick={() => doAct("camera")}>Take photo</button>
-      <button className="btn small" onClick={() => doAct("manual")}>Type an invoice</button>
-      <button className="btn small" onClick={() => doAct("pasteOpen")}>Paste bill details</button>
+      <Button className="btn small" onClick={() => doAct("camera")}>Take photo</Button>
+      <Button className="btn small" onClick={() => doAct("manual")}>Type an invoice</Button>
+      <Button className="btn small" onClick={() => doAct("pasteOpen")}>Paste bill details</Button>
     </div>
     {S.pasteOpen && <div className="pane" style={{ marginTop: 10, padding: 12 }}>
       <label className="f"><span>Bill details in JSON (one bill, or a list of bills)</span>
@@ -25,8 +26,8 @@ export default function UploadBlock() {
       </label>
       <p className="note" style={{ margin: "6px 0" }}>Use this when photos cannot be read in this view: ask Claude in a chat to read the bill and reply in this app's format, then paste the reply here.</p>
       <div className="row">
-        <button className="btn primary small" onClick={() => addPasted(paste)}>Add to {co.name}</button>
-        <button className="btn small" onClick={() => doAct("pasteClose")}>Cancel</button>
+        <Button className="btn primary small" onClick={() => addPasted(paste)}>Add to {co.name}</Button>
+        <Button className="btn small" onClick={() => doAct("pasteClose")}>Cancel</Button>
       </div>
     </div>}
   </>;

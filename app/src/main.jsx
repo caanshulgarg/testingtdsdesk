@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import "../legacy/app.css";
+import "./styles/index.css";
 import App from "./App.jsx";
 import { adopt } from "./store.js";
 import { createElement, useSyncExternalStore } from "react";
@@ -8,6 +8,8 @@ import { subscribe, snapshot } from "./store.js";
 import { flushSync } from "react-dom";
 import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
+// calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path
+import { MotionConfig } from "motion/react";
 
 // a screen as plain HTML, for printing (the GSTR-9C PDF is printed from its screen: gst9PackHtml in src/js/18)
 const PRINTABLE = { Gst9c };
@@ -21,7 +23,7 @@ window.FinComReact.markup = (name, props) => {
 // reported (staging only, src/sentry.js), and the next redraw tries again
 function Root() {
   const v = useSyncExternalStore(subscribe, snapshot);
-  return <Guard name="the app" v={v}><App /></Guard>;
+  return <MotionConfig reducedMotion="always"><Guard name="the app" v={v}><App /></Guard></MotionConfig>;
 }
 
 // an old browser was told it is not supported (public/oldcheck.js): nothing more is started

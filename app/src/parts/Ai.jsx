@@ -6,6 +6,7 @@
 import { useRef } from "react";
 import CommitBox from "./CommitBox.jsx";
 import { ListRows } from "./ListTable.jsx";
+import Button from "./Button.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const pc = (k, n) => n ? Math.round(k * 100 / n) + "%" : "—";
@@ -37,19 +38,19 @@ export function AiLedgers({ b }) {
     <section className="dash-card"><h3>AI: TDS section and blocked credit, ledger by ledger</h3>
       <p className="note">{"FinCom’s rules settle " + (stats.length - left.length) + " of " + stats.length + " ledgers by themselves. For the " + left.length + " they cannot, AI reads each ledger’s name, group, narrations and parties" + (wantTds ? " and suggests its TDS section" : "") + (wantItc ? (wantTds ? ", and" : " and says") + " whether GST credit on it is blocked under section 17(5)" : "") +
         ". Check and accept each: the audit’s checks for missed TDS and blocked credit then use what you accepted. Nothing here changes Tally or a return."}</p>
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}><button className="btn small primary" onClick={() => aihAct("review")}>{notYet ? "Ask AI about " + notYet + " ledger" + (notYet === 1 ? "" : "s") : "Nothing new to ask"}</button>
-        {rows.length > 0 && <button className="btn small" onClick={() => aihAct("reviewAgain")}>Review all again</button>}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}><Button className="btn small primary" onClick={() => aihAct("review")}>{notYet ? "Ask AI about " + notYet + " ledger" + (notYet === 1 ? "" : "s") : "Nothing new to ask"}</Button>
+        {rows.length > 0 && <Button className="btn small" onClick={() => aihAct("reviewAgain")}>Review all again</Button>}
         <span className="note">{rows.length + " reviewed · " + pend.length + " to accept"}</span></div></section>
     <CoverageCard />
     {wantTds && pay.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>TDS ledgers without a section</h3><ListRows name="aiPay" unit={["ledger", "ledgers"]} head={[{ label: "Ledger", role: "party" }, { label: "AI suggests", role: "status" }, { label: "Why" }, { label: "", role: "act", cls: "ac" }]}>
-      {pay.map(([n, s]) => { const r = AIH.rule(s.rule); return <tr key={n}><td>{n}</td><td>{r.old + " · " + r.label}</td><td>{s.reason}</td><td className="ac"><button className="btn small primary" onClick={() => aihPay(n, true)}>Accept</button> <button className="btn small" onClick={() => aihPay(n, false)}>Not this</button></td></tr>; })}</ListRows></section>}
+      {pay.map(([n, s]) => { const r = AIH.rule(s.rule); return <tr key={n}><td>{n}</td><td>{r.old + " · " + r.label}</td><td>{s.reason}</td><td className="ac"><Button className="btn small primary" onClick={() => aihPay(n, true)}>Accept</Button> <Button className="btn small" onClick={() => aihPay(n, false)}>Not this</Button></td></tr>; })}</ListRows></section>}
     {rows.length > 0 && <div style={{ marginTop: 12 }}><ListRows name="aiLedgers" unit={["ledger", "ledgers"]} head={[{ label: "Ledger", role: "party" }, { label: "Booked", role: "amount", cls: "n" }, wantTds && { label: "TDS section" }, wantItc && { label: "GST credit" }, { label: "AI’s reason" }, { label: "Status", role: "status" }]}>
       {list.map((x, i) => { const y = a.led[x.l], open = isOpen(y);
         return <tr key={x.l + ":" + i} data-key={x.l}><td>{x.l}<div className="nr">{(x.group || "") + " · " + x.n + " entries" + (x.tds ? " · TDS on " + x.tds : "") + (x.itc ? " · credit on " + x.itc : "")}</div></td><td className="n">{money(x.amt)}</td>
           {wantTds && <td><Pick l={x.l} f="tds" val={y.tds || "unsure"} opts={tdsOpts} /></td>}
           {wantItc && <td><Pick l={x.l} f="itc" val={y.itc || "unsure"} opts={[["unsure", "unsure"], ["allowed", "allowed"], ["blocked", "blocked, 17(5)"]]} />{y.clause && <div className="nr">{y.clause}</div>}</td>}
           <td>{y.reason || ""}</td>
-          <td>{open ? <><button className="btn small primary" onClick={() => aihAccept(x.l, true)}>Accept</button> <button className="btn small" onClick={() => aihAccept(x.l, false)}>Reject</button></>
+          <td>{open ? <><Button className="btn small primary" onClick={() => aihAccept(x.l, true)}>Accept</Button> <Button className="btn small" onClick={() => aihAccept(x.l, false)}>Reject</Button></>
             : <span className="nr">{((y.tdsOk || y.itcOk) === "no" ? "rejected" : "accepted") + " by " + (y.okBy || "") + (y.okAt ? " on " + fmtDate(String(y.okAt).slice(0, 10)) : "")}</span>}</td></tr>; })}
     </ListRows></div>}
   </>;
@@ -59,7 +60,7 @@ export function AiLedgers({ b }) {
 export function AuditButton() {
   if (!(AIH.enabled("tds") || AIH.enabled("audit"))) return null;
   const led = ((S.books || {}).ai || {}).led || {}, open = Object.values(led).filter((y) => (y.tds && !y.tdsOk) || (y.itc && !y.itcOk)).length;
-  return <button className="btn small" onClick={() => aihAct("auditReview")}>{"AI review of ledgers" + (open ? " (" + open + " to accept)" : "")}</button>;
+  return <Button className="btn small" onClick={() => aihAct("auditReview")}>{"AI review of ledgers" + (open ? " (" + open + " to accept)" : "")}</Button>;
 }
 
 // on 2B: ask AI to pair the invoices left after the matching
@@ -67,7 +68,7 @@ export function R2bBar({ list, free }) {
   if (!AIH.enabled("r2b") || !list.length) return null;
   AIH._r2 = { list, free };
   const pairs = AIH.st().pairs, n = Object.keys(pairs).filter((k) => !pairs[k].no).length;
-  return <div className="row" style={{ gap: 8, alignItems: "center", margin: "0 0 8px" }}><button className="btn small" onClick={() => aihAct("pair2b")}>Ask AI to pair these</button>
+  return <div className="row" style={{ gap: 8, alignItems: "center", margin: "0 0 8px" }}><Button className="btn small" onClick={() => aihAct("pair2b")}>Ask AI to pair these</Button>
     <span className="note">{"AI looks for the same invoice under another number or date format (e.g. INV/24-25/0045 and 45). " + (n ? n + " suggestion" + (n === 1 ? "" : "s") + " below, to accept or not." : "Each suggestion waits for you to accept it.")}</span></div>;
 }
 
@@ -91,8 +92,8 @@ function Notice({ n }) {
       {f.issues.map((x, i) => <tr key={i}><td>{x.point || ""}</td><td>{x.period || ""}</td><td className="n">{num(x.amount) ? INR.format(num(x.amount)) : ""}</td></tr>)}</tbody></table></div>}
     {n.reply ? <><h4 style={{ margin: "12px 0 6px" }}>Draft reply (AI, to be checked)</h4>
       <CommitBox as="textarea" aria-label="Draft reply" value={n.reply} rows={16} style={{ width: "100%", font: "13px/1.5 inherit" }} onCommit={(v) => aihReply(n.id, v)} />
-      <div className="row" style={{ gap: 8, marginTop: 6 }}><button className="btn small" onClick={() => aihNote("copy", n.id)}>Copy</button><button className="btn small" onClick={() => aihNote("dl", n.id)}>Download as text</button><button className="btn small" onClick={() => aihNote("redo", n.id)}>Draft again with today’s books</button></div></>
-      : n.step === "read" ? <button className="btn small primary" onClick={() => aihNote("redo", n.id)}>Draft the reply</button> : null}
+      <div className="row" style={{ gap: 8, marginTop: 6 }}><Button className="btn small" onClick={() => aihNote("copy", n.id)}>Copy</Button><Button className="btn small" onClick={() => aihNote("dl", n.id)}>Download as text</Button><Button className="btn small" onClick={() => aihNote("redo", n.id)}>Draft again with today’s books</Button></div></>
+      : n.step === "read" ? <Button className="btn small primary" onClick={() => aihNote("redo", n.id)}>Draft the reply</Button> : null}
   </section>;
 }
 

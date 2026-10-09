@@ -2,6 +2,7 @@
 // Was renderSwitcher and its keys in src/js/27-firm-account.js; the list order is switcherList() there.
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import Button from "./parts/Button.jsx";
 
 export default function Switcher() {
   const modal = document.getElementById("modal"), sw = S.switcher;
@@ -54,8 +55,8 @@ export default function Switcher() {
           }) : <li className="note">No client matches.</li>}
         </ul>
         <div className="swfoot">
-          <button className="btn small" onClick={() => doAct("swHome")}>All clients</button>
-          <button className="btn small" onClick={() => doAct("swAdd")}>Add client</button>
+          <Button className="btn small" onClick={() => doAct("swHome")}>All clients</Button>
+          <Button className="btn small" onClick={() => doAct("swAdd")}>Add client</Button>
         </div>
       </div>, modal);
 }

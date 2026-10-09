@@ -1,0 +1,58 @@
+/* Arc's tokens set to FinCom's colours (arc-ui, 09-Oct-2026), so the brand stays the same in light and dark mode.
+   FinCom's own variables (src/css/app.css: --brand, --paper, --ink, ...) already change with the computer's light or
+   dark setting; each Arc token below points at one of them, so it follows on its own. The same table is in
+   app/src/arc/README.md. Sizes: FinCom is a dense accounting tool, so controls are lower and corners squarer than
+   Arc's defaults. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  /* surfaces and text */
+  --background: var(--paper);
+  --surface: var(--sheet);
+  --surface-raised: var(--sheet);
+  --surface-muted: var(--sheet-2);
+  --foreground: var(--ink);
+  --text-secondary: var(--muted);
+  --text-muted: var(--muted);
+  /* lines */
+  --border: var(--rule);
+  --border-subtle: var(--rule-soft);
+  --border-strong: var(--rule-strong);
+  /* the brand: indigo */
+  --accent: var(--brand);
+  --accent-strong: var(--brand-hover);
+  --accent-subtle: var(--brand-tint);
+  --accent-foreground: var(--on-brand);
+  --control-on: var(--brand);
+  --control-fill: var(--brand);
+  --control-glyph: var(--on-brand);
+  --control-thumb-on: var(--on-brand);
+  --focus-outline: var(--focus);
+  /* one colour per meaning (owner's spec K8): green done, amber attention, red failed */
+  --success: var(--ok);
+  --warning: var(--warn);
+  --danger: var(--bad);
+  /* charts: the same colours as before (.fc-chart .c1 to .c5) */
+  --series-1: var(--brand);
+  --series-2: var(--info);
+  --series-3: var(--warn);
+  --series-4: var(--ok);
+  /* type: IBM Plex, as before */
+  --font-body: var(--sans);
+  --font-display: var(--sans);
+  --tracking-body: 0;
+  --tracking-display: -.01em;
+  /* sizes */
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-surface: 16px;
+  --control-height-sm: 1.875rem;
+  --control-height-md: 2.25rem;
+  --control-height-lg: 2.625rem;
+  --shadow-raised: 0 6px 18px rgb(var(--shade) / .08), 0 1px 3px rgb(var(--shade) / .05);
+  --shadow-floating: 0 18px 44px rgb(var(--shade) / .16), 0 3px 10px rgb(var(--shade) / .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+:root[data-theme="dark"] { color-scheme: dark; }

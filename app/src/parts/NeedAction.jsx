@@ -1,9 +1,10 @@
 // The ONE action of a "Needs you" group (Rec.needKind, src/js/61, the shared classifier): on Sync activity and on a
 // client's GST and TDS ledgers page (Books -> Tally ledgers).
 // the ONE action of a "Needs you" group (Rec.needKind, src/js/61): who may do it, else the words say who does
+import Button from "./Button.jsx";
 export default function NeedAction({ g, canApply, busy }) {
   const owner = Rec.owner(), day = g.day ? fmtDate(g.day) : "that day";
-  const b = (act, label, go, extra) => <button className="btn small" data-needs-act={act} {...extra} onClick={go}>{label}</button>;
+  const b = (act, label, go, extra) => <Button className="btn small" data-needs-act={act} {...extra} onClick={go}>{label}</Button>;
   switch (g.kind) {
     case "daybook": case "dupid":
       return canApply && g.cid ? b("daybook", "Upload the Day Book for " + day, () => Rec.uploadDay(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;

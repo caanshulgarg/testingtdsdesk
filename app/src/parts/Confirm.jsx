@@ -10,6 +10,8 @@
 //   <BankLedger co acc /> — which Tally ledger a bank account is: chosen and confirmed once, then one line
 //     "Tally ledger: HDFC BANK · Change"; asked again only for a new account, or when the ledger has gone from Tally.
 import { useEffect, useRef, useState } from "react";
+import Tag from "./Tag.jsx";
+import Button from "./Button.jsx";
 
 function useCapture(id) {
   const el = useRef(null);
@@ -36,8 +38,8 @@ export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
   return <div className="cfm-foot" data-confirm-foot={id} aria-label={"Save " + (label || "")}>
     <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />
     <span className="cfm-btns">
-      {dirty && <button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</button>}
-      <button type="button" className={"btn small" + (dirty || ready ? " primary" : "")} data-cfm="save" disabled={!dirty && !ready} title={!dirty && !ready ? "Nothing to save: change something first" : undefined} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</button>
+      {dirty && <Button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</Button>}
+      <Button type="button" className={"btn small" + (dirty || ready ? " primary" : "")} data-cfm="save" disabled={!dirty && !ready} title={!dirty && !ready ? "Nothing to save: change something first" : undefined} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</Button>
     </span>
   </div>;
 }
@@ -60,7 +62,7 @@ export function ChoiceTag({ co, k, value }) {
   const by = c.by ? " by " + c.by : "", at = c.at ? " on " + fmtDateTime(c.at) : "";
   if (c.state === "confirmed") return <span className="cfm-ok" data-choice={k} data-choice-state="confirmed" title={"Confirmed" + by + at}>✔ confirmed</span>;
   return <span className="cfm-guess" data-choice={k} data-choice-state="guessed">
-    <span className="tag warn" title={c.old ? "Saved before: a suggestion until confirmed" : c.why ? "FinCom’s guess: " + c.why : "FinCom’s guess"}>{c.old ? "saved before, confirm" : "guessed, confirm"}</span>{" "}
+    <Tag kind="warn" title={c.old ? "Saved before: a suggestion until confirmed" : c.why ? "FinCom’s guess: " + c.why : "FinCom’s guess"}>{c.old ? "saved before, confirm" : "guessed, confirm"}</Tag>{" "}
     <button type="button" className="linkbtn" data-choice-confirm={k} onClick={() => { choiceConfirm(co, k, value || c.value); toast("Confirmed: " + c.value + "."); render(); }}>Confirm</button>
   </span>;
 }
@@ -88,8 +90,8 @@ export function BankLedger({ co, acc, compact }) {
       <div className="note">{where}{c.value && c.state === "guessed" && !c.gone ? (c.old ? " · Saved before: " + c.value + ". Confirm it, or choose another." : " · FinCom’s guess: " + c.value + (c.why ? " (" + c.why + ")" : "") + ". Confirm it, or choose another.") : ""}</div></div>
     {listed ? <span className="row" style={{ gap: 8, alignItems: "center" }}>
       <select aria-label="Tally ledger for this bank account" key={sel} onChange={(ev) => choose(ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions(sel, BANK_GROUPS) }} />
-      <button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} title={!sel ? "Choose the Tally ledger first" : undefined} onClick={confirm}>Confirm</button>
-      {changing && <button type="button" className="btn small" onClick={() => { delete Drafts.picks[pid]; delete Drafts.secs[pid]; setChanging(false); }}>Cancel</button>}
+      <Button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} title={!sel ? "Choose the Tally ledger first" : undefined} onClick={confirm}>Confirm</Button>
+      {changing && <Button type="button" className="btn small" onClick={() => { delete Drafts.picks[pid]; delete Drafts.secs[pid]; setChanging(false); }}>Cancel</Button>}
       {sel && pick !== undefined && <span className="cfm-state unsaved" data-cfm-state="unsaved">Not saved yet</span>}
     </span> : <span className="note">{B() && B().ledgersLoading ? "Loading the ledger list…" : "Import the ledger list first."}</span>}
   </div>;

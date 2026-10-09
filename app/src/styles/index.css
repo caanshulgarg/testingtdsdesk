@@ -1,0 +1,11 @@
+/* FinCom's styles on Arc UI (arc-ui, 09-Oct-2026).
+   1. FinCom's own stylesheet (src/css/app.css, copied to app/legacy/app.css by build.py) sits in a cascade layer, so
+      Arc's component styles (CSS modules, not layered) win on Arc's elements whatever the specificity, and FinCom's
+      rules still draw everything else as before.
+   2. Arc's design tokens (src/arc/foundation.css).
+   3. The tokens set to FinCom's colours, light and dark (arc-tokens.css).
+   4. FinCom's own elements (old screens, raw buttons and boxes) in the same look as Arc's (arc-look.css). */
+@import "../../legacy/app.css" layer(fincom);
+@import "../arc/foundation.css";
+@import "./arc-tokens.css";
+@import "./arc-look.css";

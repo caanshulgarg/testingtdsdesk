@@ -16,8 +16,14 @@
 //   fmt(total) → how a total is shown (money by default), head: what the header shows instead of a sort button
 //   (the tick box), filter: the column's filter button (ColFunnel), td(row) → more attributes for the cell, title,
 //   w: its width in % for a table laid out fixed}.
+//
+// Drawn in Arc's table style (src/arc/registry/components/sortable-data-table: its header, rows, sorted-column tint and
+// sort button), on the same table as before, so every list keeps its rows, cells and attributes; an empty list is
+// Arc's empty state (EmptyNote).
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 import Loading from "./Loading.jsx";
+import EmptyNote from "./EmptyNote.jsx";
+import arc from "@/registry/components/sortable-data-table/sortable-data-table.module.css";
 
 const RANK = { pick: 0, row: 0, date: 1, number: 2, party: 3, amount: 4, status: 5, act: 7 };
 const rank = (c) => (c.role in RANK ? RANK[c.role] : 6);
@@ -58,13 +64,17 @@ const sortable = (c) => !!c.v && c.sort !== false && !["pick", "row", "act"].inc
 const sumOf = (c) => (c.sum === false ? null : typeof c.sum === "function" ? c.sum : c.sum || c.role === "amount" ? c.v : null);
 const sortVal = (v) => (blank(v) ? undefined : typeof v === "number" ? String(v) : String(v));
 
+// Arc's marks on a cell: right-aligned figures, the column sorted by
+const isNum = (c) => /\bn\b/.test(c.cls || "") || c.role === "amount";
+const arcCell = (c, on) => ({ "data-numeric": isNum(c) ? "" : undefined, "data-sorted": on ? "" : undefined });
 function Head({ name, c, s, via }) {
   const on = s && s.k === c.k, arrow = on ? (s.dir === "desc" ? "▼" : "▲") : "";
   const label = <span className="gfl">{c.label}</span>;
   const inner = c.head !== undefined ? c.head
-    : sortable(c) ? <button type="button" className="lt-sort" title={"Sort by " + String(c.label || "").toLowerCase()} onClick={() => (via ? via(c.k) : setSort(name, c.k))}>{label}<span className="lt-ar" aria-hidden="true">{arrow}</span></button>
+    : sortable(c) ? <button type="button" className={"lt-sort " + arc.sortButton} title={"Sort by " + String(c.label || "").toLowerCase()} onClick={() => (via ? via(c.k) : setSort(name, c.k))}><span className={arc.sortInner}>{label}<span className="lt-ar" aria-hidden="true">{arrow}</span></span></button>
     : label;
-  return <th className={[c.cls, c.thCls].filter(Boolean).join(" ") || undefined} data-role={c.role || ""} title={c.title}
+  return <th className={[c.cls, c.thCls].filter(Boolean).join(" ") || undefined} data-role={c.role || ""} title={c.title} {...arcCell(c, on)}
+    data-sortable={sortable(c) && c.head === undefined ? "" : undefined}
     aria-sort={on ? (s.dir === "desc" ? "descending" : "ascending") : sortable(c) ? "none" : undefined}>
     {c.filter ? <span className="colh">{inner}{c.filter}</span> : inner}
   </th>;
@@ -104,18 +114,19 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   const cs = orderCols(cols), s = sortOf(name);
   const Wrap = wrap || ListWrap;
   if (loading) return <Loading what={typeof loading === "string" ? loading : unit[1]} rows={4} cols={cs.length} />;
-  if (!rows.length) return empty === null ? null : <div className="bk-none lt-empty" data-list-empty="">{empty || "Nothing here yet."}</div>;
+  if (!rows.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
+  const sorted = sortVia ? sortVia.state : s;
   const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
   return <>
     <Wrap>
-      <table className={className + " lt"} data-list={name} style={style} id={id}>
+      <table className={className + " lt " + arc.table} data-list={name} style={style} id={id}>
         {cs.some((c) => c.w) && <colgroup>{cs.map((c) => <col key={c.k} style={c.w ? { width: c.w + "%" } : undefined} />)}</colgroup>}
         <thead><tr>{cs.map((c) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} />)}</tr></thead>
         <tbody>{shown.map((r, i) => {
           const p = prep ? prep(r) : undefined, rp = rowProps ? rowProps(r, p) : {}, k = rowKey ? rowKey(r, i) : i;
           const tr = <tr key={k} {...rp}>{cs.map((c) => {
             const { className: ec, ...extra } = (c.td && c.td(r, p)) || {};
-            return <td key={c.k} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
+            return <td key={c.k} {...arcCell(c, sorted && sorted.k === c.k)} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
           })}</tr>;
           // a row opened under its row (a challan's deductions): one cell across the table
           const open = after && after(r, p);
@@ -170,20 +181,20 @@ export function ListRows({ name, head, children, unit = ["entry", "entries"], of
     else rows.push({ tr, cells: null, under: [] });
   });
   const data = rows.filter((r) => r.cells), loose = rows.filter((r) => !r.cells);
-  if (!data.length && !loose.length) return empty === null ? null : <div className="bk-none lt-empty" data-list-empty="">{empty || "Nothing here yet."}</div>;
+  if (!data.length && !loose.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
   const sorted = s ? sortRows(name, order.map((c) => ({ ...c, v: (r) => r.vals[c.i] })), data) : data;
   const shown = limit ? sorted.slice(0, limit) : sorted;
   const sumCols = order.filter((c) => c.sum !== false && (c.sum || c.role === "amount"));
   return <>
     <ListWrap>
-      <table className={className + " lt"} data-list={name} id={id}>
+      <table className={className + " lt " + arc.table} data-list={name} id={id}>
         <thead><tr>{order.map((c) => <Head key={c.k} name={name} c={{ ...c, v: c.sort === false || ["pick", "row", "act"].includes(c.role) ? null : () => 0 }} s={s} />)}</tr></thead>
         <tbody>
           {loose.map((r, i) => cloneElement(r.tr, { key: "loose" + i }))}
           {shown.map((r, n) => {
             // the row itself (a <tr>, or a part that draws one, such as an entry that opens) with its cells in the one order
             const k = r.tr.key != null ? r.tr.key : n;
-            return [cloneElement(r.tr, { key: k }, ...order.map((c) => cloneElement(r.cells[c.i], { key: c.k, "data-sort": typeof r.vals[c.i] === "number" ? String(r.vals[c.i]) : r.vals[c.i] || undefined }))),
+            return [cloneElement(r.tr, { key: k }, ...order.map((c) => cloneElement(r.cells[c.i], { key: c.k, ...arcCell(c, s && s.k === c.k), "data-sort": typeof r.vals[c.i] === "number" ? String(r.vals[c.i]) : r.vals[c.i] || undefined }))),
               ...r.under.map((u, j) => cloneElement(u, { key: k + ":u" + j }))];
           })}
           {tail.map((t, i) => cloneElement(t, { key: "tail" + i }))}

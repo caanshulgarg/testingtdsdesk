@@ -5,6 +5,7 @@
 // postReportHtml (src/js/26). The work is in src/js; buttons go through bankAct, bankFocusGo, reconPick, reconExcelGo.
 
 import { useEffect } from "react";
+import Button from "./Button.jsx";
 
 const Btn = ({ act, className = "btn small", children, disabled, title, ...rest }) => <button className={className} disabled={disabled} title={title} onClick={() => bankAct(act)} {...rest}>{children}</button>;
 const inr = (v) => money(v || 0), abs = (v) => money(Math.abs(v || 0));
@@ -72,7 +73,7 @@ export function Recon() {
   const rowById = new Map(b.rows.map((r) => [r.id, r])), live = Bridge.on() && Bridge.up();
   const balanced = R.unexplained !== null && Math.abs(R.sClose - R.tClose) < 0.01;
   const head = <div className="recon-head"><div><h3>{"Bank reconciliation · " + R.ledger}</h3><div className="note">{R.company + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + fmtTime(R.at)}</div></div>
-    <div className="row" style={{ gap: 8 }}><button className="btn small" onClick={() => reconExcelGo()}>Download Excel</button>{live && <Btn act="reconRun">Reconcile again</Btn>}<Btn act="reconClose">Close</Btn></div></div>;
+    <div className="row" style={{ gap: 8 }}><Button className="btn small" onClick={() => reconExcelGo()}>Download Excel</Button>{live && <Btn act="reconRun">Reconcile again</Btn>}<Btn act="reconClose">Close</Btn></div></div>;
   if (balanced && !R.missing.length && !R.extra.length && !R.differ.length)
     return <section className="recon">{head}<div className="bk-bal ok"><div>✔ <b>Reconciled.</b> {"Every line of the statement is in Tally once, and nothing else is. " + R.ledger + " in Tally on " + fmtDate(R.to) + " is " + abs(R.tClose) + ", the same as the statement."}</div></div></section>;
   const Line = ({ label, v, sign, note }) => <tr><td>{label}{note && <> <span className="muted">{note}</span></>}</td><td className="n">{v ? (sign || "") + abs(v) : "—"}</td></tr>;
@@ -168,7 +169,7 @@ export function PostReport({ rep }) {
   if (!rep) return null;
   // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
   if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
-    <button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+    <Button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
   if (rep.checkNote) bits.push(rep.checkNote);

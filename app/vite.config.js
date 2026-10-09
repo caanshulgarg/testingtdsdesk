@@ -6,6 +6,16 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import { execSync } from "node:child_process";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+// Arc UI (src/arc, copied from github.com/kuratlielia/arc-library; see src/arc/README.md). Its files import each other
+// as "@/lib/…" and "@/registry/…", so "@" is src/arc. "motion/react" is FinCom's calm version of Motion
+// (src/arc/lib/calm-motion.js): every Arc component takes its reduced-motion path, short fades and no travel.
+const here = (p) => fileURLToPath(new URL(p, import.meta.url));
+const alias = [
+  { find: /^@\//, replacement: here("./src/arc/") },
+  { find: /^motion\/react$/, replacement: here("./src/arc/lib/calm-motion.js") },
+];
 
 // Sentry (docs/sentry.md): error reports from the test build only, unless built with FINCOM_SENTRY=off; a live build never
 // carries src/sentry.js, and its page may not reach Sentry's address
@@ -78,5 +88,6 @@ export default defineConfig(({ mode }) => ({
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
     __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
   plugins: [react(), legacy(mode), fresh()],
+  resolve: { alias },
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
 }));

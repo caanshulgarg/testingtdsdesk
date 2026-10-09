@@ -1,6 +1,7 @@
 // Uploads for any client that matched no client: move each to a client, or delete it. Was viewInbox() in src/js/18.
 import DocqPanel from "./Docq.jsx";
 import ListTable from "./ListTable.jsx";
+import Button from "./Button.jsx";
 
 export default function Unsorted() {
   const items = Object.values(S.inbox).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -22,6 +23,6 @@ export default function Unsorted() {
       { k: "move", label: "Move to", cell: (i) => !i.reading && <select value="" aria-label="Move to client" onChange={(e) => e.target.value && assignInbox(i.id, e.target.value)}>
           <option value="">Choose client…</option>{sortedCompanies().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select> },
-      { k: "ac", role: "act", cls: "n", cell: (i) => !i.reading && <button className="btn small danger" onClick={() => ask(i)}>Delete</button> },
+      { k: "ac", role: "act", cls: "n", cell: (i) => !i.reading && <Button className="btn small danger" onClick={() => ask(i)}>Delete</Button> },
     ]} />;
 }

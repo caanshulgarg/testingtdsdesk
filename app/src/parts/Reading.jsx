@@ -3,6 +3,7 @@
 // in src/js/01; the reading itself (pump, jobAction, ...) stays there.
 import { useState } from "react";
 import ReadBadge from "./ReadBadge.jsx";
+import Button from "./Button.jsx";
 
 export function BusyCard({ title, detail, done, total }) {
   const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;
@@ -55,7 +56,7 @@ export function Jobs({ which }) {
       <div className="jobshead">
         <b>{busy ? "Reading " + (jobs.length - busy) + " of " + jobs.length + "…" : jobs.length + " file" + (jobs.length === 1 ? "" : "s") + " processed"}</b>
         <span className="note">{summary}</span>
-        {!busy && <button className="btn small" onClick={() => doAct("clearJobs")}>Clear list</button>}
+        {!busy && <Button className="btn small" onClick={() => doAct("clearJobs")}>Clear list</Button>}
       </div>
       {busy > 0 && <div className="bar jobbar"><div className="add" style={{ left: 0, width: Math.round(((jobs.length - busy) / jobs.length) * 100) + "%" }} /></div>}
       <ul className="joblist">
@@ -72,12 +73,12 @@ export function Jobs({ which }) {
               {j.msg && <div className="note">{j.msg}</div>}
               {(again || canOpen) && <div className="row" style={{ gap: 6, marginTop: 4 }}>
                 {again && <>
-                  <button className="btn small" onClick={act("retry")}>Read again</button>
-                  <button className="btn small" onClick={act("google")} disabled={!googleReady()}>With Google OCR</button>
-                  <button className="btn small" onClick={act("claude")} disabled={!claudeReady()}>With Claude</button>
-                  {j.status === "failed" && <button className="btn small" onClick={act("type")}>Type it in</button>}
+                  <Button className="btn small" onClick={act("retry")}>Read again</Button>
+                  <Button className="btn small" onClick={act("google")} disabled={!googleReady()}>With Google OCR</Button>
+                  <Button className="btn small" onClick={act("claude")} disabled={!claudeReady()}>With Claude</Button>
+                  {j.status === "failed" && <Button className="btn small" onClick={act("type")}>Type it in</Button>}
                 </>}
-                {canOpen && <button className="btn small" onClick={act("open")}>Open</button>}
+                {canOpen && <Button className="btn small" onClick={act("open")}>Open</Button>}
               </div>}
             </li>
           );

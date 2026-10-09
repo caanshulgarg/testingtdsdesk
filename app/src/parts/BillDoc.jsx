@@ -3,6 +3,7 @@
 // Zoom for both; page flip for a PDF (the browser's PDF viewer, opened at the page asked for).
 import { useEffect, useState } from "react";
 import Loading from "./Loading.jsx";
+import Button from "./Button.jsx";
 
 export default function BillDoc({ e }) {
   const cid = S.coId, prev = S.previews[e.id];
@@ -37,13 +38,13 @@ export default function BillDoc({ e }) {
     <div className="prevbox billdoc">
       <div className="row" style={{ gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
         <b style={{ fontSize: 13 }}>{pdf ? "Bill (PDF)" : "Bill image"}</b>
-        <button className="btn small" aria-label="Zoom out" onClick={() => z(-25)}>−</button>
+        <Button className="btn small" aria-label="Zoom out" onClick={() => z(-25)}>−</Button>
         <span className="note" style={{ minWidth: 40, textAlign: "center" }}>{zoom}%</span>
-        <button className="btn small" aria-label="Zoom in" onClick={() => z(25)}>+</button>
+        <Button className="btn small" aria-label="Zoom in" onClick={() => z(25)}>+</Button>
         {pdf && <>
-          <button className="btn small" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Page</button>
+          <Button className="btn small" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Page</Button>
           <span className="note">page {page}</span>
-          <button className="btn small" aria-label="Next page" onClick={() => setPage((p) => p + 1)}>Page ›</button>
+          <Button className="btn small" aria-label="Next page" onClick={() => setPage((p) => p + 1)}>Page ›</Button>
         </>}
         <a className="linkbtn" href={url} target="_blank" rel="noopener">Open in a new tab</a>
       </div>

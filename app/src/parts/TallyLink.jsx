@@ -11,6 +11,7 @@
 // request is made: Change company calls the same tally_company_link as Settings → Books in the cloud (TCloud.link).
 import { useState } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
+import Button from "./Button.jsx";
 
 const STATE = { open: ["ok", "Connected"], closed: ["warn", "Tally not open"], offline: ["bad", "Not connected"], notanswering: ["bad", "Tally not answering"],
   paused: ["warn", "Reading paused"], stopped: ["bad", "Reading stopped"] };
@@ -71,21 +72,21 @@ export default function TallyLink({ co, where = "setup", b = null }) {
   // From Tally lists each day with its own Upload ("Days that need a Day Book"), so the line is not said twice there
   if (where !== "books" && (nd || h.daybook)) needs.push(<li key="daybook" data-tally-need="daybook"><span>{nd ? (nd === 1 ? "1 day needs its Day Book" : nd + " days need their Day Book") + (h.daybook ? " (" + plural(h.daybook, "entry", "entries") + " waiting)" : "")
       : plural(h.daybook, "entry needs", "entries need") + " that day's Day Book"}</span>
-    <button className="btn small primary" data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</button></li>);
+    <Button className="btn small primary" data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</Button></li>);
   if (h.baseline) needs.push(<li key="baseline" data-tally-need="baseline"><span>{"The starting point of " + (company || "this company") + " is not recorded yet: " + plural(h.baseline, "entry waits", "entries wait")}</span>
-    <button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</button></li>);
+    <Button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</Button></li>);
   if (h.other) needs.push(<li key="held" data-tally-need="held"><span>{(h.other === 1 ? "1 entry from Tally is held and needs a look" : h.other + " entries from Tally are held and need a look")}</span>
-    <button className="btn small" data-tally-need-held="" onClick={() => Rec.openActivity(co.id, "held")}>See them</button></li>);
+    <Button className="btn small" data-tally-need-held="" onClick={() => Rec.openActivity(co.id, "held")}>See them</Button></li>);
   const stopped = l && l.state === "stopped";
   return <section className="tlink" data-tally-link={l ? l.state : "linked"}>
     <div className="tlink-line">
       <span data-tally-link-text="">{text + " · "}<span className={"tag " + lv} data-tally-link-state="">{word}</span>
         {stopped && <span className="note" data-tally-link-why="">{" " + l.text.replace(/^Reading stopped /, "(") + ")"}</span>}</span>
       <span className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {stopped ? (owner && l.stop ? <button className="btn small primary" data-read-resume-line="" onClick={() => TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer })}>Resume</button>
+        {stopped ? (owner && l.stop ? <Button className="btn small primary" data-read-resume-line="" onClick={() => TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer })}>Resume</Button>
           : <span className="note">An owner of the firm can resume it.</span>)
-          : <button className="btn small" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>{l && l.reading ? "Reading now…" : "Update now"}</button>}
-        {cloud && <button className="btn small" data-tally-link-change="" aria-expanded={pick ? "true" : "false"} onClick={() => setPick(!pick)}>Change company</button>}
+          : <Button className="btn small" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>{l && l.reading ? "Reading now…" : "Update now"}</Button>}
+        {cloud && <Button className="btn small" data-tally-link-change="" aria-expanded={pick ? "true" : "false"} onClick={() => setPick(!pick)}>Change company</Button>}
         {tallyBtn}
       </span>
     </div>

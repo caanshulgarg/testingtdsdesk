@@ -9,6 +9,7 @@
 // few seconds: "Cleared N notifications · Undo" (UndoSnack).
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import Button from "./Button.jsx";
 
 // the Clear of one notification ({key, fp, text}: an AlertHub alert, or AlertClear.item(...) for a page's own line)
 export function ClearBtn({ x, label = "Clear" }) {
@@ -38,7 +39,7 @@ function Item({ x }) {
       <div data-alert-text="">{x.text}</div>
       {x.fix && <div className="al-fix" data-alert-fix="">{x.fix}</div>}
       <div className="al-acts">
-        {x.act && <button className="btn small" data-alert-act="" onClick={() => { S.alertsOpen = false; x.act.run(); }}>{x.act.label}</button>}
+        {x.act && <Button className="btn small" data-alert-act="" onClick={() => { S.alertsOpen = false; x.act.run(); }}>{x.act.label}</Button>}
         {!x.selfClear && x.alert && <button className="linkbtn" data-alert-read="" onClick={() => AlertHub.read(x)}>Mark read</button>}
         {x.details && <button className="linkbtn al-more" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide details" : "Details"}</button>}
         <ClearBtn x={x} />
@@ -64,8 +65,8 @@ export default function Bell() {
       <div className="alerts-panel" role="dialog" aria-label="Alerts" data-alerts-panel="">
         <div className="fm-head"><b>Alerts</b>
           <span className="row" style={{ gap: 6, alignItems: "center" }}>
-            {n > 0 && typeof AlertClear === "object" && <button className="btn small" data-alerts-clear-all="" title="Clear every notification here: they are not shown again to you"
-              onClick={() => AlertClear.clear(list)}>Clear all</button>}
+            {n > 0 && typeof AlertClear === "object" && <Button className="btn small" data-alerts-clear-all="" title="Clear every notification here: they are not shown again to you"
+              onClick={() => AlertClear.clear(list)}>Clear all</Button>}
             <button className="icon" onClick={close} aria-label="Close">✕</button></span></div>
         {typeof Rec === "object" && Rec.alerts && Rec.alerts.msg && Rec.alerts.msg.err && <p className="note bad" data-alerts-msg="" style={{ padding: "8px 14px", margin: 0 }}>{Rec.alerts.msg.err}</p>}
         {n ? <ul className="al-list">{list.map((x) => <Item key={x.key} x={x} />)}</ul>
@@ -86,7 +87,7 @@ export function AlertLine({ cid, skip }) {
   return <div className={"alert-line al-" + x.sev} data-alert-line="" data-sev={x.sev} title={x.text + " " + (x.fix || "")}>
     <span className="al-dot" aria-hidden="true" />
     <span className="al-line-text">{x.text + (x.fix ? " " + x.fix : "")}</span>
-    {x.act && <button className="btn small" data-alert-act="" onClick={() => x.act.run()}>{x.act.label}</button>}
+    {x.act && <Button className="btn small" data-alert-act="" onClick={() => x.act.run()}>{x.act.label}</Button>}
     {all.length > 1 && <button className="linkbtn" onClick={() => { S.alertsOpen = true; render(); }}>{"+" + (all.length - 1) + " more"}</button>}
     <ClearBtn x={x} />
   </div>;
