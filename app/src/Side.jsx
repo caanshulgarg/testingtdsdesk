@@ -56,7 +56,7 @@ export default function Side() {
         <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
         <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />
         <Item icon="reports" label="Plan and credit" on={S.homeTab === "rules" && S.settingsTab === "plan"} onClick={() => goSettings("plan")} />
-        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => navHome("tally")} />
+        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => { S.tallyFocus = ""; navHome("tally"); }} />
         <Item icon="setup" label="Settings" on={S.homeTab === "rules" && !["account", "plan"].includes(S.settingsTab)} onClick={() => goSettings(null)} />
       </>}
       {open && !home && (

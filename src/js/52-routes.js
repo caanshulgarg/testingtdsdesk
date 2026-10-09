@@ -45,6 +45,8 @@ const Route = {
     if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
     if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
     const h = this.of();
+    // the Tally redesign (09-Oct-2026): the client's page last shown, for "← Back to <client>" on the Tally page
+    if (/^#\/c\//.test(h)) S.lastClientHash = h;
     if (h === location.hash){ this.replaceNext = false; return; }
     try {
       if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
@@ -90,6 +92,18 @@ const Route = {
     }
   }
 };
+// the Tally redesign (09-Oct-2026, the owner: "if i go to tally page then return to that client is not possible"): the
+// Tally page keeps the open client; "← Back to <client>" opens that client's page last shown (a new step in the
+// browser's history, so Back returns to the Tally page), else its dashboard
+function backToClient(){
+  const cid = S.coId;
+  if (!cid || !S.companies[cid]) { navHome("clients"); return; }
+  const pre = "#/c/" + encodeURIComponent(cid) + "/", h = S.lastClientHash && S.lastClientHash.indexOf(pre) === 0 ? S.lastClientHash : pre + "dash";
+  if (typeof history !== "undefined" && Route.ready){ try { history.pushState(null, "", location.pathname + location.search + h); } catch (e){} }
+  Route.apply(h);
+}
+// from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
+function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
 if (typeof window !== "undefined"){
   window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
   window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });

@@ -2229,6 +2229,9 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk:last") || recentIds()[0];
   if (!linked && last && S.companies[last]) openCompany(last);
+  // the Tally redesign (09-Oct-2026): a firm page opened by its address (#/tally after a refresh) keeps the client open
+  // last time, so the Tally page can say "← Back to <client>" and the sidebar names it
+  else if (linked && S.view === "home" && !S.coId && last && S.companies[last]) S.coId = last;
   if (typeof Route === "object"){ Route.ready = true; Route.replaceNext = true; }
   S.sample = await samplePromise;
   if (S.sample){
