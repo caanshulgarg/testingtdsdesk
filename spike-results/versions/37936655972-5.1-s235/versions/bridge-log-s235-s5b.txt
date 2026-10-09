@@ -1,0 +1,3 @@
+2026-10-09 13:47:48  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 793d78f2…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:47:48  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 793d78f2…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+2026-10-09 13:47:48  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)

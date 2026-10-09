@@ -1,0 +1,15 @@
+2026-10-09 13:35:58  Setup: FinCom Bridge 2.4.1 setup started: Windows Server 2025 Datacenter 24H2 build 26100 (Windows 11); user runneradmin; administrator: yes; command line: /S /CURRENTUSER /MODE=sole
+2026-10-09 13:35:58  Setup: Silent install: user, sole mode, into C:\Users\runneradmin\AppData\Local\FinCom Bridge
+2026-10-09 13:35:58  Setup: Installing: user, sole mode, into C:\Users\runneradmin\AppData\Local\FinCom Bridge, as runneradmin
+2026-10-09 13:35:58  Setup: Files written in C:\Users\runneradmin\AppData\Local\FinCom Bridge
+2026-10-09 13:35:59  Setup: Shortcuts and the Apps entry (this user) written
+2026-10-09 13:35:59  Setup: Running: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" install --per-user --mode sole --fincom "https://staging.fincom.live/review/" --postonly ""
+2026-10-09 13:35:59  Install: Windows Windows Server 2025 Datacenter 24H2 (build 26100), program C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe
+2026-10-09 13:35:59  Install (just for this user, no service): FinCom Bridge 2.4.1 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+2026-10-09 13:36:04  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+2026-10-09 13:36:04  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+2026-10-09 13:36:04  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+2026-10-09 13:36:04  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+2026-10-09 13:36:05  Install: done; the bridge answers on 127.0.0.1:9100
+2026-10-09 13:36:05  Setup: FinComBridge.exe install: done, the bridge answers
+2026-10-09 13:36:05  Setup: Finished: installed and running (sole mode)
