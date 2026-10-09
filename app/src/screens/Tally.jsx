@@ -444,9 +444,14 @@ function SourceCard({ g, owner }) {
   const same = chosenAll.length > 1 && person, marks = chosenAll.map((x) => x.n).join(" and ");
   const later = !!(S.srcLater && S.srcLater[g.book]);
   const item = (x) => x.n + " " + [x.computer || "a computer", x.win_user || "—", x.path || "its data folder"].join(" · ") + " (last entry " + (agoWords(x.last_line_at || x.last_seen) || "not seen") + ")";
-  const words = g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data: " + g.list.map(item).join(" ") + " Which one is your books? FinCom reads only that one.";
+  // the re-review of next-241, N2: a lone location waiting for the owner's choice
+  const lone = g.list.length === 1, x0 = g.list[0] || {};
+  const words = lone ? "Read " + g.company + " from " + x0.n + " (" + [x0.computer || "a computer", x0.path || "its data folder"].join(" · ") + ")? Its entries are held until you choose it."
+    : g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data: " + g.list.map(item).join(" ") + " Which one is your books? FinCom reads only that one.";
+  // the re-review (Low): "These are the same data" only while a location is pending; "both data folders" on one computer
+  const pending = g.list.some((x) => x.choice === "pending"), onePc = TCloud.sourceOnePc(g.list.filter((x) => x.choice !== "other"));
   if (later && !person) return <div className="pane tcard" data-sources-card={g.book} data-sources-later="">
-    <p className="note" style={{ margin: 0 }}>{g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data; you chose to decide later. FinCom reads " + (chosen ? chosen.n : "none of them") + " meanwhile."}</p></div>;
+    <p className="note" style={{ margin: 0 }}>{(lone ? g.company + " in " + x0.n + " waits for your choice" : g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data") + "; you chose to decide later. FinCom reads " + (chosen ? chosen.n : "none of them") + " meanwhile."}</p></div>;
   return <div className={"pane tcard " + (person ? "" : "warn")} data-sources-card={g.book} style={{ borderLeft: "4px solid var(--warn, #c98a00)" }}>
     <p style={{ margin: "0 0 6px" }} data-sources-words="">{words}</p>
     {person && same && <p style={{ margin: "0 0 6px" }} data-sources-now="">{"FinCom reads " + marks + " as the same data (both computers read one data folder)."}</p>}
@@ -457,7 +462,7 @@ function SourceCard({ g, owner }) {
       {/* review M3 of next-241: the location FinCom reads already (alone) cannot be chosen again */}
       {g.list.map((x) => <button key={x.data_id} className="btn small" data-source-use={x.data_id} disabled={x.choice === "chosen" && chosenAll.length === 1} onClick={() => TCloud.sourceChoose(g.book, x.data_id, x.n, g.company)}>{"Use " + x.n}</button>)}
       {/* review H5 of next-241: one data folder under two paths */}
-      {!same && <button className="btn small" data-source-same="" onClick={() => TCloud.sourceSame(g.book, g.company)}>{"These are the same data (" + (g.list.length === 2 ? "both" : "all") + " computers read it)"}</button>}
+      {!same && pending && !lone && <button className="btn small" data-source-same="" onClick={() => TCloud.sourceSame(g.book, g.company)}>{onePc ? "These are the same data (both data folders are one folder)" : "These are the same data (" + (g.list.length === 2 ? "both" : "all") + " computers read it)"}</button>}
       {!person && <button className="btn small ghost" data-source-later="" onClick={() => { S.srcLater = Object.assign({}, S.srcLater || {}, { [g.book]: true }); render(); }}>Decide later</button>}
     </div>}
   </div>;

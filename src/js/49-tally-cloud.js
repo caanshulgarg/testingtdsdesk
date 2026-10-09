@@ -771,12 +771,16 @@ const TCloud = {
   sourceBooks(){
     const p = this.pane, by = new Map();
     (p.sources || []).forEach(x => { if (x && x.book_id){ if (!by.has(x.book_id)) by.set(x.book_id, []); by.get(x.book_id).push(x); } });
-    return [...by.entries()].filter(([, l]) => l.length > 1).map(([book, l]) => {
+    // the re-review of next-241, N2: a lone location waiting for the owner's choice (pending) gets its card too (its lines
+    // are held until it is chosen)
+    return [...by.entries()].filter(([, l]) => l.length > 1 || l.some(x => x.choice === "pending")).map(([book, l]) => {
       const b = (p.books || []).find(y => y.book_id === book) || {};
       l = l.slice().sort((a, c) => String(a.first_seen || "").localeCompare(String(c.first_seen || "")) || num(a.id) - num(c.id));
       return {book, company: b.company || "This company", cid: b.client_id || "", list: l.map((x, i) => Object.assign({}, x, {n: i < 20 ? String.fromCharCode(0x2460 + i) : "(" + (i + 1) + ")"}))};
     });
   },
+  // the re-review (Low): every location on one computer (one folder under two paths there, e.g. D:\TallyData and Z:\)
+  sourceOnePc(l){ const pcs = new Set((l || []).map(x => String(x.computer || "").toLowerCase())); return (l || []).length > 1 && pcs.size === 1 && !pcs.has(""); },
   // an owner chooses which data location is the books (tally_company_source_choose: that one chosen, the others not,
   // the starting point cleared so the chosen location records it afresh); FinCom reads only that one from then on
   // The coordinator, 09-Oct-2026: asked once first (it changes what FinCom reads and clears the starting point)
@@ -785,7 +789,7 @@ const TCloud = {
     const others = g ? g.list.filter(y => y.data_id !== dataId).map(y => y.n).join(", ") : "the other location";
     const where = x ? [x.computer || "a computer", x.path || "its data folder"].join(" \u00b7 ") : "";
     const a = await askConfirm({title: "Read " + company + " from " + n + "?", ok: "Use " + n,
-      body: esc("FinCom will read " + company + " from " + n + (where ? " (" + where + ")" : "") + " from now on. Entries from " + others + " will be held, not used. You'll need to upload " + n + "'s Day Book for the year. Continue?")});
+      body: esc("FinCom will read " + company + " from " + n + (where ? " (" + where + ")" : "") + " from now on. " + (others ? "Entries from " + others + " will be held, not used. You'll need to upload " + n + "'s Day Book for the year. " : "The entries held from it are put in the books. ") + "Continue?")});
     if (!a || !a.ok) return;
     await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId}, "FinCom now reads " + n + " of " + company + ".");
   },
@@ -793,10 +797,12 @@ const TCloud = {
   // server's D:\TallyData, a client's \\SERVER\TallyData or Z:\). Asked once; then every location is read, and the entries
   // held from them are put in the books (tally_company_source_same)
   async sourceSame(book, company){
-    const g = (this.sourceBooks() || []).find(x => x.book === book), ns = g ? g.list.map(y => y.n) : [];
+    // the re-review (Low): only the locations waiting for a choice (pending) join the ones FinCom reads; never one set 'other'
+    const g = (this.sourceBooks() || []).find(x => x.book === book), l = g ? g.list.filter(y => y.choice !== "other") : [], ns = l.map(y => y.n);
     const both = ns.length > 1 ? ns.slice(0, -1).join(", ") + " and " + ns[ns.length - 1] : ns.join("");
+    const onePc = TCloud.sourceOnePc(l);
     const a = await askConfirm({title: "Are these the same data?", ok: "They are the same data",
-      body: esc("FinCom will read " + company + " from " + both + " as the same data (both computers read one data folder). The entries held from them are put in the books. Continue?")});
+      body: esc("FinCom will read " + company + " from " + both + " as the same data (" + (onePc ? "both data folders are one folder" : "both computers read one data folder") + "). The entries held from them are put in the books. Continue?")});
     if (!a || !a.ok) return;
     await this.control("tally_company_source_same", {p_book: book}, "FinCom reads " + both + " of " + company + " as the same data.");
   },

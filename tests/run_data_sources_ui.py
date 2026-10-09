@@ -33,6 +33,8 @@ def src(i, did, p, pc, user, choice, first, last, by=None, at=None):
 TWO = [src(1, I1, P1, "NWS144", "anshul", "chosen", "ago:3000", "ago:5", at="ago:3000"), src(2, I2, P2, "PC-2", "anshul", "pending", "ago:60", "ago:30")]
 CHOSEN = [src(1, I1, P1, "NWS144", "anshul", "other", "ago:3000", "ago:5", at="ago:3000"), src(2, I2, P2, "PC-2", "anshul", "chosen", "ago:60", "ago:30", by=OWNER, at="ago:2")]
 ONE = [src(1, I1, P1, "NWS144", "anshul", "chosen", "ago:3000", "ago:5", at="ago:3000")]
+ONE_PENDING = [src(1, I1, P1, "NWS144", "anshul", "pending", "ago:3000", "ago:5")]
+SAMEPC = [src(1, I1, P1, "NWS144", "anshul", "chosen", "ago:3000", "ago:5", at="ago:3000"), src(2, I2, "Z:\\", "NWS144", "anshul", "pending", "ago:60", "ago:30")]
 BOOKS = [{"book_id": "b1", "client_id": "CID", "company": "GARG SHEKHAR"}]
 SOURCES = """([rows, books, alerts]) => { const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = o => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v);
@@ -120,6 +122,23 @@ def main():
         ok(pg.locator(card + " [data-source-use]").count() == 0 and "later" in txt(card).lower(), "Decide later: folded (%s)" % txt(card))
         scene(ONE)
         ok(pg.locator("#app [data-sources-card]").count() == 0, "one location: no card")
+        print("== 3b. the re-review: N2 a lone pending location; the same data only while one is pending, its words")
+        scene(ONE_PENDING)
+        t = txt(card)
+        ok(pg.locator(card).count() == 1 and t.startswith("Read GARG SHEKHAR from ① (NWS144 · C:\\Users\\Public\\TallyPrime\\Data)?"), "N2: a card for the lone pending location (%s)" % t[:300])
+        btn = E("(c) => [...document.querySelectorAll(c + ' button')].map(b => b.innerText.trim())", card)
+        ok(btn == ["Use ①", "Decide later"], "N2: Use ① and Decide later (%s)" % btn)
+        E("() => { window.__calls = []; }")
+        if pg.locator(card + ' [data-source-use="%s"]' % I1).count(): pg.click(card + ' [data-source-use="%s"]' % I1); pg.wait_for_timeout(600)
+        q_ = pg.inner_text("#confirmBox .cbx .note").strip() if pg.locator("#confirmBox .cbx").count() else ""
+        ok(q_.startswith("FinCom will read GARG SHEKHAR from ① (NWS144") and "will be held" not in q_ and not [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"], "N2: asked first (%r)" % q_)
+        if pg.locator("#confirmBox .cbx").count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
+        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_choose"] == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I1}]], "N2: then tally_company_source_choose(book, ①) (%s)" % E("window.__calls"))
+        scene(SAMEPC)
+        sb = txt(card + " [data-source-same]")
+        ok(sb == "These are the same data (both data folders are one folder)", "Low: both folders on one computer: 'both data folders' (%r)" % sb)
+        scene(CHOSEN)
+        ok(pg.locator(card + " [data-source-same]").count() == 0, "Low: nothing pending: no 'same data' button")
         print("== 4. after the choice")
         cid = scene(CHOSEN)
         t = txt(card)

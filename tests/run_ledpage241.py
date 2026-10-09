@@ -111,11 +111,15 @@ with sync_playwright() as p:
     # ---------- F2 (review H4 of next-241): a spaced suffix only when it is a real one: "TDS 192 ON SALARY" is 192 (not 192ON),
     # "195 TO", "194 OF" likewise; the real suffixes are read (194 LBA, 194 IA, 194 T, 194 C, 194 J)
     H4 = [("TDS 192 ON SALARY", "192"), ("TDS 195 TO NON RESIDENT", "195"), ("TDS 194 OF RENT", "194"), ("TDS 194 LBA", "194LBA"), ("TDS 194 IA PROPERTY", "194IA"),
-          ("TDS 194 T", "194T"), ("TDS 194 C CONTRACT", "194C"), ("TDS 194 J PROFESSIONAL", "194J"), ("TDS 194 EE", "194EE"), ("TDS 194-C", "194C"), ("TDS 192 - ON SALARY", "192"),
+          ("TDS 194 T", "194T"), ("TDS 194 C CONTRACT", "194C"), ("TDS 194 J PROFESSIONAL", "194J"), ("TDS 194 EE", "194EE"), ("TDS 192 - ON SALARY", "192"),
           ("TDS PAYABLE 194 A/C", "194"), ("TDS 194 LB PAYABLE", "194LB"), ("TDS 194 IB", "194IB"), ("TDS 194 Q PURCHASE", "194Q"), ("TDS 194 R", "194R"), ("TDS 194 S", "194S"),
           ("TDS 194 BA", "194BA"), ("TDS 194 BB", "194BB"), ("TDS 194 DA", "194DA"), ("TDS 194 G", "194G"), ("TDS 194 H", "194H"), ("TDS 194 I", "194I"), ("TDS 194 IC", "194IC"),
           ("TDS 194 K", "194K"), ("TDS 194 LBB", "194LBB"), ("TDS 194 LBC", "194LBC"), ("TDS 194 LC", "194LC"), ("TDS 194 LD", "194LD"), ("TDS 194 M", "194M"), ("TDS 194 N", "194N"),
           ("TDS 194 O", "194O"), ("TDS 194 P", "194P"), ("TDS 194 A", "194A"), ("TDS 194 B", "194B"), ("TDS 194 D", "194D"), ("TDS 194 E", "194E"), ("TDS 192 A", "192A")]
+    # the re-review (Low): after a dash nothing counts in the books' own guess (as 2.3.3: no unconfirmed figure moves beyond
+    # the owner's 194T decision); the ledger check's suggestion reads it as 2.3.3's check did (pending until confirmed)
+    dg = E("() => ['TDS 194-C', 'TDS 194-I RENT'].map(n => [Books.guess(n).section || '', LedMaster.propose(n, {}, null, []).section || ''])")
+    ok(dg == [["194", "194"], ["194", "194"]], "Low: 'TDS 194-C' and 'TDS 194-I RENT' are 194 in the guess and the proposal, as 2.3.3 (%s)" % dg)
     got = E("(xs) => xs.map(([n]) => [Books.guess(n).section || '', LedMaster.propose(n, {}, null, []).section || '', LedCheck.section(n) || ''])", H4)
     bad = [(n, w, g) for (n, w), g in zip(H4, got) if not (g[0] == w and g[1] == w and g[2].replace(" ", "") in (w, ""))]
     ok(not bad, "F2. spaced suffixes: only the real ones (guess, propose, the check) (wrong: %s)" % bad)
