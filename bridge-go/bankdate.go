@@ -145,8 +145,8 @@ func bankFresh() {
 		}
 		st := &bankCo{Company: str(e["company"]), CGUID: str(e["cguid"]), Seen: toI64(e["seen"]), Route: or(str(e["route"]), "small"), Why: str(e["why"]),
 			ListMs: toI64(e["listMs"]), Night: str(e["night"]), ReadAt: str(e["readAt"]), addon: map[string]int64{}, listed: map[string]bool{}}
-		if _, has := e["addonN"]; !has {
-			st.older = true
+		if _, has := e["addonN"]; !has || e["older"] == true {
+			st.older = true // re-review M1: kept on disk ("older": true) until bankFromOlder ran for the company
 		}
 		if n := toI64(e["addonN"]); n > 0 && n < 1<<31 {
 			st.addonN = int(n)
@@ -190,8 +190,17 @@ func bankSave() {
 			ls = append(ls, mid)
 		}
 		sort.Slice(ls, func(i, j int) bool { return str(ls[i]) < str(ls[j]) })
-		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l,
+		e := M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l,
 			"addonN": st.addonN, "addon": ad, "listed": ls}
+		if st.older {
+			// re-review M1: the older bridge's mark stays until the company's own first check took the counter
+			// (bankFromOlder); no line count is written for it, so a restart in between still finds the mark
+			delete(e, "addonN")
+			delete(e, "addon")
+			delete(e, "listed")
+			e["older"] = true
+		}
+		cs[k] = e
 	}
 	a := M{}
 	for k, e := range bank.alerts {
@@ -351,6 +360,10 @@ func bankFromOlder(st *bankCo, v, sp int64) bool {
 		st.Seen = sp
 	}
 	writeLog(fmt.Sprintf("Bank dates: %s: state from an older bridge, counter taken as the starting point (ALTVCHID=%d)", st.Company, st.Seen))
+	if !selfCheckOn() {
+		// re-review L1: nothing else finds a bank date set in that stretch
+		writeLog("Bank dates: " + st.Company + ": the nightly self-check is off; a bank date set during the upgrade will need that day's Day Book.")
+	}
 	return true
 }
 
