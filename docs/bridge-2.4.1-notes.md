@@ -140,10 +140,13 @@ starting day (<d>)" or "older than 3 days and not just asked", instead of "readi
   for held lines without "..", its action the Tally page. **L9** the dated "re-measured on 2026-10-09" line in
   docs/tally-allowlist.md (rows, shapes and hash unchanged).
 
-Left for the next release (as the coordinator decided): the reviews' L1, L3, L5, L6, L7 and SR-L2 to SR-L5. Also known:
-a line queued for the database's drain (a burst of more than 50 full lines) is applied later by the drain, after the
-choice was checked at the send; a pending location's lines held before an owner's "Use ②" (that location chosen) stay
-held (the Day Book of the year brings the history).
+- The coordinator's follow-ups: **the drain** (a burst of more than 50 full lines queued) sorts the lines out again where
+  it applies them, under the same lock as the owner's choice (71 replaces 47's `tally_recorder_settle` with that one
+  step): a line of a location no longer chosen, or one without data id from a computer not chosen, is held as the send
+  holds it. **Use ② while ② was pending**: once ②'s starting point is recorded afresh after the choice, its held lines
+  saved above that starting point (AlterID) are applied, once; the older ones stay held with words for the Day Book.
+
+Left for the next release (as the coordinator decided): the reviews' L1, L3, L5, L6, L7 and SR-L2 to SR-L5.
 
 The owner's decision of 09-Oct-2026: staff may see the data folder path and the Windows user; only the owner chooses.
 

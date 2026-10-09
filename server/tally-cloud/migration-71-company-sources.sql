@@ -52,6 +52,9 @@
 --       lines; under the book's source lock (the owner's choice takes it too) a chosen location's line goes to
 --       tally_recorder_send, any other is kept held; a line without data_id from a computer that is not a chosen location's
 --       (once the book has one) is held: "Restart Tally so the 2.4.1 add-on loads".
+--       The coordinator's follow-ups: the drain sorts a queued burst out again under the same lock (tally_recorder_settle,
+--       47's text with the step added, create or replace here); choosing a pending location applies its held lines above
+--       its starting point once that is recorded afresh, the older ones held for the Day Book.
 --   SR-M2 at most 20 locations a book; the marks computed once a call.  SR-L1 control characters and bidi marks stripped
 --       from the path, the Windows user and the computer (tally_source_clean), lengths in characters.
 -- Every function: security definer, search_path = public, pg_temp; the service role's revoked from public, anon and
@@ -118,18 +121,29 @@ $function$;
 -- cleaned it (body), applied now that the location is read: each as a new line (its line id + ':same', so the repeat check of
 -- 63 never takes it for the held row), the held row marked 'duplicate' with words saying so. Granted to nobody (the
 -- functions below call it)
-create or replace function public.tally_company_source_release(p_book uuid, p_data_id text)
+-- The coordinator's follow-up (09-Oct-2026): p_above, a starting point (AlterID): only the lines above it are applied (the
+-- owner chose a pending location: its starting point recorded afresh); the older ones stay held for the Day Book, no longer
+-- pending (never applied by this again). null: every pending line of the location (the same data, M2's promotion)
+create or replace function public.tally_company_source_release(p_book uuid, p_data_id text, p_above bigint)
 returns integer language plpgsql security definer set search_path = public, pg_temp as $function$
-declare r tally_recorder_lines%rowtype; one jsonb; n integer := 0;
+declare r tally_recorder_lines%rowtype; one jsonb; n integer := 0; alt text; mk text;
 begin
   for r in select * from tally_recorder_lines l where l.book_id = p_book and l.event = 'other_source' and l.state = 'held' and l.body is not null
              and l.payload->>'dataId' = p_data_id and l.payload->>'pending' = 'true' order by l.id loop
+    alt := coalesce(r.body->>'alter_id', '');
+    if p_above is not null and not (alt ~ '^[0-9]{1,15}$' and alt::bigint > p_above) then
+      select tally_source_mark(m.n) into mk from tally_source_marks(p_book) m where m.data_id = p_data_id;
+      update tally_recorder_lines set payload = payload || jsonb_build_object('pending', false),
+             held_why = format('saved in %s before its starting point (AlterID %s) was recorded: upload %s''s Day Book for the year to bring it in', coalesce(mk, p_data_id), p_above, coalesce(mk, p_data_id))
+       where id = r.id;
+      continue;
+    end if;
     -- as an owner's release runs a held line (tally_recorder_release_held): the row named, so the ingest's own checks let it in
     perform set_config('fincom.recorder_release', r.id::text, true);
     one := tally_recorder_line(p_book, r.device_id, r.body || jsonb_build_object('line_id', left(r.line_id, 72) || ':same'), null);
     perform set_config('fincom.recorder_release', '', true);
     update tally_recorder_lines set state = 'duplicate',
-           held_why = format('applied as the same data (row %s, %s)', coalesce(one->>'id', '?'), coalesce(one->>'state', '?'))
+           held_why = format(case when p_above is null then 'applied as the same data (row %s, %s)' else 'applied once this location was chosen (row %s, %s)' end, coalesce(one->>'id', '?'), coalesce(one->>'state', '?'))
      where id = r.id;
     n := n + 1;
   end loop;
@@ -193,7 +207,13 @@ begin
       -- recorded after it was first seen), and the lines held meanwhile applied
       if r.choice = 'pending' and own and not had_chosen and cur.start_device is not null and cur.start_device = p_device then
         update tally_company_sources set choice = 'chosen', chosen_at = now() where id = r.id;
-        perform tally_company_source_release(p_book, did);
+        perform tally_company_source_release(p_book, did, null);
+      end if;
+      -- the coordinator's follow-up: the owner chose this location while it was pending; once its starting point is recorded
+      -- afresh (after the choice), its held lines above that starting point are applied, the older ones held for the Day Book
+      if r.choice = 'chosen' and own and r.chosen_by is not null and cur.start_at is not null and r.chosen_at is not null and cur.start_at >= r.chosen_at
+         and cur.start_device is not distinct from p_device and cur.last_voucher_alterid is not null then
+        perform tally_company_source_release(p_book, did, cur.last_voucher_alterid);
       end if;
     end if;
   end loop;
@@ -251,22 +271,18 @@ begin
   return jsonb_build_object('ok', true, 'results', res);
 end $function$;
 
--- review L4 and H2 of next-241: the lines of one recorder_lines call sorted out under the book's source lock (the owner's
--- choice takes the same lock), at the point they are applied: a line of a chosen location goes to tally_recorder_send; a
--- pending location's line is kept held with its body (keep); any other location's, an 'other_source' line, and a line
--- without data_id from a computer that is not a chosen location's (once the book has one) are kept held. Answers
--- {ok, sent (tally_recorder_send's answer, or null), sentIdx (the indexes sent, in order), held: [{i, result}]}
-create or replace function public.tally_recorder_send_sourced(p_firm uuid, p_book uuid, p_device uuid, p_lines jsonb, p_queue boolean)
+-- review L4 and H2 of next-241: the lines sorted out under the book's source lock (the caller takes it; the owner's choice takes
+-- it too): a line of a chosen location kept; a pending location's line held with its body (keep); any other location's, an
+-- 'other_source' line, and a line without data_id from a computer that is not a chosen location's (once the book has one)
+-- held. Answers {kept, idx (the kept lines' indexes), hold (the lines for tally_company_source_lines), hidx}. Granted to nobody
+create or replace function public.tally_source_sort(p_book uuid, p_device uuid, p_lines jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare x jsonb; i integer := 0; did text; ev text; ch text; kept jsonb := '[]'::jsonb; idx jsonb := '[]'::jsonb; hold jsonb := '[]'::jsonb; hidx integer[] := '{}';
-  any_chosen boolean; dev_chosen boolean; hl jsonb; sent jsonb; hr jsonb; k integer;
+declare x jsonb; i integer := 0; did text; ev text; ch text; kept jsonb := '[]'::jsonb; idx jsonb := '[]'::jsonb; hold jsonb := '[]'::jsonb; hidx jsonb := '[]'::jsonb;
+  any_chosen boolean; dev_chosen boolean; hl jsonb;
 begin
-  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
-  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) > 500 then return jsonb_build_object('ok', false, 'error', 'lines must be a list of at most 500'); end if;
-  perform pg_advisory_xact_lock(hashtext('sources' || p_book::text));
   any_chosen := exists (select 1 from tally_company_sources s where s.book_id = p_book and s.choice = 'chosen');
   dev_chosen := exists (select 1 from tally_company_sources s where s.book_id = p_book and s.choice = 'chosen' and s.device_id = p_device);
-  for x in select * from jsonb_array_elements(p_lines) loop
+  for x in select * from jsonb_array_elements(case when jsonb_typeof(p_lines) = 'array' then p_lines else '[]'::jsonb end) loop
     ev := coalesce(x->>'event', ''); did := lower(btrim(coalesce(x->>'data_id', '')));
     select s.choice into ch from tally_company_sources s where s.book_id = p_book and s.data_id = did;
     if ev <> 'other_source' and ((did <> '' and ch = 'chosen') or (did = '' and (not any_chosen or dev_chosen))) then
@@ -276,19 +292,51 @@ begin
               'vch_type', x->>'vch_type', 'vch_no', x->>'vch_no', 'vch_date', x->>'vch_date', 'saved_at', x->>'saved_at', 'received_at', coalesce(x->>'received_at', x->'payload'->>'received_at'),
               'pc', x->>'pc', 'user', x->>'user', 'w', x->>'w', 'data_id', did, 'data_path', x->>'data_path', 'bridge', x->>'bridge');
       if ev <> 'other_source' and did <> '' and ch = 'pending' then hl := hl || jsonb_build_object('keep', x); end if;
-      hold := hold || jsonb_build_array(hl); hidx := hidx || i;
+      hold := hold || jsonb_build_array(hl); hidx := hidx || to_jsonb(i);
     end if;
     i := i + 1;
   end loop;
-  if jsonb_array_length(kept) > 0 then sent := tally_recorder_send(p_firm, p_book, p_device, kept, p_queue); end if;
-  hr := '[]'::jsonb;
-  if jsonb_array_length(hold) > 0 then
-    hl := tally_company_source_lines(p_firm, p_book, p_device, hold);
-    for k in 0 .. jsonb_array_length(hold) - 1 loop
-      hr := hr || jsonb_build_array(jsonb_build_object('i', hidx[k + 1], 'result', coalesce(hl->'results'->k, jsonb_build_object('state', 'failed', 'why', coalesce(hl->>'error', 'not kept')))));
+  return jsonb_build_object('kept', kept, 'idx', idx, 'hold', hold, 'hidx', hidx);
+end $function$;
+
+-- tally-ingest's one call for a request's recorder lines: sorted out under the book's source lock (tally_source_sort), the
+-- kept ones to tally_recorder_send, the others held. Answers {ok, sent (tally_recorder_send's answer, or null), sentIdx,
+-- held: [{i, result}]}
+create or replace function public.tally_recorder_send_sourced(p_firm uuid, p_book uuid, p_device uuid, p_lines jsonb, p_queue boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare so jsonb; sent jsonb; hl jsonb; hr jsonb := '[]'::jsonb; k integer;
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) > 500 then return jsonb_build_object('ok', false, 'error', 'lines must be a list of at most 500'); end if;
+  perform pg_advisory_xact_lock(hashtext('sources' || p_book::text));
+  so := tally_source_sort(p_book, p_device, p_lines);
+  if jsonb_array_length(so->'kept') > 0 then sent := tally_recorder_send(p_firm, p_book, p_device, so->'kept', p_queue); end if;
+  if jsonb_array_length(so->'hold') > 0 then
+    hl := tally_company_source_lines(p_firm, p_book, p_device, so->'hold');
+    for k in 0 .. jsonb_array_length(so->'hold') - 1 loop
+      hr := hr || jsonb_build_array(jsonb_build_object('i', (so->'hidx'->>k)::integer, 'result', coalesce(hl->'results'->k, jsonb_build_object('state', 'failed', 'why', coalesce(hl->>'error', 'not kept')))));
     end loop;
   end if;
-  return jsonb_build_object('ok', true, 'sent', sent, 'sentIdx', idx, 'held', hr);
+  return jsonb_build_object('ok', true, 'sent', sent, 'sentIdx', so->'idx', 'held', hr);
+end $function$;
+
+-- The coordinator's follow-up (09-Oct-2026), the rest of review L4: a burst queued for the drain (more than 50 full lines) is
+-- sorted out again where the drain applies it, under the same source lock: a line of a location no longer chosen, or one
+-- without data_id from a computer that is not a chosen location's, is held exactly as tally_recorder_send_sourced holds it.
+-- Migration 47's tally_recorder_settle with that one step added (the archive, the pending row and the book's next message
+-- as 47 does them); granted to nobody, as in 47
+create or replace function public.tally_recorder_settle(p_msg bigint, p_message jsonb)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare r jsonb; b uuid := tally_try_uuid(p_message->>'book'); f uuid := tally_try_uuid(p_message->>'firm'); dev uuid := tally_try_uuid(p_message->>'device'); so jsonb;     -- 71
+begin
+  perform pg_advisory_xact_lock(hashtext('sources' || b::text));     -- 71
+  so := tally_source_sort(b, dev, p_message->'lines');     -- 71
+  r := case when jsonb_array_length(so->'kept') > 0 then tally_recorder_apply(f, b, dev, so->'kept') else jsonb_build_object('ok', true, 'results', '[]'::jsonb) end;     -- 71
+  if jsonb_array_length(so->'hold') > 0 then perform tally_company_source_lines(f, b, dev, so->'hold'); end if;     -- 71
+  perform pgmq.archive('tally_recorder', p_msg);
+  update tally_recorder_pending set state = 'done', done_at = now(), why = null where msg_id = p_msg;
+  perform pgmq.set_vt('tally_recorder', o.msg_id, 0) from (select x.msg_id from tally_recorder_pending x where x.book_id = b and x.state = 'pending' order by x.msg_id limit 1) o;
+  return r;
 end $function$;
 
 create or replace function public.tally_company_source_choose(p_book uuid, p_data_id text)
@@ -338,7 +386,7 @@ begin
   perform pg_advisory_xact_lock(hashtext('sources' || p_book::text));
   update tally_company_sources set choice = 'chosen', chosen_by = auth.uid(), chosen_at = now() where book_id = p_book;
   for s in select data_id from tally_company_sources where book_id = p_book loop
-    n := n + tally_company_source_release(p_book, s.data_id);
+    n := n + tally_company_source_release(p_book, s.data_id, null);
   end loop;
   return jsonb_build_object('ok', true, 'same', true, 'released', n, 'at', now(), 'by', auth.uid());
 end $function$;
@@ -356,10 +404,12 @@ revoke all on function public.tally_source_clean(text, integer) from public, ano
 revoke all on function public.tally_source_mark(bigint) from public, anon, authenticated;
 revoke all on function public.tally_source_marks(uuid) from public, anon, authenticated;
 revoke all on function public.tally_source_chosen_marks(uuid) from public, anon, authenticated;
-revoke all on function public.tally_company_source_release(uuid, text) from public, anon, authenticated, service_role;
+revoke all on function public.tally_company_source_release(uuid, text, bigint) from public, anon, authenticated, service_role;
 revoke all on function public.tally_company_sources_note(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.tally_company_source_lines(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.tally_recorder_send_sourced(uuid, uuid, uuid, jsonb, boolean) from public, anon, authenticated;
+revoke all on function public.tally_source_sort(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
+revoke all on function public.tally_recorder_settle(bigint, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.tally_company_source_choose(uuid, text) from public, anon;
 revoke all on function public.tally_company_source_same(uuid) from public, anon;
 revoke all on function public.tally_company_sources_of(uuid) from public, anon;
