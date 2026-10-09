@@ -202,7 +202,7 @@ function More({ b, other, sureN }) {
     {open && <div style={{ marginTop: 8 }}>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
         <button className="btn small" data-led-check-again="" onClick={() => doAct("lcRun")}>Check again</button>
-        {sureN > 0 && <button className="btn small" data-led-confirm-sure="" title="The check's answer replaces the one on the row; from then on only confirmed ledgers count in the returns" onClick={() => doAct("lcConfirm")}>{"Confirm the check’s " + sureN + " sure answers"}</button>}
+        {sureN > 0 && <button className="btn small" data-led-confirm-sure="" title="The check's answer replaces the one on the row and counts in the returns from then on" onClick={() => doAct("lcConfirm")}>{"Confirm the check’s " + sureN + " sure answers"}</button>}
         <span className="note">{b.ledCheck && b.ledCheck.ranAt ? "Checked " + fmtDateTime(b.ledCheck.ranAt) + ". " : ""}Each ledger is read from Tally’s master (tax type, duty head, rate, nature of payment), how the day book uses it, and AI only for what is still unclear.</span>
       </div>
       <nav className="sbar" aria-label="Ledgers">{tabs.map(([id, l, c]) => <button key={id} aria-selected={view === id} onClick={() => lmViewGo(view === id ? "" : id)}>{l}{c != null && <>{" "}<span className="sbar-n">{c}</span></>}</button>)}</nav>
@@ -265,7 +265,7 @@ export default function LedgersTab({ b }) {
     {notTax.length > 0 && <details className="led-nottax" data-led-nottax="" open={showDone || !!q}><summary className="note">{plural(notTax.filter((r) => !r.ok).length, "ledger", "ledgers") + " with GST or TDS in the name " + (notTax.filter((r) => !r.ok).length === 1 ? "is" : "are") + " not tax ledgers — show"}</summary>
       <GstTable b={b} rows={notTax} /></details>}
     <p className="led-done" data-led-done-line="">{plural(done.length, "ledger", "ledgers") + " confirmed"}{(done.length > 0 || showDone) && <>{" — "}<button className="linkbtn" data-led-show-done="" onClick={() => { S.ledShowDone = !showDone; S.lcAll = false; if (S.lmView === "done") S.lmView = ""; render(); }}>{showDone ? "hide" : "show"}</button></>}
-      <span className="note">{" · Returns count only confirmed ledgers; the TDS and GST files wait until every one is confirmed."}</span></p>
+      <span className="note">{" · Suggestions you have not confirmed count in no return. Ledgers already in use count as before; the TDS and GST files wait until every one is confirmed."}</span></p>
     <More b={b} other={other} sureN={sureN} />
   </div></Confirm>;
 }

@@ -1670,7 +1670,7 @@ function doAct(act, t){
     case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
     case "lcConfirm": { const b = S.books, c = b && b.ledCheck; if (!c) break;
       const names = (c.names || []).filter(n => !((b.map || {})[n] || {}).ok && LedCheck.ticked(c.items[n]));
-      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
+      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed: each counts in the returns as the check reads it."); render(); break; }
     case "lcAi": { const b = S.books; if (!b || !b.ledCheck) break; b.busy = "Asking AI about the unclear ledgers…"; render();
       LedCheck.askAi(b).then(n => { b.busy = ""; if (n){ toast("AI answered for " + n + " ledger" + (n === 1 ? "" : "s") + ". Its answers are not ticked: check each."); saveBooks(); } render(); }, e => { b.busy = ""; toast("AI could not be asked: " + ((e && e.message) || e)); render(); }); break; }
     case "trashRestore": {

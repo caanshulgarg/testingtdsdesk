@@ -1,0 +1,2408 @@
+{
+"gstr1": {
+"202504|": [
+{
+"cess": 0,
+"cgst": 36000,
+"igst": 0,
+"sgst": 36000,
+"taxable": 400000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202504|07": [
+{
+"cess": 0,
+"cgst": 36000,
+"igst": 0,
+"sgst": 36000,
+"taxable": 400000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202504|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202505|": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202505|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202505|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202506|": [
+{
+"cess": 0,
+"cgst": 4500,
+"igst": 0,
+"sgst": 4500,
+"taxable": 50000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202506|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202506|09": [
+{
+"cess": 0,
+"cgst": 4500,
+"igst": 0,
+"sgst": 4500,
+"taxable": 50000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202507|": [
+{
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202507|07": [
+{
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202507|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202508|": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202508|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202508|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202509|": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 21600,
+"sgst": 0,
+"taxable": 120000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202509|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 21600,
+"sgst": 0,
+"taxable": 120000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202509|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202510|": [
+{
+"cess": 0,
+"cgst": 27000,
+"igst": 0,
+"sgst": 27000,
+"taxable": 300000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202510|07": [
+{
+"cess": 0,
+"cgst": 27000,
+"igst": 0,
+"sgst": 27000,
+"taxable": 300000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202510|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202511|": [
+{
+"cess": 0,
+"cgst": 7200,
+"igst": 0,
+"sgst": 7200,
+"taxable": 80000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202511|07": [
+{
+"cess": 0,
+"cgst": 7200,
+"igst": 0,
+"sgst": 7200,
+"taxable": 80000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202511|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202512|": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202512|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202512|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202601|": [
+{
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202601|07": [
+{
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202601|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202602|": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202602|07": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202602|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202603|": [
+{
+"cess": 0,
+"cgst": 7000,
+"igst": 9000,
+"sgst": 7000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202603|07": [
+{
+"cess": 0,
+"cgst": 7000,
+"igst": 9000,
+"sgst": 7000,
+"taxable": 200000
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+],
+"202603|09": [
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+{
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+]
+},
+"gstr3b": {
+"202504|": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 36000,
+"igst": 0,
+"sgst": 36000,
+"taxable": 400000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202504|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 36000,
+"igst": 0,
+"sgst": 36000,
+"taxable": 400000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202504|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202505|": {
+"itc": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000
+}
+},
+"202505|07": {
+"itc": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000
+}
+},
+"202505|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202506|": {
+"itc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800
+},
+"net": {
+"cess": 0,
+"cgst": 13500,
+"igst": 0,
+"sgst": 13500,
+"taxable": 150000
+},
+"netItc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800
+}
+},
+"202506|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 9000,
+"igst": 0,
+"sgst": 9000,
+"taxable": 100000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202506|09": {
+"itc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800
+},
+"net": {
+"cess": 0,
+"cgst": 4500,
+"igst": 0,
+"sgst": 4500,
+"taxable": 50000
+},
+"netItc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800
+}
+},
+"202507|": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 9000,
+"igst": 0,
+"sgst": 9000,
+"taxable": 100000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0
+}
+},
+"202507|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 9000,
+"igst": 0,
+"sgst": 9000,
+"taxable": 100000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0
+}
+},
+"202507|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202508|": {
+"itc": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800
+},
+"net": {
+"cess": 0,
+"cgst": 4500,
+"igst": 0,
+"sgst": 4500,
+"taxable": 50000
+},
+"netItc": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800
+}
+},
+"202508|07": {
+"itc": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800
+},
+"net": {
+"cess": 0,
+"cgst": 4500,
+"igst": 0,
+"sgst": 4500,
+"taxable": 50000
+},
+"netItc": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800
+}
+},
+"202508|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202509|": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 21600,
+"sgst": 0,
+"taxable": 120000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0
+}
+},
+"202509|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 21600,
+"sgst": 0,
+"taxable": 120000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0
+}
+},
+"202509|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202510|": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 27000,
+"igst": 0,
+"sgst": 27000,
+"taxable": 300000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202510|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 27000,
+"igst": 0,
+"sgst": 27000,
+"taxable": 300000
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202510|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202511|": {
+"itc": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400
+},
+"net": {
+"cess": 0,
+"cgst": 7200,
+"igst": 0,
+"sgst": 7200,
+"taxable": 80000
+},
+"netItc": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400
+}
+},
+"202511|07": {
+"itc": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400
+},
+"net": {
+"cess": 0,
+"cgst": 7200,
+"igst": 0,
+"sgst": 7200,
+"taxable": 80000
+},
+"netItc": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400
+}
+},
+"202511|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202512|": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202512|07": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202512|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202601|": {
+"itc": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300
+},
+"net": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+"netItc": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300
+}
+},
+"202601|07": {
+"itc": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300
+},
+"net": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+"netItc": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300
+}
+},
+"202601|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202602|": {
+"itc": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500
+}
+},
+"202602|07": {
+"itc": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500
+}
+},
+"202602|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+},
+"202603|": {
+"itc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800
+},
+"net": {
+"cess": 0,
+"cgst": 7000,
+"igst": 9000,
+"sgst": 7000,
+"taxable": 200000
+},
+"netItc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800
+}
+},
+"202603|07": {
+"itc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800
+},
+"net": {
+"cess": 0,
+"cgst": 7000,
+"igst": 9000,
+"sgst": 7000,
+"taxable": 200000
+},
+"netItc": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800
+}
+},
+"202603|09": {
+"itc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+},
+"net": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"netItc": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0
+}
+}
+},
+"itc": {
+"202504|": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202504|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202504|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202505|": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+"202505|07": {
+"cess": 0,
+"cgst": 18000,
+"igst": 0,
+"sgst": 18000,
+"taxable": 200000
+},
+"202505|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202506|": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800,
+"taxable": 20000
+},
+"202506|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202506|09": {
+"cess": 0,
+"cgst": 1800,
+"igst": 0,
+"sgst": 1800,
+"taxable": 20000
+},
+"202507|": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0,
+"taxable": 80000
+},
+"202507|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 14400,
+"sgst": 0,
+"taxable": 80000
+},
+"202507|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202508|": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800,
+"taxable": 120000
+},
+"202508|07": {
+"cess": 0,
+"cgst": 10800,
+"igst": 0,
+"sgst": 10800,
+"taxable": 120000
+},
+"202508|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202509|": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0,
+"taxable": 200000
+},
+"202509|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 39600,
+"sgst": 0,
+"taxable": 200000
+},
+"202509|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202510|": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202510|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202510|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202511|": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400,
+"taxable": 60000
+},
+"202511|07": {
+"cess": 0,
+"cgst": 5400,
+"igst": 0,
+"sgst": 5400,
+"taxable": 60000
+},
+"202511|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202512|": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202512|07": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202512|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202601|": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300,
+"taxable": 170000
+},
+"202601|07": {
+"cess": 0,
+"cgst": 15300,
+"igst": 0,
+"sgst": 15300,
+"taxable": 170000
+},
+"202601|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202602|": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500,
+"taxable": 90000
+},
+"202602|07": {
+"cess": 0,
+"cgst": 5500,
+"igst": 0,
+"sgst": 5500,
+"taxable": 90000
+},
+"202602|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+},
+"202603|": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800,
+"taxable": 60000
+},
+"202603|07": {
+"cess": 0,
+"cgst": 1800,
+"igst": 7200,
+"sgst": 1800,
+"taxable": 60000
+},
+"202603|09": {
+"cess": 0,
+"cgst": 0,
+"igst": 0,
+"sgst": 0,
+"taxable": 0
+}
+},
+"q26": [
+[
+"194A",
+"Hemant Zaverchand (Loan)",
+0,
+2000,
+"20260331",
+"AFRPZ6610B"
+],
+[
+"194C",
+"Nightjar Sound & Light Co",
+0,
+2000,
+"20250505",
+"AAKFN4416E"
+],
+[
+"194C",
+"Nightjar Sound & Light Co",
+0,
+2000,
+"20250508",
+"AAKFN4416E"
+],
+[
+"194C",
+"Nightjar Sound & Light Co",
+0,
+3000,
+"20260115",
+"AAKFN4416E"
+],
+[
+"194C",
+"Peregrine Tent Works",
+0,
+2000,
+"20250920",
+"ACBPP3390L"
+],
+[
+"194J",
+"Juniper Legal Associates",
+0,
+3000,
+"20260225",
+"AAHFJ6012N"
+],
+[
+"194J",
+"Juniper Legal Associates",
+0,
+6000,
+"20251105",
+"AAHFJ6012N"
+]
+],
+"q27": [],
+"q27e": []
+}

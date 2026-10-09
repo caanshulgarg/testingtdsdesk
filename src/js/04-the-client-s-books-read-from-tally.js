@@ -256,8 +256,9 @@ const Books = {
   },
   ledgerOf(name){
     const b = S.books, m = (b && b.map && b.map[name]) || {};
-    // a tax ledger not confirmed counts in no return (src/js/57; release-240 review H1: whether or not the check is saved)
-    if (b && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
+    // the owner's decision on H1 (09-Oct-2026, "Keep today's figures"): the books' own ledger map counts as in 2.3.3,
+    // whether or not the ledger check is saved or its switch set; the check's suggestions are kept apart (b.ledCheck) and
+    // count in no figure until confirmed, which writes them into the map (src/js/57)
     return m;
   },
   // the purchase and sales side of a voucher, ready for GST and TDS

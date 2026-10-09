@@ -184,12 +184,12 @@ const LedCheck = {
     c.savedAt = new Date().toISOString(); c.savedBy = whoAmI(); c.strict = true;
     return done.length;
   },
-  // a ledger counts in returns only when confirmed (request of 02-Oct-2026; release-240 review H1, the owner's condition:
-  // pending suggestions count in NO figure until confirmed, whether or not the check's switch was set): an unconfirmed
-  // tax-like ledger reads as "other tax", in no return and not part of any taxable value
+  // the ledgers not confirmed (the books' own map). Since the owner's decision on H1 (09-Oct-2026, "Keep today's figures")
+  // Books.ledgerOf no longer reads them as "other tax": the books' map counts as in 2.3.3, the check's suggestions count
+  // in no figure until confirmed (they are kept apart in b.ledCheck until then)
   PENDING: Object.freeze({kind: "tax_other", pending: true}),
   held(b){
-    if (!(b && b.map)) return null;
+    if (!(b && b.ledCheck && b.ledCheck.strict)) return null;
     const k = (b.mapV || 0) + "|" + Object.keys(b.map || {}).length;
     if (this._held && this._held.b === b && this._held.k === k) return this._held.set;
     const set = new Set(Object.entries(b.map || {}).filter(([n, m]) => !m.ok && LedMaster.taxLike(n, m, (b.ledInfo || {})[n])).map(([n]) => n));

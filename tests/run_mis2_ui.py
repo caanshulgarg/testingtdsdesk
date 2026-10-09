@@ -21,9 +21,6 @@ with sync_playwright() as p:
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
     pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
-    # release-240 review H1: a tax-like ledger counts in no figure until confirmed. EXPECTED.md's figures take the fixture's
-    # GST ledgers (with those the masters add, e.g. 07 IGST INPUT PROVISIONAL) as confirmed and its TDS ledgers as not
-    pg.evaluate("() => { Object.values(S.books.map).forEach(m => { if (!/^tds_/.test(m.kind || '')) m.ok = true; }); S.books.mapV = (S.books.mapV || 0) + 1; render(); }"); pg.wait_for_timeout(300)
     pg.evaluate("S.booksTab = 'mis'; render();"); pg.wait_for_timeout(400)
     pg.click('button:text-is("Last year")'); pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(4000)
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(500)
