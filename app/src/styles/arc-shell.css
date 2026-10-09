@@ -161,3 +161,6 @@ nav.sbar .sbar-n.attn, nav.sbar button[role="tab"][data-state="active"] .sbar-n.
 .rp-grid .rp-cell:not(.st-na):hover { transform: translateY(-1px); box-shadow: var(--shadow-raised); }
 /* Arc's list is one row as wide as its tabs; here the tabs wrap within the page */
 nav.sbar [role="tablist"] { width: auto; max-width: 100%; min-width: 0; flex-wrap: wrap; }
+
+/* smart moves round 1 (09-Oct-2026): Look up's tiles on a phone ("not known", "0.00 (movement)") fit their box */
+@media (max-width: 600px) { .lk-res .dtile b { font-size: clamp(15px, 4.6vw, 22px); white-space: normal; overflow-wrap: anywhere; } }

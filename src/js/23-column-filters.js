@@ -985,8 +985,9 @@ function fsMapSet(l, v){ const c = FS.cfg(S.books); c.map = Object.assign({}, c.
 function fsUnmap(l){ const c = FS.cfg(S.books); delete c.map[l]; fsRedo(c); }
 // MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
 // marked MSME (the run is worked out again), a month of the budget
-function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
-function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); }
+// the period chosen is kept for the client in this browser (smart moves round 1)
+function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); Smart.keep("mis", S.misRange); render(); }
+function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; Smart.keep("mis", S.misRange); render(); }
 function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
 function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); render(); }
 function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); }

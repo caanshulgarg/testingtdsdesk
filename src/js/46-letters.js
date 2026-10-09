@@ -7,7 +7,8 @@ const LTR = {
   st(){
     const cid = S.coId;
     if (!S.ltr || S.ltr.cid !== cid){
-      // confirmations are asked for at the year end: the last 31 March up to the books' last day
+      // confirmations are asked for at the year end: the last 31 March (the last full year, as before); dues reminders
+      // are as on today, in India (smart moves round 1, 09-Oct-2026)
       const a = FC.anchor(), lastFyEnd = a.slice(4) === "0331" ? a : num(Audit.fyStart(a).slice(0, 4)) + "0331";
       S.ltr = {cid, asOn: lastFyEnd, remOn: a, sides: {r: true, p: true, o: false}, min: 1, q: "", show: "all", sel: {}, credit: 30, tone: "friendly", busy: "", tally: null};
     }

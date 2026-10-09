@@ -64,15 +64,21 @@ const RPT = {
     const from = fy + "0401", to = (num(fy) + 1) + "0331", c = entryCount(from, to);
     return {n: c.n, text: c.text, sales: c.list.filter(v => typeof Books === "object" && Books.isSale(v)).length};
   },
+  // the year shown: the one chosen (kept for the client in this browser), else the current financial year (the owner's
+  // choice of 09-Oct-2026, smart moves round 1; it was the latest year with sales). A year the books in FinCom do not
+  // reach yet is notRead: the page says so in one line, with Read from Tally, and works nothing out for it
   range(){
-    const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
-    const fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : (withSales || ys[0]);
-    if (!fy) return null;
+    const ys = this.fys();
+    if (!ys.length) return null;
+    const now = Smart.fyStartOf(Smart.today()).slice(0, 4), k = Smart.recall("reports");
+    const fy = S.rptFy && (ys.includes(S.rptFy) || S.rptFy === now) ? S.rptFy : k && k.fy && ys.includes(k.fy) ? k.fy : now;
     const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
-    return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};
+    return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to, notRead: !ys.includes(fy), end};
   },
+  years(){ const R = this.range(), ys = this.fys(); return R && !ys.includes(R.fy) ? [R.fy].concat(ys) : ys; },
+  pickFy(fy){ S.rptFy = fy; Smart.keep("reports", {fy}); render(); },
   data(){
-    const b = S.books, R = this.range(); if (!R) return null;
+    const b = S.books, R = this.range(); if (!R || R.notRead) return null;
     const key = [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
     if (this._d && this._d.key === key) return this._d.d;
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
@@ -98,7 +104,7 @@ const RPT = {
   },
   open(id){
     const r = this.LIST.find(x => x[0] === id); if (!r) return;
-    const to = r[4], R = this.range(), b = S.books;
+    const to = r[4], R0 = this.range(), R = R0 && !R0.notRead ? R0 : null, b = S.books;
     if (to.mis){
       if (!(b.vouchers || []).length){ FC.go("import"); return; }
       const last = (b.mis || {}).last;

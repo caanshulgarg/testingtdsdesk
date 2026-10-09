@@ -431,6 +431,8 @@ function istParts(v){
 function p2ist(n){ return String(n).padStart(2, "0"); }
 // the day in India of a moment, yyyy-mm-dd ("" when none): for "today" and "yesterday" by Indian time
 function istDay(v){ const p = istParts(v); return p ? p.y + "-" + p2ist(p.mo) + "-" + p2ist(p.d) : ""; }
+// today in India, yyyymmdd: what the default periods count from (smart moves round 1), whatever this computer's clock zone
+function istToday(){ return istDay(Date.now()).replace(/-/g, ""); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -502,7 +504,10 @@ function plainMessage(s){
 }
 // the plain words alone, for a message built into a sentence
 function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$/, "") : String(s == null ? "" : s); }
-function toast(msg){
+// toast(msg, {actions: [{label, run}]}): the message, and after it a button for each action ("Stay here", "Undo",
+// "Review them →"; smart moves round 1, 09-Oct-2026). The message keeps its own words; the buttons sit beside it in
+// their own span (data-toast-acts), so a check of the message's words is not changed by them
+function toast(msg, o){
   const t = document.getElementById("toast"); if (!t) return;
   let s = msg == null ? "" : String(msg);
   toastWire(t);
@@ -514,10 +519,21 @@ function toast(msg){
     more.addEventListener("click", ev => { ev.stopPropagation(); clearTimeout(toastTimer); const d = document.createElement("div"); d.className = "toast-raw"; d.textContent = plain.details; more.replaceWith(d); });
     t.appendChild(more);
   } else t.textContent = s;
+  const acts = ((o && o.actions) || []).filter(a => a && a.label && typeof a.run === "function");
+  if (acts.length){
+    const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
+    acts.forEach(a => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = a.label; b.dataset.toastAct = a.label;
+      b.addEventListener("click", ev => { ev.stopPropagation(); toastHide(); try { a.run(); } catch (e){ console.error(e); } });
+      box.appendChild(b);
+    });
+    t.appendChild(box);
+  }
   t.dataset.tone = plain ? "stop" : toastTone(s);
   clearTimeout(toastTimer);
   t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
-  toastTimer = setTimeout(toastHide, Math.min(9000, 4000 + s.length * 35));
+  // a message with buttons stays long enough to reach them
+  toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
 }
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
@@ -3485,6 +3501,8 @@ async function enqueueFiles(files, target){
     j.donePromise = new Promise(res => { j.markDone = res; });
     if (j.status === "failed") j.markDone();
     j.id = uid("j"); j.target = target; j.status = j.status || "waiting";
+    // the page the upload started on: the page moves to Review at the end only if it is still that page (smart moves)
+    j.from = typeof Smart === "object" ? Smart.here() : "";
     j.force = j.force || null;
     j.name = j.file.name + (j.page ? (Array.isArray(j.page) ? " · pages " + j.page[0] + "\u2013" + j.page[j.page.length - 1] : " · page " + j.page) : "");
     S.jobs.push(j);
@@ -3529,20 +3547,39 @@ function afterBatch(){
     lines.forEach(l => { const c = l.cid || S.coId; (by[c] = by[c] || []).push(l); });
     Object.keys(by).forEach(c => { S.lastUpload[c] = {at: Date.now(), lines: by[c], text: uploadSummary(by[c])}; });
   }
-  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
-  S.advanceAfterRead = false;
-  const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial", "notread"].includes(j.status)), held = mine.filter(j => j.status === "held");
-  mine.forEach(j => { j.advanced = true; });
-  if (!mine.length) return;
-  const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
-  if (!fresh.length){
-    // only duplicates held: the Duplicates list opens on the copy, with its original beside it
-    if (held.length){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; }
+  // smart moves round 1 (2): each finished file is counted once, here, whichever page is open (it was counted again at
+  // the next upload when this batch ended on another page: "1 bill read" for 3)
+  const ended = S.jobs.filter(j => !j.advanced && ["done", "partial", "held", "duplicate", "failed", "unsorted", "notread"].includes(j.status));
+  ended.forEach(j => { j.advanced = true; });
+  if (!ended.length){ if (lines.length) render(); return; }
+  const cidOf = j => j.cid || (j.target && j.target !== "auto" ? j.target : "");
+  const fresh = ended.filter(j => ["done", "partial", "notread"].includes(j.status) && cidOf(j) && j.entryId);
+  // the client with the most bills read (the open one first)
+  const per = {}; fresh.forEach(j => { const c = cidOf(j); per[c] = (per[c] || 0) + 1; });
+  const cid = Object.keys(per).sort((a, b) => (per[b] - per[a]) || ((b === S.coId) - (a === S.coId)))[0] || "";
+  // the page the upload started on (an older upload, or one made from a test, has none: the purchase pages count)
+  const from = (ended.find(j => j.from) || {}).from || "";
+  const onBills = S.view === "company" && (S.step === "collect" || ["invoices", "export", "done"].includes(S.tab));
+  if (!cid){
+    // nothing to review: only duplicates held (their list opens on the copy, with its original beside it), or files not read
+    const held = ended.filter(j => j.status === "held" && j.cid === S.coId);
+    const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
+    if (held.length && (from ? from === Smart.here() : onBills) && !Smart.held()){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; S.step = null; }
     toast(said + "."); render(); return;
   }
-  goStep("review", "bills");
-  toast(said + ". Review " + (fresh.length === 1 ? "it" : "them") + " below.");
+  const n = per[cid], one = n === 1 ? fresh.find(j => cidOf(j) === cid) : null, co = S.companies[cid] || {name: ""};
+  const e1 = one && S.data[cid] && S.data[cid].entries[one.entryId];
+  const where = "#/c/" + encodeURIComponent(cid) + (one ? "/bill/" + encodeURIComponent(one.entryId) : "/purchase/review");
+  const rest = (S.lastUpload && S.lastUpload[cid] && S.lastUpload[cid].lines) || [];
+  const more = uploadSummary(rest.filter(l => l.kind !== "ok"));
+  const bills = n + (n === 1 ? " bill" : " bills");
+  Smart.go(where, one && e1 ? "Moved to Review: " + (e1.x.vendorName || e1.fileName || "the bill") + (e1.x.invoiceNo ? " " + e1.x.invoiceNo : "") + " is open" + (more ? " (" + more + ")" : "")
+    : "Moved to Review (" + bills + (more ? "; " + more : "") + ")", {
+    kind: "upload", from: from || (onBills && S.coId === cid ? Smart.here() : "#none"),
+    label: one ? "Open it →" : "Review them →",
+    idle: bills + " read for " + co.name + (more ? " (" + more + ")" : "")
+  });
+  if (!Smart.last.moved) render();
 }
 let readTick = null;
 function keepBusyCardAlive(){
@@ -3741,7 +3778,8 @@ function finishNewEntry(e, cid, j){
     j.status = e.status === "duplicate" ? "held" : "done";
     j.msg = e.status === "duplicate" ? dup.msg : (j.target === "auto" ? "Filed under " + CO(cid).name + (e.routedBy ? " by " + e.routedBy : "") : "") ;
   }
-  if (cid === S.coId && S.view === "company" && (S.batchSize === 1 || !S.selected)){
+  // (not while the person is typing on a bill: the bill on screen stays the one being typed in)
+  if (cid === S.coId && S.view === "company" && (S.batchSize === 1 || !S.selected) && !(typeof Smart === "object" && Smart.held())){
     S.filter = e.status; S.selected = e.id;
   }
 }
@@ -3936,7 +3974,8 @@ async function assignInbox(id, cid){
 /* ------------------------------------------------------------------ */
 /* Approve / undo / reject (current client)                            */
 /* ------------------------------------------------------------------ */
-function approve(e){
+// o.bulk: one of many approved from the review table (its own toast says how many; the page does not move per bill)
+function approve(e, o){
   if (notReadYet(e)){ toast(e.fileName + " is not read yet (" + e.notRead.reason.replace(/\.$/, "") + "). Press Retry, or type in the supplier, date and total, before approving."); return; }
   const cid = S.coId, c = compute(e, cid);
   if (c.missing.length){ toast("Fill in " + c.missing.join(", ") + " before approving."); return; }
@@ -3970,10 +4009,24 @@ function approve(e){
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
-  toast("Approved. " + (c.skip ? "TDS not booked (" + (SKIP_REASONS[c.skip.reason] || c.skip.reason) + "); would have been " + money0(c.tdsWould) + "." : c.tds ? "TDS " + money0(c.tds) + " drafted for Tally." : "No TDS on this invoice."));
-  const next = Object.values(D(cid).entries).filter(o => o.status === "draft" && !S.reading[o.id]).sort(byDate)[0];
-  if (next) S.selected = next.id;
-  refreshStats(cid); render();
+  const said = "Approved. " + (c.skip ? "TDS not booked (" + (SKIP_REASONS[c.skip.reason] || c.skip.reason) + "); would have been " + money0(c.tdsWould) + "." : c.tds ? "TDS " + money0(c.tds) + " drafted for Tally." : "No TDS on this invoice.");
+  refreshStats(cid);
+  if (o && o.bulk){ render(); return; }
+  billMoveOn(e, said, "draft", {label: "Undo", run: () => { if (e.status === "approved" && !e.exportedAt){ undoApproval(e); S.selected = e.id; render(); } }});
+}
+// smart moves round 1 (5): after a bill is approved, set aside (No entry needed), kept as a separate bill or moved back,
+// the next bill of the list it was in opens: "Approved · Next: MASTERCAD INV-4412 (4 left) · Undo". The page does not
+// move while a box has focus or the switch is off: the same words, with "Next →". At the end of To review, the bill
+// stays and the list says "All N bills reviewed · Post N to Tally →" (Invoices.jsx, QueueDone)
+function billMoveOn(e, said, list, undo){
+  const cid = S.coId;
+  const left = Object.values(D(cid).entries).filter(x => x.status === list && x.id !== e.id && !S.reading[x.id]).sort(list === "draft" ? byDate : (a, b) => byDate(b, a));
+  const next = left[0];
+  if (!next){ toast(said, {actions: undo ? [undo] : []}); render(); return; }
+  const name = [next.x.vendorName || next.fileName || "the next bill", next.x.invoiceNo].filter(Boolean).join(" ");
+  Smart.go(() => { S.filter = list; S.selected = next.id; S.reviewTable = S.reviewTable && S.drawerOpen && list === "draft"; },
+    said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
+  render();
 }
 function unapply(e, cid){
   const a = e.applied, p = a && D(cid).parties[a.partyId];

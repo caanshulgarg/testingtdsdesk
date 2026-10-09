@@ -14,6 +14,7 @@
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstView (year | return), S.gstPart,
 // S.gstSub (the tab of GSTR-1 or 3B), all kept in the address (Route.booksMore, src/js/52); a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
+import NotRead from "../parts/NotRead.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
@@ -135,9 +136,19 @@ export default function Gst() {
   const b = S.books, months = GSTR.months(), regs = GSTR.gstins(b) || [];
   if (!regs.length) return <div className="bk-none">Add the client’s GSTIN in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to use the GST tab.
     With it, 2B can be fetched from the portal or brought in, and the returns filed kept, with or without a Tally day book. GSTR-1 and 3B are worked out from the day book, brought in under “From Tally”.</div>;
-  if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
   // a return is filed for one GSTIN: the company's own first, never the registrations added together
   if (!regs.some((g) => g.slice(0, 2) === S.gstReg)) { const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find((g) => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
+  // smart moves round 1 (the owner's choice of 09-Oct-2026, "due now"): opened afresh, the return due now (monthly: last
+  // month's 3B; QRMP: the quarter just ended), or the oldest one not marked filed, or the person's last choice here
+  if (!S.gstYm) { const k = Smart.recall("gst"); S.gstYm = k && /^\d{6}$/.test(k.ym || "") ? k.ym : Smart.gstDue(S.gstReg); }
+  const lastYm = months[months.length - 1] || "";
+  // the books in FinCom do not reach that period yet: one line with Read from Tally, not an empty return
+  // (the year's grid only: a return or part asked for by name, such as notices, opens on the last month read, as before)
+  if (S.gstYm && lastYm && S.gstYm > lastYm && !months.includes(S.gstYm) && (S.gstView || (S.gstPart ? "return" : "year")) === "year") {
+    const end = String((b.meta || {}).to || "") || lastYm + "01";
+    return <><LedgerBanner b={b} which="gst" /><NotRead end={end} what={"GST " + (GSTSet.typeOf(S.gstYm, S.gstReg || "") === "qrmp" ? GSTSet.qLabel(S.gstYm) : GSTR.label(S.gstYm))} read={GSTF.fyOf(S.gstYm)} show={GSTR.label(lastYm)} onShow={() => gstSetYm(lastYm)} /></>;
+  }
+  if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = lastYm;
   // the year's grid first; a part already chosen (a link to it, an alert's button) opens that part
   if (!S.gstView) S.gstView = S.gstPart ? "return" : "year";
   // the parts follow the filing type of this month and GSTIN, so both are settled first

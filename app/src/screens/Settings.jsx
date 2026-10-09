@@ -44,7 +44,14 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+  plan: "Nothing to save here.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+
+// "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
+export function BackTo() {
+  const back = typeof Smart === "object" ? Smart.returnHere() : null;
+  if (!back) return null;
+  return <p className="back-to"><button className="linkbtn" data-back-to="" onClick={() => Smart.goBack()}>{"← Back to " + back.label}</button></p>;
+}
 
 function Layout({ label, groups, current, pick, children, scope, cid }) {
   const it = groups.flatMap((g) => g.items).find((x) => x.id === current);
@@ -52,6 +59,7 @@ function Layout({ label, groups, current, pick, children, scope, cid }) {
     <div className="setwrap">
       <SetNav label={label} groups={groups} current={current} pick={pick} />
       <div className="setbody">
+        <BackTo />
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
         <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>
       </div>
@@ -105,10 +113,22 @@ function firmGroups() {
       { id: "reading", label: "Reading bills", about: "How bills and statements are read — free reading first, then Google OCR or Claude — and a test of each.",
         status: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only" },
       { id: "ai", label: "AI help", about: "Claude’s suggestions in TDS, GST, audit and notices: on or off.", status: AIH.sub() },
+      { id: "moves", label: "Move on by itself", about: "When a piece of work ends, the page opens what comes next. It never approves, posts or sends anything to Tally, never moves while you are typing or have unsaved changes, and says so with Stay here; Back undoes it.",
+        status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
   ];
   if (sa) groups.push({ title: "Administrator", items: [{ id: "platform", label: "Platform", about: "All firms, credit, plans, prices and keys.", status: S.adminData ? (S.adminData.firms || []).length + " firms" : "" }] });
   return groups;
+}
+
+// Move on by itself (smart moves round 1): one switch for each kind of move, on unless turned off (Smart, src/js/64)
+function MoveSwitches() {
+  const [, redraw] = useState(0);
+  return <Card title="After a piece of work" note="With a switch off, the page stays where it is and a message offers the same step as a button.">
+    <div data-move-switches="">{Smart.KINDS.map(([k, when, what]) => <label key={k} className="chk" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0" }}>
+      <input type="checkbox" data-move={k} checked={Smart.on(k)} onChange={(ev) => { Smart.set(k, ev.target.checked); redraw((n) => n + 1); render(); }} />
+      <span><b>{when}</b><br /><span className="note">{what}</span></span></label>)}</div>
+  </Card>;
 }
 
 export function FirmSettings() {
@@ -126,6 +146,7 @@ export function FirmSettings() {
     rates: () => <Rates />,
     reading: () => <Reading />,
     ai: () => <AiSettings />,
+    moves: () => <MoveSwitches />,
     platform: () => <Platform />,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings

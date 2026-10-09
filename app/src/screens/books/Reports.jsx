@@ -5,6 +5,7 @@
 // State: S.rptQ (the search), S.rptFy (the year).
 import { useEffect } from "react";
 import Bars from "../../parts/Bars.jsx";
+import NotRead from "../../parts/NotRead.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
@@ -85,11 +86,12 @@ export default function Reports({ b }) {
   const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
   // when the bridge is live, the books are brought up to date on opening (as before, after each drawing)
   useEffect(() => { if (LK.live()) setTimeout(() => LK.autoFresh(), 0); });
-  const d = have ? RPT.data() : null;
+  const d = have ? RPT.data() : null, R = have ? RPT.range() : null;
   const head = <>
     <section className="dash-card rpt-head"><div className="rpt-top-row"><div><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + " in one place. Click a figure or a report to open it."}</p></div>
       <input type="search" id="rptQ" data-fk="rptQ" value={S.rptQ || ""} placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report" onChange={(ev) => setAndShow("rptQ", ev.target.value, true)} />
-      {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => setAndShow("rptFy", ev.target.value)}>{RPT.fys().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div></section>
+      {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div></section>
+    {have && R && R.notRead && <NotRead end={R.end} what={"Reports " + FC.fyLabel(R.fy)} read={FC.fyLabel(R.fy)} show={RPT.fys()[0] ? FC.fyLabel(RPT.fys()[0]) : ""} onShow={() => RPT.pickFy(RPT.fys()[0])} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {(have || LK.live()) && <FreshBar b={b} />}
     {!have && <NoBooks what="Reports" />}

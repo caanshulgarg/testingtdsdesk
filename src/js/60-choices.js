@@ -378,7 +378,7 @@ const Drafts = {
   // Save: what was chosen is confirmed and saved, with who and when
   save(id){
     const s = this.secs[id]; if (!s) return false;
-    if (s.custom){ const ok = s.custom.save(); if (ok !== false){ this.stamp(s); delete this.secs[id]; render(); } return ok !== false; }
+    if (s.custom){ const ok = s.custom.save(); if (ok !== false){ this.stamp(s); delete this.secs[id]; render(); if (typeof Smart === "object") setTimeout(() => Smart.afterSave(), 0); } return ok !== false; }
     const ch = this.changes(s);
     this.bypassN++;
     try {
@@ -402,6 +402,8 @@ const Drafts = {
     } finally { this.bypassN--; }
     delete this.secs[id];
     render();
+    // smart moves round 1 (9): saved on a setup page reached from another page: "Saved · Back to Post to Tally →"
+    if (typeof Smart === "object") setTimeout(() => Smart.afterSave(), 0);
     return true;
   },
   // "Saved · <time> · <who>", kept with the client (or the firm) so every computer shows it

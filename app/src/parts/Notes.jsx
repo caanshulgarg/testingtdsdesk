@@ -53,8 +53,10 @@ export function OnbCard({ co }) {
   if (n === st.length) return null;
   return <section className="dash-card onb"><div className="onb-h"><div><h3>{"Getting " + co.name + " ready"}</h3><p className="note" style={{ margin: 0 }}>{n + " of " + st.length + " done"}</p></div><button className="linkbtn" onClick={() => onbHide()}>Hide this</button></div>
     <div className="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax={st.length} aria-valuenow={n}><i style={{ width: Math.round(n / st.length * 100) + "%" }}></i></div>
-    <ol className="onb-list">{st.map((s) => <li key={s.id} className={s.done ? "done" : ""}><span className="onb-n" aria-hidden="true">{s.done ? "✓" : ""}</span><div><b>{s.t}</b><span>{s.d}</span></div>
-      {!s.done && <Button className="btn small" onClick={() => s.btn[1].act ? doAct(s.btn[1].act) : goClient(s.btn[1].go)}>{s.btn[0]}</Button>}</li>)}</ol></section>;
+    {/* smart moves round 1 (10): the first step not done is the one primary button, "Next: …" */}
+    <ol className="onb-list">{st.map((s) => { const next = !s.done && s === st.find((x) => !x.done);
+      return <li key={s.id} className={s.done ? "done" : next ? "next" : ""} data-onb-step={s.id}><span className="onb-n" aria-hidden="true">{s.done ? "✓" : ""}</span><div><b>{s.t}</b><span>{s.d}</span></div>
+      {!s.done && <Button className={"btn small" + (next ? " primary" : "")} data-onb-next={next ? "" : undefined} onClick={() => onbStepGo(s)}>{(next ? "Next: " : "") + s.btn[0]}</Button>}</li>; })}</ol></section>;
 }
 
 // day books for several clients at once: each file's company matched to a client, checked, then brought in

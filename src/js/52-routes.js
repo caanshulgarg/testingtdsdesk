@@ -86,6 +86,9 @@ const Route = {
     const h = this.of();
     // the Tally redesign (09-Oct-2026): the client's page last shown, for "← Back to <client>" on the Tally page
     if (/^#\/c\//.test(h)) S.lastClientHash = h;
+    // smart moves round 1: the client's page kept for the next opening (7), the way back from a setup page let go once
+    // the person has gone elsewhere (9), a Getting ready step just done (10)
+    if (typeof Smart === "object"){ try { Smart.remember(h); Smart.dropReturn(h); setTimeout(() => Smart.onbWatch(), 0); } catch (e){} }
     if (h === location.hash){ this.replaceNext = false; return; }
     try {
       if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);

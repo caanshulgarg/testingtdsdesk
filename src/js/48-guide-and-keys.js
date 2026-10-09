@@ -23,7 +23,7 @@ const ONB = {
       {id: "bridge", done: bridgeSet, t: "Connect FinCom Bridge", d: "A small Windows program on the computer where Tally is open; install it from the Tally page.", btn: ["Connect", {act: "tallyGuide"}]},
       {id: "link", done: !!linked, t: "Link the Tally company", d: "The company in Tally with this client's books: linked by itself when its GSTIN is the client's.", btn: ["Link Tally company", {act: "goTcloud"}]},
       {id: "books", done: dayBook, t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
-      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the books", {go: "books:import"}]},
+      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the balances", {go: "books:import", focus: "opening"}]},
       {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},
       {id: "bank", done: !!(co.bankAccounts || []).some(a => a.ledger), t: "Add a bank account", d: (tallyBank ? tallyBank + " bank account" + (tallyBank === 1 ? "" : "s") + " in Tally. " : "") + "Add the one to bring statements for, with its Tally ledger.", btn: ["Bank", {go: "bank"}]},
       {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", {go: "bills"}]}

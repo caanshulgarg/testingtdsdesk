@@ -15,6 +15,7 @@ import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
+import NotRead from "../parts/NotRead.jsx";
 import "../parts/returns.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -171,8 +172,15 @@ function Year({ b }) {
   </>;
 }
 
+// the first day of a quarter of a year ("2026-27", "Q2" → 20260701), and of the year when no quarter is chosen
+function qStart(fy, q) { const y = num(String(fy).slice(0, 4)); return q === "Q2" ? y + "0701" : q === "Q3" ? y + "1001" : q === "Q4" ? (y + 1) + "0101" : y + "0401"; }
+
 export default function Tds({ b }) {
   const rows = TDS.rows(), had = tdsYears(b, rows), fys = tdsBarYears(b, rows);
+  // smart moves round 1 (the owner's choice of 09-Oct-2026, "due now"): opened afresh, the page shows the year and the
+  // quarter whose return is due now (Q2 of 2026-27 on 09-Oct-2026, due 31-Oct), or the person's last choice for this
+  // client. The quarter's own tax year names its forms (Form 140 from 2026-27, 26Q before: TDS.formLabel)
+  if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
   if (["year", "return", "certs"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices"].includes(S.tdsView)) S.tdsView = "years";
@@ -183,9 +191,15 @@ export default function Tds({ b }) {
       : ["summary", "challans", "deductees", "deductions", "checks", "file"];
     if (!tabs.includes(S.tdsTab)) S.tdsTab = tabs[0];
   }
+  // the books in FinCom end before the quarter (or year) shown starts, and no TDS of it is here: one line, not an empty grid
+  const end = v === "year" && S.tdsFy && !rows.some((r) => r.fy === S.tdsFy && (!S.tdsQ || r.q === S.tdsQ)) ? Smart.booksEndBefore(qStart(S.tdsFy, S.tdsQ)) : "";
+  const prevFy = end ? Smart.fyLabelOf(end) : "";
+  const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
+    show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   return <>
     <LedgerBanner b={b} which="tds" />
     {!had.length && v !== "notices" ? <>
+      {notRead}
       <div className="bk-none">TDS is worked out from the day book. Salary for 24Q can also be brought in on its own, from a salary sheet. The years appear here once either is in.</div>
       <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button><button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div>
     </> : <>
@@ -195,6 +209,7 @@ export default function Tds({ b }) {
         : v === "years" ? <Years rows={rows} fys={had} />
         : v === "certs" ? <CertsPage />
         : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
+        : notRead ? notRead
         : <Year b={b} />}
     </>}
   </>;

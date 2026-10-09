@@ -13,6 +13,7 @@ import HeldBooks from "../../parts/HeldBooks.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
+import NotRead from "../../parts/NotRead.jsx";
 
 const Tile = ({ l, v, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b></div>;
 const LedBtn = ({ l }) => <button className="linkbtn strong" onClick={(ev) => { ev.stopPropagation(); lkLed(l); }}>{l}</button>;
@@ -30,22 +31,35 @@ function VoucherRow({ r, x, children }) {
   </>;
 }
 
+// entries before this financial year, when the dates run into it: folded into one row, "Show earlier years" (smart moves
+// round 1: the year being worked on comes first; the running balance still counts them)
+function earlier(r, x) {
+  const fs = Smart.fyStartOf(Smart.today());
+  if (x.early || !(r.from < fs && r.to >= fs)) return { rows: r.rows, n: 0 };
+  const n = r.rows.filter((v) => v.date < fs).length;
+  return { rows: r.rows.filter((v) => v.date >= fs), n, fs, last: n ? r.rows[n - 1] : null, dr: r2(r.rows.slice(0, n).reduce((a, v) => a + num(v.dr), 0)), cr: r2(r.rows.slice(0, n).reduce((a, v) => a + num(v.cr), 0)) };
+}
+const ShowEarly = ({ n, fs, cols }) => <tr className="lk-early" data-lk-early=""><td colSpan={cols}>{n + (n === 1 ? " entry" : " entries") + " before " + FC.when(fs) + " · "}<button className="linkbtn" onClick={() => { LK.st().early = true; render(); }}>Show earlier years</button></td></tr>;
+
 function Body({ r, x }) {
   const LIMIT = gfN(1500);
-  if (r.kind === "ledger") return <>
-    <div className="dash-tiles"><Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} /><Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} /><Tile l="Closing" v={r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)} /></div>
+  // the opening and the closing each shown once: in the table's first and last rows when there are entries, else as tiles
+  if (r.kind === "ledger") { const E = earlier(r, x); return <>
+    <div className="dash-tiles">{!r.rows.length && <Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} />}<Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} />{(!r.rows.length || r.close == null) && <Tile l="Closing" v={r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)} />}</div>
     {!r.rows.length ? <div className="bk-none">No entries in {r.led} for these dates.</div> : <>
       <Wrap head={<><th>Date</th><th>Particulars</th><th>Type</th><th>No.</th><th className="n">Debit</th><th className="n">Credit</th><th className="n">Balance</th></>}>
         {r.open != null && <tr className="lk-ob"><td>{FC.when(r.from)}</td><td><b>Opening balance</b></td><td></td><td></td><td className="n">{r.open > 0 ? FC.amt(r.open) : ""}</td><td className="n">{r.open < 0 ? FC.amt(-r.open) : ""}</td><td className="n">{FC.drcr(r.open)}</td></tr>}
-        {r.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td><span className="lk-part">{v.part}</span>{v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td>{v.type}</td><td>{v.no || ""}</td>
+        {E.n > 0 && <tr className="lk-early" data-lk-early=""><td>{FC.when(E.last.date)}</td><td colSpan={3}>{E.n + (E.n === 1 ? " entry" : " entries") + " before " + FC.when(E.fs) + " · "}<button className="linkbtn" onClick={() => { LK.st().early = true; render(); }}>Show earlier years</button></td>
+          <td className="n">{FC.amt(E.dr)}</td><td className="n">{FC.amt(E.cr)}</td><td className="n">{r.open == null ? "" : FC.drcr(E.last.run)}</td></tr>}
+        {E.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td><span className="lk-part">{v.part}</span>{x.narr && v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td>{v.type}</td><td>{v.no || ""}</td>
           <td className="n">{FC.amt(v.dr)}</td><td className="n">{FC.amt(v.cr)}</td><td className="n">{r.open == null ? "" : FC.drcr(v.run)}</td></VoucherRow>)}
         <tr className="lk-tot"><td></td><td><b>Total</b></td><td></td><td></td><td className="n"><b>{FC.amt(r.dr)}</b></td><td className="n"><b>{FC.amt(r.cr)}</b></td><td className="n"><b>{r.close == null ? "" : FC.drcr(r.close)}</b></td></tr>
       </Wrap>
-      {r.rows.length > LIMIT && <p className="note">{"The first " + LIMIT + " of " + r.rows.length + " entries are shown; Excel has them all."}</p>}
-      <p className="note">Click an entry to see both sides. Click a ledger in it to open that ledger.</p></>}
-  </>;
+      {E.rows.length > LIMIT && <p className="note">{"The first " + LIMIT + " of " + E.rows.length + " entries are shown; Excel has them all."}</p>}
+      <p className="note">Click an entry to see both sides and its narration. Click a ledger in it to open that ledger.</p></>}
+  </>; }
   if (r.kind === "group") return <>
-    <div className="dash-tiles"><Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} /><Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} /><Tile l="Closing" v={r.close == null ? "not known" : FC.drcr(r.close)} /></div>
+    <div className="dash-tiles">{!r.rows.length && <Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} />}<Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} />{!r.rows.length && <Tile l="Closing" v={r.close == null ? "not known" : FC.drcr(r.close)} />}</div>
     {!r.rows.length ? <div className="bk-none">No ledger under {r.grp} moved in these dates.</div> :
       <Wrap head={<><th>Ledger</th><th>Under</th><th className="n">Opening</th><th className="n">{r.net ? "Net debit" : "Debit"}</th><th className="n">{r.net ? "Net credit" : "Credit"}</th><th className="n">Closing</th></>}>
         {r.rows.slice(0, LIMIT).map((z, i) => <tr key={z.l + ":" + i}><td><LedBtn l={z.l} /></td><td>{z.sub}</td><td className="n">{z.open == null ? "" : FC.drcr(z.open)}</td><td className="n">{FC.amt(z.dr)}</td><td className="n">{FC.amt(z.cr)}</td><td className="n">{z.close == null ? "" : FC.drcr(z.close)}</td></tr>)}
@@ -88,11 +102,13 @@ function Body({ r, x }) {
             <td className={"n" + (z.age > 90 ? " bad" : "")}>{z.age}</td><td className="n">{FC.amt(z.amt)}</td></tr>)}
         </ListRows>}</>;
   }
+  const E = earlier(r, x);
   return <>
     <p className="note"><b>{r.n || r.rows.length}</b>{" entries, together " + money(r.total) + (r.opt ? " (" + r.opt + " Optional, not in the total, as in Tally)" : "") + "."}{r.n > r.rows.length && <>{" The first " + r.rows.length + " are here; "}<button className="linkbtn" onClick={() => lkAct("more")}>{"show " + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more"}</button>.</>}</p>
     {!r.rows.length ? <div className="bk-none">Nothing matches. Try fewer words, or a wider period.</div> : <>
       <ListRows name="lkFind" className="bk-table lk-t" unit={["entry", "entries"]} skipSum={(tr) => !!(tr.props.r && tr.props.r.opt)} of={r.n || r.rows.length} head={[{ label: "Date", role: "date" }, { label: "Type" }, { label: "No.", role: "number" }, { label: "Party or ledger", role: "party" }, { label: "Amount", role: "amount", cls: "n" }]}>
-        {r.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td>{v.type}{v.opt && <> <span className="tag" data-opt="1">Optional</span></>}</td><td>{v.no || ""}</td><td><span className="lk-part">{v.party}</span>{v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td className="n">{v.opt ? <s title="Optional: not in the total">{FC.amt(v.amt)}</s> : FC.amt(v.amt)}</td></VoucherRow>)}
+        {E.n > 0 && <ShowEarly n={E.n} fs={E.fs} cols={5} />}
+        {E.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td>{v.type}{v.opt && <> <span className="tag" data-opt="1">Optional</span></>}</td><td>{v.no || ""}</td><td><span className="lk-part">{v.party}</span>{x.narr && v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td className="n">{v.opt ? <s title="Optional: not in the total">{FC.amt(v.amt)}</s> : FC.amt(v.amt)}</td></VoucherRow>)}
       </ListRows>
       {r.rows.length > LIMIT && <p className="note">{"The first " + LIMIT + " are shown; Excel has them all."}</p>}</>}
   </>;
@@ -107,7 +123,11 @@ function Result({ r, x }) {
     {/* the owner's finding of 05-Oct-2026: never "in step with Tally" while a line of these books is held; the held
         lines said here instead, a ledger's own with it (LK.noteOf, HeldBooks) */}
     <HeldBooks cid={S.coId} where="answer" led={LK.heldLed(r)[0]} to={LK.heldLed(r)[1]} />
-    {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>{LK.noteOf(r) && <p className="note" data-lk-note="">{LK.noteOf(r)}</p>}
+    {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>
+    {/* the answer's own note stays in view: it says whether the books are in step with Tally (the owner's finding of 05-Oct-2026) */}
+    {LK.noteOf(r) && <p className="note" data-lk-note="">{LK.noteOf(r)}</p>}
+    {["ledger", "find"].includes(r.kind) && <div className="row lk-opts" style={{ gap: 14, alignItems: "center", margin: "0 0 8px" }}>
+      <label className="chk"><input type="checkbox" data-lk-narr="" checked={!!x.narr} onChange={(ev) => { x.narr = ev.target.checked; render(); }} /> Show narration</label></div>}
     <Body r={r} x={x} /></>}
   </section>;
 }
@@ -138,6 +158,9 @@ export default function Lookup({ b }) {
   });
   const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
   const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = LK.recent();
+  // smart moves round 1 (3): the dates run past the books in FinCom: one line, Read that year from Tally or show the last year read
+  const asked = ["tb", "bills"].includes(x.kind) ? x.asOn : x.to, end = have ? Smart.booksEndBefore(asked) : "";
+  const notRead = end && <NotRead end={end} read={Smart.fyLabelOf(asked)} show={Smart.fyLabelOf(end) !== Smart.fyLabelOf(asked) ? Smart.fyLabelOf(end) : ""} onShow={() => lkShowFy(Smart.fyStartOf(end))} />;
   return <>
     <section className="dash-card lk-ask"><h3>Ask the books</h3>
       <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; Tally is never asked for a balance.</p>
@@ -149,11 +172,14 @@ export default function Lookup({ b }) {
       <FreshBar b={b} held={!x.res} />
       <div className="lk-form"><Form x={x} /></div>
       {["ledger", "group", "monthly", "find"].includes(x.kind) && <div className="lk-presets">{FC.PRESETS.map(([k, l]) => <button key={k} className="btn small" onClick={() => lkPer(k)}>{l}</button>)}</div>}
-      {can && <div className="lk-src" role="radiogroup" aria-label="Where from"><span className="note">From</span><button role="radio" aria-checked={fromTally} onClick={() => lkSrc("tally")}>FinCom's copy</button>
-        {have && <button role="radio" aria-checked={!fromTally} onClick={() => lkSrc("books")}>{"The books read into FinCom" + (LK.booksAge() ? " on " + LK.booksAge() : "")}</button>}</div>}
+      {notRead}
       <div className="row" style={{ gap: 8, marginTop: 10, alignItems: "center" }}><button className="btn" disabled={!!x.busy} title={x.busy ? "Wait: the answer is being worked out" : undefined} onClick={() => LK.run("auto")}>{x.busy ? "Working it out…" : "Show"}</button>
+        {/* smart moves round 1 (4): where the answer comes from and the ledger names, behind More */}
+        {(can || T || live) && <details className="lk-more" data-lk-more="src"><summary className="linkbtn">More</summary>
+        {can && <div className="lk-src" role="radiogroup" aria-label="Where from"><span className="note">From</span><button role="radio" aria-checked={fromTally} onClick={() => lkSrc("tally")}>FinCom's copy</button>
+          {have && <button role="radio" aria-checked={!fromTally} onClick={() => lkSrc("books")}>{"The books read into FinCom" + (LK.booksAge() ? " on " + LK.booksAge() : "")}</button>}</div>}
         {(T || live) && <p className="note lk-names">{T ? <>{"Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + " · "}<button className="linkbtn" onClick={() => lkAct("names")}>refresh</button></>
-          : LK._namesBusy ? "Bringing the ledger names…" : live ? <button className="linkbtn" onClick={() => lkAct("names")}>Bring the ledger names from Tally</button> : null}</p>}</div>
+          : LK._namesBusy ? "Bringing the ledger names…" : live ? <button className="linkbtn" onClick={() => lkAct("names")}>Bring the ledger names from Tally</button> : null}</p>}</details>}</div>
       <datalist id="lkLeds">{leds.slice(0, 5000).map((l) => <option key={l} value={l} />)}</datalist><datalist id="lkGrps">{grps.map((g) => <option key={g} value={g} />)}</datalist>
     </section>
     {rec.length > 0 && !x.res && <section className="dash-card" style={{ marginTop: 12 }}><h3>Looked up lately</h3><div className="lk-recent">{rec.map((r, i) => <button key={i} className="btn small" onClick={() => lkRec(i)}>{r.label}</button>)}</div></section>}
