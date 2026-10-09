@@ -145,11 +145,11 @@ expect "red 13: a standing line and an older decision line together name two ver
 # bridge 2.3.1 (the owner's decision of 06-Oct-2026), then 2.3.2 (the owner's standing decision, 2.3.1's line kept as
 # history: "as for 2.3.1: ..."): the real decision line, as docs/tally-allowlist.md carries it
 L231="$(grep -m1 '^First table:' "$HERE/../docs/tally-allowlist.md")"
-setup; withver 2.4.0; unmeasured "$L231
+setup; withver 2.4.1; unmeasured "$L231
 (re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
-expect "green 5: 2.4.0 with the real decision line (2.3.5's, 2.3.4's, 2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.4.0 by the owner's decision of 2026-10-07"
+expect "green 5: 2.4.1 with the real decision line (2.4.0's, 2.3.5's, 2.3.4's, 2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.4.1 by the owner's decision of 2026-10-06"
 
-setup; withver 2.4.0; unmeasured "$L231
+setup; withver 2.4.1; unmeasured "$L231
 (re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
 sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-09 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
 expect "red 14: the line re-measured before the last release row's date" 1 "before the last release"

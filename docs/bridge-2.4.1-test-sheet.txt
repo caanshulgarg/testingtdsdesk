@@ -1,0 +1,45 @@
+FINCOM 2.4.1 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.1.exe (NOT built yet)
+Fingerprint: (written when it is built; compare with the .sha256 file next to the setup)
+
+What 2.4.1 changes (the full notes: docs/bridge-2.4.1-notes.md):
+1. A save whose MasterID points at an older entry, or at no voucher, is found once by its type and number (Sales 297 of
+   09-Oct). Another type, date or number stays held as in 2.4.0.
+2. The log says why an entry was not asked by its number.
+3. After a restart the bank-date route does not read and send again the entries the add-on's lines explained.
+4. FinCom keeps the bridge's own time a line was read.
+The two data locations (one company open in two places) moved to 2.4.2. There is no migration for 2.4.1 (no migration
+to run on staging), and the add-on is 2.4.0's.
+
+Before you start: tally-ingest of 2.4.1 is deployed; you are signed in to FinCom as the owner; TallyPrime 7.1 is open on
+NWS144 with GARG SHEKHAR & COMPANY. In every entry you make for this sheet, start the narration with TRIAL. Write down the
+time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.4.1.exe and compare its fingerprint. The add-on is unchanged: nothing to reload.
+   You should see: the tray says FinCom Bridge 2.4.1; FinCom's Tally page shows version 2.4.1.
+
+CHECK 2 - A NEW ENTRY
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 241 one".
+   You should see: the entry in FinCom's books within a few seconds, as in 2.4.0.
+
+CHECK 3 - A RESTART DOES NOT SEND AGAIN
+   Alter that Journal (narration "TRIAL 241 two"), wait until it is in the books, then right-click the FinCom icon >
+   Exit, and start FinCom Bridge again.
+   You should see: the log does NOT say "Tally's voucher counter moved with no add-on line ... each is read again from
+   Tally" for it; Sync activity shows no second line for it.
+
+CHECK 4 - AN ENTRY WHOSE MASTERID IS AN OLDER ENTRY (the 09-Oct case)
+   Not made by hand: the bridge's tests cover it (fallback241_test.go). On NWS144, a line held with "Tally's voucher with
+   that MasterID is not a change after the starting point" from now on should be in the books, or held with "the voucher
+   with that MasterID in this Tally is an older entry, not this save; asked by its type and number: ...".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.0)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.0). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.0 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.
