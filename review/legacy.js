@@ -4102,7 +4102,7 @@ async function downloadStandalone(){
       (tag === "link" && /fonts\.(googleapis|gstatic)\.com/.test(el.getAttribute("href") || "")) || (tag === "style" && el.id === "app-style") || (tag === "script" && keepScript(el));
     if (!keep) el.remove();
   });
-  const bodyKeep = new Set(["app", "modal", "toast", "skipLink", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "multiBooksIn", "twoBIn", "filedIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
+  const bodyKeep = new Set(["app", "modal", "toast", "skipLink", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "tallyIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "multiBooksIn", "twoBIn", "filedIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
   Array.from(root.querySelector("body").children).forEach(el => {
     if (el.tagName.toLowerCase() === "header" && el.classList.contains("top")) return;
     if (el.tagName.toLowerCase() === "script" && keepScript(el)) return;
@@ -5028,8 +5028,9 @@ const Books = {
   },
   ledgerOf(name){
     const b = S.books, m = (b && b.map && b.map[name]) || {};
-    // once a client's ledger check is saved, a tax ledger not confirmed counts in no return (src/js/57)
-    if (b && b.ledCheck && b.ledCheck.strict && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
+    // the owner's decision on H1 (09-Oct-2026, "Keep today's figures"): the books' own ledger map counts as in 2.3.3,
+    // whether or not the ledger check is saved or its switch set; the check's suggestions are kept apart (b.ledCheck) and
+    // count in no figure until confirmed, which writes them into the map (src/js/57)
     return m;
   },
   // the purchase and sales side of a voucher, ready for GST and TDS
@@ -5372,7 +5373,10 @@ const LedMaster = {
     if (m.what === "tds_payable" && !m.section) out.push("no section: choose one; if it only collects the month's TDS from the section ledgers and is paid from the bank, it is a TDS clearing account");
     return out;
   },
-  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1;
+  // who confirmed and when are kept on the ledger (shown on the ledgers page, on every computer); the check's own
+  // record of the ledger (b.ledCheck, kept with the books) says confirmed or pending with it
+  confirm(b, names, yes){ const who = typeof whoAmI === "function" ? whoAmI() : "", items = (b.ledCheck || {}).items || {};
+    names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; m.okBy = yes ? who : undefined; if (items[n]) items[n].state = yes ? "confirmed" : "pending"; } }); b.mapV = (b.mapV || 0) + 1;
     if (yes && typeof this.tplLearn === "function"){ this.tplLearn(b, names); try { const co = CO(); if (co && co.id === b.cid) this.applyPosting(b, co, "empty"); } catch (e){} } }
 };
 
@@ -7326,6 +7330,15 @@ const TDS = {
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
   fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
+  // review M1 of 2.4.0 part 2 (08-Oct-2026): a TDS line of Tally's entry (tally_tds_details_marked, migration 62) in words:
+  // the rate and, where it is not Tally's own, why: worked out by FinCom where Tally stored 0 (the owner's decision of
+  // 07-Oct-2026, option A), or none worked out where Tally marked the line exempt (review L2). Tally's own rate: the rate alone
+  tallyRateWords(l){
+    const has = l && l.rate != null && l.rate !== "", pct = (has ? r2(num(l.rate)) : 0) + "%";
+    if (l && l.exempt) return pct + " \u00b7 exempt in Tally: no rate worked out";
+    if (l && l.rate_worked_out) return pct + " \u00b7 rate worked out: Tally stored 0 (TDS \u00f7 assessable amount)";
+    return has ? pct : "";
+  },
   // 26Q: every deduction from a resident other than salary
   rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section))); },
   // 27Q: deductions from non-residents
@@ -9284,7 +9297,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
@@ -13446,7 +13459,8 @@ function lmSet(name, key, val){
   if (key === "gstRate") m.gstRate = val ? num(val) : null;
   if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
   if (key === "rate") m.rate = val === "" ? null : num(val);
-  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI();
+  const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
@@ -13521,9 +13535,12 @@ async function companyGate(fc, b, co, fname, quiet){
   return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
 }
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
-// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown)
+// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown).
+// opts.toast === false (2.4.0, the one Upload Tally data on From Tally): the questions are asked as always, but the
+// result is returned for the page to say instead of a toast
 async function bringDayBookFile(f, from0, to0, opts){
   opts = opts || {};
+  const loud = !opts.quiet && opts.toast !== false;
   const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
   const who = {client: S.coId, company: BridgeSeed.company()};           // fixed now: the background sends below keep to this client
   let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
@@ -13531,11 +13548,18 @@ async function bringDayBookFile(f, from0, to0, opts){
   if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
     return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return {refused: panRefusal("The day book " + f.name, bad)}; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
       const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
-      const from = from0 || ds[0], to = to0 || ds[ds.length - 1];
-      if (!from || !to){ b.busy = ""; render(); if (!opts.quiet) toast("There are no entries in " + f.name + "."); return {refused: "no entries in the file"}; }
+      if (!ds.length){ b.busy = ""; render(); if (loud) toast("There are no entries in " + f.name + "."); return {refused: "there are no entries in " + f.name}; }
+      // 2.4.0: dates asked for (a day that needs its Day Book, the month between two files) are met with the file's own
+      // first and last entry, so a day the file does not cover is never emptied (a file of the wrong period used to wipe
+      // every day asked for). A file whose entries run past both ends covers them all (days with no entries in Tally are
+      // then empty here too); a file with no entry inside them that does not run past them is refused, nothing changes
+      const from = from0 && from0 > ds[0] ? from0 : ds[0], to = to0 && to0 < ds[ds.length - 1] ? to0 : ds[ds.length - 1];
+      if (from > to){ b.busy = ""; render(); const asked = fmtDate(tallyDate(from0 || to0)) + (from0 && to0 && from0 !== to0 ? " to " + fmtDate(tallyDate(to0)) : "");
+        const why = "there are no entries for " + asked + " in " + f.name + " (it has " + fmtDate(tallyDate(ds[0])) + " to " + fmtDate(tallyDate(ds[ds.length - 1])) + "). Export the Day Book of " + asked + " from Tally";
+        if (loud) toast(why.charAt(0).toUpperCase() + why.slice(1) + "."); return {refused: why}; }
       const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
       if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
       else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
@@ -13546,7 +13570,7 @@ async function bringDayBookFile(f, from0, to0, opts){
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
       if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
-      if (!opts.quiet) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      if (loud) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
       // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
       // cloud (everyone in the firm sees the same books)
       (async () => {
@@ -13577,10 +13601,140 @@ async function bringDayBookFile(f, from0, to0, opts){
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
-      return {n: inside.length, from, to};
-    }, e => { b.busy = ""; if (!opts.quiet) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
+      return {n: inside.length, from, to, outside};
+    }, e => { b.busy = ""; if (loud) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
 }
+// opening balances from a trial balance exported from Tally, as on `on` (yyyymmdd): its closing balances are the
+// opening balances of the next day. {text} or {refused}; opts.toast === false: said by the page, not a toast
+async function bringTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance (the day before the first date of the books) first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML.");
+  const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
+  const to = (b.meta || {}).to || next;
+  const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
+  TallyRead.balances(b, j, next, to);
+  b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
+  // the closing figures follow from the opening and the entries brought in
+  if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+  TallyRead.after(b, "after the trial balance was read", {from: next, to});
+  await saveBooks(); render();
+  const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
+  const said = r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".";
+  if (loud) toast(said);
+  if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge’s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+  if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
+  return {text: said, n: r.rows.length};
+}
+// the books checked against Tally's own trial balance as on `on` (TBCheck.run, src/js/24)
+async function checkTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ".");
+  b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
+  await saveBooks(); render();
+  const said = b.tbCheck.ok ? "Ready: every ledger agrees with Tally’s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally’s trial balance as on " + fmtDate(tallyDate(on)) + ".");
+  if (loud) toast(said);
+  return b.tbCheck.ok || !b.tbCheck.why ? {text: said} : {refused: said};
+}
+// the ledger masters (Display > List of Accounts, or All Masters, exported as XML): groups, PAN, GSTIN of each ledger
+async function bringMastersFile(f, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  b.busy = "Opening " + f.name + "…"; render();
+  let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
+  const g = await companyGate(fc, b, CO(), f.name);
+  if (!g.ok){ b.busy = ""; render(); return {refused: g.why || "not taken"}; }
+  if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
+  let res;
+  try { res = await Books.importMasters(f, m => { b.busy = m; softRender(); }); }
+  catch (e){ b.busy = ""; const why = "Could not read that file: " + ((e && e.message) || e); if (loud) toast(why); render(); return {refused: why}; }
+  b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
+  b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
+  await saveBooks();
+  const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
+  if (loud) toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
+  render();
+  return {count: res.count, pans: Object.keys(res.pans).length, gstins: Object.keys(res.gstins || {}).length, withPan, deductions: rows.length};
+}
+// 2.4.0 (the owner, 08-Oct-2026: "change the data xml upload page.. it is too much crowded.. simplify it"): the one
+// Upload Tally data on Books -> From Tally (#tallyIn, the top bar's button and the drop area). Which file it is comes
+// from its content, never asked: a Day Book (vouchers), the ledger masters (groups and ledgers) or a trial balance
+// (Tally's report lines; its date is not in the file, so only that is asked, on the page). Refused, changing nothing:
+// an empty file, a file cut short (a Tally export ends with </ENVELOPE>), a file of no known kind.
+async function tallyFileKind(f){
+  if (!f || !f.size) return {kind: "", why: (f ? f.name : "The file") + " is empty. Export it again from Tally."};
+  const dec = await Books.decoder(f), wide = /utf-16/.test(dec.encoding);
+  const head = dec.decode(new Uint8Array(await f.slice(0, 262144).arrayBuffer()));
+  let at = Math.max(0, f.size - 4096); if (wide && at % 2) at++;
+  const tail = new TextDecoder(dec.encoding).decode(new Uint8Array(await f.slice(at).arrayBuffer()));
+  const kind = /<VOUCHER[\s>]/.test(head) ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
+  if (!kind) return {kind, why: f.name + " is not a Tally Day Book, ledger masters or trial balance XML. In Tally, export the report with Ctrl+E as XML."};
+  if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
+  return {kind};
+}
+const TALLY_KINDS = {daybook: "Day Book", masters: "ledger masters", tb: "trial balance"};
+// the files chosen or dropped: the masters first (the PANs and groups the day book's figures use), then the day books,
+// then a trial balance (asked its date on the page). S.tallyUp = {cid, at, busy, lines: [{kind, name, ok, text}]}
+async function tallyFiles(files){
+  const b = S.books, cid = S.coId;
+  if (!b || b.cid !== cid || !(files || []).length) return;
+  const u = S.tallyUp = {cid, at: Date.now(), busy: true, lines: []}; render();
+  const said = l => { u.lines.push(l); render(); };
+  const seen = [];
+  for (const f of files){ let k; try { k = await tallyFileKind(f); } catch (e){ k = {kind: "", why: "Could not read " + f.name + ": " + ((e && e.message) || e)}; } seen.push([f, k]); }
+  const order = {masters: 0, daybook: 1, tb: 2, "": 3};
+  seen.sort((x, y) => order[x[1].kind] - order[y[1].kind]);
+  const iso8 = v => String(v || "").replace(/-/g, "");
+  for (const [f, k] of seen){
+    if (!k.kind){ said({kind: "", name: f.name, ok: false, text: k.why}); continue; }
+    if (k.kind === "masters"){
+      const r = await bringMastersFile(f, {toast: false});
+      said(r.refused ? {kind: "masters", name: f.name, ok: false, text: "The ledger masters were not taken: " + r.refused}
+        : {kind: "masters", name: f.name, ok: true, text: "Read the ledger masters: " + r.count.toLocaleString("en-IN") + " ledgers (" + r.pans + " with PAN, " + r.gstins + " with GSTIN)" + (r.deductions ? "; " + r.withPan + " of " + r.deductions + " deductions now have a PAN" : "") + "."});
+      continue;
+    }
+    if (k.kind === "daybook"){
+      const lim = [iso8(S.dbFrom), iso8(S.dbTo)];
+      const r = await bringDayBookFile(f, lim[0], lim[1], {toast: false}) || {refused: "not taken"};
+      if (r.refused){ said({kind: "daybook", name: f.name, ok: false, text: "The Day Book was not taken: " + r.refused + "."}); continue; }
+      let days = 0; for (let d = r.from; d <= r.to; d = BridgeSeed.add(d, 1)) days++;
+      if (lim[0] || lim[1]){ S.dbFrom = ""; S.dbTo = ""; }
+      said({kind: "daybook", name: f.name, ok: true, text: "Read " + r.n.toLocaleString("en-IN") + (r.n === 1 ? " entry" : " entries") + " for " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + "; " + days + (days === 1 ? " day" : " days") + " updated" + (r.outside ? " (" + r.outside + " outside those dates left out)" : "") + "."});
+      continue;
+    }
+    // a trial balance: its date is asked on the page (the books' last date for a check, the day before them for openings)
+    const m = b.meta || {}, open = !(b.tb && b.tb.source) && !!(b.vouchers || []).length;
+    S.tbAsk = {cid, f, name: f.name, on: open ? tbDefaultOn(b) : tallyDate(m.to || "") || tbDefaultOn(b)};
+    said({kind: "tb", name: f.name, ok: true, text: f.name + " is a trial balance. Tally does not write its date in the file: give it below."});
+  }
+  u.busy = false; render();
+}
+// the trial balance asked about on the page: as opening balances, or to check the books against
+async function tbAskUse(how){
+  const a = S.tbAsk; if (!a || a.cid !== S.coId) return;
+  const on = String(a.on || "").replace(/-/g, "");
+  const r = how === "open" ? await bringTbFile(a.f, on, {toast: false}) : await checkTbFile(a.f, on, {toast: false});
+  if (r.refused && /date/.test(r.refused) && !/^\d{8}$/.test(on)){ toast(r.refused); return; }
+  S.tbAsk = null;
+  S.tallyUp = {cid: S.coId, at: Date.now(), busy: false, lines: [{kind: "tb", name: a.name, ok: !r.refused, text: r.refused ? "The trial balance was not taken: " + r.refused : r.text}]};
+  render();
+}
+// a day (or the dates between two files) that needs its Day Book: the one file box, for those dates only (yyyy-mm-dd)
+function tallyPickFor(from, to){ S.dbFrom = from || ""; S.dbTo = to || from || ""; render(); const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } }
 function booksChange(t){
+  if (t.id === "tallyIn"){
+    const files = Array.from(t.files || []); t.value = "";
+    if (files.length) tallyFiles(files);
+    return true;
+  }
   if (t.id === "booksIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -13590,61 +13744,18 @@ function booksChange(t){
   }
   if (t.id === "tbIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbOn || tbDefaultOn(b) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
-      const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
-      const to = (b.meta || {}).to || next;
-      const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
-      TallyRead.balances(b, j, next, to);
-      b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
-      // the closing figures follow from the opening and the entries brought in
-      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
-      TallyRead.after(b, "after the trial balance was read", {from: next, to});
-      await saveBooks(); render();
-      const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
-      toast(r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".");
-      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
-      if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) bringTbFile(f, String(S.tbOn || tbDefaultOn(S.books) || "").replace(/-/g, ""));
     return true;
   }
   if (t.dataset && t.dataset.tbcheckon !== undefined){ S.tbCheckOn = t.value; render(); return true; }
   if (t.id === "tbCheckIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbCheckOn || tallyDate((b.meta || {}).to) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + "."); return; }
-      b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
-      await saveBooks(); render();
-      toast(b.tbCheck.ok ? "Ready: every ledger agrees with Tally\u2019s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance; they are listed under step 5."));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) checkTbFile(f, String(S.tbCheckOn || tallyDate((S.books.meta || {}).to) || "").replace(/-/g, ""));
     return true;
   }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
-    (async () => { let fc = null; try { fc = await Books.fileCompany(f); } catch (e){} return companyGate(fc, b, CO(), f.name).then(g => ({g, fc})); })().then(({g, fc}) => {
-    if (!g.ok){ b.busy = ""; render(); return; }
-    if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
-    Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
-      b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
-      await saveBooks();
-      const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
-      toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
-      render();
-    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
-    });
+    if (f) bringMastersFile(f);
     return true;
   }
   if (t.id === "filedIn"){
@@ -18120,6 +18231,7 @@ function doAct(act, t){
     case "postAll": postAllToTally(); break;
     case "postToChoose": goChooseTallyCompany(); break;
     case "marketPick": { const i = document.getElementById("marketIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "tallyPick": { const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } break; }
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
@@ -18300,7 +18412,7 @@ function doAct(act, t){
     case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
     case "lcConfirm": { const b = S.books, c = b && b.ledCheck; if (!c) break;
       const names = (c.names || []).filter(n => !((b.map || {})[n] || {}).ok && LedCheck.ticked(c.items[n]));
-      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
+      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed: each counts in the returns as the check reads it."); render(); break; }
     case "lcAi": { const b = S.books; if (!b || !b.ledCheck) break; b.busy = "Asking AI about the unclear ledgers…"; render();
       LedCheck.askAi(b).then(n => { b.busy = ""; if (n){ toast("AI answered for " + n + " ledger" + (n === 1 ? "" : "s") + ". Its answers are not ticked: check each."); saveBooks(); } render(); }, e => { b.busy = ""; toast("AI could not be asked: " + ((e && e.message) || e)); render(); }); break; }
     case "trashRestore": {
@@ -18745,7 +18857,7 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;
-  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id && ["tallyIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
@@ -22723,6 +22835,17 @@ const TCloud = {
       .finally(() => { x.busy = false; x.at = Date.now(); render(); });
     return x;
   },
+  // review M1 of 2.4.0 part 2: the TDS details of Tally's entries in the client's book (migration 62,
+  // tally_tds_details_marked: each line with rate_worked_out and exempt), kept for the page's life, asked again after a minute
+  tdsl: {},
+  tdsLines(cid){
+    const bk = this.book(cid), x = this.tdsl[cid] = this.tdsl[cid] || {};
+    if (!bk || !bk.book || !this.on() || x.busy || (x.at && Date.now() - x.at < 60000)) return x;
+    x.busy = true; x.err = "";
+    this.rpc("tally_tds_details_marked", {p_book: bk.book}).then(j => { x.rows = [].concat(j || []); }, e => { x.err = (e && e.message) || String(e); if (/tally_tds_details_marked|does not exist|PGRST202|schema cache/i.test(x.err)) x.missing = true; })
+      .finally(() => { x.busy = false; x.at = Date.now(); render(); });
+    return x;
+  },
   // fast-sync (migration-13): the server's jobs for a client (a day book handed over, the kept day books read again),
   // the latest five; changes come live (Live.joinJobs), else every few seconds while one is going
   jobs: {}, jobsOk: null,
@@ -22970,6 +23093,10 @@ const TCloud = {
         else p.cursors = null;
       }
       try { p.books = p.cursors && p.cursors.length ? [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []; } catch (e){ p.books = []; }
+      // next release (item e, migration 65): the nightly self-check of each company, the firm's latest 300 (tally_selfchecks,
+      // as row security gives them); a cloud without the table: none, and nothing said
+      try { p.selfchecks = [].concat(await Cloud.api("tally_selfchecks?select=id,book_id,device_id,bridge,company,ran_at,night,result,words,still_missing,fetched,copy_ok&order=ran_at.desc&limit=300") || []); p.noSelfChecks = false; }
+      catch (e){ p.selfchecks = []; p.noSelfChecks = true; }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -23147,8 +23274,8 @@ const TCloud = {
   readState(r){
     if (!r.online) return {state: "offline", text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : "")};
     const st = this.stopFor(r.device.id), rs = r.readStopped || {};
-    if (st) return {state: "fincomstop", text: "Stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
-    if (rs.by === "fincom") return {state: "fincomstop", text: "Stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
+    if (st) return {state: "fincomstop", text: "Reading stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
+    if (rs.by === "fincom") return {state: "fincomstop", text: "Reading stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
     if (r.paused) return {state: "paused", text: "Paused"};
     const tr = r.tallyRetry || {};
     if (tr.words) return {state: "retrying", text: String(tr.words), reason: ""};
@@ -23187,6 +23314,19 @@ const TCloud = {
       if (cur.state === "needs_baseline" || (cur.cleared_at && Date.parse(cur.cleared_at) > week)) out.push({book: b.book_id, company: b.company, cur});
     });
     return out;
+  },
+  // next release (item e): under a computer, each of its companies' latest nightly self-check (tally_selfchecks):
+  // [{book, company, row, old}], old when it ran more than two nights ago (Tally closed at night, or the bridge off). On a
+  // shared computer key (2.3.0, one bridge per Windows user) each bridge's line shows the checks that bridge made
+  selfChecks(devId, bridgeId){
+    const rows = Array.isArray(this.pane.selfchecks) ? this.pane.selfchecks : [], seen = new Set(), out = [];
+    rows.filter(r => r && r.device_id === devId && (!bridgeId || !r.bridge || r.bridge === bridgeId)).sort((a, b) => String(b.ran_at || "").localeCompare(String(a.ran_at || ""))).forEach(r => {
+      const k = r.book_id || r.company || "";
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      out.push({book: r.book_id || "", company: String(r.company || ""), row: r, old: !!r.ran_at && Date.now() - Date.parse(r.ran_at) > 2 * 86400000});
+    });
+    return out.sort((a, b) => a.company.localeCompare(b.company));
   },
   // a request's line: "vouchers 1.2 s at 15:34"
   reqSay(q){ if (!q || !q.kind) return ""; const ms = Number(q.ms) || 0; return q.kind + " " + (ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s") + (q.at ? " at " + tallyHm(q.at) : ""); },
@@ -23827,8 +23967,8 @@ const TLight = {
 // FinCom Bridge 2.1.3 reads Tally only after an event (a client opened here, Update now, a posting, the nightly catch-up):
 // Tally cannot send changes by itself, so FinCom says in one line a client how its Tally stands, from the bridge's
 // heartbeat, with one button, Update now:
-//   "Tally open on NWS144 · last read 15:34" | "Tally is closed on NWS144" | "NWS144 is offline" |
-//   "Tally is not answering on NWS144 since 12:28" | "Background reading paused on NWS144"
+//   "Connected · Tally open on NWS144 · last read 15:34" | "Tally not open on NWS144" | "NWS144 is offline" |
+//   "Tally is not answering on NWS144 since 12:28" | "Reading paused on NWS144" (FinCom 2.3.5: the cards' words)
 // {state: open | closed | offline | notanswering | paused, level, text, computer, read}; null when no Tally computer
 // keeps this client's company (and the bridge here does not have it open)
 function tallyHm(t){
@@ -23859,15 +23999,16 @@ function tallyLine(co){
   const ask = TallyAsk[co.id], updating = !!(beat && beat.updating);
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
   const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
+  // FinCom 2.3.5: the same words as the Tally page's cards (Connected / Offline / Tally not open / Reading stopped / paused)
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
   // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
   // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update now look at .stop
   const stop = dev ? tallyStopOn(dev) : null;
   if (stop) return Object.assign(o("stopped", "bad", "Reading stopped " + (stop.who ? "by " + stop.who : "from FinCom") + (stop.at ? " at " + tallyHm(stop.at) : "") + ": " + (stop.reason || "no reason given")), {stop});
-  if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
+  if (tally === "closed") return o("closed", "warn", "Tally not open on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
-  if (paused) return o("paused", "warn", "Background reading paused on " + comp);
-  return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
+  if (paused) return o("paused", "warn", "Reading paused on " + comp);
+  return o("open", "ok", "Connected \u00b7 Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
 }
 // the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
 // computer's own (tally_read_stops read by TLight, or by the Tally page), else the computer's info.readStop from its
@@ -25379,7 +25520,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.recorderTopic = ""; this.recorderLive = false; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.recorderTopic = ""; this.recorderLive = false; this.copyTopic = ""; this.copyLive = false; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -25394,7 +25535,7 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); if (this.recorderTopic) this.send(this.recorderTopic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); if (this.recorderTopic) this.send(this.recorderTopic, "access_token", {access_token: t}); if (this.copyTopic) this.send(this.copyTopic, "access_token", {access_token: t}); } },
   // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
   // only when the database has tally_jobs (migration-13): the live sync above never depends on it
   async joinJobs(){
@@ -25427,6 +25568,19 @@ const Live = {
     const f = Cloud.st.firm; this.recorderTopic = "realtime:fincom-recorder-" + f; this.recorderRef = String(this.ref + 1);
     this.send(this.recorderTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_recorder_lines", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
+  // next-realtime (migration 64): FinCom's copy of a client's books changed (tally_book_changes: one row per book, written
+  // by the database once per transaction that changed the copy, never the copy's own rows), or what Sync activity reads
+  // beside the recorder lines changed (tally_sync_cursor: the gap; tally_month_locks, tally_tieouts: the tie-out; tally_alerts).
+  // A channel of its own, joined only when the database has tally_book_changes; each change goes to CopyLive, which
+  // refreshes only the page on screen, once for a burst
+  async joinCopy(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.copyTopic) return;
+    try { await Cloud.api("tally_book_changes?select=book_id&limit=1"); } catch (e){ return; }
+    if (this.copyTopic || !this.ws) return;
+    const f = Cloud.st.firm; this.copyTopic = "realtime:fincom-copy-" + f; this.copyRef = String(this.ref + 1);
+    const pc = ["tally_book_changes", "tally_sync_cursor", "tally_month_locks", "tally_tieouts", "tally_alerts"].map(t => ({event: "*", schema: "public", table: t, filter: "firm_id=eq." + f}));
+    this.send(this.copyTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
+  },
   // review of 02-Oct-2026 (item 7): a Tally computer's heartbeat with a new last read, a read going on, or Tally's state
   // changed, passed on at once by tally-ingest on the firm's broadcast channel (no table, no SQL): the Post page's
   // "read 17:43" / "Reading now…" changes without waiting for FinCom to look again
@@ -25449,6 +25603,12 @@ const Live = {
   got(m){
     if (this.tallyTopic && m.topic === this.tallyTopic){
       if (m.event === "broadcast" && m.payload && m.payload.event === "beat" && typeof TLight === "object") TLight.beatIn(m.payload.payload);
+      return;
+    }
+    if (this.copyTopic && m.topic === this.copyTopic){
+      if (m.event === "phx_reply" && m.ref === this.copyRef) this.copyLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "system" && m.payload && m.payload.status === "error") this.copyLive = false;
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && typeof CopyLive === "object") CopyLive.in(d.table, d.record); }
       return;
     }
     if (this.recorderTopic && m.topic === this.recorderTopic){
@@ -25474,7 +25634,7 @@ const Live = {
       return;
     }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); this.joinRecorder(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); this.joinRecorder(); this.joinCopy(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }
@@ -25534,6 +25694,73 @@ const Live = {
     this.sv = {state: off ? "offline" : "error", at: this.sv.at, err: String(e && e.message || e).slice(0, 160)}; this.top();
   },
   top(){ try { if (typeof renderTop === "function") renderTop(); else render(); } catch (e){} }
+};
+
+/* ---------- next-realtime: the pages that read FinCom's copy and Sync activity, refreshed by themselves ---------- */
+// A change (Live.joinCopy) is noted, and after a quiet WAIT (1.5 s) - at most MAX (6 s) after the first of a burst - the
+// pages on screen read again what they show, one refresh at a time (a change during one: one more after it). Never a page
+// reload, never a read for a page not on screen (its data is only marked old, read when it is opened):
+//   - Look up on that client: the answer from FinCom's copy asked again (and the copy's time);
+//   - the ledgers on that client: the list read again from the copy when the ledgers or groups changed;
+//   - Sync activity and the tie-out: the gap, the month locks and tie-outs, the alerts (the lines come in live already).
+const CopyLive = {
+  WAIT: 1500, MAX: 6000,
+  books: new Map(),        // client id -> the copy's tables changed
+  sync: new Set(),         // Sync activity's tables changed
+  t: null, first: 0, busy: false, again: false, runs: 0, events: 0,
+  in(table, r){
+    if (!r || typeof r !== "object") return;
+    this.events++;
+    if (table === "tally_book_changes"){
+      if (!r.client_id) return;
+      const k = String(r.client_id), had = this.books.get(k) || new Set();
+      [].concat(r.tables || []).forEach(t => had.add(String(t)));
+      this.books.set(k, had);
+    } else this.sync.add(String(table));
+    this.soon();
+  },
+  soon(){
+    const now = Date.now();
+    if (!this.first) this.first = now;
+    clearTimeout(this.t);
+    this.t = setTimeout(() => this.flush(), Math.max(0, Math.min(this.WAIT, this.first + this.MAX - now)));
+  },
+  async flush(){
+    this.t = null; this.first = 0;
+    if (this.busy){ this.again = true; return; }
+    const books = new Map(this.books), sync = new Set(this.sync);
+    this.books.clear(); this.sync.clear();
+    if (!books.size && !sync.size) return;
+    this.busy = true; this.runs++;
+    try { await this.apply(books, sync); } catch (e){}
+    this.busy = false;
+    if (this.again){ this.again = false; if (this.books.size || this.sync.size) this.soon(); }
+  },
+  onClient(cid){ return S.view === "company" && S.coId === cid; },
+  async apply(books, sync){
+    let draw = false;
+    for (const [cid, tables] of books){
+      try { if (typeof TCloud === "object" && TCloud.st[cid]) TCloud.st[cid].at = 0; } catch (e){}
+      if (!this.onClient(cid) || S.tab !== "books") continue;
+      const leds = !tables.size || tables.has("tally_ledgers") || tables.has("tally_groups");
+      if (S.booksTab === "lookup" && typeof LK === "object"){
+        const x = LK.st();
+        try { await TCloud.status(cid, true); } catch (e){}
+        if (x.res && x.res.src === "cloud" && !x.busy) await LK.run("tally");     // it draws the page itself
+        else draw = true;
+      } else if (S.booksTab === "ledgers" && typeof Ledgers === "object"){
+        if (leds) await Ledgers.load(cid, {fresh: true});
+        try { delete Ledgers.hist[cid]; } catch (e){}
+        draw = true;
+      }
+    }
+    if (typeof Rec === "object"){
+      if (sync.has("tally_sync_cursor") && Rec.gaps && Rec.gaps.at){ await Rec.gapsLoad(); }
+      if ((sync.has("tally_month_locks") || sync.has("tally_tieouts")) && Rec.tie){ for (const cid of Object.keys(Rec.tie)) await Rec.tieLoad(cid); }
+      if (sync.has("tally_alerts") && Rec.alerts && Rec.alerts.at && !Rec.alerts.none){ await Rec.alertsLoad(); }
+    }
+    if (draw) render();
+  }
 };
 
 /* ---------- every change on this computer goes to the server at once ---------- */
@@ -26083,8 +26310,8 @@ const LedCheck = {
       const party = String(v.gstin || gst[v.party] || "").slice(0, 2);
       const taxLines = v.ent.filter(e => want.has(e.l)), setoff = !inc && !exp && v.ent.every(e => want.has(e.l) || LedMaster.bankByGroup(e.l, (b.ledInfo || {})[e.l]));
       taxLines.forEach(e => {
-        const x = u[e.l] = u[e.l] || {n: 0, dr: 0, cr: 0, sale: 0, purch: 0, cn: 0, dn: 0, pay: 0, setoff: 0, other: 0, inter: 0, intra: 0, ratios: [], with: {}, samples: [], months: new Set()};
-        x.n++; if (e.a < 0) x.dr++; else x.cr++;
+        const x = u[e.l] = u[e.l] || {n: 0, dr: 0, cr: 0, sale: 0, purch: 0, cn: 0, dn: 0, pay: 0, setoff: 0, other: 0, inter: 0, intra: 0, rcmN: 0, ratios: [], with: {}, samples: [], months: new Set()};
+        x.n++; if (v.ent.some(z => z !== e && /\bRCM\b|REVERSE/i.test(z.l))) x.rcmN++; if (e.a < 0) x.dr++; else x.cr++;
         if (cn) x.cn++; else if (dn) x.dn++; else if (setoff) x.setoff++; else if (sale) x.sale++; else if (purch) x.purch++; else if (pay) x.pay++; else x.other++;
         if (party && reg) { if (party === reg) x.intra++; else x.inter++; }
         if (base) x.ratios.push(Math.round(Math.abs(e.a) / base * 10000) / 100);
@@ -26115,7 +26342,12 @@ const LedCheck = {
     ms.ev.forEach(s => add("master", s));
     if (x && x.n) add("usage", this.sayUse(x));
     const notTaxName = /NON[\s-]*GST|NOT\s+GST|EXEMPT/.test(up), payish = /\b(PENA?LTY|PANELTY|FEES?|LOAN|PAYMENTS?|REFUND|DEPOSIT|INTEREST|CLIENT|REFUNDABLE)\b/.test(up);
-    const rcmLike = /\bRCM\b|REVERSE\s*CHARGE/.test(up) || Object.keys((x && x.with) || {}).some(w => /\bRCM\b|REVERSE/i.test(w));
+    // reverse charge: the name says so; or by use, when (almost) every entry of the ledger is a reverse-charge entry
+    // (another ledger on it is named RCM / reverse charge) - never for a ledger named input or ITC without RCM in its
+    // name: a regular input ledger takes the credit of the reverse-charge purchases too (Dr expense, Dr 07 CGST INPUT,
+    // Cr 07 RCM CGST PAYABLE), and was called reverse charge when ANY of its entries was one (08-Oct-2026)
+    const rcmName = /\bRCM\b|REVERSE\s*CHARGE/.test(up), inputName = /\bINPUT\b|\bITC\b/.test(up);
+    const rcmLike = rcmName || (!inputName && !!(x && x.n && x.rcmN / x.n >= 0.8));
     if (hint && hint.what) add("firm", "confirmed as " + LedMaster.label(hint.what) + (hint.section ? " " + this.secLabel(hint.section) : "") + (hint.tax ? " " + hint.tax : "") + (hint.side ? " " + hint.side : "") + " for " + hint.others + " other client" + (hint.others === 1 ? "" : "s"));
     // not tax: the master says so (tax type Others away from Duties & Taxes, or a tax before GST), or the name says non-GST
     if (ms.none || (notTaxName && !ms.gst)){ Object.assign(S2, {what: "none", conf: "high"}); if (notTaxName && !ms.none) add("name", "the name says it is not GST"); return Object.assign(S2, {ev}); }
@@ -26168,6 +26400,9 @@ const LedCheck = {
       const hint = typeof LedMaster.tplFor === "function" ? LedMaster.tplFor(b, n) : null, s = this.suggest(b, n, u[n], hint), it = c.items[n] = c.items[n] || {};
       const ai = it.ai && !s.ev.some(e => e.src === "master") ? it.ai : null;
       it.s = s; it.use = u[n] ? {n: u[n].n, say: this.sayUse(u[n]), samples: u[n].samples} : {n: 0, say: "not used in the day book"}; it.sig = this.sig(u[n]); it.at = at;
+      // kept with the books (BOOKS_KEYS): a suggestion is "pending" and counts in no figure until the ledger is
+      // confirmed (then it is in the ledger master, b.map, which is what the returns read)
+      it.state = ((b.map || {})[n] || {}).ok ? "confirmed" : "pending";
       if (ai) it.ai = ai;
     });
     c.ranAt = at; c.names = names;
@@ -26196,13 +26431,14 @@ const LedCheck = {
       if (LedMaster.isTds(p.what)){ m.section = p.section || ""; if (p.rate) m.rate = p.rate; }
       m.why = p.ev.map(e => this.SRC[e.src] + ": " + e.say).join("; ") + (p.fromAi ? "; AI: " + (it.ai.reason || "") : "");
       m.src = Array.from(new Set(p.ev.map(e => e.src).concat(p.fromAi ? ["ai"] : [])));
-      it.okSig = this.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.tick = undefined; done.push(n); });
+      it.okSig = this.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.tick = undefined; it.state = "confirmed"; done.push(n); });
     LedMaster.confirm(b, done, true);
     c.savedAt = new Date().toISOString(); c.savedBy = whoAmI(); c.strict = true;
     return done.length;
   },
-  // a ledger counts in returns only when confirmed, once the check is saved (request of 02-Oct-2026): an unconfirmed
-  // tax-like ledger reads as "other tax", in no return and not part of any taxable value
+  // the ledgers not confirmed (the books' own map). Since the owner's decision on H1 (09-Oct-2026, "Keep today's figures")
+  // Books.ledgerOf no longer reads them as "other tax": the books' map counts as in 2.3.3, the check's suggestions count
+  // in no figure until confirmed (they are kept apart in b.ledCheck until then)
   PENDING: Object.freeze({kind: "tax_other", pending: true}),
   held(b){
     if (!(b && b.ledCheck && b.ledCheck.strict)) return null;
@@ -26231,6 +26467,136 @@ const LedCheck = {
       it.s.ev = it.s.ev.filter(e => e.src !== "ai").concat([{src: "ai", say: (a.kind || "").replace("_", " ") + (a.head ? " " + a.head : "") + (a.tds_section ? " " + a.tds_section : "") + " (" + it.ai.conf + "): " + it.ai.reason}]); n++; });
     AIH.log("ledger check", n + " ledgers asked");
     return n;
+  }
+};
+
+/* ================================================================== */
+/* The GST and TDS ledgers page, simpler (FinCom 2.4.0; the owner of  */
+/* 08-Oct-2026: "there should be simple page of tds & gst tally ledger */
+/* import page"): one row a ledger with one answer and one action     */
+/* ================================================================== */
+// The screen is app/src/screens/books/Ledgers.jsx. One list of the client's tax-like ledgers (the map's GST and TDS ledgers
+// and the check's), each with ONE answer: the check's suggestion while the ledger is not confirmed and not set by hand,
+// else the ledger master's (b.map) - so the page never shows two answers for one ledger. The rows go to three places:
+//   GST ledgers / TDS ledgers - FinCom can tell what it is: Confirm, or Change;
+//   Needs you - FinCom could not tell (or a TDS ledger without its section, a GST ledger without its head or side), and
+//     the rest a person must act on: a ledger renamed in Tally (an owner confirms), entries naming a ledger FinCom does
+//     not have (migration 56), ledger lines without a GUID (Rec.needKind "masters", the shared classifier), a confirmed
+//     ledger now used differently, ledgers changed after returns were made, two ledgers with one GSTIN, a PAN that is
+//     not the one in the ledger's GSTIN - each with its one action.
+// Nothing new is asked of Tally: the ledger list is the bridge's (Ledgers, src/js/58) and the masters read as before.
+const LedPage = {
+  // the check worked out by itself when the books, the masters or the ledgers change (it was a button: "Run the ledger
+  // check"; "Check again" under More still runs it on demand)
+  key(b){ return (b.vouchers || []).length + "|" + (b.ledInfoAt || "") + "|" + Object.keys(b.map || {}).length + "|" + Object.keys(b.ledInfo || {}).length; },
+  ensure(b){
+    const k = this.key(b);
+    if (!b.ledCheck || !b.ledCheck.ranAt || b.ledCheck.autoKey !== k){
+      LedCheck.run(b); b.ledCheck.autoKey = k;
+      // kept with the books, its suggestions pending (they count in nothing until confirmed)
+      if (typeof saveBooks === "function" && b.cid) setTimeout(() => { if (S.books === b) saveBooks(); }, 0);
+    }
+    return b.ledCheck;
+  },
+  rows(b){
+    const c = this.ensure(b), info = b.ledInfo || {}, names = new Set();
+    Object.entries(b.map || {}).forEach(([n, m]) => { if (LedMaster.taxLike(n, m, info[n])) names.add(n); });
+    (c.names || []).forEach(n => names.add(n));
+    return Array.from(names).sort((x, y) => x.localeCompare(y)).map(n => this.row(b, n));
+  },
+  row(b, n){
+    const has = !!(b.map && b.map[n]), m = has ? b.map[n] : {}, it = ((b.ledCheck || {}).items || {})[n], ok = !!m.ok, cp = it ? LedCheck.pick(it) : null;
+    // the ledger master's answer (what the returns use) wherever it has one; the check's for a ledger it alone found, or
+    // one the master has no answer for
+    const fromCheck = !!(cp && (!has || (!m.what && !ok)));
+    const p = fromCheck ? cp : {what: m.what || "", side: m.side || "", tax: m.tax || "", rate: LedMaster.isGst(m.what) ? m.gstRate : m.rate, section: m.section || "",
+      conf: ok ? "high" : cp && this.same(cp, m) ? cp.conf : "medium", ev: cp ? cp.ev : [], fromAi: false};
+    // the check reads it otherwise: said under Why (its answer is taken only with "Confirm the check's sure answers")
+    const alt = cp && has && !ok && !this.same(cp, m) ? this.says(cp) : "";
+    const kind = LedMaster.isGst(p.what) ? "gst" : LedMaster.isTds(p.what) ? "tds" : "none";
+    let unclear = "";
+    if (!ok){
+      if (!p.what || (p.what === "none" && LedMaster.taxLike(n, null, (b.ledInfo || {})[n]) && !(cp && cp.what === "none" && cp.conf !== "low")) || (fromCheck && p.conf === "low" && !p.fromAi)) unclear = "FinCom could not tell what this ledger is";
+      else if ((p.what === "tds_payable" || p.what === "tcs_payable") && !p.section) unclear = "a TDS ledger without its section";
+      else if (/^(gst|gst_rcm|gst_import)$/.test(p.what) && (!p.tax || !p.side)) unclear = "a GST ledger whose head (CGST, SGST, IGST) or side (input, output) is not known";
+    }
+    return {n, m, it, ok, fromCheck, p, alt, kind, unclear, group: ((b.ledInfo || {})[n] || {}).group || (b.under || {})[n] || "", why: m.why || ""};
+  },
+  same(cp, m){ return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || "")); },
+  // "CGST input · 9%", "IGST output, reverse charge", "Not a tax ledger"
+  says(p){
+    if (!p || !p.what) return "Not known yet";
+    if (p.what === "none") return "Not a tax ledger";
+    if (/^(gst|gst_rcm|gst_import)$/.test(p.what))
+      return String(p.tax || "GST").replace("+", " + ") + (p.side ? " " + p.side : "") + (p.what === "gst_rcm" ? ", reverse charge" : p.what === "gst_import" ? ", on imports" : "") + (num(p.rate) ? " · " + num(p.rate) + "%" : "");
+    return LedMaster.label(p.what) + (LedMaster.isTds(p.what) && p.section ? " · " + LedCheck.secLabel(p.section) : "") + (num(p.rate) ? " · " + num(p.rate) + "%" : "");
+  },
+  // the nature of payment: Tally's own (the master's), else the payments FinCom's rules know for the section
+  nature(b, n, sec){
+    const t = ((b.ledInfo || {})[n] || {}).tdsNature; if (t) return String(t);
+    const k = String(sec || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    if (!k || typeof RULE_DEFAULTS === "undefined") return "";
+    return Array.from(new Set(RULE_DEFAULTS.filter(r => String(r.old || "").toUpperCase().replace(/[^0-9A-Z]/g, "") === k).map(r => r.label))).slice(0, 3).join(" / ");
+  },
+  // Confirm on a row: the ledger confirmed as the row says (the master's answer, as its Confirm did); a ledger only the
+  // check found goes into the master with the check's answer. A confirm is its own step: saved at once. The check's
+  // "only confirmed ledgers count" switch is still set only by "Confirm the check's sure answers" (lcConfirm)
+  confirm(b, names){
+    const rows = [].concat(names || []).map(n => this.row(b, n)).filter(r => !r.ok && (r.fromCheck || (b.map && b.map[r.n])));
+    if (!rows.length) return 0;
+    Drafts.direct(() => {
+      b.map = b.map || {};
+      rows.filter(r => r.fromCheck).forEach(r => { const p = r.p, m = b.map[r.n] = b.map[r.n] || {n: 0};
+        LedMaster.applyWhat(m, p.what || "none");
+        if (LedMaster.isGst(p.what)){ m.tax = p.tax || m.tax; m.side = p.side || m.side; if (p.rate) m.gstRate = p.rate; }
+        if (LedMaster.isTds(p.what)){ m.section = p.section || ""; if (p.rate) m.rate = p.rate; }
+        m.why = (p.ev || []).map(e => LedCheck.SRC[e.src] + ": " + e.say).join("; "); });
+      const names2 = rows.map(r => r.n), u = LedCheck.usage(b, names2);
+      LedMaster.confirm(b, names2, true);
+      names2.forEach(n => { const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.state = "confirmed"; } });
+      b.reco = null; saveBooks();
+    }, {bypass: true});
+    render();
+    return rows.length;
+  },
+  // two ledgers with one GSTIN; a PAN that is not the one inside the ledger's GSTIN. From the masters read and the
+  // bridge's ledger list; "Fine as it is" (b.ledOk) puts one away
+  conflicts(b, cid){
+    const all = {}, ok = b.ledOk || {}, out = [];
+    const add = (n, g, p) => { if (!n) return; const x = all[n] = all[n] || {n, gstin: "", pan: ""}; g = String(g || "").toUpperCase().trim(); p = String(p || "").toUpperCase().trim(); if (g && !x.gstin) x.gstin = g; if (p && !x.pan) x.pan = p; };
+    Object.entries(b.ledInfo || {}).forEach(([n, i]) => add(n, i && i.gstin, i && i.pan));
+    Object.entries(b.gstins || {}).forEach(([n, g]) => add(n, g, ""));
+    Object.entries(b.pans || {}).forEach(([n, p]) => add(n, "", p));
+    if (typeof Ledgers === "object" && cid) Ledgers.list(cid).forEach(l => { if (l) add(l.name, l.gstin, l.pan); });
+    const own = new Set([].concat((typeof GSTR === "object" && GSTR.gstins ? GSTR.gstins(b) : []) || [], [((CO(cid) || {}).gstin || "")]).map(g => String(g || "").toUpperCase()));
+    const by = {};
+    Object.values(all).forEach(x => { if (GSTIN_RE.test(x.gstin) && !own.has(x.gstin)) (by[x.gstin] = by[x.gstin] || []).push(x.n); });
+    Object.keys(by).sort().forEach(g => { const ns = by[g].sort((x, y) => x.localeCompare(y)); if (ns.length < 2 || ok["gstin:" + g]) return;
+      out.push({key: "gstin:" + g, kind: "gstin", names: ns, text: "GSTIN " + g + " is on " + ns.length + " ledgers: " + ns.join(", ") + ". If they are one party, merge them in Tally; if not, correct the GSTIN in Tally."}); });
+    Object.values(all).sort((x, y) => x.n.localeCompare(y.n)).forEach(x => {
+      if (!GSTIN_RE.test(x.gstin) || !PAN_RE.test(x.pan) || x.gstin.slice(2, 12) === x.pan || ok["pan:" + x.n]) return;
+      out.push({key: "pan:" + x.n, kind: "pan", names: [x.n], text: x.n + ": PAN " + x.pan + " is not the PAN inside its GSTIN " + x.gstin + " (" + x.gstin.slice(2, 12) + "). Correct it in Tally; the TDS returns use the PAN."}); });
+    return out;
+  },
+  fine(b, key){ Drafts.direct(() => { (b.ledOk = b.ledOk || {})[key] = {by: whoAmI(), at: new Date().toISOString()}; saveBooks(); }, {bypass: true}); render(); },
+  // entries naming a ledger FinCom does not have yet (migration 56, Rec.unkOf), one item a ledger
+  unknown(cid){
+    if (typeof Rec !== "object" || !Rec.unkOf || typeof TCloud !== "object" || !TCloud.on() || !cid) return [];
+    const bks = Rec.unkBooks(cid), rows = (Rec.unkOf(bks.length ? bks : null).rows || []).filter(r => String(r.client_id || "") === String(cid)), by = {};
+    rows.forEach(r => { const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
+      names.forEach(n => { (by[n] = by[n] || []).push(r); }); });
+    const one = r => [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "");
+    return Object.keys(by).sort().map(n => { const rs = by[n];
+      return {key: "unk:" + n, n, text: "'" + n + "' is used by " + rs.length + (rs.length === 1 ? " entry" : " entries") + " (" + rs.slice(0, 3).map(one).join(", ") + (rs.length > 3 ? ", …" : "") + "), but FinCom does not have this ledger yet. The entries are in the books; its group comes with the next ledger list."}; });
+  },
+  // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
+  // release-240 review M5: saved at once, as fine() (its own confirm step, not a draft)
+  keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it) Drafts.direct(() => { it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); saveBooks(); }, {bypass: true}); render(); },
+  // "2 min ago", "3 h ago", "on 07-Oct-2026 10:05"
+  ago(at){
+    const t = Date.parse(String(at || "")); if (!t) return "";
+    const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+    return min < 1 ? "just now" : min < 60 ? min + " min ago" : min < 24 * 60 ? Math.floor(min / 60) + " h ago" : "on " + fmtDateTime(t);
   }
 };
 /* ================================================================== */
@@ -26607,7 +26973,7 @@ function postStatusFor(co){
   const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
   const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
   if (l && l.state === "open"){ out.where = l.text.replace(/ · last read .*$/, ""); out.read = l.read; out.reading = !!l.reading; }
-  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Tally open on " + pl.computer;
+  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Connected \u00b7 Tally open on " + pl.computer;   // 2.3.5: the cards' words
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
@@ -28098,7 +28464,8 @@ const Ledgers = {
       try {
         let took = false, cand = null;
         if (bk && bk.book){
-          if (!opts.force && s && s.src === "cloud" && s.book === bk.book && (s.cloudAt || "") === (bk.ledgersAt || "") && s.list.length) return {ok: true, n: s.list.length, same: true};
+          // next-realtime: fresh (FinCom's copy said its ledgers changed, CopyLive): read again though the cloud's ledger time is the same
+          if (!opts.force && !opts.fresh && s && s.src === "cloud" && s.book === bk.book && (s.cloudAt || "") === (bk.ledgersAt || "") && s.list.length) return {ok: true, n: s.list.length, same: true};
           cand = await this.readCloud(cid, bk);
           took = this.take(cid, cand);
         }
@@ -29190,11 +29557,151 @@ const Rec = {
     return this.sorted().filter(r => (r.state === "received" || r.state === "held") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
       const d = this.devOf(r.device_id), pc = r.pc || (d && ((d.info || {}).computer || d.name)) || "the Tally computer";
       let why = r.held_why || "";
-      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
-      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
+      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally not open on " + pc : ""; }
+      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally not open on " + pc; }
       return {r, why: why || "not yet entered in the books"};
     });
   },
+  // FinCom 2.3.5 (the owner: "in tally sync there is a yellow field coming all the time.. there should be clear flow"):
+  // the lines waiting over 2 minutes (waiting(), above) by what will actually happen to them - THE one classifier, used by
+  // Sync activity, the books' held banner and the bell (AlertHub.oursHeld), so they never disagree (review of f0f1531f).
+  //   "" = being fetched: FinCom Bridge or the cloud settles it by itself (said quietly);
+  //   any other kind = Needs you: nothing happens until a person acts, with ONE action:
+  //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
+  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
+  //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
+  //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
+  //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
+  // Every reason the bridge (bridge-go) and the cloud (server/tally-cloud, migration 60) write is in
+  // tests/run_tally_page_simple.py (KINDS), each with its kind. The cloud's words are not changed.
+  FETCHED: [/waiting for the entry's details/i, /^waiting: /i, /FinCom asks again at/i, /matches no posting of this firm/i,
+    /held until FinCom Bridge( [\d.]+)? sends/i, /next (ledger list|day read|full line)/i, /^unknown (entry|ledger)\b/i, /^applied when |^replaced by /i,
+    /could not be asked whether it was (deleted|cancelled) here/i, /^the entry was not read from Tally/i, /queue/i, /not read from Tally in time/i],
+  needKind(r){
+    if (!r) return "";
+    const why = String(r.held_why || "").trim(), st = String(r.state || "");
+    if (st === "received" || st === "queued") return "";
+    if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
+    if (st !== "held") return "";
+    if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
+    if (/starting point/i.test(why)) return "baseline";
+    if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
+    if (/no MasterID or no date/i.test(why)) return "daybook";
+    if (this.FETCHED.some(x => x.test(why))) return "";
+    if (/Day Book|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
+    if (/^no GUID on the line/i.test(why)) return "masters";
+    if (/^month locked/i.test(why)) return "locked";
+    if (!why && /-0{8}$/.test(String(r.object_guid || ""))) return "";     // the add-on's placeholder, no words yet: the bridge asks for it
+    return "other";
+  },
+  // {needs: [{key, kind, cid, company, day (yyyy-mm-dd), lines, text}], fetching: [{r, why}]}
+  flow(){
+    const needs = new Map(), fetching = [];
+    this.waiting().forEach(w => {
+      const r = w.r, kind = this.needKind(r);
+      if (!kind){ fetching.push(w); return; }
+      const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
+      const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
+      const dev = this.devOf(r.device_id), pc = r.pc || (dev && ((dev.info || {}).computer || dev.name)) || "the Tally computer";
+      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : kind === "masters" || kind === "baseline" ? "" : day) + (kind === "other" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || kind === "masters" || kind === "baseline" ? "" : day, pc, deviceId: r.device_id || "", lines: []});
+      needs.get(key).lines.push(r);
+    });
+    const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
+    out.forEach(g => {
+      const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
+      const w = String(g.lines[0].held_why || ""), m = /^FinCom id (\S+)/.exec(w);
+      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
+        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
+        : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
+        : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
+        : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
+    });
+    // bridge 2.4.0 (next-outbox; the coordinator, 08-Oct-2026: "nothing lost", shown): saves FinCom answered 'failed' again
+    // and again; the bridge keeps them and sends them every 30 minutes, its beat says how many, since when and the oldest's
+    // day. Through the one classifier (a held row in the bridge's words: daybook), one group per computer and company
+    this.stuck().forEach(x => {
+      const kind = this.needKind(this.stuckRow(x));
+      if (!kind) return;
+      const d = x.day ? fmtDate(x.day) : "", hm = /T(\d{2}:\d{2})/.exec(String(x.since || "")), k = num(x.n);
+      out.push({key: kind + "|" + x.company + "|" + (x.day || "") + "|stuck|" + x.deviceId, kind, cid: this.clientOf(x.company), company: x.company, day: x.day || "", pc: x.pc, deviceId: x.deviceId, lines: [], stuck: true,
+        text: x.company + (d ? " \u00b7 " + d : "") + ": " + k + (k === 1 ? " save" : " saves") + " from " + x.pc + " could not be stored in FinCom" + (hm ? " since " + hm[1] : "") +
+          "; FinCom keeps trying \u2014 if it continues, upload the Day Book for " + (d || "that day")});
+    });
+    // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
+    const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
+    return {needs: rn.concat(out), fetching};
+  },
+  // 2.4.0 review MEDIUM (next-renumber): an entry inserted or deleted in Tally makes Tally renumber the later entries of
+  // that voucher type with no line for them; FinCom Bridge reads them again, and says the ones it could not
+  // (renumber.go: below the starting point, Tally too slow twice, an answer it cannot read, more than 500, or not
+  // listable by MasterID) on its beat (info.beat.renumberAlerts, kept by tally-ingest; the last 7 days). One item a
+  // company, the earliest date of every computer's alerts: [{key, kind: "renumber", cid, company, day, n, more, text}];
+  // its one action: Upload the Day Book from that day (Rec.uploadFrom)
+  renumberNeeds(){
+    const tl = (typeof TLight === "object" && TLight.st) || {}, by = new Map();
+    (tl.devs || []).filter(d => d && !d.revoked).forEach(d => {
+      [].concat((((d.info || {}).beat) || {}).renumberAlerts || []).forEach(a => {
+        const f = String((a && a.from) || "");
+        if (!a || !a.company || !/^\d{8}$/.test(f)) return;
+        const day = f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8), k = norm(a.company);
+        const co = (tl.cos || []).find(c => c.client_id && norm(c.company) === k)
+          || Object.values(S.companies || {}).map(c => ({client_id: c.id, company: c.tallyName || c.name})).find(c => !(S.companies[c.client_id] || {}).deleted && norm(c.company) === k);
+        if (!by.has(k)) by.set(k, {key: "renumber|" + a.company, kind: "renumber", cid: co ? co.client_id : "", company: a.company, day, n: 0, more: false, pc: this.pcOf(d), deviceId: d.id, lines: []});
+        const g = by.get(k);
+        if (day < g.day) g.day = day;
+        g.n += Math.max(0, Number(a.n) || 0); g.more = g.more || a.more === true;
+      });
+    });
+    return [...by.values()].sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
+      text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
+        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
+  },
+  // the Day Book upload from a day to today: Books -> From Tally
+  async uploadFrom(cid, day){
+    if (!cid || !day) return;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = this.ymdLocal(Date.now());
+    goClient("books:import");
+  },
+  // the lines a computer's bridge keeps because FinCom could not store them (its beat's recorderStuck), each
+  // {company, n, since, day, pc, deviceId}
+  stuck(){
+    const seen = new Set(), out = [];
+    [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).forEach(d => {
+      if (!d || d.revoked || seen.has(d.id)) return;
+      seen.add(d.id);
+      const info = d.info || {}, b = info.beat || {};
+      [].concat(b.recorderStuck || []).forEach(x => { if (x && x.company && num(x.n) > 0) out.push({company: String(x.company), n: num(x.n), since: x.since || "", day: x.day || "", pc: info.computer || d.name || "the Tally computer", deviceId: d.id}); });
+    });
+    return out;
+  },
+  // a stuck group as a held row in the bridge's words, so the one classifier (needKind) decides it
+  stuckRow(x){ return {state: "held", object_guid: "", stuck: x, held_why: "could not be stored in FinCom; FinCom Bridge keeps it and sends it again every 30 minutes; if it continues, upload that day's Day Book"}; },
+  // the FinCom client a Tally company is linked to (its Tally name, else its name), "" when none here
+  clientOf(company){
+    const k = String(company || "").trim().toLowerCase(), c = Object.values(S.companies || {}).find(x => x && String(x.tallyName || "").trim().toLowerCase() === k)
+      || Object.values(S.companies || {}).find(x => x && String(x.name || "").trim().toLowerCase() === k);
+    return c ? c.id : "";
+  },
+  // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
+  async uploadDay(cid, day){
+    if (!cid || !day) return;
+    S.dbFrom = day; S.dbTo = day;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = day;
+    goClient("books:import");
+  },
+  // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
+  async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
+  openTallyPage(){ S.tallyTab = "computers"; navHome("tally"); },
+  resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
+  // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
+  async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
   async release(r){
     const a = this.act;
     a.msg = {busy: true, id: r.id}; render();
@@ -29495,10 +30002,9 @@ const AlertHub = {
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
-    const why = String(l.held_why || "");
-    if (/^month locked/i.test(why)) return false;
-    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
-      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+    // review of f0f1531f: the one classifier (Rec.needKind, src/js/61): "ours" = being fetched, settles by itself; the
+    // page and the bell can never disagree. A line a person must settle is never "nothing to do"
+    return typeof Rec === "object" && Rec.needKind ? !Rec.needKind(l) : false;
   },
   // "1 entry", "3 entries"
   n(k){ return k + (k === 1 ? " entry" : " entries"); },
@@ -29517,8 +30023,15 @@ const AlertHub = {
     const d = typeof Rec === "object" && Rec.devOf ? Rec.devOf(id) : null;
     return d && typeof tallyPcLabel === "function" ? tallyPcLabel(d) : fallback || "the Tally computer";
   },
-  // every alert now: [{key, sev, cid, text, fix, act: {label, run}, details, at, alert (a tally_alerts row: Mark read)}]
-  list(){
+  // the line's part of a fingerprint (the table at AlertClear, below): the line, and whether a person must act on it
+  // ("need": Sync activity's "Needs you", Rec.needKind) or not ("wait": FinCom or the bridge is still at it). The same
+  // words in the bell, the books' banner and Sync activity, so a line cleared in one place is cleared in all
+  lineAtom(l){ return "line:" + l.id + ":" + (typeof Rec === "object" && Rec.needKind && Rec.needKind(l) ? "need" : "wait"); },
+  // every alert not cleared by this person (AlertClear, below): what the bell, its count and the pages' lines show
+  list(){ const all = this.all(); return typeof AlertClear === "object" ? all.filter(x => !AlertClear.cleared(x)) : all; },
+  // every alert now, cleared or not: [{key, fp, sev, cid, text, fix, act: {label, run}, details, at, alert (a tally_alerts row: Mark read)}]
+  // fp: its fingerprint, what it says that makes it this notification (the table at AlertClear, below)
+  all(){
     // the cloud's alerts need a firm signed in: without one nothing is asked of the cloud (no rpc with an empty firm)
     const out = [], cloud = typeof TCloud === "object" && TCloud.on() && typeof Rec === "object" && !!(Rec.firm && Rec.firm());
     const coName = cid => ((S.companies || {})[cid] || {}).name || "";
@@ -29564,12 +30077,19 @@ const AlertHub = {
         if (b.bookId) det.push("Book " + b.bookId);
         const at = [].concat(b.rows.map(x => x.at), b.gap ? [b.gap.at || ""] : [], b.ours.concat(b.other).map(l => l.received_at)).filter(Boolean).sort().pop() || "";
         const recFix = "Turn on FinCom's recorder in Tally on that computer (the details say which).";
-        const base = {key: "book:" + k, cid: b.cid, details: det.join(" · "), at, selfClear: true};
+        // the fingerprint: the gap by the day it started (never its count, which ticks), each line waiting, each computer not recording
+        const gapFrom = b.gap ? (b.gap.since || b.gap.last_match_at || b.gap.at) : b.rows.length ? b.rows[0].at : "";
+        // (the book by FinCom's cloud id, the same on every computer; the client and company when it has none)
+        const fp = AlertClear.fp([b.gap || b.rows.length ? "gap:" + (b.bookId || k) + ":" + (istDay(gapFrom) || "?") : ""]
+          .concat(b.ours.concat(b.other).map(l => this.lineAtom(l)), b.off.map(x => "off:" + x.deviceId + ":" + norm(x.company))));
+        const base = {key: "book:" + k, fp, cid: b.cid, details: det.join(" · "), at, selfClear: true};
         const waiting = b.ours.length + b.other.length;
-        if (b.ours.length && (!gapN || b.ours.length >= gapN)){
-          // FinCom's own side: the details are on their way, nothing to do
+        // 2.3.5: lines a person must settle (b.other) are said first; "nothing to do" only when nothing else waits
+        if (b.ours.length && !b.other.length && (!gapN || b.ours.length >= gapN)){
+          // FinCom's own side: the details are on their way, nothing to do. FinCom 2.3.5 (the owner: "a yellow field coming
+          // all the time"): information, said quietly (the bell lists it; no yellow line on the pages): yellow is for "Needs you"
           const k2 = Math.max(gapN, b.ours.length), hd = b.ours.filter(l => l.state === "held");
-          out.push(Object.assign(base, {sev: "warn", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
+          out.push(Object.assign(base, {sev: "info", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
             : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
@@ -29584,12 +30104,23 @@ const AlertHub = {
           const hd = b.other.filter(l => l.state === "held");
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+            // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+              ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
+              : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
+              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
+              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
           out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
             fix: recFix}));
         }
       });
+      // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again
+      // (Rec.renumberNeeds: one a company, from every computer's beat): Needs you, the Day Book from that day
+      if (Rec.renumberNeeds) Rec.renumberNeeds().forEach(g => out.push({key: "renumber:" + g.company, sev: "warn", cid: g.cid, selfClear: true, details: g.pc,
+        text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
+        fix: "Needs you: upload the Day Book from " + fmtDate(g.day) + " so FinCom has Tally's numbers.",
+        ...(g.cid ? {act: {label: "Upload the Day Book from " + fmtDate(g.day), run: () => Rec.uploadFrom(g.cid, g.day)}} : {})}));
       // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();
@@ -29604,39 +30135,45 @@ const AlertHub = {
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
         // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
         // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
-        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
+        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords, beat.recorderWaitSince, beat.recorderWaitStarts);
+        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: ownFp, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
           text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
+        const pcFp = kind => AlertClear.fp(["pc:" + d.id + ":" + kind]);
         const base = {key: "pc:" + d.id, details: [label, old && old.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
-        if (retry) out.push(Object.assign(base, {sev: "warn", text: String(retry.words).replace(/\.?$/, ".") + " (one computer)", fix: "Nothing to do: it tries again by itself; postings go on."}));
-        else if (old) out.push(Object.assign(base, {sev: "warn", text: "Tally did not answer in time" + (old.at ? " at " + fmtTime(old.at) : "") + " on one computer; reading starts again by itself once FinCom Bridge 2.3.1 is on it.", fix: "Update the bridge on that computer (it updates by itself within a few hours)."}));
-        else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
-        else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
+        if (retry) out.push(Object.assign(base, {fp: pcFp("retry:" + istDay(retry.since || retry.at || Date.now())), sev: "warn", text: String(retry.words).replace(/\.?$/, ".") + " (one computer)", fix: "Nothing to do: it tries again by itself; postings go on."}));
+        else if (old) out.push(Object.assign(base, {fp: pcFp("stopped:" + (old.at || "")), sev: "warn", text: "Tally did not answer in time" + (old.at ? " at " + fmtTime(old.at) : "") + " on one computer; reading starts again by itself once FinCom Bridge 2.3.1 is on it.", fix: "Update the bridge on that computer (it updates by itself within a few hours)."}));
+        else if (beat.notAnsweringSince) out.push(Object.assign(base, {fp: pcFp("notanswering:" + beat.notAnsweringSince), sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
+        else if (quiet || rowsD.length) out.push(Object.assign(base, {fp: pcFp("silent:" + istDay(Date.now())), sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
       });
       // ---- the owner's condition (Fix 2c): a computer key refused a bridge id: one alert per (id, computer), owners only
       if (S.account && S.account.me && S.account.me.role === "owner"){
         const tp = TCloud.pane || {};
         if (!tp.bridgeAlertsAt || Date.now() - tp.bridgeAlertsAt > 300000){ tp.bridgeAlertsAt = Date.now(); TCloud.loadBridgeAlerts().then(() => render()).catch(() => {}); }
-        (tp.bridgeAlerts || []).filter(x => !x.read_at).forEach(x => out.push({key: "bridgeid:" + x.id, sev: "bad", cid: "", selfClear: false, at: x.last_at || x.at,
+        (tp.bridgeAlerts || []).filter(x => !x.read_at).forEach(x => out.push({key: "bridgeid:" + x.id, fp: AlertClear.fp(["bridgeid:" + x.id]), sev: "bad", cid: "", selfClear: false, at: x.last_at || x.at,
           text: [x.tried_computer, x.tried_user].filter(Boolean).join(" \u00b7 ") + " tried to use bridge " + x.bridge_id + ", which belongs to another computer; FinCom refused it.",
           fix: "Ask that Windows user to install FinCom Bridge again (it makes an id of its own), or release this bridge's identity on the Tally page.",
           details: x.words || "", act: {label: "Mark read", run: () => TCloud.bridgeAlertRead(x)}}));
       }
       // ---- what cannot clear itself: the daily summary, until read
-      unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
+      unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
     }
     // ---- the app's own warnings
     const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warnAt = a && a.firm ? num(a.firm.warn_at) : 0;
+    // the review of 08-Oct (M1): a low credit is one episode from when this browser saw it go low until a top-up above
+    // the warning ends it; low again is a new notification
+    if (!(a && a.firm) || bal > warnAt) AlertClear.episode("credit-low", false);
     if (a && a.firm){
-      if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0) out.push({key: "app:credit", sev: "bad", text: "Credit finished: reading new bills, bank statements and invoices is paused.", fix: "Ask the administrator to add credit. Everything already in FinCom still works.", selfClear: true});
-      else if (bal <= warnAt) out.push({key: "app:credit", sev: "warn", text: "Credit left: " + money(bal) + ".", fix: "Ask the administrator to top it up before it runs out.", selfClear: true});
+      if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0) out.push({key: "app:credit", fp: AlertClear.fp(["credit:stop:" + istDay(S.creditStop.at)]), sev: "bad", text: "Credit finished: reading new bills, bank statements and invoices is paused.", fix: "Ask the administrator to add credit. Everything already in FinCom still works.", selfClear: true});
+      else if (bal <= warnAt) out.push({key: "app:credit", fp: AlertClear.fp(["credit:low:" + warnAt + ":" + AlertClear.episode("credit-low", true)]), sev: "warn", text: "Credit left: " + money(bal) + ".", fix: "Ask the administrator to top it up before it runs out.", selfClear: true});
     }
     if (!(S.storeKind === "db" || (typeof Cloud === "object" && Cloud.on() && Cloud.st && !Cloud.st.error))){
       const kept = S.storeKind === "local" || S.storeKind === "idb";
-      out.push({key: "app:store", sev: kept ? "info" : "bad", text: kept ? "Your work is saved in this browser only." : "Your work is not being saved.",
+      out.push({key: "app:store", fp: kept ? AlertClear.fp(["store:browser:" + AlertClear.device()]) : "", sev: kept ? "info" : "bad", text: kept ? "Your work is saved in this browser only." : "Your work is not being saved.",
         fix: kept ? "Clearing browser data would remove it. Sign in from Settings to keep it in the firm account." : "It will be lost when this page closes. Sign in from Settings to keep it.", selfClear: true});
     }
     const st = typeof selfTestSummary === "function" ? selfTestSummary() : {state: "none"};
-    if (st.state === "fail") out.push({key: "app:selftest", sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
+    const stFp = AlertClear.selftestFp(st.state === "fail" ? st.fails : [], st.state === "fail");
+    if (st.state === "fail") out.push({key: "app:selftest", fp: stFp, sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
       details: st.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + st.r[k].msg).join(" "), act: {label: "Self-test", run: () => doAct("goSelfTest")}, selfClear: true});
     const rank = {bad: 0, warn: 1, info: 2};
     return out.sort((x, y) => rank[x.sev] - rank[y.sev] || String(y.at || "").localeCompare(String(x.at || "")));
@@ -29645,6 +30182,185 @@ const AlertHub = {
   forClient(cid){ return this.list().filter(x => x.cid === cid && x.sev !== "info"); },
   async read(x){ if (x && x.alert && typeof Rec === "object") await Rec.alertRead(x.alert); }
 };
+/* ------------------------------------------------------------------ */
+/* Clear (FinCom, 08-Oct-2026). The owner: "There should be option to  */
+/* clear notifications everywhere.. in the bell of desktop even we dont */
+/* have that option.. run it everywhere.. and have the clear option..   */
+/* and if one time any notification is cleared then that notification  */
+/* should not appear".                                                 */
+/* ------------------------------------------------------------------ */
+// Every notification (the bell's, and every slim line or banner on the pages that says the same: the alert line, the
+// books' "not yet in these books" banner, Sync activity's "Needs you" groups and "being fetched" note, the unknown-ledger
+// banner) has a Clear; the bell has Clear all. A notification cleared is never shown again to that person, on any page or
+// device. It is "the same notification" when its fingerprint is: the items of what it says that make it this problem.
+// THE FINGERPRINTS (one item a line; a notification is cleared when EVERY item of its fingerprint has been cleared by this
+// person, so the same problem said with fewer items (one of two lines applied) stays cleared, and a NEW item (a new line,
+// a gap from another day, another computer or kind of problem) makes it a new notification that shows). Never in a
+// fingerprint: times that move, counts that tick, the words.
+//   key                          shown on                                        fingerprint items
+//   book:<client>|<book>         the bell; the alert line (Tally page, Books)    gap:<book id>:<IST day the gap started (the cursor's since or last
+//                                                                                  match, else the gap alert row's time)>; line:<id>:need|wait for each
+//                                                                                  line waiting; off:<computer>:<company> for each computer not recording it
+//   held:<client>                the books' "not yet in these books" banner      line:<id>:need|wait for each held line
+//   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
+//   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line
+//   unk:<client or firm>         "uses a ledger FinCom does not have yet"        unk:<the entry's key> for each entry
+//   ownwait:<computer>           the bell                                        ownwait:<computer>:<reason>:<company>:<its start> for each of the beat's recorderWaitStarts (release-240 M2-r); else recorderWaitSince; a bridge before 2.4.0: when this browser first saw it
+//   pc:<computer>                the bell                                        pc:<computer>:retry:<IST day of the retry> | :stopped:<its time> |
+//                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
+//   bridgeid:<id>                the bell (owners)                               bridgeid:<id>
+//   alert:<id>                   the bell (the daily summary)                    alert:<id>  (Clear also marks it read, as Mark read)
+//   app:credit                   the bell; the alert line                        credit:stop:<IST day it stopped> | credit:low:<the warning level>:<when this browser saw it go
+//                                                                                  low (the episode; a top-up above the warning ends it)> (never the balance)
+//   app:store                    the bell                                        store:browser:<this browser>. "Your work is not being saved" (bad: the work is being
+//                                                                                  lost) has NO fingerprint: it cannot be cleared, and Clear all leaves it
+//   app:selftest                 the bell; the alert line                        selftest:<this browser>:<the failed checks>:<when it started failing> (release-240 M2)
+// <this browser>: AlertClear.device(), a random id kept in this browser (localStorage "fincom:device-id"). The credit's
+// episode is this browser's too: another computer that saw it go low at another time shows it once more (never fewer).
+// (the review of 08-Oct, M1: every fingerprint names an occurrence, so a cleared notification can come back as a new one)
+// line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind, THE one shared classifier of
+// Sync activity, the books' banner and the bell, src/js/61), the same in every place, so a
+// line cleared in the bell is cleared on the books' banner and in Sync activity too.
+// Where it is kept: signed in to the firm account, in FinCom's cloud (migration 68: app_alert_dismissals, the person's own
+// rows, through alert_dismiss / alert_dismiss_undo / alert_dismissals_list), with a copy in this browser so a reload hides
+// what was cleared while the list is read again; not signed in (or before migration 68 runs), in this browser only
+// (localStorage). Clearing hides; it never changes data: no line applied or released, nothing removed, the work lists
+// (Sync activity's table, Post to Tally) stay as they are. Undo marks that Clear's rows undone (kept, never removed).
+const AlertClear = {
+  st: null,
+  undo: null,          // the last Clear, for its Undo: {lb, n, until}
+  inflight: {},        // lb -> the call sending it
+  reset(){ this.st = {who: null, rows: [], at: 0, busy: false, none: false, ver: 0, set: null, setVer: -1}; },
+  fp(items){ return [...new Set([].concat(items || []).filter(Boolean).map(String))].sort().join("\n"); },
+  // release-240 review M2(b): keyed on when the problem started in this browser (an episode), not the day: cleared, the
+  // same problem the next day stays cleared; ended and back, a new notification
+  // release-240 re-review M2: keyed on when the wait began as the bridge says it (the beat's recorderWaitSince, bridge
+  // 2.4.0): the same in every browser, and a wait that ended and came back while this browser was closed is new. A bridge
+  // before 2.4.0 does not say it: when this browser first saw the wait, as before
+  // re-review M2-r: each reason's start (the beat's recorderWaitStarts: earlier, blind, queue per company) is one item of
+  // the fingerprint, as a book alert's lines are: a new reason, or a reason started again, is a new notification
+  ownwaitFp(dev, on, since, starts){
+    const iso = v => /^\d{4}-\d\d-\d\dT/.test(String(v || ""));
+    const items = [].concat(Array.isArray(starts) ? starts : []).filter(x => x && iso(x.since)).map(x => "ownwait:" + dev + ":" + String(x.reason || "") + ":" + String(x.company || "") + ":" + String(x.since));
+    const s = iso(since) ? String(since) : "", t = this.episode("ownwait:" + dev, on && !items.length && !s);
+    return on ? this.fp(items.length ? items : ["ownwait:" + dev + ":" + (s || t)]) : ""; },
+  selftestFp(fails, on){ const f = [].concat(fails || []).slice().sort().join(","), t = this.episode("selftest", on); return on ? this.fp(["selftest:" + this.device() + ":" + f + ":" + t]) : ""; },
+  // release-240 review M2(a): what the cloud keeps (migration 68/70): 2,000 characters a fingerprint, 500 a call. An item
+  // longer than 200 characters is sent as its hash (h1:...; cleared() checks the item and its hash); a fingerprint still
+  // longer goes as several rows of the same notification (the items of all its rows count together)
+  hash(s){ let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0; i < s.length; i++){ const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return "h1:" + (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0"); },
+  short(a){ return a.length > 200 ? this.hash(a) : a; },
+  rowsFor(x){ const items = String(x.fp || "").split("\n").filter(Boolean).map(a => this.short(a)), out = []; let cur = [];
+    items.forEach(a => { if (cur.length && (cur.join("\n").length + 1 + a.length) > 1900){ out.push(cur); cur = []; } cur.push(a); });
+    if (cur.length) out.push(cur);
+    return out.map(c => ({key: String(x.key).slice(0, 2000), fp: c.join("\n"), words: String(x.text || "").slice(0, 500)})); },
+  item(key, items, text){ return {key, fp: this.fp(items), text: String(text || "")}; },
+  firmOn(){ try { return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); } catch (e){ return false; } },
+  who(){ if (!this.firmOn()) return "local"; const s = (Cloud.sess && Cloud.sess()) || {}; return Cloud.st.firm + "|" + (s.user_id || s.email || Cloud.st.email || ""); },
+  lsKey(w){ return "fincom:alerts-cleared:" + w; },
+  readLocal(w){ try { const v = JSON.parse(localStorage.getItem(this.lsKey(w)) || "[]"); return Array.isArray(v) ? v.filter(r => r && r.fp) : []; } catch (e){ return []; } },
+  saveLocal(){ const st = this.st; try { localStorage.setItem(this.lsKey(st.who), JSON.stringify(st.rows.slice(0, 5000))); } catch (e){} },
+  cloud(){ return this.firmOn() && !this.st.none; },
+  rpc(fn, a){ return typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(fn, a) : Cloud.api("rpc/" + fn, {method: "POST", body: a || {}}); },
+  // "migration 68 not run": only the dismissal functions missing (the review of 08-Oct, L(c)); a network fault, another
+  // 404 or another missing object is not that, and the clears are kept to send again
+  missing(e){ const m = String((e && e.message) || e); return /alert_dismiss/i.test(m) && /PGRST202|does not exist|Could not find the function/i.test(m); },
+  // this browser's own id (a self-test failure is this computer's; "saved in this browser only" is this browser's)
+  device(){
+    try { let d = localStorage.getItem("fincom:device-id"); if (!d){ d = "dev-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem("fincom:device-id", d); } return d; }
+    catch (e){ return this.memDev || (this.memDev = "dev-" + Math.random().toString(36).slice(2, 10)); }
+  },
+  // an episode of a condition seen in this browser: on -> when it began (kept), off -> ended (forgotten)
+  episode(name, on){
+    const k = "fincom:alert-episode:" + this.who() + ":" + name;
+    try {
+      if (!on){ localStorage.removeItem(k); return ""; }
+      let t = localStorage.getItem(k); if (!t){ t = new Date().toISOString(); localStorage.setItem(k, t); } return t;
+    } catch (e){ const m = this.memEp || (this.memEp = {}); if (!on){ delete m[k]; return ""; } return m[k] || (m[k] = new Date().toISOString()); }
+  },
+  // the person's cleared rows now ({key, fp, batch, lb, pending}); the cloud's list read at most once a minute
+  rowsNow(){
+    if (!this.st) this.reset();
+    const w = this.who();
+    if (this.st.who !== w){ this.reset(); this.st.who = w; this.st.rows = this.readLocal(w); }
+    const st = this.st;
+    if (this.cloud() && !st.busy && Date.now() - st.at > 60000){ st.at = Date.now(); setTimeout(() => this.load(), 0); }
+    return st.rows;
+  },
+  async load(){
+    const st = this.st;
+    if (!st) return;
+    st.busy = true;
+    const t0 = Date.now();
+    try {
+      const pend = st.rows.filter(r => r.pending);         // what could not be sent before goes first
+      if (pend.length) await this.send(pend);
+      if (!st.none){
+        const list = [].concat(await this.rpc("alert_dismissals_list", {}) || []);
+        const lbOf = new Map(st.rows.filter(r => r.batch && r.lb).map(r => [r.batch, r.lb]));
+        const rows = list.map(x => ({key: String(x.key || ""), fp: String(x.fp || ""), batch: String(x.batch || ""), lb: lbOf.get(String(x.batch || "")) || ""}))
+          .filter(r => r.fp);
+        // the review of 08-Oct, L(b): what was cleared here while the list was on its way (or not yet sent) is kept
+        const have = new Set(rows.map(r => r.key + "\n" + r.fp));
+        st.rows = rows.concat(st.rows.filter(r => (r.pending || (r.t || 0) >= t0) && !have.has(r.key + "\n" + r.fp)));
+      }
+    } catch (e){ if (this.missing(e)) st.none = true; }
+    st.busy = false; st.at = Date.now(); st.ver++;
+    if (this.st === st){ this.saveLocal(); if (typeof render === "function") render(); }
+  },
+  async send(rows){
+    const st = this.st;
+    // release-240 review M2(a): in calls of 500 or fewer (the cloud refuses more); a call that fails leaves its rows to send again
+    for (let i = 0; i < rows.length; i += 500){
+      const part = rows.slice(i, i + 500);
+      try {
+        const j = await this.rpc("alert_dismiss", {p_items: part.map(r => ({key: r.key, fp: r.fp, words: r.words || ""}))});
+        part.forEach(r => { r.pending = false; r.batch = String((j && j.batch) || ""); });
+      } catch (e){ if (this.missing(e)){ st.none = true; break; } }
+    }
+    if (this.st === st) this.saveLocal();
+  },
+  atoms(){
+    this.rowsNow();
+    const st = this.st;
+    if (st.setVer !== st.ver || !st.set){ st.set = new Set(); st.rows.forEach(r => String(r.fp || "").split("\n").forEach(a => { if (a) st.set.add(a); })); st.setVer = st.ver; }
+    return st.set;
+  },
+  cleared(x){ if (!x || !x.fp) return false; const a = this.atoms(); return String(x.fp).split("\n").every(t => a.has(t) || (t.length > 200 && a.has(this.hash(t)))); },
+  // Clear: one notification or many (Clear all); hidden at once, then kept (the cloud, or this browser)
+  async clear(items){
+    items = [].concat(items || []).filter(x => x && x.key && x.fp && !this.cleared(x));
+    if (!items.length) return;
+    this.rowsNow();
+    const st = this.st, lb = "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const rows = [].concat(...items.map(x => this.rowsFor(x))).map(r => Object.assign(r, {lb, batch: "", pending: true, t: Date.now()}));
+    st.rows = rows.concat(st.rows); st.ver++; this.saveLocal();
+    this.undo = {lb, n: items.length, until: Date.now() + 6000};
+    clearTimeout(this.undoT); this.undoT = setTimeout(() => { if (this.undo && this.undo.lb === lb){ this.undo = null; if (typeof render === "function") render(); } }, 6100);
+    if (typeof render === "function") render();
+    // the daily summary: Clear marks it read too (as its Mark read did)
+    items.filter(x => x.alert && typeof AlertHub === "object").forEach(x => { try { Promise.resolve(AlertHub.read(x)).catch(() => {}); } catch (e){} });
+    if (this.cloud()){ const p = this.send(rows); this.inflight[lb] = p; try { await p; } finally { delete this.inflight[lb]; } }
+  },
+  // Undo the last Clear: its rows marked undone in the cloud (kept), gone from this browser's copy
+  async undoLast(){
+    const u = this.undo;
+    if (!u) return;
+    this.undo = null; clearTimeout(this.undoT);
+    if (this.inflight[u.lb]) await this.inflight[u.lb].catch(() => {});
+    const st = this.st, mine = st.rows.filter(r => r.lb === u.lb);
+    st.rows = st.rows.filter(r => r.lb !== u.lb); st.ver++; this.saveLocal();
+    if (typeof render === "function") render();
+    for (const b of [...new Set(mine.map(r => r.batch).filter(Boolean))]){
+      try { await this.rpc("alert_dismiss_undo", {p_batch: b}); }
+      catch (e){ if (!this.missing(e) && typeof toast === "function") toast("Could not undo in the firm account: " + ((e && e.message) || e)); }
+    }
+  },
+  undoShown(){ return this.undo && Date.now() < this.undo.until ? this.undo : null; }
+};
+AlertClear.reset();
 // what a client's books say while lines Tally sent for them are held (AlertHub.booksHeld): null when none
 function booksHeld(cid){ return typeof AlertHub === "object" ? AlertHub.booksHeld(cid || S.coId) : null; }
 // the same words on a printed report or ledger (led: a ledger's own lines too), and as the first rows of its Excel sheet
