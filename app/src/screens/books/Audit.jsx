@@ -10,6 +10,7 @@ import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import DateBox from "../../parts/DateBox.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -30,8 +31,8 @@ function Head({ b, run }) {
   const fin = run && Audit.finalFor(run.from, run.to);
   return <section className="dash-card" data-audit-head="">
     <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" key={"f" + range.from} defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
-      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" key={"t" + range.to} defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><DateBox aria-label="Audit from" key={"f" + range.from} defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><DateBox aria-label="Audit to" key={"t" + range.to} defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
       <label className="f" style={{ minWidth: 120 }}><span>Year</span><select aria-label="Audit year" value={S.auditRange ? "" : (S.auditFy || fsLastFull())} onChange={(ev) => { S.auditFy = ev.target.value; S.auditRange = null; render(); }}>
         {S.auditRange && <option value="">dates chosen</option>}{fsYears().map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select></label>
       <span className="note" style={{ alignSelf: "center" }} data-audit-period="">{fmtDate(range.from) + " to " + fmtDate(range.to) + " · " + entryCount(Audit.ymd(range.from), Audit.ymd(range.to)).text + " in the books"}</span>

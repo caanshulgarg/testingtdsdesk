@@ -4,8 +4,10 @@
       rules still draw everything else as before.
    2. Arc's design tokens (src/arc/foundation.css).
    3. The tokens set to FinCom's colours, light and dark (arc-tokens.css).
-   4. FinCom's own elements (old screens, raw buttons and boxes) in the same look as Arc's (arc-look.css). */
+   4. FinCom's own elements (old screens, raw buttons and boxes) in the same look as Arc's (arc-look.css).
+   5. The app's frame (sidebar, header, cards, dashboard) in Arc's look (arc-shell.css). */
 @import "../../legacy/app.css" layer(fincom);
 @import "../arc/foundation.css";
 @import "./arc-tokens.css";
 @import "./arc-look.css";
+@import "./arc-shell.css";

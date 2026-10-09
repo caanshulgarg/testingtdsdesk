@@ -11,6 +11,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import ListTable from "../../parts/ListTable.jsx";
+import DateBox from "../../parts/DateBox.jsx";
 
 const Tile = ({ l, v, sub, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b><small>{sub}</small></div>;
 const Sel = ({ label, value, opts, onChange, className }) => <select className={className} aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
@@ -26,7 +27,7 @@ const SendBtns = ({ kind, l }) => <><button className="btn small" onClick={() =>
 function Confirm() {
   const x = LTR.st(), { B, rows } = LTR.confirmRows(), c = LTR.cfg();
   const form = <section className="dash-card" style={{ marginTop: 12 }}><div className="lk-form">
-    <label className="f"><span>Balance as on</span><input type="date" aria-label="Balance as on" value={FC.iso(x.asOn)} onChange={(ev) => ltrSet("asOn", ev.target.value, true)} /></label>
+    <label className="f"><span>Balance as on</span><DateBox aria-label="Balance as on" value={FC.iso(x.asOn)} onChange={(ev) => ltrSet("asOn", ev.target.value, true)} /></label>
     <div className="f"><span>Write to</span><div className="row" style={{ gap: 12 }}>{[["r", "Customers"], ["p", "Suppliers"], ["o", "Loans and advances"]].map(([k, l]) => <label key={k} className="chk"><input type="checkbox" checked={!!x.sides[k]} onChange={(ev) => ltrSide(k, ev.target.checked)} /> {l}</label>)}</div></div>
     <label className="f"><span>Balances of at least</span><CommitBox inputMode="decimal" aria-label="Balances of at least" value={x.min} onCommit={(v) => ltrSet("min", v)} /></label>
     <label className="f"><span>Show</span><Sel label="Show" value={x.show} opts={[["all", "Every party"], ["notsent", "Not sent yet"], ["waiting", "Sent, no reply yet"], ["differs", "Replied with a difference"]]} onChange={(v) => ltrSet("show", v)} /></label>
@@ -60,7 +61,7 @@ function Remind() {
   const x = LTR.st(), rows = LTR.remindRows(), c = LTR.cfg(), picked = rows.filter((r) => x.sel["rem|" + r.l]), tot = rows.reduce((s, r) => s + r.amt, 0);
   return <>
     <section className="dash-card" style={{ marginTop: 12 }}><div className="lk-form">
-      <label className="f"><span>Bills due as on</span><input type="date" aria-label="Bills due as on" value={FC.iso(x.remOn)} onChange={(ev) => ltrSet("remOn", ev.target.value, true)} /></label>
+      <label className="f"><span>Bills due as on</span><DateBox aria-label="Bills due as on" value={FC.iso(x.remOn)} onChange={(ev) => ltrSet("remOn", ev.target.value, true)} /></label>
       <label className="f"><span>Credit allowed</span><Sel label="Credit allowed" value={String(num(x.credit))} opts={[0, 15, 30, 45, 60, 90].map((d) => [String(d), d ? d + " days" : "none"])} onChange={(v) => ltrSet("credit", v)} /></label>
       <label className="f"><span>Tone</span><Sel label="Tone" value={x.tone} opts={[["friendly", "Friendly"], ["firm", "Firm"], ["final", "Final reminder"]]} onChange={(v) => ltrSet("tone", v)} /></label>
       <label className="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ2" aria-label="Find a customer" value={x.q} placeholder="customer or GSTIN" onChange={(ev) => ltrQ(ev.target.value)} /></label></div>

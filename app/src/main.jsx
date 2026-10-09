@@ -1,4 +1,7 @@
 import { createRoot } from "react-dom/client";
+// Arc's typefaces, bundled with the app (no font is fetched from elsewhere): Inter for text, Geist for headings
+import "@fontsource-variable/inter";
+import "@fontsource-variable/geist";
 import "./styles/index.css";
 import App from "./App.jsx";
 import { adopt } from "./store.js";

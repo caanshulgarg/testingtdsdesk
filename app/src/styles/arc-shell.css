@@ -1,0 +1,115 @@
+/* The app's frame in Arc's look (arc-ui, 09-Oct-2026, the owner: the app should look like Arc, sidebar included).
+   Arc has no app-shell or sidebar block, so the frame follows its page-header block (registry/blocks/page-header: a
+   surface header over a ruled edge, a quiet breadcrumb over a display title, underlined tabs), its metric card
+   (registry/components/metric-card) for the dashboard's figures and its stepper (registry/components/stepper) for the
+   "Getting ready" steps, on Arc's type scale, corners, shadows and spacing. Only the look changes: the elements, ids and
+   classes are the ones the app already had (src/css/app.css). */
+
+/* ---------- type and the page ---------- */
+body { background: var(--background); font-size: 14px; line-height: 1.5; letter-spacing: -.006em; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .pane h2 { font-family: var(--font-display); letter-spacing: var(--tracking-display); }
+.note { color: var(--text-muted); }
+a { color: var(--accent); text-underline-offset: 2px; }
+.linkbtn { color: var(--accent); }
+
+/* ---------- the sidebar ---------- */
+.side { background: var(--surface); color: var(--foreground); border-right: 1px solid var(--border); }
+.side-link { color: var(--text-secondary); font-weight: 500; border-radius: var(--radius-control);
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.side-link .side-ic { flex: none; color: var(--text-muted); }
+.side-link:hover { background: color-mix(in oklab, var(--foreground) 5%, transparent); color: var(--foreground); }
+.side-link:hover .side-ic { color: var(--foreground); }
+.side-link[aria-current="page"] { background: var(--accent-subtle); color: var(--accent); font-weight: 600; }
+.side-link[aria-current="page"] .side-ic { color: var(--accent); }
+.side-count { background: var(--surface-muted); color: var(--text-secondary); border: 1px solid var(--border); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 0 7px; line-height: 18px; }
+.side-link[aria-current="page"] .side-count { background: var(--accent); color: var(--accent-foreground); border-color: var(--accent); }
+.side-label, .side-firm-label { color: var(--text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; padding: 14px 10px 6px; }
+.side-sep { background: var(--border-subtle); }
+.side-ver { color: var(--text-muted); padding: 0 10px; }
+.side-co { display: flex; flex-direction: row; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);
+  color: var(--foreground); box-shadow: var(--shadow-resting); padding: 8px 10px; }
+.side-co:hover { border-color: var(--border-strong); background: var(--surface-muted); }
+.side-co-words { display: flex; flex-direction: column; min-width: 0; }
+.side-co small { color: var(--text-muted); }
+.side-av { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-subtle); color: var(--accent); font-size: 12px; font-weight: 700; }
+@media (min-width: 601px) { .side-brand { display: flex; } }
+.side-brand { flex-direction: row; align-items: center; gap: 10px; padding: 2px 4px 14px 6px; font-family: var(--font-display); font-size: 17px; font-weight: 650; letter-spacing: -.02em; color: var(--foreground); }
+.side-brand { flex-wrap: wrap; }
+@media (max-width: 600px) { .side .side-brand { display: none; } }
+.side-brand > .side-name { display: block; flex: 1; margin: 0; color: var(--foreground); font-family: inherit; font-size: inherit; font-weight: inherit; }
+.side-brand > .side-mark { margin: 0; font-family: inherit; }
+.is-test .side-brand::after { order: 3; flex-basis: 100%; margin-top: 0; padding-left: 38px; color: var(--warn); }
+.side.side-folded .side-brand::after { display: none; }
+.side-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--brand); color: var(--on-brand); font-size: 15px; font-weight: 700; }
+.side-fold { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.side-fold:hover { background: var(--surface-muted); color: var(--foreground); }
+@media (min-width: 601px) {
+  .side { width: 236px; padding: 14px 10px; gap: 1px; }
+  .side-link { padding: 0 10px; min-height: 34px; font-size: 14px; }
+  /* folded: the icons alone, the words on hover (each item's title) */
+  .side.side-folded { width: 64px; }
+  .side.side-folded .side-name, .side.side-folded .side-link > span, .side.side-folded .side-co-words, .side.side-folded .side-label,
+  .side.side-folded .side-firm-label, .side.side-folded .side-ver { display: none; }
+  .side.side-folded .side-brand { flex-direction: column; gap: 8px; padding: 2px 0 12px; }
+  .side.side-folded .side-link { justify-content: center; padding: 0; position: relative; }
+  .side.side-folded .side-link > .side-count { display: block; position: absolute; top: 1px; right: 4px; padding: 0 4px; font-size: 10px; line-height: 15px; }
+  .side.side-folded .side-co { justify-content: center; padding: 6px 0; }
+}
+/* from 901px the sidebar is fixed beside the page (src/css/app.css), so the page starts after it */
+@media (min-width: 901px) {
+  .side:not(.hidden) + .mainwrap { margin-left: 236px; }
+  .side.side-folded:not(.hidden) + .mainwrap { margin-left: 64px; }
+}
+@media (max-width: 600px) {
+  .side, .side:not(.hidden) { background: var(--surface); border-top: 1px solid var(--border); border-right: 0; box-shadow: 0 -4px 16px rgb(var(--shade) / .08); }
+  .side-fold, .side-av { display: none; }
+  .side .side-link[aria-current="page"] { background: var(--accent-subtle); }
+}
+
+/* ---------- the header (Arc's page header) ---------- */
+header.top { background: var(--surface); box-shadow: inset 0 -1px 0 var(--border); border-bottom: 0; }
+.tbar-title { flex-direction: column-reverse; align-items: flex-start; gap: 2px; }
+.tbar-title h2 { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -.022em; line-height: 1.15; }
+.tbar-title .note { font-size: 13px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.tbar-title .note::before { content: var(--crumb-root, ""); color: var(--text-muted); }
+.tbar[data-crumb="client"] { --crumb-root: "Clients  ›"; }
+.tbar[data-crumb="firm"] { --crumb-root: "Firm  ›"; }
+@media (min-width: 601px) { header.top .wrap { padding-top: 18px; } }
+.firmbtn { border-color: var(--border); background: var(--surface); border-radius: var(--radius-control); }
+.firmbtn:hover { border-color: var(--border-strong); background: var(--surface-muted); }
+.tsign { border-radius: var(--radius-pill); }
+.tsign-pop { border-color: var(--border); border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); background: var(--surface-raised); }
+
+/* ---------- surfaces: Arc's card ---------- */
+.pane, .dash-card, .card, .bk-head, .lt-wrap, .bk-tablewrap.lt-wrap, .fc-chart, .rpt-card {
+  border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); }
+.dash-card, .pane { padding: 18px 20px; }
+.dash-card h3, .pane h2 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+
+/* ---------- the dashboard's figures (Arc's metric card) ---------- */
+.dash-tiles { gap: 14px; }
+.dtile { gap: 0; padding: 18px 20px; border-color: var(--border); border-radius: var(--radius-surface); background: var(--surface); box-shadow: var(--shadow-resting);
+  transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+.dtile:hover { border-color: var(--border-strong); box-shadow: var(--shadow-raised); }
+.dtile span { color: var(--text-secondary); font-size: 13.5px; }
+.dtile b { margin-top: 14px; font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.dtile small { margin-top: 8px; color: var(--text-muted); font-size: 13px; }
+.dtile.warn { background: color-mix(in oklab, var(--warn) 7%, var(--surface)); border-color: color-mix(in oklab, var(--warn) 35%, var(--border)); }
+
+/* ---------- "Getting ready" (Arc's stepper: a numbered disc, a ring, a filled disc when done) ---------- */
+.onb-bar { height: 4px; background: var(--surface-muted); }
+.onb-bar i { background: var(--accent); }
+.onb-list { gap: 10px; }
+.onb-list li { align-items: flex-start; border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 12px 14px; }
+.onb-n { width: 1.75rem; height: 1.75rem; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text-secondary); font-size: 12.5px; font-weight: 600;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 3%, transparent); }
+.onb-list li.done { opacity: 1; background: var(--surface-muted); }
+.onb-list li.done .onb-n { background: var(--success); border-color: var(--success); color: var(--surface); box-shadow: 0 0 0 4px color-mix(in oklab, var(--success) 14%, transparent); }
+.onb-list li.done div { color: var(--text-muted); }
+
+/* ---------- tabs inside the pages: Arc's underlined tabs ---------- */
+.bk-tabs button[aria-selected="true"], nav.tabs button[aria-selected="true"], .rp-tabs button[aria-selected="true"] { color: var(--accent); }
+
+/* ---------- the page's margins (Arc's page header and body share one inset) ---------- */
+@media (min-width: 601px) { .mainwrap .wrap, .mainwrap header.top .wrap, .mainwrap main.wrap { padding-left: 32px; padding-right: 32px; } }
+@media (max-width: 600px) { .mainwrap .wrap, .mainwrap header.top .wrap, .mainwrap main.wrap { padding-left: 16px; padding-right: 16px; } }

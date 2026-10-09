@@ -37,9 +37,11 @@
   --series-2: var(--info);
   --series-3: var(--warn);
   --series-4: var(--ok);
-  /* type: IBM Plex, as before */
+  /* type: Arc's faces, Inter for the text and Geist for headings and figures (bundled: @fontsource-variable, main.jsx); FinCom's
+     --sans follows, so the old screens change with the new ones */
+  --sans: "Inter", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-body: var(--sans);
-  --font-display: var(--sans);
+  --font-display: "Geist", "Geist Variable", var(--sans);
   --tracking-body: 0;
   --tracking-display: -.01em;
   /* sizes */

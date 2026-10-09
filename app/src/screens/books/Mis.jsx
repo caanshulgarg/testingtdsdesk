@@ -11,6 +11,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import DateBox from "../../parts/DateBox.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -29,8 +30,8 @@ function Head({ b, r, rg }) {
   const c = MIS.cfg(b);
   return <section className="dash-card" data-mis-head="">
     <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="MIS from" value={rg.from || ""} onChange={(ev) => misRangeSet("from", ev.target.value)} /></label>
-      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="MIS to" value={rg.to || ""} onChange={(ev) => misRangeSet("to", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><DateBox aria-label="MIS from" value={rg.from || ""} onChange={(ev) => misRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><DateBox aria-label="MIS to" value={rg.to || ""} onChange={(ev) => misRangeSet("to", ev.target.value)} /></label>
       <span className="note" style={{ alignSelf: "center" }} data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
       {[["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["ytd", "Year to date"], ["lastyear", "Last year"]].map(([k, l]) => <button key={k} className="btn small" onClick={() => misQuickGo(k)}>{l}</button>)}
       <Act act="misRun" className="btn small primary">Run now</Act>

@@ -18,6 +18,7 @@ import Confirm from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 import NoticeLine from "../parts/NoticeLine.jsx";
+import DateBox from "../parts/DateBox.jsx";
 
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
@@ -235,7 +236,7 @@ function Create() {
       <div className="si-grid">
         <section className="si-card"><h3>Invoice</h3><div className="bk-form">
           <DraftText x={x} label="Invoice number" k="number" data-fk="sd:number" />
-          <label><span>Invoice date</span><input type="date" value={x.date || ""} onChange={(ev) => draftSet("date", ev.target.value)} /></label>
+          <label><span>Invoice date</span><DateBox aria-label="Invoice date" value={x.date || ""} onChange={(ev) => draftSet("date", ev.target.value)} /></label>
           <label><span>Credit period (days)</span><input type="number" min="0" value={x.dueDays || ""} onChange={(ev) => draftSet("dueDays", ev.target.value)} /></label>
           <DraftText x={x} label="Order / PO reference" k="poNo" /><DraftText x={x} label="E-way bill no. (optional)" k="ewayNo" /><DraftText x={x} label="IRN (if e-invoiced)" k="irn" />
         </div></section>

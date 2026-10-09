@@ -4,6 +4,7 @@
 // testOcr, testGoogle, testReader, askPerm, dlStandalone); boxes go through rateSet, readingToggle and closedSet
 // (src/js/18, 27, 47).
 import CommitBox from "../parts/CommitBox.jsx";
+import DateBox from "../parts/DateBox.jsx";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 const Tag = ({ c, children }) => <span className={"tag " + c}>{children}</span>;
@@ -109,9 +110,9 @@ export function ClosedPeriods({ co }) {
   const gf = b ? Object.values(b.gstFiled || {}).flatMap((recs) => Object.entries(recs || {}).filter(([, r]) => r && (r.r3b || r.r1)).map(([ym]) => ym)) : [];
   const lastGst = gf.sort().pop();
   return <div className="pane"><h2>Closed periods</h2><p className="note" style={{ margin: "0 0 12px" }}>Entries dated in a closed period are not stopped. Before they go to Tally, FinCom says which ones they are and why, and asks. Choosing to post them is recorded in the audit trail.</p>
-    <div className="grid"><label className="f"><span>Books closed up to</span><input type="date" aria-label="Books closed up to" value={c.to ? FC.iso(FC.d8(c.to)) : ""} onChange={(ev) => closedSet(co, "to", ev.target.value)} /></label></div>
+    <div className="grid"><label className="f"><span>Books closed up to</span><DateBox aria-label="Books closed up to" value={c.to ? FC.iso(FC.d8(c.to)) : ""} onChange={(ev) => closedSet(co, "to", ev.target.value)} /></label></div>
     <div className="stack" style={{ gap: 6, marginTop: 10 }}><label className="chk"><input type="checkbox" checked={!!c.gst} onChange={(ev) => closedSet(co, "gst", ev.target.checked)} /> Warn for a month whose GSTR-1 or GSTR-3B is marked filed{lastGst && <> <span className="note">{"(the latest marked filed: " + FC.monthLabel(lastGst) + ")"}</span></>}</label>
       <label className="chk"><input type="checkbox" checked={!!c.tds} onChange={(ev) => closedSet(co, "tds", ev.target.checked)} /> Warn for an entry with TDS in a quarter whose TDS return is filed</label></div>
-    <h3 style={{ margin: "14px 0 6px", fontSize: 14 }}>TDS returns filed</h3><div className="cp-q">{ClosedP.quarters().map((k) => <label key={k} className="f"><span>{ClosedP.qLabel(k)}</span><input type="date" aria-label={"Filed: " + ClosedP.qLabel(k)} value={(c.tdsFiled || {})[k] || ""} onChange={(ev) => closedSet(co, "q:" + k, ev.target.value)} /></label>)}</div>
+    <h3 style={{ margin: "14px 0 6px", fontSize: 14 }}>TDS returns filed</h3><div className="cp-q">{ClosedP.quarters().map((k) => <label key={k} className="f"><span>{ClosedP.qLabel(k)}</span><DateBox aria-label={"Filed: " + ClosedP.qLabel(k)} value={(c.tdsFiled || {})[k] || ""} onChange={(ev) => closedSet(co, "q:" + k, ev.target.value)} /></label>)}</div>
     <p className="note" style={{ marginTop: 8 }}>GST months are marked filed under TDS & GST, GST, on the GSTR-3B page or from the portal.</p></div>;
 }

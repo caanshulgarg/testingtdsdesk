@@ -1,6 +1,7 @@
 // The deductees (suppliers) of the open client: what was credited to each this year, and one opened to edit.
 // Was viewParties() in src/js/19 and its handlers in src/js/27.
 import ListTable from "../parts/ListTable.jsx";
+import DateBox from "../parts/DateBox.jsx";
 const save = (p, now) => { if (now) Store.saveParty(S.coId, p); else later("p" + p.id, () => Store.saveParty(S.coId, p), 600); };
 const set = (p, k, v, now) => { p[k] = /^(pan|gstin)$/.test(k) ? String(v).toUpperCase().trim() : v; save(p, now); render(); };
 
@@ -34,8 +35,8 @@ function Ldc({ p }) {
         <td><select aria-label="Payment type" value={c.rule || ""} onChange={(ev) => upd(i, "rule", ev.target.value)}><option value="">Any</option>
           {rules().filter((r) => r.basis !== "never").map((r) => <option key={r.id} value={r.id}>{r.label} ({r.old})</option>)}</select></td>
         <td className="n"><input type="number" step="0.01" aria-label="Rate" value={c.rate} style={{ width: 70 }} onChange={(ev) => upd(i, "rate", ev.target.value)} /></td>
-        <td><input type="date" aria-label="From" value={c.from || ""} onChange={(ev) => upd(i, "from", ev.target.value)} /></td>
-        <td><input type="date" aria-label="To" value={c.to || ""} onChange={(ev) => upd(i, "to", ev.target.value)} /></td>
+        <td><DateBox aria-label="From" value={c.from || ""} onChange={(ev) => upd(i, "from", ev.target.value)} /></td>
+        <td><DateBox aria-label="To" value={c.to || ""} onChange={(ev) => upd(i, "to", ev.target.value)} /></td>
         <td className="n"><input type="number" step="1" aria-label="Amount covered" value={c.limit} style={{ width: 110 }} onChange={(ev) => upd(i, "limit", ev.target.value)} /></td>
         <td className="n">{num(c.limit) ? "₹" + INR.format(ldcUsed(p, c, S.coId)) : "—"}</td>
         <td><button className="linkbtn" onClick={() => off(i)}>Remove</button></td></tr>)}</tbody></table></div>}

@@ -21,9 +21,10 @@ const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally:
 const BOOKS_TITLES = { reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 
-function Title({ title, sub, children }) {
+// Arc's page header: the breadcrumb (Clients › <client>, or Firm › <firm>) over the title, then the page's actions
+function Title({ title, sub, crumb, children }) {
   return (
-    <div className="tbar">
+    <div className="tbar" data-crumb={crumb}>
       <div className="tbar-title"><h2>{title}</h2><span className="note">{sub}</span></div>
       {children}
     </div>
@@ -64,7 +65,7 @@ function ClientHeader() {
   const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions"
     : S.tab === "books" ? BOOKS_TITLES[booksTab()] || "TDS & GST" : setup ? "Client setup" : DOC_NAMES[t];
   const head = (
-    <Title title={title} sub={co.name}>
+    <Title title={title} sub={co.name} crumb="client">
       <div className="tbar-actions">
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
         {setup && <Button className="btn small" onClick={() => toggleSetup()}>Back to the work</Button>}
@@ -221,7 +222,7 @@ export default function TopBar() {
     {createPortal(S.firm.firmName || "", document.getElementById("firmLine"))}
     {createPortal(
       <div className="headrow">
-        {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} />}
+        {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
         <TopRight />
       </div>, document.getElementById("cobar"))}
     <TallyPanel open={!!S.tallyPanel && !hide} />

@@ -3,6 +3,7 @@
 // not have the books in yet (a new computer, or one still bringing them in): the figures come in a moment, not after
 // every entry is downloaded. With the books in, the full MIS, TDS and GST screens take over as before.
 import Msg from "../../parts/Msg.jsx";
+import DateRange from "../../parts/DateRange.jsx";
 const m = (v) => INR.format(r2(v || 0));
 const d8 = (iso) => String(iso || "").replace(/-/g, "");
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
@@ -23,8 +24,8 @@ export function ServerMis({ b }) {
   const cid = b.cid, p = period(cid), x = TCloud.report("mis", cid, p.from, p.to), r = x.res;
   const head = <section className="dash-card"><h3>MIS</h3>
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <label className="note">From <input type="date" aria-label="MIS from" value={Audit.iso(p.from)} onChange={(ev) => { S.misRange = { from: ev.target.value, to: Audit.iso(p.to) }; render(); }} /></label>
-      <label className="note">to <input type="date" aria-label="MIS to" value={Audit.iso(p.to)} onChange={(ev) => { S.misRange = { from: Audit.iso(p.from), to: ev.target.value }; render(); }} /></label></div></section>;
+      <DateRange from={Audit.iso(p.from)} to={Audit.iso(p.to)} fromLabel="MIS from" toLabel="MIS to" calendarLabel="MIS period"
+        onFrom={(v) => { S.misRange = { from: v, to: Audit.iso(p.to) }; render(); }} onTo={(v) => { S.misRange = { from: Audit.iso(p.from), to: v }; render(); }} /></div></section>;
   if (!r) return <>{head}<Wait x={x} what="the MIS" /></>;
   if (r.none) return <>{head}<p className="note">The cloud has no copy of this client’s books for this period.</p></>;
   const H = r.heads || {}, months = r.months || [], cols = months.length <= 12;

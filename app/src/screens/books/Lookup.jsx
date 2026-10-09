@@ -12,6 +12,7 @@ import FreshBar from "../../parts/FreshBar.jsx";
 import HeldBooks from "../../parts/HeldBooks.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import DateBox from "../../parts/DateBox.jsx";
 
 const Tile = ({ l, v, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b></div>;
 const LedBtn = ({ l }) => <button className="linkbtn strong" onClick={(ev) => { ev.stopPropagation(); lkLed(l); }}>{l}</button>;
@@ -112,7 +113,7 @@ function Result({ r, x }) {
 }
 
 function Form({ x }) {
-  const date = (k, label) => <label className="f"><span>{label}</span><input type="date" aria-label={label} value={FC.iso(x[k])} onChange={(ev) => lkType(k, ev.target.value)} onKeyDown={enter(() => LK.run("auto"))} /></label>;
+  const date = (k, label) => <label className="f"><span>{label}</span><DateBox aria-label={label} value={FC.iso(x[k])} onChange={(ev) => lkType(k, ev.target.value)} onKeyDown={enter(() => LK.run("auto"))} /></label>;
   const dates = <>{date("from", "From")}{date("to", "To")}</>, asOn = date("asOn", "As on");
   const text = (k, props) => <input value={x[k] || ""} onChange={(ev) => lkType(k, ev.target.value)} onKeyDown={enter(() => LK.run("auto"))} autoComplete="off" {...props} />;
   const ledIn = (label, req) => <label className="f lk-wide"><span>{label}</span>{text("led", { type: "text", list: "lkLeds", "data-fk": "lkLed", "aria-label": label, placeholder: req ? "Start typing a ledger name" : "Every party" })}</label>;

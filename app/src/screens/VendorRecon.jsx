@@ -5,6 +5,7 @@
 // State: S.vrec (ledger, from, to, the file, busy, res: the result).
 import { useRef } from "react";
 import { BusyCard } from "../parts/Reading.jsx";
+import DateBox from "../parts/DateBox.jsx";
 
 const m = (v) => v === null || v === undefined ? "—" : (v < 0 ? "−" : "") + money(Math.abs(v));
 const side = (v) => v === null ? "" : v > 0.004 ? " payable" : v < -0.004 ? " advance" : "";
@@ -18,8 +19,8 @@ function Form({ V0 }) {
         <input type="text" list="vrLedgers" aria-label="Vendor ledger in Tally" data-fk="vr:ledger" autoComplete="off" placeholder="Start typing the name" value={V0.ledger || ""} onChange={(ev) => vrSet("ledger", ev.target.value)} />
         <datalist id="vrLedgers">{VR.ledgers().slice(0, 3000).map((l) => <option key={l.name} value={l.name}>{l.group || ""}</option>)}</datalist>
         {V0.ledger && !exactLedger(V0.ledger) && <small className="bad">Not a Tally ledger yet — choose one from the list</small>}</label>
-      <label><span>From</span><input type="date" aria-label="From" value={V0.from || ""} onChange={(ev) => vrSet("from", ev.target.value)} /></label>
-      <label><span>Up to</span><input type="date" aria-label="Up to" value={V0.to || ""} onChange={(ev) => vrSet("to", ev.target.value)} /></label>
+      <label><span>From</span><DateBox aria-label="From" value={V0.from || ""} onChange={(ev) => vrSet("from", ev.target.value)} /></label>
+      <label><span>Up to</span><DateBox aria-label="Up to" value={V0.to || ""} onChange={(ev) => vrSet("to", ev.target.value)} /></label>
       <label><span>Vendor’s ledger file</span><button className="btn small" onClick={() => file.current.click()}>{V0.fileName || "Choose Excel, CSV or PDF"}</button>
         <input ref={file} type="file" hidden aria-label="Vendor’s ledger file" accept=".xlsx,.xls,.xlsm,.csv,.txt,.pdf,image/*" onChange={(ev) => vrFile(ev.target.files && ev.target.files[0])} /></label>
       <div style={{ alignSelf: "end" }}><button className="btn primary" disabled={!live || !!V0.busy} onClick={() => runVendorRecon()}>Reconcile</button></div>
