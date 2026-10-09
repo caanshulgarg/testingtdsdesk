@@ -54,7 +54,16 @@ def bynum(b, data):
     t = a.decode('utf-8', 'replace')
     if a[:2] in (b'\xff\xfe', b'\xfe\xff'):
         t = a.decode('utf-16', 'replace')
-    return {'vno': m.group(1) if m else '', 'vtype': m.group(2) if m else '', 'day': d.group(1) if d else '', 'nv': len(re.findall(r'<VOUCHER[ >]', t))}
+    # nv: the vouchers of the asked type and number (the bridge keeps only those: Tally's answer holds one more VOUCHER
+    # block, run 37943925710: 2 / 3 / 1 for 1 / 2 / 0 vouchers with the number); nraw: every VOUCHER block
+    vno, vt = (m.group(1), m.group(2)) if m else ('', '')
+    blocks = re.findall(r'<VOUCHER[ >].*?</VOUCHER>', t, re.S)
+    def tv(b, k):
+        x = re.search(r'<' + k + r'[^>]*>([^<]*)</' + k + r'>', b)
+        return x.group(1).strip() if x else ''
+    unq = lambda v: v.replace('&amp;', '&').replace('&quot;', '"').replace('&#34;', '"')
+    nv = sum(1 for b in blocks if unq(tv(b, 'VOUCHERNUMBER')) == unq(vno) and unq(tv(b, 'VOUCHERTYPENAME')) == unq(vt))
+    return {'vno': vno, 'vtype': vt, 'day': d.group(1) if d else '', 'nv': nv, 'nraw': len(blocks)}
 
 def suspend_maybe(i):
     if not CTL:

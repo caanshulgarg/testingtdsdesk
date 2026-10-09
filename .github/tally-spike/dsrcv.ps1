@@ -259,7 +259,7 @@ try {
       $okN = (-not $asks.Count) -or ($null -eq $asks[0].nv) -or ([int]$asks[0].nv -eq $c.want)
       if (-not ($okT -and $okA -and $okN)) { $bad4 += $c.k }
       $ev4 += ("{0} ({1}; Tally has {2} with that number): MasterID asks of {3} at the proxy: {4}; FinComVoucherByNumber asks: {5} [{6}]; the line(s): {7}" -f $c.k, $c.no, $c.want, $old.mid,
-          (($objAsk | ForEach-Object { "$($_.id) $($_.ms) ms" }) -join ', '), $asks.Count, (($asks | ForEach-Object { "$($_.vtype)/$($_.vno)/$($_.day) $($_.ms) ms status $($_.status) vouchers in the answer $($_.nv)" }) -join '; '), $(if ($ln.Count) { ($ln | ForEach-Object { DsLineTxt $_ $sts }) -join ' | ' } else { 'none' }))
+          (($objAsk | ForEach-Object { "$($_.id) $($_.ms) ms" }) -join ', '), $asks.Count, (($asks | ForEach-Object { "$($_.vtype)/$($_.vno)/$($_.day) $($_.ms) ms status $($_.status) vouchers with that type and number in the answer $($_.nv) (VOUCHER blocks in all $($_.nraw))" }) -join '; '), $(if ($ln.Count) { ($ln | ForEach-Object { DsLineTxt $_ $sts }) -join ' | ' } else { 'none' }))
     }
     $logBy = @((DsBlog) | Where-Object { $_ -match 'FinComVoucherByNumber|by type and number|older entry, not this save|entries with that type and number|Tally gave no D4' } | Select-Object -Last 8)
     DRes $C4 $(if (-not $vOne) { 'HARNESS' } elseif ($bad4.Count) { 'FAIL' } elseif (-not $haveTwo) { 'HARNESS' } else { 'PASS' }) ("{0}; not as expected: {1}; item 6 (starting day today): FinComVoucherByNumber at the proxy for D4-EARLY {2}, the log: {3}; the bridge's log: {4}" -f ($ev4 -join ' || '), $(if ($bad4.Count) { $bad4 -join ', ' } else { 'none' }), $askE.Count, $(if ($refW.Count) { $refW[0] } else { 'no refusal line' }), ($logBy -join ' / '))
