@@ -104,7 +104,7 @@ def main():
         qs = pg.inner_text("#confirmBox .cbx .note").strip() if pg.locator("#confirmBox .cbx").count() else ""
         ok("the same data" in qs and "\u2460" in qs and "\u2461" in qs and not [c for c in E("window.__calls") if c[0] == "tally_company_source_same"], "H5: the same data asks first (%r)" % qs)
         if pg.locator("#confirmBox .cbx").count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
-        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_same"] == [["tally_company_source_same", {"p_book": "b1"}]], "H5: tally_company_source_same(book) (%s)" % E("window.__calls"))
+        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_same"] == [["tally_company_source_same", {"p_book": "b1", "p_pending": [I2]}]], "H5 / SR2-M2: tally_company_source_same(book, the pending ids the card showed) (%s)" % E("window.__calls"))
         scene(TWO)
         # the coordinator, 09-Oct-2026: Use ② asks once before anything is sent
         E("() => { window.__calls = []; }")
@@ -116,7 +116,7 @@ def main():
         ok(not [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"], "Cancel: nothing sent")
         pg.click(card + ' [data-source-use="%s"]' % I2); pg.wait_for_timeout(500); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
         calls = [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"]
-        ok(calls == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I2}]], "Use \u2461 asks tally_company_source_choose(book, \u2461) (%s)" % E("window.__calls"))
+        ok(calls == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I2, "p_seen": [I1, I2]}]], "Use \u2461 asks tally_company_source_choose(book, \u2461, the ids the card showed) (%s)" % E("window.__calls"))
         scene(TWO)
         pg.click(card + " [data-source-later]"); pg.wait_for_timeout(600)
         ok(pg.locator(card + " [data-source-use]").count() == 0 and "later" in txt(card).lower(), "Decide later: folded (%s)" % txt(card))
@@ -133,7 +133,7 @@ def main():
         q_ = pg.inner_text("#confirmBox .cbx .note").strip() if pg.locator("#confirmBox .cbx").count() else ""
         ok(q_.startswith("FinCom will read GARG SHEKHAR from ① (NWS144") and "will be held" not in q_ and not [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"], "N2: asked first (%r)" % q_)
         if pg.locator("#confirmBox .cbx").count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
-        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_choose"] == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I1}]], "N2: then tally_company_source_choose(book, ①) (%s)" % E("window.__calls"))
+        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_choose"] == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I1, "p_seen": [I1]}]], "N2: then tally_company_source_choose(book, ①) (%s)" % E("window.__calls"))
         scene(SAMEPC)
         sb = txt(card + " [data-source-same]")
         ok(sb == "These are the same data (both data folders are one folder)", "Low: both folders on one computer: 'both data folders' (%r)" % sb)

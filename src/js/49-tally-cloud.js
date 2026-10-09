@@ -791,7 +791,8 @@ const TCloud = {
     const a = await askConfirm({title: "Read " + company + " from " + n + "?", ok: "Use " + n,
       body: esc("FinCom will read " + company + " from " + n + (where ? " (" + where + ")" : "") + " from now on. " + (others ? "Entries from " + others + " will be held, not used. You'll need to upload " + n + "'s Day Book for the year. " : "The entries held from it are put in the books. ") + "Continue?")});
     if (!a || !a.ok) return;
-    await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId}, "FinCom now reads " + n + " of " + company + ".");
+    // the security re-check SR2-M2: the locations this card showed; FinCom refuses when they changed meanwhile
+    await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId, p_seen: g ? g.list.map(y => y.data_id) : [dataId]}, "FinCom now reads " + n + " of " + company + ".");
   },
   // review H5 of next-241: "These are the same data (both computers read it)": one data folder under two paths (the
   // server's D:\TallyData, a client's \\SERVER\TallyData or Z:\). Asked once; then every location is read, and the entries
@@ -804,7 +805,8 @@ const TCloud = {
     const a = await askConfirm({title: "Are these the same data?", ok: "They are the same data",
       body: esc("FinCom will read " + company + " from " + both + " as the same data (" + (onePc ? "both data folders are one folder" : "both computers read one data folder") + "). The entries held from them are put in the books. Continue?")});
     if (!a || !a.ok) return;
-    await this.control("tally_company_source_same", {p_book: book}, "FinCom reads " + both + " of " + company + " as the same data.");
+    // SR2-M2: the locations the card showed waiting for a choice (FinCom refuses when they changed meanwhile)
+    await this.control("tally_company_source_same", {p_book: book, p_pending: g ? g.list.filter(y => y.choice === "pending").map(y => y.data_id) : []}, "FinCom reads " + both + " of " + company + " as the same data.");
   },
   async baselineClear(book, company){
     const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
