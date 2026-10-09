@@ -6,10 +6,12 @@
    3. The tokens set to FinCom's colours, light and dark (arc-tokens.css).
    4. FinCom's own elements (old screens, raw buttons and boxes) in the same look as Arc's (arc-look.css).
    5. The app's frame (sidebar, header, cards, dashboard) in Arc's look (arc-shell.css).
-   6. The Dashboard's opening motion, when the computer allows motion (arc-motion.css). */
+   6. The Dashboard's opening motion, when the computer allows motion (arc-motion.css).
+   7. Purchase, Bank, Reports and MIS, GST and the TDS return in Arc's layout (arc-pages.css, step 3 group 2). */
 @import "../../legacy/app.css" layer(fincom);
 @import "../arc/foundation.css";
 @import "./arc-tokens.css";
 @import "./arc-look.css";
 @import "./arc-shell.css";
 @import "./arc-motion.css";
+@import "./arc-pages.css";

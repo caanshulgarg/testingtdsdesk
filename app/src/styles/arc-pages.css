@@ -1,0 +1,71 @@
+/* Step 3, group 2 (arc-ui, 10-Oct-2026): Purchase and the bill, Bank, Reports and MIS, GST and the TDS return in Arc's
+   layout. Styles only: the pages' markup, words, ids and classes are as they were (GST and TDS keep the owner-approved
+   layout of app-tdsgst: year, quarter, form; restyled, not moved).
+
+   Tabs in three levels, so the eye can tell where it is (Arc's page-header block and segmented control):
+   - a page's areas ("Books": From Tally, Tally ledgers, TDS, GST, Tie-out) as a segmented control;
+   - the parts of an area (GST's returns, MIS, Kind, Accounts, Audit, ...) as underlined tabs;
+   - the views of one return ("Return": Summary, Details, ...) as small chips.
+   The status tabs over Purchase are Arc's Tabs already (TopBar.jsx), so they are left out here. */
+
+/* the parts of an area: underlined tabs */
+nav.sbar:not([aria-label="Books"]):not([aria-label="Return"]):not([aria-label="Status"]) { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 10px;
+  padding: 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+nav.sbar:not([aria-label="Books"]):not([aria-label="Return"]):not([aria-label="Status"]) > button { min-height: 40px; margin: 0 0 -1px; padding: 0 12px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--text-secondary); font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+nav.sbar:not([aria-label="Books"]):not([aria-label="Return"]):not([aria-label="Status"]) > button:hover { color: var(--foreground); background: transparent; }
+nav.sbar:not([aria-label="Books"]):not([aria-label="Return"]):not([aria-label="Status"]) > button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent);
+  background: transparent; font-weight: 600; }
+
+/* a page's areas: a segmented control */
+nav.sbar[aria-label="Books"] { display: inline-flex; flex-wrap: wrap; gap: 4px; max-width: 100%; margin: 6px 0 4px; padding: 4px; border: 1px solid var(--border);
+  border-radius: calc(var(--radius-control) + 4px); background: var(--surface-muted); }
+nav.sbar[aria-label="Books"] > button { min-height: 32px; margin: 0; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: transparent;
+  color: var(--text-secondary); font-weight: 500; }
+nav.sbar[aria-label="Books"] > button:hover { color: var(--foreground); background: transparent; }
+nav.sbar[aria-label="Books"] > button[aria-selected="true"] { background: var(--surface); color: var(--accent); font-weight: 600; border-bottom: 0;
+  box-shadow: var(--shadow-resting); outline: 1px solid var(--border); }
+
+/* the views of one return: chips */
+nav.sbar[aria-label="Return"] { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; border: 0; }
+nav.sbar[aria-label="Return"] > button { min-height: 30px; margin: 0; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+nav.sbar[aria-label="Return"] > button:hover { border-color: var(--border-strong); color: var(--foreground); }
+nav.sbar[aria-label="Return"] > button[aria-selected="true"] { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); background: var(--accent-subtle);
+  color: var(--accent); font-weight: 600; }
+
+/* counts in any of them: the chosen tab's in the brand */
+nav.sbar > button .sbar-n { background: color-mix(in oklab, var(--tone-slate) 16%, var(--surface)); color: var(--foreground); }
+nav.sbar > button[aria-selected="true"] .sbar-n { background: var(--accent); color: var(--accent-foreground); }
+/* Look up and Letters' kinds: the same chips */
+.lk-kinds button { border-color: var(--border); background: var(--surface); color: var(--text-secondary); font-weight: 500; }
+.lk-kinds button[aria-selected="true"] { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); background: var(--accent-subtle); color: var(--accent); }
+
+/* ---------- tables and figures: sentence-case labels (Arc's quiet headings) ---------- */
+.bk-table th { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.bk-figs dt { text-transform: none; letter-spacing: 0; font-size: 12.5px; color: var(--text-muted); }
+.bk-figs dd { font-family: var(--font-display); font-size: 16px; letter-spacing: -.01em; }
+
+/* the figures of a return, a report or the bank (the dashboard's cards) each with an accent along the top */
+.dash-tiles > .dtile:not([data-tone]) { border-top: 3px solid var(--tone, var(--tone-indigo)); }
+.dash-tiles > .dtile:not([data-tone]):nth-child(4n+2) { --tone: var(--tone-sky); }
+.dash-tiles > .dtile:not([data-tone]):nth-child(4n+3) { --tone: var(--tone-emerald); }
+.dash-tiles > .dtile:not([data-tone]):nth-child(4n+4) { --tone: var(--tone-violet); }
+.dash-tiles > .dtile.warn:not([data-tone]) { --tone: var(--warn); }
+
+/* ---------- Purchase and Bank: the head of the list and the bar along the bottom ---------- */
+.bk-head { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); }
+.bk-title { font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em; }
+.actionbar { background: color-mix(in oklab, var(--surface) 92%, transparent); border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 30px rgb(var(--shade) / .08); -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px); }
+/* the bill open beside the list: Arc's drawer panel */
+.detail { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: var(--shadow-raised); }
+.detail .drawer-head { border-bottom: 1px solid var(--border-subtle); }
+
+/* ---------- a phone: the bank's figures two a row (they ran 26px past the screen) ---------- */
+@media (max-width: 600px) {
+  .bk-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; width: 100%; }
+  .bk-figs > div { min-width: 0; text-align: left; }
+  .bk-figs dd { overflow-wrap: anywhere; }
+}
