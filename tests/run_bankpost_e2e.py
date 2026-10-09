@@ -18,7 +18,25 @@ H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ
 srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 json.dump({"TallyTimeoutSec": 20}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
-br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
+# its own process group, so the bridge's workers (posting jobs, the keep copier) end with it (CI 37881218752 attempt 1: a
+# test after this one met a bridge answering 502, as if Tally were held by a process left from here)
+br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN, start_new_session=True)
+def stop_bridge():
+    """the bridge, its process group, and every worker it wrote down in its folder (keep.pid, a job's progress.json)"""
+    import glob, signal
+    try: os.killpg(br_p.pid, signal.SIGKILL)
+    except Exception: pass
+    br_p.kill()
+    pids = []
+    for f in glob.glob(_os.path.join(BRUN, "**", "keep.pid"), recursive=True):
+        try: pids.append(int(open(f).read().strip() or 0))
+        except Exception: pass
+    for f in glob.glob(_os.path.join(BRUN, "**", "progress.json"), recursive=True):
+        try: pids.append(int(json.load(open(f, encoding="utf-8-sig")).get("pid") or 0))
+        except Exception: pass
+    for pid in set(x for x in pids if x > 0 and x != os.getpid()):
+        try: os.kill(pid, 9)
+        except Exception: pass
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -212,6 +230,6 @@ try:
         ok(len(fake_tally.POSTED) == n_before and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
         br.close()
 finally:
-    br_p.kill()
+    stop_bridge()
 ok(not errors, "no page errors" + ("" if not errors else ": " + " | ".join(errors[:3])))
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))
