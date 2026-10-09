@@ -17,7 +17,7 @@ part `next-outbox-app`), `next-realtime`, `next-selfcheck`, `next-masterhook`, `
 | Replaces | 2.3.3 (kept on the computer, so the tray can roll back to it) |
 | FinCom app | changed (parts B and C): the simpler Tally, ledgers and upload pages, Clear notifications, pages that refresh by themselves, the nightly self-check's line, Needs you for renumbered entries and stuck saves, Sentry (staging only) |
 | FinCom's cloud | migrations 68 and 70 (2.3.5) and migrations 62, 63, 64, 65, 66 and 67 (2.4.0), each add-only, NONE run yet; the owner runs them: staging ... -> 60 -> 68 -> 70 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67 (`docs/MIGRATION-ORDER.md`; md5 in the test sheet). tally-ingest is deployed with them (run 62 and 66 before it; each item says what waits without its migration) |
-| Add-on | changed: load the new `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` (each Windows user's own file; the master forms of item C6) |
+| Add-on | changed: load the new `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` (each Windows user's own file; no master form hooked, item C6 not shipped) |
 | Tally requests | see "Tally requests" below: the entry request is FinComVoucherObject (2.3.4, the owner's decision of 08-Oct-2026); FinComVoucherByNumber also asks for the whole TDS list (the owner's decision of 07-Oct-2026); nothing else added or changed |
 
 ## A. From 2.3.4 (not published on its own)
@@ -98,11 +98,13 @@ ledger's closing balance; `docs/selfcheck-requests-for-approval.md` 8.5) are NOT
 
 ### 6. Master hooks (next-masterhook, migration 66)
 
-The owner's item c. The add-on hooks the master forms proven on real Tally (run 37580509870): Pay Head, Stock Item and
-Godown (heads only). Unit and Employee are left out (not proven: a Unit whose symbol changed did not save with the hook;
-no form name fires for Employee). A Pay Head's delete goes as a ledger's (FinCom marks that ledger deleted by its GUID);
-a Stock Item's or Godown's as master_deleted. Nothing is asked of Tally for them; nothing in the books changes. Migration
-66 keeps them; without it such lines are kept as failed with words.
+The owner's item c. **Not shipped in 2.4.0: the add-on hooks no master form.** The owner's rule: only master types
+proven on all five TallyPrime releases ship. The real-Tally run 37840646524 (3.0, 4.1, 5.1, 6.2, 7.1) showed Pay Head and
+Stock Item failing on every release and Godown on 3.0 to 6.2 (it passed on 7.1 only), so the Pay Head, Stock Item and
+Godown hooks next-masterhook added are taken out of the shipped add-on (TestMasterHookNoneShippedIn240). Unit and
+Employee are left out too (never hooked). The add-on's Voucher and Ledger hooks and its System Events are as before
+2.4.0, so a master's delete goes as a ledger's, as before. The bridge's pairing of master lines stays, inert (no shipped
+add-on writes them). Migration 66 stays (add-only, unused). Nothing is asked of Tally.
 
 ### 7. Renumbered entries (next-renumber, migration 67)
 
@@ -154,6 +156,6 @@ staging only. App (test build on staging), tally-ingest (staging database), brid
 - `next-reask` (the owner, 07-Oct-2026: "Re-ask a held entry the moment Tally answers again, not every 10 minutes."):
   superseded by 2.3.4's one-more-ask rule and in conflict with the rewritten resolver (the 2.4.0 review). Its merge is
   reverted.
-- `next-connect` (paused). The self-check's requests for approval (C5). Unit and Employee master hooks (C6).
+- `next-connect` (paused). The self-check's requests for approval (C5). Master hooks (C6): Pay Head, Stock Item and Godown taken out (run 37840646524), Unit and Employee never in.
 
 No AI in the bridge.

@@ -14,7 +14,7 @@ C (2.4.0).
 3. Nothing lost between the bridge and FinCom; a repeat is not stored twice (migration 63); stuck saves under Needs you.
 4. Look up, the ledgers and Sync activity refresh by themselves (migration 64).
 5. The nightly self-check, existing requests only (migration 65).
-6. Master hooks: Pay Head, Stock Item and Godown (Unit and Employee left out; migration 66).
+6. Master hooks: none shipped (Pay Head, Stock Item and Godown not proven on all five TallyPrime releases, run 37840646524; migration 66 stays, unused).
 7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
 8. Bank dates set in Bank Reconciliation reach FinCom (the nightly list stops at 10 s, outside office hours only; every other request 2 s).
 9. The simpler GST and TDS ledgers page and upload page.
@@ -70,10 +70,10 @@ CHECK 6 - THE NIGHTLY SELF-CHECK (after migration 65)
    You should see: next morning, on FinCom's Tally page, the card of NWS144 has a line per company with last night's
    check in plain words (green: every change in FinCom; red: what is missing).
 
-CHECK 7 - A STOCK ITEM, A PAY HEAD AND A GODOWN (after migration 66)
+CHECK 7 - A STOCK ITEM, A PAY HEAD AND A GODOWN SEND NOTHING (no master hook in 2.4.0)
    In IX DESIGNS alter a Stock Item's name (add " TRIAL"), then alter it back. Do the same for a Godown and a Pay Head.
-   You should see: Sync activity lists them as master changes; nothing in the books changes. Altering a Unit sends
-   nothing (left out).
+   You should see: each saves in Tally as usual; Sync activity lists no master change for them; nothing in the books
+   changes. Altering a Unit sends nothing either.
 
 CHECK 8 - RENUMBERING (after migration 67)
    In GARG SHEKHAR make three Receipts of Rs 1 (narrations "TRIAL 240 r1", "r2", "r3"). Delete the first.

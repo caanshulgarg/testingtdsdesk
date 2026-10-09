@@ -1,6 +1,6 @@
-// Next (branch next-masterhook; the owner's item c): the add-on (addon/FinComRecorder.tdl) hooks the master forms beside
-// the Ledger form: Pay Head, Stock Item and Godown (proven on real TallyPrime 7.1; Unit and Employee left out, not
-// proven: see the add-on's comment), each with the Ledger form's three lines (a line before
+// Next (branch next-masterhook; the owner's item c): the add-on (addon/FinComRecorder.tdl) was to hook the master forms
+// beside the Ledger form: Pay Head, Stock Item and Godown. NOT SHIPPED in 2.4.0 (liveMasterHooked below: none; run
+// 37840646524). As built on that branch, each with the Ledger form's three lines (a line before
 // Tally's own save, Tally's Form Accept, a line after it). Each line is "<kind>_accept_pre" / "<kind>_accept_post"
 // (payhead, stockitem, godown) with the master's name, GUID, MasterID, AlterID and parent, as the Ledger form's lines.
 // The bridge still pairs unit_* / employee_* lines should an add-on write them, but this add-on does not, and FinCom's
@@ -24,9 +24,13 @@ type liveMasterForm struct{ ev, form string }
 // every master form the bridge maps (the event's prefix and the master's type)
 var liveMasterForms = []liveMasterForm{{"payhead", "Pay Head"}, {"stockitem", "Stock Item"}, {"unit", "Unit"}, {"godown", "Godown"}, {"employee", "Employee"}}
 
-// the master forms the add-on hooks: those proven on a real TallyPrime (a form name Tally does not know makes it ignore
-// the whole add-on, with a warning screen). TestMasterHookAddon holds the add-on to this list
-var liveMasterHooked = []liveMasterForm{liveMasterForms[0], liveMasterForms[1], liveMasterForms[3]} // Pay Head, Stock Item, Godown (runs 37563133547, 37580509870); not Unit (a changed symbol did not save with the hook), not Employee (no form name found)
+// the master forms the add-on hooks: those proven on ALL FIVE TallyPrime releases (3.0, 4.1, 5.1, 6.2, 7.1; the owner's
+// rule). TestMasterHookAddon holds the add-on to this list. release-240: none. The real-Tally run 37840646524 showed Pay
+// Head and Stock Item failing on every release and Godown on 3.0 to 6.2 (7.1 only had proven them: runs 37563133547,
+// 37580509870), so the shipped add-on hooks no master form (TestMasterHookNoneShippedIn240). The pairing below stays,
+// inert: no shipped add-on writes a master form's line, so the bridge sends no master_created / master_altered, and a
+// delete goes as ledger_deleted, as before 2.4.0. Migration 66 stays (add-only, unused)
+var liveMasterHooked = []liveMasterForm{}
 
 func init() {
 	for _, k := range liveMasterForms {

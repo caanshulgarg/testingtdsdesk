@@ -100,39 +100,11 @@
     On : Form Accept : Yes          : Form Accept
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "ledger_accept_post"
 
-;; ---------------------------------------------------------------- next-masterhook: the master forms (heads only)
-;; The owner's item c. Each block stands alone: one master's hook is shipped or left out by its own block (a form name a
-;; Tally release does not know makes Tally ignore the WHOLE add-on, with a warning screen). Only masters proven on a real
-;; TallyPrime 7.1 to save normally with the hook on are here (tally-real-spike runs 37563133547 and 37580509870):
-;;   Pay Head (a ledger in Tally): saved, AlterID up (probe); renamed on the screen with this add-on: saved, both lines.
-;;   Stock Item: the same.
-;;   Godown (7.1 shows "Location"; the form is "Godown"): alias typed, saved, AlterID 648 -> 655, both lines.
-;;   Ctrl+A to a still screen with the hook 27-106 ms; with no add-on 77-109 ms (probe): no delay added.
-;; Left out (not proven):
-;;   Unit: with any On : Form Accept line on its form, an unchanged Unit is not saved again, and a Unit whose symbol was
-;;     changed on the screen was NOT saved (only the first line came; AlterID unchanged; run 37580509870), though a changed
-;;     formal name saved in the probe. A Unit made new on the screen saved. Not shipped until a Unit saves normally.
-;;   Employee: no form name tried fires on Tally's "Employee Alteration" (Employee, Cost Centre, Employee Master,
-;;     Employees, Payroll Employee: probe run 37563133547).
-;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID,
-;; MasterID, parent; probe run 37563133547). The line names no master type: the bridge sends the delete of a master these
-;; forms' lines named as master_deleted with its type (masterhook.go), any other as ledger_deleted, which FinCom applies only
-;; to the ledger holding the line's GUID.
-
-[#Form: Pay Head]
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_pre"
-    On : Form Accept : Yes          : Form Accept
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_post"
-
-[#Form: Stock Item]
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_pre"
-    On : Form Accept : Yes          : Form Accept
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_post"
-
-[#Form: Godown]
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_pre"
-    On : Form Accept : Yes          : Form Accept
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_post"
+;; ---------------------------------------------------------------- master forms: none in 2.4.0
+;; next-masterhook hooked the Pay Head, Stock Item and Godown forms. The real-Tally run 37840646524 (TallyPrime 3.0, 4.1,
+;; 5.1, 6.2 and 7.1) showed Pay Head and Stock Item failing on every release and Godown on 3.0 to 6.2. The owner's rule:
+;; only master types proven on all five releases ship, so none is hooked here (Unit and Employee were never hooked).
+;; Deletes of any object still come through the System Events above, as before 2.4.0.
 
 ;; ---------------------------------------------------------------- the one writer (heads only)
 [Function: FCRLiveLog]
