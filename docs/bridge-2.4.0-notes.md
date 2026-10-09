@@ -13,7 +13,7 @@ part `next-outbox-app`), `next-realtime`, `next-selfcheck`, `next-masterhook`, `
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.0.exe |
-| Fingerprint | (filled in when the setup is built) |
+| Fingerprint | SHA-256 `00ab8042dff1b1b508410632f832d20ee1169fcc71493f682af38a413ac416dc` (FinComBridge-Setup-2.4.0.exe, built 09-Oct-2026 13:52 IST; compare with the .sha256 file next to the setup) |
 | Replaces | 2.3.3 (kept on the computer, so the tray can roll back to it) |
 | FinCom app | changed (parts B and C): the simpler Tally, ledgers and upload pages, Clear notifications, pages that refresh by themselves, the nightly self-check's line, Needs you for renumbered entries and stuck saves, Sentry (staging only) |
 | FinCom's cloud | migrations 68 and 70 (2.3.5) and migrations 62, 63, 64, 65, 66 and 67 (2.4.0), each add-only, NONE run yet; the owner runs them: staging ... -> 60 -> 68 -> 70 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67 (`docs/MIGRATION-ORDER.md`; md5 in the test sheet). tally-ingest is deployed with them (run 62 and 66 before it; each item says what waits without its migration) |
