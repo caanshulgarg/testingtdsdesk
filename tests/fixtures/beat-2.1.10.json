@@ -31,14 +31,14 @@
     }
   ],
   "computer": "TEST-PC",
-  "dailyAt": "02:00",
+  "dailyAt": "19:00",
   "dataFolder": "",
   "events": true,
   "every": 30,
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",
-  "nightlyAt": "02:00",
+  "nightlyAt": "19:00",
   "notAnsweringSince": "",
   "open": [
     "GARG SHEKHAR & COMPANY"
