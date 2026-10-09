@@ -275,7 +275,8 @@ const Rec = {
     if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
     if (st !== "held") return "";
     if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
-    if (/^saved in another data location of /i.test(why)) return "othersrc";     // 2.4.1 (migration 71)
+    if (/^saved in another data location of |Restart Tally so the 2\.4\.1 add-on loads/i.test(why)) return "othersrc";     // 2.4.1 (migration 71; review H2 of next-241)
+    if (/is an older entry, not this save/i.test(why)) return "daybook";     // review L2 of next-241: upload that day's Day Book
     if (/starting point is not recorded|no starting point recorded/i.test(why)) return "baseline";     // 2.4.1: only "not recorded"
     if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
     if (/no MasterID or no date/i.test(why)) return "daybook";

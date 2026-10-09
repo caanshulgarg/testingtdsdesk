@@ -64,7 +64,8 @@ const AlertHub = {
   // with one reason), "N received, not yet entered in the books" for more
   heldSay(lines, count){
     const n = lines.length, whys = [...new Set(lines.map(l => String(l.held_why || "").trim()).filter(Boolean))];
-    return (count || n > 1 ? n + " " : "") + "received, not yet entered in the books" + (whys.length === 1 ? ": " + whys[0] : "");
+    // review L8 of next-241: the reason's own full stop dropped (the callers add theirs: never "..")
+    return (count || n > 1 ? n + " " : "") + "received, not yet entered in the books" + (whys.length === 1 ? ": " + whys[0].replace(/\.+$/, "") : "");
   },
   // the owner's finding of 05-Oct-2026 (Look up said "From the books (…), in step with Tally as of 05-Oct-2026 13:59 IST"
   // with a line of that company held): every view of a client's books (Look up, the trial balance, the day book, P&L,
@@ -206,7 +207,10 @@ const AlertHub = {
               ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
               : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
               ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
-              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+              : b.other.every(l => Rec.needKind(l) === "othersrc") ? "Needs you: an owner chooses on the Tally page which data location is the books."
+              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.",
+            // review L8 of next-241: lines of another data location: the Tally page (where the owner chooses)
+            act: b.other.every(l => Rec.needKind(l) === "othersrc") ? {label: "Open the Tally page", run: () => Rec.openTallyPage()} : {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
           out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
             fix: recFix}));

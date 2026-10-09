@@ -412,7 +412,8 @@ const TCloud = {
       catch (e){ p.selfchecks = []; p.noSelfChecks = true; }
       // FinCom 2.4.1 (migration 71): each book's data locations (tally_company_sources, as row security gives them: one
       // company open in two places with different data) and the books' names; a cloud without the table: none, nothing said
-      try { p.sources = [].concat(await Cloud.api("tally_company_sources?select=id,book_id,company_guid,data_id,path,device_id,win_user,computer,first_seen,last_seen,last_line_at,choice,chosen_by,chosen_at&order=first_seen.asc") || []); p.noSources = false; }
+      // review SR-M2 of next-241: bounded (at most 20 locations a book; 1000 rows)
+      try { p.sources = [].concat(await Cloud.api("tally_company_sources?select=id,book_id,company_guid,data_id,path,device_id,win_user,computer,first_seen,last_seen,last_line_at,choice,chosen_by,chosen_at&order=first_seen.asc&limit=1000") || []); p.noSources = false; }
       catch (e){ p.sources = []; p.noSources = true; }
       if (p.sources.length && !(p.books || []).length){ try { p.books = [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []); } catch (e){ p.books = p.books || []; } }
       p.err = ""; p.at = Date.now();
@@ -659,7 +660,7 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47, tally_company_source_choose: 71}[fn] || 35;
+      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47, tally_company_source_choose: 71, tally_company_source_same: 71}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
@@ -787,6 +788,17 @@ const TCloud = {
       body: esc("FinCom will read " + company + " from " + n + (where ? " (" + where + ")" : "") + " from now on. Entries from " + others + " will be held, not used. You'll need to upload " + n + "'s Day Book for the year. Continue?")});
     if (!a || !a.ok) return;
     await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId}, "FinCom now reads " + n + " of " + company + ".");
+  },
+  // review H5 of next-241: "These are the same data (both computers read it)": one data folder under two paths (the
+  // server's D:\TallyData, a client's \\SERVER\TallyData or Z:\). Asked once; then every location is read, and the entries
+  // held from them are put in the books (tally_company_source_same)
+  async sourceSame(book, company){
+    const g = (this.sourceBooks() || []).find(x => x.book === book), ns = g ? g.list.map(y => y.n) : [];
+    const both = ns.length > 1 ? ns.slice(0, -1).join(", ") + " and " + ns[ns.length - 1] : ns.join("");
+    const a = await askConfirm({title: "Are these the same data?", ok: "They are the same data",
+      body: esc("FinCom will read " + company + " from " + both + " as the same data (both computers read one data folder). The entries held from them are put in the books. Continue?")});
+    if (!a || !a.ok) return;
+    await this.control("tally_company_source_same", {p_book: book}, "FinCom reads " + both + " of " + company + " as the same data.");
   },
   async baselineClear(book, company){
     const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",

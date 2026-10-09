@@ -53,7 +53,10 @@ OTHER_WHY = "saved in another data location of GARG SHEKHAR (\u2461, PC-2); FinC
 KINDS = [
     ("held", OTHER_WHY, "othersrc"),
     ("held", "Tally's voucher with that MasterID is not a change after the starting point", "other"),
-    ("held", "the voucher with that MasterID in this Tally is an older entry, not this save; asked by its type and number: 2 entries with that type and number on that date", "other"),
+    # review L2 of next-241: the "older entry" words are Needs you, the Day Book (not Apply now)
+    ("held", "the voucher with that MasterID in this Tally is an older entry, not this save; asked by its type and number: 2 entries with that type and number on that date", "daybook"),
+    # review H2 of next-241: a line without its data location on a computer FinCom does not read the company from
+    ("held", "saved in Tally on PC-2 by an add-on that does not say its data location; FinCom reads \u2460 of GARG SHEKHAR. Restart Tally so the 2.4.1 add-on loads.", "othersrc"),
     ("held", "the company's starting point is not recorded yet, so its entries are not taken from Tally", "baseline"),
     ("held", "this computer's Tally could not be asked whether it was deleted here (no starting point recorded for this company); not sent as a deletion: held", "baseline"),
 ]
@@ -89,7 +92,18 @@ def main():
         ok(t.startswith("GARG SHEKHAR is open in two places with different data:") and "Which one is your books? FinCom reads only that one." in t, "the words (%s)" % t[:400])
         ok(re.search(r"\u2460 NWS144 \u00b7 anshul \u00b7 C:\\Users\\Public\\TallyPrime\\Data \(last entry [^)]+\)", t) is not None and re.search(r"\u2461 PC-2 \u00b7 anshul \u00b7 D:\\Copy of Tally\\DATA \(last entry [^)]+\)", t) is not None, "\u2460 and \u2461: computer, user, folder, last entry (%s)" % t)
         btn = E("(c) => [...document.querySelectorAll(c + ' button')].map(b => b.innerText.trim())", card)
-        ok(btn == ["Use \u2460", "Use \u2461", "Decide later"], "Use \u2460, Use \u2461, Decide later (%s)" % btn)
+        ok(btn == ["Use \u2460", "Use \u2461", "These are the same data (both computers read it)", "Decide later"], "Use \u2460, Use \u2461, the same data, Decide later (%s)" % btn)
+        # review M3 of next-241: the location FinCom reads already: its Use is disabled
+        ok(E("(c) => document.querySelector(c + ' [data-source-use=\"%s\"]').disabled" % I1, card) is True and E("(c) => document.querySelector(c + ' [data-source-use=\"%s\"]').disabled" % I2, card) is False,
+           "M3: Use \u2460 disabled (FinCom reads it already)")
+        # review H5 of next-241: "These are the same data" asks once, then tally_company_source_same(book)
+        E("() => { window.__calls = []; }")
+        pg.click(card + " [data-source-same]"); pg.wait_for_timeout(500)
+        qs = pg.inner_text("#confirmBox .cbx .note").strip() if pg.locator("#confirmBox .cbx").count() else ""
+        ok("the same data" in qs and "\u2460" in qs and "\u2461" in qs and not [c for c in E("window.__calls") if c[0] == "tally_company_source_same"], "H5: the same data asks first (%r)" % qs)
+        if pg.locator("#confirmBox .cbx").count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+        ok([c for c in E("window.__calls") if c[0] == "tally_company_source_same"] == [["tally_company_source_same", {"p_book": "b1"}]], "H5: tally_company_source_same(book) (%s)" % E("window.__calls"))
+        scene(TWO)
         # the coordinator, 09-Oct-2026: Use ② asks once before anything is sent
         E("() => { window.__calls = []; }")
         pg.click(card + ' [data-source-use="%s"]' % I2); pg.wait_for_timeout(600)
@@ -124,6 +138,9 @@ def main():
         E("() => { Rec.alerts.at = 0; Rec.alerts.none = false; return Rec.alertsLoad && Rec.alertsLoad(); }"); pg.wait_for_timeout(1500)
         items = E("() => AlertHub.list().map(x => [x.key, x.text, x.act ? x.act.label : ''])")
         it = [x for x in items if "open in two places" in (x[1] or "")]
+        # review L8 of next-241: the bell's line for the held lines of another location: no "..", its action the Tally page
+        bk = [x for x in items if "another data location" in (x[1] or "")]
+        ok(bk and all(".." not in x[1] for x in bk) and all(x[2] == "Open the Tally page" for x in bk), "L8: the held lines' bell line (%s)" % bk)
         ok(len(it) == 1 and it[0][2] == "Open the Tally page", "the bell lists the alert ONCE (not also as the day's summary), its action the Tally page (%s)" % items)
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()

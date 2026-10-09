@@ -440,7 +440,8 @@ function BridgeLines({ rows, latest, m }) {
 // upload of that location for the year. Staff see the words without the buttons
 const fyStart = () => { const d = new Date(Date.now() + 330 * 60000), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return (m >= 4 ? y : y - 1) + "-04-01"; };
 function SourceCard({ g, owner }) {
-  const chosen = g.list.find((x) => x.choice === "chosen"), person = chosen && chosen.chosen_by ? chosen : null;
+  const chosenAll = g.list.filter((x) => x.choice === "chosen"), chosen = chosenAll[0], person = chosen && chosen.chosen_by ? chosen : null;
+  const same = chosenAll.length > 1 && person, marks = chosenAll.map((x) => x.n).join(" and ");
   const later = !!(S.srcLater && S.srcLater[g.book]);
   const item = (x) => x.n + " " + [x.computer || "a computer", x.win_user || "—", x.path || "its data folder"].join(" · ") + " (last entry " + (agoWords(x.last_line_at || x.last_seen) || "not seen") + ")";
   const words = g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data: " + g.list.map(item).join(" ") + " Which one is your books? FinCom reads only that one.";
@@ -448,11 +449,15 @@ function SourceCard({ g, owner }) {
     <p className="note" style={{ margin: 0 }}>{g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data; you chose to decide later. FinCom reads " + (chosen ? chosen.n : "none of them") + " meanwhile."}</p></div>;
   return <div className={"pane tcard " + (person ? "" : "warn")} data-sources-card={g.book} style={{ borderLeft: "4px solid var(--warn, #c98a00)" }}>
     <p style={{ margin: "0 0 6px" }} data-sources-words="">{words}</p>
-    {person && <p style={{ margin: "0 0 6px" }} data-sources-now="">{"FinCom now reads " + person.n + ". Upload " + person.n + "'s Day Book for the year (one month per file) so the history matches. "}
+    {person && same && <p style={{ margin: "0 0 6px" }} data-sources-now="">{"FinCom reads " + marks + " as the same data (both computers read one data folder)."}</p>}
+    {person && !same && <p style={{ margin: "0 0 6px" }} data-sources-now="">{"FinCom now reads " + person.n + ". Upload " + person.n + "'s Day Book for the year (one month per file) so the history matches. "}
       {g.cid && <a href="#" data-source-upload="" onClick={(e) => { e.preventDefault(); Rec.uploadFrom(g.cid, fyStart()); }}>{"Upload " + person.n + "'s Day Book"}</a>}</p>}
     {person && <p className="note" style={{ margin: "0 0 6px" }} data-sources-who="">{"Chosen by " + who(person.chosen_by) + " at " + tallyHm(person.chosen_at) + " IST."}</p>}
     {owner && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-      {g.list.map((x) => <button key={x.data_id} className="btn small" data-source-use={x.data_id} disabled={x === person} onClick={() => TCloud.sourceChoose(g.book, x.data_id, x.n, g.company)}>{"Use " + x.n}</button>)}
+      {/* review M3 of next-241: the location FinCom reads already (alone) cannot be chosen again */}
+      {g.list.map((x) => <button key={x.data_id} className="btn small" data-source-use={x.data_id} disabled={x.choice === "chosen" && chosenAll.length === 1} onClick={() => TCloud.sourceChoose(g.book, x.data_id, x.n, g.company)}>{"Use " + x.n}</button>)}
+      {/* review H5 of next-241: one data folder under two paths */}
+      {!same && <button className="btn small" data-source-same="" onClick={() => TCloud.sourceSame(g.book, g.company)}>{"These are the same data (" + (g.list.length === 2 ? "both" : "all") + " computers read it)"}</button>}
       {!person && <button className="btn small ghost" data-source-later="" onClick={() => { S.srcLater = Object.assign({}, S.srcLater || {}, { [g.book]: true }); render(); }}>Decide later</button>}
     </div>}
   </div>;
