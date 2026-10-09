@@ -57,7 +57,9 @@ function BigImp($report, [string[]]$objs, $label) {
   try { $c = (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 900).Content } catch { $c = "failed: $($_.Exception.Message)" }
   if ($c -is [byte[]]) { $c = [Text.Encoding]::UTF8.GetString($c) }
   $cr = [int]('0' + [regex]::Match("$c", '<CREATED>(\d+)</CREATED>').Groups[1].Value)
-  if (-not $cr) { Write-Host "[big import] ${label}: $(("$c" -replace '\s+', ' ').Substring(0, [Math]::Min(300, "$c".Length)))" }
+  $al = [int]('0' + [regex]::Match("$c", '<ALTERED>(\d+)</ALTERED>').Groups[1].Value)
+  # run 37816705433: the length was taken before the spaces were folded, so Substring threw and the answer was lost
+  if (-not $cr) { $one = ("$c" -replace '\s+', ' '); Write-Host "[big import] ${label}: altered $al; $($one.Substring(0, [Math]::Min(300, $one.Length)))" }
   return $cr
 }
 $bigN = if ($env:BIG_VCH) { [int]$env:BIG_VCH } else { 100000 }
@@ -89,19 +91,61 @@ foreach ($ph in @(@('Big Basic', 1000), @('Big HRA', 500))) {
 $px += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Big Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>300000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
 $prc = BigImp 'Vouchers' @($px) 'big payroll 200'
 Info ("big payroll 200: {0} masters, {1} entry (31-10-2026)" -f $pmc, $prc)
+# the owner's set (09-Oct-2026: the receipt / 5 / 50-item invoice set on the large company), each alone on its own date so
+# that the Day Book of that date ends with it (Educational mode takes the 1st, 2nd and 31st only)
+$setDefs = @(@('receipt', '1-11-2026', '20261101'), @('sales5', '2-11-2026', '20261102'), @('sales50', '1-12-2026', '20261201'))
+$setOk = @{}
+$its5 = @(); for ($j = 1; $j -le 5; $j++) { $its5 += ('HItem {0:d5}' -f (2900 + $j)) }
+$its50 = @(); for ($j = 1; $j -le 50; $j++) { $its50 += ('HItem {0:d5}' -f (2900 + $j)) }
+$setOk['receipt'] = BigImp 'Vouchers' @(S2Receipt '20261101' 'BIG-RC1' 'HParty 02700' 500 'big set receipt') 'big set receipt'
+$setOk['sales5'] = BigImp 'Vouchers' @(S2Sales '20261102' 'BIG-S5' 'HParty 02700' $its5 'big set sales 5 items') 'big set sales 5'
+$setOk['sales50'] = BigImp 'Vouchers' @(S2Sales '20261201' 'BIG-S50' 'HParty 02700' $its50 'big set sales 50 items') 'big set sales 50'
+Info ("big set: receipt {0}, sales 5 items {1}, sales 50 items {2} entry made (1-11, 2-11, 1-12-2026)" -f $setOk['receipt'], $setOk['sales5'], $setOk['sales50'])
 
-$recAll = { @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Where-Object { $_ -like 'FCR1|*' }) }
+# run 37816705433: Get-Content on the user's recorder file threw 'being used by another process' (Tally holds it while it
+# writes), and every 25 ms read could itself hold Tally's OPEN FILE back. Now: the files' sizes polled (no open), the lines
+# read only once a size changed, with a shared open and retries; the time taken is the moment the size changed.
+function BigFiles($stampFile) { if ($stampFile) { @($stampFile) } else { @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.FullName }) } }
+function BigLen([string[]]$paths) { $n = 0L; foreach ($p in $paths) { $fi = [IO.FileInfo]::new($p); if ($fi.Exists) { $n += $fi.Length } }; $n }
+function BigLines([string[]]$paths) {
+  $all = [Collections.Generic.List[string]]::new()
+  foreach ($p in $paths) {
+    if (-not [IO.File]::Exists($p)) { continue }
+    $ok = $false
+    for ($t = 0; $t -lt 40 -and -not $ok; $t++) {
+      try {
+        $fs = [IO.FileStream]::new($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try { $sr = [IO.StreamReader]::new($fs, [Text.Encoding]::Unicode, $true); $txt = $sr.ReadToEnd() } finally { $fs.Dispose() }
+        foreach ($l in ($txt -split "`r?`n")) { if ($l) { $all.Add($l) } }; $ok = $true
+      } catch { Start-Sleep -Milliseconds 25 }
+    }
+    if (-not $ok) { return $null }
+  }
+  return ,$all
+}
 function BigSave($label, $stampFile, $day = '1-4-2026') {
   KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo "$day{ENTER}" 8 "big-$label-daybook"
   KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"
-  $c0 = if ($stampFile) { @(Get-Content $stampFile -Encoding Unicode -ErrorAction SilentlyContinue).Count } else { @(& $recAll).Count }
+  $paths = BigFiles $stampFile; $base = BigLines $paths
+  if ($null -eq $base) { Write-Host "[big] ${label}: the file could not be read before the save"; KeysTo '{ESC}' 2; return -1 }
+  $c0 = if ($stampFile) { $base.Count } else { @($base | Where-Object { $_ -like 'FCR1|*' }).Count }
   $p = Get-Process -Id $script:tpid -ErrorAction SilentlyContinue
   if (-not $p -or $p.MainWindowHandle -eq 0) { return -1 }
   [W32V]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [W32V]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 500
+  $seen = BigLen $paths; $pending = $false; $tDet = -1
   $sw = [Diagnostics.Stopwatch]::StartNew(); [System.Windows.Forms.SendKeys]::SendWait('^a'); $ms = -1
   while ($sw.Elapsed.TotalSeconds -lt 60) {
-    if ($stampFile) { if (@(Get-Content $stampFile -Encoding Unicode -ErrorAction SilentlyContinue).Count -gt $c0) { $ms = [int]$sw.Elapsed.TotalMilliseconds; break } }
-    elseif (@(& $recAll | Select-Object -Skip $c0 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -like '*|end=1|t1=*' }).Count) { $ms = [int]$sw.Elapsed.TotalMilliseconds; break }
+    if (-not $stampFile) { $paths = BigFiles '' }
+    $l = BigLen $paths
+    if ($l -ne $seen) { $seen = $l; $tDet = [int]$sw.Elapsed.TotalMilliseconds; $pending = $true }
+    if ($pending) {
+      $now = BigLines $paths
+      if ($null -ne $now) {
+        $pending = $false
+        $new = if ($stampFile) { @($now | Select-Object -Skip $c0) } else { @($now | Where-Object { $_ -like 'FCR1|*' } | Select-Object -Skip $c0 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -like '*|end=1|t1=*' }) }
+        if ($new.Count) { $ms = $tDet; break }
+      }
+    }
     Start-Sleep -Milliseconds 25
   }
   Start-Sleep 2; Shot "big-$label-saved"; KeysTo '{ESC}' 2
@@ -111,8 +155,20 @@ function BigWarmPayroll($label) {
   KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo '31-10-2026{ENTER}' 8 "big-$label-daybook"
   KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"; KeysTo '^a' 5 "big-$label-answer"; KeysTo '^a' 8 "big-$label-saved"; KeysTo '{ESC}' 2   # one Esc: the Day Book closed (run 37795537503: a second Esc at the Gateway quit Tally, and the restarted Tally stopped at Activate License)
 }
-$tAdd = @(); for ($i = 1; $i -le 5; $i++) { $tAdd += BigSave "addon$i" '' }
-$tAddP = @(); if ($prc) { BigWarmPayroll 'addon-pr-warm'; for ($i = 1; $i -le 5; $i++) { $tAddP += BigSave "addon-pr$i" '' '31-10-2026' } }
+# one arm: the 1-4-2026 sales (3 items), each set entry (one warm save not counted, then 5), the payroll (its warm save, then 5)
+function BigArm($arm, $stampFile) {
+  $r = @{}
+  $r['sales3'] = @(); for ($i = 1; $i -le 5; $i++) { $r['sales3'] += BigSave "$arm$i" $stampFile }
+  foreach ($d in $setDefs) {
+    $k = $d[0]; $r[$k] = @()
+    if (-not $setOk[$k]) { continue }
+    $null = BigSave "$arm-$k-warm" $stampFile $d[1]
+    for ($i = 1; $i -le 5; $i++) { $r[$k] += BigSave "$arm-$k$i" $stampFile $d[1] }
+  }
+  $r['payroll'] = @(); if ($prc) { if (-not $stampFile) { BigWarmPayroll "$arm-pr-warm" | Out-Null }; for ($i = 1; $i -le 5; $i++) { $r['payroll'] += BigSave "$arm-pr$i" $stampFile '31-10-2026' } }
+  return $r
+}
+$rAdd = BigArm 'addon' ''
 $stampFile = "$fc\big-stamp.txt"; Remove-Item $stampFile -Force -ErrorAction SilentlyContinue
 $stampTdl = "$fc\BigStamp.tdl"
 Set-Content $stampTdl -Encoding ASCII -Value @(
@@ -125,15 +181,14 @@ Write-TallyIni $stampTdl $folder.Name
 $t2 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $t2.Id
 for ($i = 0; $i -lt 60; $i++) { Start-Sleep 3; try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {} }
 Start-Sleep 5; KeysTo 'a' 4; KeysTo 't' 15 'big-stamp-started'
-$tStamp = @(); for ($i = 1; $i -le 5; $i++) { $tStamp += BigSave "stamp$i" $stampFile }
-$tStampP = @(); if ($prc) { for ($i = 1; $i -le 5; $i++) { $tStampP += BigSave "stamp-pr$i" $stampFile '31-10-2026' } }
-$med = { param($a) $s = @($a | Where-Object { $_ -ge 0 } | Sort-Object); if ($s.Count) { $s[[int][math]::Floor(($s.Count - 1) / 2)] } else { -1 } }
-$mA = & $med $tAdd; $mS = & $med $tStamp
-$state = if ($made -lt $bigN -or $mA -lt 0 -or $mS -lt 0) { 'HARNESS' } else { 'MEASURE' }
-Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} big: {1} entries; Ctrl+A to a new line in a file: with the add-on (its full line) {2} ms, median {3}; without it (a stamp-only TDL right after Tally's own Form Accept) {4} ms, median {5}; the add-on's own share: {6} ms" -f `
-    $state, $made, ($tAdd -join ', '), $mA, ($tStamp -join ', '), $mS, $(if ($mA -ge 0 -and $mS -ge 0) { $mA - $mS } else { '-' }))
-# payroll 200 (each copy saved with every employee; the add-on's full line in parts)
-$mAP = & $med $tAddP; $mSP = & $med $tStampP
-$stP = if (-not $prc -or $mAP -lt 0 -or $mSP -lt 0) { 'HARNESS' } else { 'MEASURE' }
-Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} big payroll 200: {1} entries; Ctrl+A to a new line in a file: with the add-on (its full line) {2} ms, median {3}; without it (a stamp-only TDL right after Tally's own Form Accept) {4} ms, median {5}; the add-on's own share: {6} ms" -f `
-    $stP, $made, ($tAddP -join ', '), $mAP, ($tStampP -join ', '), $mSP, $(if ($mAP -ge 0 -and $mSP -ge 0) { $mAP - $mSP } else { '-' }))
+$rStamp = BigArm 'stamp' $stampFile
+$med = { param($a) $s = @($a | Where-Object { $_ -ge 0 } | Sort-Object); if ($s.Count -ge 3) { $s[[int][math]::Floor(($s.Count - 1) / 2)] } else { -1 } }
+$names = [ordered]@{ sales3 = 'big'; receipt = 'big set receipt'; sales5 = 'big set sales 5 items'; sales50 = 'big set sales 50 items'; payroll = 'big payroll 200' }
+foreach ($k in $names.Keys) {
+  $a = @($rAdd[$k]); $s = @($rStamp[$k]); $mA = & $med $a; $mS = & $med $s
+  $state = if ($made -lt $bigN -or $mA -lt 0 -or $mS -lt 0) { 'HARNESS' } else { 'MEASURE' }
+  $share = if ($mA -ge 0 -and $mS -ge 0) { $mA - $mS } else { '-' }
+  $over = if ($share -is [int]) { if ($share -gt 250) { '; OVER 0.25 s' } else { '; within 0.25 s' } } else { '' }
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} {1}: {2} entries; Ctrl+A to a new line in a file: with the add-on (its full line) {3} ms, median {4}; without it (a stamp-only TDL right after Tally's own Form Accept) {5} ms, median {6}; the add-on's own share: {7} ms{8}" -f `
+      $state, $names[$k], $made, ($a -join ', '), $mA, ($s -join ', '), $mS, $share, $over)
+}
