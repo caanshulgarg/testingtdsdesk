@@ -1108,7 +1108,7 @@ function printTable(id, title){
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
 // parts of the books with a sidebar entry of their own, outside "TDS & GST" (MIS, Accounts and Audit moved out: review item 7)
 const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
-function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
+function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
   S.tdsFy = fy;

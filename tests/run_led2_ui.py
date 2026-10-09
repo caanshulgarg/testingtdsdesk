@@ -44,7 +44,7 @@ with sync_playwright() as p:
     pg.evaluate("lmPost('gst.sgst')"); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().gst.sgst") == "07 SGST INPUT", "a slot set by hand is kept until 'Use it'")
     # a return made, then a ledger changed: the banner names the return
-    pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '" + GM + "'; S.gstReg = '07'; render(); }")
+    pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '" + GM + "'; S.gstReg = '07'; S.gstView = 'return'; S.gstSub = 'file'; render(); }")   # 09-Oct-2026: the JSON is on GSTR-1's File / JSON tab
     pg.click('button:has-text("Download GSTR-1 JSON")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("(S.books.ledSnaps || []).length") == 1, "a copy of the master kept with the GSTR-1 JSON")
     pg.evaluate("S.booksTab = 'ledgers'; S.ledQ = %s; render();" % json.dumps(CTRL[:-6])); pg.wait_for_timeout(500)

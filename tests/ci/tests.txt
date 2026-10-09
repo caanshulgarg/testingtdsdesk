@@ -217,3 +217,5 @@ run_ledpage_simple.py                 180  TDSDESK_SITE=../app/dist-test
 run_alerts_clear_keys.py              120  TDSDESK_SITE=../app/dist-test
 # release-240 security review S-M1: selfcheck and renumber_list answer a computer only for its own companies
 run_company_scope_server.py           120
+# app-tdsgst (09-Oct-2026): the TDS and GST return pages redesigned; every file and amount as before (tests/fixtures/tdsgst-before.json)
+run_tdsgst_ui.py                      600  TDSDESK_SITE=../app/dist-test

@@ -20,7 +20,9 @@ with sync_playwright() as p:
     # the quarter with the most deductions
     fy, q = pg.evaluate("(() => { const by = {}; TDS.rows().forEach(r => { const k = r.fy + '|' + r.q; by[k] = (by[k] || 0) + 1; }); return Object.entries(by).sort((a, b) => b[1] - a[1])[0][0].split('|'); })()")
     pg.evaluate("([fy, q]) => tdsGo(fy, q, '26Q')", [fy, q]); pg.wait_for_timeout(600)
-    ok(pg.get_attribute('#app nav[aria-label="Return"] button:has-text("Challans")', "aria-selected") == "true", "%s %s 26Q opens on Challans" % (q, fy))
+    # 09-Oct-2026 (app-tdsgst): a return opens on its Summary; Challans is the next tab
+    ok(pg.get_attribute('#app nav[aria-label="Return"] button:has-text("Summary")', "aria-selected") == "true", "%s %s 26Q opens on its Summary" % (q, fy))
+    pg.click('#app nav[aria-label="Return"] button:has-text("Challans")'); pg.wait_for_timeout(400)
     ok(pg.locator("#app .help-btn").count() == 1, "“How this tab works” is there")
     # a challan typed in
     d = pg.evaluate("(() => { const r = TDS.rows().find(x => x.fy === '%s' && x.q === '%s'); const t = TDS.ymd(r.date); return t.slice(0,4) + '-' + t.slice(4,6) + '-' + t.slice(6,8); })()" % (fy, q))
@@ -34,7 +36,7 @@ with sync_playwright() as p:
     pg.click('#tdsChTable button.linkbtn:has-text("0240020")'); pg.wait_for_timeout(400)
     ok(pg.locator("#tdsChTable table.bk-table tbody tr").count() > 0, "a challan opened: its deductions")
     # deductions: find, filter, sort
-    pg.click('#app nav[aria-label="Return"] button:has-text("Deductions")'); pg.wait_for_timeout(500)
+    pg.click('#app nav[aria-label="Return"] button:has-text("Entries")'); pg.wait_for_timeout(500)   # the deductions: "Entries" since 09-Oct-2026
     n0 = pg.locator("#tdsDnTable > tbody > tr").count()
     party = pg.evaluate("TDS.rows().filter(x => x.fy === '%s' && x.q === '%s')[0].party" % (fy, q))
     pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', party[:6]); pg.wait_for_timeout(600)
@@ -61,8 +63,10 @@ with sync_playwright() as p:
     ok(pg.locator("#tdsDeTable table.bk-table").count() == 1, "a deductee opened: their deductions")
     pg.click("#tdsDeTable > tbody > tr >> nth=0 >> button.linkbtn >> nth=0"); pg.wait_for_timeout(400)
     ok(pg.locator("#tdsDeTable table.bk-table").count() == 0, "and closed")
-    pg.click('#app nav[aria-label="Return"] button:has-text("Interest, late fee")'); pg.wait_for_timeout(500)
-    ok("Interest under 201(1A)" in pg.inner_text("#app") and "By section" in pg.inner_text("#app"), "interest, late fee and checks")
+    pg.click('#app nav[aria-label="Return"] button:has-text("Errors to fix")'); pg.wait_for_timeout(500)
+    errs = pg.inner_text("#app")
+    pg.click('#app nav[aria-label="Return"] button:has-text("Summary")'); pg.wait_for_timeout(400)
+    ok("Interest under 201(1A)" in errs and "By section" in pg.inner_text("#app"), "interest and late fee under Errors to fix; by section on the Summary")
     # the challan removed
     pg.click('#app nav[aria-label="Return"] button:has-text("Challans")'); pg.wait_for_timeout(400)
     pg.click('#tdsChTable button[aria-label="Remove this challan"]'); pg.wait_for_timeout(500)

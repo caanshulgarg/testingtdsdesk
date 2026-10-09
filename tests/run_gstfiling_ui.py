@@ -20,11 +20,11 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8144/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => { const c = newCompany({name: "@NAME@", gstin: "@GSTIN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}, twoBs: {}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
-      S.booksTab = "@TAB@"; S.gstPart = "r3b"; S.gstYm = "@YM@"; S.gstReg = "07"; render(); }""".replace("@NAME@", "ZZ TEST (" + COMPANY + ")" if FIXTURE else "ZZ TEST (VMS books)").replace("@GSTIN@", GST07).replace("@YM@", YM).replace("@TAB@", "import" if FIXTURE else "gst"), books)
+      S.booksTab = "@TAB@"; S.gstPart = "r3b"; S.gstView = "return"; S.gstSub = "file"; S.gstYm = "@YM@"; S.gstReg = "07"; render(); }""".replace("@NAME@", "ZZ TEST (" + COMPANY + ")" if FIXTURE else "ZZ TEST (VMS books)").replace("@GSTIN@", GST07).replace("@YM@", YM).replace("@TAB@", "import" if FIXTURE else "gst"), books)
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600 if FIXTURE else 5000)
     if FIXTURE:   # the made-up books' masters: the GST ledgers by registration
         pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
-        pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'r3b'; S.gstYm = '%s'; S.gstReg = '07'; render();" % YM); pg.wait_for_timeout(5000)
+        pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'r3b'; S.gstView = 'return'; S.gstSub = 'file'; S.gstYm = '%s'; S.gstReg = '07'; render();" % YM)   # 09-Oct-2026: filing is on GSTR-3B's File / JSON tab; pg.wait_for_timeout(5000)
     t = pg.inner_text("#app")
     ok("Filing, interest and late fee" in t and "Checks the portal runs" in t and "DRC-01B" in t, "3B has the filing section and the portal's checks")
     ok("Rule 37" in t and R37 not in t, "rule 37 is off by default: no bills listed")
@@ -53,7 +53,7 @@ with sync_playwright() as p:
     ok(any("GST-setoff-07-" + YM in n for n in pg.evaluate("window.__saved")), "the set-off journal for Tally downloads")
     pg.click('button:text-is("Mark this 3B as filed and keep a copy")'); pg.wait_for_timeout(2500)
     ok(pg.evaluate("!!S.books.gstFiled['07']['%s'].snap" % YM) and "kept as filed" in pg.inner_text("#app"), "3B marked as filed, with a copy kept")
-    pg.evaluate("S.gstPart = 'r1'; S.gstYm = '202603'; render()"); pg.wait_for_timeout(3000)
+    pg.evaluate("S.gstPart = 'r1'; S.gstSub = 'diff'; S.gstYm = '202603'; render()")   # 09-Oct-2026: IMS rejections on GSTR-1's Differences tab; pg.wait_for_timeout(3000)
     ok("Rejected by customers in IMS" in pg.inner_text("#app"), "GSTR-1 still draws")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

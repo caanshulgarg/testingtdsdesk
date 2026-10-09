@@ -138,12 +138,13 @@ export default function Gst() {
   if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
   // a return is filed for one GSTIN: the company's own first, never the registrations added together
   if (!regs.some((g) => g.slice(0, 2) === S.gstReg)) { const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find((g) => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
+  // the year's grid first; a part already chosen (a link to it, an alert's button) opens that part
+  if (!S.gstView) S.gstView = S.gstPart ? "return" : "year";
   // the parts follow the filing type of this month and GSTIN, so both are settled first
   const { parts, ftype, noBooks } = gstParts(b);
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some((x) => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
   S.gstSeen = seen;
-  if (S.gstView !== "return") S.gstView = "year";
   const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
   const subs = S.gstView === "return" && !noBooks ? SUBS[part] : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";

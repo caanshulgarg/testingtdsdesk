@@ -92,7 +92,8 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="GST"] button[data-part="vault"]'); pg.wait_for_timeout(1000)
     ok("Bring in" in pg.inner_text("#app") or "PDF" in pg.inner_text("#app"), "Returns filed opens")
     pg.screenshot(path=OUT + "/gstregs-gsttab.png", full_page=False)
-    pg.click('.revfilter button.linkbtn:has-text("GST settings")'); pg.wait_for_timeout(1000)
+    # 09-Oct-2026 (app-tdsgst): the GSTIN's line and its settings link are in the bar of year, month and GSTIN
+    pg.click('[data-gst-bar] button.linkbtn:has-text("GST settings")'); pg.wait_for_timeout(1000)
     ok(pg.evaluate("S.tab") == "gstset" and "Settings of " + OWN in pg.inner_text("#app"), "the link goes to that GSTIN's settings")
     # remove one added here
     # spec K9 (round 2): nothing is lost (adding it again brings it back), so no question first
