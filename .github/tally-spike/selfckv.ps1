@@ -104,7 +104,7 @@ try {
   $ok1 = $notListed.Count -eq 0 -and $extra.Count -eq 0 -and @($xg | Where-Object { $_ -notin $gotMiss }).Count -eq 0 -and $k.guid -notin $gotMiss -and $fetched.Count -eq 3 -and
     [int]$r1.listed -eq $got.Count -and [int]$r1.missing -eq $gotMiss.Count -and [int]$r1.fetched -eq $gotMiss.Count -and [int]$r1.still -eq 0 -and -not "$($r1.stopped)"
   ScRes $CN1 $(if ($ok1) { 'PASS' } else { 'FAIL' }) ("mark (after) {0}, Tally's ALTVCHID {1}; Tally's entries above the mark {2}, listed by the bridge {3} (not listed: {4}; not Tally's: {5}); FinCom's copy lacked (the stub's compare) {6}: {7} (the Receipt by keys among them: {8}); fetched into the copy with Tally's AlterID: {9} of 3 (lines with Tally's entry: {10}); the record: listed {11}, missing {12}, fetched {13}, still {14}, deleted {15}, stopped '{16}'" -f `
-      $after, $c1.altvchid, $want.Count, $got.Count, $(if ($notListed.Count) { $notListed -join ', ' } else { 'none' }), $(if ($extra.Count) { $extra -join ', ' } else { 'none' }), $gotMiss.Count, (@($cmp[-1].answer.missing) | ForEach-Object { "$($_.guid) $($_.why)" }) -join ', ', ($k.guid -in $gotMiss), $fetched.Count, $scLines.Count,
+      $after, $c1.altvchid, $want.Count, $got.Count, $(if ($notListed.Count) { $notListed -join ', ' } else { 'none' }), $(if ($extra.Count) { $extra -join ', ' } else { 'none' }), $gotMiss.Count, ((@($cmp[-1].answer.missing) | ForEach-Object { "$($_.guid) $($_.why)" }) -join ', '), ($k.guid -in $gotMiss), $fetched.Count, $scLines.Count,
       $r1.listed, $r1.missing, $r1.fetched, $r1.still, $r1.deleted, $r1.stopped)
   # n2: the words (migration 65 at the ref), and the bridge's log line with them
   $w = "$($ra.words)"
