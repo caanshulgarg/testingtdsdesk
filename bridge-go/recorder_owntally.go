@@ -283,7 +283,7 @@ func liveOwnAskNow() bool {
 // stopped is incomplete (it tells nothing; liveNoteOwnTally). It gives way to a posting. A person's look (Update now, the
 // tray, the setup) is not cut
 func bgCompaniesTC() *TC {
-	return &TC{copier: true, light: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: keepNum("RecorderLimitMs", 2000)}
+	return &TC{copier: true, light: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: recorderLimitMs()}
 }
 
 // After 2.3.0 (refetch): under live.mu, whether this bridge's own Tally has the company open now: its last look saw it open, or

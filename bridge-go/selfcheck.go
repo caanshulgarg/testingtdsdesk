@@ -6,7 +6,7 @@ package main
 // company's checked mark; Tally's own list of the entries changed above the mark (TDSDeskKeepList in its undated form above
 // an AlterID, source B's request, exactly as keepListAboveRequest builds it) compared by FinCom's cloud with its copy
 // (kind selfcheck, step compare); the entries missing fetched through the live recorder (one entry a request,
-// FinComVoucherByMaster, the recorder's own rules); the result recorded by the cloud (step record, migration 65's
+// FinComVoucherObject since 2.3.4, which replaced FinComVoucherByMaster; the recorder's own rules); the result recorded by the cloud (step record, migration 65's
 // tally_selfchecks) with its words for the Tally page. ONLY requests already on the allow-list, byte for byte as built:
 // no Tally request is added or changed here. Tally's own balances need a new, computed request and wait for the owner
 // (the document above, section 8).

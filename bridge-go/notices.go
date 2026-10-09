@@ -6,7 +6,7 @@ package main
 // Every notification the tray shows goes through one gate (noticeGate):
 //   - a problem (trayProblems: the bridge could not start, is not running, FinCom refused this computer's id, offline,
 //     Tally not open) is shown at most once per problem, dismissed or not: its id is the kind plus a fingerprint of the
-//     problem (kind, company, day, computer; never times or counts), recorded when shown in a file of this Windows user
+//     problem (kind, company, the day it started (release-240: not today), computer; never times or counts), recorded when shown in a file of this Windows user
 //     (%LOCALAPPDATA%\FinCom Bridge\notifications-cleared.json), written whole (a temporary file renamed over it), kept
 //     90 days. Closed with X or clicked (Windows' NIN_BALLOONTIMEOUT / NIN_BALLOONUSERCLICK) it is marked dismissed;
 //     "Clear notifications" in the tray menu marks every current one cleared. A new problem (another day, company or
@@ -229,7 +229,13 @@ func (g *noticeGate) key(p trayProblem) problemKey {
 	if p.Day != "" {
 		return problemKey{Kind: p.Kind, Company: p.Company, Day: p.Day, Computer: g.computer}
 	}
-	return problemKey{Kind: p.Kind, Company: p.Company, Day: g.now().Format("2006-01-02"), Computer: g.computer}
+	// release-240 review M2(b): the day the problem started (it has lasted since), not today: a cleared problem still
+	// there the next day is the same problem
+	day := g.now()
+	if t, ok := g.since[p.Kind]; ok {
+		day = t
+	}
+	return problemKey{Kind: p.Kind, Company: p.Company, Day: day.Format("2006-01-02"), Computer: g.computer}
 }
 
 // a problem: shown once it has lasted its while, if it was never shown (nor dismissed, nor cleared) before

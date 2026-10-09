@@ -78,6 +78,7 @@ type renumJob struct {
 	MissedFrom string
 	Unknown    int
 	More       bool
+	CloudFails int // release-240 review M1: FinCom's cloud did not answer renumber_list this many times in a row (the wait doubles)
 }
 
 var renum = struct {
@@ -131,7 +132,7 @@ func renumJobOf(e M) *renumJob {
 	j := &renumJob{Key: str(e["key"]), Company: str(e["company"]), CGUID: str(e["cguid"]), Type: str(e["type"]), Date: str(e["date"]), No: str(e["no"]),
 		Mid: str(e["mid"]), Event: str(e["event"]), Line: str(e["line"]), At: str(e["at"]), Asked: e["asked"] == true, Probed: e["probed"] == true,
 		Sent: toInt(e["sent"]), Same: toInt(e["same"]), Below: toInt(e["below"]), BelowFrom: str(e["belowFrom"]),
-		Wait: str(e["wait"]), Stops: toInt(e["stops"]), Missed: toInt(e["missed"]), MissedFrom: str(e["missedFrom"]), Unknown: toInt(e["unknown"]), More: e["more"] == true}
+		Wait: str(e["wait"]), Stops: toInt(e["stops"]), Missed: toInt(e["missed"]), MissedFrom: str(e["missedFrom"]), Unknown: toInt(e["unknown"]), More: e["more"] == true, CloudFails: toInt(e["cloudFails"])}
 	for _, x := range arr(e["cands"]) {
 		c := obj(x)
 		j.Cands = append(j.Cands, renumCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), No: str(c["no"]), Alter: toI64(c["alter"])})
@@ -146,7 +147,7 @@ func (j *renumJob) m() M {
 	}
 	return M{"key": j.Key, "company": j.Company, "cguid": j.CGUID, "type": j.Type, "date": j.Date, "no": j.No, "mid": j.Mid, "event": j.Event, "line": j.Line,
 		"at": j.At, "asked": j.Asked, "probed": j.Probed, "sent": j.Sent, "same": j.Same, "below": j.Below, "belowFrom": j.BelowFrom, "cands": cs,
-		"wait": j.Wait, "stops": j.Stops, "missed": j.Missed, "missedFrom": j.MissedFrom, "unknown": j.Unknown, "more": j.More}
+		"wait": j.Wait, "stops": j.Stops, "missed": j.Missed, "missedFrom": j.MissedFrom, "unknown": j.Unknown, "more": j.More, "cloudFails": j.CloudFails}
 }
 
 // under renum.mu
@@ -350,12 +351,15 @@ func renumTurn() int {
 	}()
 	n, done := renumWork(j)
 	renum.mu.Lock()
-	if done {
+	if done || j.Wait != "" {
 		for i, x := range renum.jobs {
 			if x == j {
 				renum.jobs = append(renum.jobs[:i:i], renum.jobs[i+1:]...)
 				break
 			}
+		}
+		if !done {
+			renum.jobs = append(renum.jobs, j) // release-240 review M1: a job that waits goes last; the others get their turn
 		}
 	}
 	renumSave()
@@ -394,11 +398,23 @@ func renumWork(j *renumJob) (int, bool) {
 			return 0, true // not linked: nothing FinCom holds
 		}
 		if r.code != 200 || r.json == nil || !truthy(r.json["ok"]) {
+			// release-240 review M1: never again at the next turn: the job waits (30 s, doubling to 30 minutes) and the
+			// other jobs go first meanwhile (renumTurn puts a waiting job last)
+			j.CloudFails++
+			d := 30 * time.Second
+			for i := 1; i < j.CloudFails && d < 30*time.Minute; i++ {
+				d *= 2
+			}
+			if d > 30*time.Minute {
+				d = 30 * time.Minute
+			}
+			renumWaitJob(j, d, "")
 			renum.mu.Lock()
-			renumSayOnce("cloud|"+j.Key, "Renumbering: FinCom's cloud did not list the "+j.Type+" entries of "+j.Company+" ("+cutRunes(or(r.err, fmt.Sprint("HTTP ", r.code)), 120)+"); asked again later")
+			renumSayOnce("cloud|"+j.Key, "Renumbering: FinCom's cloud did not list the "+j.Type+" entries of "+j.Company+" ("+cutRunes(or(r.err, fmt.Sprint("HTTP ", r.code)), 120)+"); asked again later, waiting longer each time")
 			renum.mu.Unlock()
 			return 0, false
 		}
+		j.CloudFails = 0
 		var cs []renumCand
 		for _, x := range arr(r.json["entries"]) {
 			e := obj(x)
@@ -433,7 +449,7 @@ func renumWork(j *renumJob) (int, bool) {
 	if len(j.Cands) == 0 {
 		return renumFinish(j), true
 	}
-	port, err := findCompanyPortBg(j.Company, 0)
+	port, err := ownPortErr("Renumbering", j.Company, j.CGUID)
 	if err != nil {
 		renumWaitJob(j, renumPause(), "Renumbering: "+j.Company+" is not open in Tally ("+cutRunes(err.Error(), 120)+"); its renumbering check waits, the other companies' go on")
 		return 0, false

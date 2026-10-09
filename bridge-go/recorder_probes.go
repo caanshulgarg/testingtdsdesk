@@ -321,12 +321,15 @@ func readTestEditLogProbe(port int, company string, answers ...string) {
 
 // --- the 2 s hard stop, every background read (2.3.1, the owner's last change: never a switch-off; a request stopped or
 // not answered is asked again by the shared retry schedule, retry.go)
-func liveLimitSec() float64 { return float64(keepNum("RecorderLimitMs", 2000)) / 1000 }
+// release-240 review Low: the 2-second rule, never above 2,000 ms whatever the settings say (a lower value stays)
+func recorderLimitMs() int { return minI(keepNum("RecorderLimitMs", 2000), 2000) }
+
+func liveLimitSec() float64 { return float64(recorderLimitMs()) / 1000 }
 
 // 2.2.2 (the owner's condition b): a recorder background read: it gives way to a posting, is told its time, is stopped
 // HARD at RecorderLimitMs (2000): the bridge stops waiting for Tally then (tally.go), and follows the retry schedule
 func recorderTC(timed func(sec float64)) *TC {
-	return &TC{copier: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: keepNum("RecorderLimitMs", 2000)}
+	return &TC{copier: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: recorderLimitMs()}
 }
 
 // --- B. source C

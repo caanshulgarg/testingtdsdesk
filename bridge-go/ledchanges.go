@@ -131,6 +131,17 @@ func ledOwnPort(company, guid string, preferred int) (int, string) {
 	return port, ""
 }
 
+// release-240 review M6: the bank route's and renumbering's reads ask only this bridge's own Tally (ledOwnPort, as the
+// self-check): why not, said once in the log per company and reason
+func ownPortErr(what, company, guid string) (int, error) {
+	p, why := ledOwnPort(company, guid, 0)
+	if why == "" {
+		return p, nil
+	}
+	liveSayOnce(strings.ToLower(what)+"|own|"+companyKey(company)+"|"+why, what+": "+company+": not asked: "+why)
+	return 0, errors.New(why)
+}
+
 // --- 1. after the light check: the ledgers changed since the last number (the number of ledgers sent)
 func ledChangesAfterLightCheck(company string, port int) {
 	if n, err := ledChangesCheckOn(company, port); err != nil && !gaveWay(err) {

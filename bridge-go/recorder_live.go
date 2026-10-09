@@ -1969,6 +1969,8 @@ func fastCompanyListed(tc *TC, company string, port, sec int) error {
 	}
 	t2 := *tc
 	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)
+	// release-240 review M4: the list is not the ask: only the entry request itself marks an ask as having reached Tally
+	t2.sentOut, t2.slotOut = nil, nil
 	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8))
 	if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
 		retryNote(port, "TDSDeskCompanies", err) // a frozen Tally steps the shared schedule on, as the entry request would

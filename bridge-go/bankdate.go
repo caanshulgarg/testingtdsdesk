@@ -59,7 +59,7 @@ func bankSmallMs() int64 { return int64(keepNum("BankSmallMs", 1500)) }
 // alert, not asked again that night. Only this one request (bankNightTurn's list) has it: every other request keeps the
 // 2-second rule (RecorderLimitMs)
 func bankNightLimitMs() int {
-	return keepNum("BankNightLimitMs", 10000)
+	return minI(keepNum("BankNightLimitMs", 10000), 10000) // release-240 review Low: never above 10 s, whatever the settings say
 }
 
 // India's time (no daylight saving; a fixed zone needs no time-zone data on Windows)
@@ -353,7 +353,7 @@ func bankAfterLightCheck(company string, port int) {
 	bank.busy = true
 	after := st.Seen
 	bank.mu.Unlock()
-	raw, ms, err := bankList(company, port, after, keepNum("RecorderLimitMs", 2000))
+	raw, ms, err := bankList(company, port, after, recorderLimitMs())
 	bank.mu.Lock()
 	defer bank.mu.Unlock()
 	bank.busy = false
@@ -367,7 +367,7 @@ func bankAfterLightCheck(company string, port int) {
 		if st.ReadAt == "" {
 			st.ReadAt = bankNowS()
 		}
-		st.Why = fmt.Sprintf("its list of changed entries took longer than %d ms", keepNum("RecorderLimitMs", 2000))
+		st.Why = fmt.Sprintf("its list of changed entries took longer than %d ms", recorderLimitMs())
 		writeLog(fmt.Sprintf("Bank dates: %s goes to the nightly check (%s): bank dates set in Tally are read outside office hours, from %s", company, st.Why, keepDailyAt()))
 		bankSave()
 		return
@@ -533,7 +533,7 @@ func bankNightTurn() {
 	bank.busy = true
 	company, guid, after := st.Company, st.CGUID, st.Seen
 	bank.mu.Unlock()
-	port, err := findCompanyPortBg(company, 0)
+	port, err := ownPortErr("Bank dates", company, guid)
 	var raw string
 	var ms int64
 	held := false
@@ -648,7 +648,7 @@ func bankWork(company, guid string, todo []bankCand) int {
 	if !spOK || (held != "" && !strings.EqualFold(held, guid)) {
 		return 0
 	}
-	port, err := findCompanyPortBg(company, 0)
+	port, err := ownPortErr("Bank dates", company, guid)
 	if err != nil {
 		return 0
 	}
