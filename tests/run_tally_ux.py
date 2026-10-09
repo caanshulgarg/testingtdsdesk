@@ -254,9 +254,15 @@ def main():
         scene(DEVS, LINKED, lines=HELD)
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(2000); E("() => render()"); pg.wait_for_timeout(500)
         nd = E("() => [...document.querySelectorAll('#app [data-tally-link-needs] li')].map(li => [li.getAttribute('data-tally-need'), li.innerText.replace(/\\s+/g, ' ').trim()])")
-        ok(any(n[0] == "daybook" and "Day Book" in n[1] and n[1].endswith("Upload") for n in nd) and any(n[0] == "held" and n[1].endswith("See them") for n in nd),
-           "5. held entries: one line with Upload (%s)" % nd)
+        ok(not any(n[0] == "daybook" for n in nd) and pg.locator("#app [data-need-days]").count() == 1 and any(n[0] == "held" and n[1].endswith("See them") for n in nd),
+           "5. From Tally: held entries one line with See them; the days that need a Day Book in their own section, not twice (%s)" % nd)
         shot("client-held")
+        # Client setup -> Tally says the Day Book line too (From Tally lists the days in its own section instead)
+        E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)
+        nd2 = E("() => [...document.querySelectorAll('#app [data-tally-link-needs] li')].map(li => [li.getAttribute('data-tally-need'), li.innerText.replace(/\\s+/g, ' ').trim()])")
+        ok(any(n[0] == "daybook" and n[1].endswith("Upload") for n in nd2), "5. Client setup -> Tally: the Day Book line with Upload (%s)" % nd2)
+        shot("client-setup-held")
+        E("() => goClient('books:import')"); pg.wait_for_timeout(1000)
         # stopped: the line says it, Resume for an owner
         stopped = [dict(d) for d in DEVS]; STOP1 = [{"id": 8, "device_id": D1, "action": "stop", "reason": "Tally slow", "stopped_at": "ago:5", "cleared_at": None, "stopped_by": None}]
         scene(stopped, LINKED, stops=STOP1); render_wait = pg.wait_for_timeout(800); E("() => render()"); pg.wait_for_timeout(500)

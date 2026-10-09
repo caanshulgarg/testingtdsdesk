@@ -64,7 +64,7 @@ with sync_playwright() as p:
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
     pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)   # fold the page's More again
     ln = pg.inner_text("#app [data-bridge-lines]")
-    ok(pg.locator("#app [data-bridge-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "FinCom Bridge 2.1.1", "Connected", "Tally open: ZZ TEST, Testing AAD")),
+    ok(pg.locator("#app [data-bridge-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "Connected", "Reads ZZ TEST, Testing AAD")),  # the Tally redesign: the version is under Details
        "5. one line: NWS144 · anshul · FinCom Bridge 2.1.1 · Connected · Tally open: the companies (%s)" % ln.replace("\n", " "))
     ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-details]").count() == 1,
        "5. no card and no table: the download and the details behind More")
@@ -76,13 +76,13 @@ with sync_playwright() as p:
     # offline: the line says what to do
     E("() => { TCloud.pane.devices[0].info.bridges['go-3fa9c1d2e4b7'].at = new Date(Date.now() - 3600000).toISOString(); render(); }"); pg.wait_for_timeout(500)
     st = pg.inner_text("#app [data-bridge-line]")
-    ok("Offline since" in st and "sign in to Windows as anshul" in st and "Test connection" in st, "5. offline: since when, and what to do (%s)" % st.replace("\n", " "))
+    ok("is not connected since" in st and "Sign in to Windows there as anshul" in st and "FinCom Bridge starts by itself" in st, "5. offline: since when, and what to do (%s)" % st.replace("\n", " "))
     # 1.15.0 still main beside a 2.1.0 test install, and a computer with only 1.15.0
     E(SETUP, NWS_BOTH); pg.wait_for_timeout(1200)
     lines = pg.locator("#app [data-bridge-line]")
     # 2.3.5: the card names the computer and the bridge; its status line says the problem and the one fix
     l1 = pg.inner_text('#app [data-computer]:has([data-bridge-line="go-3fa9c1d2e4b7"])'); l2 = pg.inner_text('#app [data-computer]:has([data-bridge-line="v1"])')
-    ok(lines.count() == 2 and "FinCom Bridge 2.1.0" in l1 and "reads only" in l1 and "Older bridge" in l2 and "TALLYSRV" in l2 and "Needs FinCom Bridge" in l2 and "Install it on TALLYSRV" in l2,
+    ok(lines.count() == 2 and "only reads" in l1 and "TALLYSRV" in l2 and "Needs you" in l2 and "Install FinCom Bridge" in l2 and "on TALLYSRV" in l2,
        "a line a computer: NWS144's FinCom Bridge reads only; TALLYSRV has an older bridge: install FinCom Bridge (%s | %s)" % (l1.replace("\n", " "), l2.replace("\n", " ")))
     ok(pg.locator('#app [data-bridge-line="v1"] [data-bridge-download]').count() == 1, "a computer with only an older bridge: its line has the download")
     t = pg.inner_text("#app")

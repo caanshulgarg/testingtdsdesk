@@ -217,3 +217,5 @@ run_ledpage_simple.py                 180  TDSDESK_SITE=../app/dist-test
 run_alerts_clear_keys.py              120  TDSDESK_SITE=../app/dist-test
 # release-240 security review S-M1: selfcheck and renumber_list answer a computer only for its own companies
 run_company_scope_server.py           120
+# the Tally redesign (09-Oct-2026): Your Tally connection, Back to the client, the client's Tally link line, phone width
+run_tally_ux.py                       240  TDSDESK_SITE=../app/dist-test

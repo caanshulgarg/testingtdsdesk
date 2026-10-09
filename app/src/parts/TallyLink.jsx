@@ -68,8 +68,8 @@ export default function TallyLink({ co, where = "setup", b = null }) {
   const h = heldNeeds(co.id), books = b || (S.books && S.books.cid === co.id ? S.books : null);
   const days = needDays(books || {}, co.id), nd = days.reduce((a, x) => a + x.days, 0);
   const needs = [];
-  // From Tally lists each day with its own Upload: there the line says how many and points to them
-  if (nd || h.daybook) needs.push(<li key="daybook" data-tally-need="daybook"><span>{nd ? plural(nd, "day needs", "days need") + " that day's Day Book" + (h.daybook ? " (" + plural(h.daybook, "entry", "entries") + " waiting)" : "")
+  // From Tally lists each day with its own Upload ("Days that need a Day Book"), so the line is not said twice there
+  if (where !== "books" && (nd || h.daybook)) needs.push(<li key="daybook" data-tally-need="daybook"><span>{nd ? (nd === 1 ? "1 day needs its Day Book" : nd + " days need their Day Book") + (h.daybook ? " (" + plural(h.daybook, "entry", "entries") + " waiting)" : "")
       : plural(h.daybook, "entry needs", "entries need") + " that day's Day Book"}</span>
     <button className="btn small primary" data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</button></li>);
   if (h.baseline) needs.push(<li key="baseline" data-tally-need="baseline"><span>{"The starting point of " + (company || "this company") + " is not recorded yet: " + plural(h.baseline, "entry waits", "entries wait")}</span>
