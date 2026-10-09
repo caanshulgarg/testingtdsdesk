@@ -65,6 +65,7 @@
   "recorderSourceB": {},
   "recorderSourceC": {},
   "recorderState": {},
+  "recorderWaitSince": "",
   "recorderWaitWords": "",
   "renumberAlerts": [],
   "reqs": {
