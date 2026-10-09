@@ -53,9 +53,10 @@ try {
   $kv = @(foreach ($v in $v1) { if ("$($v.mid)" -notin @($v0 | ForEach-Object { "$($_.mid)" })) { $v } })
   if (-not $kv.Count) { throw 'the keys made no Receipt (see the sc-1* screens)' }
   $k = $kv[0]; $null = TdsMid $k.mid
-  # three Journals by XML: no add-on line
+  # three Journals by XML: no add-on line. Dated 2-Oct-2026: Educational mode takes only the 1st, 2nd and 31st of a month
+  # (run 37829564139 dated them 20261003 and Tally refused each: LINEERROR 'Voucher date is missing', 0 made)
   foreach ($i in 1..3) {
-    $ir = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261003</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>selfck missing ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "selfck journal $i"
+    $ir = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261002</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>selfck missing ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "selfck journal $i"
     Info "selfck journal ${i}: Tally answered $((([regex]::Match("$ir", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' '))$(if ("$ir" -match '<LINEERROR>([^<]*)') { ' ' + $matches[1] })"
   }
   $v2 = VAll
