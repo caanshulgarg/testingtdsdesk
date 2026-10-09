@@ -56,9 +56,21 @@ const NAMES = new Set(["JSON", "HTML", "XML", "HTTP", "HTTPS", "URL", "URI", "AP
   "Sentry", "Postgres", "PostgreSQL", "WebSocket", "Promise", "Object", "Array", "String", "Number", "Function", "Symbol", "Date",
   "Map", "Set", "Response", "Request", "Headers", "Blob", "File", "Storage", "Worker", "Element", "Node", "Document", "Window"]);
 const ERROR_CLASS = /^[A-Z][A-Za-z]{0,40}(Error|Exception)$/;
-// a code name: starts lower case; camelCase, snake_case or a.b.c; at most two digits
-const CODE = /^[a-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*(\(\))?$/;
-const codeName = (w) => w.length <= 60 && CODE.test(w) && (/[A-Z_.$]/.test(w) || w.endsWith("()")) && (w.match(/\d/g) || []).length <= 2 && !/[A-Z]{3}/.test(w);
+// a code name (release-240 review M3: only code identifiers, never a file or a firm's name written in lower case):
+// camelCase (vendorName), a call (render(), x.map()), or a dotted name with a capital after the first part (pkg.Func,
+// Books.lines); never snake_case, never all lower-case dotted words (mehta.textiles.pvt), never a file name (acme_corp.pdf);
+// at most two digits, never three capitals running
+const CODE = /^[a-z$][A-Za-z0-9$]*(\.[A-Za-z$][A-Za-z0-9$]*)*(\(\))?$/;
+// a lower-case a.b only when b is a well-known method or property ("x.map is not a function")
+const METHODS = new Set("map filter forEach reduce find findIndex some every push pop shift slice splice concat join split trim replace includes indexOf length keys values entries then catch finally json text call apply bind toString toFixed get set has add delete clear close open send read write".split(" "));
+const FILE_EXT = new Set("pdf xls xlsx xlsm csv tsv xml json txt doc docx zip rar png jpg jpeg gif webp heic tif tiff bmp htm html eml msg ods odt pptx ppt".split(" "));
+const codeName = (w) => {
+  if (w.length > 60 || !CODE.test(w) || (w.match(/\d/g) || []).length > 2 || /[A-Z]{3}/.test(w)) return false;
+  const call = w.endsWith("()"), parts = (call ? w.slice(0, -2) : w).split(".");
+  if (FILE_EXT.has(parts[parts.length - 1].toLowerCase())) return false;
+  if (parts.length === 1) return call || /[A-Z]/.test(parts[0]);
+  return call || parts.some((p) => /[A-Z]/.test(p)) || (parts.length === 2 && METHODS.has(parts[1]));
+};
 function safeWord(w) {
   if (/^\d{1,2}$/.test(w)) return true;
   if (WORDS.has(w)) return true;
@@ -162,7 +174,9 @@ const TAGS = {
   install: (v) => (/^[0-9a-f]{32}$/.test(v) ? v : undefined),       // the random per-install id
   firm: (v) => (/^[0-9a-f]{12}$/.test(v) ? v : undefined),          // a hash of the firm's id, never the id
   kind: (v) => (/^[a-z][a-z_]{0,30}$/.test(v) ? v : undefined),     // tally-ingest's request kind (beat, posts_update, ...)
-  where: (v) => (/^[a-z][a-z0-9_ .:-]{0,60}$/.test(v) && scrubText(v) === v ? v : undefined),   // a fixed place in the code
+  // a fixed place in the code: a snake_case name (light_check, tally_ingest: set by the code, never data; release-240 M3
+  // keeps snake_case out of free text only), or words the scrubber keeps
+  where: (v) => (/^[a-z]+(?:_[a-z]+){0,3}$/.test(v) || (/^[a-z][a-z0-9_ .:-]{0,60}$/.test(v) && scrubText(v) === v) ? v : undefined),
   guard: (v) => (/^[A-Za-z][A-Za-z0-9 ']{0,40}$/.test(v) && (scrubText(v) === v || (/^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/.test(v) && !/[A-Z]{3}/.test(v))) ? v : undefined),   // a part of the page
   mode: (v) => (/^[a-z]{1,12}$/.test(v) ? v : undefined),
 };

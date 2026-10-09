@@ -135,24 +135,26 @@ func TestCrashReportCarriesNoBusinessData(t *testing.T) {
 	for _, x := range fx.Texts {
 		writeLog("Tally answered: " + x)
 	}
-	// panics as the bridge's loops recover them: strings, errors, wrapped errors, a path error, a runtime error
-	for _, x := range fx.Texts {
-		crashReport("heartbeat", x)
-		crashReport("posting_job", errors.New(x))
-		crashReport("keep_in_step", fmt.Errorf("company %s: %w", "OMEGA HOLDINGS & CO", errors.New(x)))
-	}
-	crashReport("recorder", &fs.PathError{Op: "open", Path: `C:\Users\priya\AppData\Local\FinCom Bridge\27AAACZ9876K1Z3.xml`, Err: fs.ErrPermission})
+	// panics as the bridge's loops recover them: a runtime error, a path error, strings, errors, wrapped errors (the
+	// runtime error first: the flood cap, 30 reports a minute, drops what comes after the 30th; release-240 review M3
+	// added three texts to the fixture)
 	func() {
 		defer func() { crashReport("light_check", recover()) }()
 		var a []int
 		_ = a[len(fx.Texts)] // index out of range: a runtime error
 	}()
+	crashReport("recorder", &fs.PathError{Op: "open", Path: `C:\Users\priya\AppData\Local\FinCom Bridge\27AAACZ9876K1Z3.xml`, Err: fs.ErrPermission})
+	for _, x := range fx.Texts {
+		crashReport("heartbeat", x)
+		crashReport("posting_job", errors.New(x))
+		crashReport("keep_in_step", fmt.Errorf("company %s: %w", "OMEGA HOLDINGS & CO", errors.New(x)))
+	}
 	crashFlush()
 	envs := s.envelopes()
 	if len(envs) < 5 {
 		t.Fatalf("reports sent: %d", len(envs))
 	}
-	sawRuntime, sawFrame := false, false
+	sawRuntime, sawFrame, sawWhere := false, false, false
 	for _, env := range envs {
 		if l := fx.leaks(env); len(l) > 0 {
 			t.Errorf("business data in an envelope: %v\n%s", l, env)
@@ -205,12 +207,18 @@ func TestCrashReportCarriesNoBusinessData(t *testing.T) {
 				t.Errorf("tag %q: only where", k)
 			}
 		}
+		if tags["where"] == "light_check" {
+			sawWhere = true
+		}
 		if strings.Contains(lines[2], "runtime error: index out of range") {
 			sawRuntime = true
 		}
 		if regexp.MustCompile(`"function":"[^"]*TestCrashReportCarriesNoBusinessData`).MatchString(lines[2]) && strings.Contains(lines[2], `"filename":"crash_test.go"`) {
 			sawFrame = true
 		}
+	}
+	if !sawWhere {
+		t.Error("the place in the code (where: light_check) is kept")
 	}
 	if !sawRuntime {
 		t.Error("a runtime error's own words are kept (runtime error: index out of range ...)")

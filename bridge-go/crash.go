@@ -179,7 +179,7 @@ var (
 	crashWords   = map[string]bool{}
 	crashNames   = map[string]bool{}
 	reCrashClass = regexp.MustCompile(`^[A-Z][A-Za-z]{0,40}(Error|Exception)$`)
-	reCrashCode  = regexp.MustCompile(`^[a-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*(\(\))?$`)
+	reCrashCode  = regexp.MustCompile(`^[a-z$][A-Za-z0-9$]*(\.[A-Za-z$][A-Za-z0-9$]*)*(\(\))?$`)
 	reCrashCap   = regexp.MustCompile(`^[A-Z][a-z']+$`)
 	reCrash3Caps = regexp.MustCompile(`[A-Z]{3}`)
 	reCrashMark  = regexp.MustCompile(`<[^>]{0,400}>`)
@@ -194,6 +194,7 @@ var (
 	reCrashDir   = regexp.MustCompile(`^[A-Za-z0-9._-]{1,80}$`)
 	reCrashOS    = regexp.MustCompile(`^[A-Za-z0-9 ._()+/-]{1,80}$`)
 	reCrashWhere = regexp.MustCompile(`^[a-z][a-z0-9_ .:-]{0,60}$`)
+	reCrashPlace = regexp.MustCompile(`^[a-z]+(_[a-z]+){0,3}$`) // a fixed place in the code (light_check): set by the code, never data
 )
 
 func init() {
@@ -207,15 +208,41 @@ func init() {
 	}
 }
 
+// release-240 review M3: only code identifiers (as codeName in sentry-scrub.js): camelCase, a call (x.map()), or a dotted
+// name with a capital after the first part (pkg.Func); never snake_case, all lower-case dotted words or a file name
+var crashFileExt, crashMethods = map[string]bool{}, map[string]bool{}
+
+func init() {
+	for _, m := range strings.Fields("map filter forEach reduce find findIndex some every push pop shift slice splice concat join split trim replace includes indexOf length keys values entries then catch finally json text call apply bind toString toFixed get set has add delete clear close open send read write") {
+		crashMethods[m] = true
+	}
+	for _, e := range strings.Fields("pdf xls xlsx xlsm csv tsv xml json txt doc docx zip rar png jpg jpeg gif webp heic tif tiff bmp htm html eml msg ods odt pptx ppt") {
+		crashFileExt[e] = true
+	}
+}
+
 func crashCodeName(w string) bool {
 	if len(w) > 60 || !reCrashCode.MatchString(w) || reCrash3Caps.MatchString(w) {
 		return false
 	}
-	if !strings.ContainsAny(w, "ABCDEFGHIJKLMNOPQRSTUVWXYZ_.$") && !strings.HasSuffix(w, "()") {
+	if strings.Count(w, "0")+strings.Count(w, "1")+strings.Count(w, "2")+strings.Count(w, "3")+strings.Count(w, "4")+
+		strings.Count(w, "5")+strings.Count(w, "6")+strings.Count(w, "7")+strings.Count(w, "8")+strings.Count(w, "9") > 2 {
 		return false
 	}
-	return strings.Count(w, "0")+strings.Count(w, "1")+strings.Count(w, "2")+strings.Count(w, "3")+strings.Count(w, "4")+
-		strings.Count(w, "5")+strings.Count(w, "6")+strings.Count(w, "7")+strings.Count(w, "8")+strings.Count(w, "9") <= 2
+	call := strings.HasSuffix(w, "()")
+	parts := strings.Split(strings.TrimSuffix(w, "()"), ".")
+	if crashFileExt[strings.ToLower(parts[len(parts)-1])] {
+		return false
+	}
+	if call {
+		return true
+	}
+	for _, p := range parts {
+		if strings.ContainsAny(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			return true
+		}
+	}
+	return len(parts) == 2 && crashMethods[parts[1]]
 }
 
 func crashSafeWord(w string) bool {
@@ -344,7 +371,7 @@ func crashScrub(e *sentry.Event) *sentry.Event {
 	if e.Message != "" {
 		o.Message = crashText(e.Message)
 	}
-	if w := e.Tags["where"]; reCrashWhere.MatchString(w) && crashText(w) == w {
+	if w := e.Tags["where"]; reCrashPlace.MatchString(w) || (reCrashWhere.MatchString(w) && crashText(w) == w) {
 		o.Tags = map[string]string{"where": w}
 	}
 	osName, osVer := "Windows", windowsVersion()

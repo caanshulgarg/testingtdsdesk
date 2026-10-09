@@ -9,12 +9,14 @@
     "<PARTYLEDGERNAME>", "PARTYLEDGERNAME", "<VOUCHER",
     "priya.sharma@alphatraders.in", "owner@omega-holdings.example",
     "cmufksrrqjub2g", "00000004-1111-4111-8111-000000000000", "client_id=eq.", "?id=eq.", "#client=",
-    "Alpha_Traders_Invoice_AB-101.pdf", "C:\\Users\\priya", "/home/priya"
+    "Alpha_Traders_Invoice_AB-101.pdf", "C:\\Users\\priya", "/home/priya",
+    "sharma_traders_gstr2b.xlsx", "acme_corp.pdf", "mehta.textiles.pvt"
   ],
   "tokens": [
     "ALPHA", "Alpha", "Zeta", "ZETA", "Kappa", "OMEGA", "Omega", "Priya", "priya", "Sharma",
     "landlord", "september", "N12345", "UTR", "09AANFG", "AAAPA", "1,25,000", "125000", "2,500", "118000",
-    "alphatraders", "omega-holdings", "@alphatraders", "@omega", "cmufksrrqjub2g", "4111-8111", "Invoice_AB", ".pdf", "AB/101", "ZC/77", "INV-2026"
+    "alphatraders", "omega-holdings", "@alphatraders", "@omega", "cmufksrrqjub2g", "4111-8111", "Invoice_AB", ".pdf", "AB/101", "ZC/77", "INV-2026",
+    "sharma_traders", "gstr2b.xlsx", "acme_corp", "acme", "mehta", "textiles"
   ],
   "texts": [
     "Party ALPHA TRADERS (GSTIN 09AANFG3202D1ZR, PAN AAAPA1234A) owes ₹1,25,000.00 on bill AB/101",
@@ -25,6 +27,7 @@
     "Failed to fetch https://qbocskaiewaxqcvaunzc.supabase.co/rest/v1/tally_post_jobs?id=eq.00000004-1111-4111-8111-000000000000&client_id=eq.cmufksrrqjub2g",
     "Upload of Alpha_Traders_Invoice_AB-101.pdf by priya.sharma@alphatraders.in (Priya Sharma) failed",
     "duplicate key value violates unique constraint \"tally_ledgers_pkey\" Key (book, name)=(cmufksrrqjub2g, OMEGA HOLDINGS & CO) already exists; mail owner@omega-holdings.example",
-    "open C:\\Users\\priya\\AppData\\Local\\FinCom Bridge\\27AAACZ9876K1Z3.xml: access denied; /home/priya/fincom #client=cmufksrrqjub2g"
+    "open C:\\Users\\priya\\AppData\\Local\\FinCom Bridge\\27AAACZ9876K1Z3.xml: access denied; /home/priya/fincom #client=cmufksrrqjub2g",
+    "Could not read sharma_traders_gstr2b.xlsx: the sheet is empty", "Upload of acme_corp.pdf failed (reading 'pages')", "Party mehta.textiles.pvt not found in the ledger list"
   ]
 }
