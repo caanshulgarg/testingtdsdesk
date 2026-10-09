@@ -255,7 +255,11 @@ const Rec = {
   //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
   //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
   //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
-  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines). 2.4.1:
+  //                ONLY these words (09-Oct-2026: "Tally's voucher with that MasterID is not a change after the starting
+  //                point" also named the starting point, and the owner was sent to the wrong place)
+  //     othersrc - 2.4.1 (migration 71): saved in another data location of the company: an owner chooses on the Tally page
+  //                which location is the books (the cloud's words say which, with the marks of the Tally page's card)
   //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
   //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
   //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
@@ -271,7 +275,8 @@ const Rec = {
     if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
     if (st !== "held") return "";
     if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
-    if (/starting point/i.test(why)) return "baseline";
+    if (/^saved in another data location of /i.test(why)) return "othersrc";     // 2.4.1 (migration 71)
+    if (/starting point is not recorded|no starting point recorded/i.test(why)) return "baseline";     // 2.4.1: only "not recorded"
     if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
     if (/no MasterID or no date/i.test(why)) return "daybook";
     if (this.FETCHED.some(x => x.test(why))) return "";
@@ -290,8 +295,9 @@ const Rec = {
       const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
       const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
       const dev = this.devOf(r.device_id), pc = r.pc || (dev && ((dev.info || {}).computer || dev.name)) || "the Tally computer";
-      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : kind === "masters" || kind === "baseline" ? "" : day) + (kind === "other" ? "|" + String(r.held_why || "") : "");
-      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || kind === "masters" || kind === "baseline" ? "" : day, pc, deviceId: r.device_id || "", lines: []});
+      const undated = kind === "masters" || kind === "baseline" || kind === "othersrc";
+      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : undated ? "" : day) + (kind === "other" || kind === "othersrc" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || undated ? "" : day, pc, deviceId: r.device_id || "", lines: []});
       needs.get(key).lines.push(r);
     });
     const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
@@ -302,6 +308,7 @@ const Rec = {
         : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
         : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
         : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
+        : g.kind === "othersrc" ? n(k) + " " + w     // 2.4.1: the cloud's words ("saved in another data location of ... Choose on the Tally page.")
         : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
         : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
         : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");

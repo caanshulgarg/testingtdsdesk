@@ -434,6 +434,34 @@ function BridgeLines({ rows, latest, m }) {
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0" }}>{ctl.ok}</p>}
   </div>;
 }
+// FinCom 2.4.1 (the owner's approval of 09-Oct-2026, item 4; migration 71): one card a book open in more than one place
+// with different data (the same company GUID, two data folders). The owner chooses which one is the books (Use ①, Use ②;
+// Decide later folds it for now); after a person's choice: which one FinCom reads, who chose and when, and the Day Book
+// upload of that location for the year. Staff see the words without the buttons
+const fyStart = () => { const d = new Date(Date.now() + 330 * 60000), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return (m >= 4 ? y : y - 1) + "-04-01"; };
+function SourceCard({ g, owner }) {
+  const chosen = g.list.find((x) => x.choice === "chosen"), person = chosen && chosen.chosen_by ? chosen : null;
+  const later = !!(S.srcLater && S.srcLater[g.book]);
+  const item = (x) => x.n + " " + [x.computer || "a computer", x.win_user || "—", x.path || "its data folder"].join(" · ") + " (last entry " + (agoWords(x.last_line_at || x.last_seen) || "not seen") + ")";
+  const words = g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data: " + g.list.map(item).join(" ") + " Which one is your books? FinCom reads only that one.";
+  if (later && !person) return <div className="pane tcard" data-sources-card={g.book} data-sources-later="">
+    <p className="note" style={{ margin: 0 }}>{g.company + " is open in " + (g.list.length === 2 ? "two" : g.list.length) + " places with different data; you chose to decide later. FinCom reads " + (chosen ? chosen.n : "none of them") + " meanwhile."}</p></div>;
+  return <div className={"pane tcard " + (person ? "" : "warn")} data-sources-card={g.book} style={{ borderLeft: "4px solid var(--warn, #c98a00)" }}>
+    <p style={{ margin: "0 0 6px" }} data-sources-words="">{words}</p>
+    {person && <p style={{ margin: "0 0 6px" }} data-sources-now="">{"FinCom now reads " + person.n + ". Upload " + person.n + "'s Day Book for the year (one month per file) so the history matches. "}
+      {g.cid && <a href="#" data-source-upload="" onClick={(e) => { e.preventDefault(); Rec.uploadFrom(g.cid, fyStart()); }}>{"Upload " + person.n + "'s Day Book"}</a>}</p>}
+    {person && <p className="note" style={{ margin: "0 0 6px" }} data-sources-who="">{"Chosen by " + who(person.chosen_by) + " at " + tallyHm(person.chosen_at) + " IST."}</p>}
+    {owner && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+      {g.list.map((x) => <button key={x.data_id} className="btn small" data-source-use={x.data_id} disabled={x === person} onClick={() => TCloud.sourceChoose(g.book, x.data_id, x.n, g.company)}>{"Use " + x.n}</button>)}
+      {!person && <button className="btn small ghost" data-source-later="" onClick={() => { S.srcLater = Object.assign({}, S.srcLater || {}, { [g.book]: true }); render(); }}>Decide later</button>}
+    </div>}
+  </div>;
+}
+function SourceCards() {
+  const owner = S.account && S.account.me && S.account.me.role === "owner";
+  const list = TCloud.on() && TCloud.sourceBooks ? TCloud.sourceBooks() : [];
+  return list.length ? <div data-sources-cards="">{list.map((g) => <SourceCard key={g.book} g={g} owner={owner} />)}</div> : null;
+}
 // the page's More: the versions (hold, let go, roll back, withdraw), Stop reading on all computers, every bridge heard
 // from, this browser's own connection (its Connect steps, the Tallys found, Check my Tally, the bridge's log), the
 // connection history and FinCom Bridge's install help (fingerprint, direct link, PowerShell, Windows blocked it)
@@ -740,6 +768,7 @@ export default function TallyHome({ connectStep = null }) {
     {tab === "activity" ? <SyncActivity />
       : tab === "sent" ? <PostLog />
       : <><AlertLine />
+        <SourceCards />
         <TallyGuide rows={rows} m={m} connectStep={connectStep} />
         {rows.length > 0 && <BridgeLines rows={rows} latest={latest} m={m} />}
         <ClientLines />

@@ -251,6 +251,11 @@ const AlertHub = {
           fix: "Ask that Windows user to install FinCom Bridge again (it makes an id of its own), or release this bridge's identity on the Tally page.",
           details: x.words || "", act: {label: "Mark read", run: () => TCloud.bridgeAlertRead(x)}}));
       }
+      // ---- FinCom 2.4.1 (migration 71): a company open in two places with different data (ONE alert a problem, until
+      // read): an owner chooses on the Tally page which location is the books
+      unread.filter(x => x.kind === "source").forEach(x => { const d = x.data || {}; out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "warn", cid: x.client_id || "",
+        text: String(x.words || "A company is open in two places with different data.").replace(/\.?$/, "."), fix: "Needs you: an owner of the firm chooses on the Tally page which one is the books; FinCom reads only that one.",
+        details: [d.computer, d.user, d.path].filter(Boolean).join(" \u00b7 "), at: x.at, selfClear: false, alert: x, act: {label: "Open the Tally page", run: () => Rec.openTallyPage()}}); });
       // ---- what cannot clear itself: the daily summary, until read
       unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
     }

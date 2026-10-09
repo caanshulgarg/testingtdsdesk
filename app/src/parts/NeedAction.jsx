@@ -11,7 +11,7 @@ export default function NeedAction({ g, canApply, busy }) {
       return owner ? b("resume", "Resume reading", () => Rec.resumeOn(g), { "data-needs-resume": "" }) : null;
     case "renumber": // 2.4.0 review (next-renumber): entries Tally may have renumbered: the Day Book from that day to today
       return canApply && g.cid ? b("daybook-from", "Upload the Day Book from " + day, () => Rec.uploadFrom(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
-    case "baseline":
+    case "baseline": case "othersrc": // 2.4.1: another data location: an owner chooses on the Tally page
       return b("tally", "Open the Tally page", () => Rec.openTallyPage());
     case "masters":
       return g.cid ? b("masters", "Open From Tally", () => Rec.openClientTab(g.cid, "books:import")) : null;

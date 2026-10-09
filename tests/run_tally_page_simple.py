@@ -132,6 +132,10 @@ KINDS = [
     ("held", "the company's starting point is not recorded yet, so its entries are not taken from Tally", "baseline"),
     ("held", "this computer's Tally could not be asked whether it was deleted here (no starting point recorded for this company); not sent as a deletion: held", "baseline"),
     ("held", "the ledger was not read from Tally in time; FinCom takes it from the next ledger list", ""),
+    # FinCom 2.4.1 (the owner, 09-Oct-2026): 'baseline' only for "starting point not recorded"; another data location of the
+    # company: an owner chooses on the Tally page (migration 71; run_data_sources_ui.py)
+    ("held", "Tally's voucher with that MasterID is not a change after the starting point", "other"),
+    ("held", "saved in another data location of GARG SHEKHAR (\u2461, PC-2); FinCom reads \u2460. Choose on the Tally page.", "othersrc"),
     ("held", "not found by its type and number (asked 3 times)", "other"),
     ("held", None, "other"),
     ("received", None, ""), ("queued", None, ""),

@@ -410,6 +410,11 @@ const TCloud = {
       // as row security gives them); a cloud without the table: none, and nothing said
       try { p.selfchecks = [].concat(await Cloud.api("tally_selfchecks?select=id,book_id,device_id,bridge,company,ran_at,night,result,words,still_missing,fetched,copy_ok&order=ran_at.desc&limit=300") || []); p.noSelfChecks = false; }
       catch (e){ p.selfchecks = []; p.noSelfChecks = true; }
+      // FinCom 2.4.1 (migration 71): each book's data locations (tally_company_sources, as row security gives them: one
+      // company open in two places with different data) and the books' names; a cloud without the table: none, nothing said
+      try { p.sources = [].concat(await Cloud.api("tally_company_sources?select=id,book_id,company_guid,data_id,path,device_id,win_user,computer,first_seen,last_seen,last_line_at,choice,chosen_by,chosen_at&order=first_seen.asc") || []); p.noSources = false; }
+      catch (e){ p.sources = []; p.noSources = true; }
+      if (p.sources.length && !(p.books || []).length){ try { p.books = [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []); } catch (e){ p.books = p.books || []; } }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -654,7 +659,7 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
+      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47, tally_company_source_choose: 71}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
@@ -760,6 +765,22 @@ const TCloud = {
     await this.control("tally_release_withdraw", {p_version: v, p_why: a.data.why}, "Version " + v + " is withdrawn.");
   },
   // item 10: an owner clears "needs a fresh baseline" on a book (with a note); the bridge reads the company afresh
+  // FinCom 2.4.1 (migration 71): the books open in more than one data location: [{book, company, cid, list: [source row +
+  // n (①, ②: by first seen)]}]
+  sourceBooks(){
+    const p = this.pane, by = new Map();
+    (p.sources || []).forEach(x => { if (x && x.book_id){ if (!by.has(x.book_id)) by.set(x.book_id, []); by.get(x.book_id).push(x); } });
+    return [...by.entries()].filter(([, l]) => l.length > 1).map(([book, l]) => {
+      const b = (p.books || []).find(y => y.book_id === book) || {};
+      l = l.slice().sort((a, c) => String(a.first_seen || "").localeCompare(String(c.first_seen || "")) || num(a.id) - num(c.id));
+      return {book, company: b.company || "This company", cid: b.client_id || "", list: l.map((x, i) => Object.assign({}, x, {n: i < 20 ? String.fromCharCode(0x2460 + i) : "(" + (i + 1) + ")"}))};
+    });
+  },
+  // an owner chooses which data location is the books (tally_company_source_choose: that one chosen, the others not,
+  // the starting point cleared so the chosen location records it afresh); FinCom reads only that one from then on
+  async sourceChoose(book, dataId, n, company){
+    await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId}, "FinCom now reads " + n + " of " + company + ".");
+  },
   async baselineClear(book, company){
     const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
       body: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
