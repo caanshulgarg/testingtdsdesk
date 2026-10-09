@@ -170,6 +170,17 @@ try:
     c, r = call(BEAT)
     bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
     ok(c == 200 and "recorderWaitWords" not in bt, "H1. a beat without them: gone (%s)" % bt.get("recorderWaitWords"))
+    # release-240 re-review M2: when that wait began (recorderWaitSince, the bridge's time), kept as an ISO time only; a
+    # beat without it, or with anything that is not a time: none
+    c, r = call(dict(BEAT, recorderWaitWords=WW, recorderWaitSince="2026-10-09T05:40:00Z"))
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and bt.get("recorderWaitSince") == "2026-10-09T05:40:00Z", "M2. the beat keeps recorderWaitSince (%s)" % bt.get("recorderWaitSince"))
+    c, r = call(dict(BEAT, recorderWaitWords=WW, recorderWaitSince="ALPHA TRADERS since Monday"))
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and "recorderWaitSince" not in bt, "M2. not a time: not kept (%s)" % bt.get("recorderWaitSince"))
+    c, r = call(BEAT)
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and "recorderWaitSince" not in bt, "M2. a beat without it: gone (%s)" % bt.get("recorderWaitSince"))
     # bridge 2.3.1, the owner's last change: a request not answered in time, and when the bridge tries again by itself
     # (tallyRetry), kept on the beat and the bridge's entry for the Tally page; gone when it answers in time again
     TR = {"words": "Tally did not answer in time at 12:14; trying again by itself at 12:15", "at": "2026-10-06T12:14:50", "next": "2026-10-06T12:15:05", "tries": 1, "x": "dropped"}

@@ -113,6 +113,19 @@ func resetEarlier() {
 
 // 2.3.3 (the owner's rule d): the Tally page's words while a Tally is still on a request the bridge stopped waiting for:
 // nothing else goes to it (a posting waits, TallyAbandonMaxSec at most); "" when none
+// release-240 re-review M2: when the oldest earlier request Tally is still finishing was sent (zero: none)
+func earlierOldestAt() time.Time {
+	earlierMu.Lock()
+	defer earlierMu.Unlock()
+	var t time.Time
+	for _, s := range earlier {
+		if t.IsZero() || s.at.Before(t) {
+			t = s.at
+		}
+	}
+	return t
+}
+
 func earlierPageWords() string {
 	earlierMu.Lock()
 	defer earlierMu.Unlock()

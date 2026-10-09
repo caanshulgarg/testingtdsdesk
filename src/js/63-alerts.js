@@ -232,7 +232,7 @@ const AlertHub = {
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
         // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
         // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
-        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords);
+        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords, beat.recorderWaitSince);
         if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: ownFp, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
           text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
         const pcFp = kind => AlertClear.fp(["pc:" + d.id + ":" + kind]);
@@ -302,7 +302,7 @@ const AlertHub = {
 //   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
 //   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line
 //   unk:<client or firm>         "uses a ledger FinCom does not have yet"        unk:<the entry's key> for each entry
-//   ownwait:<computer>           the bell                                        ownwait:<computer>:<when this browser first saw it> (release-240 M2: not the day; ended and back is new)
+//   ownwait:<computer>           the bell                                        ownwait:<computer>:<when the wait began: the beat's recorderWaitSince> (release-240 M2; a bridge before 2.4.0: when this browser first saw it)
 //   pc:<computer>                the bell                                        pc:<computer>:retry:<IST day of the retry> | :stopped:<its time> |
 //                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
 //   bridgeid:<id>                the bell (owners)                               bridgeid:<id>
@@ -331,7 +331,11 @@ const AlertClear = {
   fp(items){ return [...new Set([].concat(items || []).filter(Boolean).map(String))].sort().join("\n"); },
   // release-240 review M2(b): keyed on when the problem started in this browser (an episode), not the day: cleared, the
   // same problem the next day stays cleared; ended and back, a new notification
-  ownwaitFp(dev, on){ const t = this.episode("ownwait:" + dev, on); return on ? this.fp(["ownwait:" + dev + ":" + t]) : ""; },
+  // release-240 re-review M2: keyed on when the wait began as the bridge says it (the beat's recorderWaitSince, bridge
+  // 2.4.0): the same in every browser, and a wait that ended and came back while this browser was closed is new. A bridge
+  // before 2.4.0 does not say it: when this browser first saw the wait, as before
+  ownwaitFp(dev, on, since){ const s = /^\d{4}-\d\d-\d\dT/.test(String(since || "")) ? String(since) : "", t = this.episode("ownwait:" + dev, on && !s);
+    return on ? this.fp(["ownwait:" + dev + ":" + (s || t)]) : ""; },
   selftestFp(fails, on){ const f = [].concat(fails || []).slice().sort().join(","), t = this.episode("selftest", on); return on ? this.fp(["selftest:" + this.device() + ":" + f + ":" + t]) : ""; },
   // release-240 review M2(a): what the cloud keeps (migration 68/70): 2,000 characters a fingerprint, 500 a call. An item
   // longer than 200 characters is sent as its hash (h1:...; cleared() checks the item and its hash); a fingerprint still

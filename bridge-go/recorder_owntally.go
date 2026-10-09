@@ -92,6 +92,7 @@ func liveOwnLoad() {
 		live.ownCur[k] = true
 	}
 	live.ownBlind = truthy(o["blind"])
+	live.ownBlindAt = liveOwnParse(str(o["blindAt"]))
 	for k, v := range obj(o["companies"]) {
 		e := obj(v)
 		st := &liveOwnSt{name: str(e["name"])}
@@ -152,6 +153,9 @@ func liveOwnText() string {
 	}
 	sort.Strings(cur)
 	o["cur"], o["blind"] = toAny(cur), live.ownBlind
+	if live.ownBlind && !live.ownBlindAt.IsZero() {
+		o["blindAt"] = live.ownBlindAt.Format(time.RFC3339)
+	}
 	return jsonText(o)
 }
 
@@ -181,7 +185,7 @@ func liveNoteOwnTally(open map[string]string, complete bool) {
 		}
 		st.ivs = append(st.ivs, liveOwnIv{after: live.ownAt, from: now, to: now, blind: live.ownBlind})
 	}
-	live.ownBlind = false
+	live.ownBlind, live.ownBlindAt = false, time.Time{}
 	live.ownCur = map[string]bool{}
 	for k := range open {
 		live.ownCur[k] = true
@@ -314,7 +318,7 @@ func liveOwnBlindNow() {
 		live.mu.Unlock()
 		return
 	}
-	live.ownBlind = true
+	live.ownBlind, live.ownBlindAt = true, nowFn()
 	path, text := liveOwnTallyFile(), liveOwnText()
 	live.mu.Unlock()
 	if err := saveFile(path, text); err != nil {

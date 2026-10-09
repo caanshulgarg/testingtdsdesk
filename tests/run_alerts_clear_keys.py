@@ -55,20 +55,59 @@ with sync_playwright() as p:
     ok(calls and max(calls) <= 500 and sum(calls) == 1200, "a) Clear all of 1,200: calls of %s (each 500 or fewer, all sent)" % calls)
     E(RELOAD)
     ok(E("window.__all.every(x => AlertClear.cleared(x))") and E("AlertClear.st.rows.every(r => !r.pending)"), "a) every one cleared in the cloud, none left to send again")
-    # ---------- b) ownwait and selftest keyed on when the problem started
+    # ---------- b) selftest keyed on when the problem started (this browser's own self-test)
     E(CLOUD)
-    # the self-test failing on this computer all along (the page's own list keys it as the test does)
     E("() => { window.__now = Date.now(); window.__realNow = Date.now; window.selfTestSummary = () => ({state: 'fail', fails: ['pdf'], r: {pdf: {msg: 'PDF reading failed'}}}); }")
     day = lambda d: E("(d) => { Date.now = () => window.__now + d * 86400000; return true; }", d)
-    fp = lambda: E("() => [AlertClear.ownwaitFp('d1', true), AlertClear.selftestFp(['pdf'], true)]")
-    day(0); f0 = fp()
-    E("async (f) => { await AlertClear.clear([{key: 'ownwait:d1', fp: f[0], text: 'wait'}, {key: 'app:selftest', fp: f[1], text: 'self'}]); }", f0)
-    day(1); f1 = fp()
-    ok(f1 == f0 and E("(f) => f.every(x => AlertClear.cleared({fp: x}))", f1), "b) the same problems the next day: the same fingerprints, still cleared (%s)" % f1)
-    E("() => { AlertClear.ownwaitFp('d1', false); AlertClear.selftestFp(['pdf'], false); }")
-    day(2); f2 = fp()
-    ok(f2[0] != f0[0] and f2[1] != f0[1] and E("(f) => f.every(x => !AlertClear.cleared({fp: x}))", f2), "b) ended, then back: new notifications, shown (%s)" % f2)
+    sfp = lambda: E("() => AlertClear.selftestFp(['pdf'], true)")
+    day(0); s0 = sfp()
+    E("async (f) => { await AlertClear.clear([{key: 'app:selftest', fp: f, text: 'self'}]); }", s0)
+    day(1); s1 = sfp()
+    ok(s1 == s0 and E("(f) => AlertClear.cleared({fp: f})", s1), "b) selftest: the same problem the next day, still cleared (%s)" % s1)
+    E("() => { AlertClear.selftestFp(['pdf'], false); }")
+    day(2); s2 = sfp()
+    ok(s2 != s0 and E("(f) => !AlertClear.cleared({fp: f})", s2), "b) selftest: ended, then back: a new notification, shown")
     E("() => { Date.now = window.__realNow; }")
+    # ---------- b) ownwait ("changes wait on one computer"): keyed on when the wait began, as the bridge's beat says it
+    # (recorderWaitSince), the same in every browser of the person (release-240 re-review M2)
+    DEV = """([since, on]) => { const now = new Date().toISOString(), beat = {at: now, every: 30, tally: true, tallyState: "open", open: ["ZZ CO"]};
+      if (on){ beat.recorderWaitWords = "3 changes of ZZ CO waiting to go to FinCom (oldest since 10:05)"; beat.recorderWaitSince = since; }
+      TLight.st.devs = [{id: "d1", name: "Office", revoked: false, last_seen: now, info: {computer: "OFFICE", beat}}]; TLight.st.at = Date.now();
+      const x = AlertHub.all().find(i => i.key === "ownwait:d1"), shown = AlertHub.list().some(i => i.key === "ownwait:d1");
+      return x ? {fp: x.fp, cleared: AlertClear.cleared(x) && !shown, shown, text: x.text} : null; }"""
+    E(CLOUD)
+    w1 = E(DEV, ["2026-10-09T04:30:00Z", True])
+    ok(w1 and w1["fp"].endswith("2026-10-09T04:30:00Z") and w1["shown"], "b) ownwait: shown, keyed on the bridge's start of the wait (%s)" % (w1 and w1["fp"]))
+    E("async (fp) => { await AlertClear.clear([{key: 'ownwait:d1', fp, text: 'wait'}]); }", w1["fp"])
+    db = E("window.__db")
+    w2 = E(DEV, ["2026-10-09T04:30:00Z", True])
+    ok(w2 and w2["cleared"], "b) ownwait: cleared, the same wait still there: stays cleared")
+    # device B (another browser of the same person): the cloud's rows, its own empty localStorage
+    ctxB = br.new_context(); pgB = ctxB.new_page(); pgB.on("pageerror", lambda e: errors.append("B: " + str(e)))
+    pgB.goto("http://localhost:8419/"); pgB.wait_for_timeout(2500); pgB.click('button[data-act="useOffline"]'); pgB.wait_for_timeout(1000)
+    pgB.evaluate(CLOUD); pgB.evaluate("(db) => { window.__db = db; }", db); pgB.evaluate(RELOAD)
+    wb = pgB.evaluate(DEV, ["2026-10-09T04:30:00Z", True])
+    ok(wb and wb["fp"] == w1["fp"] and wb["cleared"], "b) ownwait: cleared on device A, stays cleared on device B (%s)" % (wb and wb["fp"]))
+    ctxB.close()
+    # the same browser reloaded, the same wait: stays cleared
+    pg.reload(); pg.wait_for_timeout(2500)
+    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    E("() => { Cloud.on = () => true; Cloud.st.firm = 'f-1'; Cloud.st.email = 'me@zz.test'; Cloud.sess = () => ({user_id: 'u-1'}); return true; }")
+    E("""(db) => { window.__db = db; window.__calls = []; AlertClear.rpc = async (fn, a) => { window.__calls.push([fn, a]);
+      if (fn === "alert_dismissals_list") return window.__db.map(r => Object.assign({}, r)); return {ok: true}; }; AlertClear.reset(); return true; }""", db)
+    E("async () => { AlertClear.rowsNow(); await AlertClear.load(); }")
+    w3 = E(DEV, ["2026-10-09T04:30:00Z", True])
+    ok(w3 and w3["cleared"], "b) ownwait: after a reload, the same wait: stays cleared")
+    # gone, then back while this browser was closed (it never saw the wait end; its own copy remembers the old one): the
+    # bridge's new start, a new notice that shows
+    pg.reload(); pg.wait_for_timeout(2500)
+    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    E("() => { Cloud.on = () => true; Cloud.st.firm = 'f-1'; Cloud.st.email = 'me@zz.test'; Cloud.sess = () => ({user_id: 'u-1'}); return true; }")
+    E("""(db) => { window.__db = db; window.__calls = []; AlertClear.rpc = async (fn, a) => { window.__calls.push([fn, a]);
+      if (fn === "alert_dismissals_list") return window.__db.map(r => Object.assign({}, r)); return {ok: true}; }; AlertClear.reset(); return true; }""", db)
+    E("async () => { AlertClear.rowsNow(); await AlertClear.load(); }")
+    w4 = E(DEV, ["2026-10-09T05:10:00Z", True])
+    ok(w4 and w4["fp"] != w1["fp"] and w4["shown"], "b) ownwait: cleared, gone, back with the browser closed: shows again (%s)" % (w4 and w4["fp"]))
     ok(not errors, "no page errors %s" % errors[:3])
     br.close()
 srv.shutdown()

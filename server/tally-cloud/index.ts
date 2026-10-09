@@ -2782,6 +2782,8 @@ Deno.serve(sentry.wrap(async (req) => {
           // FinCom Bridge 2.3.0: the Windows user it works for, its own local port, its Tally's port and data folder
           // bridge 2.3.1 (review H1): why this computer's changes wait (its own Tally lists its companies too slowly), in plain words
           ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
+          // bridge 2.4.0 (release-240 re-review M2): when that wait began, an ISO time only (the "changes wait" notice is keyed on it)
+          ...(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(s(b.recorderWaitSince, 40)) ? { recorderWaitSince: s(b.recorderWaitSince, 40) } : {}),
           // bridge 2.3.1 (the owner's last change): a request not answered in time, and when it tries again by itself
           ...tallyRetryOf(b),
           // 2.4.0 review MEDIUM (next-renumber): the renumbering alerts, for "Needs you"

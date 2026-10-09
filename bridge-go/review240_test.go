@@ -235,3 +235,62 @@ func TestLimitsCapped(t *testing.T) {
 		t.Fatalf("lower limits set by hand: %d / %d", recorderLimitMs(), bankNightLimitMs())
 	}
 }
+
+// --- M2 remainder (re-review): the beat says when the wait its recorderWaitWords tell of began (recorderWaitSince), so
+// every browser keys the "changes wait" notice on the same start: the same while the wait lasts (more lines waiting do
+// not move it), gone when it ends, and a later wait has a later start
+func TestBeatWaitSince(t *testing.T) {
+	rec, f, _ := ownBridge(t, "", b220CoGUID, zz)
+	t.Cleanup(func() { nowFn = time.Now; retryReset() })
+	if b := beatBody(true, "open", "", nil, nil, nil); str(b["recorderWaitSince"]) != "" {
+		t.Fatalf("a start while nothing waits: %v", b["recorderWaitSince"])
+	}
+	ownSlowList(f, true)
+	base := time.Now().Truncate(time.Second)
+	ownAt(base)
+	liveAppend(t, ownFile(rec, b220CoGUID), ownLine(b220CoGUID, zz, "mine", "11", base.Add(-20*time.Second)))
+	var first string
+	for i, m := range []int{0, 1, 6, 16, 40} {
+		ownAt(base.Add(time.Duration(m) * time.Minute))
+		if i == 2 {
+			liveAppend(t, ownFile(rec, b220CoGUID), ownLine(b220CoGUID, zz, "mine", "12", base.Add(5*time.Minute)))
+		}
+		readAndUploadAll(t)
+		b := beatBody(true, "open", "", nil, nil, nil)
+		if str(b["recorderWaitWords"]) == "" {
+			continue
+		}
+		s := str(b["recorderWaitSince"])
+		if _, err := time.Parse(time.RFC3339, s); err != nil {
+			t.Fatalf("+%d min: words %q with no start (%q)", m, b["recorderWaitWords"], s)
+		}
+		if first == "" {
+			first = s
+		} else if s != first {
+			t.Fatalf("+%d min: the start moved from %s to %s while the same wait lasts", m, first, s)
+		}
+	}
+	if first == "" {
+		t.Fatal("the wait was never said")
+	}
+	// a complete look ends it
+	ownSlowList(f, false)
+	ownAt(base.Add(76 * time.Minute))
+	openCompaniesWith(fin, true)
+	ownAt(base.Add(77 * time.Minute))
+	readAndUploadAll(t)
+	if b := beatBody(true, "open", "", nil, nil, nil); str(b["recorderWaitWords"]) != "" || str(b["recorderWaitSince"]) != "" {
+		t.Fatalf("after the complete look: %q since %q", b["recorderWaitWords"], b["recorderWaitSince"])
+	}
+	// later, a look stopped again and a line waiting for the next one (as the reader marks them): a new wait, a later start
+	ownAt(base.Add(120 * time.Minute))
+	liveOwnBlindNow()
+	live.mu.Lock()
+	live.ownWaitAt = nowFn()
+	live.mu.Unlock()
+	b := beatBody(true, "open", "", nil, nil, nil)
+	s := str(b["recorderWaitSince"])
+	if str(b["recorderWaitWords"]) == "" || s != base.Add(120*time.Minute).UTC().Format(time.RFC3339) || s <= first {
+		t.Fatalf("the wait again: words %q since %q (the first one began %s)", b["recorderWaitWords"], s, first)
+	}
+}

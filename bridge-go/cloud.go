@@ -919,6 +919,51 @@ func liveWaitWordsAll() string {
 	return cutRunes(strings.Join(ws, "; "), 300)
 }
 
+// release-240 re-review M2: when the wait recorderWaitWords tells of began (RFC3339; "" when nothing waits): the earliest
+// start of what it says (an earlier request still with Tally: when it was sent; no complete look at the own Tally: when
+// that began; lines waiting: the oldest one shown), the same for every browser, so a notice cleared stays cleared while
+// the same wait lasts and a new wait is a new notice
+func liveWaitSinceAll() string {
+	var t time.Time
+	pick := func(x time.Time) {
+		if !x.IsZero() && (t.IsZero() || x.Before(t)) {
+			t = x
+		}
+	}
+	if earlierPageWords() != "" {
+		pick(earlierOldestAt())
+	}
+	if liveOwnWaitWords() != "" {
+		live.mu.Lock()
+		if !live.ownBlindAt.IsZero() {
+			pick(live.ownBlindAt)
+		} else {
+			pick(live.ownWaitAt)
+		}
+		live.mu.Unlock()
+	}
+	if liveQueueWaitWords() != "" {
+		live.mu.Lock()
+		after := time.Duration(keepNumZero("RecorderWaitWordsSec", 30)) * time.Second
+		oldest := map[string]time.Time{}
+		for _, c := range live.queue {
+			if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
+				oldest[c.company] = c.readAt
+			}
+		}
+		for _, o := range oldest {
+			if nowFn().Sub(o) >= after {
+				pick(o)
+			}
+		}
+		live.mu.Unlock()
+	}
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
@@ -949,7 +994,7 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
 		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
-		"recorderWaitWords": liveWaitWordsAll(),
+		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": liveWaitSinceAll(),
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
 		"renumberAlerts": renumBeat(),
 		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
