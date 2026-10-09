@@ -1,7 +1,7 @@
 FINCOM 2.4.1 - TEST SHEET (NWS144, staging)
 
-File:        FinComBridge-Setup-2.4.1.exe (NOT built yet)
-Fingerprint: (written when it is built; compare with the .sha256 file next to the setup)
+File:        FinComBridge-Setup-2.4.1.exe
+Fingerprint: SHA-256 8c5b8b077a7249b17f404d5dc8723ba7af6c0107810696d3b08979de2f0975b3 (FinComBridge-Setup-2.4.1.exe, built 10-Oct-2026 01:08 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.1 changes (the full notes: docs/bridge-2.4.1-notes.md):
 1. A save whose MasterID points at an older entry, or at no voucher, is found once by its type and number (Sales 297 of

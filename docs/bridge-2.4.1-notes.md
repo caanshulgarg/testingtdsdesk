@@ -5,6 +5,12 @@ data id, 'other_source' lines, migration 71 and the Tally page's card). The fina
 Tally read is not tied to the proven folder; an empty narration proves a forked copy), so the feature moved to 2.4.2,
 built on branch next-241. 2.4.1 is 2.4.0 with the fixes below, ported from next-241.
 
+| | |
+|---|---|
+| Setup file | FinComBridge-Setup-2.4.1.exe |
+| Fingerprint | SHA-256 `8c5b8b077a7249b17f404d5dc8723ba7af6c0107810696d3b08979de2f0975b3` (FinComBridge-Setup-2.4.1.exe, built 10-Oct-2026 01:08 IST; compare with the .sha256 file next to the setup); program SHA-256 `c2643eecea7de51a00d1221daf650e5385d0d429cd8f970eb13c7df951ad2846` |
+| Replaces | 2.4.0 (kept on the computer, so the tray can roll back to it) |
+
 ## What is in 2.4.1
 
 1. **The fallback by number (the owner's approval of 09-Oct-2026, item 5; reverses 2.3.4's L5 for this case only).**
