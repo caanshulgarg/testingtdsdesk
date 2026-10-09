@@ -181,33 +181,40 @@ const canSettle = () => typeof postCanSettle === "function" ? postCanSettle() : 
 // "Show Tally's reply". Line 3 (not posted): reason · what to do · the button. The statuses, reasons and Tally ids are
 // src/js/62 (postStatus, POST_REASONS, postTallyIdOf); every amount is money(), every date fmtDate, every time fmtIST.
 // The page's own styles (never the global stylesheet)
+// Post to Tally in Arc's look (arc-ui step 3, 09-Oct-2026): the list a card of rows, each status a coloured tag, what
+// was sent (Tally id, date and time) on a quiet line, the fix for an error in a tinted box beside its Post again, the
+// toolbar and the More menu as Arc's; the same rows, words and buttons as before (presentation only)
 const POST_CSS = `
-.pe-list{list-style:none;margin:0;padding:0;border:1px solid var(--rule);border-radius:8px}
-.pe-row{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-top:1px solid var(--rule)}
+.pe-list{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:var(--radius-panel);background:var(--surface);box-shadow:var(--shadow-resting);overflow:hidden}
+.pe-row{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-top:1px solid var(--border-subtle);transition:background-color var(--duration-fast) var(--ease-standard)}
 .pe-row:first-child{border-top:0}
-.pe-tick{margin-top:3px;flex:none}
+.pe-row:hover{background:color-mix(in oklab,var(--foreground) 2.5%,var(--surface))}
+.pe-tick{margin-top:4px;flex:none;width:16px;height:16px;accent-color:var(--accent)}
 .pe-main{flex:1 1 auto;min-width:0}
-.pe-l1{display:grid;grid-template-columns:minmax(150px,15em) minmax(70px,10em) minmax(120px,1fr) 9.5em 7.5em minmax(60px,7em);gap:2px 12px;align-items:baseline}
-.pe-st{font-weight:600}
-.pe-st.ok{color:var(--ok)} .pe-st.bad{color:var(--stop)} .pe-st.warn{color:var(--warn)}
-.pe-amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pe-l1{display:grid;grid-template-columns:minmax(150px,15em) minmax(70px,10em) minmax(120px,1fr) 9.5em 7.5em minmax(60px,7em);gap:4px 12px;align-items:baseline}
+.pe-st{justify-self:start;display:inline-block;font-weight:600;font-size:12.5px;line-height:1.35;padding:2px 9px;border-radius:7px;background:var(--surface-muted);color:var(--text-secondary)}
+.pe-st.ok{background:var(--ok-soft);color:var(--ok)} .pe-st.bad{background:var(--bad-soft);color:var(--bad)} .pe-st.warn{background:var(--warn-soft);color:var(--warn)}
+.pe-no{font-weight:600}
+.pe-amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
 .pe-party,.pe-no{min-width:0;overflow-wrap:anywhere}
-.pe-l2,.pe-l3{margin-top:3px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
-.pe-l3{color:inherit;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
-.pe-l3 .pe-why{flex:1 1 260px;min-width:0}
+.pe-l2,.pe-l3{margin-top:6px;font-size:13px;color:var(--text-secondary);overflow-wrap:anywhere}
+.pe-l2[data-posted-mark]{display:block;width:fit-content;max-width:100%;padding:4px 10px;border-radius:8px;background:var(--surface-muted);font-variant-numeric:tabular-nums}
+.pe-l3{color:inherit;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.pe-l3 .pe-why{flex:1 1 260px;min-width:0;padding:6px 10px;border-left:3px solid var(--warn);border-radius:0 8px 8px 0;background:var(--warn-soft);color:var(--foreground)}
+.pe-row[data-status="7"] .pe-l3 .pe-why,.pe-row[data-status="8"] .pe-l3 .pe-why,.pe-row[data-status="9"] .pe-l3 .pe-why{border-left-color:var(--bad);background:var(--bad-soft)}
 .pe-acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.pe-links{display:inline-flex;gap:10px;margin-left:8px;font-size:13px}
-.pe-raw{white-space:pre-wrap;font-size:12px;background:var(--shade);border-radius:6px;padding:6px 8px;margin:4px 0 0}
-.pe-id{font-size:11px;color:var(--muted)}
-.pe-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}
-.pe-bar input[type=search]{flex:1 1 260px;max-width:420px}
+.pe-links{display:inline-flex;flex-wrap:wrap;gap:4px 12px;margin-left:2px;font-size:13px}
+.pe-raw{white-space:pre-wrap;font-size:12px;background:var(--surface-muted);border:1px solid var(--border-subtle);border-radius:8px;padding:6px 8px;margin:6px 0 0}
+.pe-id{font-size:11px;color:var(--text-muted)}
+.pe-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-panel);background:var(--surface-muted)}
+.pe-bar input[type=search]{flex:1 1 260px;max-width:420px;min-height:34px;background-color:var(--surface)}
 .pe-more{position:relative;display:inline-block}
 .pe-more>summary{list-style:none;cursor:pointer}
 .pe-more>summary::-webkit-details-marker{display:none}
-.pe-more-list{position:absolute;right:0;z-index:5;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:4px;min-width:260px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
-.pe-more-list button{display:block;width:100%;text-align:left;padding:6px 8px;background:none;border:0;cursor:pointer;color:inherit;font:inherit}
-.pe-more-list button:hover{background:var(--shade)}
-@media (max-width:760px){.pe-l1{grid-template-columns:1fr auto}.pe-st{grid-column:1/-1}.pe-amt{grid-column:2;grid-row:2}}
+.pe-more-list{position:absolute;right:0;z-index:5;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-panel);padding:5px;min-width:260px;box-shadow:var(--shadow-floating)}
+.pe-more-list button{display:block;width:100%;text-align:left;padding:7px 10px;border-radius:calc(var(--radius-panel) - 6px);background:none;border:0;cursor:pointer;color:inherit;font:inherit}
+.pe-more-list button:hover{background:var(--surface-muted)}
+@media (max-width:760px){.pe-l1{grid-template-columns:1fr auto}.pe-st{grid-column:1/-1}.pe-amt{grid-column:2;grid-row:2}.pe-row{padding:12px}}
 `;
 const PostStyles = () => <style data-post-css="">{POST_CSS}</style>;
 const TONE = { 1: "ok", 2: "ok", 3: "ok", 10: "warn", 4: "", 5: "", 6: "warn", 7: "bad", 8: "bad", 9: "bad" };

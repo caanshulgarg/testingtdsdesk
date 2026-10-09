@@ -1,0 +1,44 @@
+/* The Dashboard's motion (the owner, 09-Oct-2026: the motion of his release board, calm but visible). Only when the
+   computer does not ask for reduced motion; with reduced motion everything simply shows. The rest of the app keeps its
+   short fades (src/arc/lib/calm-motion.js). Played once a page load: Dash.jsx puts data-intro on the first showing only.
+   - the "Getting ready" steps, then the four figures, rise into place one after another: 300 ms each, 60 ms apart, all in
+     about 1.1 s;
+   - the progress bar fills from 0 over 900 ms once the first cards are up;
+   - each figure counts up from 0 over 600 ms, drawn over the figure (::after); the figure's own text is its value the
+     whole time, so anything reading the page reads the value;
+   - the next step, and an entry on its way to Tally, carry a soft ring that breathes every 2.4 s. */
+@property --n { syntax: "<integer>"; inherits: false; initial-value: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dash[data-intro] .onb-list > li,
+  .dash[data-intro] .dash-tiles > .dtile { animation: arc-rise 300ms var(--ease-enter) var(--rise-at, 0ms) both; }
+  .dash[data-intro] .onb-list > li:nth-child(2) { --rise-at: 60ms; }
+  .dash[data-intro] .onb-list > li:nth-child(3) { --rise-at: 120ms; }
+  .dash[data-intro] .onb-list > li:nth-child(4) { --rise-at: 180ms; }
+  .dash[data-intro] .onb-list > li:nth-child(5) { --rise-at: 240ms; }
+  .dash[data-intro] .onb-list > li:nth-child(6) { --rise-at: 300ms; }
+  .dash[data-intro] .onb-list > li:nth-child(7) { --rise-at: 360ms; }
+  .dash[data-intro] .onb-list > li:nth-child(n+8) { --rise-at: 420ms; }
+  .dash[data-intro] .dash-tiles > .dtile:nth-child(1) { --rise-at: 480ms; }
+  .dash[data-intro] .dash-tiles > .dtile:nth-child(2) { --rise-at: 540ms; }
+  .dash[data-intro] .dash-tiles > .dtile:nth-child(3) { --rise-at: 600ms; }
+  .dash[data-intro] .dash-tiles > .dtile:nth-child(n+4) { --rise-at: 660ms; }
+
+  .dash[data-intro] .onb-bar i { animation: arc-fill 900ms var(--ease-in-out) 250ms both; }
+
+  .dash[data-intro] .dtile b[data-count] { position: relative; animation: arc-hold-text 600ms linear var(--rise-at, 0ms) backwards; }
+  .dash[data-intro] .dtile b[data-count]::after { content: counter(n); counter-reset: n var(--n); position: absolute; left: 0; top: 0; color: var(--foreground);
+    pointer-events: none; animation: arc-count 600ms var(--ease-standard) var(--rise-at, 0ms) both; }
+
+  .onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li),
+  .pe-row[data-status="4"] .pe-st, .pe-row[data-status="5"] .pe-st { animation: arc-breathe 2.4s ease-in-out infinite; }
+  .dash[data-intro] .onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li) { animation: arc-rise 300ms var(--ease-enter) var(--rise-at, 0ms) both, arc-breathe 2.4s ease-in-out 1.2s infinite; }
+}
+@keyframes arc-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes arc-fill { from { width: 0; } }
+@keyframes arc-hold-text { from, to { color: transparent; } }
+@keyframes arc-count { from { --n: 0; opacity: 1; } 99% { opacity: 1; } to { --n: var(--to); opacity: 0; } }
+@keyframes arc-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--tone-indigo) 14%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--tone-indigo) 5%, transparent); }
+}
