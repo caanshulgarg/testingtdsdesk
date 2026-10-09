@@ -5,7 +5,7 @@ after one more keystroke, it was taken for a change made elsewhere: the older va
 sync mark, and the full value was never sent. A wrong saved value becomes a wrong entry in Tally.
 Now a copy coming in is not laid over a bill with a change here not yet sent (a save waiting, or the bill changed since
 it was last sent): what was changed here stays and is sent; what was changed only elsewhere still comes in.
-Checked for every typed field (invoice no., date, taxable, total, supplier, GSTIN, narration, party ledger): the box,
+Checked for every typed field (invoice no., date (FinCom's date box since arc-ui; its own case below), taxable, total, supplier, GSTIN, narration, party ledger): the box,
 the bill in memory and the next push to the server all hold the full value. Also: a change made on another computer,
 with nothing pending here, still shows; leaving the page saves a pending bill at once and sends it.
 A stand-in for Supabase here (REST and the Realtime socket); its echo of a push is held back and let go after the last
@@ -93,7 +93,7 @@ def server_entry(eid):
 # the fields typed, as on the bill: (what, the box, the value typed, where it is kept on the bill)
 FIELDS = [
     ("invoice no.", "x:invoiceNo", "ZZ/2026/0417", "x.invoiceNo"),
-    ("invoice date", "x:invoiceDate", "09102026", "x.invoiceDate"),
+    ("invoice date", "x:invoiceDate", "09-Oct-2026", "x.invoiceDate"),
     ("taxable value", "x:taxable", "125000", "x.taxable"),
     ("invoice total", "x:total", "147500", "x.total"),
     ("supplier name", "x:vendorName", "ZZ Echo Traders", "x.vendorName"),
@@ -125,6 +125,31 @@ with sync_playwright() as p:
     for what, fk, typed, path in FIELDS:
         b = box(fk)
         if not b.count(): ok(False, "%s: the box is on the bill" % what); continue
+        if fk == "x:invoiceDate":
+            # arc-ui (10-Oct-2026): the invoice date is FinCom's date box (it shows 01-Oct-2026; a date counts once it is
+            # whole, never half typed), no longer the browser's own box. The same intent: a server's copy of an earlier
+            # save that comes in while the date is being typed takes no keystroke and no date away. A first date is
+            # typed and saved (its echo held back), the new date typed but for its last key, the echo let go mid-typing,
+            # then the last key: the box, the bill and the next push all hold the new date.
+            ok(b.get_attribute("type") == "text" and b.locator("xpath=..").get_attribute("data-datebox") is not None, "invoice date: FinCom's date box (01-Oct-2026), not the browser's")
+            b.click(); pg.keyboard.press("Control+A"); pg.keyboard.press("Backspace"); pg.wait_for_timeout(1300)
+            HOLD[0] = True
+            pg.keyboard.type("01-Sep-2026", delay=25); pg.wait_for_timeout(1400)     # a whole date: saved and sent, its echo held
+            sent_first = str(get(server_entry(eid), path) or "")
+            pg.keyboard.press("Control+A"); pg.keyboard.type(typed[:-1], delay=25)     # the new date, all but its last key
+            release(); pg.wait_for_timeout(400)                                       # the server's copy of 01-Sep comes in now
+            mid = b.input_value()
+            pg.keyboard.type(typed[-1]); n0 = len(UPS); pg.wait_for_timeout(1800)
+            shown, kept, srv_now = b.input_value(), here(path), str(get(server_entry(eid), path) or "")
+            last = str(get(UPS[-1][1], path) or "") if UPS else ""
+            print("    %-14s first saved: %r; while typing: %r; box %r, bill %r, server %r" % (what, sent_first, mid, shown, kept, srv_now))
+            ok(sent_first == "2026-09-01", "invoice date: the first date reached the server before the new one was typed (%r)" % sent_first)
+            ok(mid == typed[:-1], "invoice date: the echo of 01-Sep-2026 coming in mid-typing leaves the typing alone (%r)" % mid)
+            ok(shown == typed, "invoice date: the box keeps the new date %r (shows %r)" % (typed, shown))
+            ok(kept == "2026-10-09", "invoice date: the bill keeps 2026-10-09 (%r)" % kept)
+            ok(srv_now == "2026-10-09" and last == "2026-10-09", "invoice date: the next push to the server holds 2026-10-09 (server %r, last push %r)" % (srv_now, last))
+            HOLD[0] = False
+            continue
         kind = b.get_attribute("type")
         full = "2026-09-10" if kind == "date" else typed
         short = "0202-09-10" if kind == "date" else typed[:-1]

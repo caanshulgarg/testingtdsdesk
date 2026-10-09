@@ -69,3 +69,37 @@ nav.sbar > button[aria-selected="true"] .sbar-n { background: var(--accent); col
   .bk-figs > div { min-width: 0; text-align: left; }
   .bk-figs dd { overflow-wrap: anywhere; }
 }
+
+/* ========== Step 3, group 3 (arc-ui, 10-Oct-2026): Clients, the Tally page, the firm's account, Settings, Help and a
+   client's parties in Arc's look. Styles only: the markup, words, ids and classes are as they were. ========== */
+
+/* a link that acts (Reading check, Save and fill in, ...): Arc's quiet link, underlined on hover */
+.linkbtn { color: var(--accent); font-weight: 500; text-decoration: none; text-underline-offset: 3px; border-radius: 4px; }
+.linkbtn:hover { text-decoration: underline; }
+.linkbtn:focus-visible { outline: 2px solid var(--focus-outline, var(--accent)); outline-offset: 2px; }
+td .linkbtn { white-space: nowrap; }
+/* "← Back to <client>" on the Tally page: Arc's ghost back button */
+.tback .linkbtn { display: inline-flex; align-items: center; min-height: 32px; margin-left: -10px; padding: 0 10px; border-radius: var(--radius-control);
+  color: var(--text-secondary); font-size: 13.5px; }
+.tback .linkbtn:hover { background: var(--surface-muted); color: var(--foreground); text-decoration: none; }
+
+/* the box to drop bills on (Clients, Purchase, the inbox): Arc's dropzone */
+.drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-panel); background: color-mix(in oklab, var(--accent) 3%, var(--surface)); padding: 22px 20px; }
+.drop:hover { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); }
+.drop.over { border-style: solid; border-color: var(--accent); background: var(--accent-subtle); transform: none; }
+.drop::before { background: var(--accent); opacity: 1; }
+.drop strong { font-family: var(--font-display); font-size: 15px; letter-spacing: -.01em; }
+.drop:focus-visible { outline: 2px solid var(--focus-outline, var(--accent)); outline-offset: 2px; }
+
+/* Settings' list and Help's guide list: the side menu's look (sentence-case group names, the chosen one in the brand) */
+.setnav .setgroup-t, .sp-area { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.setnav button, .sp-art { border-radius: var(--radius-control); transition: background-color var(--duration-fast) var(--ease-standard); }
+.setnav button:hover, .sp-art:hover { background: var(--surface-muted); }
+.setnav button[aria-current="page"], .sp-art.on { background: var(--accent-subtle); box-shadow: none; color: var(--accent); font-weight: 600; }
+.setnav button[aria-current="page"] small { color: var(--text-secondary); }
+.sp-art { padding: 7px 10px; color: var(--foreground); }
+/* Help's search box: the size and border of the other text boxes (it had the browser's own, 26px high) */
+.sp-gleft input[type=search] { min-height: 36px; margin-bottom: 4px; padding: 0 10px; border: 1px solid var(--border-strong); font: inherit; font-size: 14px; }
+
+/* a phone: the breadcrumb over the title had 150px and was cut mid-word ("Garg Shekhar & Co"); it has the row now */
+@media (max-width: 600px) { .tbar-title .note { max-width: 100%; } }

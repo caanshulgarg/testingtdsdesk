@@ -5,7 +5,7 @@
 //
 // It takes what <input type="date"> takes, so a screen swaps one for the other and nothing else changes: the value is
 // yyyy-mm-dd (value, or defaultValue), onChange gets {target: {value}} with the new yyyy-mm-dd date ("" when emptied),
-// and aria-label, min, max, disabled, data-* stay on the box. onCommit(value) is CommitBox's way (a false answer puts
+// and aria-label, min, max, disabled, readOnly, data-* stay on the box (inputClassName is the box's own class). onCommit(value) is CommitBox's way (a false answer puts
 // the old date back). A screen is told only of a whole date, never of one half-typed.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -40,7 +40,7 @@ export function readDate(text) {
 const toDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : undefined; };
 const fromDate = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 
-export default function DateBox({ value, defaultValue, onChange, onCommit, min, max, disabled, className = "", style, onKeyDown, onBlur, ...rest }) {
+export default function DateBox({ value, defaultValue, onChange, onCommit, min, max, disabled, className = "", inputClassName, style, onKeyDown, onBlur, ...rest }) {
   const [own, setOwn] = useState(defaultValue || "");
   const iso = value !== undefined ? value || "" : own;
   const [text, setText] = useState(null);            // what is being typed; null = show the date
@@ -86,10 +86,10 @@ export default function DateBox({ value, defaultValue, onChange, onCommit, min, 
   const show = () => { setMonth(toDate(iso) || new Date()); setOpen(!open); };
   return <span className={("datebox " + className).trim()} style={style} data-datebox="">
     <input ref={box} type="text" inputMode="numeric" autoComplete="off" placeholder="DD-Mon-YYYY" spellCheck={false} {...rest}
-      disabled={disabled} data-iso={iso || undefined} value={text !== null ? text : showDate(iso)}
+      disabled={disabled} className={inputClassName} data-iso={iso || undefined} value={text !== null ? text : showDate(iso)}
       onChange={(ev) => typed(ev.target.value)} onBlur={leave}
       onKeyDown={(ev) => { if (ev.key === "Enter" && text !== null) { const d = readDate(text); if (d) fire(d); setText(null); } if (ev.key === "ArrowDown" && ev.altKey) { ev.preventDefault(); show(); } if (onKeyDown) onKeyDown(ev); }} />
-    <button type="button" className="datebox-cal" aria-label={"Choose " + label + " on a calendar"} aria-haspopup="dialog" aria-expanded={open} disabled={disabled} onClick={show}>
+    <button type="button" className="datebox-cal" aria-label={"Choose " + label + " on a calendar"} aria-haspopup="dialog" aria-expanded={open} disabled={disabled || rest.readOnly} onClick={show}>
       <CalendarDays size={15} strokeWidth={1.75} aria-hidden="true" />
     </button>
     {open && at && createPortal(<div ref={pop} className={arc.popover + " datebox-pop"} role="dialog" aria-label={label + ": calendar"} style={{ position: "fixed", top: at.top, left: at.left }}>

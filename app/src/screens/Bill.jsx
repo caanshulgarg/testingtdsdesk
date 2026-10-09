@@ -5,6 +5,7 @@ import Msg from "../parts/Msg.jsx";
 import { useEffect } from "react";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
+import DateBox from "../parts/DateBox.jsx";
 
 const money_ = (n) => money(n);
 const isFree = (m) => /^(free (OCR|\(PDF)|Google OCR$)/.test(m);
@@ -19,9 +20,14 @@ function Field({ e, label, k, ro, type = "text", wide, value, miss }) {
   return (
     <label className={"f" + (wide ? " wide" : "") + (unsure ? " unsure" : "")}>
       <span>{label}</span>
-      <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k} data-focus-field={k} className={miss === k ? "bk-missing" : undefined}
-        {...(type === "number" ? { step: "0.01", inputMode: "decimal" } : {})}
-        onChange={(ev) => billSetX(e, k, ev.target.value)} />
+      {/* arc-ui (10-Oct-2026): a date is FinCom's date box, 01-Oct-2026 (the browser's own box showed the computer's
+          format); it tells the bill a date once it is whole, as the browser's did */}
+      {type === "date"
+        ? <DateBox value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k} data-focus-field={k} aria-label={label} inputClassName={miss === k ? "bk-missing" : undefined}
+            onChange={(ev) => billSetX(e, k, ev.target.value)} />
+        : <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k} data-focus-field={k} className={miss === k ? "bk-missing" : undefined}
+            {...(type === "number" ? { step: "0.01", inputMode: "decimal" } : {})}
+            onChange={(ev) => billSetX(e, k, ev.target.value)} />}
       {noDate && <span className="bk-warn" data-date-not-found="">Date not found on this page; please type it.</span>}
     </label>
   );
