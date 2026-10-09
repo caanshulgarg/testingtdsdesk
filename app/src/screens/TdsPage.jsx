@@ -192,7 +192,8 @@ export default function Tds({ b }) {
     if (!tabs.includes(S.tdsTab)) S.tdsTab = tabs[0];
   }
   // the books in FinCom end before the quarter (or year) shown starts, and no TDS of it is here: one line, not an empty grid
-  const end = v === "year" && S.tdsFy && !rows.some((r) => r.fy === S.tdsFy && (!S.tdsQ || r.q === S.tdsQ)) ? Smart.booksEndBefore(qStart(S.tdsFy, S.tdsQ)) : "";
+  // (a year with any TDS here, from the books or a salary sheet, shows its grid as before)
+  const end = v === "year" && S.tdsFy && !had.includes(S.tdsFy) && !rows.some((r) => r.fy === S.tdsFy && (!S.tdsQ || r.q === S.tdsQ)) ? Smart.booksEndBefore(qStart(S.tdsFy, S.tdsQ)) : "";
   const prevFy = end ? Smart.fyLabelOf(end) : "";
   const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
