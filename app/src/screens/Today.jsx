@@ -1,9 +1,13 @@
 // Today: what needs doing, across every client. Was viewToday() in src/js/18.
 import ListTable from "../parts/ListTable.jsx";
+import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
+const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-function Metric({ label, n, warn, onClick }) {
-  return <button className={"metric" + (warn && n ? " warn" : "")} onClick={onClick}><span>{label}</span><b>{n}</b></button>;
+// a figure in Arc's metric-card look, with its own accent and icon (arc-ui step 3; styles/arc-shell.css)
+function Metric({ label, n, warn, onClick, tone, Icon }) {
+  return <button className={"metric" + (warn && n ? " warn" : "")} data-tone={tone} onClick={onClick}><span>{label}</span><b>{n}</b>
+    {Icon && <i className="dtile-chip" aria-hidden="true"><Icon width={16} height={16} strokeWidth={2} /></i>}</button>;
 }
 
 export default function Today() {
@@ -23,16 +27,16 @@ export default function Today() {
         <button className="btn small" onClick={() => doAct("addCo")}>Add client</button>
       </div>
       <div className="metrics">
-        <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} />
-        <Metric label="To review" n={sum("review")} />
-        <Metric label="To post" n={sum("post")} />
-        <Metric label="Need a look" n={sum("look")} warn />
+        <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} tone="violet" Icon={Inbox} />
+        <Metric label="To review" n={sum("review")} tone="amber" Icon={ReceiptText} />
+        <Metric label="To post" n={sum("post")} tone="indigo" Icon={Send} />
+        <Metric label="Need a look" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
       </div>
       {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
           cols={[
-            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
+            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
             { k: "read", label: "To read", cls: "n", v: (r) => r.read, sum: true, fmt: String, cell: (r) => cell(r, "read", "collect") },
             { k: "review", label: "To review", cls: "n", v: (r) => r.review, sum: true, fmt: String, cell: (r) => cell(r, "review", "review") },
             { k: "post", label: "To post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },

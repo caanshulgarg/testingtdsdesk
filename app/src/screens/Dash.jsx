@@ -1,20 +1,30 @@
 // A client's dashboard: what is waiting (inbox, bills, posting, bank), and a card each for TDS, the bank statement,
 // sales and what was posted lately. Was viewClientDash (src/js/18). The first-steps card (ONB.card, src/js/48)
 // is still an old piece.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { OnbCard } from "../parts/Notes.jsx";
 import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
 
-// a figure in Arc's metric-card look, with its own accent and icon (styles/arc-shell.css)
+// a figure in Arc's metric-card look, with its own accent and icon (styles/arc-shell.css). A number counts up from 0 on
+// the page's first showing (styles/arc-motion.css draws the count over it; the figure's own text is the value throughout)
 function Tile({ label, n, sub, go, tone, Icon }) {
-  return <button className="dtile" data-tone={tone} onClick={() => goClient(go)}><span>{label}</span><b>{n}</b><small>{sub}</small>
+  const count = typeof n === "number" && n > 0 && n < 100000;
+  return <button className="dtile" data-tone={tone} onClick={() => goClient(go)}><span>{label}</span>
+    <b data-count={count ? "" : undefined} style={count ? { "--to": n } : undefined}>{n}</b><small>{sub}</small>
     {Icon && <i className="dtile-chip" aria-hidden="true"><Icon width={16} height={16} strokeWidth={2} /></i>}</button>;
 }
 
+// the dashboard's opening motion (the owner, 09-Oct-2026: the release board's motion, calm but visible) plays once a page
+// load: the first showing carries data-intro, and a redraw or a later visit does not replay it (styles/arc-motion.css,
+// only when the computer does not ask for reduced motion)
+let introShown = false;
+
 export default function Dash() {
+  const [intro] = useState(() => !introShown);
+  useEffect(() => { introShown = true; }, []);
   const co = CO(), v = Object.values(D().entries), [q, setQ] = useState("");
   const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // ready to post: the one count for Tally (postCounts, src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
@@ -23,7 +33,7 @@ export default function Dash() {
   const recent = v.filter(billInTally).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
-    <section className="dash">
+    <section className="dash" data-intro={intro ? "" : undefined}>
       <OnbCard co={co} />
       <form className="dash-ask" onSubmit={(ev) => { ev.preventDefault(); dashAsk(q); }}>
         <input type="search" id="dashAsk" value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Ask the books: a ledger for any dates, open bills, trial balance… (press /)" aria-label="Ask the books" />

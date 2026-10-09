@@ -119,11 +119,14 @@ with sync_playwright() as p:
     got = E("(xs) => xs.map(([n]) => [Books.guess(n).section || '', LedMaster.propose(n, {}, null, []).section || '', LedCheck.section(n) || ''])", H4)
     bad = [(n, w, g) for (n, w), g in zip(H4, got) if not (g[0] == w and g[1] == w and g[2].replace(" ", "") in (w, ""))]
     ok(not bad, "F2. spaced suffixes: only the real ones (guess, propose, the check) (wrong: %s)" % bad)
-    # arc-ui, the owner's decision of 09-Oct-2026: the space form "TDS 194 C" is 194C (above); after a dash the name reads
-    # as 2.3.3 did: FinCom's guess 194 (2.3.3's Books read \b(19[2-9][A-Z]{0,2})\b), the ledger check 194C (2.3.3's
-    # LedCheck.section joined a dash). This replaces the commit's ("TDS 194-C", "194C") for the guess.
-    d = E("() => [Books.guess('TDS 194-C').section || '', LedMaster.propose('TDS 194-C', {}, null, []).section || '', LedCheck.section('TDS 194-C') || '']")
-    ok(d[0] == "194" and d[1] == "194" and d[2].replace(" ", "") == "194C", "F2. the dash form as 2.3.3: 'TDS 194-C' guess 194, propose 194, the check 194C (%s)" % d)
+    # arc-ui, the owner's ruling of 09-Oct-2026 ("TDS 194 C = 194C"), the dash form too (the coordinator, 09-Oct-2026: 194 is
+    # dividends, and the guess and the check must agree): every form of 194C is 194C in the guess, propose and the check;
+    # a bare 194 stays 194, and a section written on stays as written
+    DASH = [("TDS 194-C", "194C"), ("TDS 194 - C", "194C"), ("TDS-194C", "194C"), ("TDS 194C", "194C"), ("TDS 194 C", "194C"),
+            ("TDS 194", "194"), ("TDS 194IA", "194IA"), ("TDS 194J Prof", "194J")]
+    got = E("(xs) => xs.map(([n]) => [Books.guess(n).section || '', LedMaster.propose(n, {}, null, []).section || '', LedCheck.section(n) || ''])", DASH)
+    bad = [(n, w, g) for (n, w), g in zip(DASH, got) if not (g[0] == w and g[1] == w and g[2].replace(" ", "") == w)]
+    ok(not bad, "F2. 194-C, 194 - C, TDS-194C, 194C and 194 C are 194C alike (guess, propose, check); 194, 194IA, 194J as written (wrong: %s)" % bad)
     # ---------- M5: the check and FinCom agree only when the rate (both have one) and the registration agree too
     sm = E("""() => [LedPage.same({what: 'gst', tax: 'CGST', side: 'input', rate: 9, reg: '07'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 9, reg: '07'}),
       LedPage.same({what: 'gst', tax: 'CGST', side: 'input', rate: 9, reg: '07'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 18, reg: '07'}),

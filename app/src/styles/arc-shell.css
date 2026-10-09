@@ -164,3 +164,49 @@ nav.sbar [role="tablist"] { width: auto; max-width: 100%; min-width: 0; flex-wra
 
 /* smart moves round 1 (09-Oct-2026): Look up's tiles on a phone ("not known", "0.00 (movement)") fit their box */
 @media (max-width: 600px) { .lk-res .dtile b { font-size: clamp(15px, 4.6vw, 22px); white-space: normal; overflow-wrap: anywhere; } }
+/* ---------- the header's title never squeezes (a crowded top bar folded "Purchase" to a letter a line) ---------- */
+.tbar-title { flex: 1 0 auto; min-width: min(100%, max-content); }
+/* the title's block keeps its width; a crowded right side wraps under it instead of over it */
+header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content); }
+@media (min-width: 901px) {
+  header.top .headrow:has(> .sbar) { grid-template-columns: max-content minmax(0, 1fr); }
+  header.top .headrow:has(> .sbar) > .topright { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+}
+.tbar-title h2 { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+
+/* ---------- Post to Tally in Arc's look (step 3); its rows are drawn by Post.jsx's own stylesheet ---------- */
+/* its tabs: Arc's underlined tabs (the page-header block), counts as chips; Errors' count red when there are any */
+.post-tabs { gap: 2px; margin: 14px 0 12px; border-bottom: 1px solid var(--border); }
+.post-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent;
+  color: var(--text-secondary); font-weight: 500; transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+.post-tab:hover { color: var(--foreground); }
+.post-tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.post-tab .sbar-n { margin-left: 0; background: color-mix(in oklab, var(--tone-slate) 16%, var(--surface)); color: var(--foreground); }
+.post-tab.on .sbar-n { background: var(--accent); color: var(--accent-foreground); }
+.post-tab.bad .sbar-n { background: var(--bad-soft); color: var(--bad); }
+/* the status line over the page, the sections and the ready list as Arc's cards */
+.post-status { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.post-sec h3 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.post-sec .tblwrap { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); overflow-x: auto; }
+.post-sec table[data-post-table] { margin: 0; border-collapse: separate; border-spacing: 0; }
+.post-sec table[data-post-table] th { padding: 8px 12px; background: var(--surface); color: var(--text-muted); font-size: 12.5px; font-weight: 600; border-bottom: 1px solid var(--border); text-align: left; }
+.post-sec table[data-post-table] th.n { text-align: right; }
+.post-sec table[data-post-table] td { padding: 9px 12px; border-bottom: 1px solid var(--border-subtle); background: var(--surface); }
+.post-sec table[data-post-table] tbody tr:last-child td { border-bottom: 0; }
+.post-attn { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); overflow: hidden; }
+.post-attn li { padding: 10px 14px; border-top-color: var(--border-subtle); }
+
+/* ---------- Today (step 3): Arc's metric cards with their accents, each client with its initials ---------- */
+.today .metrics { gap: 14px; }
+.metric[data-tone] { position: relative; gap: 0; padding: 18px 20px; border: 1px solid var(--border); border-top: 3px solid var(--tone); border-radius: var(--radius-surface);
+  background: linear-gradient(180deg, var(--tone-tint) 0%, var(--surface) 72%); box-shadow: var(--shadow-resting);
+  transition: transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+.metric[data-tone]:hover { transform: translateY(-1px); box-shadow: var(--shadow-raised); }
+.metric[data-tone] span { color: var(--text-secondary); font-size: 13.5px; }
+.metric[data-tone] b { margin-top: 14px; color: var(--foreground); font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; }
+.metric.warn[data-tone] { background: linear-gradient(180deg, var(--warn-soft) 0%, var(--surface) 80%); border-top-color: var(--warn); }
+.metric.warn[data-tone] span { color: var(--warn); }
+.today-co { display: inline-flex; align-items: center; gap: 8px; }
+.today-co::before { content: attr(data-initials); display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 8px;
+  background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #FFFFFF; font-size: 11px; font-weight: 700; }
+.today > .row h2 { font-size: 18px; font-weight: 600; }
