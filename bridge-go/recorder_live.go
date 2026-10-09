@@ -2380,9 +2380,20 @@ byDay:
 				// held for good). Only a line whose MasterID is proven NOT its entry's (review H2: Tally's voucher with it was
 				// not saved after the line; the line carries the copied source's ids) is asked by its number, as a line
 				// with no MasterID is
-				if m.kind != wrongNoSave || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) || strings.Contains(m.why, "not a change after the starting point") {
+				//
+				// 2.4.1 (the owner's approval of 09-Oct-2026, item 5; reverses 2.3.4's L5 for this case ONLY): a created or altered
+				// line whose MasterID answer is an older entry (below the starting point), no entry at all, or an entry of another
+				// type, date or number is asked ONCE by its type and number (its date from the starting day to today, as
+				// voucherByNumberExact allows), and the answer is taken only when exactly one voucher comes back and it passes
+				// liveVoucherWrong with the MasterID cleared (liveOneByNumber). Only here, on the line's first fetch: the held list
+				// asks again by its MasterID alone (liveResolveOne). A line of another data location never comes here (datasource.go)
+				byNo := m.kind == wrongNoSave || ((c.event == "created" || c.event == "altered") && liveFallbackWhy(m.why))
+				if !byNo || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
+				}
+				if m.kind != wrongNoSave && strings.Contains(m.why, "not a change after the starting point") {
+					m.why = liveOlderWhy // 2.4.1: the true words (the older entry itself is never named: security M1)
 				}
 				if time.Now().After(deadline) {
 					liveHeldAs(c, m.why+"; not asked by its type and number (20 s passed)", false)
