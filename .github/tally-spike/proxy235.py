@@ -7,7 +7,7 @@
 # whose id matches it suspends Tally's process (pid from the file) for `sec` seconds before it is forwarded, so Tally takes
 # the request and does not answer (Tally itself not answering, not a refusal by the proxy). The control file is removed
 # at once (one shot) and a {"event": "suspend"} line is logged when Tally is suspended and {"event": "resume"} after.
-import ctypes, json, os, re, sys, threading, time, http.client
+import ctypes, gzip, json, os, re, sys, threading, time, http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(sys.argv[1]); LOG = sys.argv[2]; CTL = sys.argv[3] if len(sys.argv) > 3 else ''
 LOCK = threading.Lock()
@@ -38,6 +38,23 @@ def rid(b):
         mid = m2.group(1) if m2 else ''
     t = re.search(r'<TALLYREQUEST>([^<]*)</TALLYREQUEST>', s)
     return i, (t.group(1) if t else ''), mid
+
+# mode dsrc (2.4.1 item 5): the entry request by number's type, number and day, and how many vouchers Tally's answer held
+def bynum(b, data):
+    s = b[:8000].decode('utf-8', 'replace')
+    if b[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        try: s = b[:16000].decode('utf-16', 'replace')
+        except Exception: pass
+    m = re.search(r'\$VoucherNumber = (?:&#34;|&quot;|")(.*?)(?:&#34;|&quot;|") AND \$VoucherTypeName = (?:&#34;|&quot;|")(.*?)(?:&#34;|&quot;|")', s)
+    d = re.search(r'<SVFROMDATE[^>]*>([^<]*)</SVFROMDATE>', s)
+    a = data
+    if a[:2] == b'\x1f\x8b':
+        try: a = gzip.decompress(a)
+        except Exception: pass
+    t = a.decode('utf-8', 'replace')
+    if a[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        t = a.decode('utf-16', 'replace')
+    return {'vno': m.group(1) if m else '', 'vtype': m.group(2) if m else '', 'day': d.group(1) if d else '', 'nv': len(re.findall(r'<VOUCHER[ >]', t))}
 
 def suspend_maybe(i):
     if not CTL:
@@ -101,8 +118,12 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             err = err or ('reply: ' + str(e))
         self.close_connection = True
-        logj({'t0': round(t0 * 1000), 't1': round(t1 * 1000), 'ms': round((t1 - t0) * 1000), 'method': method, 'id': i, 'req': tr, 'mid': mid,
-              'suspended': bool(sus), 'in': len(body), 'out': len(data), 'status': st, 'err': err})
+        o = {'t0': round(t0 * 1000), 't1': round(t1 * 1000), 'ms': round((t1 - t0) * 1000), 'method': method, 'id': i, 'req': tr, 'mid': mid,
+             'suspended': bool(sus), 'in': len(body), 'out': len(data), 'status': st, 'err': err}
+        if i == 'FinComVoucherByNumber':
+            try: o.update(bynum(body, data))
+            except Exception as e: o['bynumErr'] = str(e)
+        logj(o)
     def do_POST(self): self.go('POST')
     def do_GET(self): self.go('GET')
     def log_message(self, *a): pass

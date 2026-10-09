@@ -74,8 +74,7 @@ $script:TdsSend = { param([string]$k) KeysTo $k 0 }
 $script:TdsPost = { param([string]$x) Post $x '' 30 }
 $script:TdsCo = $co1
 $script:TdsRestart = { UpgTally $tdl 'fresh' | Out-Null }
-$CU1 = 'u1 2.4.0 installed over 2.3.3: the version and the settings carried'; $CU2 = 'u2 the recorder state carried: nothing sent twice, nothing lost'
-$CU3 = 'u3 held lines from 2.3.3: each asked once and ended'; $CU4 = 'u4 a new save after the upgrade arrives with its body'
+$CU1 = $upgNames[0]; $CU2 = $upgNames[1]; $CU3 = $upgNames[2]; $CU4 = $upgNames[3]
 $upDone = @{}
 function URes($c, $st, $ev) { if (-not $upDone[$c]) { Result $c $st $ev; $upDone[$c] = $true } }
 function ULog { if (Test-Path $blog) { return , @(Get-Content $blog -Encoding UTF8) }; return , @() }
@@ -110,11 +109,11 @@ function UStub($guid) { $l = StubLines 0; $o = @(foreach ($x in $l) { if ($x.gui
 try {
   $ver0 = "$($st.version)"
   $cfg0 = Get-Content "$h1\tds-bridge.config.json" -Raw | ConvertFrom-Json
-  Info "upg: the bridge before the upgrade: version $ver0 (expected 2.3.3), port $($cfg0.Port)"
-  if ($ver0 -ne '2.3.3') { throw "the bridge installed first answers version '$ver0', not 2.3.3" }
+  Info "upg: the bridge before the upgrade: version $ver0 (expected $upgFrom), port $($cfg0.Port)"
+  if ($ver0 -ne $upgFrom) { throw "the bridge installed first answers version '$ver0', not $upgFrom" }
   $t = Get-Date; $sp = $false
   while (((Get-Date) - $t).TotalMinutes -lt 5) { $l = ULog; if (@($l | Where-Object { $_ -match ('Company ' + [regex]::Escape($co1) + ': its starting point is recorded') }).Count) { $sp = $true; break }; Start-Sleep 5 }
-  Info "upg: 2.3.3 recorded the starting point: $sp"
+  Info "upg: $upgFrom recorded the starting point: $sp"
   # S0 under 2.3.3
   $s0 = UpgReceipt 's0' 701
   if (-not $s0) { throw 'the keys made no Receipt S0 under 2.3.3' }
@@ -145,7 +144,7 @@ try {
   $keep = @('Port', 'Key', 'CloudUrl', 'CloudKey', 'TallyHost')
   $diff = @(foreach ($kname in $keep) { if ("$($cfg0.$kname)" -ne "$($cfg1.$kname)") { "$kname '$($cfg0.$kname)' -> '$($cfg1.$kname)'" } })
   if ((@($cfg0.TallyPorts) -join ',') -ne (@($cfg1.TallyPorts) -join ',')) { $diff += "TallyPorts $(@($cfg0.TallyPorts) -join ',') -> $(@($cfg1.TallyPorts) -join ',')" }
-  URes $CU1 $(if ($st1 -and "$($st1.version)" -eq $verNew -and -not $diff.Count) { 'PASS' } else { 'FAIL' }) ("before: 2.3.3 on port {0}; the setup {1} ended {2}; after: {3}; settings changed: {4}" -f $cfg0.Port, $setupNew.Name, $p.ExitCode, $(if ($st1) { "version $($st1.version) on port $bport" } else { 'the bridge did not answer' }), $(if ($diff.Count) { $diff -join ', ' } else { 'none (port, key, cloud, Tally ports and host kept)' }))
+  URes $CU1 $(if ($st1 -and "$($st1.version)" -eq $verNew -and -not $diff.Count) { 'PASS' } else { 'FAIL' }) ("before: $upgFrom on port {0}; the setup {1} ended {2}; after: {3}; settings changed: {4}" -f $cfg0.Port, $setupNew.Name, $p.ExitCode, $(if ($st1) { "version $($st1.version) on port $bport" } else { 'the bridge did not answer' }), $(if ($diff.Count) { $diff -join ', ' } else { 'none (port, key, cloud, Tally ports and host kept)' }))
   if (-not $st1) { throw 'the bridge did not answer after the upgrade' }
   # Tally with 2.4.0's add-on (test sheet check 1: the add-on loaded again)
   $null = UpgTally $tdl 'addon240'
@@ -186,6 +185,25 @@ try {
   $bad = @($res | Where-Object { $_.asks -ne 1 -or $_.obj -ne 1 -or $_.ended -lt 1 -or ($_.kind -eq 'real' -and $_.body -lt 1) })
   $seededIds = @($script:upgOdd.Keys)
   $lost = @(foreach ($sid in $seededIds) { if ($sid -notin $held0Ids -and -not $ends.ContainsKey($sid) -and $sid -notin $script:upgEnded) { $sid } })
+  if ($upgFrom -ne '2.3.3') {
+    # 2.4.1's gate: the published 2.4.0 already asks every seeded line once (FinComVoucherObject) and ends it before the
+    # upgrade; the carry check is that 2.4.1 asks none of those again, asks each line still held at the upgrade once, and
+    # every seeded line is asked once in all (both versions, the whole proxy log) and ended
+    $midOf = @{}; foreach ($sid in $seededIds) { $midOf[$sid] = if ($sid -like 'upgreal*') { "$((@($script:upgJ)[[int]($sid -replace '\D', '') - 1]).mid)" } else { "$(900001 + [int]($sid -replace '\D', ''))" } }
+    $all = foreach ($sid in $seededIds) {
+      $m = $midOf[$sid]
+      $aAll = @($px | Where-Object { $_.id -match 'FinComVoucher' -and "$($_.mid)" -eq $m })
+      $aNew = @($aAll | Where-Object { [int64]$_.t0 -ge $tUp })
+      $end = @($lines | Where-Object { $_.lid -eq "${sid}:resolved" })
+      [pscustomobject]@{ id = $sid; kind = $script:upgOdd[$sid]; mid = $m; held = ($sid -in $held0Ids); all = $aAll.Count; new = $aNew.Count; ended = $end.Count; body = @($end | Where-Object { $_.xml }).Count }
+    }
+    $all = @($all)
+    $bad = @($all | Where-Object { $_.all -ne 1 -or $_.ended -lt 1 -or ($_.kind -eq 'real' -and $_.body -lt 1) -or ($_.held -and $_.new -ne 1) -or (-not $_.held -and $_.new -ne 0) })
+    $byKind = ($all | Group-Object kind | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
+    URes $CU3 $(if ($all.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $all.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} seeded lines ({1}); held by {2} at the upgrade: {3}; asked again by 2.4.1 though {2} had ended them: {4}; each asked once in all and ended: {5}; not so: {6}; lost: {7}" -f `
+        $all.Count, $byKind, $upgFrom, @($all | Where-Object held).Count, @($all | Where-Object { -not $_.held -and $_.new -gt 0 }).Count, ($all.Count - $bad.Count),
+        $(if ($bad.Count) { ($bad | Select-Object -First 8 | ForEach-Object { "$($_.id) ($($_.kind), mid $($_.mid), held at the upgrade $($_.held)) asks in all $($_.all), by 2.4.1 $($_.new), ended $($_.ended), body $($_.body)" }) -join '; ' } else { 'none' }), $(if ($lost.Count) { $lost -join ', ' } else { 'none' }))
+  }
   $byKind = ($res | Group-Object kind | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
   URes $CU3 $(if ($res.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $res.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} lines held at the upgrade ({1}); asked once by 2.4.0 and ended: {2}; not so: {3}; seeded lines neither held at the upgrade nor ended (lost): {4}; e.g. {5}" -f `
       $res.Count, $byKind, ($res.Count - $bad.Count), $(if ($bad.Count) { ($bad | Select-Object -First 8 | ForEach-Object { "$($_.id) ($($_.kind), mid $($_.mid)) asks $($_.asks) object $($_.obj) ended $($_.ended) body $($_.body)" }) -join '; ' } else { 'none' }), $(if ($lost.Count) { $lost -join ', ' } else { 'none' }), (($res | Select-Object -First 2 | ForEach-Object { "$($_.id): $(if ($_.body) { 'with its body' } else { $_.words })" }) -join ' | '))
@@ -194,7 +212,7 @@ try {
   else {
     $g2 = $s2.guid; $w2 = WaitLine 0 { $_.guid -eq $g2 -and $_.xml } (Get-Date) 150
     $recW = @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge [DateTimeOffset]::FromUnixTimeMilliseconds($tUp).LocalDateTime } | ForEach-Object { $_.Name })
-    URes $CU4 $(if ($w2.Count) { 'PASS' } else { 'FAIL' }) ("S2 mid {0} guid {1}: {2}; the add-on's files written after the upgrade: {3}" -f $s2.mid, $g2, $(if ($w2.Count) { Ev $w2[0] } else { 'no line with its body in 150 s' }), ($recW -join ', '))
+    URes $CU4 $(if ($w2.Count) { 'PASS' } else { 'FAIL' }) ("S2 mid {0} guid {1}: {2}{4}; the add-on's files written after the upgrade: {3}" -f $s2.mid, $g2, $(if ($w2.Count) { Ev $w2[0] } else { 'no line with its body in 150 s' }), ($recW -join ', '), $(if ($w2.Count -and $w2[0].raw.data_id) { " data_id $($w2[0].raw.data_id)" } else { '' }))
   }
   Copy-Item (Join-Path $sync '*') (New-Item -ItemType Directory -Force (Join-Path $out 'state-240')).FullName -Recurse -Force -ErrorAction SilentlyContinue
 } catch {

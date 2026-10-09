@@ -39,6 +39,11 @@ on:
       versions:
         description: 'Releases to run, comma separated (e.g. 3.0,7.1); empty: the mode''s own list'
         default: ''
+      # 2.4.1's gate (09-Oct-2026): mode dsrc (one company in two data folders: dsrcv.ps1, stubds.py) and upg from the
+      # published 2.4.0 (upg_from=2.4.0: its committed setup, SHA-256 00ab8042...16dc, and add-on from 3bf7b6d9)
+      upg_from:
+        description: 'upg: the published release installed first (2.3.3, or 2.4.0 for 2.4.1''s gate)'
+        default: '2.3.3'
 permissions:
   contents: write
 concurrency:
@@ -60,7 +65,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="full mhook ledlist dpath share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -69,7 +74,7 @@ jobs:
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
             if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            case $x in hang2|mhook) t=220; c=190 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc) t=130; c=105 ;; *) t=75; c=40 ;; esac
             for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
           done
           echo "matrix={\"include\":[${inc%,}]}" | tee -a "$GITHUB_OUTPUT"
@@ -148,7 +153,7 @@ jobs:
       # upg: the published 2.3.3 (commit 91faf7f3, setup SHA-256 8280206b...e5e5) and its add-on, the install the gate's
       # setup goes over
       - name: Bridge 2.3.3 (upg)
-        if: contains(steps.mode.outputs.modes, 'upg')
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from != '2.4.0'
         run: |
           git fetch -q --depth 1 origin 91faf7f3b04932e65624b8bff5072c7ffa62b8f9
           mkdir -p bridge-go/dist/old233
@@ -157,6 +162,17 @@ jobs:
           got=$(sha256sum bridge-go/dist/old233/FinComBridge-Setup-2.3.3.exe | awk '{print $1}')
           [ "$got" = 8280206b1500742b892d41a658fdff809aa7eba219913611d929b7f8e9bee5e5 ] || { echo "::error::2.3.3 setup SHA-256 $got"; exit 1; }
           echo "2.3.3 setup SHA-256 $got"
+      # upg_from=2.4.0 (2.4.1's gate): the published 2.4.0 (built at 3bf7b6d9, setup SHA-256 00ab8042...16dc) and its add-on
+      - name: Bridge 2.4.0 (upg from 2.4.0)
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from == '2.4.0'
+        run: |
+          git fetch -q --depth 1 origin 3bf7b6d9e890defce82160799c09b6b960eede11
+          mkdir -p bridge-go/dist/old240
+          git show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.4.0.exe > bridge-go/dist/old240/FinComBridge-Setup-2.4.0.exe
+          git show FETCH_HEAD:bridge-go/addon/FinComRecorder.tdl > bridge-go/dist/old240/FinComRecorder.tdl
+          got=$(sha256sum bridge-go/dist/old240/FinComBridge-Setup-2.4.0.exe | awk '{print $1}')
+          [ "$got" = 00ab8042dff1b1b508410632f832d20ee1169fcc71493f682af38a413ac416dc ] || { echo "::error::2.4.0 setup SHA-256 $got"; exit 1; }
+          echo "2.4.0 setup SHA-256 $got"
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -175,6 +191,7 @@ jobs:
       TALLY_REL: ${{ matrix.version }}
       VMODE: ${{ matrix.mode }}
       MH_TYPES: ${{ inputs.mhook_types }}
+      UPG_FROM: ${{ inputs.upg_from || '2.3.3' }}
       RES: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
       SHOTS: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
       LOG: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}\log.txt
@@ -239,7 +256,9 @@ jobs:
           if ($env:VMODE -eq 's235') { $want += @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day') }
           if ($env:VMODE -eq 'tds240') { $want += @('t1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') }
           if ($env:VMODE -eq 'selfck') { $want += @('n1 nightly check: Tally''s changes compared, the missing fetched', 'n2 nightly check: the words recorded', 'n3 nightly check: once a night') }
-          if ($env:VMODE -eq 'upg') { $want += @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
+          if ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.0') { $want += @('u1 2.4.1 installed over 2.4.0: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.0: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
+          elseif ($env:VMODE -eq 'upg') { $want += @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
+          if ($env:VMODE -eq 'dsrc') { $want += @('d1 a save in folder 1 (the bridge''s own Tally): applied, its line with dp= of folder 1', 'd2 a save in folder 2 (one Tally, one folder at a time): never fetched, never applied; other_source with folder 2''s data id, no body', 'd2b a save in folder 2 with two Tallys at once: never fetched, never applied; other_source with folder 2''s data id, no body', 'd3 FinCom chooses folder 2: after a fresh starting point folder 2''s new saves applied, folder 1''s held', 'd4 the fallback by number: asked once, answered within 2 s, taken only when exactly one voucher matches') }
           if ($env:VMODE -eq 'full') { $want += @('c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') }
           $have = Get-Content $r
           foreach ($c in $want) {
