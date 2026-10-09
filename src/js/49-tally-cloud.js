@@ -778,7 +778,14 @@ const TCloud = {
   },
   // an owner chooses which data location is the books (tally_company_source_choose: that one chosen, the others not,
   // the starting point cleared so the chosen location records it afresh); FinCom reads only that one from then on
+  // The coordinator, 09-Oct-2026: asked once first (it changes what FinCom reads and clears the starting point)
   async sourceChoose(book, dataId, n, company){
+    const g = (this.sourceBooks() || []).find(x => x.book === book), x = g && g.list.find(y => y.data_id === dataId);
+    const others = g ? g.list.filter(y => y.data_id !== dataId).map(y => y.n).join(", ") : "the other location";
+    const where = x ? [x.computer || "a computer", x.path || "its data folder"].join(" \u00b7 ") : "";
+    const a = await askConfirm({title: "Read " + company + " from " + n + "?", ok: "Use " + n,
+      body: esc("FinCom will read " + company + " from " + n + (where ? " (" + where + ")" : "") + " from now on. Entries from " + others + " will be held, not used. You'll need to upload " + n + "'s Day Book for the year. Continue?")});
+    if (!a || !a.ok) return;
     await this.control("tally_company_source_choose", {p_book: book, p_data_id: dataId}, "FinCom now reads " + n + " of " + company + ".");
   },
   async baselineClear(book, company){

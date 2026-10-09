@@ -90,8 +90,15 @@ def main():
         ok(re.search(r"\u2460 NWS144 \u00b7 anshul \u00b7 C:\\Users\\Public\\TallyPrime\\Data \(last entry [^)]+\)", t) is not None and re.search(r"\u2461 PC-2 \u00b7 anshul \u00b7 D:\\Copy of Tally\\DATA \(last entry [^)]+\)", t) is not None, "\u2460 and \u2461: computer, user, folder, last entry (%s)" % t)
         btn = E("(c) => [...document.querySelectorAll(c + ' button')].map(b => b.innerText.trim())", card)
         ok(btn == ["Use \u2460", "Use \u2461", "Decide later"], "Use \u2460, Use \u2461, Decide later (%s)" % btn)
+        # the coordinator, 09-Oct-2026: Use ② asks once before anything is sent
         E("() => { window.__calls = []; }")
-        pg.click(card + ' [data-source-use="%s"]' % I2); pg.wait_for_timeout(1000)
+        pg.click(card + ' [data-source-use="%s"]' % I2); pg.wait_for_timeout(600)
+        q_ = pg.inner_text("#confirmBox .cbx .note").strip() if pg.locator("#confirmBox .cbx").count() else ""
+        want_q = "FinCom will read GARG SHEKHAR from ② (PC-2 · D:\\Copy of Tally\\DATA) from now on. Entries from ① will be held, not used. You'll need to upload ②'s Day Book for the year. Continue?"
+        ok(q_ == want_q and not [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"], "Use ②: the question first, nothing sent (%r)" % q_)
+        pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(500)
+        ok(not [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"], "Cancel: nothing sent")
+        pg.click(card + ' [data-source-use="%s"]' % I2); pg.wait_for_timeout(500); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
         calls = [c for c in E("window.__calls") if c[0] == "tally_company_source_choose"]
         ok(calls == [["tally_company_source_choose", {"p_book": "b1", "p_data_id": I2}]], "Use \u2461 asks tally_company_source_choose(book, \u2461) (%s)" % E("window.__calls"))
         scene(TWO)
@@ -111,13 +118,13 @@ def main():
         scene(TWO, role="member")
         ok(pg.locator(card).count() == 1 and "Which one is your books?" in txt(card) and pg.locator(card + " button").count() == 0, "staff: the words, no button (%s)" % txt(card)[:200])
         print("== 6. the bell")
-        scene(TWO, alerts=[{"id": 71, "kind": "source", "book_id": "b1", "device_id": T.D1, "day": "2026-10-09", "at": "ago:30", "read_at": None,
+        scene(TWO, alerts=[{"id": 71, "kind": "summary", "book_id": "b1", "device_id": T.D1, "day": "2026-10-09", "at": "ago:30", "read_at": None,
                             "words": "GARG SHEKHAR is open in two places with different data: choose on the Tally page which one is your books (FinCom reads only that one)",
-                            "data": {"dataId": I2, "path": P2, "computer": "PC-2", "user": "anshul"}}])
+                            "data": {"reason": "source", "dataId": I2, "path": P2, "computer": "PC-2", "user": "anshul"}}])
         E("() => { Rec.alerts.at = 0; Rec.alerts.none = false; return Rec.alertsLoad && Rec.alertsLoad(); }"); pg.wait_for_timeout(1500)
         items = E("() => AlertHub.list().map(x => [x.key, x.text, x.act ? x.act.label : ''])")
         it = [x for x in items if "open in two places" in (x[1] or "")]
-        ok(len(it) == 1 and it[0][2] == "Open the Tally page", "the bell lists the alert, its action the Tally page (%s)" % items)
+        ok(len(it) == 1 and it[0][2] == "Open the Tally page", "the bell lists the alert ONCE (not also as the day's summary), its action the Tally page (%s)" % items)
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()
     srv.shutdown()

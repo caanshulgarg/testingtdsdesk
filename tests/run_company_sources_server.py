@@ -137,9 +137,9 @@ try:
     d = ds(r).get(CO) or {}
     ok(c == 200 and d.get("chosenId") == I1 and d.get("chosen") is False, "1. PC-2 (②): not chosen (%s)" % r.get("dataSources"))
     ok(len(FS.ARGS.get("tally_start_point", [])) == n_sp and (r.get("recorder") or {}).get(CO, {}).get("otherSource") is True, "1. no starting point or gap check from PC-2 (%s)" % r.get("recorder"))
-    ok(db.one("select choice from tally_company_sources where data_id = %s" % q(I2)) == "pending" and db.one("select count(*) from tally_alerts where kind = 'source'") == "1", "1. ② pending, ONE alert")
+    ok(db.one("select choice from tally_company_sources where data_id = %s" % q(I2)) == "pending" and db.one("select count(*) from tally_alerts where kind = 'summary' and data->>'reason' = 'source'") == "1", "1. ② pending, ONE alert")
     beat(K2, G2, src(I2, P2), start=70000, alt=70010)
-    ok(db.one("select count(*) from tally_alerts where kind = 'source'") == "1", "1. PC-2's next beat: still one alert")
+    ok(db.one("select count(*) from tally_alerts where kind = 'summary' and data->>'reason' = 'source'") == "1", "1. PC-2's next beat: still one alert")
 
     print("== 2. lines: ① applied, ② held, other_source held with the words")
     c, r = rec([line("n-1", 26311, 54401, "S-191", "NWS144", I1)], K1, G1)

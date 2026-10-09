@@ -54,8 +54,9 @@ every function SECURITY DEFINER with `search_path = public, pg_temp`, minimal gr
   last_seen, last_line_at, choice 'chosen' | 'other' | 'pending', chosen_by, chosen_at; unique (book_id, data_id)). The
   firm reads its own rows; nobody writes them directly.
 - The first data id a bridge says is its own for a linked book becomes **'chosen'** by itself, so today's setups stay as
-  they are. A different data id for the same book becomes **'pending'** and raises **ONE alert** (`tally_alerts` kind
-  'source': its CHECK widened in one statement, only while it is exactly migration 47's; once per problem).
+  they are. A different data id for the same book becomes **'pending'** and raises **ONE alert** (`tally_alerts`, the
+  existing kind 'summary' marked `data.reason = 'source'`, once per problem; nothing of `tally_alerts` is changed: the
+  migration drops nothing, not even a CHECK).
 - Owner-only `tally_company_source_choose(book, data_id)`: that one 'chosen', the others 'other', who and when recorded;
   the book's starting point cleared as `tally_baseline_clear` clears it, so the next beat from the chosen location records
   it afresh. It writes nothing else.
@@ -81,7 +82,8 @@ and does everything else as before.
 
 - One **owner-only** card per book with more than one location: "<company> is open in two places with different data:
   ① <computer> · <user> · <path> (last entry <time>) ② … Which one is your books? FinCom reads only that one." Buttons:
-  **Use ①**, **Use ②**, **Decide later**.
+  **Use ①**, **Use ②**, **Decide later**. Use ② asks once first: "FinCom will read <company> from ② (<computer> ·
+  <path>) from now on. Entries from ① will be held, not used. You'll need to upload ②'s Day Book for the year. Continue?"
 - After a change: "FinCom now reads ②. Upload ②'s Day Book for the year (one month per file) so the history matches.",
   with the link to the upload page; who chose and when. Staff see the words without the buttons.
 - Needs you for those lines: "saved in another data location of <company> (②, <computer>); FinCom reads ①. Choose on the

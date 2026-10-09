@@ -1,9 +1,8 @@
 -- Migration 71 (09-Oct-2026, FinCom Bridge 2.4.1: one company, two data locations; the owner's approval of 09-Oct-2026,
 -- item 3). Runs after 47 (tally_alerts) and 37 (tally_sync_cursor's cleared_*); independent of 61-70 (any order after 60).
--- ADD-ONLY: one new table with its index, row security and grants; tally_alerts.kind's CHECK widened in place to take
--- 'source' (one ALTER TABLE, only while it is exactly migration 47's, as 47 widened tally_jobs.kind); four new functions.
--- No existing row, column, function or grant is changed or removed; no statement here removes rows; safe to run twice;
--- one transaction (lock_timeout 10 s). NOT RUN by this change: written only.
+-- ADD-ONLY: one new table with its index, row security and grants, and new functions. Nothing on an existing table is
+-- changed (no column, grant or CHECK rule): the coordinator's rule of 09-Oct-2026, "nothing dropped", not even a CHECK.
+-- No statement here removes rows; safe to run twice; one transaction (lock_timeout 10 s). NOT RUN by this change.
 --
 -- On 09-Oct-2026 the owner opened GARG SHEKHAR & COMPANY (one company GUID) in two Tallys with different data folders, and
 -- one copy's saves reached the other's book. From 2.4.1 the add-on writes the company's data folder on every line and the
@@ -19,7 +18,8 @@
 --     beat and recorder_lines): at most 50 sources [{company_guid, data_id (16 hex), path (<= 260), w, computer, own,
 --     line_at}]. A new data id: 'chosen' when the bridge says it is its OWN (own = true) and the book has no chosen one yet
 --     (so today's setups stay as they are: the first data id seen for a linked book is chosen by itself); else 'pending',
---     with ONE alert (tally_alerts kind 'source', once per problem: only when the pending row is new). A known one: last
+--     with ONE alert (tally_alerts, the existing kind 'summary' with data.reason 'source': kind's CHECK stays as 47 made
+--     it; once per problem: only when the pending row is new). A known one: last
 --     seen (and its folder, computer, user, last line) brought up to date; its choice never changes here. Answers {ok,
 --     chosenId, sources: [{data_id, choice, n (①, ② ...: by first seen)}]}.
 --   tally_company_source_lines(p_firm, p_book, p_device, p_lines jsonb) returns jsonb (service role only): lines of a data
@@ -71,26 +71,6 @@ revoke all on public.tally_company_sources from public, anon, authenticated;
 grant select on public.tally_company_sources to authenticated;
 revoke all on sequence public.tally_company_sources_id_seq from public, anon, authenticated;
 
--- tally_alerts.kind: the one CHECK swapped for the same name with 'source' added, in one statement, only while it is
--- EXACTLY migration 47's text (gap, silent, summary); anything else stops the file with words (never replaced blindly)
-do $$
-declare old_def constant text := 'CHECK ((kind = ANY (ARRAY[''gap''::text, ''silent''::text, ''summary''::text])))';
-  new_def constant text := 'CHECK ((kind = ANY (ARRAY[''gap''::text, ''silent''::text, ''summary''::text, ''source''::text])))';
-  c text; n int; found text;
-begin
-  if exists (select 1 from pg_constraint con where con.conrelid = 'public.tally_alerts'::regclass and con.contype = 'c' and pg_get_constraintdef(con.oid) = new_def) then return; end if;
-  select count(*), min(con.conname) into n, c from pg_constraint con
-   where con.conrelid = 'public.tally_alerts'::regclass and con.contype = 'c' and pg_get_constraintdef(con.oid) = old_def;
-  if n = 1 then
-    execute format('alter table public.tally_alerts drop constraint %I, add constraint %I check (kind in (''gap'', ''silent'', ''summary'', ''source''))', c, c);
-    raise notice 'migration 71: tally_alerts.% takes kind source', c;
-  else
-    select string_agg(con.conname || ' ' || pg_get_constraintdef(con.oid), '; ') into found from pg_constraint con
-     where con.conrelid = 'public.tally_alerts'::regclass and con.contype = 'c' and pg_get_constraintdef(con.oid) ~ '\mkind\M';
-    raise exception 'migration 71 stopped, nothing changed: tally_alerts has no CHECK on kind exactly as migration 47 made it (gap, silent, summary), so it is not replaced blindly (found: %). Widen it by hand to take source, then run 71 again', coalesce(found, 'none');
-  end if;
-end $$;
-
 -- ① .. ⑳ (by first seen), else "(21)"
 create or replace function public.tally_source_mark(p_n bigint) returns text language sql immutable set search_path = public, pg_temp as $function$
   select case when p_n between 1 and 20 then chr(9311 + p_n::int) else '(' || coalesce(p_n::text, '?') || ')' end
@@ -127,11 +107,12 @@ begin
       on conflict (book_id, data_id) do nothing
       returning * into r;
       if r.id is not null and r.choice = 'pending' then
-        -- ONE alert, once per problem: written only with the new pending row (never again for the same data id)
+        -- ONE alert, once per problem: written only with the new pending row (never again for the same data id); the existing
+        -- kind 'summary' (a book's row, so never the firm's daily summary, which has no book) marked data.reason 'source'
         insert into tally_alerts (firm_id, client_id, book_id, device_id, kind, day, words, data)
-        values (p_firm, b.client_id, p_book, p_device, 'source', (now() at time zone 'Asia/Kolkata')::date,
+        values (p_firm, b.client_id, p_book, p_device, 'summary', (now() at time zone 'Asia/Kolkata')::date,
                 format('%s is open in two places with different data: choose on the Tally page which one is your books (FinCom reads only that one)', b.company),
-                jsonb_build_object('dataId', did, 'path', pth, 'computer', pc, 'user', usr))
+                jsonb_build_object('reason', 'source', 'dataId', did, 'path', pth, 'computer', pc, 'user', usr))
         on conflict do nothing;
       end if;
     else
