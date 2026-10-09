@@ -1,6 +1,6 @@
 """python3 shots_ledpage.py OUTDIR - screenshots of a client's GST and TDS ledgers page (Books -> Tally ledgers) with the
 made-up client of ledpage_setup.py (fixture books and masters, FinCom's cloud made up in the page, offline), for
-docs/ui-pass/ledpage/before and after: owner and staff at desktop width (1366) and at phone width (390), and the page with
+docs/ui-pass/ledpage/before and after (2.4.0), docs/ui-pass/ledpage241/before and after (2.4.1): owner and staff at desktop width (1366) and at phone width (390), and the page with
 no bridge or cloud copy. Works on the build before the simpler page too (it only sets data and opens the tab).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 shots_ledpage.py ../docs/ui-pass/ledpage/after"""
 import os, sys
@@ -25,4 +25,8 @@ with sync_playwright() as p:
     L.open_page(pg, "owner", cloud=False)
     shot("4-no-bridge-desktop", 1366)
     shot("5-no-bridge-phone", 390, 844)
+    # FinCom 2.4.1: a ledger confirmed by hand that FinCom's check reads otherwise
+    pg.set_viewport_size({"width": 1366, "height": 900})
+    L.open_page(pg, "owner"); pg.evaluate(L.SET_DIFFERS, L.DIFFERS); pg.wait_for_timeout(500)
+    shot("6-confirmed-differs-desktop", 1366)
     br.close(); srv.shutdown()
