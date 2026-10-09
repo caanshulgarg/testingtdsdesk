@@ -185,6 +185,9 @@ type change struct {
 	retryAt   time.Time
 	failWhy   string
 	failSince time.Time
+	// 2.4.1 (datasource.go): the data id and folder of the line's Tally (dp=), the line's Windows user (w=); an
+	// "other_source" line: the event it would have been (otherOf), never fetched, sent heads only
+	dataId, dataPath, winUser, otherOf string
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -1151,6 +1154,7 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		liveNotHere(l)
 		return 0
 	}
+	dataLearn(l) // 2.4.1: a line of this Windows user teaches its company's own data id (datasource.go)
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
 		liveSayOnce("cap|"+l.CGUID, fmt.Sprintf("Recorder: %s has %d changes waiting to be sent: the rest of its file is read once they go", strings.TrimSpace(l.CName), liveQueueCap()))
 		return -1
@@ -1319,7 +1323,8 @@ func liveCapWhy(s string) string { return cutRunes(s, 300) }
 func liveMerge(pre, post recLine) (recLine, string) {
 	m := post
 	for _, f := range []struct{ a, b *string }{{&m.GUID, &pre.GUID}, {&m.MID, &pre.MID}, {&m.AID, &pre.AID}, {&m.VType, &pre.VType}, {&m.VNo, &pre.VNo},
-		{&m.VDate, &pre.VDate}, {&m.Name, &pre.Name}, {&m.Parent, &pre.Parent}, {&m.Narr, &pre.Narr}, {&m.CName, &pre.CName}, {&m.CGUID, &pre.CGUID}, {&m.User, &pre.User}} {
+		{&m.VDate, &pre.VDate}, {&m.Name, &pre.Name}, {&m.Parent, &pre.Parent}, {&m.Narr, &pre.Narr}, {&m.CName, &pre.CName}, {&m.CGUID, &pre.CGUID}, {&m.User, &pre.User},
+		{&m.DP, &pre.DP}, {&m.W, &pre.W}} { // 2.4.1: the data folder and the Windows user of the save
 		if strings.TrimSpace(*f.a) == "" {
 			*f.a = *f.b
 		}
@@ -1452,6 +1457,31 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		c.holds = append(c.holds, liveAt{file, lineStart})
 	}
 	c.companyGuid = liveGUID(c.companyGuid)
+	c.dataId, c.dataPath, c.winUser = dataIDOf(l.DP), cutRunes(strings.TrimSpace(l.DP), 260), cutRunes(strings.TrimSpace(l.W), 200)
+	// 2.4.1 (the owner's approval of 09-Oct-2026): a line of another data location of the company (its dp= not the one this
+	// bridge reads, or a company this bridge stopped reading): never asked of Tally, never an entry; sent heads only as
+	// "other_source" (datasource.go). Before anything of it is looked at: no FinCom id, no GUID, no body
+	if c.dataId != "" && !c.isLedger() && !c.isMaster() && dataOther(c.companyGuid, l.DP) {
+		c.otherOf, c.event = ev, "other_source"
+		c.guid, c.masterId, c.alterId, c.narr, c.name, c.parent, c.lineAlter = "", "", "", "", "", "", 0
+		if t := liveTime(l.T1); !t.IsZero() {
+			c.at = t.Format(time.RFC3339)
+		} else if t := liveTime(l.T0); !t.IsZero() {
+			c.at = t.Format(time.RFC3339)
+		} else {
+			c.at = c.readAt.In(liveZone).Format(time.RFC3339)
+		}
+		if liveNotLinkedLocked(c.key()) {
+			liveCo(c.company).skipped++
+			live.sent[id] = true
+			return 0
+		}
+		liveSayOnce("othersrc|"+c.companyGuid+"|"+c.dataId, "Recorder: "+c.company+": a save in another data location of the company ("+c.dataPath+
+			") is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent)")
+		liveDecide(c, "not asked: saved in another data location of the company ("+c.dataPath+"); sent to FinCom as such, without the entry")
+		liveQueueAdd(c)
+		return 1
+	}
 	if c.isMaster() {
 		c.masterType = liveMasterType(l.Ev) // next-masterhook: heads only (masterhook.go)
 		if c.masterType == "" {
@@ -2519,6 +2549,16 @@ var importGaps atomic.Int64 // grows after every import request (post.go): a gap
 
 // one line as the cloud's recorder_lines takes it (index.ts)
 func (c *change) wire() M {
+	if c.event == "other_source" {
+		// 2.4.1: heads only: nothing of the entry (no GUID, MasterID, AlterID, narration, ledgers or body)
+		m := M{"line_id": c.lineId, "event": "other_source", "of": c.otherOf, "company_guid": c.companyGuid, "vch_type": c.vchType, "vch_no": c.vchNo,
+			"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "w": c.winUser, "data_id": c.dataId, "data_path": c.dataPath,
+			"source": c.source, "again": c.again}
+		if !c.readAt.IsZero() {
+			m["received_at"] = c.readAt.In(liveZone).Format(time.RFC3339)
+		}
+		return m
+	}
 	var alter any
 	if a := toI64(onlyDigits(c.alterId)); a > 0 {
 		alter = a
@@ -2545,6 +2585,16 @@ func (c *change) wire() M {
 		"again": c.again}
 	if c.event == "cancelled" && alter == nil && c.vchCounter > 0 {
 		m["vch_counter"] = c.vchCounter // re-review M-B: FinCom cancels again only a body at or below it
+	}
+	// 2.4.1: the data id of the Tally the line came from (its dp=); what the bridge read from its own Tally by itself (a
+	// held line resolved, renumbered entries, bank dates) carries the own data id. FinCom holds a line of a data id it does
+	// not read. A line of an older add-on (no dp=) carries none, as in 2.4.0
+	if id := c.dataId; id != "" {
+		m["data_id"] = id
+	} else if c.source != "addon" || strings.HasSuffix(c.lineId, ":resolved") {
+		if id := dataOwnID(c.companyGuid); id != "" {
+			m["data_id"] = id
+		}
 	}
 	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
 	m["full"] = c.full && c.xml != ""

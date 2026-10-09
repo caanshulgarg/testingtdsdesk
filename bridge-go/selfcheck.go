@@ -144,6 +144,9 @@ func selfCheckBlocked(company, guid string) string {
 	if guid == "" {
 		return "Tally gave no GUID for the company"
 	}
+	if dataStopped(guid) {
+		return "FinCom reads this company from another data location" // 2.4.1 (datasource.go)
+	}
 	if st := scState(company, guid); str(st["night"]) == night {
 		return "already checked tonight"
 	}

@@ -730,6 +730,7 @@ func beatOnce() {
 		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
 		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again
 		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
+		applyDataSources(r.json)    // 2.4.1: the data location FinCom reads for each company (datasource.go)
 		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
 		applyRefetch(r.json)        // after 2.3.0: this bridge's own held lines FinCom asks for again (body missing, placeholder GUID)
 		applyLedgersWanted(r.json)  // 2.3.1: the ledgers FinCom holds an entry for, asked of the own Tally by name (ledchanges.go)
@@ -1072,7 +1073,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
 		"renumberAlerts": renumBeat(),
 		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
-		"bankAlerts": bankBeat()}
+		"bankAlerts": bankBeat(),
+		// 2.4.1: this bridge's own data location (data id and folder) of each company, from its own add-on lines (datasource.go)
+		"dataSources": dataBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

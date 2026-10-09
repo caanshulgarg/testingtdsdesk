@@ -602,6 +602,9 @@ func bankTurn() int {
 	gap := bankGap()
 	for _, k := range ks {
 		c := bank.cos[k]
+		if dataStopped(c.CGUID) {
+			continue // 2.4.1: FinCom reads the company from another data location: nothing of it is read here
+		}
 		var day, nt []bankCand
 		for _, x := range c.Cands {
 			if !x.due(now) {

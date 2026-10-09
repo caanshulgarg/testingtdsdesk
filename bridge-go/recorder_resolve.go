@@ -816,6 +816,9 @@ func liveRescanFiles(scannedBefore bool) []heldLine {
 		if !((livePlaceholder(m.GUID) && !scannedBefore) || toI64(onlyDigits(m.MID)) <= 0 || mismatch || (wasOff && !at.IsZero() && !at.Before(off))) {
 			return
 		}
+		if dataOther(m.CGUID, m.DP) {
+			return // 2.4.1: another data location's line (sent as such, without its entry): never asked of Tally
+		}
 		id := liveLineID(name, fmt.Sprint(gen), fmt.Sprint(lineStart))
 		live.mu.Lock()
 		was := live.sent[id] && !live.sent[id+":resolved"] && !live.bodied[id]
@@ -972,6 +975,9 @@ func liveResolveTurn() {
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
+		if dataStopped(h.CGUID) {
+			continue // 2.4.1: FinCom reads the company from another data location: nothing of it is asked of this Tally
+		}
 		if !h.V234 {
 			// 2.3.4: a line an older bridge kept (tries 20, final, refetch, any ask count): one ask with the fast request now
 			// (FastAgain: its one ask is this version's, whatever an older bridge sent or ended; Added now: not dropped as 7 days old)

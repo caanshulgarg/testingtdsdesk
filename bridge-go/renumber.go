@@ -322,6 +322,9 @@ func renumTurn() int {
 	var j *renumJob
 	now := nowFn()
 	for _, x := range renum.jobs {
+		if dataStopped(x.CGUID) {
+			continue // 2.4.1: FinCom reads the company from another data location: nothing of it is read here
+		}
 		if w, err := time.Parse(time.RFC3339, x.Wait); x.Wait == "" || err != nil || !now.Before(w) {
 			j = x
 			break

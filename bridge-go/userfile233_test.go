@@ -233,7 +233,7 @@ func TestUserFileAddon(t *testing.T) {
 	for _, s := range []string{
 		"FCRWinUser",
 		`@@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"`,
-		`"|tw=" + ##vTW + "|w=" + @@FCRWinUser`,
+		`"|tw=" + ##vTW + "|dp=" + @@FCRDataPath + "|w=" + @@FCRWinUser`, // 2.4.1: dp= between tw and w (datasource241_test.go)
 		`"|src=live"`,
 		`IF     : $$IsEmpty:@@FCRWinUser`,
 	} {

@@ -67,12 +67,21 @@
 ;; Proven end to end in run 37580509870 (two Windows users, each with their own Tally, this add-on and this bridge): each
 ;; Tally wrote only <GUID>-7-Oct-26-<its user>.txt with w=<its user> on every line; each bridge read and sent only its own.
 
+;; 2.4.1: every line also carries "|dp=<the company's data folder>" right after tw, before w= (FCRDataPath, below). A 2.4.0
+;; bridge reads it as part of tw (a time it needs only without t0); its w= stays whole. Not a request to Tally: the add-on's
+;; own line only.
+
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
     FCRIsLive   : NOT $$IsEmpty:##SVCurrentCompany
     FCRFolder   : "C:\ProgramData\FinCom\recorder\"
     FCRDay      : $$String:$$MachineDate:"UniversalDate"
     FCRWinUser  : $$SysInfo:WindowsUser
+    ;; 2.4.1 (the owner's approval of 09-Oct-2026): the company's data folder, written on every line as "|dp=<path>" so
+    ;; the bridge never mixes two copies of one company (the same GUID) kept in two data folders. ONE named formula: its
+    ;; text is being measured on real TallyPrime 3.0 to 7.1 and is dropped in here once proven. Until then it is empty,
+    ;; and the bridge reads a line with an empty dp= as an older add-on's (as in 2.4.0)
+    FCRDataPath : ""
 
 ;; ---------------------------------------------------------------- system events (the trial's)
 ;; Syntax: <label> : <event> : <condition> : <action> : <action parameters>
@@ -145,7 +154,7 @@
     ;; the line (heads only: the bridge asks Tally for the body)
     14 : SET    : vLine : "FCR1|ev=" + ##pEvent + "|t0=" + ##vT0
     15 : SET    : vTW   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW + "|w=" + @@FCRWinUser
+    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW + "|dp=" + @@FCRDataPath + "|w=" + @@FCRWinUser
     17 : SET    : vLine : ##vLine + "|cguid=" + ##vGuid + "|cname=" + ##SVCurrentCompany
     18 : SET    : vLine : ##vLine + "|user=" + ($$String:$$CmpUserName) + "|obj=" + ##vObj
     19 : SET    : vLine : ##vLine + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID)

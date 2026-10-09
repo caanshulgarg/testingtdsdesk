@@ -15,6 +15,10 @@
 // line), in that user's own daily file <company GUID>-<day>-<Windows user>.txt (userfile.go). Optional: older lines have
 // none. After tw, so an older bridge reads it as part of tw (a time it needs only when t0 is missing) and the line still
 // ends "|t1=...|src=live" as its reader requires.
+//
+// 2.4.1 (the owner's approval of 09-Oct-2026): "|dp=<the company's data folder>" right after tw, before w=
+// (FCR1|ev=|t0=|tw=|dp=|w=|cguid=...): optional (older lines have none; an empty one is none); a 2.4.0 bridge reads it as
+// part of tw, and its w= stays whole (datasource.go).
 package main
 
 import (
@@ -24,6 +28,7 @@ import (
 
 type recLine struct {
 	Ev, T0, Tw, CGUID, CName, User, Obj, GUID, MID, AID, VType, VNo, VDate, Name, Parent, Narr, T1 string
+	DP                                                                                             string // 2.4.1: the company's data folder ("" from an older add-on, or the add-on's placeholder)
 	W                                                                                              string // next-userfile: the Windows user ("" from an older add-on)
 	Src                                                                                            string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
 	// 2.2.2 (the bridge's own, never on a line): a pair's first half's GUID and AlterID (the AlterID before the save: a
@@ -85,6 +90,18 @@ func parseRecorderLine(l string) (recLine, bool) {
 		return recLine{}, false
 	}
 	head, narr, t1 := rest[:ni], rest[ni+len("|narr="):ti], rest[ti+len("|t1="):]
+	// 2.4.1: the company's data folder, "|dp=<path>" after tw (before w= and cguid=): taken out of the head; its value runs to
+	// the next "|w=" or "|cguid=" (a Windows path holds no "|"). A 2.4.0 bridge reads it as part of tw
+	dp := ""
+	if ci := strings.Index(head, "|cguid="); ci >= 0 {
+		if di := strings.Index(head[:ci], "|dp="); di >= 0 {
+			end := ci
+			if wi := strings.Index(head[di+1:ci], "|w="); wi >= 0 {
+				end = di + 1 + wi
+			}
+			dp, head = head[di+len("|dp="):end], head[:di]+head[end:]
+		}
+	}
 	vals := make([]string, len(recKeys))
 	pos, w := 0, ""
 	for i, k := range recKeys {
@@ -125,7 +142,7 @@ func parseRecorderLine(l string) (recLine, bool) {
 		t1, src = t1[:i], strings.TrimSpace(t1[i+len("|src="):])
 	}
 	return recLine{Ev: vals[0], T0: vals[1], Tw: vals[2], CGUID: vals[3], CName: vals[4], User: vals[5], Obj: vals[6], GUID: vals[7], MID: vals[8], AID: vals[9],
-		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1), Src: src, W: strings.TrimSpace(w)}, true
+		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1), Src: src, W: strings.TrimSpace(w), DP: strings.TrimSpace(dp)}, true
 }
 
 // every FCR1 line of a recorder file's text
