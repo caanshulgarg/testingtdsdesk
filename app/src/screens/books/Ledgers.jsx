@@ -130,7 +130,7 @@ function PleaseCheck({ b, items, lines }) {
         <td className="ac"><span className="led-act">
           <button className="btn small" data-led-keep-mine={x.n} onClick={() => LedPage.keepMine(b, x.n)}>Keep mine</button>
           {x.check && x.checkSays !== x.mine && <button className="btn small" data-led-use-check={x.n} onClick={() => LedPage.useCheck(b, x.n)}>Use the check’s</button>}</span></td></tr>)}
-      {lines.map((x) => <tr key={x.key} data-led-line={x.kind}><td>{x.text}</td><td className="ac">{x.act}</td></tr>)}
+      {lines.map((x) => <tr key={x.key} data-led-line={x.kind} data-key={x.n || x.key}><td>{x.text}</td><td className="ac">{x.act}</td></tr>)}
     </tbody></table>
   </section>;
 }
@@ -186,7 +186,7 @@ function Others({ b, rows }) {
 // Other notices: moved here from the top of the page, never lost
 function Notices({ b, cid }) {
   const items = [];
-  Ledgers.renamed(cid).forEach((l) => items.push({ key: "rn:" + l.name, kind: "renamed", text: <RenameLine cid={cid} name={l.name} /> }));
+  Ledgers.renamed(cid).forEach((l) => items.push({ key: "rn:" + l.name, n: l.name, kind: "renamed", text: <RenameLine cid={cid} name={l.name} /> }));
   const ch = LedMaster.changesSince(b);
   if (ch.length) items.push({ key: "changed", kind: "changed", text: <>{plural(ch.length, "ledger was", "ledgers were") + " changed after returns were made from them (" + (() => { const rs = [...new Set(ch.flatMap((x) => x.returns))]; return rs.slice(0, 3).join("; ") + (rs.length > 3 ? " and " + (rs.length - 3) + " more" : ""); })() + "). Check whether those returns need a revision or an amendment: "}
     {ch.slice(0, 10).map((x) => x.name).join(", ") + (ch.length > 10 ? " and " + (ch.length - 10) + " more" : "") + "."}</>,
@@ -195,7 +195,7 @@ function Notices({ b, cid }) {
   if (!items.length) return null;
   return <details className="led-fold" data-led-notices="">
     <summary>{"Other notices · " + items.length}</summary>
-    <table className="led-t nocards"><tbody>{items.map((x) => <tr key={x.key} data-notice={x.kind}><td>{x.text}</td><td className="ac">{x.act || null}</td></tr>)}</tbody></table>
+    <table className="led-t nocards"><tbody>{items.map((x) => <tr key={x.key} data-notice={x.kind} data-key={x.n || x.key}><td>{x.text}</td><td className="ac">{x.act || null}</td></tr>)}</tbody></table>
   </details>;
 }
 
@@ -214,7 +214,7 @@ export default function LedgersTab({ b }) {
   const lines = [];
   LedPage.unknown(cid).forEach((x) => lines.push({ key: x.key, kind: "unknown", text: x.text, act: readAct("unknown") }));
   if (typeof Rec === "object" && Rec.flow) Rec.flow().needs.filter((g) => g.cid === cid && g.kind === "masters").forEach((g) => lines.push({ key: "rec:" + g.key, kind: "masters", text: g.text, act: <NeedAction g={g} canApply={Rec.canWrite()} /> }));
-  LedCheck.diff(b).changed.forEach((x) => lines.push({ key: "use:" + x.n, kind: "used", text: x.n + ": used differently since it was confirmed (" + x.say + ").",
+  LedCheck.diff(b).changed.forEach((x) => lines.push({ key: "use:" + x.n, n: x.n, kind: "used", text: x.n + ": used differently since it was confirmed (" + x.say + ").",
     act: <button className="btn small" data-led-keep={x.n} onClick={() => LedPage.keepUse(b, x.n)}>Keep as confirmed</button> }));
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((x, y) => x.name.localeCompare(y.name));
   const okN = main.filter((r) => r.ok).length;

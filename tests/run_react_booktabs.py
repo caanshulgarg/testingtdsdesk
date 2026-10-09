@@ -28,38 +28,33 @@ with sync_playwright() as p:
     row = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; name = row.get_attribute("data-key")
     row.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(pend() == n0 - 1 and pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "Confirm: %s confirmed, one fewer to confirm" % name)
-    pg.click("#app [data-led-show-done]"); pg.wait_for_timeout(400)
+    # 2.4.1: the confirmed stay in place with a separate Undo (✓ is not a button)
     pg.locator('#app tr[data-key=%s] [data-led-undo]' % json.dumps(name)).click(); pg.wait_for_timeout(400)
-    ok(pend() == n0 and not pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "✓ Confirmed, clicked: undone")
-    pg.click("#app [data-led-show-done]"); pg.wait_for_timeout(300)
-    pg.click("#app [data-more-toggle=ledpage]"); pg.wait_for_timeout(300)
-    pg.click('nav[aria-label="Ledgers"] button:has-text("Other ledgers")'); pg.wait_for_timeout(400)
-    other = pg.locator("#lmTable tbody tr").first.get_attribute("data-key")
+    ok(pend() == n0 and not pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "Undo: not confirmed again")
+    # 2.4.1: other ledgers are folded at the bottom; Change marks one as tax
+    pg.click("#app details[data-led-other] > summary"); pg.wait_for_timeout(400)
+    other = pg.locator("#app table[data-led-table=other] tbody tr").first.get_attribute("data-key")
     box = pg.locator('input[aria-label="Find a ledger"]'); box.click(); pg.keyboard.type(other[:8], delay=15); pg.wait_for_timeout(600)
-    ok(pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Find a ledger" and pg.locator("#lmTable tbody tr").count() >= 1, "the find box filters as typed, keeping the cursor")
+    ok(pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Find a ledger" and pg.locator("#app table[data-led-table=other] tbody tr").count() >= 1, "the find box filters as typed, keeping the cursor")
+    pg.click('#app table[data-led-table=other] tr[data-key=%s] [data-led-change]' % json.dumps(other)); pg.wait_for_timeout(300)
     pg.select_option('select[aria-label="What %s is"]' % other, "tds_payable"); pg.wait_for_timeout(500)
     m = pg.evaluate("S.books.map[%s]" % json.dumps(other))
     ok(m["what"] == "tds_payable" and m["ok"], "an other ledger made a TDS ledger: kept, and confirmed as the user's own choice")
-    # now a confirmed TDS ledger: shown with the confirmed, changed there
-    pg.evaluate("lmViewGo('done')"); pg.wait_for_timeout(400)
-    pg.click('#app [data-led-table=tds] tr[data-key=%s] [data-led-change]' % json.dumps(other)); pg.wait_for_timeout(300)
+    # now a confirmed TDS ledger, in the main table; its section changed there
     sec = pg.locator('input[aria-label="Section of %s"]' % other); sec.fill("194j"); sec.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].section" % json.dumps(other)) == "194J", "its section typed, kept in capitals")
-    # review 18 (02-Oct-2026): what is chosen or typed on the page is saved with Save at its foot; Confirm buttons save at once
-    ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="books:ledgers"]'), "review 18: the ledger's kind and section are not saved until Save")
-    pg.click('#app [data-confirm-foot="books:ledgers"] [data-cfm="save"]'); pg.wait_for_timeout(400)
-    box.fill(""); pg.evaluate("S.ledEdit = ''; lmViewGo('pending')"); pg.wait_for_timeout(400)
-    for sec_ in ("gst", "tds"):
-        if pg.locator("#app [data-led-confirm-all=%s]" % sec_).count(): pg.click("#app [data-led-confirm-all=%s]" % sec_); pg.wait_for_timeout(500)
-    while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
-        pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
-    # a ledger FinCom could not tell is chosen by hand (Needs you), then confirmed
+    # 2.4.1 (Cause B): saved at once; no Save at the foot (it was a draft until Save, review 18)
+    ok(pg.locator('#app [data-confirm-foot="books:ledgers"]').count() == 0 and pg.evaluate("Drafts.hold('books:' + S.books.cid)") is False, "2.4.1: the ledger's kind and section are saved at once")
+    box.fill(""); pg.evaluate("S.ledEdit = ''; render()"); pg.wait_for_timeout(400)
+    if pg.locator("#app [data-led-confirm-agree]").count(): pg.click("#app [data-led-confirm-agree]"); pg.wait_for_timeout(500)
+    while pg.locator("#app table[data-led-table=main] tbody tr [data-led-confirm]").count():
+        pg.locator("#app table[data-led-table=main] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
+    # a ledger FinCom could not tell is chosen by hand, then confirmed
     for k in pg.evaluate("LedMaster.pending(S.books).map(([n]) => n)"):
         pg.evaluate("(n) => lmSet(n, 'what', 'none')", k); pg.wait_for_timeout(100)
-    ok(pend() == 0 and "No GST ledger to confirm." in pg.inner_text("#app"), "Confirm all: nothing left to confirm")
-    pg.click("#app [data-more-toggle=ledpage]") if pg.locator('nav[aria-label="Ledgers"]').count() == 0 else None; pg.wait_for_timeout(300)
-    pg.click('nav[aria-label="Ledgers"] button:has-text("What FinCom posts to")'); pg.wait_for_timeout(400)
-    ok("What FinCom posts bills to" in pg.inner_text("#app"), "What FinCom posts to: the posting ledgers")
+    ok(pend() == 0 and pg.locator("#app table[data-led-table=main] [data-led-confirm]").count() == 0, "Confirm all: nothing left to confirm")
+    # 2.4.1: "What FinCom posts to" is no longer a tab of the ledgers page; its rows are LedMaster.posting
+    ok(pg.evaluate("LedMaster.posting(S.books, CO()).some(x => x.from)"), "the posting ledgers come from the confirmed master")
     # Audit: run, open a finding, its status and note, an area, related parties, the 3CD draft
     pg.evaluate("() => { S.booksTab = 'audit'; S.books.stale = {}; render(); }"); pg.wait_for_timeout(500)
     pg.fill('input[aria-label="Audit from"]', "2025-04-01"); pg.fill('input[aria-label="Audit to"]', "2026-03-31")
@@ -203,7 +198,7 @@ with sync_playwright() as p:
     pg.evaluate("""() => { S.firm.ai = {on: true}; const st = AIH.ledgerStats().filter(x => !AIH.ruleTds(x)).map(x => x.l), ls = [st[0], st[1], Object.keys(S.books.map).sort()[2]], R = RULE_DEFAULTS[0]; window.__ls = ls;
       S.books.ai = {led: {[ls[0]]: {tds: R.id, reason: 'staff welfare'}, [ls[1]]: {tds: 'none', reason: 'bank charges'}}, tdsPay: {[ls[2]]: {rule: R.id, reason: 'contracts'}}, pairs: {},
         notices: [{id: 'n1', kind: 'gst', name: 'asmt.pdf', at: '2026-02-02T00:00:00Z', by: 'a@b.in', step: 'drafted', reply: 'Dear Sir', fields: {form: 'ASMT-10'}}], log: []};
-      S.booksTab = 'ledgers'; S.lmView = 'ai'; render(); }"""); pg.wait_for_timeout(600)
+      S.booksTab = 'audit'; S.auditTab = 'find'; S.auditAi = true; render(); }"""); pg.wait_for_timeout(600)   # 2.4.1: on the Audit tab
     ls = pg.evaluate("window.__ls")
     pg.click('tr[data-key=%s] button:text-is("Accept")' % json.dumps(ls[0])); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.ai.led[%s].tdsOk" % json.dumps(ls[0])) == "yes" and "accepted by" in pg.inner_text('tr[data-key=%s]' % json.dumps(ls[0])), "a suggestion accepted, with who")
@@ -211,9 +206,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("[S.books.ai.led[%s].tds, S.books.ai.led[%s].byHand]" % (json.dumps(ls[1]), json.dumps(ls[1]))) == ["unsure", True], "a section set by hand")
     pg.click('tr:has(td:text-is(%s)) button:text-is("Accept")' % json.dumps(ls[2])); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].section" % json.dumps(ls[2])) and pg.evaluate("!S.books.ai.tdsPay[%s]" % json.dumps(ls[2])), "a TDS ledger's section accepted")
-    pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; render(); }"); pg.wait_for_timeout(500)
+    pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; S.auditAi = false; render(); }"); pg.wait_for_timeout(500)
     pg.click('button:has-text("AI review of ledgers")'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("[S.booksTab, S.lmView]") == ["ledgers", "ai"], "the Audit button opens the AI review")
+    ok(pg.evaluate("[S.booksTab, !!S.auditAi]") == ["audit", True] and pg.locator("#app [data-audit-ai]").count() == 1, "the Audit button opens the AI review (2.4.1: on the Audit tab)")
     pg.evaluate("() => { S.booksTab = 'gst'; S.gstPart = 'notices'; render(); }"); pg.wait_for_timeout(500)
     ta = pg.locator('textarea[aria-label="Draft reply"]'); ta.fill("Dear Sir, corrected."); ta.press("Tab"); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.books.ai.notices[0].reply") == "Dear Sir, corrected.", "the draft reply, corrected, is kept")

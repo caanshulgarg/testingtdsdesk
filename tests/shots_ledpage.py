@@ -29,4 +29,10 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 1366, "height": 900})
     L.open_page(pg, "owner"); pg.evaluate(L.SET_DIFFERS, L.DIFFERS); pg.wait_for_timeout(500)
     shot("6-confirmed-differs-desktop", 1366)
+    if pg.evaluate("typeof LedPage === 'object' && typeof LedPage.confirmAgree === 'function'"):
+        # 2.4.1: after "Confirm N ledgers that FinCom and its check agree on" (the Undo line), and a confirmed ledger's Change
+        pg.evaluate("() => { LedPage.confirmAgree(S.books); }"); pg.wait_for_timeout(500)
+        shot("7-after-confirm-all-desktop", 1366)
+        pg.evaluate("() => { const d = document.querySelector('#app details[data-led-notices]'); if (d) d.open = true; const o = document.querySelector('#app details[data-led-other]'); if (o) o.open = true; }"); pg.wait_for_timeout(300)
+        shot("8-folds-open-desktop", 1366)
     br.close(); srv.shutdown()

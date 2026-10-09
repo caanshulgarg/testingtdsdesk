@@ -79,7 +79,7 @@ with sync_playwright() as p:
     ok("Add: tax on advances, 11A less 11B" in txt and "(B)(1) Reversed: rules 38, 42, 43 and section 17(5)" in txt, "3B shows advances and 4(B)(1)")
     pg.screenshot(path=OUT + "/r3b-jan.png", full_page=True)
     # Ledgers: mark 07 IGST INPUT as common credit through the select
-    pg.evaluate("LedMaster.refresh(S.books); S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = '07 IGST INPUT'; S.ledShowDone = true; S.ledEdit = '07 IGST INPUT'; render();"); pg.wait_for_timeout(500)
+    pg.evaluate("LedMaster.refresh(S.books); S.booksTab = 'ledgers'; S.ledQ = '07 IGST INPUT'; S.ledEdit = '07 IGST INPUT'; render();"); pg.wait_for_timeout(500)
     ks = pg.locator('select[aria-label="What 07 IGST INPUT is"]')
     ok(ks.count() == 1, "ledger row found")
     ks.select_option("gst_common"); pg.wait_for_timeout(400)

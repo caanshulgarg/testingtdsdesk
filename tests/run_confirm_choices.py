@@ -218,7 +218,8 @@ with sync_playwright() as p:
         EC("(t) => { S.tab = t; render(); }", tab); pc.wait_for_timeout(700 if tab in ("gstset", "bankset", "bankrules") else 300)
         ok(foot().count() >= 1, "Client setup → %s: the shared footer" % tab)
     EC("() => { S.tab = 'books'; S.booksTab = 'ledgers'; render(); }"); pc.wait_for_timeout(800)
-    ok(pc.locator('#app [data-confirm-foot="books:ledgers"]').count() == 1, "Tally ledgers (to confirm): the shared footer")
+    # 2.4.1 (the owner's decision, Cause B): the Tally ledgers page has no footer and no drafts; each step is saved at once
+    ok(pc.locator('#app [data-ledpage]').count() == 1 and pc.locator('#app [data-confirm-foot="books:ledgers"]').count() == 0, "Tally ledgers: no Save footer (each step saved at once)")
     EC("() => { S.tab = 'books'; S.booksTab = 'fs'; S.fsTab = 'map'; render(); }"); pc.wait_for_timeout(2500)
     ok(pc.locator('#app [data-confirm-foot="books:fs-map"]').count() == 1, "Accounts → Mapping: the shared footer")
     EC("() => { S.booksTab = 'mis'; render(); }"); pc.wait_for_timeout(1500)

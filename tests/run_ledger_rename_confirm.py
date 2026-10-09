@@ -45,8 +45,9 @@ SETUP = """([NEW, OLD, UNMAP]) => {
   };
   TCloud.rpc = async (fn, args) => { window.__rpc.push([fn, args]); if (fn === "tally_ledger_rename_confirm"){ window.__rows.filter(r => r.name === args.p_name).forEach(r => { r.needs_confirm = false; }); return {ok: true, cleared: 1}; } return []; };
   Cloud.api = async () => [];
-  S.booksTab = "ledgers"; S.lmView = "other"; render(); return c.id; }"""
-LOAD = "async (cid) => { const r = await Ledgers.load(cid, {force: true}); render(); await new Promise(r => setTimeout(r, 300)); return r; }"
+  S.booksTab = "ledgers"; render(); return c.id; }"""
+# 2.4.1: the rename lines are in the "Other notices" fold at the bottom of the page (opened here)
+LOAD = "async (cid) => { const r = await Ledgers.load(cid, {force: true}); render(); await new Promise(r => setTimeout(r, 300)); const d = document.querySelector('#app details[data-led-notices]'); if (d) d.open = true; return r; }"
 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
@@ -64,20 +65,20 @@ with sync_playwright() as p:
     ok(want in txt, "the line: " + txt[:200])
     ok("the new name already had a map choice; the new name's stands" in txt, "the clash is said: " + txt[:200])
     # FinCom 2.4.0: every rename to confirm is one line in Needs you, under the ledger's name, with its one action
-    ok(pg.locator("#app [data-led-needs] tr[data-need=renamed][data-key='%s'] [data-renamed]" % NEW).count() == 1, "the line sits under the ledger's name in Needs you")
+    ok(pg.locator("#app [data-led-notices] tr[data-notice=renamed][data-key='%s'] [data-renamed]" % NEW).count() == 1, "the line sits in Other notices, keyed by the ledger's name (2.4.1)")
     # review nit 8: one line and one Confirm per ledger on the whole page; the section above only lists ledgers without a row
     ok(line.count() == 1, "a flagged ledger in the map has exactly one line on the page (%d)" % line.count())
     ok(pg.locator("#app button[data-rename-confirm='%s']" % NEW).count() == 1, "and exactly one Confirm button (%d)" % pg.locator("#app button[data-rename-confirm='%s']" % NEW).count())
-    ok(pg.locator("#lmTable tr[data-key='%s']" % UNMAP).count() == 0, "a flagged ledger not in the map has no table row")
-    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1 and pg.locator("#app [data-led-needs] tr[data-key='%s'] [data-renamed='%s']" % (UNMAP, UNMAP)).count() == 1, "it has exactly one line, in Needs you (%d on the page)" % pg.locator("#app [data-renamed='%s']" % UNMAP).count())
+    ok(pg.locator("#app table[data-led-table] tr[data-key='%s']" % UNMAP).count() == 0, "a flagged ledger not in the map has no table row")
+    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1 and pg.locator("#app [data-led-notices] tr[data-key='%s'] [data-renamed='%s']" % (UNMAP, UNMAP)).count() == 1, "it has exactly one line, in Other notices (%d on the page)" % pg.locator("#app [data-renamed='%s']" % UNMAP).count())
     ok(pg.locator("#app [data-renamed='HDFC Bank']").count() == 0, "a ledger not flagged has no line")
-    btn = pg.locator("#app [data-led-needs] tr[data-key='%s'] button[data-rename-confirm]" % NEW)
+    btn = pg.locator("#app [data-led-notices] tr[data-key='%s'] button[data-rename-confirm]" % NEW)
     ok(btn.count() == 1 and btn.first.inner_text().strip() == "Confirm", "an owner sees a Confirm button")
     btn.first.click(); pg.wait_for_timeout(1200)
     calls = [c for c in E("window.__rpc") if c[0] != "tally_unknown_ledger_entries"]   # the page also reads the unknown-ledger list (migration 56)
     ok(calls == [["tally_ledger_rename_confirm", {"p_book": "bk-aad", "p_name": NEW}]], "Confirm calls tally_ledger_rename_confirm with p_book and p_name: %s" % calls)
     ok(pg.locator("#app [data-renamed='%s']" % NEW).count() == 0, "after confirm the list is read again and the line is gone")
-    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1, "the other ledger's line stays in Needs you")
+    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1, "the other ledger's line stays in Other notices")
     # when every flagged ledger has a row, the section is not rendered
     E("() => { window.__rows[0].needs_confirm = true; window.__rows[2].needs_confirm = false; }"); E(LOAD, cid)
     ok(pg.locator("#app [data-renamed='%s']" % NEW).count() == 1 and pg.locator("#app [data-renamed-list]").count() == 0, "one line for it and no separate Renamed section (%d)" % pg.locator("#app [data-renamed-list]").count())
@@ -95,7 +96,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-renamed]").count() == 0 and pg.locator("#app button[data-rename-confirm]").count() == 0, "no line and no button without the column")
     E("window.__sel = []"); E(LOAD, cid)
     ok(all("needs_confirm" not in s for s in E("window.__sel")), "the column is not asked for again once missing: %s" % E("window.__sel"))
-    ok(pg.locator("#lmTable tr[data-key='%s']" % NEW).count() == 1, "the ledgers tab still lists the ledger")
+    ok(pg.locator("#app table[data-led-table] tr[data-key='%s']" % NEW).count() == 1, "the ledgers tab still lists the ledger")
     ok(not errors, "no page errors: " + "; ".join(errors)[:300])
     br.close()
 print("\n%d failed" % len(fails) if fails else "\nall ok")
