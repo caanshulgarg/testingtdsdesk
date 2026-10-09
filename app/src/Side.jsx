@@ -52,6 +52,8 @@ export default function Side() {
           </div>)}
       {/* on the firm's own pages, the firm's menu instead of a client's (review item 29) */}
       {home && <>
+        {/* the Tally redesign (09-Oct-2026): on a firm page with a client open, the way back to it comes first */}
+        {open && typeof backToClient === "function" && <Item icon="dash" label={"\u2190 Back to " + open.name} onClick={() => backToClient()} />}
         <div className="side-firm-label">Firm</div>
         <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
         <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />

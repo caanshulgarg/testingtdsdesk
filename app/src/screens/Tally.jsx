@@ -439,6 +439,12 @@ function NeedsYou({ cards, latest, m, sources = null }) {
     <ul className="tneeds-list">{items}</ul>
   </section>;
 }
+// "GARG SHEKHAR (Alpha Traders ›)": the client a company read on a computer is linked to, a link to that client
+function ClientOf({ company, dev }) {
+  const l = (TCloud.pane.companies || []).find((c) => c.company === company && c.client_id && (!c.device_id || c.device_id === dev)), co = l && S.companies && S.companies[l.client_id];
+  if (!co || co.deleted) return null;
+  return <>{" ("}<button className="linkbtn" data-client-open={co.id} onClick={() => openCompany(co.id)}>{co.name + " \u203a"}</button>{")"}</>;
+}
 // the card's state in words
 function cardState(r, n) {
   if (r.go && !r.old && !r.online) return ["bad", "Not connected"];
@@ -465,7 +471,7 @@ function ComputerCard({ r, latest, m, focus }) {
       {live && <span style={{ marginLeft: "auto" }}><MoreToggle k={k} label="Details" less="Hide details" aria-label={"Details of " + pcName(r)} /></span>}
     </div>
     <div className="tcard-facts">
-      <div data-card-companies="">{cos.length ? <>{r.online ? "Reads " : "Read when last connected: "}<b>{cos.join(", ")}</b></> : <span className="note">{live && r.online ? "No company open in Tally" : "No company being read"}</span>}</div>
+      <div data-card-companies="">{cos.length ? <>{r.online ? "Reads " : "Read when last connected: "}{cos.map((c, i) => <span key={c}>{i > 0 && ", "}<b>{c}</b><ClientOf company={c} dev={r.device.id} /></span>)}</> : <span className="note">{live && r.online ? "No company open in Tally" : "No company being read"}</span>}</div>
       <div data-card-last="">{last ? "Last entry received " + whenWords(last) : <span className="note">No entry received yet</span>}</div>
     </div>
     <div data-status-line="" data-bridge-line={r.id || "old"} data-level={n ? (lv === "ok" ? "warn" : lv) : lv} className="tcard-line">

@@ -21,7 +21,10 @@ const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "own
 function linkOf(co) {
   const tl = (typeof TLight === "object" && TLight.st) || {}, cos = tl.cos || (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || [];
   const link = cos.find((c) => String(c.client_id || "") === String(co.id));
-  return { company: (link && link.company) || "", seen: cos };
+  // the last entry Tally's change recorder sent for that company (the computer's heartbeat), as the Tally page's card says it
+  const dev = link && link.device_id && (tl.devs || []).find((d) => d.id === link.device_id);
+  let last = ""; try { const rc = dev && typeof Rec === "object" && Rec.recOf ? Rec.recOf(dev) : null, x = rc && link.company ? rc[link.company] : null; last = (x && x.lastAt) || ""; } catch (e) { last = ""; }
+  return { company: (link && link.company) || "", seen: cos, last };
 }
 // the held lines of this client, by what a person must do (Rec.needKind): daybook (with dupid), baseline, other
 function heldNeeds(cid) {
@@ -44,7 +47,7 @@ function ChangeCompany({ co, cur, seen, done }) {
 export default function TallyLink({ co, where = "setup", b = null }) {
   const [pick, setPick] = useState(false);
   if (!co) return null;
-  const l = typeof tallyLine === "function" ? tallyLine(co) : null, { company, seen } = linkOf(co), owner = isOwner();
+  const l = typeof tallyLine === "function" ? tallyLine(co) : null, { company, seen, last: recLast } = linkOf(co), owner = isOwner();
   const cloud = typeof TCloud === "object" && TCloud.on();
   const openTally = () => (typeof openTallyFor === "function" ? openTallyFor(co.id) : navHome("tally"));
   const tallyBtn = <button className="linkbtn" data-tally-link-page="" onClick={openTally}>Tally page</button>;
@@ -59,7 +62,7 @@ export default function TallyLink({ co, where = "setup", b = null }) {
     </ol>
   </section>;
   const [lv, word] = l ? STATE[l.state] || [l.level, l.text] : ["warn", "Not connected"];
-  const last = l && l.read ? tallyHm(l.read) : "";
+  const lastAt = [l && l.read, recLast].filter(Boolean).sort().pop() || "", last = lastAt ? tallyHm(lastAt) : "";
   const text = "Linked to " + (company || co.tallyName || "its Tally company") + (l && l.computer ? " on " + l.computer : "") + " · last entry " + (last || "not received yet");
   // what a person must do, one line each
   const h = heldNeeds(co.id), books = b || (S.books && S.books.cid === co.id ? S.books : null);
@@ -71,7 +74,7 @@ export default function TallyLink({ co, where = "setup", b = null }) {
     <button className="btn small primary" data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</button></li>);
   if (h.baseline) needs.push(<li key="baseline" data-tally-need="baseline"><span>{"The starting point of " + (company || "this company") + " is not recorded yet: " + plural(h.baseline, "entry waits", "entries wait")}</span>
     <button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</button></li>);
-  if (h.other) needs.push(<li key="held" data-tally-need="held"><span>{plural(h.other, "entry from Tally is", "entries from Tally are") + " held and need a look"}</span>
+  if (h.other) needs.push(<li key="held" data-tally-need="held"><span>{(h.other === 1 ? "1 entry from Tally is held and needs a look" : h.other + " entries from Tally are held and need a look")}</span>
     <button className="btn small" data-tally-need-held="" onClick={() => Rec.openActivity(co.id, "held")}>See them</button></li>);
   const stopped = l && l.state === "stopped";
   return <section className="tlink" data-tally-link={l ? l.state : "linked"}>

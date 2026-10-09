@@ -132,6 +132,20 @@ def main():
         # the sidebar's Tally (no focus) still has the Back link: the open client is kept
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); pg.wait_for_timeout(600)
         ok(pg.locator(back).count() == 1 and pg.locator('#app [data-tally-focus]').count() == 0, "1. the Tally page from the sidebar: Back link, no focus line")
+        sb = pg.locator('#side button[aria-label="\u2190 Back to Alpha Traders"]')
+        ok(sb.count() == 1, "1. the sidebar's first item on a firm page: '\u2190 Back to Alpha Traders'")
+        sb.click(); pg.wait_for_timeout(1200)
+        ok(state()[1] == "company" and state()[2] == cid, "1. the sidebar's Back opens the client (%s)" % state())
+        E("() => navHome('tally')"); pg.wait_for_timeout(800)
+        # a refresh on #/tally keeps the client (start() no longer drops it for a firm page's address)
+        E("() => { lsSet('tdsdesk:last', S.coId); }")
+        pg.reload(); pg.wait_for_timeout(2500)
+        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        if E("!!S.companies[%r]" % cid):
+            s = state()
+            ok(s[0] == "#/tally" and s[2] == cid and pg.locator(back).count() == 1, "1. after a refresh on #/tally the client is kept, with its Back link (%s)" % s)
+        else: print("  note the offline client is not kept across a reload here; the refresh check is skipped")
+        scene(DEVS, LINKED); E("() => navHome('tally')"); pg.wait_for_timeout(1200)
 
         # ---- 2. Your Tally connection: Needs you, cards, Details folded
         ok(txt("#cobar h1, #cobar .title, #cobar") .find("Your Tally connection") >= 0, "A. the page is called 'Your Tally connection'")
@@ -143,7 +157,7 @@ def main():
         ok(pg.locator("#app [data-computer]").count() == 4, "A. one card a computer and Windows user")
         c1 = '#app [data-computer="%s"]' % D1
         ok(txt(c1 + " [data-card-name]") == "NWS144 \u00b7 anshul" and pg.get_attribute(c1, "data-card-state") == "Connected", "A. card 'NWS144 \u00b7 anshul', Connected (%s)" % txt(c1 + " [data-card-name]"))
-        ok(txt(c1 + " [data-card-companies]") == "Reads GARG SHEKHAR", "A. the companies it reads (%s)" % txt(c1 + " [data-card-companies]"))
+        ok(txt(c1 + " [data-card-companies]") == "Reads GARG SHEKHAR (Alpha Traders \u203a)", "A. the companies it reads, with the client's link (%s)" % txt(c1 + " [data-card-companies]"))
         ok(re.match(r"^Last entry received 2 min ago \(\d\d:\d\d IST\)$", txt(c1 + " [data-card-last]")) is not None, "A. the last entry, IST (%s)" % txt(c1 + " [data-card-last]"))
         ok(pg.get_attribute('#app [data-computer="%s"]' % D2, "data-card-state") == "Not connected" and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-card-state") == "Needs you",
            "A. Not connected / Needs you in words")
@@ -227,7 +241,7 @@ def main():
         E("(cid) => openCompany(cid)", cid); pg.wait_for_timeout(500)
         scene(DEVS, LINKED); E("() => goClient('books:import')"); pg.wait_for_timeout(1200)
         lt = txt(link + " [data-tally-link-text]")
-        ok(re.match(r"^Linked to GARG SHEKHAR on NWS144 \u00b7 last entry (\d\d:\d\d IST|not received yet) \u00b7 Connected$", lt) is not None, "5. linked: one line (%r)" % lt)
+        ok(re.match(r"^Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d IST \u00b7 Connected$", lt) is not None, "5. linked: one line (%r)" % lt)
         ok(pg.locator(link + " [data-update-now]").count() == 1 and pg.locator(link + " [data-tally-link-change]").count() == 1, "5. linked: Update now and Change company")
         ok(pg.locator("#app [data-upload-page] [data-update-now]").count() == 1, "5. From Tally: Update now once (on the link line)")
         pg.click(link + " [data-tally-link-change]"); pg.wait_for_timeout(300)
@@ -238,9 +252,9 @@ def main():
         shot("client-linked")
         # held entries: that day's Day Book (and one other held line)
         scene(DEVS, LINKED, lines=HELD)
-        E("() => { if (typeof Rec === 'object' && Rec.loadHeld) Rec.loadHeld(); if (typeof AlertHub === 'object' && AlertHub.refresh) AlertHub.refresh(); render(); }"); pg.wait_for_timeout(2500)
+        E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(2000); E("() => render()"); pg.wait_for_timeout(500)
         nd = E("() => [...document.querySelectorAll('#app [data-tally-link-needs] li')].map(li => [li.getAttribute('data-tally-need'), li.innerText.replace(/\\s+/g, ' ').trim()])")
-        ok(any(n[0] == "daybook" and "Day Book" in n[1] and n[1].endswith("Upload") for n in nd) or not E("typeof AlertHub === 'object' && AlertHub.heldFor([S.coId]).length"),
+        ok(any(n[0] == "daybook" and "Day Book" in n[1] and n[1].endswith("Upload") for n in nd) and any(n[0] == "held" and n[1].endswith("See them") for n in nd),
            "5. held entries: one line with Upload (%s)" % nd)
         shot("client-held")
         # stopped: the line says it, Resume for an owner
