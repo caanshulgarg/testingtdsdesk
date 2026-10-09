@@ -1,0 +1,330 @@
+[14:36:09] ---- c1 install and open the company (TallyPrime 6.2)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 17026752 bytes, 2026-10-09, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 10 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>6</PRODMAJORREL><PRODMINORREL>2</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 6 PRODMINORREL 2 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-09, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 10 ms, 'FinCom Spike Co' in it: True
+[14:36:42] ---- the stub cloud and the bridge
+[ledger Spike Income] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[renum journal] 29 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.1.exe SHA-256 63bdfabbfd6adbf9aef11618e8714882fc7f3f44600badf263cb864c064fd850; bridge source: 0f436f6c906283396e6940167fde920d52acfdc1 Add-on 2.4.1: the measured data-folder formula in place of FCRDataPath; the data id trims trailing backslashes
+[14:36:46] ---- dsrc seed: the D4 voucher type, folder 2 copied from folder 1, Tally on folder 1
+[dsrc voucher type] 9 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dsrc: voucher type 'D4 Manual' (manual numbering, duplicates allowed): <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+  INFO dsrc: folder 2 made: D:\a\_temp\TallyData2\100000 (16 files; folder 1 16 files); data ids: folder 1 24a82933860657e3, folder 2 095a59eb8231e2f8
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-001-ds-seed-f1-start-0 (1024x768)
+[14:37:27] [tds] screen tds-001-ds-seed-f1-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Thursday, I-Oct-2026 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q I-Oct-26 Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Data...
+[14:37:29] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1280)
+  INFO dsrc seed-f1: Tally (port 9000) started on D:\a\_temp\TallyData (pid 2424): port up True, 'FinCom Spike Co' loaded True, proxy True
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-09 14:37:33  FinCom Bridge 2.4.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-09 14:37:33  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-09 14:37:33  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-09 14:37:33  Recorder: re-scan of the add-on's files for 2.4.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-09 14:37:33  Check:  - 
+  bridge log: 2026-10-09 14:37:36  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-09 14:37:36  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-09 14:37:36  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-09 14:37:36  Company FinCom Spike Co: its Tally GUID 85fc9722-6637-4c63-8d5a-7c543f666589 is held from now on
+  bridge log: 2026-10-09 14:37:36  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=213 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-09 14:37:36  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=213
+  bridge log: 2026-10-09 14:37:36  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=213)
+  bridge log: 2026-10-09 14:37:36  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=2 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  INFO add-on: recorder files after start: none
+[14:38:19] ---- dsrc: one company in two data folders (bridge 2.4.1)
+  INFO dsrc: folder 1 D:\a\_temp\TallyData\100000 (data id 24a82933860657e3); folder 2 D:\a\_temp\TallyData2\100000 (data id 095a59eb8231e2f8); bridge 2.4.1 on port 9100
+  INFO dsrc: the bridge recorded the starting point: True
+[shot] tds-001-gw0 (1024x768)
+[14:38:20] [tds] screen tds-001-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Thursday, I-Oct-2026 I-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Data...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d1-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '711{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d1-saved (1024x768)
+[shot] tds-002-gw0 (1024x768)
+[14:38:59] [tds] screen tds-002-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 2 • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Adjustment El 2: Configure Mode Win...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-003-gw1 (1024x768)
+[14:39:04] [tds] screen tds-003-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 2 • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X:...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-004-gw2 (1024x768)
+[14:39:08] [tds] screen tds-004-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d1: Tally (port 9000) made Receipt no 1 of 20261002 mid 3 AlterID 3 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000003
+######## PASS d1 a save in folder 1 (the bridge's own Tally): applied, its line with dp= of folder 1: Receipt no 1 mid 3 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000003; the add-on's line: FCR1|ev=voucher_accept_post|t0=9-Oct-26 14:38|tw=9-Oct-26 14:38|dp=D:\a\_temp\TallyData\100000|w=runneradmin|cguid=85fc9722-6637-4c63-8d5a-7c543f666589|cname=FinCom Spike Co|user=TALLY User|obj=Voucher|guid=85fc9722-6637-4c63-8d5a-7c543f666589-00000000|mid=3|aid=0|vtype=Receipt|vno=1|vdate=2-Oct-26|name=|parent=|narr=|t1=9-Oct-2; dp='D:\a\_temp\TallyData\100000' (folder 1 'D:\a\_temp\TallyData\100000', equal: True); stub 14:38:49 event=created guid='85fc9722-6637-4c63-8d5a-7c543f666589-00000003' mid='3' vch=Receipt/1/20261002 data_id='24a82933860657e3' data_path='' w='' body=yes(876 chars) answer=applied; data id expected 24a82933860657e3
+  INFO dsrc: the bridge's recorder-data.json: own / chosen: {"chosen":{"85fc9722-6637-4c63-8d5a-7c543f666589":{"company":"FinCom Spike Co","id":"24a82933860657e3"}},"own":{"85fc9722-6637-4c63-8d5a-7c543f666589":{"at":"2026-10-09T14:38:49","cguid":"85fc9722-6637-4c63-8d5a-7c543f666589","company":"FinCom Spike Co","id":"24a82933860657e3","path":"D:\\a\\_temp\\TallyData\\100000","w":"runneradmin"}}}; company GUID in the beat '85fc9722-6637-4c63-8d5a-7c543f666589'
+[14:39:11] ---- dsrc d4: the fallback by number
+[d4 d4 early] 17 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>4</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dsrc d4: 'd4 early' by XML: <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>; in Tally: D4 Manual no 'D4-EARLY' of 20261002 mid 4 AlterID 4 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000004
+  INFO dsrc d4: the add-on's pair of lines written to 85fc9722-6637-4c63-8d5a-7c543f666589-9-Oct-26-runneradmin.txt for D4 Manual 'D4-EARLY' of 2-Oct-26 with the older entry's MasterID 2 (AlterID 2), GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000002
+  INFO dsrc d4 (item 6): D4-EARLY with the starting day today: FinComVoucherByNumber at the proxy 0; the bridge's log: 2026-10-09 14:39:12  Tally 9000: FinComVoucherByNumber refused before sending: the date is before the company's starting day (09-Oct-2026)
+  INFO dsrc d4: start-point.json before: {"fincom spike co|85fc9722-6637-4c63-8d5a-7c543f666589":{"altmstid":213,"altvchid":2,"at":"2026-10-09T14:37:36","company":"FinCom Spike Co","guid":"85fc9722-6637-4c63-8d5a-7c543f666589"}}; after: {"fincom spike co|85fc9722-6637-4c63-8d5a-7c543f666589":{"altmstid":213,"altvchid":2,"at":"2026-10-01T14:37:36","company":"FinCom Spike Co","guid":"85fc9722-6637-4c63-8d5a-7c543f666589"}}
+[d4 d4 one] 17 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>5</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dsrc d4: 'd4 one' by XML: <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>; in Tally: D4 Manual no 'D4-ONE' of 20261002 mid 5 AlterID 5 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000005
+[d4 d4 two a] 17 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dsrc d4: 'd4 two a' by XML: <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>; in Tally: D4 Manual no 'D4-TWO' of 20261002 mid 6 AlterID 6 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000006
+[d4 d4 two b] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>7</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dsrc d4: 'd4 two b' by XML: <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>7</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>; in Tally: D4 Manual no 'D4-TWO' of 20261002 mid 7 AlterID 7 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000007
+  INFO dsrc d4: the add-on's pair of lines written to 85fc9722-6637-4c63-8d5a-7c543f666589-9-Oct-26-runneradmin.txt for D4 Manual 'D4-ONE' of 2-Oct-26 with the older entry's MasterID 2 (AlterID 2), GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000002
+  INFO dsrc d4: the add-on's pair of lines written to 85fc9722-6637-4c63-8d5a-7c543f666589-9-Oct-26-runneradmin.txt for D4 Manual 'D4-TWO' of 2-Oct-26 with the older entry's MasterID 2 (AlterID 2), GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000002
+  INFO dsrc d4: the add-on's pair of lines written to 85fc9722-6637-4c63-8d5a-7c543f666589-9-Oct-26-runneradmin.txt for D4 Manual 'D4-NONE' of 2-Oct-26 with the older entry's MasterID 2 (AlterID 2), GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000002
+######## FAIL d4 the fallback by number: asked once, answered within 2 s, taken only when exactly one voucher matches: ONE (D4-ONE; Tally has 1 with that number): MasterID asks of 2 at the proxy: FinComVoucherObject 27 ms, FinComVoucherObject 8 ms, FinComVoucherObject 26 ms; FinComVoucherByNumber asks: 1 [D4 Manual/D4-ONE/20261002 35 ms status 200 vouchers in the answer 2]; the line(s): stub 14:39:58 event=created guid='85fc9722-6637-4c63-8d5a-7c543f666589-00000005' mid='5' vch=D4 Manual/D4-ONE/20261002 data_id='24a82933860657e3' data_path='' w='' body=yes(946 chars) answer=applied || TWO (D4-TWO; Tally has 2 with that number): MasterID asks of 2 at the proxy: FinComVoucherObject 8 ms, FinComVoucherObject 26 ms; FinComVoucherByNumber asks: 1 [D4 Manual/D4-TWO/20261002 47 ms status 200 vouchers in the answer 3]; the line(s): stub 14:40:38 event=created guid='' mid='2' vch=D4 Manual/D4-TWO/20261002 data_id='24a82933860657e3' data_path='' w='' body=none answer=applied held='the voucher with that MasterID in this Tally is an older entry, not this save; 2 entries with that type and number on that date' || NONE (D4-NONE; Tally has 0 with that number): MasterID asks of 2 at the proxy: FinComVoucherObject 26 ms; FinComVoucherByNumber asks: 1 [D4 Manual/D4-NONE/20261002 29 ms status 200 vouchers in the answer 1]; the line(s): stub 14:41:19 event=created guid='' mid='2' vch=D4 Manual/D4-NONE/20261002 data_id='24a82933860657e3' data_path='' w='' body=none answer=applied held='the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual D4-NONE of 02-Oct-2026'; not as expected: ONE, TWO, NONE; item 6 (starting day today): FinComVoucherByNumber at the proxy for D4-EARLY 0, the log: 2026-10-09 14:39:12  Tally 9000: FinComVoucherByNumber refused before sending: the date is before the company's starting day (09-Oct-2026); the bridge's log: 2026-10-09 14:39:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save) / 2026-10-09 14:39:12  Tally 9000: FinComVoucherByNumber refused before sending: the date is before the company's starting day (09-Oct-2026) / 2026-10-09 14:39:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): held: the voucher with that MasterID in this Tally is an older entry, not this save; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved) / 2026-10-09 14:39:57  Recorder: D4 Manual D4-ONE of 02-Oct-2026 (MasterID 2, line 9392cc82…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save) / 2026-10-09 14:40:37  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save) / 2026-10-09 14:40:38  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): held: the voucher with that MasterID in this Tally is an older entry, not this save; 2 entries with that type and number on that date (sent without its body and GUID; FinCom holds the line until it is resolved) / 2026-10-09 14:41:18  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save) / 2026-10-09 14:41:19  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): held: the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual D4-NONE of 02-Oct-2026 (sent without its body and GUID; FinCom holds the line until it is resolved)
+[14:42:16] ---- dsrc d2: Tally on folder 2
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-005-ds-d2-f2-start-0 (1024x768)
+[14:42:52] [tds] screen tds-005-ds-d2-f2-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Thursday, I-Oct-2026 I-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Data...
+[14:42:54] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1496)
+  INFO dsrc d2-f2: Tally (port 9000) started on D:\a\_temp\TallyData2 (pid 1452): port up True, 'FinCom Spike Co' loaded True, proxy True
+[shot] tds-006-gw0 (1024x768)
+[14:43:15] [tds] screen tds-006-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Thursday, I-Oct-2026 I-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Data...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d2-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '722{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d2-saved (1024x768)
+[shot] tds-007-gw0 (1024x768)
+[14:43:49] [tds] screen tds-007-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 2 • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Adjustment El 2: Configure Mode Win...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-gw1 (1024x768)
+[14:43:53] [tds] screen tds-008-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 2 • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X:...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-009-gw2 (1024x768)
+[14:43:57] [tds] screen tds-009-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d2: Tally (port 9000) made Receipt no 1 of 20261002 mid 3 AlterID 3 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000003
+######## PASS d2 a save in folder 2 (one Tally, one folder at a time): never fetched, never applied; other_source with folder 2's data id, no body: folder 2 Receipt no 1 mid 3 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000003 (folder 1's d1 entry had mid 3); the add-on's dp='D:\a\_temp\TallyData2\100000' (folder 2: True); stub 14:43:44 event=other_source of=created guid='' mid='' vch=Receipt/1/20261002 data_id='095a59eb8231e2f8' data_path='D:\a\_temp\TallyData2\100000' w='runneradmin' body=none answer=held; voucher requests for it at the proxy in 180 s: none; lines of it sent as an entry: none; data id expected 095a59eb8231e2f8; the bridge's log: 2026-10-09 14:43:44  Recorder: FinCom Spike Co: a save in another data location of the company (D:\a\_temp\TallyData2\100000) is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent) / 2026-10-09 14:43:44  Recorder: Receipt 1 of 02-Oct-2026 (MasterID none, line d0c25e61…): not asked: saved in another data location of the company (D:\a\_temp\TallyData2\100000); sent to FinCom as such, without the entry
+[14:44:57] ---- dsrc d2b: Tally on folder 1 and a second Tally on folder 2
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-010-ds-d2b-f1-start-0 (1024x768)
+[14:45:31] [tds] screen tds-010-ds-d2b-f1-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[14:45:33] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 5480)
+  INFO dsrc d2b-f1: Tally (port 9000) started on D:\a\_temp\TallyData (pid 3932): port up True, 'FinCom Spike Co' loaded True, proxy True
+[keys] 'a' -> Tally 'TallyPrime:9001'
+[keys] 't' -> Tally 'TallyPrime:9001'
+[shot] tds-011-ds-d2b-f2-start-0 (1024x768)
+[14:46:04] [tds] screen tds-011-ds-d2b-f2-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d2b-f2: a second Tally (C:\fcspike\tally2\tally.exe, port 9001) started on D:\a\_temp\TallyData2 (pid 1784): exited False, port up True, 'FinCom Spike Co' loaded True; Tally on 9000 still up: True
+[shot] tds-012-gw0 (1024x768)
+[14:46:25] [tds] screen tds-012-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9001'
+[shot] v-ds-d2b-f2-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9001'
+[keys] '{F2}' -> Tally 'TallyPrime:9001'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] '733{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] '^a' -> Tally 'TallyPrime:9001'
+[shot] v-ds-d2b-f2-saved (1024x768)
+[shot] tds-013-gw0 (1024x768)
+[14:47:00] [tds] screen tds-013-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Search Adjustment El 2: Configure Mode Windows S...
+[keys] '{ESC}' -> Tally 'TallyPrime:9001'
+[shot] tds-014-gw1 (1024x768)
+[14:47:03] [tds] screen tds-014-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X: Cancel Vch Q Search ¯ Adjustment Ye...
+[keys] 'y' -> Tally 'TallyPrime:9001'
+[shot] tds-015-gw2 (1024x768)
+[14:47:07] [tds] screen tds-015-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d2b-f2: Tally (port 9001) made Receipt no 2 of 20261002 mid 4 AlterID 4 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000004
+[shot] tds-016-gw0 (1024x768)
+[14:47:08] [tds] screen tds-016-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d2b-f1-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '734{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d2b-f1-saved (1024x768)
+[shot] tds-017-gw0 (1024x768)
+[14:47:43] [tds] screen tds-017-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Search Adjustment El 2: Configure Mode Windows S...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-018-gw1 (1024x768)
+[14:47:46] [tds] screen tds-018-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X: Cancel Vch Q Search ¯ Adjustment Ye...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-019-gw2 (1024x768)
+[14:47:50] [tds] screen tds-019-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d2b-f1: Tally (port 9000) made Receipt no 2 of 20261002 mid 8 AlterID 8 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000008
+######## PASS d2b a save in folder 2 with two Tallys at once: never fetched, never applied; other_source with folder 2's data id, no body: second Tally (9001, folder 2) Receipt no 2 mid 4; dp='D:\a\_temp\TallyData2\100000'; stub 14:46:54 event=other_source of=created guid='' mid='' vch=Receipt/2/20261002 data_id='095a59eb8231e2f8' data_path='D:\a\_temp\TallyData2\100000' w='runneradmin' body=none answer=held; voucher requests for it at the proxy: none; folder 2 lines sent as an entry: none. Beside it, Tally on folder 1 (9000) Receipt no 2 mid 8: (no line)
+[14:50:40] ---- dsrc d3: FinCom chooses folder 2
+  INFO dsrc d3: the stub's choice set to folder 2 (095a59eb8231e2f8) for '85fc9722-6637-4c63-8d5a-7c543f666589': {"ok":true,"chosen":{"85fc9722-6637-4c63-8d5a-7c543f666589":"095a59eb8231e2f8"},"fresh":{"85fc9722-6637-4c63-8d5a-7c543f666589":"pending"}}
+  INFO dsrc d3: the bridge: 2026-10-09 14:50:42  Recorder: FinCom Spike Co: FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's); recorder-data.json {"chosen":{"85fc9722-6637-4c63-8d5a-7c543f666589":{"company":"FinCom Spike Co","id":"095a59eb8231e2f8"}},"own":{"85fc9722-6637-4c63-8d5a-7c543f666589":{"at":"2026-10-09T14:38:49","cguid":"85fc9722-6637-4c63-8d5a-7c543f666589","company":"FinCom Spike Co","id":"24a82933860657e3","path":"D:\\a\\_temp\\TallyData\\100000","w":"runneradmin"}}}
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-020-ds-d3-f2-start-0 (1024x768)
+[14:51:18] [tds] screen tds-020-ds-d3-f2-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[14:51:20] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1460)
+  INFO dsrc d3-f2: Tally (port 9000) started on D:\a\_temp\TallyData2 (pid 1952): port up True, 'FinCom Spike Co' loaded True, proxy True
+[shot] tds-021-gw0 (1024x768)
+[14:51:41] [tds] screen tds-021-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f2a-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '741{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f2a-saved (1024x768)
+[shot] tds-022-gw0 (1024x768)
+[14:52:15] [tds] screen tds-022-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 4 • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Adjustment El 2: Configure Mode Win...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-023-gw1 (1024x768)
+[14:52:19] [tds] screen tds-023-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 4 • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X:...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-024-gw2 (1024x768)
+[14:52:23] [tds] screen tds-024-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d3-f2a: Tally (port 9000) made Receipt no 3 of 20261002 mid 5 AlterID 5 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000005
+[shot] tds-025-gw0 (1024x768)
+[14:52:24] [tds] screen tds-025-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f2b-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '742{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f2b-saved (1024x768)
+[shot] tds-026-gw0 (1024x768)
+[14:53:01] [tds] screen tds-026-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Adjustment El 2: Configure Mode Windows S...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-027-gw1 (1024x768)
+[14:53:05] [tds] screen tds-027-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X: Cance...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-028-gw2 (1024x768)
+[14:53:09] [tds] screen tds-028-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d3-f2b: Tally (port 9000) made Receipt no 4 of 20261002 mid 6 AlterID 6 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000006
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-029-ds-d3-f1-start-0 (1024x768)
+[14:53:43] [tds] screen tds-029-ds-d3-f1-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[14:53:45] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1920)
+  INFO dsrc d3-f1: Tally (port 9000) started on D:\a\_temp\TallyData (pid 7760): port up True, 'FinCom Spike Co' loaded True, proxy True
+[shot] tds-030-gw0 (1024x768)
+[14:54:06] [tds] screen tds-030-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f1-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '743{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-ds-d3-f1-saved (1024x768)
+[shot] tds-031-gw0 (1024x768)
+[14:54:41] [tds] screen tds-031-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 4 • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Adjustment El 2: Configure Mode Win...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-032-gw1 (1024x768)
+[14:54:44] [tds] screen tds-032-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t No. 4 • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X:...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-033-gw2 (1024x768)
+[14:54:48] [tds] screen tds-033-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d3-f1: Tally (port 9000) made Receipt no 3 of 20261002 mid 9 AlterID 9 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000009
+######## PASS d3 FinCom chooses folder 2: after a fresh starting point folder 2's new saves applied, folder 1's held: the bridge: 2026-10-09 14:50:42  Recorder: FinCom Spike Co: FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's); folder 2's first save (Receipt 3 mid 5): stub 14:52:10 event=created guid='85fc9722-6637-4c63-8d5a-7c543f666589-00000005' mid='5' vch=Receipt/3/20261002 data_id='095a59eb8231e2f8' data_path='' w='' body=yes(876 chars) answer=applied; the stub's fresh starting point: at 14:52:12 for data id 095a59eb8231e2f8 (startPoint {"FinCom Spike Co":{"altmstid":213,"altvchid":2,"at":"2026-10-01T14:37:36","guid":"85fc9722-6637-4c63-8d5a-7c543f666589"}}); folder 2's save after it (Receipt 4 mid 6): stub 14:52:57 event=created guid='85fc9722-6637-4c63-8d5a-7c543f666589-00000006' mid='6' vch=Receipt/4/20261002 data_id='095a59eb8231e2f8' data_path='' w='' body=yes(876 chars) answer=applied; folder 1's save (Receipt 3 mid 9): stub 14:54:35 event=other_source of=created guid='' mid='' vch=Receipt/3/20261002 data_id='24a82933860657e3' data_path='D:\a\_temp\TallyData\100000' w='runneradmin' body=none answer=held; voucher requests for it at the proxy: none; folder 1 lines applied after the choice: none
+[14:55:35] ---- dsrc d3b: folder 2 chosen; Tally on folder 1 and the second Tally on folder 2
+[keys] 'a' -> Tally 'TallyPrime:9001'
+[keys] 't' -> Tally 'TallyPrime:9001'
+[shot] tds-034-ds-d3b-f2-start-0 (1024x768)
+[14:56:08] [tds] screen tds-034-ds-d3b-f2-start-0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d3b-f2: a second Tally (C:\fcspike\tally2\tally.exe, port 9001) started on D:\a\_temp\TallyData2 (pid 5840): exited False, port up True, 'FinCom Spike Co' loaded True; Tally on 9000 still up: True
+[shot] tds-035-gw0 (1024x768)
+[14:56:29] [tds] screen tds-035-gw0 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9001'
+[shot] v-ds-d3b-f2-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9001'
+[keys] '{F2}' -> Tally 'TallyPrime:9001'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] '751{ENTER}' -> Tally 'TallyPrime:9001'
+[keys] '^a' -> Tally 'TallyPrime:9001'
+[shot] v-ds-d3b-f2-saved (1024x768)
+[shot] tds-036-gw0 (1024x768)
+[14:57:04] [tds] screen tds-036-gw0 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Quit Z: Exchange A Accept O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete x: Cancel Vch Q Search Adjustment El 2: Configure Mode Windows S...
+[keys] '{ESC}' -> Tally 'TallyPrime:9001'
+[shot] tds-037-gw1 (1024x768)
+[14:57:07] [tds] screen tds-037-gw1 : EDU Prime K: Company Y: Data Accounting Voucher Creation Recei t • Account Current balance: Particulars Narration: Unity Q: Quit Z: Exchange A: Accept O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat to run on_id 970—0 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName D: Delete X: Cancel Vch Q Search ¯ Adjustment Ye...
+[keys] 'y' -> Tally 'TallyPrime:9001'
+[shot] tds-038-gw2 (1024x768)
+[14:57:11] [tds] screen tds-038-gw2 : EDU Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 O: Import E: Export M: Share p: print Fl: Help Date to run on_id 970—0 I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search Company 6+80— 67602 ' , "orc 3+636 76026 .337. 0—011' ening elati 25b3U ng jo ce 15139 , "orch f636f bName Mode Windows Server 2025 Datace...
+  INFO dsrc d3b-f2: Tally (port 9001) made Receipt no 5 of 20261002 mid 7 AlterID 7 guid 85fc9722-6637-4c63-8d5a-7c543f666589-00000007
+  bridge log: 2026-10-09 14:38:49  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 1aec32f9…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:38:49  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-09 14:38:49  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 1aec32f9…): taken: Tally's GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000003, AlterID 3
+  bridge log: 2026-10-09 14:38:49  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 14:39:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:39:12  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-09 14:39:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+  bridge log: 2026-10-09 14:39:12  Tally 9000: FinComVoucherByNumber refused before sending: the date is before the company's starting day (09-Oct-2026)
+  bridge log: 2026-10-09 14:39:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): held: the voucher with that MasterID in this Tally is an older entry, not this save; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge log: 2026-10-09 14:39:57  Recorder: D4 Manual D4-ONE of 02-Oct-2026 (MasterID 2, line 9392cc82…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:39:57  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-09 14:39:57  Recorder: D4 Manual D4-ONE of 02-Oct-2026 (MasterID 2, line 9392cc82…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+  bridge log: 2026-10-09 14:39:58  Recorder: D4 Manual D4-ONE of 02-Oct-2026 (MasterID 5, line 9392cc82…): taken: Tally's GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000005, AlterID 5
+  bridge log: 2026-10-09 14:39:58  Renumbering: made D4 Manual D4-ONE of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later D4 Manual entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 14:40:37  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:40:37  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+  bridge log: 2026-10-09 14:40:37  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+  bridge log: 2026-10-09 14:40:38  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): held: the voucher with that MasterID in this Tally is an older entry, not this save; 2 entries with that type and number on that date (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge log: 2026-10-09 14:41:18  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:41:18  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+  bridge log: 2026-10-09 14:41:19  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): held: the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual D4-NONE of 02-Oct-2026 (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge log: 2026-10-09 14:43:44  Recorder: FinCom Spike Co: a save in another data location of the company (D:\a\_temp\TallyData2\100000) is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent)
+  bridge log: 2026-10-09 14:43:44  Recorder: Receipt 1 of 02-Oct-2026 (MasterID none, line d0c25e61…): not asked: saved in another data location of the company (D:\a\_temp\TallyData2\100000); sent to FinCom as such, without the entry
+  bridge log: 2026-10-09 14:46:54  Recorder: Receipt 2 of 02-Oct-2026 (MasterID none, line a28b07fb…): not asked: saved in another data location of the company (D:\a\_temp\TallyData2\100000); sent to FinCom as such, without the entry
+  bridge log: 2026-10-09 14:47:37  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=8, ALTMSTID=213
+  bridge log: 2026-10-09 14:47:38  Bank dates: FinCom Spike Co: not asked: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
+  bridge log: 2026-10-09 14:47:38  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line e5528e1e…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
+  bridge log: 2026-10-09 14:47:38  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.); sent without it (FinCom holds the line until a body comes)
+  bridge log: 2026-10-09 14:49:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 14:49:12  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 30df63bd…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+  bridge log: 2026-10-09 14:49:12  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 4 still held (4 in the list)
+  bridge log: 2026-10-09 14:50:38  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 14:50:38  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+  bridge log: 2026-10-09 14:50:38  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 5e3d0181…): held: Tally's voucher with that MasterID is not a change after the starting point (not asked again)
+  bridge log: 2026-10-09 14:50:38  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 4 still held (4 in the list)
+  bridge log: 2026-10-09 14:50:42  Recorder: FinCom Spike Co: FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's)
+  bridge log: 2026-10-09 14:52:10  Recorder: FinCom Spike Co: this bridge's own Tally now has the company's data in D:\a\_temp\TallyData2\100000 (was D:\a\_temp\TallyData\100000)
+  bridge log: 2026-10-09 14:52:10  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line 1301c1cc…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:52:10  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+  bridge log: 2026-10-09 14:52:10  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line 1301c1cc…): taken: Tally's GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000005, AlterID 5
+  bridge log: 2026-10-09 14:52:10  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 14:52:11  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-09 14:52:11  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line acb5678f…): held: Tally's voucher with that MasterID is not a change after the starting point (not asked again)
+  bridge log: 2026-10-09 14:52:11  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 4 still held (4 in the list)
+  bridge log: 2026-10-09 14:52:11  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 14:52:56  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line a02cae52…): asking Tally by MasterID
+  bridge log: 2026-10-09 14:52:57  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-09 14:52:57  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line a02cae52…): taken: Tally's GUID 85fc9722-6637-4c63-8d5a-7c543f666589-00000006, AlterID 6
+  bridge log: 2026-10-09 14:52:57  Renumbering: made Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 14:54:35  Recorder: FinCom Spike Co: a save in another data location of the company (D:\a\_temp\TallyData\100000) is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent)
+  bridge log: 2026-10-09 14:54:35  Recorder: Receipt 3 of 02-Oct-2026 (MasterID none, line 4b4d16e7…): not asked: saved in another data location of the company (D:\a\_temp\TallyData\100000); sent to FinCom as such, without the entry
+  bridge log: 2026-10-09 14:56:59  Recorder: Receipt 5 of 02-Oct-2026 (MasterID 7, line 5ebc5c22…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
+  bridge log: 2026-10-09 14:56:59  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.); sent without it (FinCom holds the line until a body comes)
+  bridge log: 2026-10-09 14:57:38  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line e5528e1e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 14:57:38  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line e5528e1e…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+  bridge log: 2026-10-09 14:57:38  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 5 still held (5 in the list)
+  bridge log: 2026-10-09 14:57:41  Bank dates: FinCom Spike Co: not asked: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
