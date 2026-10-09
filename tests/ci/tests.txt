@@ -212,3 +212,5 @@ run_sentry_ui.py                      180  TDSDESK_SITE=../app/dist-test
 # release-240 final review (09-Oct-2026): H1 and M5 (pending ledgers count in no figure; keep as confirmed saved), M2 (cleared stays cleared)
 run_ledger_pending.py                 120  TDSDESK_SITE=../app/dist-test
 run_alerts_clear_keys.py              120  TDSDESK_SITE=../app/dist-test
+# release-240 security review S-M1: selfcheck and renumber_list answer a computer only for its own companies
+run_company_scope_server.py           120

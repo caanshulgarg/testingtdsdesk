@@ -1784,6 +1784,27 @@ function renumNumCmp(a: string, b: string): number | null {
   const x = BigInt(da), y = BigInt(db_);
   return x < y ? -1 : x > y ? 1 : 0;
 }
+// release-240 security review S-M1: "selfcheck" and "renumber_list" answer a computer only for a company IT named: in its
+// own last heartbeat (the beat's open companies or company list, or any of its bridges' entries), or one it has sent
+// recorder lines for before (that book, this device). Nothing stored for it: what the device row already keeps.
+async function deviceNamed(dev: any, book: string, company: string): Promise<boolean> {
+  const k = (x: unknown) => String(x ?? "").trim().toLowerCase();
+  const want = k(company);
+  if (!want) return false;
+  const info = (dev && dev.info) || {}, names: unknown[] = [];
+  const take = (b: any) => {
+    if (!b || typeof b !== "object") return;
+    for (const x of Array.isArray(b.open) ? b.open : []) names.push(typeof x === "string" ? x : x?.name);
+    for (const c of Array.isArray(b.companies) ? b.companies : []) names.push(typeof c === "string" ? c : c?.name);
+  };
+  take(info.beat);
+  for (const b of Object.values(info.bridges || {})) take(b);
+  if (names.some((x) => k(x) === want)) return true;
+  const { data, error } = await db.from("tally_recorder_lines").select("id").eq("book_id", book).eq("device_id", dev.id).limit(1);
+  if (error) { fail("device_named", error); return false; }
+  return (data || []).length > 0;
+}
+
 async function renumberList(book: string, body: any) {
   const vt = String(body.vtype ?? "").trim().slice(0, 60), from = String(body.from ?? "").trim();
   if (!vt) return reply(400, { ok: false, error: "renumber_list: no voucher type" });
@@ -2068,7 +2089,7 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
       .map((x: any[]) => [x[0].trim().slice(0, 100), whole(x[1], 1e15 - 1)]);
     const { data, error } = await db.rpc("tally_selfcheck_compare", { p_book: book, p_entries: entries });
     if (error && notReady65(error)) return reply(503, { ok: false, notReady: true, error: "FinCom's cloud does not keep the nightly check yet (migration 65)." });
-    if (error) throw new Error(error.message);
+    if (error) throw dbFail("selfcheck_compare", error, "The cloud could not compare the nightly check just now; the bridge asks again.");
     return reply(200, data);
   }
   const me = bridgeOf(dev, body, false);
@@ -2084,7 +2105,7 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
     sliceFrom: /^\d{8}$/.test(String(body.sliceFrom || "")) ? String(body.sliceFrom) : "", sliceTo: /^\d{8}$/.test(String(body.sliceTo || "")) ? String(body.sliceTo) : "" };
   const { data, error } = await db.rpc("tally_selfcheck_record", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: me.id, p_r: r });
   if (error && notReady65(error)) return reply(503, { ok: false, notReady: true, error: "FinCom's cloud does not keep the nightly check yet (migration 65)." });
-  if (error) throw new Error(error.message);
+  if (error) throw dbFail("selfcheck_record", error, "The cloud could not record the nightly check just now; the bridge asks again.");
   console.log("tally-ingest selfcheck", book, (data as any)?.result, String((data as any)?.words || "").slice(0, 200));
   return reply(200, data);
 }
@@ -3227,6 +3248,7 @@ Deno.serve(sentry.wrap(async (req) => {
       case "selfcheck": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         return await selfCheck(dev, firm, book, body);
       }
       case "recorder_lines": case "start_point": {
@@ -3237,6 +3259,7 @@ Deno.serve(sentry.wrap(async (req) => {
       case "renumber_list": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         return await renumberList(book, body);
       }
       case "support": return await supportPack(firm, dev, body);

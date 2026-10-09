@@ -33,7 +33,8 @@ F.HONOR_LIMIT[0] = True
 F.T["clients"].append({"id": CID, "firm_id": FIRM, "name": "ZZ TEST", "tally_name": "ZZ CO", "gstin": "", "deleted": False})
 F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ CO", "client_id": CID, "book_id": BOOK, "last_seen": "2026-10-01T00:00:00Z"})
 F.T["tally_companies"].append({"firm_id": "f-2", "company": "ZZ CO", "client_id": "c-2", "book_id": "b-2", "last_seen": "2026-10-01T00:00:00Z"})
-F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "wake_token": "w" * 64,
+# the computer has ZZ CO open (its last heartbeat names it): security review S-M1 (tests/run_company_scope_server.py)
+F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {"beat": {"open": ["ZZ CO"]}}, "wake_token": "w" * 64,
                              "version": "2.3.5", "want_update_at": None, "want_sent_at": None})
 def vch(book, mid, day, no, alter, vtype="Receipt", deleted=None, guid=None):
     F.T.setdefault("tally_vouchers", []).append({"book_id": book, "firm_id": FIRM if book == BOOK else "f-2", "guid": guid or G(mid), "day": day, "alter_id": alter, "vtype": vtype, "vno": no,

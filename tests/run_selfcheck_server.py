@@ -21,8 +21,10 @@ FIRM, BOOK, CID = "f-1", "b-1", "c-1"; KEY, KEY2 = "fcd_" + "e" * 48, "fcd_" + "
 CG = "78257d7a-c68a-4ffc-a253-148c60566464"
 F.T["clients"].append({"id": CID, "firm_id": FIRM, "name": "ZZ TEST", "tally_name": "ZZ CO", "gstin": "", "deleted": False})
 F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ CO", "client_id": CID, "book_id": BOOK, "last_seen": "2026-10-06T00:00:00Z"})
-F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.3.1"})
-F.T["tally_devices"].append({"id": "d-2", "firm_id": FIRM, "name": "OTHER-PC", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.3.1"})
+# both computers have ZZ CO open (their last heartbeat names it): security review S-M1, a computer is answered only for
+# its own companies (tests/run_company_scope_server.py)
+F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {"beat": {"open": ["ZZ CO"]}}, "version": "2.3.1"})
+F.T["tally_devices"].append({"id": "d-2", "firm_id": FIRM, "name": "OTHER-PC", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "info": {"beat": {"open": ["ZZ CO"]}}, "version": "2.3.1"})
 GOT = {}
 real = F.rpc
 def rpc(fn, a):
