@@ -13,7 +13,7 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
   - every file the pages make (the TDS text files, the GSTR-1 and 3B JSON) byte for byte, and every amount they show, as
     the build before the redesign made and showed them (tests/fixtures/tdsgst-before.json, by tdsgst_snapshot.py).
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
-import os, sys, json, threading, functools, http.server
+import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from books_data import CACHE
@@ -132,6 +132,12 @@ try:
             pg.evaluate("() => { " + js + " }"); pg.wait_for_timeout(500)
             w = pg.evaluate("document.documentElement.scrollWidth")
             ok(w <= 391, "phone, %s: %dpx wide, no sideways scrolling" % (what, w))
+            if what == "the TDS grid":
+                # arc-ui, 09-Oct-2026: on a phone the grid is shown as cards (src/js/53-phone.js), each cell labelled with its
+                # column's heading; the quarter's label ran into its due date ("Q1 · Apr–Jundue 31 Jul"). Each quarter's
+                # cell now reads "Q1 · Apr–Jun, due 31 Jul"
+                lb = pg.evaluate("[...document.querySelectorAll('#app [data-tds-grid] tbody tr:first-child [data-cell]')].map(c => c.closest('td').getAttribute('data-label') || '')")
+                ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}$", x) for x in lb), "phone, the TDS grid: each quarter's label and its due date apart (%s)" % lb)
         ph.close()
     # every figure and file, as before the redesign
     before = json.load(open(os.path.join(HERE, "fixtures", "tdsgst-before.json")))

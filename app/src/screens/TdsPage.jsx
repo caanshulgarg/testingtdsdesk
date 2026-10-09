@@ -151,7 +151,9 @@ function Year({ b }) {
       <div className="rp-title"><h3>{TDS.yearWord(fy)} {fy}: returns by quarter</h3>
         <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, with the old form in brackets." : "Forms of the Income-tax Act, 1961."} Click a cell to open that return.</span></div>
       <div className="bk-tablewrap"><table className="rp-grid gf-off">
-        <thead><tr><th>Form</th>{quarters.map((q) => <th key={q}>{q} · {Q_MONTHS[q]}<small>due {Q_DUE[q]}</small></th>)}<th>Year</th></tr></thead>
+        {/* aria-label: the heading's name read out, and on a phone each card's label (src/js/53-phone.js), with the due date
+            apart from the months ("Q1 · Apr–Jun, due 31 Jul"; it read "Apr–Jundue 31 Jul" at 390px) */}
+        <thead><tr><th>Form</th>{quarters.map((q) => <th key={q} aria-label={q + " · " + Q_MONTHS[q] + ", due " + Q_DUE[q]}>{q} · {Q_MONTHS[q]}<small>due {Q_DUE[q]}</small></th>)}<th>Year</th></tr></thead>
         <tbody>{forms.map((k) => <tr key={k} data-form={k}>
           <th scope="row">{TDS.formShort(k, fy)}<small>{TDS.FORM_ABOUT[k]}</small></th>
           {quarters.map((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; return <Cell key={q} fy={fy} q={q} form={k} {...c} />; })}
