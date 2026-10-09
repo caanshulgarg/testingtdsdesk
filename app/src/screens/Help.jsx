@@ -187,7 +187,7 @@ export default function Help() {
   else if (s.list === null) { if (!s.loading) { s.loading = true; SUP.load(true).then(() => { s.loading = false; render(); }); } body = <Loading what="tickets" />; }
   else body = s.tab === "desk" ? <Desk /> : <Mine />;
   const tabs = [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : []);
-  return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><h2 style={{ margin: 0 }}>Help</h2><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>
+  return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>
     {SUP.on() && <Sup a="new" className="btn primary">+ New ticket</Sup>}</div>
     <nav className="sbar" aria-label="Help">{tabs.map(([id, l, c]) => <button key={id} aria-selected={s.tab === id} onClick={() => supTab(id)}>{l}{c ? <> <span className="sbar-n">{c}</span></> : null}</button>)}</nav>
     {body}</div>;

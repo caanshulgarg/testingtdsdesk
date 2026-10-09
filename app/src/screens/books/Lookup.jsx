@@ -140,7 +140,7 @@ export default function Lookup({ b }) {
   return <>
     <section className="dash-card lk-ask"><h3>Ask the books</h3>
       <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; Tally is never asked for a balance.</p>
-      <div className="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" value={x.ask || ""} placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books"
+      <div className="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" value={x.ask || ""} placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31-Mar-2026" aria-label="Ask a question about the books"
         onChange={(ev) => lkType("ask", ev.target.value)} onKeyDown={enter((ev) => lkAsk(ev.target.value))} />
         <button className={"btn" + (needBooks ? "" : " primary")} onClick={() => lkAsk(x.ask || "")}>Look up</button></div>
       {x.heard && <p className="note lk-heard">Understood as: <b>{x.heard}</b>. Change anything below.</p>}

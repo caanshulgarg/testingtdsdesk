@@ -51,7 +51,7 @@ export default function DocqPanel({ cid = "" }) {
         <h3 style={{ margin: 0 }}>{"\u{1F4E5} Inbox · " + list.length + " waiting"}</h3>
         <button className="btn small primary" onClick={() => readDocq(list.map((d) => d.id), cid)}>Read all {list.length}</button>
       </div>
-      <p className="note" style={{ margin: "4px 0 8px" }}>Files sent in by office automation. They are read the same way as an upload, and charged the same.</p>
+      <p className="note" style={{ margin: "4px 0 8px" }}>Files your office sent in automatically (through a drop key). They are read the same way as an upload, and charged the same.</p>
       {/* the one list table (spec K6): received (date), the file, who sent it, then the rest */}
       <ListTable name={"docq" + (cid ? "" : "-unsorted")} className="data" rows={list} rowKey={(d) => d.id} unit={["file", "files"]}
         cols={[

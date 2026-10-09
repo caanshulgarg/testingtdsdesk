@@ -55,7 +55,7 @@ export default function Txn() {
         : bank ? "No bank lines yet. Use Upload statement on the Bank page to add a statement." : tab === "sales" ? "No sales invoices yet. Use Upload invoices on the Sales page, or Create invoice there." : "No purchase bills yet. Use Upload bills on the Purchase page to add them."}
       cols={[
         { k: "sno", role: "row", label: "S. no.", cls: "n stick1", cell: (r, p, i) => i + 1 },
-        c("date") && { k: "date", role: "date", label: "Date", cls: "dt stick2", filter: <ColFunnel t="txn" k="date" label="Date" />, v: (r) => r.date || "", cell: (r) => <>{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</> },
+        c("date") && { k: "date", role: "date", label: "Date", cls: "dt stick2", filter: <ColFunnel t="txn" k="date" label="Date" />, v: (r) => r.date || "", cell: (r) => <>{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">uploaded {fmtDate(r.up)}</div>}</> },
         c("no") && { k: "no", role: "number", label: bank ? "Reference" : "Invoice no.", filter: <ColFunnel t="txn" k="no" label={bank ? "Reference" : "Invoice no."} />, v: (r) => r.no || "", cell: (r) => r.no || "—" },
         c("party") && { k: "party", role: "party", label: tab === "sales" ? "Customer" : "Party", filter: <ColFunnel t="txn" k="party" label={tab === "sales" ? "Customer" : "Party"} />, v: (r) => r.party || "", cell: (r) => r.party },
         c("val") && { k: "val", role: "amount", label: bank ? "Amount ₹" : "Invoice value ₹", cls: "n", filter: <ColFunnel t="txn" k="val" label={bank ? "Amount ₹" : "Invoice value ₹"} />, v: (r) => num(r.total) || null, sum: (r) => num(r.total), cell: (r) => amt(r.total) },

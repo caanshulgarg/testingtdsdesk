@@ -5,7 +5,7 @@ import Unsorted from "../parts/Unsorted.jsx";
 export default function InboxAll() {
   const cos = sortedCompanies().filter((c) => docqFor(c.id).length), loose = docqFor("").length, un = Object.keys(S.inbox || {}).length;
   return <>
-    <section className="today"><h2>Inbox</h2><p className="note" style={{ margin: "0 0 12px" }}>Documents from office automation, by client, and uploads that matched no client.</p></section>
+    <section className="today"><p className="note" style={{ margin: "0 0 12px" }}>Documents your office sends in automatically (through a drop key, see Settings), by client, and uploads that matched no client.</p></section>
     {cos.map((c) => (
       <div className="inbox-client" key={c.id}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>

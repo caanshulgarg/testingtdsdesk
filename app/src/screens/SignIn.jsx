@@ -17,7 +17,7 @@ const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10
 // "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
 // out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
 // Nothing signs you out by itself either way.
-export const KeepBox = () => <label className="chk" style={{ marginTop: 10, display: "block" }}><input type="checkbox" data-cloud="keep" defaultChecked /> Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></label>;
+export const KeepBox = () => <label className="chk keep-box" style={{ marginTop: 10 }}><input type="checkbox" data-cloud="keep" defaultChecked /><span>Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></span></label>;
 
 function SignUp() {
   const st = Cloud.st;

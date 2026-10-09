@@ -129,7 +129,7 @@ export function FirmSettings() {
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>
-    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "")}</p></>;
+    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
 }
 
 /* ---------------------------------------------------------------- for one client */

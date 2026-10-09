@@ -51,6 +51,10 @@ export default function Side() {
             </button>
           </div>)}
       {/* on the firm's own pages, the firm's menu instead of a client's (review item 29) */}
+      {/* round 4 of the UI pass (09-Oct-2026): from the firm's pages, one click back to the client that is open (it was
+          only "change", which opens the client chooser) */}
+      {home && open && <Item icon="dash" label={"Back to " + open.name} title={"Back to " + open.name + ", where you left it"}
+        onClick={() => { S.firmMenu = false; S.tallyPanel = false; openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); }} />}
       {home && <>
         <div className="side-firm-label">Firm</div>
         <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />

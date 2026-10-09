@@ -78,6 +78,8 @@ with sync_playwright() as p:
     ok(ph and not re.search(r"\d{1,2}/\d{1,2}/\d{2,4}", ph) and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}", ph), "Look up: the example question's date is like 31-Mar-2026 (%s)" % ph)
     d = pg.evaluate("() => LK.dateIn('trial balance as on 31-Mar-2026')")
     ok(d and d.get("asOn") == "20260331", "Look up: 'as on 31-Mar-2026' is understood (%s)" % d)
+    old = [pg.evaluate("(q) => LK.dateIn(q)", q) for q in ["trial balance as on 31/03/2026", "from 01-04-2025 to 30-09-2025", "sales in march"]]
+    ok(old[0] and old[0].get("asOn") == "20260331" and old[1] and old[1].get("from") == "20250401" and old[1].get("to") == "20250930", "Look up: the dates it understood before still read the same (%s)" % old[:2])
     # 7. dashboard steps
     pg.evaluate("() => { goClient('dash'); }"); pg.wait_for_timeout(900)
     narrow = pg.evaluate("""() => [...document.querySelectorAll('#app .onb-list li')].filter(s => s.offsetParent && s.querySelector('button')).map(s => { const t = s.querySelector('b'); return t ? Math.round(t.getBoundingClientRect().width) : 999; })""")

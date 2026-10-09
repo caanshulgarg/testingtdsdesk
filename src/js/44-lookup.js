@@ -451,8 +451,9 @@ const LK = {
   dateIn(s){
     const t = String(s).toLowerCase(), a = FC.anchor();
     let m;
-    // 31/03/2026, 31-03-2026, 2026-03-31, 31 mar 2026, mar 31 2026
+    // 31-Mar-2026, 31/03/2026, 31-03-2026, 2026-03-31, 31 mar 2026, mar 31 2026
     const one = x => {
+      x = x.replace(/^(\d{1,2})-([a-z]{3,9})-(\d{4})$/, "$1 $2 $3");   // 31-mar-2026, the app's own date format (round 4 of the UI pass)
       let q = x.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
       if (q){ const y = q[3].length === 2 ? "20" + q[3] : q[3]; return y + q[2].padStart(2, "0") + q[1].padStart(2, "0"); }
       q = x.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (q) return q[1] + q[2] + q[3];
@@ -465,7 +466,7 @@ const LK = {
       }
       return "";
     };
-    const D = "(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[a-z]+(?:,?\\s+\\d{4})?|[a-z]+\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)";
+    const D = "(\\d{1,2}-[a-z]{3,9}-\\d{4}|\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[a-z]+(?:,?\\s+\\d{4})?|[a-z]+\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)";
     if ((m = t.match(new RegExp("(?:from|between)\\s+" + D + "\\s+(?:to|and|till|until|-)\\s+" + D)))){ const f = one(m[1]), e = one(m[2]); if (f && e) return {from: f, to: e}; }
     if ((m = t.match(new RegExp("(?:as on|as at|on|till|upto|up to)\\s+" + D)))){ const d = one(m[1]); if (d) return {asOn: d, from: Audit.fyStart(d), to: d}; }
     if ((m = t.match(/\b(?:fy\s*)?(20\d{2})\s*[-\/]\s*(\d{2}|20\d{2})\b/))){ const y = num(m[1]); return {from: y + "0401", to: (y + 1) + "0331"}; }
