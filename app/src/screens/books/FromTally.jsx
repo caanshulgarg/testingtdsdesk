@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
 import TallyLink from "../../parts/TallyLink.jsx";
+import DateBox from "../../parts/DateBox.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
@@ -98,7 +99,7 @@ function TbAsk() {
   if (!a || a.cid !== S.coId) return null;
   return <div className="up-ask" data-tb-ask="" style={{ margin: "10px 0 0" }}>
     <p className="note" style={{ margin: "0 0 6px" }}><b>{a.name}</b> is a trial balance. Tally does not write its date in the file: as on{" "}
-      <input type="date" aria-label="Trial balance as on" value={a.on || ""} onChange={(ev) => { a.on = ev.target.value; render(); }} /></p>
+      <DateBox aria-label="Trial balance as on" value={a.on || ""} onChange={(ev) => { a.on = ev.target.value; render(); }} /></p>
     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
       <button className="btn small" onClick={() => tbAskUse("open")}>Use as opening balances</button>
       <button className="btn small" onClick={() => tbAskUse("check")}>Check the books against it</button>

@@ -11,6 +11,8 @@
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
 .btn.primary:hover:not([disabled]) { background: var(--brand-hover); border-color: var(--brand-hover); }
 .btn.danger { color: var(--bad); }
+.btn.danger-fill { background: var(--bad); border-color: var(--bad); color: var(--sheet); }   /* a removal's button (the confirm box): red again */
+.btn.danger-fill:hover:not([disabled]) { background: color-mix(in oklab, var(--bad) 88%, var(--foreground)); border-color: var(--bad); color: var(--sheet); }
 /* the parts' buttons (parts/Button.jsx, Arc's Button): FinCom's brand on the primary one (Arc draws it in the text
    colour), red words on a danger one, and FinCom's own sizes */
 button[data-arc="button"] { font-weight: 500; line-height: 1.2; white-space: nowrap; }
@@ -117,10 +119,30 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
 /* ---------- dialogs: Arc's (FirmSetup) and FinCom's own (the confirm box, the client switcher) in the same look ---------- */
 /* the firm's details dialog keeps its old class (the tests'), which also drew the old backdrop: Arc's dialog places it */
 [role="dialog"].firmsetup-scrim { display: block; padding: 0; width: min(calc(100vw - 32px), 480px); }
-#confirmBox { background: rgb(var(--shade) / .40); }
-#confirmBox .cbx, .sw { border: 1px solid var(--border); border-radius: var(--radius-surface); box-shadow: var(--shadow-floating); background: var(--surface-raised);
+.sw { border: 1px solid var(--border); border-radius: var(--radius-surface); box-shadow: var(--shadow-floating); background: var(--surface-raised);
   animation: arc-fade var(--duration-fast) var(--ease-enter); }
-#confirmBox h2 { font-size: 17px; font-weight: 600; }
+/* The confirm box (askConfirm in src/js/23, and "Save your changes?" in src/js/60) in Arc's Dialog
+   (src/arc/registry/components/dialog/dialog.module.css): its overlay, a panel in the middle, a header with the title over
+   a rule, the body, and the buttons in a footer. Styles only: the box keeps its markup, ids (#confirmBox, #cbxT, #cbxCheck,
+   #cbxName, ...), words, buttons and keys (Enter = the main button, Escape = Cancel), which the tests and the app use.
+   Its first part is the title (h2), then the words (.note), a tick box (.chk) or a red line (.cbx-err), then .row. */
+#confirmBox { align-items: center; padding: var(--space-4, 16px); background: oklch(10% 0 0 / .46);
+  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); animation: arc-fade var(--duration-fast) var(--ease-enter); }
+#confirmBox .cbx { width: min(calc(100vw - 32px), 520px); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow: auto; border: 1px solid var(--border);
+  border-radius: var(--radius-surface); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating);
+  animation: arc-fade var(--duration-fast) var(--ease-enter); }
+#confirmBox .cbx.wide { width: min(calc(100vw - 32px), 860px); max-width: none; }
+#confirmBox .cbx > h2 { margin: 0; padding: var(--space-6, 24px) var(--space-6, 24px) var(--space-5, 20px); border-bottom: 1px solid var(--border);
+  font-family: var(--font-body); font-size: var(--text-lg, 17px); font-weight: 600; letter-spacing: var(--tracking-body); line-height: var(--leading-body, 1.5);
+  overflow-wrap: anywhere; }
+#confirmBox .cbx > :not(h2):not(.row) { margin-left: var(--space-6, 24px); margin-right: var(--space-6, 24px); }
+#confirmBox .cbx > h2 + * { margin-top: var(--space-5, 20px); }
+#confirmBox .cbx > .note { color: var(--text-secondary); }
+#confirmBox .cbx > .note b, #confirmBox .cbx > .note strong { color: var(--foreground); }
+#confirmBox .cbx > .row { position: sticky; bottom: 0; flex-wrap: wrap; gap: 8px; margin: var(--space-6, 24px) 0 0 !important;
+  padding: var(--space-4, 16px) var(--space-6, 24px); border-top: 1px solid var(--border); background: var(--surface-muted); }
+#confirmBox .cbx-err { color: var(--danger); font-size: 13.5px; }
+@media (max-width: 600px) { #confirmBox { align-items: flex-end; } #confirmBox .cbx > .row > .btn { flex: 1 1 auto; justify-content: center; text-align: center; } }
 
 /* ---------- the message at the bottom (the old toast): Arc's toast look, a short fade, no slide ---------- */
 .toast { border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); }

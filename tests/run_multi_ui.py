@@ -83,9 +83,11 @@ with sync_playwright() as p:
     # 2.4.0: through the one Upload Tally data (#tallyIn): the file is told to be a trial balance; only its date is asked
     def tb_up(path, how, on=None):
         pg.set_input_files("#tallyIn", path); pg.wait_for_timeout(1200)
-        if on: pg.fill('#app [data-tb-ask] input[type=date]', on); pg.wait_for_timeout(200)
+        # Arc UI step 4 (10-Oct-2026): the trial balance's "as on" is FinCom's own date box (DD-Mon-YYYY, DateBox) instead of the
+        # browser's input[type=date], so it is found by its label; the date it holds is its data-iso (yyyy-mm-dd), what it shows DD-Mon-YYYY.
+        if on: pg.fill('#app [data-tb-ask] [data-datebox] input[aria-label="Trial balance as on"]', on); pg.wait_for_timeout(200)
         pg.click("#app [data-tb-ask] button:has-text('%s')" % how); pg.wait_for_timeout(1500)
-    tb_up(fo, "Use as opening balances", "2025-03-31")
+    tb_up(fo, "Use as opening balances", "31-Mar-2025")
     ok(pg.evaluate("Object.keys(S.books.tb.led).length") == 13, "opening balances taken")
     moves = {}
     for i, d in enumerate(days):

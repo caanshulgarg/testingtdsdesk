@@ -51,7 +51,11 @@ with sync_playwright() as p:
           "<DSPACCNAME><DSPDISPNAME>%s</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA></DSPCLDRAMTA></DSPCLDRAMT><DSPCLCRAMT><DSPCLCRAMTA>1,000.00</DSPCLCRAMTA></DSPCLCRAMT></DSPACCINFO></ENVELOPE>") % (led[0].replace("&", "&amp;"), led[1].replace("&", "&amp;"))
     fp = os.path.join(OUT, "tb.xml"); open(fp, "w").write(tb)
     pg.set_input_files("#tallyIn", fp); pg.wait_for_timeout(1200)
-    ok(pg.input_value('#app [data-tb-ask] input[type=date]') == "2025-03-31", "the trial balance date offered is the day before the first part: " + pg.input_value('#app [data-tb-ask] input[type=date]'))
+    # Arc UI step 4 (10-Oct-2026): the trial balance's "as on" is FinCom's own date box (DD-Mon-YYYY, DateBox) instead of the
+    # browser's input[type=date], so it is found by its label; the date it holds is its data-iso (yyyy-mm-dd), what it shows DD-Mon-YYYY.
+    tbon = '#app [data-tb-ask] [data-datebox] input[aria-label="Trial balance as on"]'
+    ok(pg.locator(tbon).count() == 1 and pg.get_attribute(tbon, "data-iso") == "2025-03-31" and pg.input_value(tbon) == "31-Mar-2025",
+       "the trial balance date offered is the day before the first part, in FinCom's date box: %s" % (pg.locator(tbon).count() and pg.input_value(tbon)))
     pg.click("#app [data-tb-ask] button:has-text('Use as opening balances')"); pg.wait_for_timeout(2500)
     o = pg.evaluate("(l) => [S.books.tb.led[l[0]].open, S.books.tb.led[l[1]].open, S.books.tb.from, S.books.tb.source || '', Object.keys(S.books.tb.led).length]", led)
     ok(o[0] == -1000 and o[1] == 1000 and o[2] == "20250401", "opening balances as on 31 March: debit kept as Tally keeps it (%s, %s), from %s" % (o[0], o[1], o[2]))

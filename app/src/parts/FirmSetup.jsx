@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import Button from "./Button.jsx";
+import LogoPick from "./LogoPick.jsx";
 
 export default function FirmSetup() {
   const a = S.account || {};
@@ -17,7 +18,7 @@ export default function FirmSetup() {
         description="Shown in the header, on letters and on reports. You can change them later in Settings → Firm details.">
         <label className="f"><span>Firm name</span><input type="text" aria-label="Firm name" value={d.name} autoFocus onChange={(ev) => setD({ ...d, name: ev.target.value })} /></label>
         <label className="f" style={{ marginTop: 8 }}><span>Address</span><textarea rows={3} aria-label="Firm address" value={d.address} onChange={(ev) => setD({ ...d, address: ev.target.value })} /></label>
-        <label className="f" style={{ marginTop: 8 }}><span>Logo (optional)</span><input type="file" accept="image/*" aria-label="Firm logo" onChange={pick} /></label>
+        <label className="f" style={{ marginTop: 8 }}><span>Logo (optional)</span><LogoPick has={!!d.logo} onChange={pick} /></label>
         {d.logo && <img src={d.logo} alt="Logo" style={{ maxHeight: 60, marginTop: 6 }} />}
         {err && <p className="bk-warn">{err}</p>}
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>

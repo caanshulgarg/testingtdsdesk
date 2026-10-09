@@ -103,3 +103,17 @@ td .linkbtn { white-space: nowrap; }
 
 /* a phone: the breadcrumb over the title had 150px and was cut mid-word ("Garg Shekhar & Co"); it has the row now */
 @media (max-width: 600px) { .tbar-title .note { max-width: 100%; } }
+
+/* ========== Step 4 (arc-ui, 10-Oct-2026) ========== */
+/* the firm's logo (Settings → Firm details, and the first-run firm dialog): Arc's small dropzone over the hidden file box */
+.logo-pick { position: relative; display: inline-flex; max-width: 100%; }
+.logo-pick-in { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.logo-pick-face { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-panel); background: color-mix(in oklab, var(--accent) 3%, var(--surface)); color: var(--accent); cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard); }
+.logo-pick-face > span { display: flex; flex-direction: column; gap: 1px; }
+.logo-pick-face b { color: var(--foreground); font-size: 13.5px; font-weight: 600; }
+.logo-pick-face small { color: var(--text-muted); font-size: 12px; white-space: normal; }
+.logo-pick:hover .logo-pick-face { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); }
+.logo-pick[data-over] .logo-pick-face { border-style: solid; border-color: var(--accent); background: var(--accent-subtle); }
+.logo-pick:focus-within .logo-pick-face { outline: 2px solid var(--focus-outline, var(--accent)); outline-offset: 2px; }

@@ -16,7 +16,9 @@ function PartyLedgerTag({ p }) {
 }
 function Pf({ p, label, k, type = "text" }) {
   return <label className="f"><span>{label}</span>
-    <input type={type} value={p[k] == null ? "" : p[k]} {...(type === "number" ? { step: "0.01" } : {})} onChange={(ev) => set(p, k, ev.target.value)} /></label>;
+    {type === "date"
+      ? <DateBox aria-label={label} value={p[k] == null ? "" : p[k]} onChange={(ev) => set(p, k, ev.target.value)} />
+      : <input type={type} value={p[k] == null ? "" : p[k]} {...(type === "number" ? { step: "0.01" } : {})} onChange={(ev) => set(p, k, ev.target.value)} />}</label>;
 }
 
 // lower deduction certificates (old section 197) for this deductee: one per section and period, with the amount it covers

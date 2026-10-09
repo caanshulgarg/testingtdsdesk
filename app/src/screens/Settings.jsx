@@ -20,6 +20,7 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
 import GstApiAll from "./GstApiAll.jsx";
+import LogoPick from "../parts/LogoPick.jsx";
 
 // the list on the left: groups of sections; each section has a label and, below it, where it stands now
 function SetNav({ label, groups, current, pick }) {
@@ -74,7 +75,7 @@ function FirmDetails() {
     <div className="grid"><label className="f"><span>Firm name</span>
       <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label>
       <label className="f wide"><span>Address</span><textarea rows={2} value={S.firm.firmAddress || ""} onChange={(ev) => setAddr(ev.target.value)} /></label>
-      <label className="f"><span>Logo</span><input type="file" accept="image/*" aria-label="Firm logo" onChange={pick} /></label>
+      <label className="f"><span>Logo</span><LogoPick has={!!S.firm.firmLogo} onChange={pick} /></label>
       {S.firm.firmLogo && <div><img src={S.firm.firmLogo} alt="Logo" style={{ maxHeight: 48 }} /> <button className="linkbtn" onClick={() => { S.firm.firmLogo = ""; Store.saveFirm(); render(); }}>Remove</button></div>}</div>
   </Card>;
 }

@@ -95,8 +95,11 @@ with sync_playwright() as p:
         ok(words in res and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1, "%s is refused, nothing changed (%s)" % (what, res))
     # a trial balance: its date is not in the file, so it is asked (with the books' own default)
     res = up(TB)
-    ok(pg.locator("#app [data-tb-ask]").count() == 1 and pg.input_value("#app [data-tb-ask] input[type=date]") == "2026-03-31", "a trial balance: asked only its date, the books' last date offered")
-    pg.fill("#app [data-tb-ask] input[type=date]", "2025-03-31"); pg.click("#app [data-tb-ask] button:has-text('Use as opening balances')"); pg.wait_for_timeout(1500)
+    # Arc UI step 4 (10-Oct-2026): the trial balance's "as on" is FinCom's own date box (DD-Mon-YYYY, DateBox) instead of the
+    # browser's input[type=date], so it is found by its label; the date it holds is its data-iso (yyyy-mm-dd), what it shows DD-Mon-YYYY.
+    tbon = '#app [data-tb-ask] [data-datebox] input[aria-label="Trial balance as on"]'
+    ok(pg.locator("#app [data-tb-ask]").count() == 1 and pg.locator(tbon).count() == 1 and pg.get_attribute(tbon, "data-iso") == "2026-03-31" and pg.input_value(tbon) == "31-Mar-2026", "a trial balance: asked only its date, the books' last date offered")
+    pg.fill(tbon, "31-Mar-2025"); pg.click("#app [data-tb-ask] button:has-text('Use as opening balances')"); pg.wait_for_timeout(1500)
     ok("TB.xml" in E("S.books.tb.source || ''") and E("S.books.tb.openAsOn") == "20250331" and pg.locator("#app [data-tb-ask]").count() == 0, "used as opening balances as on 31-Mar-2025")
 
     # ---------------------------------------------------------------- 6. Days that need a Day Book
