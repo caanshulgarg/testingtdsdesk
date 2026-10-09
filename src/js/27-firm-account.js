@@ -1108,15 +1108,30 @@ function printTable(id, title){
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
 // parts of the books with a sidebar entry of their own, outside "TDS & GST" (MIS, Accounts and Audit moved out: review item 7)
 const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
-function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
+function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
   S.tdsFy = fy;
   if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
-  else S.tdsView = "year";
+  else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
 }
 function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "year"; render(); }
+// the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
+// return; either left at "every" shows the year's grid of forms and quarters
+function tdsPick(fy, q, form){
+  const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
+  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || "";
+  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
+  else S.tdsView = "year";
+  render();
+}
+// the GST pages (redesign of 09-Oct-2026): the year's grid of returns and months, or one return and period with its tabs
+function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; if (S.books) S.books.reco = null; }
+  S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
+  S.gstPart = part; S.gstView = "return"; S.gstSub = ""; render(); window.scrollTo(0, 0); }
+function gstViewGo(v){ S.gstView = v; render(); }
+function gstSubGo(sub){ S.gstSub = sub; render(); }
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows

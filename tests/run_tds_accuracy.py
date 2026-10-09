@@ -138,13 +138,23 @@ with sync_playwright() as p:
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'books'; S.booksTab = 'tds'; S.loadingCo = false; S.books.loading = false; S.books.cid = cid; S.tdsView = 'year'; S.tdsFy = '2026-27'; window.__bk = S.books; render(); }", cid)
     pg.wait_for_timeout(800); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
     txt = pg.inner_text("#app")
-    ok("form 144 (was 27q), non-residents" in txt.lower() and "form 143 (was 27eq), tcs" in txt.lower() and "form 140 (was 26q)" in txt.lower(), "2026-27: the year's table shows Forms 140, 138, 144 and 143 with the old names beside")
+    # 09-Oct-2026 (app-tdsgst): the year is a grid of forms × quarters, each form named as the Income Tax Department's PDFs
+    # do ("Form No. 140 (Earlier Form No. 26Q)"); a return's downloads and the draft warning are on its File tab, the
+    # details to fill on Errors to fix, the totals on the Summary
+    tl = txt.lower()
+    ok("form 144 (earlier 27q)" in tl and "non-residents" in tl and "form 143 (earlier 27eq)" in tl and "tcs" in tl and "form 140 (earlier 26q)" in tl and "form 138 (earlier 24q)" in tl, "2026-27: the year's grid shows Forms 140, 138, 144 and 143 with the old names beside")
     pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27Q'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
-    ok("Download the Form 144 text file (draft)" in txt and "draft – not yet validated" in txt and "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
-    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
+    nr = "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1 and "not yet validated" in txt
+    pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
     txt = pg.inner_text("#app")
-    ok("Download the Form 143 text file (draft)" in txt and "Collection codes" in txt and "TCS collected" in txt, "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
+    ok(nr and "Download the Form 144 text file (draft)" in txt and "draft – not yet validated" in txt, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
+    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
+    codes = "Collection codes" in pg.inner_text("#app")
+    pg.evaluate("() => { S.tdsTab = 'summary'; render(); }"); pg.wait_for_timeout(300)
+    tcs = "TCS collected" in pg.inner_text("#app")
+    pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
+    ok(codes and tcs and "Download the Form 143 text file (draft)" in pg.inner_text("#app"), "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
     # screens: Parties shows the certificates and the inoperative mark; the year shows 27Q and 27EQ
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.step = null; S.tab = 'deductees'; S.partySel = 'Cert Prof'; render(); }", cid)
     pg.wait_for_timeout(500)

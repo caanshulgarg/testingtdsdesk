@@ -23,7 +23,7 @@ const Route = {
     if (S.tab === "dash") return c + "dash";
     if (S.tab === "clientInbox") return c + "inbox";
     if (S.tab === "txn") return c + "txn/" + txnTab();
-    if (S.tab === "books") return c + "books/" + booksTab();
+    if (S.tab === "books") return c + "books/" + booksTab() + this.booksMore();
     if (isSetupTab(S.tab)) return c + "setup/" + S.tab;
     if (S.tab === "bank") return c + "bank";
     if (S.tab === "sales") return c + "sales";
@@ -35,6 +35,45 @@ const Route = {
       return c + "purchase/" + (S.reviewTable ? "review" : (S.filter || "draft"));
     }
     return c + "dash";
+  },
+  // the TDS and GST pages keep their year, quarter or month, form or return and tab in the address (09-Oct-2026), so Back
+  // and Refresh come back to the same return: #/c/<client>/books/tds/2026-27/Q1/26Q/challans, …/books/tds/2026-27 (the
+  // year's grid), …/books/tds/2026-27/certs, …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
+  booksMore(){
+    const t = booksTab(), e = (x) => encodeURIComponent(x || "");
+    if (t === "tds"){
+      const v = S.tdsView || "";
+      if (v === "years") return "/all";
+      if (v === "notices") return "/notices";
+      if (!S.tdsFy) return "";
+      if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
+      if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
+    }
+    if (t === "gst"){
+      if (!S.gstYm || !S.gstReg) return "";
+      if ((S.gstView || "year") === "year") return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/year";
+      return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/" + e(S.gstPart || "r1") + (S.gstSub ? "/" + e(S.gstSub) : "");
+    }
+    return "";
+  },
+  booksApply(tab, p){
+    if (tab === "tds"){
+      if (p[0] === "all"){ S.tdsView = "years"; return; }
+      if (p[0] === "notices"){ S.tdsView = "notices"; return; }
+      if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
+      S.tdsFy = p[0];
+      if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
+      S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
+      return;
+    }
+    if (tab === "gst" && /^\d{2}$/.test(p[0] || "") && /^\d{6}$/.test(p[1] || "")){
+      S.gstReg = p[0]; if (S.gstYm !== p[1] && S.books) S.books.reco = null; S.gstYm = p[1];
+      S.gstSeen = p[0] + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(p[1], p[0]) : "monthly");
+      if (!p[2] || p[2] === "year") S.gstView = "year";
+      else { S.gstView = "return"; S.gstPart = p[2]; S.gstSub = p[3] || ""; }
+    }
   },
   // after each drawing: the address follows the page; a new page is a new step in the browser's history
   pending: null,                    // a link opened before signing in: applied once signed in
@@ -69,7 +108,7 @@ const Route = {
         else if (what === "dash") S.tab = "dash";
         else if (what === "inbox") S.tab = "clientInbox";
         else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
-        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; }
+        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
         else if (what === "setup" && isSetupTab(arg)) S.tab = arg;
         else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "sales") S.tab = "sales";

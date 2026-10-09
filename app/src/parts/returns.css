@@ -1,0 +1,39 @@
+/* The TDS and GST return pages (redesign of 09-Oct-2026): the bar of year, period and form, the status grid and the
+   return's tabs. Status colours: grey not started, blue ready, red errors or a mismatch, green filed. */
+.rp-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;margin:0 0 12px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--sheet)}
+.rp-bar label.rp-f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em;min-width:0}
+.rp-bar label.rp-f select{width:auto;max-width:100%;min-width:120px;font-size:14px;color:var(--ink);font-weight:500}
+.rp-bar .rp-links{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-left:auto}
+.rp-title{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 8px}
+.rp-title h3{margin:0;font-size:17px}
+.rp-title .note{margin:0}
+.rp-grid{border-collapse:separate;border-spacing:0;width:100%;min-width:640px}
+.rp-grid th,.rp-grid td{border-bottom:1px solid var(--rule);padding:6px;vertical-align:top;text-align:left}
+.rp-grid thead th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+.rp-grid thead th small{display:block;font-weight:400}
+.rp-grid tbody th{font-size:13.5px;font-weight:600;min-width:150px}
+.rp-grid tbody th small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.rp-cell{display:flex;flex-direction:column;gap:2px;width:100%;min-height:64px;padding:7px 9px;border:1px solid var(--rule);border-left-width:4px;border-radius:8px;background:var(--sheet);color:var(--ink);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.rp-cell:hover,.rp-cell:focus-visible{border-color:var(--brand);outline:none}
+.rp-cell[aria-current="true"]{box-shadow:0 0 0 2px var(--brand)}
+.rp-cell .rp-s{font-weight:650;font-size:12.5px}
+.rp-cell .rp-a{font-weight:650;font-size:14px;font-variant-numeric:tabular-nums}
+.rp-cell .nr{white-space:normal}
+.rp-cell.st-none{border-left-color:var(--rule-strong);background:var(--sheet-2);color:var(--muted)}
+.rp-cell.st-ready{border-left-color:var(--info)}.rp-cell.st-ready .rp-s{color:var(--info)}
+.rp-cell.st-bad{border-left-color:var(--bad);background:var(--bad-soft)}.rp-cell.st-bad .rp-s{color:var(--bad)}
+.rp-cell.st-filed{border-left-color:var(--ok);background:var(--ok-soft)}.rp-cell.st-filed .rp-s{color:var(--ok)}
+.rp-cell.st-na{cursor:default;border-style:dashed;background:transparent;color:var(--muted);min-height:40px}
+.rp-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin:8px 0 0}
+.rp-key span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--k)}
+.rp-sec small{display:block;color:var(--muted);font-size:11.5px;white-space:normal}
+.rp-tabs{flex-wrap:wrap;max-width:100%;min-width:0}
+@media (max-width:640px){
+  .rp-bar{padding:8px}
+  .rp-bar label.rp-f{flex:1 1 calc(50% - 12px)}
+  .rp-bar label.rp-f select{min-width:0;width:100%}
+  .rp-bar .rp-links{margin-left:0}
+  .rp-tabs{flex-wrap:nowrap;overflow-x:auto}
+}
+.rp-tabs button{white-space:nowrap;flex:0 0 auto}
+.rp-grid .rp-cell{min-width:84px}

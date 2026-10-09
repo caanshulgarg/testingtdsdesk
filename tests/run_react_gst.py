@@ -20,6 +20,7 @@ with sync_playwright() as p:
     # the month with the most customers
     pg.evaluate("() => { const n = ym => new Set(Object.values(GSTR.one(ym, S.gstReg || '')).filter(Array.isArray).flat().map(r => r.gstin || r.party)).size; S.gstYm = GSTR.months().reduce((a, m) => n(m) > n(a) ? m : a); render(); }")
     pg.click('nav[aria-label="GST"] button[data-part="r1"]'); pg.wait_for_timeout(500)
+    pg.click('nav[aria-label="Return"] button[data-sub="details"]'); pg.wait_for_timeout(400)   # 09-Oct-2026: the customers and HSN on GSTR-1's Details tab
     rows = lambda: pg.locator("#r1Table > tbody > tr").count()
     n0 = rows()
     ok(n0 > 1 and "HSN summary (12)" in pg.inner_text("#app"), "GSTR-1: customers, and the HSN summary")
@@ -33,6 +34,7 @@ with sync_playwright() as p:
     pg.click('#r1Table tbody tr td button >> nth=0'); pg.wait_for_timeout(400)
     ok(pg.locator("#r1Table table").count() == 0, "and again closes them")
     # customers' IMS rejections: find an invoice by number, mark it, say what to do, and take it back
+    pg.click('nav[aria-label="Return"] button[data-sub="diff"]'); pg.wait_for_timeout(400)   # 09-Oct-2026: IMS rejections on GSTR-1's Differences tab
     inv = pg.evaluate("GSTR.one(S.gstYm, S.gstReg || '').b2b[0].no")
     box = pg.locator('input[aria-label="Invoice or credit note number"]'); box.click(); pg.keyboard.type(inv, delay=15); pg.wait_for_timeout(600)
     ok(pg.locator('button:text-is("Mark as rejected")').count() >= 1 and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Invoice or credit note number", "IMS: found by number while typing, the cursor stays")
@@ -43,6 +45,7 @@ with sync_playwright() as p:
     pg.click('button:text-is("not rejected after all")'); pg.wait_for_timeout(400)
     ok(len(pg.evaluate("CustIMS.items(S.gstReg || '')")) == 0, "“not rejected after all” takes it off")
     # the funnel on a column heading, as on every old table: filters the customers, and stays through a redraw
+    pg.click('nav[aria-label="Return"] button[data-sub="details"]'); pg.wait_for_timeout(400)   # back to GSTR-1's Details tab
     hsn = pg.locator('#r1Table')
     n = hsn.locator("tbody tr").count()
     ok(n >= 4 and hsn.locator("th .gff").count() == 5, "funnels on the customers' headings")
@@ -59,6 +62,7 @@ with sync_playwright() as p:
     pg.select_option('select[aria-label="Part"]', "B2B"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.r1F.part") == "B2B", "the part filter")
     pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(500)
+    pg.click('nav[aria-label="Return"] button[data-sub="details"]'); pg.wait_for_timeout(400)   # 09-Oct-2026: table 4 on GSTR-3B's Details tab
     before = pg.inner_text('tr:has-text("(C) Net ITC available")')
     inp = pg.locator('input[aria-label="rev2 IGST"]'); inp.fill("1000"); inp.press("Tab"); pg.wait_for_timeout(500)
     k = pg.evaluate("(S.gstReg || '') + '|' + S.gstYm")

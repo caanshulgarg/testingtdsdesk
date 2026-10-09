@@ -221,3 +221,5 @@ run_company_scope_server.py           120
 run_round4_ux.py                      180  TDSDESK_SITE=../app/dist-test
 # the Tally redesign (09-Oct-2026): Your Tally connection, Back to the client, the client's Tally link line, phone width
 run_tally_ux.py                       240  TDSDESK_SITE=../app/dist-test
+# app-tdsgst (09-Oct-2026): the TDS and GST return pages redesigned; every file and amount as before (tests/fixtures/tdsgst-before.json)
+run_tdsgst_ui.py                      600  TDSDESK_SITE=../app/dist-test
