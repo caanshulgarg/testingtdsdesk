@@ -2,9 +2,7 @@
 
 Written 10-Oct-2026 from the repository only. Nothing here has been run on live, and no tool has read the live database.
 "Live" means app.fincom.live and its Supabase project. Its id is never written here: a hook blocks it.
-"Staging" means staging.fincom.live and project `qbocskaiewaxqcvaunzc`.
-
-The plan has three parts: this checklist, then a rehearsal on a copy, then the go-live together. The owner opens the
+"Staging" means staging.fincom.live and project `qbocskaiewaxqcvaunzc`. The plan has three parts: this checklist, then a rehearsal on a copy, then the go-live together. The owner opens the
 go-live window by lifting the hook himself, and closes it by putting the hook back.
 
 ## 1. What differs between staging and live
@@ -28,12 +26,9 @@ select id from storage.buckets order by 1;
 ```
 
 The list below starts after Build 199. It follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which
-`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped.
-
-That gives **67 files: 66 to run, plus 31 for the owner to decide**. Add `gst-taxpro/schema.sql` (3adf1dc2…) if live has
+`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files: 66 to run, plus 31 for the owner to decide**. Add `gst-taxpro/schema.sql` (3adf1dc2…) if live has
 no `gst_sessions` table. Its header says "apply the same on live before gst-taxpro goes there", and it also names
 staging's address, so it is edited first like 13 and 16.
-
 Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's comes from branch `perms-61`.
 Folders are under `server/`. "Edit first" means the file names staging's web address in a pg_cron job. Before it runs
 on live, Claude puts live's address in, prints the new md5 and the diff, and the owner approves both.
@@ -108,38 +103,29 @@ on live, Claude puts live's address in, prints the new md5 and the diff, and the
 | 66 | 65 | `tally-cloud/migration-65-selfchecks.sql` | `51a224cf8e00b7a46da42da4694e8993` |  |
 | 67 | 66 | `tally-cloud/migration-66-recorder-masters.sql` | `fea953435146ec8bdc3e77c5808e1714` |  |
 
-Some files contain the words "delete from". In 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the
+- Some files contain the words "delete from". In 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the
 migration itself removes no rows. Only 23 deletes rows when it runs: it deletes `tally_ledger_day` rows and builds the
 same days again. In 31 the delete touches a temporary list only.
-
-Live has real data in the cloud copy, and these files change it as they run: 13, 23, 27, 32 and 37. In the rehearsal,
+- Live has real data in the cloud copy, and these files change it as they run: 13, 23, 27, 32 and 37. In the rehearsal,
 Claude takes counts and totals before and after each of them.
-
-The SQL editor rule: 43, 44, 48, 50, 55 and 68 were run by the owner in the SQL editor on staging. On live, 48 and 50
+- The SQL editor rule: 43, 44, 48, 50, 55 and 68 were run by the owner in the SQL editor on staging. On live, 48 and 50
 must be run that way, by the owner. The others may go in md5-checked pieces as on staging (`docs/HANDOVER.md`, "How to
 apply a migration").
-
-**Extensions live needs** (staging has these): pg_cron 1.6.4, pg_net 0.20.4, pgmq 1.5.1, supabase_vault 0.3.1, pgcrypto
+- **Extensions live needs** (staging has these): pg_cron 1.6.4, pg_net 0.20.4, pgmq 1.5.1, supabase_vault 0.3.1, pgcrypto
 and uuid-ossp. The owner switches on any that are missing (Database → Extensions) before step 4 below.
 
-**pg_cron jobs after the migrations** (as on staging; `tds-desk-nightly-backup` should already be there):
-
-| Job | When (UTC) | From |
-|---|---|---|
-| tally-work | every 30 s | 13 (edited) |
-| tally-post-requeue | every minute | 13 |
-| gst-taxpro-refresh, gst-daily | */20 min; 01:30–05:30 hourly | gst-taxpro/schema.sql, 16 (both edited) |
-| tally-recorder-drain | every 30 s | 47 |
-| tally-alert-gaps / -silent / -summary | */10; */30 03–13 Mon–Sat; 13:30 | 47 |
-| tally-recorder-archive-trim | 21:17 | 48 |
-
+**pg_cron jobs after the migrations** (as on staging; `tds-desk-nightly-backup` should already be there; times UTC):
+`tally-work` every 30 s and `tally-post-requeue` every minute (13, edited); `gst-taxpro-refresh` */20 and `gst-daily`
+01:30–05:30 hourly (schema.sql and 16, both edited); `tally-recorder-drain` every 30 s, `tally-alert-gaps` */10,
+`tally-alert-silent` */30 03–13 Mon–Sat, `tally-alert-summary` 13:30 (47); `tally-recorder-archive-trim` 21:17 (48).
 **pgmq queues:** `tally_work` (13) and `tally_recorder` (47). **Vault:** `tally_work_key` (made by 13) and `gst_cron_key`
 (made by schema.sql). **Buckets:** `support-files`, `tally-days` and `tally-support` (should be there already), and
 `tally-uploads` (47).
 
 ### 1.2 Edge functions (staging versions, read 10-Oct)
 
-Deploy each one with the files listed in `server/_shared/README.md`. Always include `../_shared/cors.ts`.
+Deploy each one with the files listed in `server/_shared/README.md`. Always include `../_shared/cors.ts`. Before deploying, the owner
+writes down live's current version of each function: that is the way back.
 
 | Function | Staging | Source | Note |
 |---|---|---|---|
@@ -151,20 +137,13 @@ Deploy each one with the files listed in `server/_shared/README.md`. Always incl
 | gst-api | v10 | server/gst-api | uses fyn-relay |
 | support-mail | v10 | server/support-mail | |
 | signup | v10 | **not in the repository** | leave live's own as it is |
-
-Before deploying, the owner writes down live's current version of each function. That is the way back.
-
 ### 1.3 Secrets and settings (names only)
 
-- **Function secrets:**
-  - `APP_URL` = https://app.fincom.live/ (admin, support-mail)
-  - `INVITE_MAIL_FROM`, `RESEND_API_KEY`, `SUPPORT_MAIL_FROM`, `SUPPORT_MAIL_TO`
-  - `ALLOWED_ORIGINS` (optional)
-  - `FYN_BASE_URL`, `FYN_CLIENT_ID`, `FYN_CLIENT_SECRET`, `FYN_RELAY_URL`, `FYN_RELAY_KEY`
-  - `TAXPRO_ASP_ID`, `TAXPRO_ASP_PASSWORD`, `TAXPRO_BASE_URL`, `TAXPRO_EINV_URL`, `TAXPRO_TRACK_PATH` and the
-    `TAXPRO_EINV_TEST_*` set
-  - `TALLY_UPLOAD_PIECE`, `TALLY_UPLOAD_MAX_TAIL`, `TALLY_WORK_VT` (optional; the defaults are as on staging)
-  - Supabase fills the `SUPABASE_*` secrets itself.
+- **Function secrets:** `APP_URL` = https://app.fincom.live/ (admin, support-mail); `INVITE_MAIL_FROM`,
+  `RESEND_API_KEY`, `SUPPORT_MAIL_FROM`, `SUPPORT_MAIL_TO`; `ALLOWED_ORIGINS` (optional); `FYN_BASE_URL`,
+  `FYN_CLIENT_ID`, `FYN_CLIENT_SECRET`, `FYN_RELAY_URL`, `FYN_RELAY_KEY`; `TAXPRO_ASP_ID`, `TAXPRO_ASP_PASSWORD`,
+  `TAXPRO_BASE_URL`, `TAXPRO_EINV_URL`, `TAXPRO_TRACK_PATH`, the `TAXPRO_EINV_TEST_*` set; `TALLY_UPLOAD_PIECE`,
+  `TALLY_UPLOAD_MAX_TAIL`, `TALLY_WORK_VT` (optional). Supabase fills the `SUPABASE_*` secrets itself.
 - **Vault:** `gsp:taxpro:aspid`, `gsp:taxpro:password` and `connector_signing_passphrase`, as on staging.
 - **Platform keys (FinCom admin):** `claude_api_key` and `google_vision_key`.
 - **Auth:** Site URL https://app.fincom.live/, with redirect `https://app.fincom.live/**`. Apply the settings in
@@ -185,12 +164,9 @@ Before deploying, the owner writes down live's current version of each function.
 - **Hosting.** Per docs/setup.md, live is `caanshulgarg/tds-desk` on GitHub Pages: copy the files in and push. Staging's
   root forwards to /review/, and live needs the same root page. Confirm with the owner that app.fincom.live is that
   repository's Pages address: this session cannot read that repository.
-- **Changes the live build needs:**
-  1. vite.config.js ships `assets/bridge-go` only for a test build with `FINCOM_SHIP_BRIDGE=1`.
-  2. build.py's live form still hands out the old PowerShell setup (`bridge-setup`).
-  3. A live build has no Sentry.
-
-  For live users to get 2.4.1, (1) and (2) need a small reviewed change.
+- **Changes the live build needs:** vite.config.js ships `assets/bridge-go` only for a test build with
+  `FINCOM_SHIP_BRIDGE=1`, and build.py's live form still hands out the old PowerShell setup (`bridge-setup`). For live
+  users to get 2.4.1, both need a small reviewed change. (A live build has no Sentry; that is intended.)
 
 ### 1.5 The bridge for live users
 
@@ -198,20 +174,16 @@ Before deploying, the owner writes down live's current version of each function.
   f59866e0…6eab). These are the same files as `assets-test/bridge-go/`.
 - A bridge whose `CloudUrl` is not staging takes https://app.fincom.live/ as its FinCom address (bridge-go/mode.go). It
   looks for updates at **https://app.fincom.live/assets/bridge-go/latest.json** and `latest.json.sig`.
-- So live needs a `latest.json` whose two URLs point at app.fincom.live/assets/bridge-go/. As on staging, it has no
-  `.sig`, so nothing updates by itself: each computer is installed by hand.
+  So live needs a `latest.json` whose two URLs point there; as on staging it has no `.sig`, so each computer is
+  installed by hand.
 - Live's computers run PowerShell bridge 1.14.x. The Go bridge adopts a 1.15.0 key (`adoptCloudKey`), so a 1.14
   computer is paired again with a connect code.
 
 ### 1.6 Sentry
 
 There are three projects in the organisation garg-shekhar-company: app …4724864, cloud …5118080 and bridge …5642368.
-The owner's condition of 08-Oct allows staging only, and the code enforces it:
-
-- `sentry.ts` and `crash.go` are on only for staging's host;
-- a live build carries no Sentry code.
-
-Live therefore goes without Sentry unless the owner widens the condition, which would need a code change and a new
+The owner's condition of 08-Oct allows staging only, and the code enforces it (`sentry.ts` and `crash.go` are on
+only for staging's host; a live build carries no Sentry code). Live goes without Sentry unless the owner widens the condition, which would need a code change and a new
 review.
 
 ## 2. The go-live, in order
@@ -240,19 +212,14 @@ the backup from step 2 is a full way back.
 
 ## 3. Rehearsal
 
-1. **The copy.** The owner makes it and gives Claude its id. There are two ways:
-   - a new throwaway project restored from live's backup (Dashboard → Backups → Restore to a new project);
-   - a Supabase branch.
-
-   A branch is made from live's dashboard and starts empty, so the restored project is the better rehearsal. Claude
-   checks the id is not live's before any call; the hook would also stop it.
+1. **The copy.** The owner makes it and gives Claude its id: best, a new throwaway project restored from live's backup
+   (Dashboard → Backups → Restore to a new project). A Supabase branch is made from live's dashboard and starts empty,
+   so it rehearses less. Claude checks the id is not live's before any call; the hook would also stop it.
 2. **Treat it as live data.** The copy holds real clients. Claude reads only counts and totals from it. The owner
    deletes the project after the rehearsal.
-3. **Run steps 3, 5, 6, 7 and 10 exactly as in section 2, timing each.**
-   - Edit 13, 16 and schema.sql for the copy's own address. Never leave staging's address in a copy: its cron would call
-     staging.
-   - Point a local live build (1.4) at the copy, or test the copy with the bridge's `CloudUrl` set to it.
-   - Post into a test company only.
+3. **Run steps 3, 5, 6, 7 and 10 exactly as in section 2, timing each.** Edit 13, 16 and schema.sql for the copy's own
+   address (never staging's: its cron would call staging). Point a local live build (1.4), or a bridge's `CloudUrl`,
+   at the copy. Post into a test company only.
 4. **Record** for each file: the minutes it took, whether it ran in pieces or in the SQL editor, and any lock wait.
    Record the trial balance and the live entry count of each book before and after 23, 27, 32 and 37.
 5. **Done when** every step passes twice, from two separate restores, and section 2's times are replaced with the
@@ -277,24 +244,15 @@ the backup from step 2 is a full way back.
    staging every 30 seconds. They must be edited, which gives them new md5s that the owner approves.
 2. **Live's starting point is not known.** This list assumes live has exactly Build 199's files. The inventory query
    decides; if live is ahead or behind, the list changes before anything runs.
-3. **Data that migrations transform:**
-   - 23 renames names and rebuilds `tally_ledger_day` days;
-   - 27 sets clients' `postTo`;
-   - 32 and 37 re-mark voucher origins;
-   - 13 gives every device a new wake token.
-
-   None of these is undone by a later migration. Only the backup undoes them.
+3. **Data that migrations transform:** 23 renames names and rebuilds `tally_ledger_day` days; 27 sets clients'
+   `postTo`; 32 and 37 re-mark voucher origins; 13 gives every device a new wake token. None of these is undone by a later migration. Only the backup undoes them.
 4. **31 never ran on staging** (`tally_ledgers.raw_name` is missing there), yet it is in the numbered chain. The tested
    order goes from 30 to 32 without it.
 5. **61 is not on tax-accuracy** (only on `perms-61`). It narrows what `authenticated` may write on clients, records
    and activity. Old Build 199 tabs left open would then fail their writes. `live-members-fix.sql` (perms-61, md5
    fd84f633…) was for the owner to run on live: was it run?
-6. **Staff accounts:**
-   - 61 closes members self-promotion;
-   - invites need `APP_URL` and Resend;
-   - the platform admin's second step (admin function) is not switched on.
-
-   Check that every live staff member can still sign in during step 10.
+6. **Staff accounts:** 61 closes members self-promotion; invites need `APP_URL` and Resend; the platform admin's
+   second step (admin function) is not switched on. Check that every live staff member can still sign in during step 10.
 7. **Bridges 1.14 during and after the window.** It is not tested whether tally-ingest v43 still accepts a 1.14
    PowerShell bridge. Until 2.4.1 is installed, a 1.14 computer may stop syncing or posting.
 8. **The bridge release table.** On live, `tally_bridge_releases` and the allow-list are empty. Staging runs with "any
