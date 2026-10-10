@@ -1,0 +1,935 @@
+[01:10:33] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1533 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+[01:11:07] ---- the stub cloud and the bridge
+[ledger Spike Income] 36 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[renum journal] 92 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: c89c58ffa929d561d1de3d7bf3ca175dbc24af22 Bridge 2.4.1 built (from the published 2.4.0, after the gate fix): setup SHA-256 79e95ba3…e06a (program f59866e0…6eab), release log row (2.4.0 superseded; the withdrawn build 8c5b8b07…75b3 recorded), notes and test sheet fingerprint and build time (10-Oct-2026 04:59 IST); 2.4.0 assets moved to bridge-go-old; not published
+[01:11:13] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1360)
+  INFO s235: the runner's clock Sat 01:11 (UTC) is outside office hours: KeepOfficeFrom 0, KeepOfficeTo 24 set
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-10 01:11:27  FinCom Bridge 2.4.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-10 01:11:28  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-10 01:11:28  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-10 01:11:28  Recorder: re-scan of the add-on's files for 2.4.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-10 01:11:28  Check:  - 
+  bridge log: 2026-10-10 01:11:30  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+  bridge log: 2026-10-10 01:11:30  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+  bridge log: 2026-10-10 01:11:30  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-10 01:11:33  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-10 01:11:33  Tally 9000 did not answer in time at 01:11:33 (TDSDeskCompanies, try 1); trying again by itself at 01:11:48
+  bridge log: 2026-10-10 01:11:33  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+  bridge log: 2026-10-10 01:11:34  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-10 01:11:34  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-10 01:11:34  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskCompanies) 600ms after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-10 01:11:39  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+  bridge log: 2026-10-10 01:11:39  Company FinCom Spike Co: its Tally GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6 is held from now on
+  bridge log: 2026-10-10 01:11:39  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-10 01:11:39  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=211
+  bridge log: 2026-10-10 01:11:39  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=211)
+  bridge log: 2026-10-10 01:11:39  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=2 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge log: 2026-10-10 01:11:39  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading
+  INFO add-on: recorder files after start: none
+[01:12:15] ---- s235: FinCom's read stop and the held lines, a real failure, the Tally-not-open notification
+  INFO s235: bridge processes: pid 6504: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 1256: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 7572: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 6504
+  INFO s235: proxy beside Tally: True; bridge config TallyHost '127.0.0.2', CloudBeatSec '5', KeepOfficeFrom '0', KeepOfficeTo '24'
+  INFO s235: the bridge's starting point recorded: True
+[01:12:15] ---- s235 prep: three receipts by keys
+[shot] tds-001-gw0 (1024x768)
+[01:12:18] [tds] screen tds-001-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 ....
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-002-prep-A-vouchers (1024x768)
+[01:12:22] [tds] screen tds-002-prep-A-vouchers : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Pa ment No. 1 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print upr-26 Wednesday Amount Fl: Help Date Company Contra F5: Payment Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j o...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-003-prep-A-receipt (1024x768)
+[01:12:26] [tds] screen tds-003-prep-A-receipt : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 1 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print upr-26 Wednesday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c '...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-004-prep-A-datebox (1024x768)
+[01:12:29] [tds] screen tds-004-prep-A-datebox : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:12 AM 10/10/2026
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-005-prep-A-dated (1024x768)
+[01:12:33] [tds] screen tds-005-prep-A-dated : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 1 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accep...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-006-prep-A-account (1024x768)
+[01:12:36] [tds] screen tds-006-prep-A-account : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 1 Account Cash • Cument balance: 10.00 Dr Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337....
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-007-prep-A-particular (1024x768)
+[01:12:40] [tds] screen tds-007-prep-A-particular : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 1 Account Cash • Cument balance: 10.00 Dr Particulars Spike Income CurBal: 10.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning lati...
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-prep-A-amount (1024x768)
+[01:12:44] [tds] screen tds-008-prep-A-amount : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 1 Account Cash • Cument balance: 710.00 Dr Particulars Spike Income CurBa1: 710.00 Cr 31 Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount 700.00 700.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Config...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[s235 prep-A] Tally: Receipt no 1 of 20261031 mid 3 AlterID 3 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003; line after 0.9 s: [01:12:45 created id=84b7a598870e972e4e5a26938943b2f9 mid=3 aid=3 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 body=yes(876 chars) guidHeld=False held='']
+  INFO s235 prep A (31-10-2026): Tally Receipt no 1 of 20261031 mid 3 AlterID 3 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003; line after 0.9 s [01:12:45 created id=84b7a598870e972e4e5a26938943b2f9 mid=3 aid=3 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 body=yes(876 chars) guidHeld=False held='']
+[shot] tds-009-gw0 (1024x768)
+[01:12:47] [tds] screen tds-009-gw0 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accep...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-010-gw1 (1024x768)
+[01:13:01] [tds] screen tds-010-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .33...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-011-gw2 (1024x768)
+[01:13:05] [tds] screen tds-011-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-012-prep-D1-vouchers (1024x768)
+[01:13:09] [tds] screen tds-012-prep-D1-vouchers : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accep...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-013-prep-D1-receipt (1024x768)
+[01:13:13] [tds] screen tds-013-prep-D1-receipt : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accep...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-014-prep-D1-datebox (1024x768)
+[01:13:16] [tds] screen tds-014-prep-D1-datebox : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 1-11-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:13 AM 10/10/2026
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-015-prep-D1-dated (1024x768)
+[01:13:20] [tds] screen tds-015-prep-D1-dated : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j ...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-016-prep-D1-account (1024x768)
+[01:13:23] [tds] screen tds-016-prep-D1-account : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cash • Cument balance: 710.00 Dr Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j ob...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-017-prep-D1-particular (1024x768)
+[01:13:28] [tds] screen tds-017-prep-D1-particular : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cash • Cument balance: 710.00 Dr Particulars Spike Income CurBa1: 710.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning lati...
+[keys] '300{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-018-prep-D1-amount (1024x768)
+[01:13:31] [tds] screen tds-018-prep-D1-amount : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cash • Cument balance: 1,010.00 Dr Particulars Spike Income CurBal: 1,010.00 Cr 31 Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount 300.00 300.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Conf...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[s235 prep-D1] Tally: Receipt no 2 of 20261101 mid 4 AlterID 4 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; line after 1.6 s: [01:13:34 created id=3fdacca6f3a6f52c3b0651adc2dcd3b0 mid=4 aid=4 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004 body=yes(876 chars) guidHeld=False held='']
+  INFO s235 prep D1 (1-11-2026): Tally Receipt no 2 of 20261101 mid 4 AlterID 4 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; line after 1.6 s [01:13:34 created id=3fdacca6f3a6f52c3b0651adc2dcd3b0 mid=4 aid=4 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004 body=yes(876 chars) guidHeld=False held='']
+[shot] tds-019-gw0 (1024x768)
+[01:13:35] [tds] screen tds-019-gw0 : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-020-gw1 (1024x768)
+[01:13:38] [tds] screen tds-020-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-021-gw2 (1024x768)
+[01:13:42] [tds] screen tds-021-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Sunday, I-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search I-NovQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .33...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-022-prep-D2-vouchers (1024x768)
+[01:13:46] [tds] screen tds-022-prep-D2-vouchers : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-023-prep-D2-receipt (1024x768)
+[01:13:50] [tds] screen tds-023-prep-D2-receipt : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 1-Nov-26 Sunday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-024-prep-D2-datebox (1024x768)
+[01:13:53] [tds] screen tds-024-prep-D2-datebox : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 2-11-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:13 AM 10/10/2026
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-025-prep-D2-dated (1024x768)
+[01:14:00] [tds] screen tds-025-prep-D2-dated : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept Search...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-026-prep-D2-account (1024x768)
+[01:14:03] [tds] screen tds-026-prep-D2-account : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,010.00 Dr Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-027-prep-D2-particular (1024x768)
+[01:14:07] [tds] screen tds-027-prep-D2-particular : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,010.00 Dr Particulars Spike Income CurBal: 1,010.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ...
+[keys] '400{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-028-prep-D2-amount (1024x768)
+[01:14:11] [tds] screen tds-028-prep-D2-amount : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,410.00 Dr Particulars Spike Income CurBa1: 1,410.00 Cr 31 Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount 400.00 400.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure ...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[s235 prep-D2] Tally: Receipt no 3 of 20261102 mid 5 AlterID 5 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; line after 1.2 s: [01:14:13 created id=aa3f1590807abc9e014fe885d42e20f7 mid=5 aid=5 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005 body=yes(876 chars) guidHeld=False held='']
+  INFO s235 prep D2 (2-11-2026): Tally Receipt no 3 of 20261102 mid 5 AlterID 5 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; line after 1.2 s [01:14:13 created id=aa3f1590807abc9e014fe885d42e20f7 mid=5 aid=5 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005 body=yes(876 chars) guidHeld=False held='']
+[shot] tds-029-gw0 (1024x768)
+[01:14:14] [tds] screen tds-029-gw0 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-030-gw1 (1024x768)
+[01:14:17] [tds] screen tds-030-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337....
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-031-gw2 (1024x768)
+[01:14:21] [tds] screen tds-031-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Monday, 2-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+  bridge log: 2026-10-10 01:12:45  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 84b7a598…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:12:45  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-10 01:12:45  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 84b7a598…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 3
+  bridge log: 2026-10-10 01:12:45  Renumbering: made Receipt 1 of 31-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-10 01:13:33  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 3fdacca6…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:13:34  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-10 01:13:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 3fdacca6…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004, AlterID 4
+  bridge log: 2026-10-10 01:13:34  Renumbering: made Receipt 2 of 01-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-10 01:13:35  Nightly catch-up: waiting, someone is working in Tally
+  bridge log: 2026-10-10 01:14:12  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line aa3f1590…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:14:13  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-10 01:14:13  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line aa3f1590…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005, AlterID 5
+  bridge log: 2026-10-10 01:14:13  Renumbering: made Receipt 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+[01:14:21] ---- s1 stop: three lines held, nothing asked
+  INFO s235 s1 stop: stub True; bridge log: '2026-10-10 01:14:24  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom'; tray status readStopped: {"at":"2026-10-10T01:14:21","by":"fincom","reason":"Stopped by the owner from FinCom (harness s1)"}
+[shot] tds-032-gw0 (1024x768)
+[01:14:26] [tds] screen tds-032-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Monday, 2-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-033-s1-create-vouchers (1024x768)
+[01:14:30] [tds] screen tds-033-s1-create-vouchers : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept ...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-034-s1-create-receipt (1024x768)
+[01:14:34] [tds] screen tds-034-s1-create-receipt : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept ...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-035-s1-create-datebox (1024x768)
+[01:14:37] [tds] screen tds-035-s1-create-datebox : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 3-11-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:14 AM 10/10/2026
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-036-s1-create-dated (1024x768)
+[01:14:41] [tds] screen tds-036-s1-create-dated : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 2-Oct-26 Friday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j ...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-037-s1-create-account (1024x768)
+[01:14:45] [tds] screen tds-037-s1-create-account : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cash • Cument balance: 1,410.00 Dr Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 2-Oct-26 Friday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-038-s1-create-particular (1024x768)
+[01:14:48] [tds] screen tds-038-s1-create-particular : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cash • Cument balance: 1,410.00 Dr Particulars Spike Income CurBal: 1,410.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Oct-26 Friday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning ...
+[keys] '500{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-039-s1-create-amount (1024x768)
+[01:14:52] [tds] screen tds-039-s1-create-amount : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 4 Account Cash • Cument balance: 1,910.00 Dr Particulars Spike Income CurBal: 1,910.00 Cr 31 Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Oct-26 Friday Amount 500.00 500.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Conf...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[s235 s1-create] Tally: Receipt no 4 of 20261002 mid 6 AlterID 6 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006; line after 0.6 s: [01:14:53 created id=ec6d19a0ad880a3fc05197c89810e2eb mid=6 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']
+[shot] tds-040-gw0 (1024x768)
+[01:14:54] [tds] screen tds-040-gw0 : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 2-Oct-26 Friday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-041-gw1 (1024x768)
+[01:14:58] [tds] screen tds-041-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-042-gw2 (1024x768)
+[01:15:01] [tds] screen tds-042-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Friday, 2-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[shot] tds-043-s1-alter-goto (1024x768)
+[01:15:05] [tds] screen tds-043-s1-alter-goto : EDU {I' Prime Unity Quit Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import K: Company Y: Data List of Reports Saved Views Bills Payable - GST E: Export M: Share p: print Fl: Help x Bills Payable - GST - Sundry Creditors Bills Payable - GST - Sundry Debtors Bills Receivable - GST Bills Receivable - GST - Sundry Creditors Bills Receivable - GST - Sundry Debtors Purchase Dashboard Sales Dashboard IMS Inward Supplies - Filed Invoices Ledger Vouchers - GST Details Outstanding MSME Bills Common Reports inCom Spike (Predefined) (Predefined) (Predefined) (Predefined) (Pre...
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-044-s1-alter-daybook (1024x768)
+[01:15:12] [tds] screen tds-044-s1-alter-daybook : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 2-Oct-26 Credit Amount Outwards Qt 500.00 U: Restore Line Company 166- F4: Voucher Date 2-Oct-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-045-s1-alter-db-date (1024x768)
+[01:15:15] [tds] screen tds-045-s1-alter-db-date : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime Change Date Unity Quit K: Company Y: Data Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Change Date 2-10-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:15 AM 10/10/2026
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-046-s1-alter-db-dated (1024x768)
+[01:15:20] [tds] screen tds-046-s1-alter-db-dated : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 310ct-26 Credit Amount Outwards Qt 700.00 U: Restore Line Company 166- F4: Voucher Date 31-Oct-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a ...
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[shot] tds-047-s1-alter-db-first (1024x768)
+[01:15:23] [tds] screen tds-047-s1-alter-db-first : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 310ct-26 Credit Amount Outwards Qt 700.00 U: Restore Line Company 166- F4: Voucher Date 31-Oct-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a ...
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-048-s1-alter-open (1024x768)
+[01:15:28] [tds] screen tds-048-s1-alter-open : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Recei t No. 1 Account Cash • Cument balance: 1,910.00 Dr Particulars Spike Income CurBal: 1,910.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print El -Oct-26 Saturday Amount 700.00 700.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: Delete Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adj...
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-049-s1-alter-at-amount (1024x768)
+[01:15:37] [tds] screen tds-049-s1-alter-at-amount : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Recei t No. 1 Account Cash • Cument balance: 1,910.00 Dr Particulars Spike Income CurBal: 1,910.00 Cr Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 310ct-26 Saturday Amount üoo.oo 700.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post ...
+[keys] '800{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-050-s1-alter-amount (1024x768)
+[01:15:41] [tds] screen tds-050-s1-alter-amount : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Recei t No. 1 Account Cash • Cument balance: 2,010.00 Dr Particulars Spike Income CurBa1: 2,010.00 Cr 31 Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 310ct-26 Saturday Amount 800.00 800.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: A Accept Search D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional po...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[s235 s1-alter] Tally: Receipt no 1 of 20261031 mid 3 AlterID 7 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003; line after 0.7 s: [01:15:42 altered id=e4a158431f1b3016566d12d051edb247 mid=3 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']
+[shot] tds-051-gw0 (1024x768)
+[01:15:44] [tds] screen tds-051-gw0 : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 310ct-26 Credit Amount Outwards Qt 800.00 U: Restore Line Company 166- F4: Voucher Date 31-Oct-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-052-gw1 (1024x768)
+[01:15:47] [tds] screen tds-052-gw1 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[shot] tds-053-s1-delete-goto (1024x768)
+[01:15:51] [tds] screen tds-053-s1-delete-goto : EDU {I' Prime Unity Quit Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import K: Company Y: Data List of Reports Saved Views Bills Payable - GST E: Export M: Share p: print Fl: Help x Bills Payable - GST - Sundry Creditors Bills Payable - GST - Sundry Debtors Bills Receivable - GST Bills Receivable - GST - Sundry Creditors Bills Receivable - GST - Sundry Debtors Purchase Dashboard Sales Dashboard IMS Inward Supplies - Filed Invoices Ledger Vouchers - GST Details Outstanding MSME Bills Common Reports inCom Spike (Predefined) (Predefined) (Predefined) (Predefined) (Pre...
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-054-s1-delete-daybook (1024x768)
+[01:15:58] [tds] screen tds-054-s1-delete-daybook : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 310ct-26 Credit Amount Outwards Qt 800.00 U: Restore Line Company 166- F4: Voucher Date 31-Oct-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a ...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-055-s1-delete-db-date (1024x768)
+[01:16:01] [tds] screen tds-055-s1-delete-db-date : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime Change Date Unity Quit K: Company Y: Data Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Change Date 31-10-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:16 AM 10/10/2026
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-056-s1-delete-db-dated (1024x768)
+[01:16:06] [tds] screen tds-056-s1-delete-db-dated : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 1- Nov-26 Company 166- F4: Voucher Date I-Nov-26 Quit Particulars Spike Income Enter: Alter Vch No. 2 Delete Debit Amount Inwards Q Cancel Vch Credit Amount Outwards Qt 300.00 U: Restore Line Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166...
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[shot] tds-057-s1-delete-db-first (1024x768)
+[01:16:09] [tds] screen tds-057-s1-delete-db-first : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 1- Nov-26 Company 166- F4: Voucher Date I-Nov-26 Quit Particulars Spike Income Enter: Alter Vch No. 2 Delete Debit Amount Inwards Q Cancel Vch Credit Amount Outwards Qt 300.00 U: Restore Line Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166...
+[keys] '%d' -> Tally 'TallyPrime:9000'
+[shot] tds-058-s1-delete-delete-q (1024x768)
+[01:16:13] [tds] screen tds-058-s1-delete-delete-q : EDU {I' Prime K: Company Y: Data Day Book Find details entered In masters and transactions Z: Exchange FinCom Spike Co Delete o Yes or No O: Import E: Export M: Share p: print x Fl:Help F2: Date F3: Company F4: Voucher Type F 7: Show profit F8: Columnar FIO B: Basis of = Values H: Change = View J: Exception = Reports L: Save View F: Apply = Filter • Filter = Details to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Unity Q: Quit Enter: Alter Space: Seé:t Q A: Add Vch I R: Vch l: Insert Vch Search p: Delete I cancel vch R: Remue Line U: Restore Line...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[s235 s1-delete] Tally: True; line after 0.2 s: [01:16:14 deleted id=4c0c052960d0001a8af41a3bdc266e3d mid=4 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']
+[shot] tds-059-gw0 (1024x768)
+[01:16:16] [tds] screen tds-059-gw0 : Find details entered in masters and transactions. EDU {I' Prime (Alt+F) O: Import K: Company Y: Data Particulars Z: Exchange A Add Vch Search E: Export M: Share p: print Fl: Help Date to ru ion Day Book Day Book Date Unity Quit inCom Spike Vch Type DuÅicate Vch I Insert Vch For 1- Nov-26 Company 166- F4: Voucher Vch No. Delete Debit Amount Inwards Q Cancel Vch Credit Amount Outwards Qt U: Restore Line Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-060-gw1 (1024x768)
+[01:16:19] [tds] screen tds-060-gw1 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Sunday, I-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+  INFO s235: the bridge's held list: C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json
+  bridge log: 2026-10-10 01:14:24  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom
+  bridge log: 2026-10-10 01:14:25  Nightly catch-up: not finished (reading from Tally is stopped on this computer (Stopped by the owner from FinCom (harness s1))) (13 request(s) to Tally)
+  bridge log: 2026-10-10 01:14:29  Light check: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s1))
+  bridge log: 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tally. Post; asked when reading is resumed (not counted as a try)
+  bridge log: 2026-10-10 01:14:53  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:53  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:14:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tally. Post; asked when reading is resumed (not counted as a try)
+  bridge log: 2026-10-10 01:15:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:46  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:46  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:46  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:46  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:48  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:48  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:48  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:48  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:49  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:49  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:49  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:49  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:50  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:50  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:50  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:50  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:52  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:52  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:52  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:52  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:53  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:53  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:53  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:55  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:55  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:55  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:55  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:57  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:15:59  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:00  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-10 01:16:14  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 4c0c0529…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:16:14  Recorder: FinCom Spike Co: delete of mid 4: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+  bridge log: 2026-10-10 01:16:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:14  Renumbering: deleted Receipt 2 of 01-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-10 01:16:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+######## PASS s1 stop: three lines held, nothing asked: Tally: created Receipt no 4 of 20261002 mid 6 AlterID 6 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006; altered mid 3 AlterID 3 -> 7; deleted Receipt no 2 of 20261101 mid 4 AlterID 4 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004. Stub lines (seconds from each save, 10 s at most): created 0.6 s [01:14:53 created id=ec6d19a0ad880a3fc05197c89810e2eb mid=6 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']; altered 0.7 s [01:15:42 altered id=e4a158431f1b3016566d12d051edb247 mid=3 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']; deleted 0.2 s [01:16:14 deleted id=4c0c052960d0001a8af41a3bdc266e3d mid=4 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']. Held with the stop's words, no body: True; the delete held for its proof with no GUID: True. Voucher requests that reached Tally during the stop (proxy): none; every request the bridge sent Tally then: TDSDeskCompanies x3. Held list (no try counted: True; the delete's keepGuid is its GUID: False): created tries=0 freshTries=0 asked=0 allow=2 fresh=True slow=0 freshSlow=False final=False keepGuid= why='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed'; altered tries=0 freshTries=0 asked=0 allow=2 fresh=True slow=0 freshSlow=False final=False keepGuid= why='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed'; deleted tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'. Bridge log: 2026-10-10 01:14:24  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom | 2026-10-10 01:14:25  Nightly catch-up: not finished (reading from Tally is stopped on this computer (Stopped by the owner from FinCom (harness s1))) (13 request(s) to Tally) | 2026-10-10 01:14:29  Light check: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s1)) | 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally ... | 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tall... | 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally ... | 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tall... | 2026-10-10 01:16:14  Recorder: FinCom Spike Co: delete of mid 4: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+[01:16:22] ---- s2 lift: bodies and the delete with its GUID
+  INFO s235 s2 lift: stub True; bridge log: '2026-10-10 01:16:24  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))'
+[s235] settled after 13 s
+  bridge log: 2026-10-10 01:16:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:24  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+  bridge log: 2026-10-10 01:16:25  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 7
+  bridge log: 2026-10-10 01:16:25  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 and body
+  bridge log: 2026-10-10 01:16:25  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-10 01:16:25  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006, AlterID 6
+  bridge log: 2026-10-10 01:16:25  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006 and body
+  bridge log: 2026-10-10 01:16:25  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 4c0c0529…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:16:25  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-10 01:16:26  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+  bridge log: 2026-10-10 01:16:26  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 4c0c0529…): proven in this Tally now: the delete goes as 4c0c052960d0001a8af41a3bdc266e3d:resolved
+  bridge log: 2026-10-10 01:16:26  Recorder: held lines: 0 from FinCom, 3 asked, 3 resolved, 0 still held (3 in the list)
+  bridge log: 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; the GUID its MasterID makes agrees
+  bridge log: 2026-10-10 01:16:26  Renumbering: made Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+######## PASS s2 lift: bodies and the delete with its GUID: created (Tally guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006): 1 ':resolved' line(s): [01:16:26 created id=ec6d19a0ad880a3fc05197c89810e2eb:resolved mid=6 aid=6 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006 body=yes(876 chars) guidHeld=False held='']; Day Book words in 0 line(s). altered (Tally guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 7; the line's AlterID is Tally's: True): 1 ':resolved' line(s): [01:16:26 altered id=e4a158431f1b3016566d12d051edb247:resolved mid=3 aid=7 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 body=yes(876 chars) guidHeld=False held='']; Day Book words in 0 line(s). deleted (its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; still in Tally by MasterID 4: False): 1 ':resolved' line(s): [01:16:26 deleted id=4c0c052960d0001a8af41a3bdc266e3d:resolved mid=4 aid= guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004 body=none guidHeld=False held='']; Day Book words in 0 line(s). Requests the bridge sent Tally after the lift: FinComVoucherObject x3, TDSDeskCompanies x5. Bridge log: 2026-10-10 01:16:25  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 7 | 2026-10-10 01:16:25  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 and body | 2026-10-10 01:16:25  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006, AlterID 6 | 2026-10-10 01:16:25  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006 and body | 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here | 2026-10-10 01:16:26  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 4c0c0529…): proven in this Tally now: the delete goes as 4c0c052960d0001a8af41a3bdc266e3d:resolved | 2026-10-10 01:16:26  Recorder: held lines: 0 from FinCom, 3 asked, 3 resolved, 0 still held (3 in the list) | 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; the GUID its MasterID makes agrees
+[01:16:38] ---- s3 restart: the held delete keeps its GUID
+  INFO s235 s3 stop: stub True; bridge log: '2026-10-10 01:16:39  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s3). Postings still go; reading starts again only from FinCom'; tray status readStopped: {"at":"2026-10-10T01:16:38","by":"fincom","reason":"Stopped by the owner from FinCom (harness s3)"}
+[shot] tds-061-gw0 (1024x768)
+[01:16:41] [tds] screen tds-061-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Sunday, I-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 2-Nov-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[shot] tds-062-s3-delete-goto (1024x768)
+[01:16:44] [tds] screen tds-062-s3-delete-goto : EDU {I' Prime Unity Quit Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import K: Company Y: Data List of Reports Saved Views Bills Payable - GST E: Export M: Share p: print Fl: Help x Bills Payable - GST - Sundry Creditors Bills Payable - GST - Sundry Debtors Bills Receivable - GST Bills Receivable - GST - Sundry Creditors Bills Receivable - GST - Sundry Debtors Purchase Dashboard Sales Dashboard IMS Inward Supplies - Filed Invoices Ledger Vouchers - GST Details Outstanding MSME Bills Common Reports inCom Spike (Predefined) (Predefined) (Predefined) (Predefined) (Pre...
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-063-s3-delete-daybook (1024x768)
+[01:16:51] [tds] screen tds-063-s3-delete-daybook : EDU {I' Prime Day Book Day Book Date Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import K: Company Y: Data Particulars E: Export M: Share p: print Fl: Help Date to ru ion inCom Spike Vch Type For 1- Nov-26 Company 166- F4: Voucher Vch No. D: Delete Debit Amount Inwards Q X: Cancel Vch Credit Amount Outwards Qt U: Restore Line Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Unity Quit Enter: A...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-064-s3-delete-db-date (1024x768)
+[01:16:54] [tds] screen tds-064-s3-delete-db-date : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime Change Date Unity Quit K: Company Y: Data Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Change Date 1-11-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:16 AM 10/10/2026
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-065-s3-delete-db-dated (1024x768)
+[01:16:59] [tds] screen tds-065-s3-delete-db-dated : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 2-Nov-26 Credit Amount Outwards Qt 400.00 U: Restore Line Company 166- F4: Voucher Date 2-Nov-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b...
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[shot] tds-066-s3-delete-db-first (1024x768)
+[01:17:02] [tds] screen tds-066-s3-delete-db-first : EDU {I' Prime K: Company Y: Data Day Book Day Book Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share P: Print Fl: Help Date to ru ion inCom Spike Vch Type Receipt DuÅicate Vch I Insert Vch For 2-Nov-26 Credit Amount Outwards Qt 400.00 U: Restore Line Company 166- F4: Voucher Date 2-Nov-26 Unity Quit Particulars Spike Income Enter: Alter Vch No. Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b...
+[keys] '%d' -> Tally 'TallyPrime:9000'
+[shot] tds-067-s3-delete-delete-q (1024x768)
+[01:17:06] [tds] screen tds-067-s3-delete-delete-q : EDU {I' Prime K: Company Y: Data Day Book Find details entered In masters and transactions Z: Exchange FinCom Spike Co Delete o Yes or No O: Import E: Export M: Share p: print x Fl:Help F2: Date F3: Company F4: Voucher Type F 7: Show profit F8: Columnar FIO B: Basis of = Values H: Change = View J: Exception = Reports L: Save View F: Apply = Filter • Filter = Details to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Unity Q: Quit Enter: Alter Space: Seé:t Q A: Add Vch I R: Vch l: Insert Vch Search p: Delete I cancel vch R: Remue Line U: Restore Line...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[s235 s3-delete] Tally: True; line after 0.3 s: [01:17:07 deleted id=4786b183ace53bf037b0a6b2da568720 mid=5 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']
+[shot] tds-068-gw0 (1024x768)
+[01:17:09] [tds] screen tds-068-gw0 : Find details entered in masters and transactions. EDU {I' Prime (Alt+F) O: Import K: Company Y: Data Particulars Z: Exchange A Add Vch Search E: Export M: Share P: Print Fl: Help Date to ru ion Day Book Day Book Date Unity Quit inCom Spike Vch Type DuÅicate Vch I Insert Vch For 2-Nov-26 Credit Amount Outwards Qt U: Restore Line Company 166- F4: Voucher Vch No. Delete Debit Amount Inwards Q Cancel Vch Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-069-gw1 (1024x768)
+[01:17:12] [tds] screen tds-069-gw1 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Monday, 2-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+  INFO s235 s3: restart asked ({"ok":true,"restarting":true}); worker pids 7572 -> 2024; bridge back: True version 2.4.1
+  INFO s235 s3 lift: stub True; bridge log: '2026-10-10 01:17:45  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3))'
+[s235] settled after 13 s
+  bridge log: 2026-10-10 01:16:39  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s3). Postings still go; reading starts again only from FinCom
+  bridge log: 2026-10-10 01:17:07  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:17:07  Recorder: FinCom Spike Co: delete of mid 5: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+  bridge log: 2026-10-10 01:17:07  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:17:07  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s3), 2026-10-10 01:16:38); nothing was sent to Tally. Post; asked when reading is resumed (not counted as a try)
+  bridge log: 2026-10-10 01:17:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:07  Renumbering: deleted Receipt 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-10 01:17:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:10  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:14  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:16  Restarting: asked from the tray icon
+  bridge log: 2026-10-10 01:17:17  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-10 01:17:17  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-10 01:17:17  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:17:17  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s3), 2026-10-10 01:16:38); nothing was sent to Tally. Post; asked when reading is resumed (not counted as a try)
+  bridge log: 2026-10-10 01:17:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:17  Check:  - 
+  bridge log: 2026-10-10 01:17:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:18  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:19  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:20  Light check of FinCom Spike Co: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s3))
+  bridge log: 2026-10-10 01:17:20  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-10 01:17:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:23  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:25  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:29  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:31  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:38  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:40  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:42  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:43  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:45  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3))
+  bridge log: 2026-10-10 01:17:46  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-10 01:17:46  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here
+  bridge log: 2026-10-10 01:17:46  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): proven in this Tally now: the delete goes as 4786b183ace53bf037b0a6b2da568720:resolved
+  bridge log: 2026-10-10 01:17:46  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+  bridge log: 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; the GUID its MasterID makes agrees
+  bridge log: 2026-10-10 01:17:46  Renumbering: deleted Receipt 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-10 01:17:50  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=11, ALTMSTID=211
+  bridge log: 2026-10-10 01:17:50  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=11, ALTMSTID=211
+  bridge log: 2026-10-10 01:17:50  Nightly check of FinCom Spike Co: not now: someone used this computer in the last few minutes
+######## PASS s3 restart: the held delete keeps its GUID: Tally deleted Receipt no 3 of 20261102 mid 5 AlterID 5 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; the held line after 0.3 s [01:17:07 deleted id=4786b183ace53bf037b0a6b2da568720 mid=5 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']; held list before the restart: tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'; after it: tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'; the stop after the restart: {"at":"2026-10-10T01:16:38","by":"fincom","reason":"Stopped by the owner from FinCom (harness s3)"}; after the lift: 1 ':resolved' line(s): [01:17:46 deleted id=4786b183ace53bf037b0a6b2da568720:resolved mid=5 aid= guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005 body=none guidHeld=False held='']; Day Book words in 0 line(s); still in Tally by MasterID: False. Bridge log: 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3)) | 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here | 2026-10-10 01:17:46  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): proven in this Tally now: the delete goes as 4786b183ace53bf037b0a6b2da568720:resolved | 2026-10-10 01:17:46  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list) | 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; the GUID its MasterID makes agrees
+[01:17:59] ---- s4 a real failure still counts
+[shot] tds-070-gw0 (1024x768)
+[01:18:00] [tds] screen tds-070-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Monday, 2-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-071-s4-create-vouchers (1024x768)
+[01:18:04] [tds] screen tds-071-s4-create-vouchers : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept Search...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-072-s4-create-receipt (1024x768)
+[01:18:08] [tds] screen tds-072-s4-create-receipt : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 2-Nov-26 Monday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode A Accept Search...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-073-s4-create-datebox (1024x768)
+[01:18:11] [tds] screen tds-073-s4-create-datebox : a Find details entered in masters and transactions. (Alt+F) EDU {I' Prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date E-11-2026 to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning latio ing j urce -Oa01 9bd7c ' j obNa Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 1:18 AM 10/10/2026
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-074-s4-create-dated (1024x768)
+[01:18:15] [tds] screen tds-074-s4-create-dated : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print I-DecQ6 Tuesday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-075-s4-create-account (1024x768)
+[01:18:18] [tds] screen tds-075-s4-create-account : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,310.00 Dr Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print I-DecQ6 Tuesday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-076-s4-create-particular (1024x768)
+[01:18:22] [tds] screen tds-076-s4-create-particular : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,310.00 Dr Particulars Spike Income CurBal: 1,310.00 Cr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print I-DecQ6 Tuesday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ...
+[keys] '600{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-077-s4-create-amount (1024x768)
+[01:18:26] [tds] screen tds-077-s4-create-amount : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cash • Cument balance: 1,910.00 Dr Particulars Spike Income CurBal: 1,910.00 Cr 31 Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print I-DecQ6 Tuesday Amount 600.00 600.00 Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adju...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+resume Tally (pid 7592): 0
+[shot] tds-078-gw0 (1024x768)
+[01:18:58] [tds] screen tds-078-gw0 : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print I-DecQ6 Tuesday Amount Fl: Help Date Company Contra F5: payment F6: Receipt Journal to ru ion 166- b6e5 ' , "orc bd7c6 166—a Purchase b6e53 FIO: D: Delete x: Cancel Vch E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure .337. ning latio ing j urce -...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-079-gw1 (1024x768)
+[01:19:01] [tds] screen tds-079-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print I-DecQ6 Tuesday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure to ru ion 166- b6e5 ' , "orc bd7c6 166—a b6e53 .337. ning ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-080-gw2 (1024x768)
+[01:19:05] [tds] screen tds-080-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date to ru ion CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) Q Search I-DecQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company 166- b6e5 ' , "orc bd7c6 166—a b6e53 .3...
+  bridge log: 2026-10-10 01:18:27  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): asking Tally by MasterID
+  bridge log: 2026-10-10 01:18:30  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-10 01:18:30  Tally 9000 did not answer in time at 01:18:30 (FinComVoucherObject, try 1); trying again by itself at 01:18:45
+  bridge log: 2026-10-10 01:18:30  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped)
+  bridge log: 2026-10-10 01:18:30  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 01:23 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+  bridge log: 2026-10-10 01:18:48  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 18s after the stop; its answer is discarded and the next request goes now
+######## PASS s4 a real failure still counts: Tally made Receipt no 5 of 20261201 mid 9 AlterID 12 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000009; the proxy: suspend FinComVoucherObject pid 7592 status 0 at 1791595108244, resume FinComVoucherObject pid 7592 status 0 at 1791595128251; the suspended request: FinComVoucherObject mid 9 20022 ms status 200 err ''; voucher requests for mid 9: FinComVoucherObject at 1791595108238 20022 ms. The line [01:18:30 created id=1a8bc6b7dbe525c928540491aa74b5d8 mid=9 aid= guid='' body=none guidHeld=False held='waiting: Tally took longer than 2 s; FinCom asks once more at 01:23']; its ':resolved' line(s): none; ended with the Day Book words: False; held list: tries=0 freshTries=1 asked=0 allow=1 fresh=True slow=0 freshSlow=True final=False keepGuid= why='waiting: Tally took longer than 2 s; FinCom asks once more at 01:23'; one more ask that settled it: False; held with the stop's words (wrong): False. Bridge log: 2026-10-10 01:18:27  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): asking Tally by MasterID | 2026-10-10 01:18:30  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) | 2026-10-10 01:18:30  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped) | 2026-10-10 01:18:30  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 01:23 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+[01:19:05] ---- s5 Tally not open: one notification a day
+  INFO s235 s5: tray icon process(es): pid 1256 "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  INFO s235 s5: before: 'Notification shown: Tally not open' lines 0; tray status tallyOpen True, paused False, readStopped null; clock Sat 01:19
+resume Tally (pid 7592): 0
+[shot] v-s235-s5-toast (1024x768)
+  bridge log: 2026-10-10 01:22:10  Notification shown: Tally not open (tally:b0c3246c7e211ce7; not shown again for this problem)
+resume Tally (pid 7592): -1073741558
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-s235-s5-reopen-started (1024x768)
+[01:22:57] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 6660)
+[01:22:57] Tally started again (s5-reopen): pid 5568, port up True, proxy True
+resume Tally (pid 5568): 0
+  bridge log: 2026-10-10 01:23:30  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-10 01:23:30  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+  bridge log: 2026-10-10 01:23:30  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+[shot] v-s235-s5-end (1024x768)
+######## PASS s5 Tally not open: one notification a day: 1st close: the bridge saw Tally closed after 10 s; the notification after 190 s; notifications-cleared.json: {"tally:b0c3246c7e211ce7":{"kind":"tally","shown":"2026-10-10T01:22:10Z","dismissed":"2026-10-10T01:22:10Z","how":"closed"}}. Reopened (Tally up True, the bridge saw it open True), closed again 270 s: 'Notification shown: Tally not open' lines in all since the start of s5: 1; the file's tally entries: 1 ({"tally:b0c3246c7e211ce7":{"kind":"tally","shown":"2026-10-10T01:22:10Z","dismissed":"2026-10-10T01:22:10Z","how":"closed"}}). Log: 2026-10-10 01:22:10  Notification shown: Tally not open (tally:b0c3246c7e211ce7; not shown again for this problem)
+  INFO s235 end: ':resolved' ids sent more than once over the whole run: none; fresh Tallys started by the harness: 0
+== results
+INFO TallyPrime 7.1, mode s235, runner GitHub Actions 1000006987, 2026-10-10T01:10:32
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1533 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: c89c58ffa929d561d1de3d7bf3ca175dbc24af22 Bridge 2.4.1 built (from the published 2.4.0, after the gate fix): setup SHA-256 79e95ba3…e06a (program f59866e0…6eab), release log row (2.4.0 superseded; the withdrawn build 8c5b8b07…75b3 recorded), notes and test sheet fingerprint and build time (10-Oct-2026 04:59 IST); 2.4.0 assets moved to bridge-go-old; not published
+INFO s235: the runner's clock Sat 01:11 (UTC) is outside office hours: KeepOfficeFrom 0, KeepOfficeTo 24 set
+INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO s235: bridge processes: pid 6504: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 1256: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 7572: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 6504
+INFO s235: proxy beside Tally: True; bridge config TallyHost '127.0.0.2', CloudBeatSec '5', KeepOfficeFrom '0', KeepOfficeTo '24'
+INFO s235: the bridge's starting point recorded: True
+INFO s235 prep A (31-10-2026): Tally Receipt no 1 of 20261031 mid 3 AlterID 3 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003; line after 0.9 s [01:12:45 created id=84b7a598870e972e4e5a26938943b2f9 mid=3 aid=3 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 body=yes(876 chars) guidHeld=False held='']
+INFO s235 prep D1 (1-11-2026): Tally Receipt no 2 of 20261101 mid 4 AlterID 4 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; line after 1.6 s [01:13:34 created id=3fdacca6f3a6f52c3b0651adc2dcd3b0 mid=4 aid=4 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004 body=yes(876 chars) guidHeld=False held='']
+INFO s235 prep D2 (2-11-2026): Tally Receipt no 3 of 20261102 mid 5 AlterID 5 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; line after 1.2 s [01:14:13 created id=aa3f1590807abc9e014fe885d42e20f7 mid=5 aid=5 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005 body=yes(876 chars) guidHeld=False held='']
+INFO s235 s1 stop: stub True; bridge log: '2026-10-10 01:14:24  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom'; tray status readStopped: {"at":"2026-10-10T01:14:21","by":"fincom","reason":"Stopped by the owner from FinCom (harness s1)"}
+INFO s235: the bridge's held list: C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json
+PASS s1 stop: three lines held, nothing asked: Tally: created Receipt no 4 of 20261002 mid 6 AlterID 6 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006; altered mid 3 AlterID 3 -> 7; deleted Receipt no 2 of 20261101 mid 4 AlterID 4 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004. Stub lines (seconds from each save, 10 s at most): created 0.6 s [01:14:53 created id=ec6d19a0ad880a3fc05197c89810e2eb mid=6 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']; altered 0.7 s [01:15:42 altered id=e4a158431f1b3016566d12d051edb247 mid=3 aid= guid='' body=none guidHeld=False held='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed']; deleted 0.2 s [01:16:14 deleted id=4c0c052960d0001a8af41a3bdc266e3d mid=4 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']. Held with the stop's words, no body: True; the delete held for its proof with no GUID: True. Voucher requests that reached Tally during the stop (proxy): none; every request the bridge sent Tally then: TDSDeskCompanies x3. Held list (no try counted: True; the delete's keepGuid is its GUID: False): created tries=0 freshTries=0 asked=0 allow=2 fresh=True slow=0 freshSlow=False final=False keepGuid= why='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed'; altered tries=0 freshTries=0 asked=0 allow=2 fresh=True slow=0 freshSlow=False final=False keepGuid= why='waiting: reading from Tally is stopped from FinCom; asked again when it is resumed'; deleted tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'. Bridge log: 2026-10-10 01:14:24  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom | 2026-10-10 01:14:25  Nightly catch-up: not finished (reading from Tally is stopped on this computer (Stopped by the owner from FinCom (harness s1))) (13 request(s) to Tally) | 2026-10-10 01:14:29  Light check: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s1)) | 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally ... | 2026-10-10 01:14:53  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tall... | 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally ... | 2026-10-10 01:15:42  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-10 01:14:21); nothing was sent to Tall... | 2026-10-10 01:16:14  Recorder: FinCom Spike Co: delete of mid 4: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+INFO s235 s2 lift: stub True; bridge log: '2026-10-10 01:16:24  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))'
+PASS s2 lift: bodies and the delete with its GUID: created (Tally guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006): 1 ':resolved' line(s): [01:16:26 created id=ec6d19a0ad880a3fc05197c89810e2eb:resolved mid=6 aid=6 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006 body=yes(876 chars) guidHeld=False held='']; Day Book words in 0 line(s). altered (Tally guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 7; the line's AlterID is Tally's: True): 1 ':resolved' line(s): [01:16:26 altered id=e4a158431f1b3016566d12d051edb247:resolved mid=3 aid=7 guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 body=yes(876 chars) guidHeld=False held='']; Day Book words in 0 line(s). deleted (its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; still in Tally by MasterID 4: False): 1 ':resolved' line(s): [01:16:26 deleted id=4c0c052960d0001a8af41a3bdc266e3d:resolved mid=4 aid= guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004 body=none guidHeld=False held='']; Day Book words in 0 line(s). Requests the bridge sent Tally after the lift: FinComVoucherObject x3, TDSDeskCompanies x5. Bridge log: 2026-10-10 01:16:25  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line e4a15843…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003, AlterID 7 | 2026-10-10 01:16:25  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000003 and body | 2026-10-10 01:16:25  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line ec6d19a0…): taken: Tally's GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006, AlterID 6 | 2026-10-10 01:16:25  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000006 and body | 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here | 2026-10-10 01:16:26  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 4c0c0529…): proven in this Tally now: the delete goes as 4c0c052960d0001a8af41a3bdc266e3d:resolved | 2026-10-10 01:16:26  Recorder: held lines: 0 from FinCom, 3 asked, 3 resolved, 0 still held (3 in the list) | 2026-10-10 01:16:26  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000004; the GUID its MasterID makes agrees
+INFO s235 s3 stop: stub True; bridge log: '2026-10-10 01:16:39  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s3). Postings still go; reading starts again only from FinCom'; tray status readStopped: {"at":"2026-10-10T01:16:38","by":"fincom","reason":"Stopped by the owner from FinCom (harness s3)"}
+INFO s235 s3: restart asked ({"ok":true,"restarting":true}); worker pids 7572 -> 2024; bridge back: True version 2.4.1
+INFO s235 s3 lift: stub True; bridge log: '2026-10-10 01:17:45  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3))'
+PASS s3 restart: the held delete keeps its GUID: Tally deleted Receipt no 3 of 20261102 mid 5 AlterID 5 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; the held line after 0.3 s [01:17:07 deleted id=4786b183ace53bf037b0a6b2da568720 mid=5 aid= guid='' body=none guidHeld=True held='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held']; held list before the restart: tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'; after it: tries=0 freshTries=0 asked=0 allow=0 fresh=False slow=0 freshSlow=False final=False keepGuid= why='this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not s...'; the stop after the restart: {"at":"2026-10-10T01:16:38","by":"fincom","reason":"Stopped by the owner from FinCom (harness s3)"}; after the lift: 1 ':resolved' line(s): [01:17:46 deleted id=4786b183ace53bf037b0a6b2da568720:resolved mid=5 aid= guid=9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005 body=none guidHeld=False held='']; Day Book words in 0 line(s); still in Tally by MasterID: False. Bridge log: 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list) | 2026-10-10 01:17:45  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3)) | 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here | 2026-10-10 01:17:46  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 4786b183…): proven in this Tally now: the delete goes as 4786b183ace53bf037b0a6b2da568720:resolved | 2026-10-10 01:17:46  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list) | 2026-10-10 01:17:46  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000005; the GUID its MasterID makes agrees
+PASS s4 a real failure still counts: Tally made Receipt no 5 of 20261201 mid 9 AlterID 12 guid 9a8ca67c-9667-42c0-b34a-83d70cd634e6-00000009; the proxy: suspend FinComVoucherObject pid 7592 status 0 at 1791595108244, resume FinComVoucherObject pid 7592 status 0 at 1791595128251; the suspended request: FinComVoucherObject mid 9 20022 ms status 200 err ''; voucher requests for mid 9: FinComVoucherObject at 1791595108238 20022 ms. The line [01:18:30 created id=1a8bc6b7dbe525c928540491aa74b5d8 mid=9 aid= guid='' body=none guidHeld=False held='waiting: Tally took longer than 2 s; FinCom asks once more at 01:23']; its ':resolved' line(s): none; ended with the Day Book words: False; held list: tries=0 freshTries=1 asked=0 allow=1 fresh=True slow=0 freshSlow=True final=False keepGuid= why='waiting: Tally took longer than 2 s; FinCom asks once more at 01:23'; one more ask that settled it: False; held with the stop's words (wrong): False. Bridge log: 2026-10-10 01:18:27  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): asking Tally by MasterID | 2026-10-10 01:18:30  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) | 2026-10-10 01:18:30  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped) | 2026-10-10 01:18:30  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 1a8bc6b7…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 01:23 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+INFO s235 s5: tray icon process(es): pid 1256 "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+INFO s235 s5: before: 'Notification shown: Tally not open' lines 0; tray status tallyOpen True, paused False, readStopped null; clock Sat 01:19
+PASS s5 Tally not open: one notification a day: 1st close: the bridge saw Tally closed after 10 s; the notification after 190 s; notifications-cleared.json: {"tally:b0c3246c7e211ce7":{"kind":"tally","shown":"2026-10-10T01:22:10Z","dismissed":"2026-10-10T01:22:10Z","how":"closed"}}. Reopened (Tally up True, the bridge saw it open True), closed again 270 s: 'Notification shown: Tally not open' lines in all since the start of s5: 1; the file's tally entries: 1 ({"tally:b0c3246c7e211ce7":{"kind":"tally","shown":"2026-10-10T01:22:10Z","dismissed":"2026-10-10T01:22:10Z","how":"closed"}}). Log: 2026-10-10 01:22:10  Notification shown: Tally not open (tally:b0c3246c7e211ce7; not shown again for this problem)
+INFO s235 end: ':resolved' ids sent more than once over the whole run: none; fresh Tallys started by the harness: 0
