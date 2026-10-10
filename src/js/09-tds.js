@@ -146,7 +146,7 @@ const TDS = {
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
           voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
-          // section (TDSRate, src/js/65)
+          // section (TDSRate, src/js/66)
           pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
         });
       });
@@ -187,7 +187,7 @@ const TDS = {
     return typeof TDS_FORMS === "object" && TDS_FORMS[form] ? TDS_FORMS[form].rows() : this.rows();
   },
   // interest under section 201(1A), for each form (T-S3, 10-Oct-2026): 1% a month (or part of one) for deducting late, from
-  // the bill to the TDS entry (TDSInt, src/js/65), and 1.5% a month for paying late, from the deduction to the challan when
+  // the bill to the TDS entry (TDSInt, src/js/66), and 1.5% a month for paying late, from the deduction to the challan when
   // the challan is after the due date. TCS (27EQ) is 1% a month under 206C(7). Each entry says which (kind "deduct" or "pay")
   interest(fy, q, form){
     form = form || "26Q";
@@ -234,8 +234,10 @@ const TDS = {
   },
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
+  // (tds-challans, 10-Oct-2026: the salary TDS the books carry under 192 counts too, as it can now be tagged; untagged
+  // before, so no figure moves)
   challanUse(){
-    const rows = this.rows().concat(this.nrRows(), this.tcsRows()), used = {};
+    const rows = this.rows().concat(this.nrRows(), this.tcsRows(), this.salaryRows()), used = {};
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },

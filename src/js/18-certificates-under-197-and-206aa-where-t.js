@@ -29,7 +29,7 @@ const Certs = {
       const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
       return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
     }
-    // who the deductee is (the PAN's 4th letter) and what was paid for decide the rate within a section (TDSRate, src/js/65):
+    // who the deductee is (the PAN's 4th letter) and what was paid for decide the rate within a section (TDSRate, src/js/66):
     // 194C to a company 2%, to an individual 1%; 194J professional 10%, technical 2%; 194-I building 10%, machinery 2%
     const by = typeof TDSRate === "object" ? TDSRate.expect(r) : null;
     if (by) return {rate: by.rate, why: by.why};

@@ -28,6 +28,9 @@ const TDS26Q = {
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     const live = chs.filter(c => (used[c.id] || []).length);
     if (!live.length) return {error: "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in " + form + " against it yet."};
+    // tds-challans (10-Oct-2026): a challan is never used beyond its amount; one that is (an old tagging) stops the file
+    const useAll = TDS.challanUse(), over = live.filter(c => Math.round((useAll[c.id] || 0) * 100) > Math.round(num(c.tax) * 100));
+    if (over.length) return {error: "Challan " + over.map(c => c.bsr + "/" + c.serial).join(", ") + " has more deductions against it than its amount. Take some off it first (Entries, tick them, Untag)."};
     const d = s => String(s || "").replace(/-/g, "");                 // ddmmyyyy
     const dmy = s => s ? String(s).slice(6, 8) + String(s).slice(4, 6) + String(s).slice(0, 4) : "";
     const today = new Date(), fileDate = String(today.getDate()).padStart(2, "0") + String(today.getMonth() + 1).padStart(2, "0") + today.getFullYear();
@@ -52,8 +55,10 @@ const TDS26Q = {
     live.forEach((c, ci) => {
       const mine = used[c.id] || [];
       const tax = mine.reduce((a, r) => a + num(r.tds), 0);
-      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(c.interest), "0.00",
-        money(num(c.tax) + num(c.interest)), "", c.bsr, dmy(c.date), c.serial, "C", "200", "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
+      // the challan as deposited: interest, and fee and others where the challan read has them (tds-challans); its minor
+      // head (200 unless the challan says 400)
+      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(c.interest), money(num(c.fee) + num(c.others)),
+        money(num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)), "", c.bsr, dmy(c.date), c.serial, "C", String(c.minorHead || "200"), "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
       mine.forEach((r, di) => {
         const m = this.remark(r, form);
         const old = form === "27EQ" ? r.code || "" : this.code(r.section);
