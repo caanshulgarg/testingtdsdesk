@@ -26,12 +26,12 @@ select id from storage.buckets order by 1;
 ```
 
 The list below starts after Build 199. It follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which
-`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files: 66 to run, plus 31 for the owner to decide**. Add `gst-taxpro/schema.sql` (3adf1dc2…) if live has
-no `gst_sessions` table. Its header says "apply the same on live before gst-taxpro goes there", and it also names
-staging's address, so it is edited first like 13 and 16.
+`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files: 66 to run, plus 31 for the owner to decide**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
+`gst-taxpro/schema.sql`, 1.1.1) if live has no `gst_sessions` table: its header says "apply the same on live before
+gst-taxpro goes there". Run it before step 13 (16 alters `gst_sessions`).
 Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's comes from branch `perms-61`.
-Folders are under `server/`. "Edit first" means the file names staging's web address in a pg_cron job. Before it runs
-on live, Claude puts live's address in, prints the new md5 and the diff, and the owner approves both.
+Folders are under `server/`. "GO-LIVE COPY" means the original names staging's web address in a pg_cron job, so live
+runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DATA": see the dry runs in 1.1.2.
 
 | Step | No. | File | md5 | Note |
 |---|---|---|---|---|
@@ -44,10 +44,10 @@ on live, Claude puts live's address in, prints the new md5 and the diff, and the
 | 7 | 10 | `tally-cloud/migration-10-find-optional.sql` | `70dabadba7d98e9bcee7450481241a42` |  |
 | 8 | 11 | `tally-cloud/migration-11-ref-cmp.sql` | `0ff4296c3da61c4bc5e8140956762c03` | delete from: inside a function only |
 | 9 | 12 | `books-sync/migration-12-live-items.sql` | `f9b346bbd1dc4e417ec5838f21d045f5` |  |
-| 10 | 13 | `tally-cloud/migration-13-fast-sync.sql` | `d142e44b596319a1e39fed77657e0929` | **EDIT FIRST**: cron `tally-work` names staging's address; makes queue `tally_work`, crons `tally-work`, `tally-post-requeue`, vault `tally_work_key`; sets `tally_devices.wake_token` on every row |
+| 10 | 13 | `tally-cloud/golive/migration-13-golive.sql` | `23175e76972a90cf4e08cfeef0db568d` | **GO-LIVE COPY** of `migration-13-fast-sync.sql` (d142e44b…; 1.1.1). **CHANGES DATA**; makes queue `tally_work`, crons `tally-work`, `tally-post-requeue`, vault `tally_work_key`; sets `tally_devices.wake_token` on every row |
 | 11 | 14 | `tally-cloud/migration-14-reports.sql` | `afd306f7a4c986374669c1a7131c17d8` |  |
 | 12 | 15 | `tally-cloud/migration-15-books-live.sql` | `de5dae0db4fd08441a29366fbe1adb24` |  |
-| 13 | 16 | `gst-taxpro/migration-16-tax-accuracy.sql` | `00463f7e91b27e49fcf41c7c1e7bea9e` | **EDIT FIRST**: cron `gst-daily` names staging's address |
+| 13 | 16 | `gst-taxpro/golive/migration-16-golive.sql` | `b6bf6a1c585e85547f011186a1fd0ea5` | **GO-LIVE COPY** of `migration-16-tax-accuracy.sql` (00463f7e…; 1.1.1): cron `gst-daily` |
 | 14 | 17 | `books-sync/migration-17-trash.sql` | `7a01401466398905161c22005d9695a7` |  |
 | 15 | 18 | `tally-cloud/migration-18-gst-books.sql` | `2df63aba438de6968e42220d40149541` | delete from: inside a function only |
 | 16 | 19 | `security/migration-19-sync-guard.sql` | `dd4c2e68b0687e116042c246a941b8e6` | delete from: inside a function only |
@@ -62,7 +62,7 @@ on live, Claude puts live's address in, prints the new md5 and the diff, and the
 | 25 | 28 | `tally-cloud/migration-28-ledger-ids.sql` | `12a0901fd5ef8cfb78172f2ecf90f94c` |  |
 | 26 | 29 | `security/migration-29-backups-history.sql` | `484b2c1997ea781c10befb96f18a87a1` | delete from: inside a function only |
 | 27 | 30 | `security/migration-30-client-keys-kept.sql` | `321de21d22027a5336def15d380774bd` |  |
-| 28 | 31 | `tally-cloud/migration-31-clean-names.sql` | `45ed0b283c274132b3dc27abdd9527c8` | **NOT run on staging** (no `raw_name` column there). Leave out unless the owner decides; it rewrites names |
+| 28 | 31 | `tally-cloud/migration-31-clean-names.sql` | `45ed0b283c274132b3dc27abdd9527c8` | **NOT run on staging** (no `raw_name` column there). **Recommended: skip** (1.1.3) |
 | 29 | 32 | `tally-cloud/migration-32-sync-safety.sql` | `a04b1c71802bce5b7231306f63c393d6` | **CHANGES DATA**: `tally_vouchers.origin` = 'fincom' where the narration has a TDSDesk id |
 | 30 | 33 | `tally-cloud/migration-33-ledger-lists.sql` | `1d64b0145738d7358d4ce42c63ecf0ca` |  |
 | 31 | 35 | `tally-cloud/migration-35-bridge-control.sql` | `d13b234cbdb5e3429e23389acef742bd` | never run again after 34 |
@@ -93,7 +93,7 @@ on live, Claude puts live's address in, prints the new md5 and the diff, and the
 | 56 | 58 | `tally-cloud/migration-58-lows.sql` | `db5b429519308c9768f6e6e6befee08a` |  |
 | 57 | 59 | `tally-cloud/migration-59-ledger-aliases.sql` | `882de3e601fb7b57a370ab275cbb61b9` |  |
 | 58 | 60 | `tally-cloud/migration-60-recorder-lows.sql` | `adbec22537f274cc5deaf170a339095f` |  |
-| 59 | 61 | `tally-cloud/migration-61-privileges.sql` | `cec075a148f26144fd1808c94b841684` | **only on branch perms-61** (not in tax-accuracy's tree): bring the file over first; closes members self-promotion |
+| 59 | 61 | `tally-cloud/migration-61-privileges.sql` | `cec075a148f26144fd1808c94b841684` | **only on branch perms-61** (not in tax-accuracy's tree): bring the file over first; closes members self-promotion. **Recommended: run** (1.1.3) |
 | 60 | 68 | `tally-cloud/migration-68-alert-dismissals.sql` | `184e795994242b41f4edbaaaa7d530f9` | owner ran it in the SQL editor |
 | 61 | 70 | `tally-cloud/migration-70-alert-dismissals-tighten.sql` | `3457411cc0bacfdbdc174191e0629b63` |  |
 | 62 | 62 | `tally-cloud/migration-62-tds-rate-worked-out.sql` | `bcdfd7b72b1d69b429e6b15a5e9652c6` |  |
@@ -106,8 +106,8 @@ on live, Claude puts live's address in, prints the new md5 and the diff, and the
 - Some files contain the words "delete from". In 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the
 migration itself removes no rows. Only 23 deletes rows when it runs: it deletes `tally_ledger_day` rows and builds the
 same days again. In 31 the delete touches a temporary list only.
-- Live has real data in the cloud copy, and these files change it as they run: 13, 23, 27, 32 and 37. In the rehearsal,
-Claude takes counts and totals before and after each of them.
+- Live has real data in the cloud copy, and these files change it as they run: 13, 23, 27, 32 and 37. 1.1.2 has, for
+each, a read-only dry run that counts the rows it will change, and a check to run just before and just after it.
 - The SQL editor rule: 43, 44, 48, 50, 55 and 68 were run by the owner in the SQL editor on staging. On live, 48 and 50
 must be run that way, by the owner. The others may go in md5-checked pieces as on staging (`docs/HANDOVER.md`, "How to
 apply a migration").
@@ -115,12 +115,218 @@ apply a migration").
 and uuid-ossp. The owner switches on any that are missing (Database → Extensions) before step 4 below.
 
 **pg_cron jobs after the migrations** (as on staging; `tds-desk-nightly-backup` should already be there; times UTC):
-`tally-work` every 30 s and `tally-post-requeue` every minute (13, edited); `gst-taxpro-refresh` */20 and `gst-daily`
-01:30–05:30 hourly (schema.sql and 16, both edited); `tally-recorder-drain` every 30 s, `tally-alert-gaps` */10,
+`tally-work` every 30 s and `tally-post-requeue` every minute (13, go-live copy); `gst-taxpro-refresh` */20 and `gst-daily`
+01:30–05:30 hourly (schema.sql and 16, go-live copies); `tally-recorder-drain` every 30 s, `tally-alert-gaps` */10,
 `tally-alert-silent` */30 03–13 Mon–Sat, `tally-alert-summary` 13:30 (47); `tally-recorder-archive-trim` 21:17 (48).
 **pgmq queues:** `tally_work` (13) and `tally_recorder` (47). **Vault:** `tally_work_key` (made by 13) and `gst_cron_key`
 (made by schema.sql). **Buckets:** `support-files`, `tally-days` and `tally-support` (should be there already), and
 `tally-uploads` (47).
+
+#### 1.1.1 The go-live copies of 13, 16 and gst-taxpro/schema.sql (risk 1)
+
+The originals name staging's address in their pg_cron jobs. Live runs these copies **instead of** the originals
+(staging keeps the originals; they are not edited). Each copy is the original with three changes only: the job reads
+this project's own address from a Vault secret, `fincom_project_url`, every time it runs (no project address is written
+in the file); the file stops with a clear message, before changing anything, if that secret is missing, is not of the
+form `https://<project id>.supabase.co`, or names staging; and it runs twice cleanly (13 adds `tally_jobs` to the realtime
+publication only when it is not there yet; 16 and schema.sql now run in one transaction).
+
+| Go-live copy (run on live) | md5 (for the owner to approve) | Replaces on live |
+|---|---|---|
+| `gst-taxpro/golive/schema-golive.sql` | `a3f27ffa473266bb46400b5925fefcea` | `gst-taxpro/schema.sql` (3adf1dc2779cef249651126c3bdc852b): cron `gst-taxpro-refresh`, vault `gst_cron_key` |
+| `tally-cloud/golive/migration-13-golive.sql` | `23175e76972a90cf4e08cfeef0db568d` | `tally-cloud/migration-13-fast-sync.sql` (d142e44b596319a1e39fed77657e0929): crons `tally-work`, `tally-post-requeue` |
+| `gst-taxpro/golive/migration-16-golive.sql` | `b6bf6a1c585e85547f011186a1fd0ea5` | `gst-taxpro/migration-16-tax-accuracy.sql` (00463f7e91b27e49fcf41c7c1e7bea9e): cron `gst-daily` |
+
+**Before the first of them** (in step 5, before step 10 of the list), the owner sets the secret once in live's SQL
+editor, with live's own address typed in by him:
+
+```sql
+select vault.create_secret('https://<live project id>.supabase.co', 'fincom_project_url', 'FinCom: this project''s own address, for its pg_cron jobs');
+```
+
+On the rehearsal copy, the same with the copy's address. To check later: `select net.http_post` calls go to
+`(select decrypted_secret from vault.decrypted_secrets where name = 'fincom_project_url') || '/functions/v1/…'`.
+
+**Proved** by `tests/run_golive_cron.py` on a throwaway PostgreSQL (pg_stand, with stand-ins for Vault, pg_net and
+pg_cron, and the real pgmq): without the secret, with staging's address, or with a wrong address each copy refuses and
+leaves nothing; with it set, each copy runs twice cleanly; the four jobs are there once each and none holds an address;
+run, `tally-work` calls `<address>/functions/v1/tally-ingest` and the two GST jobs `<address>/functions/v1/gst-taxpro`, each
+with its key; a changed secret is followed at the next run; and the copies end with the same functions, columns, jobs and
+schedules as the originals (40 checks, all passed).
+
+#### 1.1.2 Dry runs for the files that change data (risk 3)
+
+For each of 13, 23, 27, 32 and 37: a **dry run** (read-only, counts exactly the rows the file will change) and a
+**check** to run just before and just after the file. The owner pastes the dry runs into live's SQL editor **before
+go** and sends the numbers; Claude runs the same in the rehearsal. Every query here only reads. They work both on live as
+it is now (Build 199: the later columns and tables are not there yet) and in the window. A row that arrives between the
+dry run and the file (a bridge still syncing) can change the number; so in the window, run the dry run again just
+before the file: the number must not differ from the file's result.
+
+`tests/run_golive_dryrun.py` takes these queries from this page and proves them on pg_stand with made-up rows: on Build
+199's tables and on the tables as they are in the window, each dry run's number equals the rows the file's own
+statements (copied word for word from the file) touched; the before/after checks behave as written below (60 checks,
+all passed).
+
+**The money check** (run before and after 23, 32 and 37; one row a book). Before and after must be the same. The one
+allowed difference: after 23, if a day's ready totals (`day_totals_dr_cr`) were stale before, 23 rebuilds them from the
+lines, so they can then differ; `lines_turnover` and `openings_total` must still be the same.
+
+```sql
+-- check money
+select b.company, b.book_id,
+       (select count(*) from public.tally_vouchers v where v.book_id = b.book_id) as entries,
+       (select count(*) from public.tally_lines l where l.book_id = b.book_id) as lines,
+       (select coalesce(sum(abs(l.amount)), 0) from public.tally_lines l where l.book_id = b.book_id) as lines_turnover,
+       (select count(*) from public.tally_ledgers g where g.book_id = b.book_id) as ledgers,
+       (select coalesce(sum(g.open), 0) from public.tally_ledgers g where g.book_id = b.book_id) as openings_total,
+       (select coalesce(sum(d.dr), 0) || ' / ' || coalesce(sum(d.cr), 0) from public.tally_ledger_day d where d.book_id = b.book_id) as day_totals_dr_cr
+  from public.tally_books b order by 1, 2;
+-- end
+```
+
+**13** (fast sync): gives every Tally computer a new `wake_token`.
+
+```sql
+-- dry run 13
+select 'tally_devices: a new wake_token' as rows_changed, count(*) as how_many
+  from public.tally_devices t where to_jsonb(t)->>'wake_token' is null;
+-- end
+```
+```sql
+-- check 13
+select count(*) as devices, count(*) filter (where to_jsonb(t)->>'wake_token' is null) as without_token,
+       count(distinct to_jsonb(t)->>'wake_token') as different_tokens
+  from public.tally_devices t;
+-- end
+```
+After: `without_token` = 0 and `different_tokens` = `devices` (devices unchanged).
+
+**23** (clean names): rewrites ledger, group, party and line names that hold line breaks, and deletes then builds again
+the ready day totals of the days touched. "Rows rewritten" counts every row its updates touch (a clean twin of an
+unclean ledger is touched to take the twins' openings, even if its values end the same).
+
+```sql
+-- dry run 23
+with l as (select t.book_id, t.name, t.parent, to_jsonb(t) as j from public.tally_ledgers t),
+     unclean as (select distinct book_id, btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')) as nm
+                   from l where name <> btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))),
+     days as (select book_id, day from public.tally_ledger_day where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+              union select book_id, day from public.tally_lines where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')))
+select 'tally_ledgers: rows rewritten' as rows_changed, count(*) as how_many from l
+ where (book_id, btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))) in (select book_id, nm from unclean)
+    or parent <> btrim(regexp_replace(parent, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+    or coalesce(j->>'primary_group', '') <> btrim(regexp_replace(coalesce(j->>'primary_group', ''), '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+    or coalesce(j->>'merged_into', '') <> btrim(regexp_replace(coalesce(j->>'merged_into', ''), '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+    or exists (select 1 from jsonb_array_elements_text(case when jsonb_typeof(j->'chain') = 'array' then j->'chain' else '[]' end) c
+                where c <> btrim(regexp_replace(c, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')))
+union all select 'tally_lines: ledger name cleaned', count(*) from public.tally_lines
+ where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+union all select 'tally_vouchers: party name cleaned', count(*) from public.tally_vouchers
+ where party <> btrim(regexp_replace(party, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+union all select 'tally_ledger_day: rows deleted (their days are built again)', count(*) from public.tally_ledger_day d
+ where (d.book_id, d.day) in (select book_id, day from days)
+union all select 'tally_ledger_day: days built again', count(*) from days
+union all select 'tally_groups: rows rewritten', case when to_regclass('public.tally_groups') is null then 0 else
+  (xpath('/row/c/text()', query_to_xml($q$
+    with g as (select name, parent, btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')) as nm,
+                      row_number() over (partition by book_id, btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+                                         order by (name = btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))) desc, (parent <> '') desc, name) as rn
+                 from public.tally_groups)
+    select count(*) as c from g where parent <> btrim(regexp_replace(parent, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')) or (rn = 1 and name <> nm)
+  $q$, false, true, '')))[1]::text::bigint end
+union all select 'tally_bills: ledger name cleaned', case when to_regclass('public.tally_bills') is null then 0 else
+  (xpath('/row/c/text()', query_to_xml($q$
+    select count(*) as c from public.tally_bills where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
+  $q$, false, true, '')))[1]::text::bigint end;
+-- end
+```
+```sql
+-- check 23
+select count(*) filter (where name <> btrim(regexp_replace(name, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g')) and to_jsonb(t)->>'merged_into' is null) as ledger_names_not_clean,
+       (select count(*) from public.tally_lines where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))) as line_names_not_clean,
+       (select count(*) from public.tally_vouchers where party <> btrim(regexp_replace(party, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))) as party_names_not_clean,
+       (select count(*) from public.tally_ledger_day where ledger <> btrim(regexp_replace(ledger, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))) as day_names_not_clean
+  from public.tally_ledgers t;
+-- end
+```
+After: all four 0. Plus the money check.
+
+**27** (posting record): sets `postTo` on clients whose one Tally company has the same GSTIN, where none is chosen.
+
+```sql
+-- dry run 27
+select 'clients: postTo set' as rows_changed, count(*) as how_many
+  from public.clients cl
+  join (select firm_id, client_id, min(company) as company, min(upper(btrim(coalesce(gstin, '')))) as gstin
+          from public.tally_companies where client_id is not null
+         group by firm_id, client_id having count(*) = 1) t on cl.firm_id = t.firm_id and cl.id = t.client_id
+ where not coalesce(cl.deleted, false)
+   and coalesce(btrim(cl.data->>'postTo'), '') = ''
+   and t.gstin <> '' and t.gstin = upper(btrim(coalesce(nullif(cl.gstin, ''), cl.data->>'gstin', '')));
+-- end
+```
+```sql
+-- check 27
+select count(*) filter (where coalesce(btrim(data->>'postTo'), '') <> '') as clients_with_post_to,
+       count(*) filter (where data->>'postToBy' = 'auto') as set_automatically
+  from public.clients where not coalesce(deleted, false);
+-- end
+```
+After: `clients_with_post_to` grows by exactly the dry run's number (as does `set_automatically`). The file also lists
+the clients it changed (its `returning`): keep that list.
+
+**32** (sync safety): `origin` = 'fincom' on entries whose narration holds a TDSDesk id. (It also fills two new tables,
+`tally_post_ids` and `tally_voucher_versions`, from the posting queue and the entries; no existing row changes there.)
+
+```sql
+-- dry run 32
+select 'tally_vouchers: origin becomes fincom' as rows_changed, count(*) as how_many
+  from public.tally_vouchers t
+ where coalesce(to_jsonb(t)->>'origin', 'tally') = 'tally' and narration ~ 'TDSDesk:[A-Za-z0-9]';
+-- end
+```
+**37** (follow-ups): fills `fincom_id` (and `origin`) from the narration on entries that have none.
+
+```sql
+-- dry run 37
+select 'tally_vouchers: fincom_id and origin filled' as rows_changed, count(*) as how_many
+  from public.tally_vouchers t
+ where to_jsonb(t)->>'fincom_id' is null and narration ~ 'TDSDesk:[A-Za-z0-9._-]';
+-- end
+```
+Check for 32 and 37 (run before and after each):
+
+```sql
+-- check 32 37
+select coalesce(to_jsonb(t)->>'origin', '(no origin column yet)') as origin, count(*) as entries,
+       count(to_jsonb(t)->>'fincom_id') as with_fincom_id,
+       count(*) filter (where narration ~ 'TDSDesk:') as narration_has_tdsdesk_id
+  from public.tally_vouchers t group by 1 order by 1;
+-- end
+```
+After 32: the `fincom` row's `entries` grows by the dry run's number. After 37: `with_fincom_id` grows by the dry run's
+number. Total entries the same. Plus the money check.
+
+#### 1.1.3 Migrations 31 and 61: run or skip
+
+- **31 (`tally-cloud/migration-31-clean-names.sql`): recommended SKIP.** It is a one-time rewrite of names already kept
+  (entities, two spaces read for a line break, twins with one key). It never ran on staging, so staging, which is
+  what was tested and reviewed, has lived without it since 02-Oct; the tested fresh order goes from 30 to 32 without it.
+  Everything after it copes without it: 34, 36 and 41 check whether its column `before_clean` is there, 36 adds that
+  column itself, and tally-ingest reads it only when present. Running it on live would be its first run anywhere on real
+  data, after 36–66 instead of before them (an order nobody has tested), and it rewrites names in every table of the
+  cloud copy. The names it would fix also get fixed the normal way: tally-ingest now cleans names on the way in, the
+  next ledger list rebuilds the masters, and "Read the kept day books again" rebuilds a book's entries. If, after the
+  go-live, a book shows one ledger under two names, read that book again rather than run 31.
+- **61 (`tally-cloud/migration-61-privileges.sql`, branch perms-61, md5 cec075a148f26144fd1808c94b841684):
+  recommended RUN**, as step 59. It ran on staging on 06-Oct and staging has worked with it since (pub-241 included). It
+  closes two real holes that live has today: anyone with the public key could empty (TRUNCATE) most public tables, and a
+  staff member can make themselves owner with one request (members self-promotion). It only revokes privileges (no row,
+  table or policy removed) and checks itself at the end. Before it runs: bring the file (with `tests/run_migration61.py`)
+  onto tax-accuracy and check the md5. Risks: a Build 199 tab left open would fail its writes, so it runs in the window
+  while no one works and everyone reloads after; a page refused afterwards is fixed by the one grant its header names.
+  If 61 is skipped, run `live-members-fix.sql` (perms-61, md5 fd84f633…) at least, unless the owner already did.
 
 ### 1.2 Edge functions (staging versions, read 10-Oct)
 
@@ -129,7 +335,7 @@ writes down live's current version of each function: that is the way back.
 
 | Function | Staging | Source | Note |
 |---|---|---|---|
-| tally-ingest | v43 | server/tally-cloud (index.ts, parse.js, _shared/cors.ts, names.js, sentry.ts, sentry-scrub.js) | the index.ts deployed with comments stripped, SHA-256 82d4e873…18f7 (docs/bridge-2.4.1-notes.md); verify_jwt off |
+| tally-ingest | v43 | server/tally-cloud (index.ts, parse.js, _shared/cors.ts, names.js, sentry.ts, sentry-scrub.js) | the index.ts deployed with comments stripped, SHA-256 82d4e873…18f7 (docs/bridge-2.4.1-notes.md); verify_jwt off. Accepts bridge 1.14.6 (risk 7) |
 | signin | v3 | server/security/functions/signin | new on live |
 | admin | v14 | server/security/functions/admin | invite links go to `APP_URL`, which **defaults to staging**: set it on live |
 | gateway | v13 | server/security/functions/gateway | bill reading (Claude, Google Vision) |
@@ -157,13 +363,35 @@ writes down live's current version of each function: that is the way back.
   `test.js` only it swaps in staging's address and key (`to_test`). `npm run build` (in app/) makes `app/dist` with
   live.js. `npm run build:test` makes `app/dist-test` with test.js.
 - **The guard.** `app/publish-preview.sh` builds only dist-test and refuses to push unless `legacy.js` names staging
-  and not live. **There is no live publish script yet.** For live, the same check runs the other way: dist's
-  `legacy.js` must name live and must not name `qbocskaiewaxqcvaunzc`.
+  and not live.
+- **The live publish script: `app/publish-live.sh`** (written 10-Oct, **not run**). It does nothing unless `LIVE_GO=1`;
+  with `DRY=1` as well it does everything except the push. It refuses a checkout with uncommitted changes (and, when
+  `LIVE_SOURCE_COMMIT` is set, any commit other than that one), builds `app/dist` (`build.py --react`, `npm run build`),
+  and stops unless dist's `legacy.js` names live's project id and nothing in dist names staging or carries Sentry. Then,
+  like publish-preview.sh, it copies the build into one folder of the live site's repository, commits, and refuses to push
+  if any file outside that folder would change. The repository holds no live project id: the owner writes his settings in
+  **`~/.fincom/live.env`** (or the path in `LIVE_CONFIG`), outside the repository (the script refuses a settings file
+  inside a git work tree that is not ignored there):
+
+  ```sh
+  LIVE_PROJECT_ID=<live's project id>          # 20 letters and digits; the build must name it
+  LIVE_SITE_REPO=https://github.com/caanshulgarg/tds-desk.git
+  LIVE_SITE_BRANCH=main                        # the branch Pages publishes from
+  LIVE_FOLDER=app                              # the folder the build goes into (not the root)
+  LIVE_SOURCE_COMMIT=601e57ad                  # optional: the commit staging shows
+  LIVE_URL=https://app.fincom.live/app/        # optional: only printed
+  ```
+  Run: `cd app && npm ci && LIVE_GO=1 DRY=1 ./publish-live.sh`, read the list of files, then `LIVE_GO=1 ./publish-live.sh`.
+  Tried here only on its refusals (no LIVE_GO, no settings file, staging's id, a settings file inside the repository, a
+  wrong folder, uncommitted changes); a full dry run needs live's id, which this session may not name.
 - **Build from the staging commit.** Build from the commit staging shows: pub-241 601e57ad (main b6d6fcdd; arc-ui
   840b5331 merged with tax-accuracy c89c58ff). Run `npm ci` first.
-- **Hosting.** Per docs/setup.md, live is `caanshulgarg/tds-desk` on GitHub Pages: copy the files in and push. Staging's
-  root forwards to /review/, and live needs the same root page. Confirm with the owner that app.fincom.live is that
-  repository's Pages address: this session cannot read that repository.
+- **Hosting.** Per docs/setup.md (step 7), live is `caanshulgarg/tds-desk` on GitHub Pages (Build 199 is its root
+  `index.html`, one file). The repository does not say that app.fincom.live is that repository's Pages address (this
+  repository's own CNAME is staging.fincom.live; tds-desk cannot be read from this session): **owner question**. Because
+  the script changes one folder only, the React build lands at `<site>/<folder>/` and Build 199's root page stays until a
+  separate, reviewed one-file commit makes the root forward to the folder, as staging's root forwards to /review/
+  (**owner question**: which folder, and when the root switches; switching it back is the way back).
 - **Changes the live build needs:** vite.config.js ships `assets/bridge-go` only for a test build with
   `FINCOM_SHIP_BRIDGE=1`, and build.py's live form still hands out the old PowerShell setup (`bridge-setup`). For live
   users to get 2.4.1, both need a small reviewed change. (A live build has no Sentry; that is intended.)
@@ -196,10 +424,10 @@ Who: O = owner, C = Claude. The times are estimates; the rehearsal replaces them
 | 2 | **Full backup of live:** Dashboard → Database → Backups (note the newest), switch on PITR if possible, download a full dump (`supabase db dump` or the dashboard's download), and download every storage bucket's files (a database backup holds no files) | O | 30–45 m | the dump file opens; bucket file counts noted | — |
 | 3 | Run the inventory query (1.1); write down live's function versions and the Build number on screen | O | 10 m | C compares it with the list in 1.1 | — |
 | 4 | **Lift the hook** for this session; switch on the missing extensions | O | 5 m | C reads one harmless `select 1` | put the hook back |
-| 5 | Migrations in the order of 1.1, each md5-checked; 48 and 50 by O in the SQL editor; functions read back by md5(prosrc) as on staging | C (+O) | 2½–3½ h | each file: md5 equal, functions matched; after 23/27/32/37 the counts and totals agree | stop; restore from step 2 (or PITR to before step 5) |
-| 6 | Vault and settings: `gst_cron_key`, the GSP items, Auth URLs, platform keys | O | 15 m | cron jobs listed; `tally-work` runs without an error in `cron.job_run_details` | — |
+| 5 | O sets the Vault secret `fincom_project_url` (1.1.1); O runs the dry runs again (1.1.2). Migrations in the order of 1.1 (13, 16 and schema.sql as go-live copies), each md5-checked; 48 and 50 by O in the SQL editor; functions read back by md5(prosrc) as on staging | C (+O) | 2½–3½ h | each file: md5 equal, functions matched; the checks of 1.1.2 before and after 13/23/27/32/37 agree with the dry runs | stop; restore from step 2 (or PITR to before step 5) |
+| 6 | Vault and settings: `gst_cron_key` (made by schema.sql), the GSP items, Auth URLs, platform keys | O | 15 m | cron jobs listed; `tally-work` runs without an error in `cron.job_run_details` | — |
 | 7 | Function secrets (1.3), then deploy the 7 functions; tally-ingest checked byte for byte | C | 30 m | CORS check from `server/_shared/README.md` against live; versions noted | redeploy the versions noted in step 3 |
-| 8 | Build the live app (1.4), check that legacy.js names live, publish to tds-desk | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | revert the tds-desk commit (Build 199 comes back) |
+| 8 | Build and publish the live app with `app/publish-live.sh` (1.4: DRY first; it checks legacy.js names live) | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | revert the tds-desk commit (Build 199 comes back) |
 | 9 | Put the 2.4.1 files and latest.json on live; pair the first computer | C, O | 20 m | the setup's SHA-256 matches; the Tally page shows 2.4.1 | the old setup is still in tds-desk's history |
 | 10 | Smoke checks: sign in (owner and one staff), open a client, upload a bill, Look up, **Post to Tally into a test company**, bridge beat within 1 minute, `tally-recorder-drain` cron runs | O, C | 30 m | each one passes | step 8's way back; the data stays |
 | 11 | **Put the hook back**; tell staff to start | O | 5 m | C cannot reach live | — |
@@ -217,11 +445,11 @@ the backup from step 2 is a full way back.
    so it rehearses less. Claude checks the id is not live's before any call; the hook would also stop it.
 2. **Treat it as live data.** The copy holds real clients. Claude reads only counts and totals from it. The owner
    deletes the project after the rehearsal.
-3. **Run steps 3, 5, 6, 7 and 10 exactly as in section 2, timing each.** Edit 13, 16 and schema.sql for the copy's own
-   address (never staging's: its cron would call staging). Point a local live build (1.4), or a bridge's `CloudUrl`,
+3. **Run steps 3, 5, 6, 7 and 10 exactly as in section 2, timing each.** Set `fincom_project_url` on the copy to the copy's
+   own address (never staging's: the go-live copies refuse it anyway). Point a local live build (1.4), or a bridge's `CloudUrl`,
    at the copy. Post into a test company only.
 4. **Record** for each file: the minutes it took, whether it ran in pieces or in the SQL editor, and any lock wait.
-   Record the trial balance and the live entry count of each book before and after 23, 27, 32 and 37.
+   Run the dry runs and checks of 1.1.2 before and after 13, 23, 27, 32 and 37, and record them.
 5. **Done when** every step passes twice, from two separate restores, and section 2's times are replaced with the
    measured ones.
 
@@ -232,35 +460,51 @@ the backup from step 2 is a full way back.
 - Say "go", in writing, after the rehearsal has passed.
 - Run 48 and 50 (and any piece the tool times out on) in live's SQL editor.
 - Paste the inventory query and send back what it shows.
-- Approve the edited 13, 16 and schema.sql (new md5s).
+- Approve the go-live copies of 13, 16 and schema.sql (md5s in 1.1.1), and set `fincom_project_url` in live's Vault.
+- Run the dry runs of 1.1.2 in live's SQL editor before go and send the numbers.
+- Fill in `~/.fincom/live.env` for `app/publish-live.sh` (1.4).
 - Set the secret values: function secrets, vault, platform keys, Resend domain, Auth settings.
 - Install bridge 2.4.1 on each live user's computer (NWS144 steps as in docs/bridge-2.4.1-test-sheet.txt), and pair
   each one with a connect code.
-- Decide whether 31 runs, whether Sentry stays off on live, and which computers get the bridge.
+- Decide on 31 (recommended: skip) and 61 (recommended: run) (1.1.3), whether whether Sentry stays off on live, and which computers get the bridge.
 
 ## 5. Risks and open questions
 
 1. **Staging's address is written into 13, 16 and gst-taxpro/schema.sql.** Run as they are, live's timers would call
-   staging every 30 seconds. They must be edited, which gives them new md5s that the owner approves.
+   staging every 30 seconds. **Addressed:** live runs the go-live copies (1.1.1), which read the address from live's
+   Vault and refuse staging's; tested. Left: the owner approves their md5s and sets the secret.
 2. **Live's starting point is not known.** This list assumes live has exactly Build 199's files. The inventory query
    decides; if live is ahead or behind, the list changes before anything runs.
 3. **Data that migrations transform:** 23 renames names and rebuilds `tally_ledger_day` days; 27 sets clients'
-   `postTo`; 32 and 37 re-mark voucher origins; 13 gives every device a new wake token. None of these is undone by a later migration. Only the backup undoes them.
+   `postTo`; 32 and 37 re-mark voucher origins; 13 gives every device a new wake token. None of these is undone by a later migration. Only the backup undoes them. **Addressed:** a dry run and a
+   before/after check for each (1.1.2), tested; the owner runs the dry runs before go.
 4. **31 never ran on staging** (`tally_ledgers.raw_name` is missing there), yet it is in the numbered chain. The tested
-   order goes from 30 to 32 without it.
+   order goes from 30 to 32 without it. **Recommended: skip** (1.1.3).
 5. **61 is not on tax-accuracy** (only on `perms-61`). It narrows what `authenticated` may write on clients, records
    and activity. Old Build 199 tabs left open would then fail their writes. `live-members-fix.sql` (perms-61, md5
-   fd84f633…) was for the owner to run on live: was it run?
+   fd84f633…) was for the owner to run on live: was it run? **Recommended: run 61** (1.1.3).
 6. **Staff accounts:** 61 closes members self-promotion; invites need `APP_URL` and Resend; the platform admin's
    second step (admin function) is not switched on. Check that every live staff member can still sign in during step 10.
-7. **Bridges 1.14 during and after the window.** It is not tested whether tally-ingest v43 still accepts a 1.14
-   PowerShell bridge. Until 2.4.1 is installed, a 1.14 computer may stop syncing or posting.
+7. **Bridges 1.14 during and after the window.** **Tested 10-Oct:** tally-ingest as in the repository (staging's v43)
+   accepts bridge 1.14.6. `tests/run_bridge_1146_server.py` (new; the real index.ts under Deno against the stand-in for
+   Supabase) sends every call 1.14.6 makes, with its exact bodies (bridge/cloud.ps1 at f447539fe): hello, companies,
+   ledgers, days (gz), state, beat, posts_take, posts_update; each is answered 200 with the fields 1.14.6 reads (links,
+   done, updateNow, posts, the job with its payload), and a queued posting goes waiting → taken → running → done (14
+   checks, all passed). `run_main_bridge_server.py` (133 checks) and `run_bridge_control_server.py` (61) also pass. What
+   this does not cover: the database functions are stand-ins there (their SQL is tested by the migration tests); a
+   posting made by the new app is not tried through 1.14.6's own PowerShell; and once a 2.x bridge is made a computer's
+   main bridge, 1.14/1.15 on that computer is refused postings by design. During the window (before step 7) live still
+   runs its own tally-ingest; 1.14 computers keep syncing, so the dry runs are repeated just before each file.
 8. **The bridge release table.** On live, `tally_bridge_releases` and the allow-list are empty. Staging runs with "any
    computer, no pilot". The owner should check whether live needs the same release rows before 2.4.1 is allowed.
-9. **No live publish script, and the live build ships no Go bridge** (1.4). A small change and its review are needed
-   before the go-live.
+9. **The live build ships no Go bridge** (1.4). `app/publish-live.sh` now exists (not run). The bridge files and the
+   root page still need a small reviewed change before the go-live.
 10. **signup's source is not in the repository.** Live keeps its own copy, untested against the new schema.
 11. **What cannot be undone without a restore:** the data changes in item 3, the privileges revoked by 4, 58, 61 and
     70, and pg_cron jobs that have already called out.
 12. **The window's length depends on live's data size.** 23, 32, 37 and the RESTRICT swaps in 45 lock tables. The
     rehearsal measures how long.
+13. **Owner questions (10-Oct):** (a) is app.fincom.live the GitHub Pages address of `caanshulgarg/tds-desk`, and from
+    which branch does it publish? (b) which folder should the React build go into, and when does the root page switch to
+    it? (c) approve the three go-live copies' md5s (1.1.1); (d) skip 31 and run 61, as recommended (1.1.3)? (e) was
+    `live-members-fix.sql` run on live?
