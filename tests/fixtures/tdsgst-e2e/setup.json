@@ -1,0 +1,32 @@
+{
+ "_about": "What the CA does in FinCom for this client, as a person would on its pages (not read from Tally): the client's details, what each tax ledger is (the ledger list, Settings -> GST and TDS ledgers), the lower deduction certificate, the challans the TDS was paid with, and the filing of May's GSTR-1 and Q1's returns. The test applies exactly this; FinCom's own proposals for the ledgers are reported beside it.",
+ "client": {"id": "tg", "name": "FinCom Spike Co", "tallyName": "FinCom Spike Co", "gstin": "07AAACF1234A1ZH", "pan": "AAACF1234A", "tan": "DELF01234E"},
+ "ledgers": {
+  "Output CGST": {"what": "gst", "tax": "CGST", "side": "output", "reg": "07"},
+  "Output SGST": {"what": "gst", "tax": "SGST", "side": "output", "reg": "07"},
+  "Output IGST": {"what": "gst", "tax": "IGST", "side": "output", "reg": "07"},
+  "Input CGST": {"what": "gst", "tax": "CGST", "side": "input", "reg": "07"},
+  "Input SGST": {"what": "gst", "tax": "SGST", "side": "input", "reg": "07"},
+  "Input IGST": {"what": "gst", "tax": "IGST", "side": "input", "reg": "07"},
+  "CGST RCM Payable": {"what": "gst_rcm", "tax": "CGST", "side": "output", "reg": "07"},
+  "SGST RCM Payable": {"what": "gst_rcm", "tax": "SGST", "side": "output", "reg": "07"},
+  "TDS Payable 194C": {"what": "tds_payable", "section": "194C"},
+  "TDS Payable 194J": {"what": "tds_payable", "section": "194J"},
+  "TDS on Commission 393(1)": {"what": "tds_payable", "section": "194H"},
+  "TDS on Rent 393(1)": {"what": "tds_payable", "section": "194I"},
+  "TDS Payable 194Q": {"what": "tds_payable", "section": "194Q"},
+  "TDS Payable 194A": {"what": "tds_payable", "section": "194A"},
+  "TDS Payable 195": {"what": "tds_payable", "section": "195"},
+  "TDS on Salary 192": {"what": "tds_payable", "section": "192"},
+  "TCS 206C(1) Scrap": {"what": "tcs_payable", "section": "206C"},
+  "TCS 206C(1H) Sale of Goods": {"what": "tcs_payable", "section": "206C"},
+  "HDFC Bank": {"what": "bank"}
+ },
+ "certs": [{"id": "cert-chi", "party": "Chi Tech Services", "pan": "AAACC1234J", "section": "194J", "rate": 1, "certNo": "LDC1234567", "from": "20260401", "to": "20270331", "limit": 500000}],
+ "challans": [
+  {"id": "ch-140", "form": "26Q", "bsr": "0240020", "serial": "00001", "date": "20260607", "tax": 31800, "interest": 0, "_about": "enough for phase 2's 31,800 (phase 1 uses 27,000 of it)"},
+  {"id": "ch-144", "form": "27Q", "bsr": "0240020", "serial": "00002", "date": "20260607", "tax": 20800, "interest": 0},
+  {"id": "ch-143", "form": "27EQ", "bsr": "0240020", "serial": "00003", "date": "20260607", "tax": 2478, "interest": 0, "section": "206C"}
+ ],
+ "filed": {"gstr1": ["202605"], "tds": ["2026-27 Q1"]}
+}

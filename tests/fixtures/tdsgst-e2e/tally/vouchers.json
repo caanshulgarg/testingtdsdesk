@@ -1,0 +1,1320 @@
+{
+ "company": {
+  "name": "FinCom Spike Co",
+  "state": "Delhi",
+  "pan": "AAACF1234A",
+  "gstin": "07AAACF1234A1ZH",
+  "tan": "DELF01234E"
+ },
+ "parties": {
+  "alpha": {
+   "name": "Alpha Traders Delhi",
+   "group": "Sundry Debtors",
+   "state": "Delhi",
+   "reg": "Regular",
+   "pan": "AABCA1111A",
+   "gstin": "07AABCA1111A1ZT"
+  },
+  "beta": {
+   "name": "Beta Industries Mumbai",
+   "group": "Sundry Debtors",
+   "state": "Maharashtra",
+   "reg": "Regular",
+   "pan": "AABCB2222B",
+   "gstin": "27AABCB2222B1ZI"
+  },
+  "gamma": {
+   "name": "Gamma SEZ Unit",
+   "group": "Sundry Debtors",
+   "state": "Karnataka",
+   "reg": "Regular",
+   "sez": true,
+   "pan": "AABCG3333C",
+   "gstin": "29AABCG3333C1Z1"
+  },
+  "delta": {
+   "name": "Delta SEZ Unit",
+   "group": "Sundry Debtors",
+   "state": "Tamil Nadu",
+   "reg": "Regular",
+   "sez": true,
+   "pan": "AABCD4444D",
+   "gstin": "33AABCD4444D1Z7"
+  },
+  "euro": {
+   "name": "Euro Imports GmbH",
+   "group": "Sundry Debtors",
+   "state": "",
+   "country": "Germany",
+   "reg": "Unregistered"
+  },
+  "retail": {
+   "name": "Retail Customer UP",
+   "group": "Sundry Debtors",
+   "state": "Uttar Pradesh",
+   "reg": "Unregistered"
+  },
+  "cash": {
+   "name": "Cash Sales Delhi",
+   "group": "Sundry Debtors",
+   "state": "Delhi",
+   "reg": "Unregistered"
+  },
+  "walkin": {
+   "name": "Walkin Haryana",
+   "group": "Sundry Debtors",
+   "state": "Haryana",
+   "reg": "Unregistered"
+  },
+  "iota": {
+   "name": "Iota Services Pune",
+   "group": "Sundry Debtors",
+   "state": "Maharashtra",
+   "reg": "Regular",
+   "pan": "AABCI5151I",
+   "gstin": "27AABCI5151I1ZM",
+   "billwise": true
+  },
+  "scrap": {
+   "name": "Scrap Buyer Delhi",
+   "group": "Sundry Debtors",
+   "state": "Delhi",
+   "reg": "Regular",
+   "pan": "AABCS5555E",
+   "gstin": "07AABCS5555E1ZF"
+  },
+  "zeta": {
+   "name": "Zeta Retail Buyer",
+   "group": "Sundry Debtors",
+   "state": "Delhi",
+   "reg": "Regular",
+   "pan": "AABCZ6666F",
+   "gstin": "07AABCZ6666F1Z0"
+  },
+  "kappa": {
+   "name": "Kappa Suppliers Delhi",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "reg": "Regular",
+   "pan": "AABCK7777G",
+   "gstin": "07AABCK7777G1Z7"
+  },
+  "lambda": {
+   "name": "Lambda Supplies Rajasthan",
+   "group": "Sundry Creditors",
+   "state": "Rajasthan",
+   "reg": "Regular",
+   "pan": "AABCL8888H",
+   "gstin": "08AABCL8888H1ZW"
+  },
+  "mu": {
+   "name": "Mu Advocates",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "reg": "Unregistered",
+   "pan": "ABCPM1111J"
+  },
+  "nu": {
+   "name": "Nu Motors Delhi",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "reg": "Regular",
+   "pan": "AABCN9999K",
+   "gstin": "07AABCN9999K1ZJ"
+  },
+  "xi": {
+   "name": "Xi Farm Produce",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "reg": "Unregistered"
+  },
+  "omicron": {
+   "name": "Omicron Contractors",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "AAACO1234C",
+   "tds": "Company - Resident"
+  },
+  "pi": {
+   "name": "Pi Consultants",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "ABCPP1234D",
+   "tds": "Individual/HUF - Resident"
+  },
+  "rho": {
+   "name": "Rho Brokers",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "AABFR1234E",
+   "tds": "Partnership Firm"
+  },
+  "sigma": {
+   "name": "Sigma Landlord",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "ABCPS1234F",
+   "pan2": "ABCPS9999F",
+   "tds": "Individual/HUF - Resident"
+  },
+  "tau": {
+   "name": "Tau Goods Supplier",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "AAACT1234G",
+   "tds": "Company - Resident"
+  },
+  "upsilon": {
+   "name": "Upsilon Finance",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "AAACU1234H",
+   "tds": "Company - Resident"
+  },
+  "phi": {
+   "name": "Phi Freelancer",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "",
+   "tds": "Individual/HUF - Resident"
+  },
+  "chi": {
+   "name": "Chi Tech Services",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "AAACC1234J",
+   "tds": "Company - Resident"
+  },
+  "psi": {
+   "name": "Psi Small Contractor",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "ABCPY1234K",
+   "tds": "Individual/HUF - Resident"
+  },
+  "omega": {
+   "name": "Omega Software Inc",
+   "group": "Sundry Creditors",
+   "state": "",
+   "country": "United States of America",
+   "pan": "AAJCO1234L",
+   "tds": "Company - Non Resident"
+  },
+  "emp": {
+   "name": "Employee A",
+   "group": "Sundry Creditors",
+   "state": "Delhi",
+   "pan": "ABCPE1234M"
+  }
+ },
+ "ledgers": {
+  "salesG": "Sales Goods 18%",
+  "salesS": "Sales Services 18%",
+  "salesNil": "Sales Nil Rated",
+  "salesEx": "Sales Exempt",
+  "scrapSales": "Scrap Sales",
+  "purch": "Purchases 18%",
+  "purchEx": "Purchase Exempt",
+  "legal": "Legal Fees",
+  "car": "Motor Car",
+  "outC": "Output CGST",
+  "outS": "Output SGST",
+  "outI": "Output IGST",
+  "inC": "Input CGST",
+  "inS": "Input SGST",
+  "inI": "Input IGST",
+  "rcmC": "CGST RCM Payable",
+  "rcmS": "SGST RCM Payable",
+  "bank": "HDFC Bank",
+  "contract": "Contract Charges",
+  "prof": "Professional Fees",
+  "comm": "Commission Paid",
+  "rent": "Rent",
+  "goods": "Purchase of Goods",
+  "interest": "Interest Paid",
+  "royalty": "Royalty Paid",
+  "salary": "Salaries",
+  "tds194C": "TDS Payable 194C",
+  "tds194J": "TDS Payable 194J",
+  "tdsComm": "TDS on Commission 393(1)",
+  "tdsRent": "TDS on Rent 393(1)",
+  "tds194Q": "TDS Payable 194Q",
+  "tds194A": "TDS Payable 194A",
+  "tds195": "TDS Payable 195",
+  "tds192": "TDS on Salary 192",
+  "tcsScrap": "TCS 206C(1) Scrap",
+  "tcs1H": "TCS 206C(1H) Sale of Goods"
+ },
+ "p1": [
+  {
+   "id": "S01",
+   "type": "Sales",
+   "date": "20260501",
+   "no": "FC/26-27/001",
+   "party": "Alpha Traders Delhi",
+   "narr": "S01 B2B intra-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Alpha Traders Delhi",
+     -118000
+    ],
+    [
+     "Sales Goods 18%",
+     100000
+    ],
+    [
+     "Output CGST",
+     9000
+    ],
+    [
+     "Output SGST",
+     9000
+    ]
+   ]
+  },
+  {
+   "id": "S02",
+   "type": "Sales",
+   "date": "20260501",
+   "no": "FC/26-27/002",
+   "party": "Beta Industries Mumbai",
+   "narr": "S02 B2B inter-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Beta Industries Mumbai",
+     -236000
+    ],
+    [
+     "Sales Goods 18%",
+     200000
+    ],
+    [
+     "Output IGST",
+     36000
+    ]
+   ]
+  },
+  {
+   "id": "S03",
+   "type": "Sales",
+   "date": "20260501",
+   "no": "FC/26-27/003",
+   "party": "Gamma SEZ Unit",
+   "narr": "S03 SEZ with payment of IGST",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Gamma SEZ Unit",
+     -177000
+    ],
+    [
+     "Sales Goods 18%",
+     150000
+    ],
+    [
+     "Output IGST",
+     27000
+    ]
+   ]
+  },
+  {
+   "id": "S04",
+   "type": "Sales",
+   "date": "20260501",
+   "no": "FC/26-27/004",
+   "party": "Delta SEZ Unit",
+   "narr": "S04 SEZ under LUT, without payment",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Delta SEZ Unit",
+     -80000
+    ],
+    [
+     "Sales Goods 18%",
+     80000
+    ]
+   ]
+  },
+  {
+   "id": "S05",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/005",
+   "party": "Euro Imports GmbH",
+   "narr": "S05 export with payment of IGST",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Euro Imports GmbH",
+     -354000
+    ],
+    [
+     "Sales Goods 18%",
+     300000
+    ],
+    [
+     "Output IGST",
+     54000
+    ]
+   ]
+  },
+  {
+   "id": "S06",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/006",
+   "party": "Euro Imports GmbH",
+   "narr": "S06 export under LUT, without payment",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Euro Imports GmbH",
+     -250000
+    ],
+    [
+     "Sales Goods 18%",
+     250000
+    ]
+   ]
+  },
+  {
+   "id": "S07",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/007",
+   "party": "Retail Customer UP",
+   "narr": "S07 B2C large, inter-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Retail Customer UP",
+     -177000
+    ],
+    [
+     "Sales Goods 18%",
+     150000
+    ],
+    [
+     "Output IGST",
+     27000
+    ]
+   ]
+  },
+  {
+   "id": "S08",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/008",
+   "party": "Cash Sales Delhi",
+   "narr": "S08 B2C small, intra-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Cash Sales Delhi",
+     -47200
+    ],
+    [
+     "Sales Goods 18%",
+     40000
+    ],
+    [
+     "Output CGST",
+     3600
+    ],
+    [
+     "Output SGST",
+     3600
+    ]
+   ]
+  },
+  {
+   "id": "S09",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/009",
+   "party": "Walkin Haryana",
+   "narr": "S09 B2C small, inter-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Walkin Haryana",
+     -59000
+    ],
+    [
+     "Sales Goods 18%",
+     50000
+    ],
+    [
+     "Output IGST",
+     9000
+    ]
+   ]
+  },
+  {
+   "id": "S10",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/010",
+   "party": "Alpha Traders Delhi",
+   "narr": "S10 nil-rated, intra-state, registered",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Alpha Traders Delhi",
+     -30000
+    ],
+    [
+     "Sales Nil Rated",
+     30000
+    ]
+   ]
+  },
+  {
+   "id": "S11",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/011",
+   "party": "Walkin Haryana",
+   "narr": "S11 exempt, inter-state, unregistered",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Walkin Haryana",
+     -20000
+    ],
+    [
+     "Sales Exempt",
+     20000
+    ]
+   ]
+  },
+  {
+   "id": "S12",
+   "type": "Sales",
+   "date": "20260531",
+   "no": "FC/26-27/012",
+   "party": "Cash Sales Delhi",
+   "narr": "S12 to be cancelled",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Cash Sales Delhi",
+     -11800
+    ],
+    [
+     "Sales Goods 18%",
+     10000
+    ],
+    [
+     "Output CGST",
+     900
+    ],
+    [
+     "Output SGST",
+     900
+    ]
+   ]
+  },
+  {
+   "id": "S13",
+   "type": "Sales",
+   "date": "20260531",
+   "no": "FC/26-27/013",
+   "party": "Cash Sales Delhi",
+   "narr": "S13 deleted after filing",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Cash Sales Delhi",
+     -5900
+    ],
+    [
+     "Sales Goods 18%",
+     5000
+    ],
+    [
+     "Output CGST",
+     450
+    ],
+    [
+     "Output SGST",
+     450
+    ]
+   ]
+  },
+  {
+   "id": "S14",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "OPT/001",
+   "party": "Alpha Traders Delhi",
+   "narr": "S14 optional (memorandum)",
+   "ref": "",
+   "optional": true,
+   "lines": [
+    [
+     "Alpha Traders Delhi",
+     -8260
+    ],
+    [
+     "Sales Goods 18%",
+     7000
+    ],
+    [
+     "Output CGST",
+     630
+    ],
+    [
+     "Output SGST",
+     630
+    ]
+   ]
+  },
+  {
+   "id": "S15",
+   "type": "Sales",
+   "date": "20260502",
+   "no": "FC/26-27/014",
+   "party": "Iota Services Pune",
+   "narr": "S15 services, inter-state",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Iota Services Pune",
+     -118000
+    ],
+    [
+     "Sales Services 18%",
+     100000
+    ],
+    [
+     "Output IGST",
+     18000
+    ]
+   ]
+  },
+  {
+   "id": "CN1",
+   "type": "Credit Note",
+   "date": "20260502",
+   "no": "CN/001",
+   "party": "Alpha Traders Delhi",
+   "narr": "CN1 goods returned by Alpha (FC/26-27/001)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Sales Goods 18%",
+     -10000
+    ],
+    [
+     "Output CGST",
+     -900
+    ],
+    [
+     "Output SGST",
+     -900
+    ],
+    [
+     "Alpha Traders Delhi",
+     11800
+    ]
+   ]
+  },
+  {
+   "id": "CN2",
+   "type": "Credit Note",
+   "date": "20260502",
+   "no": "CN/002",
+   "party": "Retail Customer UP",
+   "narr": "CN2 goods returned by a B2C large buyer (FC/26-27/007)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Sales Goods 18%",
+     -20000
+    ],
+    [
+     "Output IGST",
+     -3600
+    ],
+    [
+     "Retail Customer UP",
+     23600
+    ]
+   ]
+  },
+  {
+   "id": "DN1",
+   "type": "Debit Note",
+   "date": "20260502",
+   "no": "DN/001",
+   "party": "Beta Industries Mumbai",
+   "narr": "DN1 price revision on FC/26-27/002",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Beta Industries Mumbai",
+     -5900
+    ],
+    [
+     "Sales Goods 18%",
+     5000
+    ],
+    [
+     "Output IGST",
+     900
+    ]
+   ]
+  },
+  {
+   "id": "RV1",
+   "type": "Receipt",
+   "date": "20260502",
+   "no": "RV/001",
+   "party": "Iota Services Pune",
+   "narr": "RV1 advance for services, not yet invoiced",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "HDFC Bank",
+     -59000
+    ],
+    [
+     "Iota Services Pune",
+     59000
+    ]
+   ]
+  },
+  {
+   "id": "P01",
+   "type": "Purchase",
+   "date": "20260501",
+   "no": "PUR/001",
+   "party": "Kappa Suppliers Delhi",
+   "narr": "P01 purchase, intra-state, credit eligible",
+   "ref": "KS/101",
+   "optional": false,
+   "lines": [
+    [
+     "Purchases 18%",
+     -50000
+    ],
+    [
+     "Input CGST",
+     -4500
+    ],
+    [
+     "Input SGST",
+     -4500
+    ],
+    [
+     "Kappa Suppliers Delhi",
+     59000
+    ]
+   ]
+  },
+  {
+   "id": "P02",
+   "type": "Purchase",
+   "date": "20260501",
+   "no": "PUR/002",
+   "party": "Lambda Supplies Rajasthan",
+   "narr": "P02 purchase, inter-state, credit eligible",
+   "ref": "LS/55",
+   "optional": false,
+   "lines": [
+    [
+     "Purchases 18%",
+     -100000
+    ],
+    [
+     "Input IGST",
+     -18000
+    ],
+    [
+     "Lambda Supplies Rajasthan",
+     118000
+    ]
+   ]
+  },
+  {
+   "id": "P03",
+   "type": "Purchase",
+   "date": "20260502",
+   "no": "PUR/003",
+   "party": "Mu Advocates",
+   "narr": "P03 legal services from an advocate, reverse charge",
+   "ref": "MU/7",
+   "optional": false,
+   "lines": [
+    [
+     "Legal Fees",
+     -50000
+    ],
+    [
+     "Input CGST",
+     -4500
+    ],
+    [
+     "Input SGST",
+     -4500
+    ],
+    [
+     "CGST RCM Payable",
+     4500
+    ],
+    [
+     "SGST RCM Payable",
+     4500
+    ],
+    [
+     "Mu Advocates",
+     50000
+    ]
+   ]
+  },
+  {
+   "id": "P04",
+   "type": "Purchase",
+   "date": "20260502",
+   "no": "PUR/004",
+   "party": "Nu Motors Delhi",
+   "narr": "P04 motor car, credit blocked under section 17(5)",
+   "ref": "NM/88",
+   "optional": false,
+   "lines": [
+    [
+     "Motor Car",
+     -500000
+    ],
+    [
+     "Input CGST",
+     -70000
+    ],
+    [
+     "Input SGST",
+     -70000
+    ],
+    [
+     "Nu Motors Delhi",
+     640000
+    ]
+   ]
+  },
+  {
+   "id": "P05",
+   "type": "Purchase",
+   "date": "20260502",
+   "no": "PUR/005",
+   "party": "Xi Farm Produce",
+   "narr": "P05 exempt inward supply",
+   "ref": "XF/3",
+   "optional": false,
+   "lines": [
+    [
+     "Purchase Exempt",
+     -25000
+    ],
+    [
+     "Xi Farm Produce",
+     25000
+    ]
+   ]
+  },
+  {
+   "id": "DN2",
+   "type": "Debit Note",
+   "date": "20260502",
+   "no": "DN-P/001",
+   "party": "Kappa Suppliers Delhi",
+   "narr": "DN2 goods returned to Kappa (KS/101)",
+   "ref": "KS/101",
+   "optional": false,
+   "lines": [
+    [
+     "Kappa Suppliers Delhi",
+     -5900
+    ],
+    [
+     "Purchases 18%",
+     5000
+    ],
+    [
+     "Input CGST",
+     450
+    ],
+    [
+     "Input SGST",
+     450
+    ]
+   ]
+  },
+  {
+   "id": "T01",
+   "type": "Journal",
+   "date": "20260401",
+   "no": "JV/T01",
+   "party": "Omicron Contractors",
+   "narr": "T01 contract work, TDS 194C 2%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Contract Charges",
+     -100000
+    ],
+    [
+     "TDS Payable 194C",
+     2000
+    ],
+    [
+     "Omicron Contractors",
+     98000
+    ]
+   ]
+  },
+  {
+   "id": "T02",
+   "type": "Journal",
+   "date": "20260401",
+   "no": "JV/T02",
+   "party": "Pi Consultants",
+   "narr": "T02 professional fees, booked under 194C by mistake",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Professional Fees",
+     -60000
+    ],
+    [
+     "TDS Payable 194C",
+     1200
+    ],
+    [
+     "Pi Consultants",
+     58800
+    ]
+   ]
+  },
+  {
+   "id": "T03",
+   "type": "Journal",
+   "date": "20260401",
+   "no": "JV/T03",
+   "party": "Rho Brokers",
+   "narr": "T03 commission, TDS 2%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Commission Paid",
+     -40000
+    ],
+    [
+     "TDS on Commission 393(1)",
+     800
+    ],
+    [
+     "Rho Brokers",
+     39200
+    ]
+   ]
+  },
+  {
+   "id": "T04",
+   "type": "Journal",
+   "date": "20260401",
+   "no": "JV/T04",
+   "party": "Sigma Landlord",
+   "narr": "T04 rent for the office, TDS 10%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Rent",
+     -75000
+    ],
+    [
+     "TDS on Rent 393(1)",
+     7500
+    ],
+    [
+     "Sigma Landlord",
+     67500
+    ]
+   ]
+  },
+  {
+   "id": "T05",
+   "type": "Journal",
+   "date": "20260402",
+   "no": "JV/T05",
+   "party": "Tau Goods Supplier",
+   "narr": "T05 purchase of goods, TDS 194Q 0.1% on 5,00,000 above 50 lakh",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Purchase of Goods",
+     -5500000
+    ],
+    [
+     "TDS Payable 194Q",
+     500
+    ],
+    [
+     "Tau Goods Supplier",
+     5499500
+    ]
+   ]
+  },
+  {
+   "id": "T06",
+   "type": "Journal",
+   "date": "20260402",
+   "no": "JV/T06",
+   "party": "Upsilon Finance",
+   "narr": "T06 interest on a loan, TDS 194A 10%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Interest Paid",
+     -50000
+    ],
+    [
+     "TDS Payable 194A",
+     5000
+    ],
+    [
+     "Upsilon Finance",
+     45000
+    ]
+   ]
+  },
+  {
+   "id": "T07",
+   "type": "Journal",
+   "date": "20260402",
+   "no": "JV/T07",
+   "party": "Phi Freelancer",
+   "narr": "T07 professional fees, no PAN: 20% (206AA)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Professional Fees",
+     -40000
+    ],
+    [
+     "TDS Payable 194J",
+     8000
+    ],
+    [
+     "Phi Freelancer",
+     32000
+    ]
+   ]
+  },
+  {
+   "id": "T08",
+   "type": "Journal",
+   "date": "20260402",
+   "no": "JV/T08",
+   "party": "Chi Tech Services",
+   "narr": "T08 technical services, lower deduction certificate 1%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Professional Fees",
+     -200000
+    ],
+    [
+     "TDS Payable 194J",
+     2000
+    ],
+    [
+     "Chi Tech Services",
+     198000
+    ]
+   ]
+  },
+  {
+   "id": "T09",
+   "type": "Journal",
+   "date": "20260402",
+   "no": "JV/T09",
+   "party": "Psi Small Contractor",
+   "narr": "T09 contract work below the threshold, no TDS",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Contract Charges",
+     -20000
+    ],
+    [
+     "Psi Small Contractor",
+     20000
+    ]
+   ]
+  },
+  {
+   "id": "T10",
+   "type": "Journal",
+   "date": "20260501",
+   "no": "JV/T10",
+   "party": "Omega Software Inc",
+   "narr": "T10 royalty to a non-resident, TDS 195 20.8%",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Royalty Paid",
+     -100000
+    ],
+    [
+     "TDS Payable 195",
+     20800
+    ],
+    [
+     "Omega Software Inc",
+     79200
+    ]
+   ]
+  },
+  {
+   "id": "T11",
+   "type": "Journal",
+   "date": "20260601",
+   "no": "JV/T11",
+   "party": "Employee A",
+   "narr": "T11 salary, TDS 192",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Salaries",
+     -100000
+    ],
+    [
+     "TDS on Salary 192",
+     10000
+    ],
+    [
+     "Employee A",
+     90000
+    ]
+   ]
+  },
+  {
+   "id": "TC1",
+   "type": "Sales",
+   "date": "20260601",
+   "no": "FC/26-27/015",
+   "party": "Scrap Buyer Delhi",
+   "narr": "TC1 scrap sold, TCS 2% on 1,18,000",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Scrap Buyer Delhi",
+     -120360
+    ],
+    [
+     "Scrap Sales",
+     100000
+    ],
+    [
+     "Output CGST",
+     9000
+    ],
+    [
+     "Output SGST",
+     9000
+    ],
+    [
+     "TCS 206C(1) Scrap",
+     2360
+    ]
+   ]
+  },
+  {
+   "id": "TC2",
+   "type": "Sales",
+   "date": "20260602",
+   "no": "FC/26-27/016",
+   "party": "Zeta Retail Buyer",
+   "narr": "TC2 goods, TCS 206C(1H) 0.1% (omitted from 1-Apr-2025)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Zeta Retail Buyer",
+     -118118
+    ],
+    [
+     "Sales Goods 18%",
+     100000
+    ],
+    [
+     "Output CGST",
+     9000
+    ],
+    [
+     "Output SGST",
+     9000
+    ],
+    [
+     "TCS 206C(1H) Sale of Goods",
+     118
+    ]
+   ]
+  },
+  {
+   "id": "S20",
+   "type": "Sales",
+   "date": "20260701",
+   "no": "FC/26-27/017",
+   "party": "Alpha Traders Delhi",
+   "narr": "S20 July sale",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Alpha Traders Delhi",
+     -11800
+    ],
+    [
+     "Sales Goods 18%",
+     10000
+    ],
+    [
+     "Output CGST",
+     900
+    ],
+    [
+     "Output SGST",
+     900
+    ]
+   ]
+  }
+ ],
+ "p2": [
+  {
+   "id": "S02",
+   "op": "alter",
+   "why": "invoice FC/26-27/002 revised after GSTR-1 of May was filed: 2,00,000 to 2,20,000",
+   "type": "Sales",
+   "date": "20260501",
+   "no": "FC/26-27/002",
+   "party": "Beta Industries Mumbai",
+   "narr": "S02 B2B inter-state (revised)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Beta Industries Mumbai",
+     -259600
+    ],
+    [
+     "Sales Goods 18%",
+     220000
+    ],
+    [
+     "Output IGST",
+     39600
+    ]
+   ]
+  },
+  {
+   "id": "CN1",
+   "op": "alter",
+   "why": "credit note CN/001 revised after filing: 10,000 to 12,000",
+   "type": "Credit Note",
+   "date": "20260502",
+   "no": "CN/001",
+   "party": "Alpha Traders Delhi",
+   "narr": "CN1 goods returned by Alpha (FC/26-27/001) (revised)",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Sales Goods 18%",
+     -12000
+    ],
+    [
+     "Output CGST",
+     -1080
+    ],
+    [
+     "Output SGST",
+     -1080
+    ],
+    [
+     "Alpha Traders Delhi",
+     14160
+    ]
+   ]
+  },
+  {
+   "id": "T02",
+   "op": "alter",
+   "why": "TDS correction: professional fees moved from 194C (2%) to 194J (10%)",
+   "type": "Journal",
+   "date": "20260401",
+   "no": "JV/T02",
+   "party": "Pi Consultants",
+   "narr": "T02 professional fees, corrected to 194J",
+   "ref": "",
+   "optional": false,
+   "lines": [
+    [
+     "Professional Fees",
+     -60000
+    ],
+    [
+     "TDS Payable 194J",
+     6000
+    ],
+    [
+     "Pi Consultants",
+     54000
+    ]
+   ]
+  },
+  {
+   "id": "SIGMA",
+   "op": "ledger",
+   "why": "TDS correction: Sigma Landlord's PAN corrected from ABCPS1234F to ABCPS9999F"
+  },
+  {
+   "id": "S13",
+   "op": "delete-keys",
+   "why": "invoice FC/26-27/013 (B2C small) deleted in Tally after filing"
+  }
+ ]
+}
