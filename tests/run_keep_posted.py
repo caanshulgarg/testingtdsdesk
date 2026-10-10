@@ -16,7 +16,13 @@ fake_tally.start(); fake_cloud.start()
 fake_tally.CTRL["posted_alter"] = True
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 CFG = _os.path.join(BRUN, "tds-bridge.config.json")
-json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": "23:59", "KeepLightMin": -1, "KeepStartSec": 5, "KeepCycleSec": 3,
+# the clock (CI 06-Oct-2026 ran this across midnight: the last wait looked for the date the test started on). The daily
+# time is 12 hours from now and today's update is noted as done before the bridge starts, so the day's update never
+# comes by itself during the test, whatever the hour and across a midnight; dates are taken when they are checked
+AT = (datetime.datetime.now() + datetime.timedelta(hours=12)).strftime("%H:%M")
+_os.makedirs(_os.path.join(BRUN, "sync"), exist_ok=True)
+open(_os.path.join(BRUN, "sync", "keep-lastrun.txt"), "w").write(datetime.date.today().strftime("%Y%m%d"))
+json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": AT, "KeepLightMin": -1, "KeepStartSec": 5, "KeepCycleSec": 3,
            "KeepBudgetSec": 30, "KeepIdleMin": 1, "KeepFrom": "20260201", "KeepFakeOffice": False, "KeepRunMin": 15, "KeepSharePct": 100, "KeepNightSharePct": 100,
            "CloudLinksSec": 5, "CloudStateSec": 5, "CloudBeatSec": 5, "AllowImport": True}, open(CFG, "w"))
 br = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
@@ -47,13 +53,16 @@ def kept(day):
     return open(f, encoding="utf-8").read() if _os.path.exists(f) else ""
 def running(): return call("/keep?company=" + urllib.parse.quote(CO)).get("running")
 def kinds(n): return collections.Counter(x[0] for x in fake_tally.LOG[n:])
-today = datetime.date.today().strftime("%Y%m%d"); yday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y%m%d")
+def ymd(back=0): return (datetime.date.today() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+def lastrun(): return open(_os.path.join(sync(), "keep-lastrun.txt")).read().strip()
+def ends(): l = log(); return l.count("Update from Tally: done") + l.count("Update from Tally: not finished")
 try:
     until(lambda: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(), 60)
     call("/cloudlink", {"url": "http://127.0.0.1:9200/tally-ingest", "key": fake_cloud.KEY}); fake_cloud.LINKS[CO] = "client-1"
     for i in range(3):
+        e0 = ends()                              # this press's run ends (done, or not finished) after those before it
         call("/keep?company=" + urllib.parse.quote(CO), {"now": True})
-        until(lambda: log().count("Update from Tally: done") > i, 900, 3)
+        until(lambda: ends() > e0, 900, 3)
         if json.load(open(_os.path.join(sdir(), "keep.json"), encoding="utf-8-sig")).get("phase") == "live": break
     ok(json.load(open(_os.path.join(sdir(), "keep.json"), encoding="utf-8-sig")).get("phase") == "live", "the first copy made")
     until(lambda: not running(), 120, 2)
@@ -81,14 +90,17 @@ try:
     ok(kinds(n1)["DayBook"] >= 1 and kept("20260311").count("<GUID>%s</GUID>" % g) == 1 and fake_cloud.DAYS.get((CO, "20260311")) == kept("20260311"), "and the copy and the cloud agree with Tally, the entry once")
     # ---------- the evening update with no company open in Tally
     fake_tally.CTRL["no_company"] = True; time.sleep(35)        # the list of open companies is kept for 30 s
-    open(_os.path.join(sync(), "keep-lastrun.txt"), "w").write(yday)
+    written = ymd(1)                             # yesterday's update done: today's (at 00:00) is due
+    open(_os.path.join(sync(), "keep-lastrun.txt"), "w").write(written)
+    nf0 = log().count("not finished (Tally or the company not open")
     cfg = json.load(open(CFG, encoding="utf-8-sig")); cfg["KeepDailyAt"] = "00:00"; json.dump(cfg, open(CFG, "w"))
     call("/keep", {"dailyAt": "00:00"})
-    ok(until(lambda: "not finished (Tally or the company not open" in log(), 240, 3), "at the update's time no company is open: it says so, and does not count as done")
-    ok(open(_os.path.join(sync(), "keep-lastrun.txt")).read().strip() == yday, "today's update is still to do")
+    ok(until(lambda: log().count("not finished (Tally or the company not open") > nf0, 240, 3), "at the update's time no company is open: it says so, and does not count as done")
+    ok(lastrun() == written, "today's update is still to do (%s, as the test wrote it)" % lastrun())
     fake_tally.CTRL["no_company"] = False; time.sleep(35)
     os.remove(_os.path.join(sync(), "keep-tried.txt"))          # as if 30 minutes had passed
-    ok(until(lambda: open(_os.path.join(sync(), "keep-lastrun.txt")).read().strip() == today, 400, 3), "the company open again: the update runs then, and is done for today")
+    # done: a date after the one written, the date at the check (or, just after a midnight, the day before)
+    ok(until(lambda: lastrun() != written and lastrun() in (ymd(0), ymd(1)), 400, 3), "the company open again: the update runs then, and is done for today (%s)" % lastrun())
 finally:
     br.kill()
     for f in glob.glob(_os.path.join(BRUN, "sync", "keep.pid")):

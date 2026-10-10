@@ -42,11 +42,14 @@ with sync_playwright() as p:
     ok(pg.locator("#modal .sw").count() == 0, "the sidebar's client button opens it, a click outside closes it")
     # the sidebar and the top bar move together
     pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(800)
-    ok("Purchase bills" in top() and pg.locator("#cobar .sbar button").count() == 3, "Purchase: its title and the status tabs")
-    pg.click('#cobar .sbar button:has-text("Ready to post")'); pg.wait_for_timeout(800)
-    ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Ready to post")', "aria-selected") == "true", "a status tab switches the step")
+    # review of 02-Oct-2026 (a98430e): one row of tabs, the three steps and then Duplicates and Deleted
+    tabs = pg.evaluate("Array.from(document.querySelectorAll('#cobar .sbar button')).map(b => b.firstChild.textContent.trim())")
+    ok("Purchase" in top() and tabs[:3] == ["To review", "Post to Tally", "In Tally"] and tabs[3:5] == ["Duplicates", "Deleted"], "Purchase: its title and the status tabs (%s)" % ", ".join(tabs))
+    pg.click('#cobar .sbar button:has-text("Post to Tally")'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Post to Tally")', "aria-selected") == "true", "a status tab switches the step")
     pg.click('#side .side-link:has-text("Client setup")'); pg.wait_for_timeout(800)
-    ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 9, "Client setup: its sections, listed on the left")
+    # review of 02-Oct-2026 (f9b59b7): Remove this client moved under More, so eight sections
+    ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 8, "Client setup: its sections, listed on the left (%d)" % pg.locator('#app nav[aria-label="Client setup"] button').count())
     pg.click('#app nav[aria-label="Client setup"] button:has(span:text-is("GST"))'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "gstset", "a section in the list opens it" + " [" + pg.evaluate("S.tab") + "]")
     pg.click('#cobar button:has-text("Back to the work")'); pg.wait_for_timeout(800)

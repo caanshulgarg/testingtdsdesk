@@ -2,10 +2,12 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8131), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
-books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "books-cache.json"))))
+books = json.load(open(CACHE))
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -15,15 +17,19 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8131/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-    pg.set_input_files("#mastersIn", os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")); pg.wait_for_timeout(12000)
+    pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("S.booksTab = 'mis'; render();"); pg.wait_for_timeout(400)
-    pg.click('button:text-is("Last year")'); pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(4000)
+    pg.click('button:text-is("Last year")'); pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(4000)
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("From operations" in t and "Net change in cash and bank" in t and "The next 13 weeks" in t, "cash flow and 13 weeks")
+    if FIXTURE:   # tests/fixtures/books/EXPECTED.md: GST paid -86,600, input IGST paid from the bank -3,600, net 38,050; week 1 in 5,59,800
+        ok("-86,600.00" in t and "-3,600.00" in t and "38,050.00" in t, "fixture: GST paid 86,600 and input GST 3,600 on lines of their own; net change 38,050")
+        # week 1 out is checked in run_fixture_books.js (here the TDS ledgers are not confirmed, so no TDS is expected at all)
+        ok(pg.evaluate("S.books.mis.last.p2.fc.weeks[0].inn") == 559800, "fixture: week 1 in 5,59,800")
     pg.locator("td > button.linkbtn").first.click(); pg.wait_for_timeout(400)
     ok(pg.locator("#app td.note").count() > 0, "a cash flow line opens to its ledgers")
     pg.click('#misFc tbody tr:first-child button.linkbtn'); pg.wait_for_timeout(400)
@@ -32,23 +38,24 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Ratios")'); pg.wait_for_timeout(400)
     ok("Gross margin" in pg.inner_text("#app") and "Margins month by month" in pg.inner_text("#app"), "ratios")
     pg.click('nav[aria-label="MIS"] button:text-is("Registrations")'); pg.wait_for_timeout(400)
-    ok("07AADCV3366N1ZU" in pg.inner_text("#app") and "09AADCV3366N1ZQ" in pg.inner_text("#app"), "both registrations")
+    ok(GSTIN in pg.inner_text("#app") and GSTIN09 in pg.inner_text("#app"), "both registrations")
     pg.click('nav[aria-label="MIS"] button:text-is("Cost centres")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
-    ok("HP SALE" in t and "Income allocated" in t, "profit by cost centre")
-    pg.fill("#misq", "PMI"); pg.wait_for_timeout(700)
-    ok(pg.locator("#misCc > tbody > tr").count() >= 1 and "HP SALE" not in pg.inner_text("#misCc"), "cost centres filter")
+    CC, CQ = ("Weddings", "Corp") if FIXTURE else ("HP SALE", "PMI")   # a cost centre, and a filter that leaves it out
+    ok(CC in t and "Income allocated" in t, "profit by cost centre")
+    pg.fill("#misq", CQ); pg.wait_for_timeout(700)
+    ok(pg.locator("#misCc > tbody > tr").count() >= 1 and CC not in pg.inner_text("#misCc"), "cost centres filter")
     pg.locator("#misCc tbody button.linkbtn").first.click(); pg.wait_for_timeout(400)
     ok(pg.locator("#misCc table").count() == 1, "a cost centre opens to its ledgers")
     pg.screenshot(path=OUT + "/mis-cc.png", full_page=False)
     pg.click('nav[aria-label="MIS"] button:text-is("Budget")'); pg.wait_for_timeout(400)
     ok("No budget for this year yet" in pg.inner_text("#app"), "budget: none yet")
-    pg.click('button[data-act="misBudFill"]'); pg.wait_for_timeout(600)
+    pg.click('button:text-is("Fill from this year\u2019s actual so far")'); pg.wait_for_timeout(600)
     ok("budget for the period" in pg.inner_text("#app").lower(), "filled from this year's actual plus 10%")
-    pg.fill('input[aria-label="Budget Revenue from operations Apr 2025"]', "10000000"); pg.press('input[aria-label="Budget Revenue from operations Apr 2025"]', "Tab"); pg.wait_for_timeout(500)
+    pg.fill('input[aria-label="Budget Revenue from operations Apr-2025"]', "10000000"); pg.press('input[aria-label="Budget Revenue from operations Apr-2025"]', "Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.books.budget['2025'].rev['202504']") == 10000000, "a month of the budget changed by hand")
     with ctx.expect_page() as pop:
-        pg.click('button[data-act="misPack"]')
+        pg.click('section[data-mis-head] button:text-is("Download the MIS pack (PDF)")')
     rp = pop.value; rp.wait_for_timeout(800); rt = rp.inner_text("body")
     ok("Cash flow" in rt and "The next 13 weeks" in rt and "Budget against actual" in rt and "Cost centres, largest 15" in rt, "the pack carries phase 2")
     rp.pdf(path=OUT + "/mis-pack2.pdf"); rp.close()

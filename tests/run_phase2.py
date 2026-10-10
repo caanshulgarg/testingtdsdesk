@@ -24,7 +24,8 @@ with sync_playwright() as p:
     app = lambda: pg.inner_text("#app"); top = lambda: pg.inner_text("#cobar")
     cid, a, b = pg.evaluate(SETUP)
     # 31. one date format
-    ok(pg.evaluate("[fmtDate('2026-09-19'), fmtDateTime(new Date(2026, 8, 30, 21, 32))]") == ["19-Sep-2026", "30-Sep-2026 21:32"], "31. dates read 19-Sep-2026, and 30-Sep-2026 21:32 with the time")
+    # round 2 of the UI pass (K5): a time is Indian time with IST after it, whatever this computer's clock
+    ok(pg.evaluate("[fmtDate('2026-09-19'), fmtDateTime(Date.UTC(2026, 8, 30, 16, 2))]") == ["19-Sep-2026", "30-Sep-2026 21:32 IST"], "31. dates read 19-Sep-2026, and 30-Sep-2026 21:32 IST with the time")
     # 25. page links: a bill has its own address, which survives a refresh
     pg.evaluate("(a) => openCompany(a[0]).then(() => { goStep('review', 'bills'); S.reviewTable = false; S.selected = a[1]; render(); })", [cid, a]); pg.wait_for_timeout(900)
     link = pg.evaluate("location.hash")
@@ -66,8 +67,10 @@ with sync_playwright() as p:
     pg.fill("#delWhy", "not this client's bill"); pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(500)
     e = pg.evaluate("(b) => D().entries[b]", b)
     ok(e["status"] == "deleted" and e["deleted"]["reason"] == "not this client's bill" and e["deleted"]["by"], "24. the bill is kept as deleted, with who and why")
-    ok("Deleted (1)" in app(), "24. a Deleted filter lists it")
-    pg.click('#app button:has-text("Deleted (1)")'); pg.wait_for_timeout(300); pg.click("#app .queue li button"); pg.wait_for_timeout(400)
+    # review of 02-Oct-2026: one row of tabs; "Deleted" with its count beside it
+    DEL = 'nav[data-bill-filters] button:has-text("Deleted")'
+    ok(pg.locator(DEL).count() == 1 and pg.inner_text(DEL + " .sbar-n") == "1", "24. a Deleted filter lists it")
+    pg.click(DEL); pg.wait_for_timeout(300); pg.click("#app .queue li button"); pg.wait_for_timeout(400)
     ok("not this client's bill" in app() and pg.locator('#app button:text-is("Restore")').count() == 1, "24. opened under Deleted: the reason and a Restore button")
     pg.click('#app button:text-is("Restore")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("(b) => D().entries[b].status", b) == "draft" and pg.evaluate("(b) => !!D().entries[b].restored", b), "24. Restore puts it back to To review")
@@ -84,10 +87,12 @@ with sync_playwright() as p:
     pg.fill('.firmsetup-scrim input[aria-label="Firm name"]', "Garg Shekhar & Company"); pg.fill('.firmsetup-scrim textarea', "Kanpur"); pg.click('.firmsetup-scrim button:text-is("Save")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.firm.firmName, S.firm.firmAddress]") == ["Garg Shekhar & Company", "Kanpur"] and pg.locator(".firmsetup-scrim").count() == 0 and "Garg Shekhar" in top(), "32. saved: the name in the header, the address kept")
     pg.evaluate("() => { S.account = {me: {role: 'owner'}, firm: {balance: 499999912, plan: {name: 'Pro'}}}; render(); }"); pg.wait_for_timeout(400)
-    ok("₹49,99,99,912.00" in pg.inner_text("header.top .firmbtn"), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
+    # review of 01-Oct-2026: the chip says it short (₹49.99 Cr credit), the full figure on hover
+    ok("₹49.99 Cr credit" in pg.inner_text("header.top .firmbtn") and "₹49,99,99,912.00" in (pg.get_attribute("header.top .firmbtn", "title") or ""), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
     # 27 and 26. the page's main button; the header at 1024 px
     pg.evaluate("() => goClient('books:letters')"); pg.wait_for_timeout(700)
-    ok("New confirmation" in top() and "Upload bills" not in top() and "+ Upload" in top(), "27. Letters: New confirmation, and + Upload in the top bar")
+    # owner's spec I (04-Oct-2026): one Upload, only on the pages that upload; no "+ Upload" elsewhere
+    ok("New confirmation" in top() and "Upload bills" not in top() and "+ Upload" not in top(), "27. Letters: New confirmation, and no Upload in the top bar")
     pg.evaluate("() => goClient('books:reports')"); pg.wait_for_timeout(700)
     ok("Refresh books" in top() and "Upload bills" not in top(), "27. Reports: Refresh books")
     pg.evaluate("() => goClient('bank')"); pg.wait_for_timeout(900)
@@ -110,9 +115,11 @@ with sync_playwright() as p:
     ok(w["scroll"] == "scroll" and w["bar"] >= 8 and w["inside"] and w["lastSeen"], "30. at 1,050 px: a scroll bar that always shows, the table inside the window, the last column reachable (" + str(w) + ")")
     pg.set_viewport_size({"width": 1400, "height": 900})
     # 31 (recheck). the sidebar's foot in the same date format
+    # owner's spec K1 (04-Oct-2026): the build stamp moved from the sidebar to the About line in Settings
     foot = pg.inner_text("#side .side-ver")
-    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", foot) and "Sept" not in foot and " am" not in foot and " pm" not in foot,
-       "31. the sidebar foot reads 30-Sep-2026 and 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + ")")
+    pg.evaluate("() => goSettings(null)"); pg.wait_for_timeout(500); about = pg.inner_text("[data-about]"); pg.evaluate("() => { S.view = 'company'; goClient('txn'); }"); pg.wait_for_timeout(600)
+    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", about) and "Sept" not in foot + about and " am" not in foot + about and " pm" not in foot + about,
+       "31. the sidebar foot reads 30-Sep-2026, the About line 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + " | " + about + ")")
     # 30. Transactions: Excel, columns, the first columns kept
     ok(pg.locator('#app button:text-is("Excel")').count() == 1 and pg.locator("#app .txntbl th.stick1").count() == 1, "30. Transactions: Excel export and the first columns kept in view")
     pg.click('#app .colpick summary'); pg.click('#app .colpick label:has-text("Voucher") input'); pg.wait_for_timeout(300)

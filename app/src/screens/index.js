@@ -1,5 +1,7 @@
 // The screens already in React, by the name the old screens use to place them (<div data-react="Name" data-…>).
 import GstApiCard from "./GstApiCard.jsx";
+import GstApiAll from "./GstApiAll.jsx";
+import FiledCompare from "./gst/FiledCompare.jsx";
 import VendorRecon from "./VendorRecon.jsx";
 import Today from "./Today.jsx";
 import InboxAll from "./InboxAll.jsx";
@@ -25,4 +27,4 @@ import Unsorted from "../parts/Unsorted.jsx";
 import UploadBlock from "../parts/UploadBlock.jsx";
 import { Jobs, ReadingCheck, UploadOptions, Working } from "../parts/Reading.jsx";
 
-export default { GstApiCard, VendorRecon, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, Sales, SalesBar, Txn, Dash, Books, Gst, TallyHome, Help, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };
+export default { GstApiCard, GstApiAll, FiledCompare, VendorRecon, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, Sales, SalesBar, Txn, Dash, Books, Gst, TallyHome, Help, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };

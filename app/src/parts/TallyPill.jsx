@@ -1,5 +1,6 @@
 // One Tally status, the same words everywhere (review item 5): tallyStatus() in src/js/49-tally-cloud.js decides
-// Not set up / Offline since … / Connected – company not linked / N entries waiting / Connected & in sync.
+// Not set up / Offline since … / Connected – company not linked / N entries waiting / N received, not yet entered in the books (a held
+// recorder line: never "in sync") / Connected & in sync.
 const MARK = { ok: "● ", warn: "◐ ", bad: "○ " };
 
 export function useTally(co) { return tallyStatus(co || null); }

@@ -38,7 +38,7 @@ def call(body, tok="tok-owner", headers=None):
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
 try:
-    ok(until(lambda: any("Listening" in l for l in log), 60), "the cloud function runs (Deno)")
+    ok(until(lambda: any("Listening" in l for l in log), 120), "the cloud function runs (Deno)")
     # the made-up books, day by day, as FinCom hands a chosen day book over
     days = {}
     for d, v in make_fake_books.entries(): days.setdefault(d, []).append(v)

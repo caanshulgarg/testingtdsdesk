@@ -2,11 +2,13 @@
 // with where each stands in Tally and its document. Was viewTransactions (src/js/03). The rows are made by
 // txnRowsBills / txnRowsSales / txnRowsBank and filtered by txnFiltered (src/js/03), shared with the CSV download.
 import { useLayoutEffect, useRef, useState } from "react";
-import ColHead from "../parts/ColHead.jsx";
+import { ColFunnel } from "../parts/ColHead.jsx";
+import ListTable from "../parts/ListTable.jsx";
+import Loading from "../parts/Loading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const amt = (v) => (v ? money(r2(v)) : "—");
-const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"]];
+const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"], ["dup", "Duplicates"], ["del", "Deleted"]];
 
 function Doc({ r }) {
   if (!r.file) return "—";
@@ -22,50 +24,49 @@ function Doc({ r }) {
 export default function Txn() {
   const co = CO(), tab = txnTab();
   const all = tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank();
-  if (all === null) {
-    if (tab === "sales" && (!S.sales || S.sales.cid !== co.id)) loadSales(co.id).then(() => render());
-    if (tab === "bank" && (!S.bank || S.bank.cid !== co.id)) loadBank(co.id).then(() => render());
-    return <p className="note">Opening…</p>;
+  // still loading (spec K7): "Loading…" over a skeleton, never an empty list that is not empty
+  if (all === null || (tab === "bank" && S.bank && S.bank.loading) || (tab === "sales" && S.sales && S.sales.loading)) {
+    if (all === null && tab === "sales" && (!S.sales || S.sales.cid !== co.id)) loadSales(co.id).then(() => render());
+    if (all === null && tab === "bank" && (!S.bank || S.bank.cid !== co.id)) loadBank(co.id).then(() => render());
+    return <Loading what={tab === "sales" ? "sales invoices" : "bank lines"} />;
   }
   if (!S.fileIndex || S.fileIndexCid !== co.id) { S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
   const rows = txnFiltered(all), bank = tab === "bank", c = txnColShown;
-  const kinds = [["bills", "Purchase", txnRowsBills().length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]];
+  const kinds = [["bills", "Purchase", txnRowsBills().filter((r) => r.e.status !== "deleted").length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]];
   return <>
     <nav className="sbar" aria-label="Kind">{kinds.map(([id, label, n]) =>
       <button key={id} aria-selected={tab === id} onClick={() => txnTabGo(id)}>{label}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}</nav>
     <div className="revfilter">
       <input type="search" value={S.txnQ || ""} placeholder="Find by invoice no., party, file or amount" aria-label="Find a transaction"
         onChange={(ev) => { S.txnQ = ev.target.value; FinComReact.redraw(); later("txnq", render, 250); }} />
-      <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      <span className="note">{rows.length} of {all.length}</span>
+      <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.filter(([v]) => tab === "bills" || (v !== "dup" && v !== "del")).map(([v, l]) => <option key={v} value={v}>{l + (v === "dup" || v === "del" ? " (" + all.filter((r) => r.e && r.e.status === (v === "dup" ? "duplicate" : "deleted")).length + ")" : "")}</option>)}</select>
+      <span className="note">{rows.length} of {all.filter((r) => !(r.e && r.e.status === "deleted")).length}</span>
       <button className="btn small primary" onClick={() => txnExcel()}>Excel</button>
       <button className="btn small" onClick={() => txnCsv()}>CSV</button>
       <details className="colpick"><summary className="btn small">Columns</summary>
         <div className="colpick-box">{TXN_COLS.map(([k, label]) => <label key={k} className="chk"><input type="checkbox" checked={txnColShown(k)} onChange={() => txnColToggle(k)} /> {label}</label>)}</div></details>
     </div>
     <ChipBar t="txn" shown={rows.length} total={all.length + (bank ? " lines" : tab === "sales" ? " invoices" : " bills")} />
-    {/* the first columns stay while the rest scrolls sideways; the scroll bar is always shown (review item 30) */}
-    <SideScroll>
-      <table className="bk-table txntbl">
-        <thead><tr>
-          <th className="n stick1">S. no.</th>{c("date") && <ColHead t="txn" k="date" label="Date" cls="dt stick2" />}{c("vch") && <ColHead t="txn" k="vch" label="Voucher" />}
-          {c("no") && <ColHead t="txn" k="no" label={bank ? "Reference" : "Invoice no."} />}{c("party") && <ColHead t="txn" k="party" label={tab === "sales" ? "Customer" : "Party"} />}
-          {c("amts") && (bank ? <><th className="n">Withdrawal ₹</th><th className="n">Deposit ₹</th></> : <><th className="n">Taxable ₹</th><th className="n">GST ₹</th></>)}
-          {c("val") && <ColHead t="txn" k="val" label={bank ? "Amount ₹" : "Invoice value ₹"} cls="n" />}{c("status") && <ColHead t="txn" k="status" label="In Tally" />}{c("doc") && <ColHead t="txn" k="doc" label="Document" />}<th className="ac"></th>
-        </tr></thead>
-        <tbody>{rows.map((r, i) => (
-          <tr key={r.kind + r.id}>
-            <td className="n stick1">{i + 1}</td>
-            {c("date") && <td className="stick2">{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</td>}
-            {c("vch") && <td>{r.vch}</td>}{c("no") && <td>{r.no || "—"}</td>}{c("party") && <td>{r.party}</td>}
-            {c("amts") && (bank ? <><td className="n">{amt(r.dr)}</td><td className="n">{amt(r.cr)}</td></> : <><td className="n">{amt(r.taxable)}</td><td className="n">{amt(r.gst)}</td></>)}
-            {c("val") && <td className="n">{amt(r.total)}</td>}{c("status") && <td><span className={"tag " + r.cls}>{r.label}</span></td>}
-            {c("doc") && <td><Doc r={r} /></td>}
-            <td className="ac"><button className="btn small" onClick={() => txnGo(r.kind, r.id)}>Open</button></td>
-          </tr>))}</tbody>
-      </table>
-      {!rows.length && (S.txnQ || S.txnStatus || txnColOn() ? <NoMatch t="txn" /> : <div className="bk-none">Nothing here yet.</div>)}
-    </SideScroll>
+    {/* the first columns stay while the rest scrolls sideways; the scroll bar is always shown (review item 30). The one list
+        table (spec K6): date, number, party, amount, status, then the rest; sorting, the header in view, the foot */}
+    <ListTable name={"txn-" + tab} className="bk-table txntbl" wrap={SideScroll} rows={rows} rowKey={(r) => r.kind + r.id} unit={bank ? ["line", "lines"] : tab === "sales" ? ["invoice", "invoices"] : ["bill", "bills"]}
+      of={all.filter((r) => !(r.e && r.e.status === "deleted")).length}
+      empty={S.txnQ || S.txnStatus || txnColOn() ? <>Nothing matches. <button className="linkbtn" onClick={() => { S.txnQ = ""; S.txnStatus = ""; colChipAll("txn"); }}>Clear the search and filters</button> to see everything.</>
+        : bank ? "No bank lines yet. Use Upload statement on the Bank page to add a statement." : tab === "sales" ? "No sales invoices yet. Use Upload invoices on the Sales page, or Create invoice there." : "No purchase bills yet. Use Upload bills on the Purchase page to add them."}
+      cols={[
+        { k: "sno", role: "row", label: "S. no.", cls: "n stick1", cell: (r, p, i) => i + 1 },
+        c("date") && { k: "date", role: "date", label: "Date", cls: "dt stick2", filter: <ColFunnel t="txn" k="date" label="Date" />, v: (r) => r.date || "", cell: (r) => <>{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</> },
+        c("no") && { k: "no", role: "number", label: bank ? "Reference" : "Invoice no.", filter: <ColFunnel t="txn" k="no" label={bank ? "Reference" : "Invoice no."} />, v: (r) => r.no || "", cell: (r) => r.no || "—" },
+        c("party") && { k: "party", role: "party", label: tab === "sales" ? "Customer" : "Party", filter: <ColFunnel t="txn" k="party" label={tab === "sales" ? "Customer" : "Party"} />, v: (r) => r.party || "", cell: (r) => r.party },
+        c("val") && { k: "val", role: "amount", label: bank ? "Amount ₹" : "Invoice value ₹", cls: "n", filter: <ColFunnel t="txn" k="val" label={bank ? "Amount ₹" : "Invoice value ₹"} />, v: (r) => num(r.total) || null, sum: (r) => num(r.total), cell: (r) => amt(r.total) },
+        c("status") && { k: "status", role: "status", label: "In Tally", filter: <ColFunnel t="txn" k="status" label="In Tally" />, v: (r) => r.label || "", cell: (r) => <span className={"tag " + r.cls}>{r.label}</span> },
+        c("vch") && { k: "vch", label: "Voucher", filter: <ColFunnel t="txn" k="vch" label="Voucher" />, v: (r) => r.vch || "", td: (r) => ({ title: r.vchNote ? r.vch + ": " + r.vchNote : undefined, "data-vch-note": r.vchNote ? "" : undefined }),
+          cell: (r) => <>{r.vch}{r.vchNote && <div className="nr">(client setting)</div>}</> },
+        c("amts") && { k: "a1", label: bank ? "Withdrawal ₹" : "Taxable ₹", cls: "n", v: (r) => num(bank ? r.dr : r.taxable) || null, sum: (r) => num(bank ? r.dr : r.taxable), cell: (r) => amt(bank ? r.dr : r.taxable) },
+        c("amts") && { k: "a2", label: bank ? "Deposit ₹" : "GST ₹", cls: "n", v: (r) => num(bank ? r.cr : r.gst) || null, sum: (r) => num(bank ? r.cr : r.gst), cell: (r) => amt(bank ? r.cr : r.gst) },
+        c("doc") && { k: "doc", label: "Document", filter: <ColFunnel t="txn" k="doc" label="Document" />, cell: (r) => <Doc r={r} /> },
+        { k: "ac", role: "act", cls: "ac", cell: (r) => <button className="btn small" onClick={() => txnGo(r.kind, r.id)}>Open</button> },
+      ]} />
   </>;
 }
 
@@ -84,7 +85,7 @@ function SideScroll({ children }) {
     return () => { el.removeEventListener("scroll", check); if (ro) ro.disconnect(); window.removeEventListener("resize", check); };
   });
   return <div className={"txnscroll" + (more ? " more" : "")}>
-    <div className="bk-tablewrap txnwrap" ref={ref}>{children}</div>
+    <div className="bk-tablewrap txnwrap lt-wrap" ref={ref}>{children}</div>
     {more && <button className="txn-more" aria-label="More columns to the right" title="More columns to the right"
       onClick={() => ref.current && ref.current.scrollBy({ left: Math.max(240, ref.current.clientWidth * 0.6), behavior: "smooth" })}>›</button>}
   </div>;

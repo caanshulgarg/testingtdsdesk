@@ -1,0 +1,431 @@
+# FinCom Bridge on real Windows: the setup, installed as a Windows user who is not an administrator ("Just for me", the
+# start at sign-in, no service) and as an administrator (for all users, the Windows service), then removed again.
+#   build: the tests and the program with its setup (bridge-go/build.sh), on Linux as the owner builds it
+#   test:  on Windows Server 2022 and 2025 (GitHub's own machines), every install.log kept as an artifact
+# Nothing here signs anything or publishes anything.
+name: FinCom Bridge on Windows
+
+# Every push to tax-accuracy; on any other branch, a push that changes the bridge (bridge-go/, assets-test/bridge-go/) or
+# this file, as before. (A push filter cannot say "this branch always, others by path", so the `changes` job decides.)
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=false
+          if [ "$GITHUB_EVENT_NAME" != push ] || [ "$GITHUB_REF" = refs/heads/tax-accuracy ]; then
+            run=true
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            run=true   # a new branch, or history rewritten: nothing to compare with
+          elif git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(bridge-go/|assets-test/bridge-go/|\.github/workflows/bridge-windows\.yml$)'; then
+            run=true
+          fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bridge-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: NSIS (makensis)
+        run: sudo apt-get update -q && sudo apt-get install -y -q nsis
+      - name: Tests
+        run: go test -count=1 -timeout 25m ./...
+      - name: Program and setup
+        # FORCE_REBUILD: a version already published is built again here only to be tested, never published
+        run: FORCE_REBUILD=1 ./build.sh
+      - name: The setup handed out by FinCom's test site, when there is one, is the one tested (the same bytes)
+        run: |
+          v=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' util.go)
+          if [ -e "../assets-test/bridge-go/FinComBridge-Setup-$v.exe" ]; then
+            rm -f dist/FinComBridge-Setup-*.exe*
+            cp "../assets-test/bridge-go/FinComBridge-Setup-$v.exe" dist/
+            (cd dist && sha256sum "FinComBridge-Setup-$v.exe" | tee "FinComBridge-Setup-$v.exe.sha256")
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-dist
+          path: bridge-go/dist/
+          if-no-files-found: error
+
+  # round 19 (2.1.9): the Go tests that need real Windows (the recorder holding file's share modes, the trial's lock,
+  # a junction refused by the install step): every test whose name holds Windows or Shared
+  go-tests-windows:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: bridge-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: Go tests on Windows (share modes, the lock, a junction refused)
+        run: go test -count=1 -run 'Windows|Shared' ./...
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge-dist
+          path: dist
+
+      - name: A Windows user who is not an administrator (fctest), and the helpers
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # the setup where fctest can read it, and a temp folder fctest can write (a program started for another user
+          # keeps the caller's environment, TEMP included)
+          New-Item -ItemType Directory -Force C:\fcsetup\tmp | Out-Null
+          & icacls.exe C:\fcsetup /grant '*S-1-5-32-545:(OI)(CI)M' /T | Out-Null
+          $setup = Get-ChildItem dist -Filter 'FinComBridge-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'No setup in the build' }
+          Copy-Item $setup.FullName C:\fcsetup\FinComBridge-Setup.exe
+          $version = [regex]::Match($setup.Name, 'Setup-([0-9.]+)\.exe').Groups[1].Value
+          "BRIDGE_VERSION=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          # a random password that meets Windows' complexity rules (upper, lower, digit, sign; 24 characters)
+          $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+          $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+          $bytes = New-Object byte[] 20
+          $rng.GetBytes($bytes)
+          $pw = (-join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })) + 'Aa1!'
+          Write-Host "::add-mask::$pw"
+          $sec = ConvertTo-SecureString $pw -AsPlainText -Force
+          New-LocalUser -Name fctest -Password $sec -PasswordNeverExpires -AccountNeverExpires -Description 'FinCom Bridge test (not an administrator)' | Out-Null
+          try { Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545').Name -Member fctest } catch { Write-Host "Users: $_" }
+          $admins = Get-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-544').Name | ForEach-Object { $_.Name }
+          if ($admins -match '\\fctest$') { throw 'fctest must not be an administrator' }
+          # kept for the next steps, readable only by this runner's user (DPAPI)
+          $sec | ConvertFrom-SecureString | Set-Content "$env:RUNNER_TEMP\fctest.pw"
+          @'
+          $ErrorActionPreference = 'Stop'
+          $Setup = 'C:\fcsetup\FinComBridge-Setup.exe'
+          function Fail([string]$m) { Write-Host "::error::$m"; throw $m }
+          function Check($cond, [string]$m) { if ($cond) { Write-Host "ok    $m" } else { Fail $m } }
+          function Get-TestCred {
+            $sec = Get-Content "$env:RUNNER_TEMP\fctest.pw" | ConvertTo-SecureString
+            New-Object System.Management.Automation.PSCredential ('fctest', $sec)
+          }
+          # a program run as fctest, with its own profile and registry (HKCU) loaded; waits for that program only, not for
+          # the bridge it starts (Start-Process -Wait would wait for the bridge too), and returns its exit code
+          function Invoke-AsTest([string]$Exe, [string[]]$ArgList) {
+            $env:TEMP = 'C:\fcsetup\tmp'; $env:TMP = 'C:\fcsetup\tmp'
+            $p = Start-Process -FilePath $Exe -ArgumentList $ArgList -Credential (Get-TestCred) -LoadUserProfile -WorkingDirectory 'C:\fcsetup' -PassThru
+            $null = $p.Handle # so the exit code can be read afterwards
+            if (-not $p.WaitForExit(300000)) { Fail "$Exe did not end within 5 minutes" }
+            return $p.ExitCode
+          }
+          function Get-TestSid { (Get-LocalUser fctest).SID.Value }
+          function Get-TestProfile {
+            $k = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$(Get-TestSid)"
+            if (Test-Path $k) { return (Get-ItemProperty $k).ProfileImagePath }
+            return 'C:\Users\fctest'
+          }
+          function Get-TestLocalAppData { Join-Path (Get-TestProfile) 'AppData\Local' }
+          # fctest's HKCU Run value "FinCom Bridge": from its registry while it is loaded (its programs run), else from its
+          # NTUSER.DAT, loaded here for the moment ($null when there is none)
+          function Get-TestRunValue {
+            $sid = Get-TestSid
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path "Registry::HKEY_USERS\$sid") {
+                $k = Get-ItemProperty "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Run" -ErrorAction SilentlyContinue
+                if ($k) { return $k.'FinCom Bridge' } else { return $null }
+              }
+              # through cmd, so reg.exe's message goes to nul there: in Windows PowerShell 5.1 a native command's stderr
+              # redirected here (2>$null) stops the script ("being used by another process" while the profile unloads)
+              # instead of trying again below
+              & cmd.exe /c "reg.exe load HKU\fctest-hive `"$(Get-TestProfile)\NTUSER.DAT`" >nul 2>nul"
+              if ($LASTEXITCODE -eq 0) {
+                try {
+                  $k = Get-ItemProperty 'Registry::HKEY_USERS\fctest-hive\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+                  if ($k) { return $k.'FinCom Bridge' } else { return $null }
+                } finally {
+                  $k = $null; [gc]::Collect(); [gc]::WaitForPendingFinalizers()
+                  & cmd.exe /c "reg.exe unload HKU\fctest-hive >nul 2>nul"
+                }
+              }
+              Start-Sleep -Seconds 2 # the profile is being unloaded right now
+            }
+            Fail "fctest's registry could not be read"
+          }
+          function Get-BridgeProcs([string]$User) {
+            Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | Where-Object { (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User -eq $User }
+          }
+          # the bridge's /ping (no key needed) on 127.0.0.1:9100 within the time given; $null when it does not answer
+          function Wait-Bridge([int]$Seconds) {
+            $until = (Get-Date).AddSeconds($Seconds)
+            while ((Get-Date) -lt $until) {
+              try { return Invoke-RestMethod -Uri 'http://127.0.0.1:9100/ping' -TimeoutSec 5 -UseBasicParsing } catch { Start-Sleep -Seconds 2 }
+            }
+            return $null
+          }
+          function Wait-Until([scriptblock]$Cond, [int]$Seconds) {
+            $until = (Get-Date).AddSeconds($Seconds)
+            while ((Get-Date) -lt $until) { if (& $Cond) { return $true }; Start-Sleep -Seconds 2 }
+            return [bool](& $Cond)
+          }
+          '@ | Set-Content "$env:RUNNER_TEMP\fc.ps1"
+
+      - name: As fctest, for all users (/ALLUSERS) is refused with 740, without a prompt
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $code = Invoke-AsTest $Setup @('/S', '/ALLUSERS', '/MODE=sole')
+          Check ($code -eq 740) "the setup ended with 740 (it ended with $code)"
+          $log = Join-Path (Get-TestLocalAppData) 'FinCom Bridge\install.log'
+          Check (Test-Path $log) "fctest's install.log exists ($log)"
+          Check ((Get-Content $log -Raw) -match 'exit 740.*needs an administrator') 'install.log says why (needs an administrator)'
+          Check (-not (Get-Service FinComBridge -ErrorAction SilentlyContinue)) 'no service was made'
+
+      - name: As fctest, bridge 1.15.0 and the FinCom Connector set up, then the setup with no choices replaces them
+        # 02-Oct-2026, the owner's decision: FinCom Bridge is the only bridge. A plain /S install (as a person clicking
+        # through) stops and takes off the older bridges, keeps their pairing, settings and copy, and runs as the main one
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          # what bridge 1.15.0's setup and the Connector leave for a user, made by fctest itself (its own HKCU and folders)
+          @'
+          $ErrorActionPreference = 'Stop'
+          $home2 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'
+          New-Item -ItemType Directory -Force "$home2\sync\TEST CO" | Out-Null
+          Set-Content "$home2\TDSBridge.ps1" 'while ($true) { Start-Sleep -Seconds 5 }  # stands in for bridge 1.15.0'
+          Set-Content "$home2\run-hidden.vbs" 'rem 1.15.0 starter'
+          Set-Content "$home2\Show bridge window.bat" 'rem 1.15.0 window'
+          Set-Content "$home2\FinComConnector.exe" 'stands in for the Connector'
+          Set-Content "$home2\sync\TEST CO\keep.json" '{"days":1}'
+          Set-Content "$home2\tds-bridge.config.json" '{"Key":"old-pairing-key-115","Port":9100,"KeepInStep":true}'
+          # the folders by their paths: a profile Explorer never opened has no shell folders yet
+          $programs = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"; $startup = "$programs\Startup"; $desk = "$env:USERPROFILE\Desktop"
+          New-Item -ItemType Directory -Force $startup, $programs, $desk | Out-Null
+          Set-Content (Join-Path $startup 'TDS Desk Tally Bridge.vbs') 'rem 1.15.0 start at sign-in'
+          Set-Content (Join-Path $programs 'FinCom Connector.lnk') 'x'
+          Set-Content (Join-Path $desk 'FinCom Connector.lnk') 'x'
+          Set-Content (Join-Path $desk 'Start-TDS-Bridge.bat') 'rem old starter'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          New-Item -Force $run -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty $run 'FinCom Connector' ('"' + "$home2\FinComConnector.exe" + '" --tray')
+          $un = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector'
+          New-Item -Force $un | Out-Null
+          Set-ItemProperty $un 'DisplayName' 'FinCom Connector'
+          '@ | Set-Content C:\fcsetup\old115.ps1
+          $code = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\old115.ps1')
+          Check ($code -eq 0) "the older bridges were set up for fctest (code $code)"
+          # bridge 1.15.0 running as fctest, as its starter runs it (started here, not from the script above: a process a
+          # script started for another user ends with that script)
+          $standIn = Join-Path (Get-TestLocalAppData) 'TDS Desk Bridge\TDSBridge.ps1'
+          $env:TEMP = 'C:\fcsetup\tmp'; $env:TMP = 'C:\fcsetup\tmp'
+          $sp = Start-Process powershell.exe -ArgumentList '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $standIn + '"') -Credential (Get-TestCred) -LoadUserProfile -WorkingDirectory 'C:\fcsetup' -PassThru
+          $null = $sp.Handle
+          Start-Sleep -Seconds 5
+          Write-Host "stand-in: process $($sp.Id), ended: $($sp.HasExited) $(if ($sp.HasExited) { 'code ' + $sp.ExitCode })"
+          $script:standInId = $sp.Id
+          $old = { @(Get-Process -Id $script:standInId -ErrorAction SilentlyContinue) }
+          Check (Wait-Until { (& $old).Count -ge 1 } 20) 'bridge 1.15.0 (stand-in) runs as fctest'
+
+          $code = Invoke-AsTest $Setup @('/S')
+          $la = Get-TestLocalAppData
+          $dir = Join-Path $la 'FinCom Bridge'; $home2 = Join-Path $la 'TDS Desk Bridge'
+          if ($code -ne 0) { Get-Content "$dir\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($code -eq 0) "the setup with no choices ended with 0 (it ended with $code)"
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'FinCom Bridge answers on 127.0.0.1:9100 (bridge 1.15.0''s port) within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'user' -and -not $ping.testMode) "it is FinCom Bridge $env:BRIDGE_VERSION, just for the user, the main bridge ($($ping | ConvertTo-Json -Compress))"
+          Check (Wait-Until { (& $old).Count -eq 0 } 30) 'bridge 1.15.0 (stand-in) was stopped'
+          Check (-not (Test-Path "$home2\TDSBridge.ps1") -and (Test-Path "$home2\TDSBridge.ps1.replaced-by-go")) 'its program is set aside, not deleted'
+          Check (-not (Test-Path "$home2\FinComConnector.exe") -and (Test-Path "$home2\FinComConnector.exe.replaced-by-go")) 'the Connector is set aside, not deleted'
+          $kept = "$home2\replaced-by-FinCom-Bridge"
+          foreach ($f in 'run-hidden.vbs', 'Show bridge window.bat', 'TDS Desk Tally Bridge.vbs', 'FinCom Connector.lnk', 'Start-TDS-Bridge.bat') {
+            Check (@(Get-ChildItem $kept -Filter "*$f" -ErrorAction SilentlyContinue).Count -ge 1) "$f was moved to replaced-by-FinCom-Bridge"
+          }
+          $prof = Get-TestProfile
+          Check (-not (Test-Path "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\TDS Desk Tally Bridge.vbs")) 'bridge 1.15.0 no longer starts at sign-in'
+          Check (-not (Test-Path "$prof\Desktop\FinCom Connector.lnk") -and -not (Test-Path "$prof\Desktop\Start-TDS-Bridge.bat")) 'no old bridge on the Desktop'
+          Check (-not (Test-Path "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\FinCom Connector.lnk")) 'no Connector in the Start menu'
+          Check (Test-Path "$prof\Desktop\FinCom Bridge.lnk") 'FinCom Bridge''s own Desktop shortcut is there'
+          # fctest's registry, read by fctest
+          @'
+          $r = @{}
+          $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+          $r.connectorRun = [bool]($run -and $run.'FinCom Connector')
+          $r.bridgeRun = if ($run) { [string]$run.'FinCom Bridge' } else { '' }
+          $r.connectorApps = Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector'
+          $r | ConvertTo-Json | Set-Content C:\fcsetup\reg.json
+          '@ | Set-Content C:\fcsetup\reg.ps1
+          $null = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\reg.ps1')
+          $reg = Get-Content C:\fcsetup\reg.json -Raw | ConvertFrom-Json
+          Check (-not $reg.connectorRun) 'the Connector no longer starts at sign-in'
+          Check (-not $reg.connectorApps) 'the Connector is no longer in Settings > Apps'
+          Check ($reg.bridgeRun -like '*FinComBridge.exe" user') "FinCom Bridge starts at sign-in ($($reg.bridgeRun))"
+          $cfg = Get-Content "$home2\tds-bridge.config.json" -Raw | ConvertFrom-Json
+          Check ($cfg.Key -eq 'old-pairing-key-115') 'the pairing (bridge 1.15.0''s key) is kept'
+          Check ($cfg.KeepInStep -eq $true) 'its settings are kept'
+          Check ($cfg.ClaimMain -eq $true) 'it tells FinCom it is the main bridge on its first contact (no cloud here: still to do)'
+          Check (Test-Path "$home2\sync\TEST CO\keep.json") 'the copy of the books is kept'
+          # hidden: no window of its own; only the tray icon (a hidden window) and the supervisor and bridge in the background
+          $vis = @(Get-Process FinComBridge -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -ne '' })
+          Check ($vis.Count -eq 0) "no FinCom Bridge window is open ($(($vis | ForEach-Object { $_.MainWindowTitle }) -join ', '))"
+          Check (@(Get-Process conhost -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like '*fctest' }).Count -eq 0) 'no console window runs as fctest'
+          Check ((Get-Content "$dir\install.log" -Raw) -match 'moved to') 'install.log says what was moved'
+
+      - name: As fctest, just for me (/CURRENTUSER /MODE=sole)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $code = Invoke-AsTest $Setup @('/S', '/CURRENTUSER', '/MODE=sole')
+          $dir = Join-Path (Get-TestLocalAppData) 'FinCom Bridge'
+          if ($code -ne 0) { Get-Content "$dir\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($code -eq 0) "the setup ended with 0 (it ended with $code)"
+          Check (Test-Path "$dir\FinComBridge.exe") "the program is in fctest's folder ($dir)"
+          Check (Test-Path "$dir\install.log") 'install.log is there'
+          Check ((Get-Content "$dir\install-result.txt" -ErrorAction SilentlyContinue | Select-Object -First 1) -eq 'ok') 'install-result.txt says ok'
+          $run = Get-TestRunValue
+          Check ($run -like '*FinComBridge.exe" user') "fctest's HKCU Run value starts the bridge at sign-in ($run)"
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'user' -and -not $ping.testMode) "it is FinCom Bridge $env:BRIDGE_VERSION, just for the user, main ($($ping | ConvertTo-Json -Compress))"
+          Check (@(Get-BridgeProcs 'fctest').Count -ge 2) "its supervisor and bridge run as fctest"
+          Check (-not (Get-Service FinComBridge -ErrorAction SilentlyContinue)) 'no service was made'
+
+      - name: As fctest, uninstall (/S)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $dir = Join-Path (Get-TestLocalAppData) 'FinCom Bridge'
+          # the uninstaller copies itself to TEMP and runs from there: its first process ends at once, so the result is
+          # waited for
+          $code = Invoke-AsTest "$dir\Uninstall FinCom Bridge.exe" @('/S')
+          Check ($code -eq 0) "the uninstaller started (it ended with $code)"
+          Check (Wait-Until { -not (Test-Path "$dir\FinComBridge.exe") -and -not (Get-Process Au_ -ErrorAction SilentlyContinue) } 120) 'the program is removed'
+          Check (Wait-Until { @(Get-BridgeProcs 'fctest').Count -eq 0 } 30) "no FinCom Bridge runs as fctest any more"
+          Check ($null -eq (Get-TestRunValue)) "fctest's HKCU Run value is removed"
+          Check ($null -eq (Wait-Bridge 3)) 'nothing answers on 127.0.0.1:9100'
+          Check (Wait-Until { (Get-Content "$dir\install.log" -Raw) -match 'Removed the Apps entry' } 30) 'install.log says what was removed'
+
+      - name: As administrator, for all users (/ALLUSERS /MODE=sole), the Windows service
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $p = Start-Process -FilePath $Setup -ArgumentList '/S', '/ALLUSERS', '/MODE=sole' -PassThru
+          $null = $p.Handle
+          if (-not $p.WaitForExit(300000)) { Fail 'the setup did not end within 5 minutes' }
+          if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\FinCom Bridge\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($p.ExitCode -eq 0) "the setup ended with 0 (it ended with $($p.ExitCode))"
+          $svc = Get-Service FinComBridge -ErrorAction SilentlyContinue
+          Check ($svc -and $svc.Status -eq 'Running') 'the service FinComBridge runs'
+          Check (Test-Path "$env:ProgramData\FinCom Bridge\install.log") 'install.log is in ProgramData too'
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'service') "it is FinCom Bridge $env:BRIDGE_VERSION as a service ($($ping | ConvertTo-Json -Compress))"
+          # round 19 (S2): the recorder trial's folders made by the exe's install step, Users without Modify on the folder
+          Check (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl") 'the add-on (any company, 2.1.10) is in ProgramData\FinCom\addon'
+          Check (-not (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderTrial.tdl")) 'no old FinComRecorderTrial.tdl is made on a fresh install'
+          $acl = (& icacls.exe "$env:ProgramData\FinCom\recorder") -join "`n"
+          Write-Host $acl
+          Check (($acl -notmatch '\(OI\)\(CI\)\(M\)') -and ($acl -match '\(OI\)\(IO\)\(M\)')) 'Users may add and change files in the recorder folder, not delete the folder'
+
+      - name: As fctest, the recorder folder (make and append a file; the folder not deleted, renamed or given a subfolder)
+        # round 20 (the re-review's Low 6): what the recorder trial needs, as a Windows user who is not an administrator
+        # (Tally's add-on runs as the desk user): a holding file made and appended in recorder\; the folder itself not
+        # deleted, renamed or given a subfolder; nothing written in addon\ or FinCom\
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $fc = "$env:ProgramData\FinCom"; $rec = "$fc\recorder"
+          Check (Test-Path $rec) "the recorder folder is there ($rec)"
+          Check (@(Get-ChildItem $rec -Force -ErrorAction SilentlyContinue).Count -eq 0) 'the recorder folder is empty before the check (so a refused delete is the permissions, not "not empty")'
+          @'
+          $fc = Join-Path $env:ProgramData 'FinCom'; $rec = Join-Path $fc 'recorder'
+          $r = [ordered]@{}
+          function Try-It([string]$name, [scriptblock]$b) {
+            try { & $b; $r[$name] = 'done' } catch { $r[$name] = 'refused: ' + $_.Exception.Message }
+          }
+          Try-It 'deleteFolder' { [System.IO.Directory]::Delete($rec, $false) }
+          Try-It 'create' { [System.IO.File]::WriteAllText((Join-Path $rec 'fctest-check.txt'), "FCR1|first`r`n") }
+          Try-It 'append' { [System.IO.File]::AppendAllText((Join-Path $rec 'fctest-check.txt'), "FCR1|second`r`n") }
+          Try-It 'renameFolder' { [System.IO.Directory]::Move($rec, (Join-Path $fc 'recorder-renamed')) }
+          Try-It 'subfolder' { [System.IO.Directory]::CreateDirectory((Join-Path $rec 'sub')) | Out-Null }
+          Try-It 'writeAddon' { [System.IO.File]::WriteAllText((Join-Path $fc 'addon\fctest.txt'), 'x') }
+          Try-It 'writeFinCom' { [System.IO.File]::WriteAllText((Join-Path $fc 'fctest.txt'), 'x') }
+          $r | ConvertTo-Json | Set-Content C:\fcsetup\rec.json
+          '@ | Set-Content C:\fcsetup\rec.ps1
+          Remove-Item C:\fcsetup\rec.json -ErrorAction SilentlyContinue
+          $code = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\rec.ps1')
+          Check ($code -eq 0 -and (Test-Path C:\fcsetup\rec.json)) "the check ran as fctest (code $code)"
+          $r = Get-Content C:\fcsetup\rec.json -Raw | ConvertFrom-Json
+          Write-Host ($r | ConvertTo-Json)
+          Check ($r.create -eq 'done') "fctest made a file in recorder ($($r.create))"
+          Check ($r.append -eq 'done') "fctest appended to it ($($r.append))"
+          Check (((Get-Content "$rec\fctest-check.txt") -join '|') -eq 'FCR1|first|FCR1|second') 'the file holds both lines'
+          Check ($r.deleteFolder -like 'refused*') "fctest cannot delete the recorder folder ($($r.deleteFolder))"
+          Check ($r.renameFolder -like 'refused*') "fctest cannot rename the recorder folder ($($r.renameFolder))"
+          Check ($r.subfolder -like 'refused*' -and -not (Test-Path "$rec\sub")) "fctest cannot make a subfolder in it ($($r.subfolder))"
+          Check ($r.writeAddon -like 'refused*') "fctest cannot write in addon ($($r.writeAddon))"
+          Check ($r.writeFinCom -like 'refused*') "fctest cannot write in FinCom ($($r.writeFinCom))"
+          Check ((Test-Path $rec) -and -not (Test-Path "$fc\recorder-renamed")) 'the recorder folder is still in its place'
+          Remove-Item "$rec\fctest-check.txt" -Force
+
+      - name: As administrator, uninstall (/S)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $dir = "$env:ProgramFiles\FinCom Bridge"
+          $p = Start-Process -FilePath "$dir\Uninstall FinCom Bridge.exe" -ArgumentList '/S' -PassThru
+          $null = $p.Handle
+          $p.WaitForExit(300000) | Out-Null
+          Check (Wait-Until { -not (Get-Service FinComBridge -ErrorAction SilentlyContinue) } 120) 'the service is removed'
+          Check (Wait-Until { -not (Test-Path "$dir\FinComBridge.exe") } 60) 'the program is removed'
+          Check (-not (Test-Path 'HKLM:\SOFTWARE\FinCom\Bridge')) 'its record in HKLM is removed'
+          Check ($null -eq (Wait-Bridge 3)) 'nothing answers on 127.0.0.1:9100'
+
+      - name: Every install.log
+        if: always()
+        run: |
+          $out = "$env:RUNNER_TEMP\logs"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $test = 'C:\Users\fctest'
+          try { $k = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$((Get-LocalUser fctest).SID.Value)"; if (Test-Path $k) { $test = (Get-ItemProperty $k).ProfileImagePath } } catch {}
+          $from = @{
+            'fctest'      = "$test\AppData\Local\FinCom Bridge"
+            'fctest-home' = "$test\AppData\Local\TDS Desk Bridge"
+            'admin'       = "$env:LOCALAPPDATA\FinCom Bridge"
+            'admin-home'  = "$env:LOCALAPPDATA\TDS Desk Bridge"
+            'service'     = "$env:ProgramData\FinCom Bridge"
+          }
+          foreach ($n in $from.Keys) {
+            New-Item -ItemType Directory -Force "$out\$n" | Out-Null
+            Get-ChildItem $from[$n] -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '\.(log|txt)$|\.log\.\d$' } | Copy-Item -Destination "$out\$n" -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/logs/
+          if-no-files-found: warn

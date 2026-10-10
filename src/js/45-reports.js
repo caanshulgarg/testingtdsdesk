@@ -58,8 +58,15 @@ const RPT = {
     const out = []; for (let y = num(Audit.fyStart(t).slice(0, 4)); y >= num(Audit.fyStart(f).slice(0, 4)); y--) out.push(String(y));
     return out;
   },
+  // the entries of a year, and its sales entries (review of 01-Oct-2026: 2026-27 held one journal and no sales, and the
+  // page opened on it showing sales of nil): the page opens on the latest year that has sales
+  yearCount(fy){
+    const from = fy + "0401", to = (num(fy) + 1) + "0331", c = entryCount(from, to);
+    return {n: c.n, text: c.text, sales: c.list.filter(v => typeof Books === "object" && Books.isSale(v)).length};
+  },
   range(){
-    const ys = this.fys(), fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : ys[0];
+    const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
+    const fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : (withSales || ys[0]);
     if (!fy) return null;
     const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
     return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};
@@ -71,7 +78,7 @@ const RPT = {
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
     const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;
     const recv = MIS.ageing(R.to, "r", balTo), pay = MIS.ageing(R.to, "p", balTo), msme = MIS.msme(), md = MIS.cfg(b).msmeDays;
-    const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + p.bills.filter(x => x.ref && x.amt > 0 && x.age > md).reduce((a, x) => a + x.amt, 0), 0));
+    const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + (p.open || []).filter(x => x.age > md).reduce((a, x) => a + x.left, 0), 0));
     const inM = {}, outM = {}, sales = {}, purch = {};
     months.forEach(m => { inM[m] = 0; outM[m] = 0; });
     (b.vouchers || []).forEach(v => {
@@ -122,3 +129,13 @@ const RPT = {
   }
 };
 // the page itself is app/src/screens/books/Reports.jsx
+// One count of the entries everywhere (review of 02-Oct-2026: 2,755, 2,675 and 2,754 on different pages): the regular
+// entries of the period, as every report and check counts them, and a note of what is left out (Optional and cancelled
+// vouchers, which Tally keeps but which are not in the books)
+function entryCount(from, to){
+  const vs = ((S.books || {}).vouchers || []).filter(v => (!from || String(v.date) >= from) && (!to || String(v.date) <= to));
+  const list = vs.filter(v => !v.opt && !v.cancel), opt = vs.filter(v => v.opt && !v.cancel).length, cancel = vs.filter(v => v.cancel).length;
+  const out = [opt ? num(opt).toLocaleString("en-IN") + " Optional" : "", cancel ? num(cancel).toLocaleString("en-IN") + " cancelled" : ""].filter(Boolean);
+  const text = list.length.toLocaleString("en-IN") + (list.length === 1 ? " entry" : " entries") + (out.length ? " (" + out.join(" and ") + " not counted)" : "");
+  return {n: list.length, opt, cancel, all: vs.length, list, text};
+}

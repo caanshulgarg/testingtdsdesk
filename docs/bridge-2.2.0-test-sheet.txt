@@ -1,0 +1,95 @@
+FINCOM BRIDGE 2.2.0 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.2.0.exe
+Fingerprint: SHA-256 45a1671b0bbc8d5bd35908f5427984465580129f095109477d211b4a5730dee0 (FinComBridge-Setup-2.2.0.exe; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.0.exe
+
+In this sheet, "the company you test on" is the one company you choose: it must be linked to a FinCom client. In every
+entry you make for this sheet, start the narration with TRIAL.
+
+Installing 2.2.0 alone loads nothing into Tally. Tally changes only when you load the add-on yourself (step 1).
+"Tally's change list" and "month slices" (the other ways of finding changes) stay off until the owner switches them on
+for this computer on FinCom's Tally page.
+
+
+INSTALL
+   Open the Link. Double-click the setup; if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.2.0 is installed and running". The setup keeps the version it replaced (2.1.10),
+   so you can go back to it (HOW TO ROLL BACK, below).
+
+
+STEP 1 - DOES THE ADD-ON SLOW A SAVE? (do this first)
+   a. With the add-on NOT loaded: in the company you test on, save 3 test entries (for example 3 Payments of Rs 1,
+      narration "TRIAL time 1", "TRIAL time 2", "TRIAL time 3"). Time each save with a stopwatch (press of Ctrl+A to
+      the entry screen being ready again). Write the 3 times down.
+   b. Load the add-on: F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs) > "Load selected TDL files on startup": Yes >
+      on the first empty line type exactly
+          C:\ProgramData\FinCom\addon\FinComRecorder.tdl
+      > accept (Ctrl+A). It must show as Loaded. (The full steps: docs/recorder-live-sheet.txt, PART 1.)
+   c. Save 3 more test entries the same way ("TRIAL time 4" to "TRIAL time 6") and time them.
+   d. If any save in c is slower than the saves in a by more than 0.1 second: UNLOAD the add-on at once (HOW TO UNLOAD
+      THE ADD-ON, below; Tally does not need to close) and tell FinCom the 6 times. Stop here.
+
+STEP 2 - A NEW ENTRY REACHES FINCOM
+   Make one entry in Tally (a Payment of Rs 1, narration "TRIAL live 1") and save it.
+   You should see: within seconds, FinCom > Tally page > Sync activity shows it.
+
+STEP 3 - A DELETED ENTRY
+   Open one of your TRIAL entries in Tally and delete it (Alt+D, Yes).
+   You should see: within seconds, Sync activity shows it deleted.
+
+STEP 4 - A CANCELLED ENTRY
+   Open another TRIAL entry and cancel it (Alt+X, Yes).
+   You should see: within seconds, Sync activity shows it cancelled.
+
+
+HOW TO UNLOAD THE ADD-ON (to switch it off; Tally does not need to close)
+   1. In TallyPrime press F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
+   2. Go to the line  C:\ProgramData\FinCom\addon\FinComRecorder.tdl  and clear it (Alt+R, or blank it out).
+      (Or set "Load selected TDL files on startup" to No - this switches off every add-on in the list.)
+   3. Accept the screen (Ctrl+A). The file no longer shows as Loaded. If it still shows, close TallyPrime and open it
+      again.
+   Entries saved before you unloaded it still reach FinCom. Nothing is written after.
+
+
+HOW TO ROLL BACK (go back to 2.1.10)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.1.10). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.1.10 for this computer. Automatic updates stay
+   off on this computer until FinCom turns them on again. Unload the add-on as well (above): 2.1.10 does not read it.
+
+
+TEST READING FROM TALLY (after the steps above)
+   Right-click the FinCom icon > "Test reading from Tally" > Yes (the question names the company). Wait for its box.
+   Then "Show log" and send FinCom these lines:
+     - every line starting "Dates (collection) form" (one per form: how many entries Tally gave for a past month, the
+       seconds, and "applied: yes" for the one kept), or the line "Dates (collection): the copy holds no day of a past
+       year";
+     - the line "Entries above the starting point (TDSDeskKeepList ...): ... s";
+     - the lines starting "Tally program:" and "Edit Log probe";
+     - the lines with "FinComCompany (change numbers)" and "FinComCompanyNumbers", and the line "Company <name>: change
+       numbers read with form a/b: ALTVCHID=..." or "Company <name>: Tally gave no change numbers with form a or b
+       (answer head: ...)" (on 2.1.10 Tally gave no change numbers, so no starting point was recorded);
+   and say whether Tally froze or showed any message while the test ran.
+
+
+What is new in 2.2.0 (for reference)
+  - The live add-on C:\ProgramData\FinCom\addon\FinComRecorder.tdl (written by the install next to the trial's
+    FinComRecorderAnyCompany.tdl; load one of the two, never both). While loaded it adds one short line per save,
+    alteration, deletion, cancellation or import, for every company, to
+    C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>.txt. Nothing else happens inside Tally. The bridge reads
+    those files, asks Tally for the one entry someone typed (FinCom's own postings need nothing), and sends the
+    changes to FinCom; a line counts as sent only when FinCom confirms it. A posting always goes first.
+    Load and unload: docs/recorder-live-sheet.txt.
+  - Tally's change list (no add-on) and month slices: off unless the owner switches them on for this computer. Each
+    asks Tally at most once a minute, never during a posting. Every way the bridge asks Tally for changes (these two,
+    and the request for a typed entry) switches itself off for that company if Tally takes more than 2 seconds for
+    one answer (the log says "... off: Tally took X.X s ..."; it stays off after a restart) until the owner chooses
+    again on FinCom's Tally page.
+  - The posting window: Tally's change number before and after each posting goes to FinCom with the posting, so
+    FinCom does not count its own postings as changes not received.
+  - "Roll back to the previous version" in the tray (always there; asks first).
+  - The bridge's log is kept 30 days (one file per day, tds-bridge.log.yyyy-mm-dd).
+
+If anything is not as written: tray > "Send install log to FinCom", and note the step number.

@@ -1,5 +1,12 @@
-"""python3 run_tds_ui.py - the TDS screens: years -> year -> return tabs, filters, sorting, challans, 24Q."""
+"""python3 run_tds_ui.py - the TDS screens: years -> year -> return tabs, filters, sorting, challans, 24Q.
+
+RETIRED (02-Oct-2026): the TDS screens are checked by run_react_tds.py, on the React app. This file is kept as it was,
+for reference, but exits at once with "retired: see run_react_tds.py" (status 0) so that suites running every
+run_*.py skip it cleanly. Nothing below the exit runs."""
 import json, os, sys, threading, functools, http.server
+if __name__ == "__main__":
+    print("retired: see run_react_tds.py")
+    sys.exit(0)
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None

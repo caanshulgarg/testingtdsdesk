@@ -1,3 +1,4 @@
+import ListTable from "../../parts/ListTable.jsx";
 // The input register: every document in Tally that takes input tax for the GSTIN, for the month or the whole year,
 // with what 2B says about each, and how it ties to GSTR-3B table 4. Was viewInputRegister (src/js/18). The rows are
 // inregRows() (src/js/18); the Excel is inregExcel().
@@ -54,21 +55,25 @@ function TieOut({ R }) {
   );
 }
 
-function Row({ r, cess }) {
-  const s = sgn(r), rates = Array.from(new Set((r.parts || []).map((x) => x.rate))).join(", ");
-  const fine = (r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe;
-  const cls = fine ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad";
-  return <tr>
-    <td>{day(r.date)}<div className="nr" title={r.type + " " + (r.voucher || "")}>{r.voucher || ""}</div></td>
-    <td>{r.party || ""}<div className="nr">{r.gstin || "no GSTIN"}</div></td>
-    <td>{r.no || ""}{r.refDate && <div className="nr">{day(r.refDate)}</div>}</td>
-    <td className="hr">{[r.hsn, rates ? rates + "%" : ""].filter(Boolean).join(" · ")}</td>
-    <td className="n">{money(s * r.taxable)}{r.valueGuessed && <div className="nr">from the tax</div>}</td>
-    <td className="n">{money(s * r.igst)}</td><td className="n">{money(s * r.cgst)}</td><td className="n">{money(s * r.sgst)}</td>
-    {cess && <td className="n">{money(s * r.cess)}</td>}
-    <td>{r.kindL}</td>
-    <td><span className={cls}>{r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB}</span>{r.twoBWhy && <div className="nr" title={r.twoBWhy}>{r.twoBWhy}</div>}</td>
-  </tr>;
+// the register's columns (spec K6): booked (date), bill no., supplier, value (amount), 2B (status), then the rest
+function inregCols(cess) {
+  const sg = (r) => sgn(r);
+  return [
+    { k: "date", role: "date", label: "Booked · voucher", w: 10, v: (r) => String(r.date || ""), cell: (r) => <>{day(r.date)}<div className="nr" title={r.type + " " + (r.voucher || "")}>{r.voucher || ""}</div></> },
+    { k: "no", role: "number", label: "Bill no. · date", w: 11, v: (r) => r.no || "", cell: (r) => <>{r.no || ""}{r.refDate && <div className="nr">{day(r.refDate)}</div>}</> },
+    { k: "party", role: "party", label: "Supplier · GSTIN", w: 16, v: (r) => r.party || "", cell: (r) => <>{r.party || ""}<div className="nr">{r.gstin || "no GSTIN"}</div></> },
+    { k: "val", role: "amount", label: "Value", cls: "n", w: 9, v: (r) => sg(r) * num(r.taxable), fmt: money, cell: (r) => <>{money(sg(r) * r.taxable)}{r.valueGuessed && <div className="nr">from the tax</div>}</> },
+    { k: "twoB", role: "status", label: "2B", w: 11, v: (r) => (r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB || ""), cell: (r) => {
+      const fine = (r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe;
+      const cls = fine ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad";
+      return <><span className={cls}>{r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB}</span>{r.twoBWhy && <div className="nr" title={r.twoBWhy}>{r.twoBWhy}</div>}</>; } },
+    { k: "hsn", label: "HSN · rate", w: 10, td: () => ({ className: "hr" }), cell: (r) => { const rates = Array.from(new Set((r.parts || []).map((x) => x.rate))).join(", "); return [r.hsn, rates ? rates + "%" : ""].filter(Boolean).join(" · "); } },
+    { k: "igst", label: "IGST", cls: "n", w: 8, v: (r) => sg(r) * num(r.igst), sum: true, fmt: money, cell: (r) => money(sg(r) * r.igst) },
+    { k: "cgst", label: "CGST", cls: "n", w: 7, v: (r) => sg(r) * num(r.cgst), sum: true, fmt: money, cell: (r) => money(sg(r) * r.cgst) },
+    { k: "sgst", label: "SGST", cls: "n", w: 7, v: (r) => sg(r) * num(r.sgst), sum: true, fmt: money, cell: (r) => money(sg(r) * r.sgst) },
+    cess && { k: "cess", label: "Cess", cls: "n", w: 5, v: (r) => sg(r) * num(r.cess), sum: true, fmt: money, cell: (r) => money(sg(r) * r.cess) },
+    { k: "kind", label: "Kind", w: 8, v: (r) => r.kindL || "", cell: (r) => r.kindL },
+  ];
 }
 
 export default function InputRegister({ b }) {
@@ -79,8 +84,6 @@ export default function InputRegister({ b }) {
   const dupes = R.rows.filter((r) => r.dupe), notTaken = R.only2b.filter((p) => p.itcavl !== "N" && p.bookedNoCredit);
   // narrow enough for the amounts to be on screen: voucher number only (type on hover), HSN and rate together, cess only when there is any
   const cess = list.some((r) => Math.abs(r.cess) >= 0.01);
-  const cols = ["Booked · voucher", "Supplier · GSTIN", "Bill no. · date", "HSN · rate", "Value", "IGST", "CGST", "SGST"].concat(cess ? ["Cess"] : []).concat(["Kind", "2B"]);
-  const numTo = cess ? 8 : 7, widths = [10, 17, 12, 11, 9, 8, 7, 7].concat(cess ? [5] : []).concat([8, 11]);
   const kindOf = (k) => tot(R.rows.filter((r) => r.kindL === k)), statusOf = (k) => tot(R.rows.filter((r) => r.twoB === k));
   return (
     <section className="dash-card">
@@ -106,25 +109,23 @@ export default function InputRegister({ b }) {
         {notTaken.length > 0 && <a className="gf-chip warn" href="#inreg2b">{"Credit in 2B not taken "}<b>{notTaken.length}</b>{" · ₹" + dirTax(notTaken)}</a>}
       </div>
       <TieOut R={R} />
-      <div className="bk-tablewrap"><table className="bk-table compact fixed">
-        <colgroup>{widths.map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
-        <thead><tr>{cols.map((c, i) => <th key={c} className={i >= 4 && i <= numTo ? "n" : undefined}>{c}</th>)}</tr></thead>
-        <tbody>
-          {list.slice(0, gfN(5000)).map((r, i) => <Row key={r.ym + ":" + r.id + ":" + i} r={r} cess={cess} />)}
-          <tr><td colSpan={4}><b>{shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "")}</b></td>
-            <td className="n"><b>{money(shown.taxable)}</b></td><td className="n"><b>{money(shown.igst)}</b></td><td className="n"><b>{money(shown.cgst)}</b></td><td className="n"><b>{money(shown.sgst)}</b></td>
-            {cess && <td className="n"><b>{money(shown.cess)}</b></td>}<td colSpan={2}></td></tr>
-        </tbody>
-      </table></div>
-      {list.length > 5000 && <p className="note">The first 5,000 are shown; the Excel has all {list.length}.</p>}
+      {/* the one list table (spec K6) */}
+      <ListTable name="inreg" className="bk-table compact fixed" rows={list} rowKey={(r, i) => r.ym + ":" + r.id + ":" + i} unit={["document", "documents"]} of={all.n} limit={gfN(5000)}
+        more={<p className="note">The first 5,000 are shown; the Excel has all {list.length}.</p>} cols={inregCols(cess)}
+        empty="No document here. Choose Every document above, or another month." />
       {R.only2b.length > 0 && (!f || f === "Not in 2B") && <>
         <h3 id="inreg2b" style={{ marginTop: 14 }}>In 2B, not in the books</h3>
-        <div className="bk-tablewrap"><table className="bk-table">
-          <thead><tr><th>2B month</th><th>Supplier</th><th>GSTIN</th><th>Bill no.</th><th>Date</th><th className="n">Value</th><th className="n">Tax</th><th>In Tally</th></tr></thead>
-          <tbody>{R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst)).slice(0, gfN(300)).map((p, i) => <tr key={i}>
-            <td>{GSTR.label(p.ym)}</td><td>{p.party}</td><td>{p.gstin}</td><td>{p.no}</td><td>{p.date ? day(p.date) : ""}</td>
-            <td className="n">{money(p.dir * p.taxable)}</td><td className="n">{money(p.dir * tax4(p))}</td><td><Only2bNote p={p} /></td></tr>)}</tbody>
-        </table></div>
+        <ListTable name="inreg2b" rows={R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst))} rowKey={(p, i) => i} unit={["document", "documents"]} limit={gfN(300)}
+          cols={[
+            { k: "date", role: "date", label: "Date", v: (p) => String(p.date || ""), cell: (p) => (p.date ? day(p.date) : "") },
+            { k: "no", role: "number", label: "Bill no.", v: (p) => p.no || "", cell: (p) => p.no },
+            { k: "party", role: "party", label: "Supplier", v: (p) => p.party || "", cell: (p) => p.party },
+            { k: "tax", role: "amount", label: "Tax", cls: "n", v: (p) => p.dir * tax4(p), fmt: money, cell: (p) => money(p.dir * tax4(p)) },
+            { k: "st", role: "status", label: "In Tally", v: (p) => (p.bookedNoCredit ? "booked without credit" : "not found"), cell: (p) => <Only2bNote p={p} /> },
+            { k: "ym", label: "2B month", v: (p) => p.ym || "", cell: (p) => GSTR.label(p.ym) },
+            { k: "gstin", label: "GSTIN", v: (p) => p.gstin || "", cell: (p) => p.gstin },
+            { k: "val", label: "Value", cls: "n", v: (p) => p.dir * num(p.taxable), sum: true, fmt: money, cell: (p) => money(p.dir * p.taxable) },
+          ]} />
       </>}
     </section>
   );

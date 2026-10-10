@@ -2,10 +2,12 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8128), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
-books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "books-cache.json"))))
+books = json.load(open(CACHE))
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -16,12 +18,12 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8128/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => {
-      const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"});
+      const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"});
       S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.map = Books.mapLedgers(bk.vouchers, {});
-      window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+      window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-    pg.set_input_files("#mastersIn", os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")); pg.wait_for_timeout(12000)
+    pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("S.booksTab = 'audit'; render();"); pg.wait_for_timeout(500)
     ok("Not run yet" in pg.inner_text("#app"), "Audit tab before the first run")
     pg.fill('input[aria-label="Audit from"]', "2025-04-01"); pg.dispatch_event('input[aria-label="Audit from"]', "change")
@@ -29,7 +31,11 @@ with sync_playwright() as p:
     pg.click('button:text-is("Run now")'); pg.wait_for_timeout(4000)
     t = pg.inner_text("#app")
     ok("Serious" in t and "Expenses where TDS was due but not deducted" in t, "run now: findings listed")
-    ok("the books begin on" in t, "why the balance checks did not run is said")
+    if FIXTURE:   # the fixture's day book starts where its books begin, so the balance checks run (MSME, cash below zero)
+        ok("the books begin on" not in t and not any("Balance checks were not run" in n for n in pg.evaluate("S.books.audit.last.notes || []")), "the balance checks run: the day book starts where the books begin")
+        ok("Micro and small suppliers unpaid beyond 45 days" in t, "fixture: the MSME supplier unpaid beyond 45 days is found")
+    else:
+        ok("the books begin on" in t, "why the balance checks did not run is said")
     pg.screenshot(path=OUT + "/audit.png", full_page=False)
     # open the duplicate bills finding, mark it, add a note
     fid = "duplicates:dupRef"
@@ -57,7 +63,9 @@ with sync_playwright() as p:
     rep.pdf(path=OUT + "/audit-report.pdf") if hasattr(rep, "pdf") else None
     rep.close()
     # schedule: weekly, and a run on its own when due
+    pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")   # settings sit in a closed section
     pg.select_option('select[aria-label="Run on its own"]', "weekly"); pg.wait_for_timeout(300)
+    pg.click('#app [data-confirm-foot="books:audit-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # saved with Save (review 18)
     ok(pg.evaluate("S.books.auditCfg.freq") == "weekly", "schedule saved")
     pg.evaluate("S.books.audit.last.at = '2026-09-01T09:00:00.000Z'; Audit.maybeRun(); render();"); pg.wait_for_timeout(3000)
     ok(pg.evaluate("S.books.audit.last.how").startswith("on its own"), "runs on its own when due: " + pg.evaluate("S.books.audit.last.how"))

@@ -1,14 +1,64 @@
 /* ================================================================== */
 /* MIS: the books summed up for the owner, for any period, by rules   */
 /* ================================================================== */
+// Receivables, payables and advances (review of 02-Oct-2026: MIS, Reports, Audit and Letters each worked them out their
+// own way and gave four different figures for the same balance). One place: each customer's and supplier's balance in
+// the books on the day; a customer in debit is owed to you, in credit an advance received; a supplier in credit is owed
+// by you, in debit an advance paid. MIS ages these, Reports and Letters show them, Audit flags them.
+const Parties = {
+  position(asOn){
+    const b = S.books || {}, tb = b.tb, fs = Audit.fyStart(asOn), base = tb && tb.from > fs && tb.from <= asOn ? tb.from : fs;
+    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0].join("|");
+    if (this._p && this._p.key === key && this._p.b === b) return this._p.r;
+    let B; try { B = Audit.balances(base, asOn); } catch (e){ B = {ok: false, why: e.message}; }
+    let r;
+    if (!B.ok) r = {ok: false, why: B.why};
+    else {
+      const at = B.at(asOn), rows = {r: [], p: []};
+      let owed = 0, custAdv = 0, youOwe = 0, supAdv = 0;
+      Object.keys(at).forEach(l => {
+        const d = r2(-num(at[l]));                               // a debit balance as a positive figure, to the paisa
+        if (Math.abs(d) < 0.005) return;
+        if (Audit.isDebtor(l)){ rows.r.push({l, dr: d}); if (d > 0) owed += d; else custAdv -= d; }
+        else if (Audit.isCreditor(l)){ rows.p.push({l, dr: d}); if (d < 0) youOwe -= d; else supAdv += d; }
+      });
+      r = {ok: true, asOn, src: B.src, at, rows, owed: r2(owed), custAdv: r2(custAdv), youOwe: r2(youOwe), supAdv: r2(supAdv)};
+    }
+    this._p = {key, b, r};
+    return r;
+  }
+};
 const MIS = {
   cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
   ym(d){ return String(d).slice(0, 6); },
   monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
   shift(d, years, days){ const t = new Date(Audit.iso(d) + "T00:00:00"); if (years) t.setFullYear(t.getFullYear() + years); if (days) t.setDate(t.getDate() + days); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); },
   covered(from){ const f = String((S.books.meta || {}).from || ""); return !!f && f <= from; },
-  // what each ledger is, for the profit and loss
-  head(l){
+  // what each ledger is, for the profit and loss: its MIS head (h, MIS.HEADS), from its line in the accounts (s, FS.PL)
+  head(l, c){ return (this.plHead(l, c) || {}).h || ""; },
+  // review of 02-Oct-2026 (the owner's rule for expense ledgers in credit): MIS, the cost centres and the accounts placed
+  // the same ledger by two rules (MIS by the ledger's name, the accounts by its name and its groups: Testing AAD's H.R.A.,
+  // Other Allowance and Advance, under Salary & Wages, were "other expenses" in MIS and "employee benefits" in the
+  // accounts). One placing now, the accounts' (FS.place, with a line chosen by hand on the Mapping tab): s is the line in
+  // the statement of profit and loss, the head a credit is set off in; h is how MIS shows it (direct expenses, which
+  // Schedule III keeps in other expenses, apart, for the gross profit)
+  plHead(l, c){
+    if (typeof FS !== "undefined" && Books.groupPath(l).length){
+      const n = FS.nature(l);
+      if (n.rev){
+        c = c || FS.cfg(S.books);
+        const w = (c.map || {})[l] || FS.place(l, 0, c.kind), s = w === "pur" && c.mfg ? "mat" : w;
+        const h = s === "mat" || s === "pur" || s === "chg" ? "pur" : s === "exp" ? (n.gp ? "dir" : "exp") : s === "exc" ? "exp" : s;
+        return this.HEADS.some(z => z[0] === h) ? {s, h} : null;
+      }
+      if ((S.books || {}).groupInfo && ledLook(S.books.groupInfo, n.top)) return null;
+    }
+    const h = this.headByGroup(l);
+    return h ? {s: h === "dir" ? "exp" : h, h} : null;
+  },
+  // what a ledger is by its group alone, when the accounts' placing (FS) cannot say: the masters not read, or a test with
+  // MIS and not FS
+  headByGroup(l){
     const A = Audit, p = A.path(l).map(g => g.toLowerCase());
     const has = g => p.includes(g);
     if (has("sales accounts")) return "rev";
@@ -27,7 +77,7 @@ const MIS = {
     if (p.length && typeof FS !== "undefined"){
       const n = FS.nature(l);
       if (n.rev){ const w = FS.place(l, 0, "co"); return w === "mat" ? "pur" : w === "exc" ? "exp" : w; }
-      if ((S.books || {}).groupInfo && S.books.groupInfo[n.top]) return "";
+      if ((S.books || {}).groupInfo && ledLook(S.books.groupInfo, n.top)) return "";
     }
     if (!p.length){
       const k = Books.ledgerOf(l).kind;
@@ -49,20 +99,71 @@ const MIS = {
     });
     return out;
   },
-  pl(from, to){
-    const mv = this.moves(from, to), months = this.monthsOf(from, to), heads = {};
-    Object.entries(mv).forEach(([l, x]) => {
-      const h = this.head(l); if (!h) return;
-      const sign = (this.HEADS.find(z => z[0] === h) || [0, 0, -1])[2];
-      const H = heads[h] = heads[h] || {t: 0, m: {}, led: []};
-      const row = {l, t: r2(x.t * sign), m: {}};
-      months.forEach(m => { row.m[m] = r2((x[m] || 0) * sign); H.m[m] = r2((H.m[m] || 0) + row.m[m]); });
-      H.t = r2(H.t + row.t); H.led.push(row);
+  // THE RULE for an expense ledger with a credit balance (the owner's, review of 02-Oct-2026; it replaced moving every
+  // such ledger to Other income). Every place that shows a profit and loss uses this one function: MIS.pl (and so MIS's
+  // heads, ratios, budget, Reports and the 3CD figures), MIS.costCentres, FS.build and FS.plOnly (the accounts, their
+  // notes, the page and Excel).
+  // - The ledger stays in its own head (employee benefits, finance costs, depreciation, other expenses, purchases ...)
+  //   and its credit is set off there, against the head's debits; it is flagged for a look.
+  // - Only when the head as a whole ends in credit does what is left go to Other income ("Excess credit in Other
+  //   expenses"), and the head then shows nil. No threshold, no ledger moved on its own.
+  // The head is the line in the statement of profit and loss (s): MIS's direct expenses are part of Other expenses there,
+  // so they are set off together. The set-off is a period-end figure: it sits in the period's last month.
+  // Amounts: income credit positive, expenses debit positive. Returns the ledgers (rows), the set-off lines (set, each
+  // under an MIS head h and a line s), and what went to Other income (moved), with each head's debits and credits (sum)
+  CREDIT_EXP: "expense ledger with a credit balance",
+  SETS_OFF: ["mat", "pur", "emp", "fin", "dep", "exp"],
+  PL_LABEL: {mat: "Cost of materials consumed", pur: "Purchases", emp: "Employee benefits expense", fin: "Finance costs", dep: "Depreciation and amortisation expense", exp: "Other expenses"},
+  plRule(from, to, c){
+    if (!c && typeof FS !== "undefined") c = FS.cfg(S.books);
+    c = c || {map: {}};
+    const mv = this.moves(from, to), months = this.monthsOf(from, to), end = months[months.length - 1], rows = [];
+    const lab = s2 => (typeof FS !== "undefined" && (FS.PL.find(z => z[0] === s2) || [])[1]) || this.PL_LABEL[s2] || s2;
+    Object.keys(mv).sort().forEach(l => {
+      const k = this.plHead(l, c); if (!k) return;
+      const x = mv[l], sign = k.h === "rev" || k.h === "oth" ? 1 : -1, row = {l, s: k.s, h: k.h, t: r2(num(x.t) * sign), m: {}};
+      months.forEach(mm => { row.m[mm] = r2(num(x[mm]) * sign); });
+      if (sign < 0 && this.SETS_OFF.includes(k.s) && row.t < -0.004) row.flag = this.CREDIT_EXP;
+      rows.push(row);
     });
-    Object.values(heads).forEach(H => H.led.sort((a, c) => Math.abs(c.t) - Math.abs(a.t) || a.l.localeCompare(c.l)));
+    const set = [], moved = [], sum = {}, hOrder = this.HEADS.map(z => z[0]);
+    const line = (s2, h, t, l) => { if (Math.abs(t) >= 0.005) set.push({s: s2, h, l, t: r2(t), m: end ? {[end]: r2(t)} : {}, so: true}); };
+    this.SETS_OFF.forEach(s2 => {
+      const R = rows.filter(r => r.s === s2); if (!R.length) return;
+      const dr = r2(R.filter(r => r.t > 0).reduce((a, r) => a + r.t, 0)), cr = r2(-R.filter(r => r.t < 0).reduce((a, r) => a + r.t, 0)), T = r2(dr - cr);
+      const by = {}; R.forEach(r => { by[r.h] = r2((by[r.h] || 0) + r.t); });
+      const hs = Object.keys(by).sort((a, b2) => hOrder.indexOf(a) - hOrder.indexOf(b2));
+      sum[s2] = {dr, cr, moved: 0, t: Math.max(0, T), label: lab(s2)};
+      if (T < -0.004){
+        // the head ends in credit: what is left goes to Other income and the head shows nil
+        hs.forEach(h => line(s2, h, -by[h], hs.length < 2 ? "Excess credit moved to Other income" : by[h] > 0 ? "Set off against the credits in " + lab(s2) : "Set off against the rest of " + lab(s2) + "; the excess credit moved to Other income"));
+        sum[s2].moved = r2(-T);
+        moved.push({s: s2, l: "Excess credit in " + lab(s2), t: r2(-T), m: end ? {[end]: r2(-T)} : {}, so: true, from: s2});
+      } else if (hs.length > 1){
+        // the head is in debit, but one of the parts MIS shows apart (direct expenses, other expenses) is in credit: that
+        // part is set off against the others, in order, so no part shows a credit
+        let left = r2(-hs.filter(h => by[h] < 0).reduce((a, h) => a + by[h], 0));
+        hs.filter(h => by[h] < 0).forEach(h => line(s2, h, -by[h], "Set off against the rest of " + lab(s2)));
+        hs.filter(h => by[h] > 0).forEach(h => { const take = r2(Math.min(by[h], left)); if (take > 0){ line(s2, h, -take, "Credits in " + lab(s2) + " set off here"); left = r2(left - take); } });
+      }
+    });
+    return {months, rows, set, moved, sum};
+  },
+  pl(from, to, c){
+    const R = this.plRule(from, to, c), months = R.months, heads = {};
+    const put = (h, row) => {
+      const H = heads[h] = heads[h] || {t: 0, m: {}, led: []};
+      months.forEach(m => { row.m[m] = row.m[m] || 0; H.m[m] = r2((H.m[m] || 0) + row.m[m]); });
+      H.t = r2(H.t + row.t); H.led.push(row);
+    };
+    R.rows.forEach(r => { const row = {l: r.l, t: r.t, m: Object.assign({}, r.m)}; if (r.flag) row.flag = r.flag; put(r.h, row); });
+    Object.values(heads).forEach(H => H.led.sort((a, c2) => Math.abs(c2.t) - Math.abs(a.t) || a.l.localeCompare(c2.l)));
+    // the set-off after the ledgers, and the excess credit in Other income
+    R.set.forEach(z => put(z.h, {l: z.l, t: z.t, m: Object.assign({}, z.m), so: true}));
+    R.moved.forEach(z => put("oth", {l: z.l, t: z.t, m: Object.assign({}, z.m), so: true, from: z.s}));
     const g = k => (heads[k] || {t: 0}).t, gm = (k, m) => ((heads[k] || {m: {}}).m[m] || 0);
     const calc = f => ({t: r2(f(g)), m: Object.fromEntries(months.map(m => [m, r2(f(k => gm(k, m)))]))});
-    return {months, heads,
+    return {months, heads, sum: R.sum,
       income: calc(x => x("rev") + x("oth")),
       gross: calc(x => x("rev") - x("pur") - x("dir")),
       ebitda: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp")),
@@ -97,6 +198,8 @@ const MIS = {
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
   ageing(asOn, side, bal){
+    // the balances on the day, as everywhere else (Parties.position) when the caller has none
+    if (!bal){ const P = Parties.position(asOn); if (P.ok) bal = P.at; }
     const bills = this.bills(asOn, side), by = {}, msme = this.msme();
     bills.forEach(x => {
       const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
@@ -106,6 +209,10 @@ const MIS = {
       else { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, a); }
       p.total = r2(p.total + x.amt); p.bills.push(x);
     });
+    // a party with a balance but no bill in the books read (an opening balance carried in) is owed too (review of
+    // 02-Oct-2026: MIS left these out, so its receivables were lower than the books'); all of it is "not dated"
+    if (bal) Object.keys(bal).forEach(l => { if (by[l] || Math.abs(num(bal[l])) < 0.005 || !(side === "r" ? Audit.isDebtor(l) : Audit.isCreditor(l))) return;
+      by[l] = {party: l, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[l] || "", noBills: true}; });
     const rows = Object.values(by);
     // the control: the party's balance in Tally against the bills
     if (bal) rows.forEach(p => { const tb = bal[p.party]; if (tb != null){ p.tally = r2(side === "r" ? -tb : tb); p.diff = r2(p.tally - p.total); } });
@@ -113,21 +220,41 @@ const MIS = {
     rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
     const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
     sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
-    // review of 01-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills), aged so the
-    // ages add up to it: payments on account, advances, older settlements and any difference to Tally are set against
-    // the oldest bills first; an amount owed that no bill dates is "not dated". A party whose balance runs the other
-    // way (a supplier with a debit balance) owes nothing here: it is an advance, shown on its own, as a positive figure
+    // review of 01-Oct-2026 / 02-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills),
+    // aged so the ages add up to it: payments on account, advances, older settlements and any difference to Tally are
+    // set against the oldest bills first (MIS.netOpen, the same as the 13-week forecast); an amount owed that no bill
+    // dates is "not bill-wise". A party whose balance runs the other way (a supplier with a debit balance) owes nothing
+    // here: it is an advance, shown on its own, as a positive figure
     rows.forEach(p => {
-      const net = r2(p.tally != null ? p.tally : p.total), nb = p.b.slice();
-      let extra = r2(net - nb.reduce((a, v) => a + v, 0));
-      for (let i = nb.length - 1; i >= 0 && extra < 0; i--){ const take = Math.min(nb[i], -extra); nb[i] = r2(nb[i] - take); extra = r2(extra + take); }
-      p.net = net; p.nb = net > 0 ? nb : nb.map(() => 0); p.und = net > 0 && extra > 0 ? extra : 0; p.advance = net < 0 ? r2(-net) : 0;
+      const o = this.netOpen(p), nb = this.BUCKETS.map(() => 0);
+      o.open.forEach(x => { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); nb[i] = r2(nb[i] + x.left); });
+      p.net = o.net; p.open = o.open; p.nb = nb; p.und = o.und; p.advance = o.advance; p.owe = o.owe;
     });
     sum.owe = r2(rows.reduce((a, p) => a + Math.max(0, p.net), 0));
     sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
     sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
     sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
+    // review of 02-Oct-2026: the parties whose ledger balance and bills do not agree (the difference is the ledger balance
+    // less the bills' total), largest first, for the line at the top of Receivables and Payables
+    sum.differ = rows.filter(p => p.diff != null && Math.abs(p.diff) >= 1).sort((a, c) => Math.abs(c.diff) - Math.abs(a.diff) || a.party.localeCompare(c.party))
+      .map(p => ({party: p.party, bills: p.total, ledger: p.tally, diff: p.diff}));
+    sum.diff = r2(rows.reduce((a, p) => a + (p.diff || 0), 0));
     return {rows, sum};
+  },
+  // review of 02-Oct-2026 (Note 10 and MIS's buckets added up to 1.61 crore against receivables of 1.12 crore; the
+  // 13-week forecast expected 1.57 crore in its first week): one party's open bills net of what it paid on account, its
+  // advances, settlements of bills older than these books and any difference to its ledger balance. Those are set
+  // against the oldest bills first, so what is left of the bills never exceeds the balance; what is owed and no bill
+  // dates is one "not bill-wise" amount. p is a row of the ageing (its bills and its ledger balance, tally, when known)
+  netOpen(p){
+    const net = r2(p.tally != null ? p.tally : p.total), owe = Math.max(0, net);
+    const bills = (p.bills || []).filter(x => x.ref && x.hasNew && x.amt > 0)
+      .sort((a, c) => String(a.date).localeCompare(String(c.date)) || String(a.ref).localeCompare(String(c.ref)));
+    let less = r2(bills.reduce((a, x) => a + x.amt, 0) - owe);   // what the bills carry beyond the balance
+    const open = [];
+    bills.forEach(x => { const t = Math.max(0, Math.min(x.amt, less)); less = r2(less - t); const left = r2(x.amt - t); if (left >= 0.005) open.push(Object.assign({}, x, {left})); });
+    const und = r2(owe - open.reduce((a, x) => a + x.left, 0));
+    return {net, owe: r2(owe), open, und: und >= 0.005 ? und : 0, advance: net < 0 ? r2(-net) : 0};
   },
   msme(){
     const out = {}, info = S.books.ledInfo || {}, set = S.books.msme || {};
@@ -197,25 +324,100 @@ const MIS = {
     });
     return {rec, pay};
   },
+  // review of 02-Oct-2026: what was paid is what the books show paid, not a working. GST: worked out to pay (after credit,
+  // FinCom's working from the books, not the 3B filed) beside what was paid from the bank to the GST ledgers (GST payable
+  // or the electronic cash ledger). TDS: deducted is what the TDS ledgers were credited with; paid is what they were
+  // debited with from the bank; challans typed or brought in are counted on their own
+  booksPaid(from, to){
+    const m = {};
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      const k = this.ym(v.date), x = m[k] = m[k] || {gst: 0, tdsDed: 0, tdsPaid: 0};
+      const L = Books.lines(v);
+      L.tds.forEach(t => { x.tdsDed = r2(x.tdsDed + t.amount); }); L.tdsPaid.forEach(t => { x.tdsPaid = r2(x.tdsPaid + t.amount); });
+      if (!v.ent.some(e => e.a > 0 && Books.ledgerOf(e.l).kind === "bank")) return;
+      v.ent.forEach(e => { if (e.a < 0 && this.gstPaidTo(e.l)) x.gst = r2(x.gst - e.a); });
+    });
+    return m;
+  },
+  // GST paid to the government: a ledger of tax owed (GST payable or the electronic cash ledger, an output tax ledger,
+  // reverse charge payable) debited by a bank payment. The one rule for Compliance's "paid from the bank" and the cash
+  // flow's GST line (review of 02-Oct-2026: the cash flow also counted 10,080 of input IGST debited by two IDFC payments
+  // of 18-Sep-2025, nos. 855 and 859, which is credit taken on a purchase, not tax paid)
+  gstPaidTo(l){
+    const w = Books.ledgerOf(l);
+    return w.what === "gst_setoff" || ((w.kind === "gst" || w.kind === "gst_common") && w.side === "output") || (w.what === "gst_rcm" && w.side === "output");
+  },
+  // TDS payable over the period (review of 02-Oct-2026: "Deducted less paid" left out what was owed at the start):
+  // opening + deducted - paid = closing, with the closing as the TDS ledgers' balance in the books to check it
+  tdsPayable(from, to){
+    const tdsL = l => ["tds_payable", "tds_clearing"].includes(Books.ledgerOf(l).kind);
+    // the opening is the balances on the day before the period (with the books' opening balances), from the same source
+    let B = null; try { B = Audit.balances(from, to); } catch (e){}
+    const owed = d => { if (!B || !B.ok) return null; const at = B.at(d); return r2(Object.keys(at).filter(tdsL).reduce((a, l) => a + num(at[l]), 0)); };   // a credit (owed) is positive here
+    const p = this.booksPaid(from, to), ded = r2(Object.values(p).reduce((a, x) => a + x.tdsDed, 0)), paid = r2(Object.values(p).reduce((a, x) => a + x.tdsPaid, 0));
+    const open = owed(Audit.dayBefore(from)) || 0, close = r2(open + ded - paid), books = owed(to);
+    return {open, ded, paid, close, books, ties: books == null || Math.abs(books - close) < 1};
+  },
   compliance(from, to){
-    const months = this.monthsOf(from, to);
-    const gst = months.map(m => { try { const t = GSTR.threeB(m, ""); return {ym: m, out: r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc: r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess), pay: r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)))}; } catch (e){ return {ym: m, out: 0, itc: 0, pay: 0}; } });
+    const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
+    // worked out to pay: the 3B working's cash (after the set-off by head and credit carried forward) and reverse charge
+    // paid in cash; paid: the bank payments to the GST ledgers (review of 02-Oct-2026)
+    const sum4 = x => r2(["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0));
+    // review of 02-Oct-2026: the 3B working's cash already holds reverse charge (GSTR.setOff: cash = what credit did not
+    // cover + reverse charge); adding rcmCash again counted it twice (Apr-2025: 4,860 = 2 x 2,430, the reverse charge on
+    // Jitin & Co.'s bill 5063 of 30-Apr-2025). Each row now adds up: output - credit + reverse charge + credit
+    // carried over (credit brought in from the month before, less credit left for the next) = worked out to pay
+    // review of 02-Oct-2026 (the made-up books in tests/fixtures/books): with two registrations, one working for both set
+    // Delhi's credit against Uttar Pradesh's tax (Jun-2025: nothing to pay, where UP owed 5,400), which the law does not
+    // allow (credit stays with its GSTIN); each registration is worked out on its own and the figures added
+    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const ts = this.gst3b(m), add = f => r2(ts.reduce((a, t) => a + f(t), 0));
+      const out = add(t => sum4(t.net)), itc = add(t => sum4(t.netItc));
+      const rcm = add(t => t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0);
+      const due = add(t => t.pay && t.pay.cash ? sum4(t.pay.cash) : r2(Math.max(0, sum4(t.net) - sum4(t.netItc)) + (t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0)));
+      return {ym: m, out, itc, rcm, carry: r2(due - (out - itc + rcm)), due, pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, rcm: 0, carry: 0, due: 0, pay: pd}; } });
     const tds = months.map(m => {
-      const ded = r2(TDS.rows().filter(r => this.ym(r.date) === m).reduce((s, r) => s + r.tds, 0));
-      const dep = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
-      return {ym: m, ded, dep};
+      const p = paid[m] || {};
+      const challans = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
+      return {ym: m, ded: p.tdsDed || 0, dep: p.tdsPaid || 0, challans};
     });
     const au = (S.books.audit || {}).last;
-    return {gst, tds, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
+    let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
+    // an audit run that no longer fits the books is not counted (review of 02-Oct-2026)
+    return {gst, tds, tdsRoll, audit: au && !Audit.stale(au) ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
-  // the fixed dates of the month after the period
-  dues(to){
-    const t = new Date(Audit.iso(to) + "T00:00:00"), y = t.getFullYear(), m = t.getMonth(), nx = new Date(y, m + 1, 1), ny = nx.getFullYear(), nm = nx.getMonth();
-    const d = (dd, mm, yy) => yy + String(mm + 1).padStart(2, "0") + String(dd).padStart(2, "0");
-    const out = [[d(7, nm, ny), "TDS and TCS deposit for " + GSTR.label(this.ym(to))], [d(11, nm, ny), "GSTR-1 for " + GSTR.label(this.ym(to))], [d(20, nm, ny), "GSTR-3B and tax for " + GSTR.label(this.ym(to))]];
-    const q = {5: d(31, 6, y), 8: d(31, 9, y), 11: d(31, 0, y + 1), 2: d(31, 4, y)}[m];
-    if (q) out.push([q, "TDS returns for the quarter"]);
-    [y, y + 1].forEach(yy => [[5, 15], [8, 15], [11, 15], [2, 15]].forEach(([mm, dd]) => { const s2 = d(dd, mm, yy); if (s2 > to && Audit.days(to, s2) <= 45) out.push([s2, "Advance tax instalment"]); }));
+  // the 3B workings of a month: one for the client's only registration, else one per registration (credit cannot be set
+  // off across registrations)
+  gst3b(m){
+    const regs = Array.from(new Set((GSTR.gstins(S.books) || []).map(g => String(g).slice(0, 2))));
+    return regs.length > 1 ? regs.map(rg => GSTR.threeBm(m, rg)) : [GSTR.threeB(m, "")];
+  },
+  // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
+  // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
+  // 31 Jul, 31 Oct, 31 Jan and 31 May. GST by the client's filing type: monthly GSTR-1 on the 11th and 3B on the 20th;
+  // quarterly (QRMP) IFF on the 13th and PMT-06 on the 25th after the quarter's first two months, GSTR-1 on the 13th and
+  // 3B on the 22nd or 24th after the quarter. Advance tax on 15 Jun, 15 Sep, 15 Dec and 15 Mar.
+  dues(asOf){
+    const today = Audit.ymd(asOf || Audit.today()), until = this.shift(today, 0, 45), out = [];
+    const add = (d, l) => { d = String(d).replace(/-/g, ""); if (d >= today && d <= until) out.push([d, l]); };
+    const reg = String((GSTR.gstins(S.books) || [])[0] || (CO() || {}).gstin || "").slice(0, 2);
+    // the months whose dues can fall in the window: from three months back
+    let ym = this.shift(today, 0, -100).slice(0, 6);
+    for (let i = 0; i < 6; i++, ym = GSTR.nextYm(ym)){
+      const nx = GSTR.nextYm(ym), mo = +ym.slice(4, 6), lab = GSTR.label(ym);
+      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS and TCS deposit for " + lab);
+      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo], d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
+        add(d, "TDS and TCS returns for " + q + " " + GSTF.fyOf(ym)); }
+      if (reg){
+        const t = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
+        if (t === "monthly"){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + lab); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + lab); }
+        else if (t === "qrmp"){
+          if (GSTSet.isQEnd(ym)){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + GSTSet.qLabel(ym)); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + GSTSet.qLabel(ym)); }
+          else { add(GSTF.due(ym, "iff", reg), "IFF for " + lab + " (optional)"); add(GSTF.due(ym, "pmt06", reg), "PMT-06 tax for " + lab); }
+        } else if (t === "comp" && GSTSet.isQEnd(ym)) add(GSTF.due(ym, "cmp08", reg), "CMP-08 for " + GSTSet.qLabel(ym));
+      }
+    }
+    [today.slice(0, 4), String(+today.slice(0, 4) + 1)].forEach(y => ["0615", "0915", "1215", "0315"].forEach(md => add(y + md, "Advance tax instalment")));
     return out.sort((a, c) => a[0].localeCompare(c[0]));
   },
   // one run: every table for the period, the same every time for the same books
@@ -239,26 +441,49 @@ const MIS = {
     const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
       sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
-      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
+      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
-    r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
-    r.dpo = r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
+    // the headline owed to you and by you is the ledger balances (Parties.position), the same figure as Reports and
+    // Letters; the ageing only splits it, any part no bill explains shown as not bill-wise (review of 02-Oct-2026)
+    const P = Parties.position(to);
+    r.owed = P.ok ? {r: P.owed, p: P.youOwe, custAdv: P.custAdv, supAdv: P.supAdv} : null;
+    // review of 02-Oct-2026: on revenue from operations (the profit and loss's), never total income
+    const revOps = (pl.heads.rev || {t: 0}).t || s.total;
+    r.dso = r.recv.sum.owe > 0 && revOps > 0 ? Math.round(r.recv.sum.owe / (revOps / days)) : null;
+    // days of purchases only for a client that buys goods (Purchase Accounts used in the period): a service firm's bills
+    // are expenses, and "days of purchases" says nothing about them (review of 02-Oct-2026)
+    const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
+    r.goods = goods;
+    r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
-    r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)
-      .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.amt, 0))}));
+    // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing
+    r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: (p.open || []).filter(x => x.age > md)})).filter(x => x.bills.length)
+      .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.left, 0))}));
     // the control: every ledger's movement here against Tally's own balances
     if (b.tb && b.tb.from === from && b.tb.to === to){
       const mv = this.moves(from, to); let n = 0, amt = 0; const list = [];
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
+    r.basis = this.basis(b);
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
     const m = b.mis = b.mis || {};
     m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);
     return r;
   },
+  // what a run was worked out from: the books (entries, Tally's balances, the ledger map, how far read) and FinCom's own
+  // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
+  // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
+  // 01-Oct, result code 1FB42BF2, with figures since corrected)
+  V: 8,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5); 8: the owner's rules of 03-Oct-2026 (round 4, items 26-29): Loan given marks, salaries by a ledger's name directly under Current Liabilities, a partner's sub-group under Loans, grouping notes
+  basis(b){
+    b = b || S.books || {};
+    const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
+    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length, this.flowMarks((S.companies || {})[b.cid || S.coId])]));
+  },
+  stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
   due(b){
     const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
@@ -282,27 +507,112 @@ const MIS = {
 
 /* ---------- MIS, phase 2 ---------- */
 Object.assign(MIS, {
-  // what a ledger on the other side of a cash or bank line is, for the cash flow
+  // the cash flow's line for a ledger on the other side of a cash or bank line: from the ledger's Tally group, never from
+  // words in the ledger's name (finding 5, the owner's rule of 02-Oct-2026: "Loan Processing Fees", an expense ledger,
+  // was on "Loans" by the word LOAN; "Salary Ankit Garg", under Loans (Liability), was on "Salaries" by the word SALARY).
+  // The group path is walked up from the ledger to the first of Tally's reserved groups, which gives the section and the
+  // line; the company's own groups below it ("Salary & Wages", "TDS", "Finance Costs") name a line within it. The ledger
+  // map (Books.ledgerOf: the tax type from Tally's master, as the ledger check confirms it) names the GST and TDS lines.
+  // Group names are matched without regard to capital letters (Tally's "Cash-in-hand", a copy's "Cash-in-Hand")
+  FLOW_GROUPS: [[/^sundry debtors$/i, "debtor"], [/^sundry creditors$/i, "creditor"], [/^duties & taxes$/i, "tax"], [/^provisions$/i, "other"],
+    [/^fixed assets$/i, "fixed"], [/^(investments|deposits \(asset\))$/i, "invest"], [/^loans & advances \(asset\)$/i, "lent"],
+    [/^(loans \(liability\)|secured loans|unsecured loans)$/i, "loan"], [/^(capital account|reserves & surplus)$/i, "capital"],
+    [/^(sales accounts|direct incomes|indirect incomes)$/i, "income"], [/^(direct expenses|indirect expenses)$/i, "expense"],
+    [/^(purchase accounts|stock-in-hand|current assets|current liabilities|suspense a\/c|misc\. expenses \(asset\)|branch \/ divisions|bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand)$/i, "other"]],
+  flowGroup(l){
+    const path = Audit.path(l);
+    for (let i = 0; i < path.length; i++){
+      const hit = this.FLOW_GROUPS.find(([re]) => re.test(String(path[i]).trim()));
+      if (hit) return {kind: hit[1], own: path.slice(0, i), top: String(path[i]).trim()};
+    }
+    // the company's own primary group (no reserved group above it): by Tally's flags for it
+    const top = path[path.length - 1], gi = top ? ledLook((S.books || {}).groupInfo, top) : null;
+    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path, top: ""};
+  },
+  // The owner's rules of 03-Oct-2026 (round 4, items 26-29), each decided by Tally's group first:
+  //  26. Loans & Advances (Asset) is operating ("Loans and advances (asset)"); investing ("Loans given") only for a ledger
+  //      the owner marks "Loan given" on the Mapping tab: co.choices["flow:<ledger>"] = loan_given, confirmed by a person
+  //      (never guessed; the choice model of 60-choices.js).
+  //  27. Current Liabilities: the sub-group's own name decides a salary, wages, ESI / PF, imprest or payroll ledger
+  //      ("Salaries and staff"); a ledger directly under Current Liabilities, with no sub-group, is decided by its own
+  //      name, and that is flagged.
+  //  28. Loans (Liability): a sub-group that is a partner's own (its name is the person of a Capital Account ledger,
+  //      "Anshul Garg" for "Anshul Garg Capital", or it says Partner) is "Partners' accounts" (financing); other loans stay
+  //      "Loans". The match on a Capital Account ledger is flagged.
+  //  29. flowHead returns a third element for a flagged line ("mark", "name", "partner:<capital ledger>"); flowNotes lists
+  //      every such ledger for the "Grouping notes" box under the cash flow. A note never blocks anything.
+  STAFF_RE: /SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bE?PFO?\b|\bESIC?\b|GRATUITY|PAYROLL/i,
+  flowCo(){ if (this._co !== undefined) return this._co; const b = S.books || {}, cs = S.companies || {}; return cs[b.cid] || cs[S.coId] || null; },
+  // the owner's mark on a ledger: "loan_given", or ""; a confirmed choice only
+  flowMark(l){
+    const co = this.flowCo(); if (!co) return "";
+    const k = "flow:" + l;
+    if (typeof choiceUsable === "function") return choiceUsable(co, k);
+    const r = co.choices && co.choices[k]; return r && r.state === "confirmed" ? r.value || "" : "";
+  },
+  flowMarks(co){ const ch = (co && co.choices) || {}; return Object.keys(ch).filter(k => k.indexOf("flow:") === 0).sort().map(k => [k, (ch[k] || {}).value || "", (ch[k] || {}).state || ""]); },
+  // a name cleaned for the partner match: CAPITAL, A/C, ACCOUNT, CURRENT and punctuation dropped, capitals
+  flowClean(n){ return String(n || "").toUpperCase().replace(/\bA\/C\b/g, " ").replace(/\b(CAPITAL|ACCOUNT|CURRENT)\b/g, " ").replace(/[^A-Z0-9]+/g, " ").trim(); },
+  // the people named by the Capital Account ledgers: cleaned name -> ledger ("Capital" alone names no one)
+  flowPartners(){
+    const b = S.books || {}, u = b.under || {}, n = Object.keys(u).length;
+    if (!this._fp || this._fp.u !== u || this._fp.n !== n){
+      const people = {};
+      Object.keys(u).forEach(l => { const p = Audit.path(l); if (p.some(g => /^capital account$/i.test(String(g).trim())) && !/reserves/i.test(String(p[0] || ""))){ const c = this.flowClean(l); if (c) people[c] = l; } });
+      this._fp = {u, n, people};
+    }
+    return this._fp.people;
+  },
   flowHead(l){
-    const A = Audit, m = Books.ledgerOf(l);
-    if (A.isDebtor(l)) return ["op", "Received from customers"];
-    if (A.isCreditor(l)) return ["op", "Paid to suppliers"];
-    if (/^(gst|gst_common|ineligible|gst_setoff|gst_rcm|gst_import|gst_control|gst_interest)$/.test(m.what || "") || m.kind === "gst" || (A.isDuties(l) && /GST/i.test(l))) return ["op", "GST"];
-    if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(l)) return ["op", "TDS and TCS"];
-    if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(l)) return ["op", "Income tax"];
-    if (/SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bPF\b|\bESI|ESIC|GRATUITY/i.test(l)) return ["op", "Salaries and staff"];
-    if (A.isFixed(l)) return ["inv", "Fixed assets"];
-    if (A.under(l, /^(investments|deposits \(asset\))$/i) || /FIXED DEPOSIT|\bFDR?\b|MUTUAL FUND|\bSIP\b|\bFUND\b.*GROWTH/i.test(l)) return ["inv", "Investments and deposits"];
-    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l)) return ["fin", "Loans"];
-    if (A.isCapital(l) || A.under(l, /^reserves & surplus$/i)) return ["fin", "Capital and drawings"];
-    if (/INTEREST/i.test(l) && !A.isIncome(l)) return ["fin", "Interest paid"];
-    if (A.isIncome(l)) return ["op", "Other income received"];
-    if (A.isExpense(l)) return ["op", "Expenses paid"];
+    const m = Books.ledgerOf(l), g = this.flowGroup(l), own = g.own.join(" | ");
+    if (g.kind === "debtor") return ["op", "Received from customers"];
+    if (g.kind === "creditor") return ["op", "Paid to suppliers"];
+    if (g.kind === "fixed") return ["inv", "Fixed assets"];
+    if (g.kind === "invest") return ["inv", "Investments and deposits"];
+    if (g.kind === "lent" && this.flowMark(l) === "loan_given") return ["inv", "Loans given", "mark"];
+    if (g.kind === "loan"){
+      const P = this.flowPartners(), hit = g.own.map(x => this.flowClean(x)).find(c => c && P[c]);
+      if (hit) return ["fin", "Partners' accounts", "partner:" + P[hit]];
+      if (/PARTNER/i.test(own)) return ["fin", "Partners' accounts"];
+      return ["fin", "Loans"];
+    }
+    if (g.kind === "capital") return ["fin", "Capital and drawings"];
+    // operating: GST paid to the government by the same rule as Compliance (MIS.gstPaidTo); other GST ledgers on a bank
+    // line (input tax paid with a bill, interest and late fees) on lines of their own
+    if (this.gstPaidTo(l)) return ["op", "GST"];
+    if (m.what === "gst_interest") return ["op", "GST interest and late fees"];
+    if (/^(gst|gst_common|ineligible|gst_rcm|gst_import|gst_control)$/.test(m.what || "") || m.kind === "gst" || m.kind === "gst_common") return ["op", "Input GST paid with bills"];
+    if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(own)) return ["op", "TDS and TCS"];
+    if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(own)) return ["op", "Income tax"];
+    if (this.STAFF_RE.test(own)) return ["op", "Salaries and staff"];
+    if (g.kind === "other" && /^current liabilities$/i.test(g.top) && !g.own.length && this.STAFF_RE.test(l)) return ["op", "Salaries and staff", "name"];
+    if (g.kind === "expense" && /INTEREST|FINANCE COST|BORROWING COST/i.test(own)) return ["fin", "Interest paid"];
+    if (g.kind === "lent") return ["op", "Loans and advances (asset)"];
+    if (g.kind === "income") return ["op", "Other income received"];
+    if (g.kind === "expense") return ["op", "Expenses paid"];
     return ["op", "Other receipts and payments"];
+  },
+  flowWhy(h){
+    const w = h[2] || "";
+    if (w === "mark") return "marked Loan given on the Mapping tab";
+    if (w === "name") return "directly under Current Liabilities with no sub-group, so its own name decided";
+    if (w.indexOf("partner:") === 0) return "its sub-group is named for a partner: the Capital Account ledger \u201c" + w.slice(8) + "\u201d";
+    return w;
+  },
+  // the grouping notes: [{ledger, group, line, why}] for every ledger whose line came from a name word, the partner match
+  // or a Loan-given mark (all the books' ledgers, or the ones given)
+  flowNotes(co, ledgers){
+    const b = S.books || {}, prev = this._co;
+    if (co) this._co = co;
+    try {
+      const list = ledgers || Array.from(new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {})))), out = [];
+      list.forEach(l => { const h = this.flowHead(l); if (h[2]) out.push({ledger: l, group: Audit.path(l).join(" \u2190 "), line: h[1], why: this.flowWhy(h)}); });
+      return out.sort((a, c) => a.ledger.localeCompare(c.ledger));
+    } finally { this._co = prev; }
   },
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
   cashActual(from, to){
-    const months = this.monthsOf(from, to), rows = {};
+    const months = this.monthsOf(from, to), rows = {}, seen = new Set();
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       const cb = v.ent.filter(e => Audit.isCash(e.l) || Audit.isBankL(e.l)), other = v.ent.filter(e => !(Audit.isCash(e.l) || Audit.isBankL(e.l)));
@@ -312,13 +622,31 @@ Object.assign(MIS, {
       if (!tot || Math.abs(net) < 0.01) return;
       opp.forEach(e => {
         const share = r2(-net * Math.abs(e.a) / tot);
-        const [sec, lab] = this.flowHead(e.l), k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
-        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share);
+        // money that came in on a line named for paying (or went out on one named for receiving) has its own line (review
+        // of 02-Oct-2026: 48,50,089 received back from suppliers in Feb-2026 sat as "+" under Paid to suppliers, and an
+        // income-tax refund of 9,28,480 under Income tax)
+        let [sec, lab] = this.flowHead(e.l);
+        if (share > 0 && lab === "Paid to suppliers") lab = "Refunds and receipts from suppliers";
+        else if (share > 0 && lab === "Income tax") lab = "Tax refunds";
+        else if (share < 0 && lab === "Received from customers") lab = "Refunds and payments to customers";
+        // money back on an expense ledger (an insurance policy cancelled, an expense recovered) is not a negative payment
+        // (review of 02-Oct-2026: "Expenses paid" showed +13,216.62 in Jan-2026 and +734.76 in Mar-2026)
+        else if (share > 0 && lab === "Expenses paid") lab = "Expenses refunded or recovered";
+        const k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
+        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share); seen.add(e.l);
       });
     });
     const list = Object.values(rows).sort((a, c) => ["op", "inv", "fin"].indexOf(a.sec) - ["op", "inv", "fin"].indexOf(c.sec) || c.t - a.t);
     const sec = s2 => ({t: r2(list.filter(x => x.sec === s2).reduce((a, x) => a + x.t, 0)), m: Object.fromEntries(months.map(mm => [mm, r2(list.filter(x => x.sec === s2).reduce((a, x) => a + (x.m[mm] || 0), 0))]))});
-    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net: r2(list.reduce((a, x) => a + x.t, 0))};
+    const net = r2(list.reduce((a, x) => a + x.t, 0));
+    // cash and bank at the start and the end, from the balances (review of 02-Oct-2026): opening + net change = closing,
+    // checked; a difference is an entry that moved cash or bank without a line on the other side
+    let open = null, close = null;
+    try { const B = Audit.balances(from, to); if (B.ok){ const cb = at => r2(Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((a, l) => a - num(at[l]), 0));
+      open = cb(B.at(Audit.dayBefore(from))); close = cb(B.at(to)); } } catch (e){}
+    const diff = open == null ? null : r2(close - open - net);
+    // the grouping notes (round 4, item 29) for the ledgers that moved money in the period
+    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1, notes: this.flowNotes(null, Array.from(seen))};
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
@@ -347,15 +675,18 @@ Object.assign(MIS, {
     const start = this.shift(to, 0, 1), W = 13, weeks = Array.from({length: W}, (_, i) => ({i, from: this.shift(start, 0, i * 7), to: this.shift(start, 0, i * 7 + 6), inn: 0, out: 0, items: []}));
     const put = (d, amt, what, who, why) => { let w = this.weekOf(start, d); if (w < 0) w = 0; if (w >= W) return; const x = weeks[w]; if (amt > 0) x.inn = r2(x.inn + amt); else x.out = r2(x.out - amt); x.items.push({d: d < start ? start : d, amt: r2(amt), what, who, why}); };
     const rd = this.payDays("r", to), pd = this.payDays("p", to), msme = this.msme(), md = this.cfg(S.books).msmeDays;
-    recv.rows.forEach(p => p.bills.filter(x => x.ref && x.amt > 0 && x.hasNew).forEach(x => {
+    // each party's open bills net of its receipts on account and advances (MIS.netOpen, as the ageing): what is
+    // expected from a party never exceeds its ledger balance (review of 02-Oct-2026)
+    const openOf = p => p.open || this.netOpen(p).open, part = x => x.left < x.amt - 0.004 ? " (" + INR.format(x.left) + " of " + INR.format(x.amt) + " left after amounts on account)" : "";
+    recv.rows.forEach(p => openOf(p).forEach(x => {
       const days = rd[p.party] != null ? rd[p.party] : rd["\u0000all"], due = this.shift(x.date, 0, days);
-      put(due, x.amt, "Collections", p.party, "bill " + x.ref + (due < start ? ", overdue: taken in week 1" : ", usually paid in " + days + " days"));
+      put(due, x.left, "Collections", p.party, "bill " + x.ref + part(x) + (due < start ? ", overdue: taken in week 1" : ", usually paid in " + days + " days"));
     }));
-    pay.rows.forEach(p => p.bills.filter(x => x.ref && x.amt > 0 && x.hasNew).forEach(x => {
+    pay.rows.forEach(p => openOf(p).forEach(x => {
       let days = pd[p.party] != null ? pd[p.party] : pd["\u0000all"];
       if (/micro|small/i.test(msme[p.party] || "")) days = Math.min(days, md);
       const due = this.shift(x.date, 0, days);
-      put(due, -x.amt, "Payments to suppliers", p.party, "bill " + x.ref + (due < start ? ", overdue: taken in week 1" : ", usually paid in " + days + " days"));
+      put(due, -x.left, "Payments to suppliers", p.party, "bill " + x.ref + part(x) + (due < start ? ", overdue: taken in week 1" : ", usually paid in " + days + " days"));
     }));
     // the same payment month after month: salaries, rent, EMIs and the like
     const last4 = [0, 1, 2, 3].map(k => { const d = new Date(Audit.iso(to) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() - k); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0"); });
@@ -377,14 +708,16 @@ Object.assign(MIS, {
     });
     // tax on fixed dates: GST on the 20th, TDS on the 7th, from the last months in the books
     const lastM = this.monthsOf(this.shift(to, 0, -89), to).slice(-3);
-    const gst = lastM.map(mm => { try { const t = GSTR.threeB(mm, ""); return Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)); } catch (e){ return 0; } });
+    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)), 0)); } catch (e){ return 0; } });
     const tds = lastM.map(mm => TDS.rows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0) + TDS.salaryRows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0));
     for (let k = 0; k < 4; k++){
       const d = new Date(Audit.iso(start) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() + k);
       const ym2 = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0");
       const g = k === 0 && gst.length ? gst[gst.length - 1] : this.median(gst) || 0, t2 = k === 0 && tds.length ? tds[tds.length - 1] : this.median(tds) || 0;
       if (g) put(ym2 + "20", -r2(g), "GST", "GSTR-3B", k === 0 ? "last month's tax payable in cash" : "the usual month");
-      if (t2) put(ym2 + "07", -r2(t2), "TDS", "TDS deposit", k === 0 ? "last month's deductions" : "the usual month");
+      // TDS deducted in March is due on 30 April, not 7 April (rule 30(2); as MIS.dues has it): review of 02-Oct-2026, the
+      // fixture books' March TDS of 2,000 sat in week 1 of a forecast from 1 April
+      if (t2) put(ym2 + (ym2.slice(4) === "04" ? "30" : "07"), -r2(t2), "TDS", "TDS deposit", k === 0 ? "last month's deductions" : "the usual month");
     }
     let run = bal != null ? bal : null;
     weeks.forEach(w => { w.net = r2(w.inn - w.out); if (run != null){ w.open = run; run = r2(run + w.net); w.close = run; } w.items.sort((a, c) => a.d.localeCompare(c.d) || a.what.localeCompare(c.what) || String(a.who).localeCompare(String(c.who))); });
@@ -396,17 +729,32 @@ Object.assign(MIS, {
     const rev = (r.pl.heads.rev || {t: 0}).t, pc = (a, c) => c ? Math.round(a / c * 1000) / 10 : null;
     const out = [["Gross margin", pc(r.pl.gross.t, rev), "%", "gross profit \u00f7 revenue"], ["Operating margin (before interest and depreciation)", pc(r.pl.ebitda.t, rev), "%", ""], ["Net margin (before tax)", pc(r.pl.pbt.t, rev), "%", ""],
       ["Employee costs to revenue", pc((r.pl.heads.emp || {t: 0}).t, rev), "%", ""], ["Other expenses to revenue", pc((r.pl.heads.exp || {t: 0}).t, rev), "%", ""],
-      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"], ["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"],
+      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"]].concat(
+      // no purchases (a service firm's bills are expenses), no "days of purchases" (review of 02-Oct-2026)
+      r.goods === false || (r.goods == null && !r.purchases.total) ? [] : [["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"]]).concat([
       ["Sales growth on the previous period", r.prev && r.prev.sales ? pc(r.sales.total - r.prev.sales, r.prev.sales) : null, "%", ""],
-      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]];
+      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]]);
     if (balTo){
-      const A = Audit, g = re => Object.entries(balTo).filter(([l]) => A.under(l, re)).reduce((s2, [, v]) => s2 + v, 0);
-      const ca = -g(/^(current assets|sundry debtors|cash-in-hand|bank accounts|stock-in-hand|loans & advances \(asset\)|deposits \(asset\))$/i);
-      const cl = g(/^(current liabilities|sundry creditors|duties & taxes|provisions|bank od a\/c|bank occ a\/c)$/i);
-      const debt = g(/^(loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c)$/i), eq = g(/^(capital account|reserves & surplus)$/i) + r.pl.pat.t;
-      const liquid = ca + g(/^stock-in-hand$/i);
-      out.push(["Current ratio", cl ? Math.round(ca / cl * 100) / 100 : null, "times", "current assets \u00f7 current liabilities"], ["Quick ratio", cl ? Math.round(liquid / cl * 100) / 100 : null, "times", "without stock"],
-        ["Debt to equity", eq ? Math.round(debt / eq * 100) / 100 : null, "times", "borrowings \u00f7 capital and reserves"],
+      // review of 02-Oct-2026: the current ratio showed -11.17 times beside working capital of +1,55,35,238.49, the
+      // liabilities' groups netting to a debit (tax paid in advance, suppliers paid ahead). Each ledger is placed as the
+      // Accounts tab places it (FS.place: a debit balance under liabilities is an asset, a credit under assets a
+      // liability), and assets and liabilities are taken as positive amounts; a ratio that still comes out negative or
+      // with nothing to divide by is "not meaningful", never a negative number
+      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0};
+      ["ci", "inv", "tr", "cash", "stla", "oca"].forEach(k => { CA[k] = 1; }); ["stb", "tp", "ocl", "stp"].forEach(k => { CL[k] = 1; });
+      Object.entries(balTo).forEach(([l, v]) => {
+        v = num(v); if (Math.abs(v) < 0.005) return;
+        if (typeof FS === "undefined" || FS.nature(l).rev) return;
+        const k = FS.place(l, v, "co");
+        if (CA[k]){ at.ca += -v; if (k === "inv") at.stock += -v; }
+        else if (CL[k]) at.cl += v;
+        if (k === "ltb" || k === "stb") at.debt += v;
+        if (k === "share" || k === "reserves" || k === "capital") at.eq += v;
+      });
+      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + r.pl.pat.t);
+      const NM = "not meaningful", times = (a, c) => !(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100;
+      out.push(["Current ratio", times(ca, cl), "times", "current assets " + INR.format(ca) + " \u00f7 current liabilities " + INR.format(cl)], ["Quick ratio", times(liquid, cl), "times", "without stock"],
+        ["Debt to equity", !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100, "times", "borrowings \u00f7 capital and reserves"],
         ["Interest cover", (r.pl.heads.fin || {t: 0}).t ? Math.round(r.pl.ebitda.t / r.pl.heads.fin.t * 10) / 10 : null, "times", "operating profit \u00f7 finance costs"],
         ["Working capital", r2(ca - cl), "\u20b9", "current assets less current liabilities"]);
     }
@@ -428,13 +776,17 @@ Object.assign(MIS, {
       return {reg: rg, gstin: ((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === rg), sales, purch, m, gstPay: r2(gst.reduce((a, x) => a + x, 0)), months};
     });
   },
-  // profit by cost centre: every income and expense line allocated in Tally
+  // profit by cost centre: every income and expense line allocated in Tally. Review of 02-Oct-2026: the heads and the
+  // set-off of an expense head in credit are the profit and loss's own (MIS.plRule), so income and expenses, allocated
+  // or not, come to the profit and loss's totals. What a head in credit sends to Other income, and the set-off that
+  // leaves the head nil, belong to no cost centre: they are with what is not allocated
   costCentres(from, to){
-    const cc = {}, un = {inc: 0, exp: 0};
+    const cc = {}, un = {inc: 0, exp: 0}, c = typeof FS !== "undefined" ? FS.cfg(S.books) : null, R = this.plRule(from, to, c), hd = {};
+    R.rows.forEach(r => { hd[r.l] = r.h; });
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       v.ent.forEach(e => {
-        const h = this.head(e.l); if (!h) return;
+        const h = hd[e.l]; if (!h) return;
         const inc = h === "rev" || h === "oth", sign = inc ? 1 : -1;
         const alloc = (e.c || []);
         let done = 0;
@@ -449,6 +801,8 @@ Object.assign(MIS, {
         if (Math.abs(rest) >= 0.01){ if (inc) un.inc = r2(un.inc + rest); else un.exp = r2(un.exp + rest); }
       });
     });
+    const setOff = r2(R.set.reduce((a, z) => a + z.t, 0)), moved = r2(R.moved.reduce((a, z) => a + z.t, 0));
+    un.exp = r2(un.exp + setOff); un.inc = r2(un.inc + moved); un.setOff = setOff; un.moved = moved;
     const rows = Object.values(cc).map(x => Object.assign(x, {profit: r2(x.inc - x.exp), margin: x.inc ? Math.round((x.inc - x.exp) / x.inc * 1000) / 10 : null})).sort((a, c) => c.inc - a.inc || c.exp - a.exp || a.name.localeCompare(c.name));
     const allInc = rows.reduce((s2, x) => s2 + x.inc, 0) + un.inc, allExp = rows.reduce((s2, x) => s2 + x.exp, 0) + un.exp;
     return {rows, un, cover: {inc: allInc ? Math.round((allInc - un.inc) / allInc * 1000) / 10 : null, exp: allExp ? Math.round((allExp - un.exp) / allExp * 1000) / 10 : null}, cats: Array.from(new Set(rows.map(x => x.cat))).sort(), read: !!(S.books.meta || {}).cc};
@@ -478,7 +832,7 @@ Object.assign(Audit.checks, {
     const msme = MIS.msme(), days = MIS.cfg(S.books).msmeDays, ag = MIS.ageing(ctx.to, "p", null), rows = [];
     ag.rows.forEach(p => {
       if (!/micro|small/i.test(msme[p.party] || "")) return;
-      p.bills.filter(x => x.ref && x.amt > 0 && x.hasNew && x.age > days).forEach(x => rows.push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.amt,
+      (p.open || []).filter(x => x.age > days).forEach(x => rows.push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,
         note: x.age + " days unpaid on " + fmtDate(tallyDate(ctx.to))}));
     });
     if (!rows.length) return null;
@@ -646,7 +1000,13 @@ Object.assign(LedMaster, {
   POST_SLOTS: [["gst.cgst", "Input CGST"], ["gst.sgst", "Input SGST"], ["gst.igst", "Input IGST"], ["gst.rcmCgstIn", "Reverse charge CGST, credit"], ["gst.rcmSgstIn", "Reverse charge SGST, credit"], ["gst.rcmIgstIn", "Reverse charge IGST, credit"],
     ["gst.rcmCgstOut", "Reverse charge CGST, payable"], ["gst.rcmSgstOut", "Reverse charge SGST, payable"], ["gst.rcmIgstOut", "Reverse charge IGST, payable"], ["roundOff", "Round off"]],
   getSlot(co, k){ const [a, c] = k.split("."); return c ? ((co[a] || {})[c] || "") : (co[a] || ""); },
-  setSlot(co, k, v){ const [a, c] = k.split("."); if (c){ co[a] = co[a] || {}; co[a][c] = v; } else co[a] = v; },
+  // review 20: a slot that is a choice (GST, reverse charge, TDS ledgers) is filled by FinCom only as a guess, never over a
+  // confirmed one; "Use it" pressed by a person confirms it (src/js/60)
+  setSlot(co, k, v, person){
+    const [a, c] = k.split("."), ck = a === "gst" && c ? "gst:" + c : a === "tdsLedgers" && c ? "tds:" + c : "";
+    if (ck && typeof choiceGuess === "function"){ if (person) choiceConfirm(co, ck, v, {nosave: true}); else choiceGuess(co, ck, v, "confirmed in the ledger master"); return; }
+    if (c){ co[a] = co[a] || {}; co[a][c] = v; } else co[a] = v;
+  },
   posting(b, co){
     const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), reg = String(co.gstin || "").slice(0, 2) || regs[0] || "";
     const ok = Object.entries(b.map || {}).filter(([, m]) => m.ok);
@@ -668,7 +1028,7 @@ Object.assign(LedMaster, {
   // "empty" also covers the standard names a new client starts with, when no such ledger is in its Tally
   applyPosting(b, co, only){
     let n = 0;
-    this.posting(b, co).forEach(x => { if (x.from && x.from !== x.now && (!only || only === x.k || (only === "empty" && (!x.now || !(b.ledInfo || {})[x.now] && !(b.map || {})[x.now])))){ this.setSlot(co, x.k, x.from); n++; } });
+    this.posting(b, co).forEach(x => { if (x.from && x.from !== x.now && (!only || only === x.k || (only === "empty" && (!x.now || !(b.ledInfo || {})[x.now] && !(b.map || {})[x.now])))){ this.setSlot(co, x.k, x.from, only !== "empty"); n++; } });
     if (n) Store.saveCompany(co);
     return n;
   },

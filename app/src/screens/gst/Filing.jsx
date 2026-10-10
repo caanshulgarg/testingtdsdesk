@@ -3,6 +3,7 @@
 // set-off journal for Tally. Also GSTR-1A, under Amendments. Were viewGstFiling and viewGstr1a (src/js/35); the
 // figures are GSTF (35); what is typed goes through gstfSet, gstfSnap, gstfJournal, gst1aJson (35).
 import CommitBox from "../../parts/CommitBox.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => GSTAmend.dmy(String(s || "").replace(/-/g, ""));
@@ -28,11 +29,11 @@ const Flag = ({ on, children }) => <div className="dash-row"><span>{children}</s
 
 function Rule37({ b, reg, r }) {
   const on = !!((b.rule37On || {})[reg]);
-  const Rows = ({ list, inTb }) => list.map((x, i) => <tr key={inTb + i}><td>{x.party}</td><td>{x.ref}</td><td>{fmtDate(tallyDate(x.date))}</td><td>{x.why}</td><td className="n">{money(x.tax)}</td><td>{inTb}</td></tr>);
+  const rows = (list, inTb) => list.map((x, i) => <tr key={inTb + i}><td>{x.party}</td><td>{x.ref}</td><td>{fmtDate(tallyDate(x.date))}</td><td>{x.why}</td><td className="n">{money(x.tax)}</td><td>{inTb}</td></tr>);
   return <>
     <H4>Rule 37: suppliers unpaid after 180 days</H4><p className="note">{on ? "On for this GSTIN" : "Off for this GSTIN"} · <SetLink /></p>
-    {on && <>{r && (r.rev.n || r.re.n) ? <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Supplier</th><th>Bill</th><th className="dt">Date</th><th>Why</th><th className="n">Tax</th><th>In 3B</th></tr></thead>
-      <tbody><Rows list={r.rev.list} inTb="4(B)(2) reversed" /><Rows list={r.re.list} inTb="4(A)(5) and 4(D)(1) reclaimed" /></tbody></table></div>
+    {on && <>{r && (r.rev.n || r.re.n) ? <ListRows name="rule37" className="bk-table compact" unit={["bill", "bills"]} head={[{ label: "Supplier", role: "party" }, { label: "Bill", role: "number" }, { label: "Date", role: "date", cls: "dt" }, { label: "Why" }, { label: "Tax", role: "amount", cls: "n" }, { label: "In 3B", role: "status" }]}>
+      {rows(r.rev.list, "4(B)(2) reversed")}{rows(r.re.list, "4(A)(5) and 4(D)(1) reclaimed")}</ListRows>
       : <p className="note">No bill reaches 180 days unpaid this month, and none reversed earlier was paid.</p>}
       <p className="note">Only bills kept bill-wise in Tally can be followed. Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p></>}
   </>;
@@ -65,7 +66,7 @@ export function Filing({ b, t }) {
   const est = !!b.gstEst;
   return (
     <Card title="Filing, interest and late fee">
-      <div className="bk-tablewrap"><table className="bk-table compact">
+      <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
         <thead><tr><th>Return</th><th>Due</th><th>Filed on</th>{est && <><th className="n">Days late</th><th className="n">Late fee, estimate</th></>}<th className="n">Late fee, from the portal</th></tr></thead>
         <tbody>
           <ReturnRow label="GSTR-1" nil={nil1} due={f1.due || GSTF.due(ym, "r1", reg)} k="r1" rec={rec} f={f1} feeKey="portalFee1" est={est} />
@@ -104,8 +105,8 @@ export function Gstr1a({ ym, reg }) {
   if (!n) return card(<>{intro}<p className="note">{c.kept ? "A GSTR-1A was made for this month and the books now agree with it." : "Nothing to put in GSTR-1A: the books agree with the GSTR-1 filed."}</p></>);
   return card(<>
     {intro}
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th>Customer</th><th>What changes</th></tr></thead>
-      <tbody>{r.rows.map((x, i) => { const d = x.now || x.was || {}; return <tr key={i}><td>{KIND_1A[x.kind] || x.kind}</td><td>{d.num || (x.b2cs ? "place " + x.b2cs.pos + ", " + x.b2cs.rt + "%" : "")}</td><td>{d.ctin || ""}</td><td>{(x.changes || []).join("; ")}</td></tr>; })}</tbody></table></div>
+    <ListRows name="gstr1a" className="bk-table compact" unit={["document", "documents"]} head={[{ label: "Document" }, { label: "Number", role: "number" }, { label: "Customer", role: "party" }, { label: "What changes", role: "status" }]}>
+      {r.rows.map((x, i) => { const d = x.now || x.was || {}; return <tr key={i}><td>{KIND_1A[x.kind] || x.kind}</td><td>{d.num || (x.b2cs ? "place " + x.b2cs.pos + ", " + x.b2cs.rt + "%" : "")}</td><td>{d.ctin || ""}</td><td>{(x.changes || []).join("; ")}</td></tr>; })}</ListRows>
     <div className="row" style={{ gap: 8, marginTop: 8 }}><button className="btn small primary" onClick={() => gst1aJson()}>Download GSTR-1A JSON ({n})</button></div>
     <p className="note">Downloading keeps a copy, so the next GSTR-1 does not report these again. This is a first version: check it opens in the offline tool, and send me a GSTR-1A JSON exported from the portal so the layout can be matched exactly.</p>
   </>);

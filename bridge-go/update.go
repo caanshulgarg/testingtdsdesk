@@ -1,4 +1,5 @@
-// Updates from FinCom. The list of updates (latest.json) is signed by FinCom with the same key as the FinCom Connector's
+// Updates from FinCom. 2.1.5: an update is installed only when FinCom's heartbeat answer allows that version on this
+// computer (release: {version, allowed}; see setRelease below). The list of updates (latest.json) is signed by FinCom with the same key as the FinCom Connector's
 // (RSA, SHA-256; latest.json.sig): a list without a good signature is refused. The new program must match the SHA-256
 // in the list, and, when the list asks for it (requireSignature) or the settings do (RequireSignedUpdates), carry a valid
 // Windows code signature: ready for when the program is signed. The service puts the new program in place and starts
@@ -6,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -17,6 +19,9 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -133,6 +138,12 @@ func checkForUpdate(now bool) M {
 		setUpd("message", "This is the newest FinCom Bridge ("+BridgeVersion+").")
 		return updateInfo()
 	}
+	// only the version FinCom allowed this computer (nothing is downloaded otherwise)
+	if why := releaseRefuses(ver); why != "" {
+		setUpd("message", "Version "+ver+" is available but not approved for this computer yet ("+why+"); nothing was changed.")
+		writeLog("Update " + ver + ": FinCom has not approved it for this computer yet (" + why + "); nothing changed")
+		return updateInfo()
+	}
 	if !strings.HasPrefix(u, "https://") && !(os.Getenv("FINCOM_TEST") == "1") {
 		setUpd("message", "The update's address is not secure, so it was not used.")
 		return updateInfo()
@@ -157,16 +168,22 @@ func checkForUpdate(now bool) M {
 	}
 	exe, _ := os.Executable()
 	writeLog("Update: putting FinCom Bridge " + ver + " in place of " + BridgeVersion)
-	if err := applyUpdate(exe, exeB); err != nil {
+	if err := applyUpdateFn(exe, exeB); err != nil {
 		setUpd("message", "The update could not be put in place: "+err.Error())
 		writeLog("Update " + ver + " could not be put in place: " + err.Error())
 		return updateInfo()
 	}
 	setUpd("applying", true)
 	setUpd("message", "Updating to "+ver+"; the bridge starts again in a few seconds.")
-	go func() { time.Sleep(time.Second); requestStop(3) }()
+	go restartAfterUpdate()
 	return updateInfo()
 }
+
+// putting the new program in place and starting again (the tests put their own)
+var (
+	applyUpdateFn      = applyUpdate
+	restartAfterUpdate = func() { time.Sleep(time.Second); requestStop(3) }
+)
 
 func updateLoop() {
 	sleepOrStop(2 * time.Minute)
@@ -179,4 +196,294 @@ func updateLoop() {
 		}
 		sleepOrStop(time.Duration(keepNum("UpdateCheckHours", 6)) * time.Hour)
 	}
+}
+
+// --- the release: FinCom's heartbeat answer says what this computer may take. The owner's rule of 05-Oct-2026 (migration
+// 54): release: {newest: true, allowed: true, held: [versions]}: the newest version on FinCom's signed list goes to every
+// computer by itself, unless the firm's owner held it (or withdrew it); release: {version, allowed: true, rollback: true}:
+// the owner rolled the bridge back to that version (ownerRollback below; nothing newer installs meanwhile). An older
+// cloud's release: {version, allowed} (plan item 12, the staged release) works as before. Without a release in the last
+// answer (none named, an older cloud, or no answer yet) nothing is installed
+var (
+	relMu   sync.Mutex
+	relNow  M // {version, allowed} from the last heartbeat answer; nil: none
+	relSeen bool
+)
+
+func setRelease(rel M, seen bool) {
+	relMu.Lock()
+	relNow, relSeen = rel, seen
+	relMu.Unlock()
+}
+
+// from the heartbeat's answer: its release, or none; the owner's rollback acted on (ownerRollback)
+func applyRelease(j M) {
+	if j == nil {
+		return
+	}
+	setRelease(obj(j["release"]), true)
+	ownerRollback(obj(j["release"]))
+}
+
+// the owner's rule of 05-Oct-2026: the firm's owner rolled FinCom Bridge back to a version (FinCom's Tally page; the beat
+// says release: {version, allowed: true, rollback: true}). A bridge newer than that version which keeps exactly it as its
+// previous program puts it back, as the tray's "Roll back to the previous version" does (automatic updates stay on: the
+// owner's rollback holds newer versions back until the owner clears it); one that keeps another version (or none) stays
+// as it is, takes no newer version, and says so once. Tried once a version while the bridge runs
+var rollbackDone = map[string]bool{}
+
+func ownerRollback(rel M) {
+	if rel == nil || !truthy(rel["rollback"]) || !truthy(rel["allowed"]) {
+		return
+	}
+	v := str(rel["version"])
+	if !reBridgeVersion.MatchString(v) || v == BridgeVersion || !newerVersion(BridgeVersion, v) {
+		return
+	}
+	relMu.Lock()
+	done := rollbackDone[v]
+	rollbackDone[v] = true
+	relMu.Unlock()
+	if done {
+		return
+	}
+	pv := readObjFile(filepath.Join(filepath.Dir(exePathFn()), "previous-version.json"))
+	if str(pv["version"]) != v {
+		writeLog("The firm's owner rolled FinCom Bridge back to " + v + " (FinCom's Tally page), but this computer keeps " + or(str(pv["version"]), "no earlier version") +
+			" for a rollback, so it stays on " + BridgeVersion + " and takes no newer version. To go back to " + v + " here, run the setup of " + v + ".")
+		return
+	}
+	if _, err := rollBackBridgeBy("owner"); err != nil {
+		writeLog("The firm's owner rolled FinCom Bridge back to " + v + ", but it could not be put back: " + err.Error())
+	}
+}
+
+// "" when version may be installed on this computer; else why not
+func releaseRefuses(version string) string {
+	relMu.Lock()
+	rel, seen := relNow, relSeen
+	relMu.Unlock()
+	switch {
+	case !seen:
+		return "FinCom has not answered this computer yet"
+	case rel == nil:
+		return "FinCom names no release for this computer"
+	// the owner's rule of 05-Oct-2026: the owner's rollback holds every other version back
+	case truthy(rel["rollback"]) && str(rel["version"]) != version:
+		return "the firm's owner rolled FinCom Bridge back to " + str(rel["version"]) + " on FinCom's Tally page"
+	// the newest version goes to every computer by itself, unless the firm's owner held it
+	case truthy(rel["newest"]) && !truthy(rel["rollback"]):
+		for _, h := range arr(rel["held"]) {
+			if str(h) == version {
+				return "the firm's owner has held version " + version + " on FinCom's Tally page"
+			}
+		}
+		if !truthy(rel["allowed"]) {
+			return "FinCom has not allowed it on this computer"
+		}
+		return ""
+	case str(rel["version"]) != version:
+		return "FinCom names version " + str(rel["version"]) + " for this computer, not " + version
+	case !truthy(rel["allowed"]):
+		return "FinCom has not allowed it on this computer yet (the pilot computer takes a new version first; the others after the owner approves it)"
+	}
+	return ""
+}
+
+// --- 2.2.0: "Roll back to the previous version" (the tray, for anyone at the computer; it asks yes/no first). An update
+// that ran well keeps the program it replaced as FinComBridge.previous.exe (one, the latest; before 2.2.0 it was
+// deleted), with its version in previous-version.json. The rollback puts it back the way an update that does not start
+// is undone (win_service.go undoFailedUpdate): the running program renamed aside (FinComBridge.rolledback.exe), the
+// previous one put in its place, then the bridge starts again. Automatic updates are turned off on this computer
+// (NoAutoUpdate), else the previous version would take the newer one again at once. (putBackOldBridge, the uninstall's
+// step, puts back bridge 1.15.0's TDSBridge.ps1; it is not this.)
+var (
+	exePathFn       = func() string { e, _ := os.Executable(); return e }
+	rollbackRestart = func() { time.Sleep(time.Second); requestStop(3) }
+)
+
+func previousExe(dir string) string { return filepath.Join(dir, "FinComBridge.previous.exe") }
+
+// the SHA-256 of a file as hex ("" when it cannot be read)
+func fileSHA256(f string) string {
+	b, err := os.ReadFile(f)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}
+
+// after an update ran well (updateHealth): FinComBridge.old.exe kept as FinComBridge.previous.exe, with the SHA-256 the
+// update recorded while that program was the running one (update-pending.json, review H2)
+func keepPreviousVersion(dir, from string) {
+	pend := readObjFile(filepath.Join(dir, "update-pending.json"))
+	sum := str(pend["sha256"])
+	if truthy(pend["rollback"]) {
+		// round 2 R2-7: after a rollback the program left is the newer one: not kept as "the previous version"
+		_ = os.Remove(filepath.Join(dir, "FinComBridge.old.exe"))
+		writeLog("Rollback: the version rolled back from (" + or(from, "not known") + ") is not kept as the previous version")
+		return
+	}
+	old := filepath.Join(dir, "FinComBridge.old.exe")
+	if !exists(old) {
+		return
+	}
+	prev := previousExe(dir)
+	_ = os.Remove(prev)
+	if err := os.Rename(old, prev); err != nil {
+		_ = os.Remove(old)
+		writeLog("Update: the previous version could not be kept for a rollback: " + err.Error())
+		return
+	}
+	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": from, "at": nowS(), "sha256": sum}))
+	writeLog("Update: the previous version (" + or(from, "not known") + ") is kept for \"Roll back to the previous version\"")
+}
+
+// the tray's yes/no: the version it would go back to
+func rollbackPreview() (M, error) {
+	exe := exePathFn()
+	dir := filepath.Dir(exe)
+	fi, err := os.Lstat(previousExe(dir))
+	if exe == "" || err != nil || !fi.Mode().IsRegular() {
+		return nil, errors.New("No previous version is kept on this computer (one is kept from the next update on).")
+	}
+	pv := readObjFile(filepath.Join(dir, "previous-version.json"))
+	v := str(pv["version"])
+	// review H2: the kept program must be the one recorded when it was kept (its SHA-256), and signed when updates must be
+	if want := str(pv["sha256"]); want == "" || fileSHA256(previousExe(dir)) != want {
+		return nil, errors.New("The kept previous version has changed since it was kept (or was kept without its fingerprint), so it is not put back. Nothing was changed. Run the setup of the version you want instead.")
+	}
+	if cfgB("RequireSignedUpdates") {
+		b, _ := os.ReadFile(previousExe(dir))
+		if err := checkCodeSignature(b); err != nil {
+			return nil, errors.New("The kept previous version is not signed by FinCom (" + err.Error() + "), so it is not put back. Nothing was changed.")
+		}
+	}
+	return M{"ok": true, "version": v, "confirm": "Roll FinCom Bridge back from " + BridgeVersion + " to " + or(v, "the previous version") + "?\n\n" +
+		"The bridge stops, the previous program is put back and starts in a few seconds. Automatic updates are turned off on this computer until FinCom support turns them on again. " +
+		"A posting going on resumes after the restart; nothing is posted twice."}, nil
+}
+
+func rollBackBridge() (M, error) { return rollBackBridgeBy("tray") }
+
+// by: "tray" (anyone at the computer: automatic updates are then turned off) or "owner" (the firm's owner on FinCom's
+// Tally page: they stay on, the owner's rollback holds newer versions back)
+func rollBackBridgeBy(by string) (M, error) {
+	pv, err := rollbackPreview()
+	if err != nil {
+		return nil, err
+	}
+	exe := exePathFn()
+	dir := filepath.Dir(exe)
+	// review H2: set up as an update: the running program goes aside as FinComBridge.old.exe with update-pending.json,
+	// so a previous version that does not start is undone by undoFailedUpdate (three starts) and this one comes back;
+	// a copy stays as FinComBridge.rolledback.exe
+	// round 2 R2-8: the kept program is moved to a private name first, hashed there, and put in place only if it matches
+	pv0 := readObjFile(filepath.Join(dir, "previous-version.json"))
+	chk := filepath.Join(dir, "FinComBridge.rollback-check.exe")
+	_ = os.Remove(chk)
+	if err := os.Rename(previousExe(dir), chk); err != nil {
+		return nil, errors.New("The kept previous version could not be taken: " + err.Error())
+	}
+	if fileSHA256(chk) != str(pv0["sha256"]) {
+		_ = os.Rename(chk, previousExe(dir))
+		return nil, errors.New("The kept previous version has changed since it was kept, so it is not put back. Nothing was changed.")
+	}
+	old := filepath.Join(dir, "FinComBridge.old.exe")
+	cur := fileSHA256(exe)
+	_ = os.Remove(old)
+	if err := os.Rename(exe, old); err != nil {
+		_ = os.Rename(chk, previousExe(dir))
+		return nil, errors.New("The program could not be moved aside: " + err.Error())
+	}
+	if err := os.Rename(chk, exe); err != nil {
+		_ = os.Rename(old, exe)
+		_ = os.Rename(chk, previousExe(dir))
+		return nil, errors.New("The previous version could not be put back: " + err.Error())
+	}
+	if b, err := os.ReadFile(old); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "FinComBridge.rolledback.exe"), b, 0o755)
+	}
+	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "rollback": true, "sha256": cur}))
+	_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": str(pv["version"]), "at": nowS(), "by": by}))
+	if by == "owner" {
+		writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " by the firm's owner (FinCom's Tally page); starting again")
+	} else {
+		setCfg("NoAutoUpdate", true)
+		saveConfig()
+		writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " from the tray icon; automatic updates are off on this computer (NoAutoUpdate); starting again")
+	}
+	go rollbackRestart()
+	return M{"ok": true, "version": str(pv["version"])}, nil
+}
+
+// 2.2.0, round 2 R2-4: the setup's copy of the program it replaced. The setup copies FinComBridge.exe to
+// FinComBridge.previous.new and keeps the replaced program as FinComBridge.setup-old.exe; the install step (this) takes
+// the copy only when its SHA-256 equals the replaced program's (a whole copy), the replaced program is not the one now
+// installed (a reinstall of the same program keeps the kept pair), and the replaced program's own version can be read
+// (it is asked: "FinComBridge.exe version"; the registry is not trusted). Only then the kept pair (previous.exe and
+// previous-version.json) is replaced; otherwise it stays as it was. Both temporary files go either way
+var exeVersionFn = func(path string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, path, "version")
+	hideWindow(c)
+	out, err := c.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+var reBridgeVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+func notePreviousFromSetup(dir string) {
+	nw, old, cur := filepath.Join(dir, "FinComBridge.previous.new"), filepath.Join(dir, "FinComBridge.setup-old.exe"), filepath.Join(dir, "FinComBridge.exe")
+	defer func() { _ = os.Remove(nw); _ = os.Remove(old) }()
+	if !exists(nw) {
+		return
+	}
+	h := fileSHA256(nw)
+	switch {
+	case h == "" || h != fileSHA256(old):
+		installLogFn("Install: the copy of the program replaced is not whole (its fingerprint differs); the version kept for a rollback is left as it was")
+		return
+	case h == fileSHA256(cur):
+		return // the same program installed again: the kept pair stays
+	}
+	v := exeVersionFn(old)
+	if v == BridgeVersion {
+		// round 3 R3-3: another build of the same version (not the same bytes): not a version to roll back to
+		installLogFn("Install: the program replaced is the same version (" + v + ") as the one installed, another build of it: it is not kept for a rollback; the version kept is left as it was")
+		return
+	}
+	if !reBridgeVersion.MatchString(v) {
+		installLogFn("Install: the version of the program replaced could not be read (" + or(v, "no answer") + "); the version kept for a rollback is left as it was")
+		return
+	}
+	if err := os.Rename(nw, previousExe(dir)); err != nil {
+		installLogFn("Install: the program replaced could not be kept for a rollback: " + err.Error())
+		return
+	}
+	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": v, "at": nowS(), "by": "setup", "sha256": h}))
+	installLogFn("Install: FinCom Bridge " + v + " is kept for \"Roll back to the previous version\"")
+}
+
+// the install log (win_service.go installLog) where there is one; the bridge's log otherwise
+var installLogFn = func(s string) { writeLog(s) }
+
+// --- review S4: whether automatic updates are on, and the last rollback, go in the beat; FinCom's answer (the owner's
+// action, autoUpdateOn: true, top-level or in release) turns them on again
+func autoUpdateBeat() (bool, M) {
+	return !cfgB("NoAutoUpdate"), readObjFile(filepath.Join(filepath.Dir(exePathFn()), "update-undone.json"))
+}
+
+func applyAutoUpdateOn(j M) {
+	if j == nil || !(truthy(j["autoUpdateOn"]) || truthy(obj(j["release"])["autoUpdateOn"])) || !cfgB("NoAutoUpdate") {
+		return
+	}
+	setCfg("NoAutoUpdate", false)
+	saveConfig()
+	writeLog("Automatic updates turned on again by FinCom (the owner's choice on the Tally page)")
 }

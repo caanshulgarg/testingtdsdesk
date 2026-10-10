@@ -1,0 +1,76 @@
+FINCOM BRIDGE 2.1.8 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.8.exe
+Fingerprint: SHA-256 12b647ad5accdf8f35d93add17457e2dd4b19a356a86a631b6a92772e5f58605 (FinComBridge-Setup-2.1.8.exe; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.8.exe
+(2.1.7 is installed on NWS144. Install 2.1.8 over it; the installer replaces the program and keeps the pairing, the
+ settings and the copy.)
+
+What is new in 2.1.8 (over 2.1.7) - the owner's decision of 03-Oct-2026
+  - Posting is fast and is never held by a read-back. Tally's import reply is trusted; no voucher id is ever inferred.
+    During a posting Tally sees ONE company check (name and GUID, before anything is sent), the master imports and the
+    voucher imports, nothing else: no duplicate check against Tally, no tag read-back, no voucher-id lookup, no
+    "being checked in Tally" cycle. Those requests stay in the program for the Day Book read test and for Check Tally
+    (started by a person in FinCom), never from a posting.
+  - Tally's reply decides. CREATED + ALTERED equal to the request's size, no error, no exception, no LINEERROR: every
+    entry of that request is "posted" (by Tally's reply; verified: false). Anything else: every entry of that request
+    "needs review", with Tally's counts and words in one line ("Tally's reply: created 3 of 5, exceptions 2: ...").
+    Entries Tally accepted (created or altered above 0) are recorded on this computer as sent and are never sent again
+    by this bridge; nothing is retried by the bridge; the next request of the posting still goes. No answer from Tally
+    on an import: the entries are "unknown", recorded as sent, no checking starts (Check Tally or the next comparison
+    of the books settles it).
+  - Bills go to Tally in requests of 10 vouchers (PostBatchBills), bank lines in requests of 50 (PostBatchBank), each
+    request one envelope with one TALLYMESSAGE; masters one per request as before. FinCom's cloud can set the two
+    sizes and the PostOnly list through the heartbeat (kept in the settings file, so they survive a restart; the log
+    says "Settings from FinCom: ...").
+  - Timing in the log: one line per request, "Posting job <id>: request k of K: N vouchers in S.s s (created C,
+    altered A, exceptions E, ignored I, last Tally id N)", and at the end "Posting job <id>: K requests, N vouchers,
+    T s total". FinCom's Tally page sees the same per-request numbers.
+  - The duplicate check is this computer's own record only (sync\posted-ids.json): an id already sent from this
+    computer is refused "already sent from this computer on <date> (Tally id N)" before anything goes to Tally.
+    FinCom's cloud refuses a bill that is already posted when it is queued.
+
+0. BEFORE THE INSTALL
+   Nothing to press in FinCom. Background reading may stay paused (the installer keeps that setting). TallyPrime open
+   with ZZ TEST.
+
+1. DOWNLOAD AND INSTALL OVER 2.1.7
+   Do: open the Link, check the fingerprint if you can (PowerShell: Get-FileHash <file>). Double-click the setup;
+       "Windows protected your PC" > More info > Run anyway; "Just for me" (as 2.1.7); Next.
+   You should see: "FinCom Bridge 2.1.8 is installed and running", "Main bridge: reading and posting". Not asked to
+       pair again. Right-click the icon > Status shows version 2.1.8.
+   Then: in FinCom (staging), All clients > Tally, this computer's line shows version 2.1.8.
+   If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish; a screenshot of
+       the Tally page line.
+
+2. ZZ TEST: ONE BILL
+   Do: in FinCom, ZZ TEST, post one approved bill (or the owner button that makes test copies, with N = 1).
+   You should see: the bill "Posted" within seconds (no "being checked"); ONE voucher in TallyPrime's Day Book, its
+       narration beginning "TDSDesk:<id> | ...".
+   Then: icon > Show log; copy the line "Posting job <id>: request 1 of 1: 1 vouchers in S.s s (created 1, ...)" and
+       the line "Posting job <id>: 1 requests, 1 vouchers, T s total".
+
+3. ZZ TEST: 10, THEN 50, THEN 100 BILLS
+   Do: the owner button that makes N test copies of a bill on ZZ TEST: N = 10; post them. Then N = 50; post. Then
+       N = 100; post.
+   You should see: 10 bills -> one request of 10; 50 bills -> 5 requests of 10; 100 bills -> 10 requests of 10. Every
+       bill "Posted" when its request is answered (FinCom shows the progress after every request). The Day Book holds
+       exactly 10, 50 and 100 new vouchers (none twice).
+   Then: send me, for each of the four postings (1, 10, 50, 100), the "request k of K ... s" lines and the
+       "K requests, N vouchers, T s total" line. These are the numbers the batch size will be set from.
+   If a posting shows "needs review": send me its line "Tally's reply: ..." and the Day Book count of that date; do
+       NOT press Retry on it (the bridge refuses what it already sent; the cloud's Check Tally settles it).
+
+4. ZZ TEST: THE BANK BATCH (only if ZZ TEST has bank statement lines to post)
+   Do: on the bank page of ZZ TEST, post the lines (up to 60 if there are that many).
+   You should see: one request of up to 50 lines, then one of the rest ("request 1 of 2: 50 vouchers in ...").
+   Then: the log lines as in step 3.
+
+5. THE DAY BOOK READ TEST AGAIN
+   Do: ZZ TEST open in TallyPrime. Tray icon > Test reading from Tally. Wait for the message box.
+   Then: icon > Show log; copy the three lines that begin "Test reading from Tally:" and send them to me with the
+       TallyPrime release (Help > About). The same once more with GARG SHEKHAR & COMPANY open.
+
+6. NO UPDATE NOW until told. Background reading stays as it is. Postings are unaffected.
+
+7. CLEAN UP: nothing to do; 2.1.7's files are replaced by the installer. The test copies on ZZ TEST stay until told.

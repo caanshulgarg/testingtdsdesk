@@ -1,0 +1,49 @@
+-- Migration 57 (06-Oct-2026, FinCom Bridge 2.3.1 part A: "item invoices enter complete"). Runs AFTER 56 (fresh database:
+-- ... -> 55 -> 56 -> 57; staging: after 56). ADD-ONLY: no table, column, row or function removed; no statement in this file
+-- removes rows, not even in a comment; safe to run twice; one transaction (lock_timeout 10 s). Tables and columns added if
+-- missing; functions created or replaced. Nothing is rewritten by running it.
+--
+--   THE OWNER'S DECISIONS (06-Oct-2026). The entry request (bridge 2.3.1) fetches the whole entry; the cloud's reader
+--   (parse.js, one reader for the Day Book and the entry body) reads it; this file stores it:
+--     tally_vouchers + irn, irn_ack_no, irn_ack_date, eway_no      the e-invoice IRN and acknowledgement, the e-way bill number
+--                    + check_notes (jsonb, [] when none)           the accuracy checks' plain words (a Day Book entry is never
+--                                                                   refused: flagged here; a recorder body that fails is held
+--                                                                   by tally-ingest and never reaches the copy)
+--     tally_item_lines   one row per item line: item, quantity, unit, rate, taxable value, the HSN / SAC and GST rate Tally
+--                        applied to the line, CGST / SGST / IGST / cess (worked out from the line's rate and taxable value as
+--                        Tally does: Tally 7.1 writes no tax amount per item line; tax_basis says so)
+--     tally_cost_allocs  cost category and cost centre allocations, on ledger lines and on the ledger lines under items
+--     tally_bank_allocs  bank details on bank lines: transaction type, instrument number or UTR, instrument date, bank date
+--     tally_tds_lines    TDS details where present: nature of payment, section (Tally's own from the entry's bill-wise
+--                        detail TDSDEDUCTEESECTIONNUMBER, else the section written in the nature's name, else blank:
+--                        section_from says which), rate, assessable value, tax, the deductee and the deductee type
+--     tally_ledgers.tds_deductee_type   the party ledger master's TDSDEDUCTEETYPE (written by the ledger list once part B's
+--                        ledger request fetches it); tally_tds_details(book) (members of the firm) reads the current one
+--     tally_bills.due    a due date Tally keeps as a date (a credit period "15-Nov-2026"), besides the credit days (48)
+--   Each detail row carries its entry (guid), AlterID, day and line number (the line's place in the entry as parse.js reads
+--   it) and gone_at: a re-sent entry's earlier rows are marked gone (gone_at, kept as history), never removed. Readers take
+--   gone_at is null, and the entry's tally_vouchers.deleted_at is null. RLS: the firm's members read (my_firm()), as the
+--   neighbouring tables; written only by the entry path.
+--
+--   1. tally_ingest_details(p_book, p_vouchers, p_keep): writes the above for the entries just stored. An entry whose body
+--      carries no details (a reader before part A: no 'items' key) is left as it is. The Day Book (p_keep false) is
+--      authoritative: its values replace the stored ones, an empty list included. The recorder (p_keep true, migration 56's
+--      flag) never blanks a stored value: a blank IRN / acknowledgement / e-way bill keeps the stored one, an empty list
+--      keeps the stored rows; a value or rows sent replace them.
+--   2. tally_ingest_entries(p_book, p_vouchers, p_lines, p_rebuild, p_keep): 56's text; after 48's 4-argument form it calls
+--      tally_ingest_details, and re-applies an applied delete (cancel) of an entry the body brings back at a lower AlterID,
+--      or one settled as "nothing to remove": a later Day Book cannot undo a delete; a cancelled entry comes in cancelled.
+--      The owner's review and re-review M-B of 06-Oct-2026: one settled as "nothing to remove" WITHOUT an AlterID: a delete
+--      is applied again to any later body (Tally never brings a deleted GUID back); a cancel only to a body at or below
+--      Tally's voucher counter at the time of the cancel (the bridge's vchCounter on the line); a body above it is a later
+--      change in Tally, applied normally; no counter: at most once (tally_nothing_removed).
+--      Both paths reach it: the recorder (tally_recorder_line, 56: p_keep true) and the Day Book (below: p_keep false).
+--   3. tally_ingest_day (8 arguments): 44's text, its one call through the 5-argument form with p_keep false (48's 4-argument
+--      behaviour exactly, plus the details). The 7-argument form calls it (41), unchanged.
+--   4. tally_ingest_delete: 50's text; a delete or cancel of an entry never in FinCom's copy settles by itself: state applied,
+--      "nothing to remove: the entry is not in FinCom's copy and no longer counts in Tally" (the line kept, visible in Sync
+--      activity), instead of waiting for a Day Book; it records the bound above (tally_nothing_removed, add-only, RLS on,
+--      the service role's only).
+--   Every function: security definer, search_path = public, pg_temp; tally_ingest_details and the 5-argument
+--   tally_ingest_entries granted to nobody (run as the owner by the entry path); tally_ingest_day and tally_ingest_delete
+--   the service role's, as before. Tested by tests/run_migration57.py (pg_stand) and tests/run_migration_order.py.

@@ -2,6 +2,7 @@
 // an authenticator app). Was viewSignIn (src/js/27), viewSignUp (src/js/27) and viewTwoStep (src/js/43). Buttons are
 // doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, useOffline) and mfaAction (src/js/43); the boxes keep
 // their data-cloud and id, which those read, and the buttons their data-act (the old tests press them by it); and what is typed is kept in S.cloudForm (cloudForm).
+import Msg from "../parts/Msg.jsx";
 import { useEffect, useRef } from "react";
 
 const Act = ({ act, className = "btn primary", children, disabled }) => <button className={className} data-act={act} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -12,7 +13,11 @@ const Field = ({ label, k, type = "text", fk, auto, first }) => {
   return <label className="f" style={first ? undefined : { marginTop: 8 }}><span>{label}</span><input ref={ref} type={type} data-cloud={k} data-fk={fk} aria-label={label} autoComplete={auto}
     defaultValue={f[k] || (k === "email" ? c.email || "" : "")} onChange={(ev) => cloudForm(k, ev.target.value)} /></label>;
 };
-const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}>{Cloud.st.error}</p> : null;
+const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={Cloud.st.error} /></p> : null;
+// "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
+// out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
+// Nothing signs you out by itself either way.
+export const KeepBox = () => <label className="chk" style={{ marginTop: 10, display: "block" }}><input type="checkbox" data-cloud="keep" defaultChecked /> Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></label>;
 
 function SignUp() {
   const st = Cloud.st;
@@ -49,7 +54,7 @@ function SetPassword() {
     <label className="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" aria-label="New password" autoComplete="new-password" autoFocus /></label>
     <label className="f" style={{ marginTop: 8 }}><span>Repeat it</span><input type="password" id="spw2" aria-label="Repeat the new password" autoComplete="new-password" onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); setPasswordGo(); } }} /></label>
     <div className="row" style={{ marginTop: 12 }}><button className="btn primary" data-act="setPasswordGo" disabled={!!busy} onClick={() => setPasswordGo()}>{busy ? "Saving…" : "Save and continue"}</button></div>
-    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}>{f.error}</p>}</Box>;
+    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={f.error} /></p>}</Box>;
 }
 
 export default function SignIn() {
@@ -60,9 +65,10 @@ export default function SignIn() {
   return <Box><h1>FinCom</h1>
     <p className="note">{S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place"}</p>
     <p className="note" style={{ margin: "2px 0 0" }}><a href="welcome/">What is FinCom?</a></p>
-    {S.signedOutWhy ? <p className="bk-alert" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
+    {S.signedOutWhy ? <p className="bk-alert" data-signed-out-why="" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
       : <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>}
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
+    <KeepBox />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>

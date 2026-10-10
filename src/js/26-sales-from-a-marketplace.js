@@ -337,7 +337,12 @@ function invoiceHtml(x, co, cfg){
     "th{background:#f0f0f0;font-size:10px}.n{text-align:right;white-space:nowrap}.muted{color:#555}.w50{width:50%}.tot td{font-weight:bold}.sign{height:70px}" +
     "@media print{.noprint{display:none}}</style></head><body>" +
     '<p class="noprint" style="text-align:center"><button onclick="window.print()">Print / Save as PDF</button></p>' +
-    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") + "</div>" +
+    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") +
+      (x.ackNo ? '<div class="muted">Ack. No.: ' + e(x.ackNo) + (x.ackDt ? " · Ack. Date: " + e(fmtDateTime(x.ackDt)) : "") + "</div>" : "") +
+      (x.irnStatus === "cancelled" ? '<div><b>IRN CANCELLED</b></div>' : "") +
+      // the signed QR code of the e-invoice (rule 48(4)), drawn in the printed page from the IRP's signed text
+      (x.signedQr && x.irnStatus !== "cancelled" ? '<div id="einvqr" style="display:inline-block;margin-top:6px"></div><scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr' + 'ipt>' +
+        "<scr" + "ipt>try{new QRCode(document.getElementById('einvqr'),{text:" + JSON.stringify(String(x.signedQr)).replace(/</g, "\\u003c") + ",width:150,height:150,correctLevel:QRCode.CorrectLevel.L})}catch(e){}</scr" + "ipt>" : "") + "</div>" +
     '<div class="row b"><div class="cell r w50"><h1>' + e(co.name) + "</h1>" + (cfg.address ? "<div>" + e(cfg.address).replace(/\n/g, "<br>") + "</div>" : "") +
       (co.gstin ? "<div><b>GSTIN:</b> " + e(co.gstin) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
       (home ? "<div><b>State:</b> " + e(GST_STATES[home] || "") + " (" + home + ")</div>" : "") + (cfg.phone ? "<div>Phone: " + e(cfg.phone) + "</div>" : "") + (cfg.email ? "<div>Email: " + e(cfg.email) + "</div>" : "") + "</div>" +
@@ -377,7 +382,7 @@ function printInvoiceHtml(html, number){
   toast("The invoice was downloaded. Open it and choose Print \u2192 Save as PDF.");
 }
 /* ---------- the Sales screen ---------- */
-const SALES_TABS = [["review", "To review"], ["ready", "Ready"], ["done", "Done"]];
+const SALES_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally", "ignored"] : ["review"]; }
 function salesCounts(){ const c = {review: 0, ready: 0, done: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else c.done++; }); return c; }
 function salesColPass(v){
@@ -461,7 +466,7 @@ async function postSalesToTally(){
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0;
     let optionalN = 0;
-    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     saveBank({newLed: true});
     s.busy = ""; saveSales();
     toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
@@ -529,6 +534,7 @@ function salesBulk(kind, ledger){
     if (kind === "ignore" && v.status !== "ignored"){ v.status = "ignored"; n++; }
   });
   if (kind === "delete"){
+    s.list.filter(v => s.sel.has(v.id) && v.status !== "posted").forEach(v => { if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted"); });
     s.list = s.list.filter(v => !(s.sel.has(v.id) && v.status !== "posted")); n = rows.length;
   }
   salesSetUndo(n + " invoice" + (n === 1 ? " " : "s ") + ({ledger: "set to <b>" + esc(ledger) + "</b>", confirm: "confirmed", ignore: "ignored", delete: "deleted"}[kind]), before);
@@ -554,10 +560,9 @@ function salesRowAct(a, id, force){
     if (a === "ignore"){ v.status = "ignored"; if (s.openId === v.id) s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " ignored", before); }
     if (a === "restore"){ v.status = "review"; mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " restored", before); }
     if (a === "delete"){
-      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
-        if (!ans) return;
-        s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
-      });
+      // no question first (spec K9, round 2): Undo in the bar puts it back
+      if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted");
+      s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       return true;
     }
     s.sticky.add(v.id); saveSales(); render(); return true;
@@ -646,7 +651,7 @@ function salesClick(t){
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
-    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
+    case "salesBulkDelete": salesBulk("delete"); return true;   // Undo in the bar (spec K9, round 2)
     case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); return true; }
@@ -680,12 +685,12 @@ function applyDraftCustomer(ledgerName){
 function salesInput(t){ return false; }
 document.addEventListener("click", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;
-  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ const s = SL(); s.openId = null; s.showSettings = false; render(); }
+  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ const s = SL(); Drafts.guard("sales:settings", () => { s.openId = null; s.showSettings = false; render(); }); }
 });
 document.addEventListener("keydown", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;
   const s = SL();
-  if (ev.key === "Escape" && (s.openId || s.showSettings) && !document.querySelector("#confirmBox[style*='flex']") && !AC.fk){ ev.preventDefault(); ev.stopImmediatePropagation(); s.openId = null; s.showSettings = false; render(); }
+  if (ev.key === "Escape" && (s.openId || s.showSettings) && !document.querySelector("#confirmBox[style*='flex']") && !AC.fk){ ev.preventDefault(); ev.stopImmediatePropagation(); Drafts.guard("sales:settings", () => { s.openId = null; s.showSettings = false; render(); }); }
   if (ev.key === "Enter" && ev.target.hasAttribute && ev.target.hasAttribute("data-svbulk") && !(AC.fk && AC.idx >= 0)){ ev.preventDefault(); const l = exactLedger(ev.target.value); if (l){ acClose(); salesBulk("ledger", l); } else toast("Choose a Tally ledger."); }
 }, true);
 
@@ -694,56 +699,84 @@ function tallyLedgerName(n){ return (S.bank && S.bank.ledgers && hasLedgerList()
 function fpHash(s){ let h = 5381; const t = String(s || ""); for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
 const ROLE_GROUPS = {party: /sundry|creditors|debtors|current liab|loans|capital/i, expense: /expense|purchase|direct|indirect|fixed assets/i, gst: /duties|taxes/i, tds: /duties|taxes|current liab|provisions/i, roundoff: /./, "rcm-in": /duties|taxes/i, "rcm-out": /duties|taxes/i, sales: /sales/i, tax: /duties|taxes/i};
 const ROLE_WORDS = {gst: /gst/i, tds: /tds/i, roundoff: /round/i, "rcm-in": /gst/i, "rcm-out": /gst/i, tax: /gst|cess/i};
-// Tally ledgers closest to a name that Tally does not have
+// Tally ledgers closest to a name that Tally does not have (from the client's one list; an expense line is never
+// offered an income ledger, a GST or TDS line only tax ledgers)
 function suggestLedgers(name, role, n){
   if (!hasLedgerList()) return [];
-  const g = ROLE_GROUPS[role] || /./, w = ROLE_WORDS[role];
-  return (B().ledgers.list || []).map(l => {
+  const g = ROLE_GROUPS[role] || /./, w = ROLE_WORDS[role], cid = Ledgers.cid();
+  return Ledgers.list(cid).filter(l => Ledgers.allowed(role, Ledgers.cls(cid, l.name))).map(l => {
     let sc = nameSim(name, l.name);
-    if (g.test(l.group || "")) sc += 0.15;
+    if (g.test(l.group || "") || Ledgers.roleRank(role, Ledgers.cls(cid, l.name)) === 0) sc += 0.15;
     if (w && w.test(l.name)) sc += 0.25;
     return {l, sc};
   }).filter(x => x.sc >= 0.35).sort((a, b) => b.sc - a.sc).slice(0, n || 3).map(x => x.l.name);
 }
-// Company default ledgers (input GST, TDS by payment type, round off) matched to this client's Tally ledgers
+// Company default ledgers (input GST, reverse charge, TDS by payment type, round off) matched to this client's Tally
+// ledgers. Review of 02-Oct-2026: a value Tally has was kept even when it was of another tax (sgst = "INPUT IGST"), and
+// TDS for goods (194Q), directors and interest pointed to "TDS 94H". Now a GST value must be of its own head and side,
+// a TDS value of its own section; one that is not is replaced by the ledger that fits (the most used), or emptied
 function autoMapCompanyLedgers(co){
-  if (!co || !S.bank || S.bank.cid !== co.id || !hasLedgerList()) return [];
-  const list = S.bank.ledgers.list, changes = [];
-  const taxes = list.filter(l => /duties|taxes|current liab|provisions/i.test(l.group || ""));
+  if (!co || Ledgers.cid() !== co.id || !hasLedgerList()) return [];
+  const cid = co.id, list = Ledgers.list(cid), changes = [];
   const one = arr => arr.length === 1 ? arr[0].name : "";
-  const fix = (cur, set, find, role) => {
-    if (cur && exactLedger(cur)){ if (exactLedger(cur) !== cur){ changes.push({from: cur, to: exactLedger(cur), role}); set(exactLedger(cur)); } return; }
-    const f = find();
-    if (f && f !== cur){ changes.push({from: cur, to: f, role}); set(f); }
+  // review 20: a choice a person confirmed is never changed here; an empty or guessed one is filled as a guess, shown in
+  // Client setup to confirm (choiceGuess, src/js/60), and not used for posting until confirmed
+  const confirmed = key => key && choiceState(co, key) === "confirmed";
+  const fix = (cur, set, valid, find, role, key) => {
+    if (confirmed(key)) return;
+    const put = v => { if (key) choiceGuess(co, key, v, "matched in Tally's ledger list"); else set(v); };
+    const ok = cur ? valid(cur) : "";
+    if (ok){ if (ok !== cur){ changes.push({from: cur, to: ok, role}); put(ok); } return; }
+    const f = find() || "";
+    if (f !== (cur || "") && (f || (cur && hasLedgerList()))){ changes.push({from: cur || "", to: f, role}); put(f); }
   };
-  const input = re => one(taxes.filter(l => re.test(l.name) && !/output|payable|liab|rcm|reverse|cash\s*ledger|electronic/i.test(l.name)));
+  const usage = Ledgers.usage(cid) || {}, used = n => (usage[n] || {}).n || 0;
+  const best = arr => arr.sort((a, b) => used(b) - used(a) || a.length - b.length)[0] || "";
+  const names = list.map(l => l.name);
+  const gstFits = (n, head, kind) => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok && !!c.info.rcm === (kind !== "gst") ? c.name : ""; };
+  const gstValid = (head, kind) => n => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok ? c.name : ""; };
   co.gst = co.gst || {};
-  fix(co.gst.cgst, v => { co.gst.cgst = v; }, () => input(/(^|[^a-z])c\.?\s*gst|central\s*(gst|tax)/i), "gst");
-  fix(co.gst.sgst, v => { co.gst.sgst = v; }, () => one(taxes.filter(l => /(^|[^a-z])s\.?\s*gst|state\s*(gst|tax)|utgst/i.test(l.name) && !/cgst|igst|output|payable|rcm|reverse/i.test(l.name))), "gst");
-  fix(co.gst.igst, v => { co.gst.igst = v; }, () => input(/(^|[^a-z])i\.?\s*gst|integrated/i), "gst");
-  fix(co.roundOff, v => { co.roundOff = v; }, () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
-  const tdsL = list.filter(l => (/^tds$/i.test(l.taxType || "") || (/\btds\b|tax\s*deducted/i.test(l.name) && /duties|taxes|current liab|provisions/i.test(l.group || ""))) && !/receivable|recoverable|asset/i.test(l.name + " " + (l.group || "")));
-  const kw = {contractor: /194\s*-?\s*c\b|contract/i, professional: /194\s*-?\s*j|profession|fees?\s+for\s+prof/i, technical: /194\s*-?\s*j|technical/i, director: /director/i, commission: /194\s*h|commission|brokerage/i,
-    rent_building: /194\s*-?i\b|rent/i, rent_machinery: /194\s*-?i\b|rent|machin/i, interest: /194\s*a|interest/i, goods: /194\s*q|purchase|goods/i};
+  [["cgst", "CGST"], ["sgst", "SGST"], ["igst", "IGST"]].forEach(([k, head]) => {
+    const before = co.gst[k];
+    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(names.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(names.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst", "gst:" + k);
+    if (co.gst[k] !== before && co.gstPin && !confirmed("gst:" + k)) delete co.gstPin[k];
+  });
+  fix(co.roundOff, v => { co.roundOff = v; }, n => exactLedger(n) || "", () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
   co.tdsLedgers = co.tdsLedgers || {};
-  const tdsPick = k => {
-    const scored = tdsL.map(l => ({l, sc: (l.tdsNature && kw[k].test(l.tdsNature) ? 3 : 0) + (kw[k].test(l.name) ? 2 : 0) + (/^tds$/i.test(l.taxType || "") ? 0.5 : 0)})).filter(x => x.sc >= 2).sort((a, b) => b.sc - a.sc);
-    if (scored.length && (scored.length === 1 || scored[0].sc > scored[1].sc)) return scored[0].l.name;
-    const generic = tdsL.filter(l => !l.tdsNature && !Object.values(kw).some(re => re.test(l.name)));
-    return tdsL.length === 1 ? tdsL[0].name : generic.length === 1 ? generic[0].name : "";
-  };
-  Object.keys(kw).forEach(k => fix(co.tdsLedgers[k], v => { co.tdsLedgers[k] = v; }, () => tdsPick(k), "tds"));
-  const exp = list.filter(l => ROLE_GROUPS.expense.test(l.group || ""));
+  rules().forEach(r => {
+    if (r.basis === "never") return;
+    const sec = Ledgers.sec(r.old);
+    if (!sec) return;
+    const tech = r.id === "technical", fit = n => sec !== "194J" || /technical/i.test(n) === tech ? 1 : 0;
+    const valid = n => { const c = tdsLedgerCheck(cid, n, sec); return c.ok ? c.name : ""; };
+    const find = () => { const c = names.filter(n => { const x = tdsLedgerCheck(cid, n, sec); return x.ok && x.sec === sec && Ledgers.isTds(cid, x.name); }); return c.sort((a, b) => fit(b) - fit(a) || used(b) - used(a) || a.length - b.length)[0] || ""; };
+    // a default not in Tally and no ledger of the section: left as it is (it shows as not in Tally on the bill)
+    const cur = co.tdsLedgers[r.id];
+    if (cur && !exactLedger(cur) && !find()) return;
+    fix(cur, v => { co.tdsLedgers[r.id] = v; }, valid, find, "tds", "tds:" + r.id);
+  });
   co.expenseLedgers = co.expenseLedgers || {};
-  Object.keys(co.expenseLedgers).forEach(k => fix(co.expenseLedgers[k], v => { co.expenseLedgers[k] = v; }, () => { const c = exp.map(l => ({l, s: nameSim(co.expenseLedgers[k], l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s); return c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : ""; }, "expense"));
+  const exp = list.filter(l => ["expense", "asset"].includes(Ledgers.cls(cid, l.name)) || (!Ledgers.cls(cid, l.name) && ROLE_GROUPS.expense.test(l.group || "")));
+  Object.keys(co.expenseLedgers).forEach(k => {
+    if (confirmed("exp:" + k)) return;
+    const cur = co.expenseLedgers[k], ex = cur && exactLedger(cur), put = v => choiceGuess(co, "exp:" + k, v, "matched in Tally's ledger list");
+    if (ex && Ledgers.cls(cid, ex) === "income"){ changes.push({from: cur, to: "", role: "expense"}); put(""); return; }
+    if (ex){ if (ex !== cur){ changes.push({from: cur, to: ex, role: "expense"}); put(ex); } return; }
+    const c = exp.map(l => ({l, s: nameSim(cur, l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s);
+    const f = c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : "";
+    if (f){ changes.push({from: cur, to: f, role: "expense"}); put(f); }
+  });
   ["rcmCgstIn", "rcmSgstIn", "rcmIgstIn", "rcmCgstOut", "rcmSgstOut", "rcmIgstOut"].forEach(k => {
-    const kind = /Cgst/.test(k) ? /cgst|central/i : /Sgst/.test(k) ? /sgst|state|utgst/i : /igst|integrated/i;
-    const side = /In$/.test(k) ? /input|itc|credit/i : /output|payable|liab/i;
-    fix(co.gst[k], v => { co.gst[k] = v; }, () => one(taxes.filter(l => /rcm|reverse/i.test(l.name) && kind.test(l.name) && side.test(l.name) && !(k.includes("Sgst") && /cgst|igst/i.test(l.name)))), /In$/.test(k) ? "rcm-in" : "rcm-out");
+    const head = /Cgst/.test(k) ? "CGST" : /Sgst/.test(k) ? "SGST" : "IGST", kind = /In$/.test(k) ? "rcm-in" : "rcm-out";
+    const cur = co.gst[k];
+    const cands = names.map(n => gstFits(n, head, kind)).filter(Boolean);
+    // the default name, not in Tally, and nothing that fits: left as it is
+    if (!cur && !cands.length) return;
+    fix(cur || "", v => { co.gst[k] = v; }, gstValid(head, kind), () => best(cands), kind, "gst:" + k);
   });
   if (changes.length){
     Store.saveCompany(co);
-    changes.forEach(ch => { if (ch.from) replaceLedgerInWaiting(co.id, ch.from, ch.to, ch.role, true); });
+    changes.forEach(ch => { if (ch.from && ch.to) replaceLedgerInWaiting(co.id, ch.from, ch.to, ch.role, true); });
   }
   return changes;
 }
@@ -793,9 +826,9 @@ function canonicalizeBills(list){
 async function ensureTallyCompany(co){
   // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
   if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
-  if (!Bridge.on()){ toast("Connect the Tally Bridge first: Settings \u2192 Tally Bridge."); return null; }
+  if (!Bridge.on()){ toast("Connect FinCom Bridge first: Settings \u2192 FinCom Bridge."); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
-  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 Tally Bridge \u2192 Check my Tally."); return null; }
+  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 FinCom Bridge \u2192 Check my Tally."); return null; }
   let o = Bridge.openFor(co);
   if (o) return o.name;
   const open = Bridge.st.open;

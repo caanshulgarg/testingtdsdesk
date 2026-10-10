@@ -50,7 +50,10 @@ const LedMaster = {
     if (tt === "GST" || /\bGST\b|\bCESS\b|\b(C|S|I|UT)\s*\.?\s*GST/.test(up)){
       p.what = "gst";
       if (tt === "GST") why.push("Tally: tax type GST");
-      if (/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|CURRENT\s*GST\s*PAYABLE|GST\s*PAYABLE|SET\s*OFF/.test(up)) p.what = "gst_setoff";
+      // reverse charge before "GST PAYABLE": "07 RCM CGST PAYABLE" is the tax owed on reverse charge, not a set-off ledger.
+      // An electronic ledger, interest or a control account named for reverse charge is still read by the tests below
+      if (/\bRCM\b|REVERSE/.test(up) && !/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|SET\s*OFF|INTEREST|LATE\s*FEE|PENALTY|CONTROL|PROVISIONAL|PENDING|SUSPENSE|UNCLAIMED/.test(up)) p.what = "gst_rcm";
+      else if (/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|CURRENT\s*GST\s*PAYABLE|GST\s*PAYABLE|SET\s*OFF/.test(up)) p.what = "gst_setoff";
       else if (/INTEREST|LATE\s*FEE|PENALTY/.test(up)) p.what = "gst_interest";
       else if (/CONTROL|PROVISIONAL|PENDING|SUSPENSE|UNCLAIMED/.test(up)) p.what = "gst_control";
       else if (/\bRCM\b|REVERSE/.test(up)) p.what = "gst_rcm";
@@ -75,7 +78,7 @@ const LedMaster = {
       if (rn){ p.gstRate = num(rn[1]); why.push("rate " + rn[1] + "% in the name"); }
     } else if (tt === "TDS" || tt === "TCS" || /\bTDS\b|\bTCS\b/.test(up) || /\b19[2-9][A-Z]{0,2}\b|\b206C/.test(up)){
       const tcs = tt === "TCS" || /\bTCS\b|206C/.test(up);
-      p.what = /INTEREST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
+      p.what = /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
       if (tt) why.push("Tally: tax type " + info.taxType);
       const sec = up.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]{0,2})\b/);
       if (sec){ p.section = sec[1]; why.push("section " + sec[1] + " in the name"); }
@@ -89,6 +92,11 @@ const LedMaster = {
       else if (info.tdsNature){ p.section = (String(info.tdsNature).match(/19[2-9][A-Z]{0,2}|206C[A-Z]{0,2}/) || [""])[0]; if (p.section) why.push("Tally: nature " + info.tdsNature); }
       const rn = up.match(/(\d+(?:\.\d+)?)\s*%/);
       if (rn){ p.rate = num(rn[1]); why.push("rate " + rn[1] + "%"); }
+      // its group decides over its name (review of 02-Oct-2026: "TDS Magic Seva" and "TDS Pentagon" are kept under Loans &
+      // Advances, "Intrest On TDS" under Financial Expenses): an asset is TDS receivable, an expense is never TDS payable
+      const grp = String(info.group || ""), under = re => (typeof Audit === "object" && Audit.under(name, re)) || re.test(grp);
+      if (/payable/.test(p.what) && under(/^(loans\s*&\s*advances\s*\(asset\)|current assets|deposits\s*\(asset\)|sundry debtors)$/i)){ p.what = tcs ? "tcs_receivable" : "tds_receivable"; p.section = ""; why.push("kept under " + (grp || "an asset group") + ": tax deducted from the client"); }
+      else if (/payable/.test(p.what) && under(/^(indirect expenses|direct expenses|purchase accounts|financial expenses|indirect incomes|direct incomes|sales accounts)$/i)){ p.what = /INTEREST|INTREST|LATE\s*FEE|PENALTY|PANELTY/.test(up) ? "tds_interest" : "none"; p.section = ""; why.push("an expense or income ledger (" + (grp || "its group") + "), not a tax account"); }
       if (p.what === "tds_payable" && !p.section) why.push("no section: choose one, or mark it a general TDS account");
     } else if (/\bROUND\s*(ED)?\s*OFF\b/.test(up)){ p.what = "roundoff"; why.push("name"); }
     else if (!/GST|\bTDS\b|\bTCS\b/.test(up) && /\bRCM\b|REVERSE\s*CHARGE/.test(up) && /PAYABLE|LIABILITY|OUTPUT/.test(up)){
@@ -106,12 +114,13 @@ const LedMaster = {
   // "BANK CHARGES" is an expense and "ICICI BANK (CREDITORS)" a supplier, whatever the name says
   bankByGroup(name, info){
     const b = S.books || {}, groups = b.groups || {};
-    let g = String((info && info.group) || (b.under || {})[name] || "");
+    let g = String((info && info.group) || ledUnder(b, name) || "");
     if (!g) return /\bBANK\b|\bCASH\b/i.test(name) && !/CHARGE|COMMISSION|INTEREST|CREDITOR|DEBTOR|LOAN|FEE/i.test(name);
     for (let i = 0; i < 12 && g; i++){
       if (/^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand|bank overdraft)$/i.test(g.trim())) return true;
-      if (!groups[g] || groups[g] === g || /^primary$/i.test(groups[g])) break;
-      g = groups[g];
+      const up = ledLook(groups, g);
+      if (!up || ledKey(up) === ledKey(g) || /^\W*primary$/i.test(up)) break;
+      g = up;
     }
     return /^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand)$/i.test(g.trim());
   },
@@ -178,7 +187,10 @@ const LedMaster = {
     if (m.what === "tds_payable" && !m.section) out.push("no section: choose one; if it only collects the month's TDS from the section ledgers and is paid from the bank, it is a TDS clearing account");
     return out;
   },
-  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1;
+  // who confirmed and when are kept on the ledger (shown on the ledgers page, on every computer); the check's own
+  // record of the ledger (b.ledCheck, kept with the books) says confirmed or pending with it
+  confirm(b, names, yes){ const who = typeof whoAmI === "function" ? whoAmI() : "", items = (b.ledCheck || {}).items || {};
+    names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; m.okBy = yes ? who : undefined; if (items[n]) items[n].state = yes ? "confirmed" : "pending"; } }); b.mapV = (b.mapV || 0) + 1;
     if (yes && typeof this.tplLearn === "function"){ this.tplLearn(b, names); try { const co = CO(); if (co && co.id === b.cid) this.applyPosting(b, co, "empty"); } catch (e){} } }
 };
 

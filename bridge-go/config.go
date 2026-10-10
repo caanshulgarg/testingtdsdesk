@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,18 @@ func keepNum(k string, def int) int {
 	return def
 }
 
+// a number setting that may be 0 (2.2.1: the recorder's waits); def when it is not set or below 0
+func keepNumZero(k string, def int) int {
+	v := cfg(k)
+	if v == nil || strings.TrimSpace(str(v)) == "" {
+		return def
+	}
+	if n := toInt(v); n >= 0 {
+		return n
+	}
+	return def
+}
+
 func newBridgeKey() string {
 	chars := "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	b := make([]byte, 24)
@@ -170,6 +183,17 @@ func loadConfig() {
 		d.Set("Key", newBridgeKey())
 		need = true
 	}
+	// never a port 0 in the settings (0 means "find it"; an old file or a hand edit may hold one)
+	before, _ := d.MarshalJSON()
+	guardPorts(d)
+	if after, _ := d.MarshalJSON(); string(after) != string(before) {
+		need = true
+	}
+	// this install's id for FinCom (body.bridge.id): made once, then kept
+	if !validInstanceID(str(d.Get("InstanceId"))) {
+		d.Set("InstanceId", newInstanceID())
+		need = true
+	}
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()
@@ -187,6 +211,7 @@ func loadConfigRO() {
 			d.Set(k, o.Get(k))
 		}
 	}
+	guardPorts(d)
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()
@@ -196,6 +221,7 @@ var cfgStamp time.Time
 
 func saveConfig() {
 	cfgMu.Lock()
+	guardPorts(Cfg)
 	b, err := json.Marshal(Cfg)
 	cfgMu.Unlock()
 	if err != nil {
@@ -222,6 +248,7 @@ func syncConfig() {
 	if err := o.UnmarshalText(readText(ConfigPath)); err != nil {
 		return
 	}
+	guardPorts(o)
 	cfgMu.Lock()
 	for _, k := range o.keys {
 		Cfg.Set(k, o.Get(k))
@@ -229,7 +256,10 @@ func syncConfig() {
 	cfgMu.Unlock()
 }
 
-// --- the log: never holds keys, codes or passwords; rotated at 5 MB keeping 5 old copies
+// --- the log: never holds keys, codes or passwords. 2.2.0: kept 30 days: at the first line of a new day the log is
+// renamed to <log>.<yyyy-mm-dd> (its last day), and at 5 MB within a day to <log>.<yyyy-mm-dd>-2, -3...; at each such
+// rotation the bridge's own date-named copies (and its old numbered ones, <log>.1 to .5) older than 30 days are deleted.
+// Nothing else in the folder is touched
 var logMu sync.Mutex
 
 func protectLogText(msg string) string {
@@ -261,13 +291,159 @@ func writeLog(msg string) {
 		fmt.Println(line)
 	}
 	f := logFile()
-	if fi, err := os.Stat(f); err == nil && fi.Size() > 5*1024*1024 {
-		for i := 4; i >= 1; i-- {
-			if exists(fmt.Sprintf("%s.%d", f, i)) {
-				_ = os.Rename(fmt.Sprintf("%s.%d", f, i), fmt.Sprintf("%s.%d", f, i+1))
-			}
+	if fi, err := os.Stat(f); err == nil && fi.Mode().IsRegular() {
+		day := fi.ModTime().Format("2006-01-02")
+		if day != time.Now().Format("2006-01-02") || fi.Size() > 5*1024*1024 {
+			rotateLog(f, day)
 		}
-		_ = os.Rename(f, f+".1")
 	}
 	_ = appendText(f, line+"\r\n")
+}
+
+// the log renamed to its date (a second one that day: -2, -3...), then the bridge's own old copies pruned
+func rotateLog(f, day string) {
+	to := f + "." + day
+	for i := 2; exists(to) && i < 1000; i++ {
+		to = fmt.Sprintf("%s.%s-%d", f, day, i)
+	}
+	_ = os.Rename(f, to)
+	pruneLogs(f, 30*24*time.Hour)
+}
+
+// the bridge's own copies of its log older than keep: <log>.<yyyy-mm-dd>[-n] and <log>.1 to .9, regular files only
+func pruneLogs(f string, keep time.Duration) {
+	base := filepath.Base(f)
+	m, _ := filepath.Glob(filepath.Join(filepath.Dir(f), base+".*"))
+	own := regexp.MustCompile(`^` + regexp.QuoteMeta(base) + `\.(\d{4}-\d{2}-\d{2}(-\d+)?|[1-9])$`)
+	for _, p := range m {
+		fi, err := os.Lstat(p)
+		if err != nil || !fi.Mode().IsRegular() || !own.MatchString(filepath.Base(p)) {
+			continue
+		}
+		if time.Since(fi.ModTime()) > keep {
+			_ = os.Remove(p)
+		}
+	}
+}
+
+// --- PostOnly (round 11, 03-Oct-2026): the companies this computer may post to. The setting is a JSON array of company
+// names ("PostOnly": ["ZZ TEST"]); missing or empty means no restriction. The names are compared folded (case and
+// spacing aside), as everywhere else
+
+// the list as set (trimmed, empties dropped); nil when there is no restriction
+func postOnlyList() []string {
+	var o []string
+	for _, n := range strs(cfg("PostOnly")) {
+		if n = strings.TrimSpace(n); n != "" {
+			o = append(o, n)
+		}
+	}
+	return o
+}
+
+// why a posting to this company is refused by PostOnly ("" when it may go)
+func postOnlyRefusal(company string) string {
+	list := postOnlyList()
+	if len(list) == 0 {
+		return ""
+	}
+	want := foldName(company)
+	for _, n := range list {
+		if foldName(n) == want {
+			return ""
+		}
+	}
+	return "This computer posts only to " + strings.Join(list, ", ") + " (PostOnly); posting to " + company + " refused"
+}
+
+// why removing an entry from this company (/unpost) is refused by PostOnly ("" when it may go)
+func postOnlyUnpostRefusal(company string) string {
+	if why := postOnlyRefusal(company); why != "" {
+		return strings.Replace(why, "; posting to "+company+" refused", "; removing from "+company+" refused", 1)
+	}
+	return ""
+}
+
+// the installer's -DPOSTONLY (one name, or names separated by ';'): written into the settings when given, never over a
+// PostOnly set by hand
+var installPostOnly string
+
+func setPostOnly(c *Ordered, v string) {
+	// round 12 (03-Oct-2026, the owner's decision): POSTONLY="any" clears an installer-set list (an empty list: any
+	// company) and marks it the owner's, so a later installer never puts a list back; a list set by hand, or one
+	// already marked the owner's, is left as it is
+	if strings.EqualFold(strings.TrimSpace(v), "any") {
+		if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
+			return
+		}
+		c.Set("PostOnly", []any{})
+		c.Set("PostOnlyBy", "owner")
+		return
+	}
+	var names []any
+	for _, n := range strings.Split(v, ";") {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	// a list set by hand (no PostOnlyBy, or one that is not "installer") is never replaced; an installer-set one is
+	if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
+		return
+	}
+	c.Set("PostOnly", names)
+	c.Set("PostOnlyBy", "installer")
+}
+
+// --- settings from FinCom (round 15, 03-Oct-2026): the beat's answer may carry settings: {postOnly: array|null,
+// postBatchBills: n|null, postBatchBank: n|null, at}. A non-null value is applied at once over the file's value, kept in
+// the file (PostOnlyBy / PostBatchBy "fincom", SettingsAt) so it survives a restart, and logged once per change
+func applyCloudSettings(j M) {
+	st := obj(j["settings"])
+	if st == nil {
+		return
+	}
+	at := str(st["at"])
+	changed := false
+	if v, ok := st["postOnly"]; ok && v != nil {
+		var names []string
+		for _, n := range strs(v) {
+			if len(names) >= 20 { // review finding 9: the same bounds as the cloud's function (20 names, 200 characters)
+				break
+			}
+			if n = strings.TrimSpace(n); n != "" {
+				if len(n) > 200 {
+					n = n[:200]
+				}
+				names = append(names, n)
+			}
+		}
+		if strings.Join(names, "|") != strings.Join(postOnlyList(), "|") || cfgS("PostOnlyBy") != "fincom" {
+			setCfg("PostOnly", toAny(names))
+			setCfg("PostOnlyBy", "fincom")
+			changed = true
+		}
+	}
+	for key, k := range map[string]string{"postBatchBills": "PostBatchBills", "postBatchBank": "PostBatchBank"} {
+		if v, ok := st[key]; ok && v != nil {
+			n := clampBatch(toInt(v)) // bounds 1..500
+			if toInt(cfg(k)) != n || cfgS("PostBatchBy") != "fincom" {
+				setCfg(k, float64(n))
+				setCfg("PostBatchBy", "fincom")
+				changed = true
+			}
+		}
+	}
+	if at != "" && cfgS("SettingsAt") != at {
+		setCfg("SettingsAt", at)
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	saveConfig()
+	writeLog(fmt.Sprintf("Settings from FinCom: posts only to %s; bills per request %d; bank lines per request %d (set at %s)",
+		or(strings.Join(postOnlyList(), ", "), "any company"), postBatchBills(), postBatchBank(), or(at, "-")))
 }

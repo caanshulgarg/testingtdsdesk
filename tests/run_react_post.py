@@ -20,38 +20,55 @@ with sync_playwright() as p:
       return c.id; }""", BILLS)
     pg.evaluate("(cid) => openCompany(cid).then(() => { Object.values(D().entries).forEach(e => approve(e)); refreshStats(cid); goStep('post', 'bills'); })", cid); pg.wait_for_timeout(1500)
     app = lambda: pg.inner_text("#app")
-    ok(pg.locator("#app .pcard").count() == 3 and "Purchase bills\n3" in pg.inner_text("#app .post-sum"), "Post to Tally: three cards, three bills")
-    ok("3 approved entries waiting" in app() and pg.locator("#post-bills table.data tbody tr").count() == 3, "the bills waiting, in a table")
-    tds = pg.evaluate("money(Object.values(D().entries).reduce((a, e) => a + e.snapshot.tds, 0))")
-    ok(("TDS in these entries: " + tds) in app(), "their TDS: " + tds)
-    ok("Import into Tally" in app() and "Professional Charges" in app(), "no Tally connected: how to import the file, naming the ledgers it needs")
+    # review of 02-Oct-2026 (C15-C18): one line, one table of the entries, one main button, the rest under More
+    T = "#app [data-post-table]"
+    ok(pg.locator("#app [data-post-line]").count() == 1 and pg.locator(T + " tbody tr").count() == 3 and pg.inner_text("#app [data-post-main]") == "Post 3 to Tally", "Post to Tally: one line, the three bills in one table, Post 3 to Tally")
+    # second pass of 02-Oct-2026: the ledgers on one line, the party first
+    ok("Alpha Consultants · Professional Charges · TDS" in pg.inner_text(T), "each bill's ledgers on one line: party, expense, TDS")
+    pg.evaluate("document.querySelector(\"#app details[data-more='post']\").open = true"); pg.click('#app [data-more="post"] button:has-text("How to import the file into Tally")'); pg.wait_for_timeout(300)
+    ok("Import into Tally" in app() and "Professional Charges" in pg.inner_text("#app [data-import-steps]"), "no Tally connected: More → how to import the file, naming the ledgers it needs")
     # one back to review
-    pg.click('#post-bills tr:has-text("Kappa Labs") button:has-text("Back to review")'); pg.wait_for_timeout(500)
-    ok(pg.locator("#post-bills table.data tbody tr").count() == 2 and pg.evaluate("Object.values(D().entries).find(e => e.x.vendorName === 'Kappa Labs').status") == "draft" and "Purchase bills" in pg.inner_text("#post-bills h3"), "Back to review: out of the list, a draft again, still on this page")
-    pg.click('#post-bills tr:has-text("Gamma Rentals") button:has-text("Delete")'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox .cbx").is_visible(), "Delete asks first")
-    pg.click('#confirmBox button[data-cbx="no"]'); pg.wait_for_timeout(300)
-    ok(pg.locator("#post-bills table.data tbody tr").count() == 2, "Cancel keeps it")
+    pg.click(T + ' tr:has-text("Kappa Labs") button:has-text("Back to review")'); pg.wait_for_timeout(500)
+    ok(pg.locator(T + " tbody tr").count() == 2 and pg.evaluate("Object.values(D().entries).find(e => e.x.vendorName === 'Kappa Labs').status") == "draft" and pg.locator("#app [data-post-page]").count() == 1, "Back to review: out of the list, a draft again, still on this page")
     # a ledger Tally does not have (Tally's ledger list known from the bank side)
     pg.evaluate("""() => { S.bank = S.bank && S.bank.cid === S.coId ? S.bank : {cid: S.coId, rows: [], stmts: [], sel: new Set(), sticky: new Set(), f: {}}; S.bank.loading = false;
       S.bank.ledgers = Object.assign({}, S.bank.ledgers, {list: ['Alpha Consultants', 'Gamma Rentals', 'Legal and Professional Charges', 'TDS Payable', 'Input IGST', 'Input CGST', 'Input SGST', 'Round Off'].map(n => ({name: n}))}); render(); }""")
     pg.wait_for_timeout(500)
-    ok("not in Tally" in pg.inner_text("#post-bills") and pg.locator('#post-bills select[aria-label="Tally ledger for Professional Charges"]').count() == 1, "a ledger not in Tally is listed, with a choice of Tally's ledgers")
-    pg.select_option('#post-bills select[aria-label="Tally ledger for Professional Charges"]', "Legal and Professional Charges"); pg.wait_for_timeout(200)
-    pg.click('#post-bills tr:has-text("Professional Charges") button:has-text("Replace")'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'approved').every(e => e.snapshot.lines.some(l => l.ledger === 'Legal and Professional Charges'))"), "Replace: the waiting bills use Tally's ledger")
+    # second pass of 02-Oct-2026: a bill using a ledger Tally lacks needs attention (one line each, with the choice of
+    # Tally's ledger), and is not in Ready to post
+    led = pg.locator('#app [data-post-attention] li[data-attn-kind="ledger"]')
+    ok(led.count() == 2 and "The ledger “Professional Charges” is not in Tally" in led.first.inner_text() and pg.locator('#app select[aria-label="Tally ledger for Professional Charges"]').count() == 2
+       and pg.locator(T).count() == 0 and pg.locator("#app [data-post-main]").count() == 0 and pg.inner_text('#app [data-post-tab="topost"] [data-tab-n]') == "0", "a ledger not in Tally: its bills need attention, with a choice of Tally's ledgers, and are not ready")
+    led.first.locator("select").select_option("Legal and Professional Charges"); pg.wait_for_timeout(200)
+    led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
+    # the bills' TDS ledger is not in Tally either: said next, on the same lines
+    led = pg.locator('#app [data-post-attention] li[data-attn-kind="ledger"]')
+    ok(led.count() == 2 and "The ledger “TDS Payable - Professional” is not in Tally" in led.first.inner_text(), "then the next ledger Tally lacks, on the same two lines")
+    led.first.locator("select").select_option("TDS Payable"); pg.wait_for_timeout(200)
+    led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
+    ok(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'approved').every(e => e.snapshot.lines.some(l => l.ledger === 'Legal and Professional Charges'))") and pg.locator(T + " tbody tr").count() == 2,
+       "Replace: the waiting bills use Tally's ledger, and are ready to post again")
     pg.screenshot(path=OUT + "/react-post.png", full_page=True)
     # the Tally file, marked as sent
-    with pg.expect_download() as dl: pg.click('#post-bills button:has-text("Download Tally file")')
+    pg.evaluate("document.querySelector(\"#app details[data-more='post']\").open = true")
+    with pg.expect_download() as dl: pg.click('#app [data-more="post"] button:has-text("Download Tally file")')
     ok(dl.value.suggested_filename.endswith((".zip", ".xml")), "Download Tally file: " + dl.value.suggested_filename)
     pg.wait_for_timeout(800)
-    ok(pg.evaluate("Object.values(D().entries).filter(e => e.exportedAt).length") == 2 and "0 approved entries waiting" in app(), "marked as sent: nothing left waiting")
+    # review of 02-Oct-2026: a Tally file is not "in Tally" until Tally confirms it; the bills stay listed, marked so, and
+    # are not posted again from here (one count everywhere: 2 for Tally)
+    # second pass of 02-Oct-2026: they need attention (once each), Ready to post says so, no "Post 0 to Tally"
+    # three tabs (plan item 1b): the two need attention, so Errors is open; To post says nothing is waiting
+    ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors" and pg.inner_text('#app [data-post-tab="errors"] [data-tab-n]') == "2", "1b. the Errors tab is open, with 2")
+    rows = pg.inner_text("#app [data-post-attention]") if pg.locator("#app [data-post-attention]").count() else ""
+    pg.click('#app [data-post-tab="topost"]'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("Object.values(D().entries).filter(e => e.exportedAt).length") == 2 and rows.count("In a Tally file") == 2 and pg.locator("#app [data-post-main]").count() == 0
+       and pg.inner_text("#app [data-post-empty]") == "Nothing waiting to post" and pg.evaluate("postCounts(S.coId)") == {"ready": 0, "attention": 2}, "marked as sent: listed as in a Tally file, needing attention; nothing ready to post")
     # Done: what went to Tally
     pg.evaluate("""() => { S.firm.postLog = (S.firm.postLog || []).concat([
       {at: '2026-09-20T10:00:00Z', what: 'bill', co: S.coId, ref: 'A/1', amount: 100000, tally: {vchType: 'Purchase', masterId: '77', company: 'Zeta Exports'}, by: 'a@b.c'},
       {at: '2026-09-21T10:00:00Z', what: 'bank', co: 'other-client', ref: 'NEFT 1', amount: 500, tally: {vchType: 'Payment', masterId: '78'}, by: 'a@b.c'}]); goStep('done', 'bills'); }""")
     pg.wait_for_timeout(600)
-    ok("Bills posted\n2" in pg.inner_text("#app .post-sum"), "Done: two bills posted")
+    ok("Bills posted\n0" in pg.inner_text("#app .post-sum") and "2 approved in all" in pg.inner_text("#app .post-sum"), "Done: a Tally file is not counted as posted until Tally confirms it (0 posted, 2 approved)")
     ok("1 entry for ZZ Zeta Exports" in app() and "Purchase 77" in app() and "NEFT 1" not in app(), "the record of what went to Tally, this client only")
     pg.click('#app button:has-text("All clients")'); pg.wait_for_timeout(400)
     ok("2 entries across every client" in app() and "NEFT 1" in app(), "All clients: both")
@@ -59,7 +76,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("S.filter") == "approved", "“Approved bills” opens them")
     # the same record in Settings (an old screen around it)
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'postlog'; render()"); pg.wait_for_timeout(500)
-    ok("Everything sent to Tally" in app() and "across every client" in app() and pg.locator('#app button:has-text("All clients")').count() == 0, "in Settings: every client, no per-client switch")
+    ok("Everything sent to Tally" in app() and "across every client" in app() and pg.locator('#app button:text-is("All clients")').count() == 0, "in Settings: every client, no per-client switch")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

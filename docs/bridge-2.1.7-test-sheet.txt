@@ -1,0 +1,67 @@
+FINCOM BRIDGE 2.1.7 - TEST SHEET (any computer, staging)
+
+File:        FinComBridge-Setup-2.1.7.exe
+Fingerprint: 948426b56ae8d3a5f2a5027d65d6d2ce7306e5356cfd6dda8ab81c435679f5b6 (SHA-256; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.7.exe
+(2.1.6 was installed on NWS144 on 03-Oct-2026 at 20:18 IST with PostOnly ZZ TEST. 2.1.7 replaces it the same night by
+ the owner's decision: open for every computer, posting to any company. Install 2.1.7 over 2.1.6; the installer replaces
+ the program, keeps the pairing, the settings and the copy, and clears the PostOnly list.)
+
+What is new in 2.1.7 (over 2.1.6)
+  - The owner's decisions of 03-Oct-2026: no pilot rule, no allow-list exception tied to one computer (the owner decides
+    per build); no PostOnly: the installer writes "PostOnly": [] (any company) marked "PostOnlyBy": "owner", so a later
+    installer never puts a list back. The duplicate checks and every posting safeguard of 2.1.6 are unchanged.
+  - The read guard (round 12): a Day Book answer that is a whole envelope listing NO entry for days whose copy holds
+    some is not trusted: nothing kept, no day marked read in full, nothing sent to FinCom as empty; the slice is read
+    again as after a timeout; the log says "Tally listed no entries but the copy holds N for these days; the answer is
+    not trusted (<the answer's first 200 characters, tags only>)". A round that read 0 entries while the copy holds
+    some is a read fault: shown as the company's trouble on FinCom's Tally page, and the read guard is not sent.
+  - Tray menu: "Test reading from Tally". For the open company and the newest day of its copy that holds an entry it
+    sends three requests, one at a time: the Day Book export with dates as yyyymmdd (the copy's request), the same with
+    dates as 1-Jul-2026, and FinComTag (the posting read-back's collection request). It writes to the log, for each:
+    the voucher count, the bytes, the seconds and the answer's first 200 characters as tags only. It reads only: no day
+    file, nothing in the copy, nothing to FinCom's cloud. Started from the tray icon only; a web page is refused.
+
+0. BEFORE THE INSTALL
+   Nothing to press in FinCom. Background reading may stay paused (the installer keeps that setting).
+
+1. DOWNLOAD AND INSTALL OVER 2.1.6
+   Do: TallyPrime open. Open the Link, then check the fingerprint if you can (PowerShell: Get-FileHash <file>); on a
+       computer where you cannot, compare the size shown by the browser with the .sha256 file's line.
+       Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me" (as 2.1.6); Next.
+   You should see: "FinCom Bridge 2.1.7 is installed and running", "Main bridge: reading and posting". Not asked to
+       pair again. Right-click the icon > Status shows version 2.1.7; the menu has "Test reading from Tally" under
+       "Measure Tally (for FinCom support)".
+   Then: in FinCom (staging), All clients > Tally, this computer's line: version 2.1.7, and NO "Posts only to: ..."
+       note (an empty list shows nothing). That is the proof the installer cleared the list.
+   If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish; a screenshot of
+       the Tally page line.
+
+2. A POSTING TO GARG SHEKHAR & COMPANY
+   Do: in FinCom, Post page, Errors tab: Retry the posting refused on 03-Oct at 20:19 IST (job 38857f25), or post one
+       approved bill of Testing AAD.
+   You should see: "In Tally (verified)" within seconds; ONE voucher in TallyPrime's Day Book; its narration begins
+       with "TDSDesk:<id> | ...". The log has no "This computer posts only to" line.
+   If not: what FinCom showed, the Day Book of that date, the log of that minute.
+
+3. TEST READING FROM TALLY (the evidence for the 0-entries fault)
+   Do: GARG SHEKHAR & COMPANY open in TallyPrime. Tray icon > Test reading from Tally. Wait for the message box (up
+       to about three minutes; each request may take up to 60 s).
+   You should see: a box with three lines, e.g.
+       Day Book, dates yyyymmdd: N vouchers, B bytes, S s
+       Day Book, dates d-MMM-yyyy: N vouchers, B bytes, S s
+       FinComTag (the posting read-back's request): N vouchers, B bytes, S s
+   Then: icon > Show log; copy the three lines that begin "Test reading from Tally:" (they end with "head: <...>",
+       the answer's tags only) and send them to me with the TallyPrime release (Help > About).
+   What the lines mean: FinComTag with N > 0 and both Day Book lines with 0 means the Day Book REPORT export is what
+       fails on this Tally (the copy's request); the d-MMM-yyyy line with N > 0 means a date-format fault; all three 0
+       means the company or the day is not what the bridge thinks; the heads tell the rest.
+   If not (no box, or "not answered"): the log of those minutes.
+
+4. NO UPDATE NOW on GARG SHEKHAR & COMPANY until migration 42 has run on staging AND I have read the three lines of
+   step 3. Background reading stays paused until then. Postings are unaffected.
+
+5. ZZ TEST (optional, when it exists in FinCom): a posting there as in step 2; a Test reading from Tally with ZZ TEST
+   open: its three lines too (a small company with a few entries is the cleanest comparison).
+
+6. CLEAN UP: nothing to do; 2.1.6's files are replaced by the installer.

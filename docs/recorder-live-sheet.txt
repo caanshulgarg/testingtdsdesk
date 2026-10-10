@@ -1,0 +1,69 @@
+FINCOM RECORDER - THE LIVE ADD-ON: HOW TO LOAD AND UNLOAD IT (FinCom Bridge 2.2.0)
+
+Who: the owner, on the Tally computer, in TallyPrime. You only use Tally's own menus and the FinCom tray icon. You do
+not open or edit any file.
+
+What it is
+----------
+FinCom Bridge 2.2.0 puts the live add-on at
+    C:\ProgramData\FinCom\addon\FinComRecorder.tdl
+next to the trial add-on C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl (the trial file is not changed).
+Load ONE of the two, never both: two loaded add-ons would write every change twice. If the trial add-on
+FinComRecorderAnyCompany.tdl (or the older FinComRecorderTrial.tdl) is loaded, unload it first (PART 2, step 2).
+
+While it is loaded, the live add-on writes for every company you open in Tally (there is no company check in it).
+For each save, alteration, deletion, cancellation or import, it adds one short line (the heads only: the entry's
+type, number, date, narration and Tally's ids; for a ledger, its name and group; the Tally user name) to a daily file
+    C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>.txt
+That folder is readable by every Windows user on this PC, and nothing removes the files: the bridge never deletes
+them. When FinCom's Tally page shows nothing waiting for this computer, daily files older than 31 days may be deleted
+by hand (an administrator, in File Explorer); the newest 31 days are kept.
+It does nothing else inside Tally: no message, no menu, no network, and it never makes a save wait. If its file is
+held by another program, the line goes to failed.txt or is dropped; the save goes on.
+
+FinCom Bridge reads the newest 7 days of these files (it never changes, locks, renames or deletes them), asks Tally
+itself for the body of an entry someone typed (FinCom's own postings need none), and sends the changes to FinCom
+within seconds. Prospective only: nothing from before the add-on was loaded is read.
+
+Before you start
+----------------
+- FinCom Bridge 2.2.0 is installed on this PC (tray icon > Status... shows 2.2.0).
+- The trial is over: no trial add-on is loaded (PART 2 below, for FinComRecorderAnyCompany.tdl and
+  FinComRecorderTrial.tdl).
+
+
+PART 1  -  LOAD THE LIVE ADD-ON
+-------------------------------
+1. In TallyPrime: F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
+   (If you do not see TDLs & Add-Ons: Alt+G (Go To), type  TDL  and choose  TDLs & Add-Ons.)
+2. Set  "Load selected TDL files on startup"  to  Yes.
+   (TallyPrime 3.x / 4.x / 5.x may say "Load TDL files on startup": the same Yes/No.)
+3. In  "List of TDL files to preload on startup"  go to the first empty line and type exactly:
+       C:\ProgramData\FinCom\addon\FinComRecorder.tdl
+   The list must NOT also hold FinComRecorderAnyCompany.tdl or FinComRecorderTrial.tdl.
+4. Accept the screen (Ctrl+A, or Yes to "Accept?").
+5. Back on TDLs & Add-Ons, the file is listed and its status says  Loaded.
+   If it says anything else (an error): do PART 2 to unload it, then tray icon > "Send install log to FinCom".
+6. Check the file name: save one entry in any company, then open C:\ProgramData\FinCom\recorder in File Explorer
+   (only look). A file changed just now must end in today's date as yyyymmdd, for example ...-20261006.txt. If it ends
+   otherwise (for example ...-6-Oct-2026.txt), the bridge still reads it, but tell FinCom what it looks like.
+7. Check: save one entry in any company (for example a Payment of Rs 1). Within a minute, FinCom's Tally page shows
+   lines received from this computer. (Changes come from: the add-on.)
+
+
+PART 2  -  UNLOAD THE ADD-ON (to switch it off, without closing Tally)
+-----------------------------------------------------------------------
+1. F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
+2. Go to the line  C:\ProgramData\FinCom\addon\FinComRecorder.tdl  (or the trial's line,
+   C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl, or C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl)
+   and clear it (Alt+R, or blank it out). Or set "Load selected TDL files on startup" to No (this turns off every TDL
+   in the list - use it only if this was the only one).
+3. Accept the screen. The file no longer shows as Loaded. If it still shows, close TallyPrime and open it again.
+After UNLOAD, the bridge still sends the lines already written; nothing new is written. FinCom's gap check shows
+the changes made meanwhile ("changes not received") until a Day Book of those days is uploaded.
+
+If the add-on cannot be used
+----------------------------
+FinCom can switch this computer to "Tally's change list" on its Tally page (owner only): the bridge then asks Tally
+every 10 minutes for the entries changed since the last answer (no add-on needed; deletions are then caught only by
+the gap check and the Day Book upload). Unload the add-on (PART 2) when that is chosen.

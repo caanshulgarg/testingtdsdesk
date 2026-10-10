@@ -10,19 +10,18 @@ import NoBooks from "../../parts/NoBooks.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const Tile = ({ l, v, sub, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b><small>{sub}</small></div>;
 const Sel = ({ label, value, opts, onChange, className }) => <select className={className} aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
 const LedBtn = ({ l }) => <button className="linkbtn strong" onClick={() => lkLed(l)}>{l}</button>;
 
 // a party's email and phone, kept as typed
-function ContactCells({ r }) {
-  return <>
-    <td><input type="email" className="ltr-in" defaultValue={r.c.email} placeholder="email" aria-label={r.l + " email"} onChange={(ev) => ltrContact(r.l, "email", ev.target.value)} /></td>
-    <td><input type="tel" className="ltr-in sm" defaultValue={r.c.phone} placeholder="phone" aria-label={r.l + " phone"} onChange={(ev) => ltrContact(r.l, "phone", ev.target.value)} /></td>
-  </>;
-}
-const Sends = ({ kind, l }) => <td className="ac"><button className="btn small" onClick={() => ltrOne(kind, "print", l)}>Letter</button><button className="btn small" title={kind === "confirm" ? "Opens your email with the letter written" : undefined} onClick={() => ltrOne(kind, "mail", l)}>Email</button><button className="btn small" onClick={() => ltrOne(kind, "wa", l)}>WhatsApp</button></td>;
+const contactCols = () => [
+  { k: "email", label: "Email", cell: (r) => <input type="email" className="ltr-in" defaultValue={r.c.email} placeholder="email" aria-label={r.l + " email"} onChange={(ev) => ltrContact(r.l, "email", ev.target.value)} /> },
+  { k: "phone", label: "Phone", cell: (r) => <input type="tel" className="ltr-in sm" defaultValue={r.c.phone} placeholder="phone" aria-label={r.l + " phone"} onChange={(ev) => ltrContact(r.l, "phone", ev.target.value)} /> },
+];
+const SendBtns = ({ kind, l }) => <><button className="btn small" onClick={() => ltrOne(kind, "print", l)}>Letter</button><button className="btn small" title={kind === "confirm" ? "Opens your email with the letter written" : undefined} onClick={() => ltrOne(kind, "mail", l)}>Email</button><button className="btn small" onClick={() => ltrOne(kind, "wa", l)}>WhatsApp</button></>;
 
 function Confirm() {
   const x = LTR.st(), { B, rows } = LTR.confirmRows(), c = LTR.cfg();
@@ -38,19 +37,22 @@ function Confirm() {
   const picked = rows.filter((r) => x.sel[r.l]);
   return <>{form}
     <div className="dash-tiles" style={{ marginTop: 12 }}><Tile l="Parties" v={rows.length} sub={B.src} /><Tile l="Sent" v={sent} sub="for this date" /><Tile l="Agreed" v={agreed} sub="confirmed by the party" /><Tile l="Differences" v={diff} sub="to reconcile" cls={diff ? "warn" : ""} /></div>
-    {!rows.length ? <div className="bk-none">No party with a balance matches. Change the choices above.</div> : <>
-      <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} onClick={() => ltrAct("print")}>{"Print or PDF the letters (" + picked.length + ")"}</button>
+    {!rows.length ? <div className="bk-none lt-empty" data-list-empty="">No party with a balance matches. Change the choices above: an earlier date, a lower amount, or more kinds of party.</div> : <>
+      <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} title={!picked.length ? "Tick at least one party in the list first" : undefined} onClick={() => ltrAct("print")}>{"Print or PDF the letters (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("selall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button><button className="btn" onClick={() => ltrAct("excel")}>Excel of the list</button></div>
-      <div className="bk-tablewrap"><table className="bk-table lk-t ltr-t"><thead><tr><th className="ck"></th><th>Party</th><th className="n">Balance</th><th>Email</th><th>Phone</th><th>Sent</th><th>Reply</th><th className="ac"></th></tr></thead><tbody>
-        {rows.map((r, i) => <tr key={r.l + ":" + i} data-key={r.l}><td className="ck"><input type="checkbox" checked={!!x.sel[r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel(r.l, ev.target.checked)} /></td>
-          <td><LedBtn l={r.l} /><span className="nr">{({ r: "customer", p: "supplier", o: "loan or advance" }[r.side]) + (r.gstin ? " · " + r.gstin : "")}</span></td>
-          <td className="n">{FC.drcr(r.bal)}</td><ContactCells r={r} />
-          <td>{r.s.sentAt ? <>{fmtDate(r.s.sentAt.slice(0, 10))}<span className="nr">{r.s.via || ""}</span></> : <span className="note">not yet</span>}</td>
-          <td><Sel className="ltr-in sm" label={"Reply from " + r.l} value={r.s.reply || ""} opts={[["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]]} onChange={(v) => ltrReply(r.l, v)} />
+      {/* the one list table (spec K6): sent (date), party, balance, reply (status), then the rest */}
+      <ListTable name="ltr-confirm" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["party", "parties"]} rowProps={(r) => ({ "data-key": r.l })}
+        cols={[
+          { k: "pick", role: "pick", cls: "ck", head: "", cell: (r) => <input type="checkbox" checked={!!x.sel[r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel(r.l, ev.target.checked)} /> },
+          { k: "sent", role: "date", label: "Sent", v: (r) => r.s.sentAt || "", cell: (r) => (r.s.sentAt ? <>{fmtDate(r.s.sentAt.slice(0, 10))}<span className="nr">{r.s.via || ""}</span></> : <span className="note">not yet</span>) },
+          { k: "party", role: "party", label: "Party", v: (r) => r.l, cell: (r) => <><LedBtn l={r.l} /><span className="nr">{({ r: "customer", p: "supplier", o: "loan or advance" }[r.side]) + (r.gstin ? " · " + r.gstin : "")}</span></> },
+          { k: "bal", role: "amount", label: "Balance", cls: "n", v: (r) => num(r.bal), fmt: (t) => FC.drcr(t), cell: (r) => FC.drcr(r.bal) },
+          { k: "reply", role: "status", label: "Reply", v: (r) => r.s.reply || "", cell: (r) => <><Sel className="ltr-in sm" label={"Reply from " + r.l} value={r.s.reply || ""} opts={[["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]]} onChange={(v) => ltrReply(r.l, v)} />
             {r.s.reply === "differs" && <><input type="text" className="ltr-in sm" inputMode="decimal" defaultValue={r.s.their || ""} placeholder="their figure" aria-label="Their balance" onChange={(ev) => ltrTheir(r.l, ev.target.value)} />
-              {num(r.s.their) ? <span className="nr bad">{"difference " + money(Math.abs(r2(Math.abs(r.bal) - num(r.s.their))))}</span> : null}</>}</td>
-          <Sends kind="confirm" l={r.l} /></tr>)}
-      </tbody></table></div></>}
+              {num(r.s.their) ? <span className="nr bad">{"difference " + money(Math.abs(r2(Math.abs(r.bal) - num(r.s.their))))}</span> : null}</>}</> },
+          ...contactCols(),
+          { k: "ac", role: "act", cls: "ac", cell: (r) => <SendBtns kind="confirm" l={r.l} /> },
+        ]} /></>}
   </>;
 }
 
@@ -68,13 +70,17 @@ function Remind() {
     {!rows.length ? <div className="fc-empty"><h3>Nothing overdue</h3><p className="note">{"No customer has a bill older than " + num(x.credit) + " days on " + FC.when(x.remOn) + ". Bills are read from the bill-wise details in Tally."}</p></div> : <>
       <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} onClick={() => ltrAct("rprint")}>{"Print or PDF the reminders (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("rselall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button></div>
-      <div className="bk-tablewrap"><table className="bk-table lk-t ltr-t"><thead><tr><th className="ck"></th><th>Customer</th><th className="n">Overdue</th><th className="n">Oldest</th><th>Email</th><th>Phone</th><th>Last reminder</th><th className="ac"></th></tr></thead><tbody>
-        {rows.map((r, i) => <tr key={r.l + ":" + i} data-key={r.l}><td className="ck"><input type="checkbox" checked={!!x.sel["rem|" + r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel("rem|" + r.l, ev.target.checked)} /></td>
-          <td><LedBtn l={r.l} /><span className="nr">{r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + money(r.total) + " in all"}</span></td>
-          <td className="n">{money(r.amt)}</td><td className={"n" + (r.oldest > 90 ? " bad" : "")}>{r.oldest + " days"}</td><ContactCells r={r} />
-          <td>{r.last ? <>{fmtDate(r.last.at.slice(0, 10))}<span className="nr">{r.last.via + ", " + (r.last.tone || "")}</span></> : <span className="note">never</span>}</td>
-          <Sends kind="remind" l={r.l} /></tr>)}
-      </tbody></table></div></>}
+      {/* the one list table (spec K6): last reminder (date), customer, overdue (amount), then the rest */}
+      <ListTable name="ltr-remind" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["customer", "customers"]} rowProps={(r) => ({ "data-key": r.l })}
+        cols={[
+          { k: "pick", role: "pick", cls: "ck", head: "", cell: (r) => <input type="checkbox" checked={!!x.sel["rem|" + r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel("rem|" + r.l, ev.target.checked)} /> },
+          { k: "last", role: "date", label: "Last reminder", v: (r) => (r.last ? r.last.at : ""), cell: (r) => (r.last ? <>{fmtDate(r.last.at.slice(0, 10))}<span className="nr">{r.last.via + ", " + (r.last.tone || "")}</span></> : <span className="note">never</span>) },
+          { k: "cust", role: "party", label: "Customer", v: (r) => r.l, cell: (r) => <><LedBtn l={r.l} /><span className="nr">{r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + money(r.total) + " in all"}</span></> },
+          { k: "amt", role: "amount", label: "Overdue", cls: "n", v: (r) => num(r.amt), cell: (r) => money(r.amt) },
+          { k: "old", label: "Oldest", cls: "n", v: (r) => r.oldest, td: (r) => ({ className: r.oldest > 90 ? "bad" : undefined }), cell: (r) => r.oldest + " days" },
+          ...contactCols(),
+          { k: "ac", role: "act", cls: "ac", cell: (r) => <SendBtns kind="remind" l={r.l} /> },
+        ]} /></>}
   </>;
 }
 
@@ -99,7 +105,7 @@ export default function Letters({ b }) {
     <div className="lk-kinds" role="tablist" aria-label="Letters">{[["confirm", "Balance confirmations"], ["remind", "Dues reminders"], ["settings", "Letter settings"]].map(([k, l]) => <button key={k} role="tab" aria-selected={x.mode === k} onClick={() => ltrMode(k)}>{l}</button>)}</div></section>;
   if (!have && x.mode !== "settings") return <>{head}<NoBooks what="Letters" /></>;
   return <>{head}
-    {x.busy && <BusyCard title="Reading Tally…" detail={x.busy} done={0} total={0} />}
+    {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     <AutoFresh />
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {x.mode === "settings" ? <Settings /> : x.mode === "confirm" ? <Confirm /> : <Remind />}

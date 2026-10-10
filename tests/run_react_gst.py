@@ -65,7 +65,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.books.gst3b[%s].rev2.igst" % json.dumps(k)) == 1000 and pg.inner_text('tr:has-text("(C) Net ITC available")') != before, "3B 4(B)(2): 1,000 typed is kept, and net ITC changes")
     # the input register: a chip filters, again clears; the find box keeps the cursor; the whole year
     pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(600)
-    reg = lambda: pg.inner_text("#app table.bk-table.fixed tbody tr:last-child")
+    # the one list table (round 2, K6): the count ("12 documents of 40") and the totals are in the foot
+    reg = lambda: pg.inner_text("#app table.bk-table.fixed tfoot")
     all_ = reg()
     pg.click('#app .gf-chips button.gf-chip >> nth=0'); pg.wait_for_timeout(400)
     ok(" of " in reg() and pg.locator("#app .gf-chip.on").count() == 1, "a chip filters the register: " + reg().split("\t")[0])
@@ -116,7 +117,7 @@ with sync_playwright() as p:
     note = pg.locator('tr[data-key=%s] input[aria-label="Note"]' % json.dumps(key)); note.fill("asked on phone"); note.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("ITCT.store(S.gstReg || '').dec[%s].note" % json.dumps(key)) == "asked on phone", "and a note to it")
     pg.click('.gf-chips button.gf-chip >> nth=0'); pg.wait_for_timeout(400)
-    cat = pg.evaluate("S.itctCat"); shown = pg.evaluate("Array.from(document.querySelector('.bk-table.fixed').querySelectorAll('tbody tr td:first-child')).map(td => td.innerText.split('\\n')[0])")
+    cat = pg.evaluate("S.itctCat"); shown = pg.evaluate("(() => { const t = document.querySelector('.bk-table.fixed'), i = [...t.tHead.rows[0].cells].findIndex(h => /^What$/i.test(h.innerText.trim())); return Array.from(t.tBodies[0].rows).map(r => r.cells[i].innerText.split('\\n')[0]); })()")
     ok(cat and len(set(shown)) == 1, "a chip shows one kind only (%d lines)" % len(shown))
     pg.click('.gf-chips button.gf-chip.on'); pg.wait_for_timeout(300)
     sup = pg.locator('section:has(h3:text-is("Suppliers to write to")) tbody tr').first

@@ -22,7 +22,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("GSTSet.typeOf('202511','07')") == "qrmp" and "Quarterly (QRMP) from Q3 2025-26" in pg.inner_text("#app"), "QRMP from Q3 2025-26 set in GST settings")
     ok("Save only" in pg.inner_text("#app") and pg.evaluate("GSTQ.apiMode()") == "save", "returns through the API: save only by default")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(3500); t = pg.inner_text("#app")
-    ok("This quarter" in t and "IFF" in t and "Pay tax by PMT-06" in t and "This month has no GSTR-1 or 3B" in t, "November: This quarter shows two steps, IFF and PMT-06")
+    # 02-Oct-2026: the quarter on one page; November's column (its IFF) is the one open, with PMT-06
+    ok("This quarter" in t and "What goes in this file: IFF Nov-2025" in t and "Pay tax by PMT-06" in t and pg.locator("#app [data-qtable]").count() == 1, "November: the quarter on one page, November's IFF open, with PMT-06")
     pg.screenshot(path=OUT + "/qrmp-month.png", full_page=False)
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
     pg.click('button:text-is("Download IFF JSON")'); pg.wait_for_timeout(1000)
@@ -30,9 +31,9 @@ with sync_playwright() as p:
     pg.fill('input[aria-label="PMT-06 paid igst"]', "200000"); pg.press('input[aria-label="PMT-06 paid igst"]', "Tab"); pg.wait_for_timeout(3000)
     ok(pg.evaluate("GSTF.peek('202511','07').pmt06.igst") == 200000, "PMT-06 paid is kept")
     pg.select_option('select[aria-label=Month]', "202512"); pg.wait_for_timeout(5000); t = pg.inner_text("#app")
-    ok("GSTR-1 for the quarter" in t and "GSTR-3B for the quarter" in t and "Less: paid by PMT-06" in t and "2,00,000" in t, "December: the quarter's two returns, with PMT-06 set against the 3B")
+    ok("Download GSTR-1 JSON for the quarter" in t and "Download GSTR-3B JSON for the quarter" in t and "PMT-06 paid (₹2,00,000.00) is in the cash ledger and used first" in t, "December: the quarter's two returns, with PMT-06 set against the 3B")
     pg.screenshot(path=OUT + "/qrmp-quarter.png", full_page=False)
-    pg.click('button[data-act="gstJson"]'); pg.wait_for_timeout(3000)
+    pg.click('#app button:text-is("Download GSTR-1 JSON for the quarter")'); pg.wait_for_timeout(3000)
     ok(any("GSTR1_" in n and "122025" in n for n in pg.evaluate("window.__saved")), "GSTR-1 JSON for the quarter downloads")
     # composition from Q4
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)

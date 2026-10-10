@@ -60,7 +60,8 @@ with sync_playwright() as p:
     ok(pg.locator("#app .billdoc, #app .prevbox").count() >= 1, "12. the bill's document panel sits beside the fields")
     # 8. suppliers on waiting bills
     pg.evaluate("() => { S.tab = 'deductees'; render(); }"); pg.wait_for_timeout(600)
-    ok("New supplier, not yet approved" in app() and "Shree Nandik Technologies" in app(), "8. Client setup lists the supplier of a waiting bill as new")
+    # 2c58741 (review of 02-Oct-2026): the list is "Supplier not yet in FinCom's list", each marked new or with its Tally ledger
+    ok("Supplier not yet in FinCom\u2019s list" in app() and "Shree Nandik Technologies" in app(), "8. Client setup lists the supplier of a waiting bill as new")
     pg.click('#app button:has-text("Save and fill in")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("Object.values(D().parties).some(p => p.name === 'Shree Nandik Technologies')"), "8. Save and fill in: the supplier is in the list")
     # 5. one Tally status
@@ -90,7 +91,12 @@ with sync_playwright() as p:
       return [tallyStatus(S.companies[cid]).state, tallyStatus(S.companies[nog]).label]; }""", [cid, nog])
     ok(st[0] in ("ok", "waiting") and st[1] == "Connected \u2013 company not linked", "5. linked client: connected; a client with only a Tally name typed: “Connected – company not linked” (" + str(st) + ")")
     pg.evaluate("(cid) => openCompany(cid).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); })", nog); pg.wait_for_timeout(1200)
-    ok("Not connected on this computer" not in app() and "company not linked" in app(), "5. From Tally, step 4: the same status as the top bar, not “Not connected on this computer”")
+    # The owner's simpler upload page (08-Oct-2026, next-uploadpage 143a104b; docs/ui-pass/uploadpage/README.md row 12)
+    # removed step 4 and its Tally pill from From Tally: the top bar's Tally sign is the one status on the page. Item 5
+    # ("one status everywhere") is kept as: no second, different Tally status on this page, and the top bar's sign shown.
+    ok("Not connected on this computer" not in app() and "4. FinCom Bridge" not in app() and pg.locator("#app [data-tally]").count() == 0
+       and pg.locator("[data-tally-sign]").count() == 1,
+       "5. From Tally: no Tally status of its own (no “Not connected on this computer”, no step 4); the top bar’s sign is the one status")
     # 6 (recheck). the link as the cloud has it, and the GSTIN matched whatever its spacing or case
     ok(pg.evaluate("(cid) => (gstinMatch({gstin: ' 09aanfg3202d1zr '}) || {}).id === cid", cid), "6. a Tally company's GSTIN matches the client's, whatever the case or spaces")
     pg.evaluate("""(cid) => { TCloud.rpc = async () => ({}); Cloud.api = async (q) => /tally_devices/.test(q) ? [] : [];

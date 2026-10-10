@@ -1,6 +1,8 @@
 // A purchase bill: what was read from it, GST, the TDS decision and the draft entry for Tally. Editable while it is a
 // draft. Was viewDetail() and its helpers (field, docWarnHtml, itemsHtml, partyHistHtml, ytdSourceHtml,
 // rereadButtons, viewGst) in src/js/19, 01 and 27. Every change goes through billSet…/billGst/… in src/js/27.
+import Msg from "../parts/Msg.jsx";
+import { useEffect } from "react";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
 
@@ -8,15 +10,19 @@ const money_ = (n) => money(n);
 const isFree = (m) => /^(free (OCR|\(PDF)|Google OCR$)/.test(m);
 const costNote = (m) => /^free (OCR|\(PDF)/.test(m) ? ": no cost" : m === "Google OCR" ? ": Google OCR, no Claude cost" : /text only/.test(m) ? ": low Claude cost" : /^Claude/.test(m) ? ": normal Claude cost" : "";
 
-function Field({ e, label, k, ro, type = "text", wide, value }) {
+// round 14c (C4): the reader found no date on the page (its trace or freeWhy says "date not found") and none is typed
+const dateNotFound = (e) => !e.x.invoiceDate && e.status === "draft" && (/date not found/i.test(e.freeWhy || "") || (e.readTrace || []).some((t) => t && /date not found/i.test(t.note || "")));
+function Field({ e, label, k, ro, type = "text", wide, value, miss }) {
   const unsure = !ro && e.uncertain && e.uncertain.indexOf(k) >= 0;
   const v = value !== undefined ? value : e.x[k];
+  const noDate = k === "invoiceDate" && !ro && dateNotFound(e);
   return (
     <label className={"f" + (wide ? " wide" : "") + (unsure ? " unsure" : "")}>
       <span>{label}</span>
-      <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k}
+      <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k} data-focus-field={k} className={miss === k ? "bk-missing" : undefined}
         {...(type === "number" ? { step: "0.01", inputMode: "decimal" } : {})}
         onChange={(ev) => billSetX(e, k, ev.target.value)} />
+      {noDate && <span className="bk-warn" data-date-not-found="">Date not found on this page; please type it.</span>}
     </label>
   );
 }
@@ -28,7 +34,7 @@ function Items({ e }) {
   return (
     <details className="itembox" open={s.multi}>
       <summary>What was billed · {s.items.length} line{s.items.length === 1 ? "" : "s"}{s.multi && <> <span className="tag">two GST rates</span></>}</summary>
-      <div className="tblwrap"><table className="data">
+      <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Description</th><th>HSN/SAC</th><th className="n">Quantity</th><th className="n">Rate</th><th className="n">Value</th><th className="n">GST</th></tr></thead>
         <tbody>{s.items.map((i, k) => (
           <tr key={k}><td>{i.desc}</td><td>{i.hsn || "—"}</td><td className="n">{i.qty ? i.qty + (i.unit ? " " + i.unit : "") : "—"}</td>
@@ -37,7 +43,7 @@ function Items({ e }) {
       </table></div>
       {(s.rates.length > 1 || s.multi) && <>
         <h4 style={{ margin: "10px 0 4px", fontSize: 14 }}>By GST rate</h4>
-        <div className="tblwrap"><table className="data">
+        <div className="tblwrap"><table className="data" data-statement="">
           <thead><tr><th>Rate</th><th>HSN/SAC</th><th className="n">Taxable</th><th className="n">GST</th></tr></thead>
           <tbody>{s.rates.map((r, k) => (
             <tr key={k}><td>{r.rate == null ? "rate not shown" : r.rate + "%"}</td><td>{r.hsn.size ? Array.from(r.hsn).join(", ") : "—"}</td>
@@ -69,7 +75,7 @@ function ReadBits({ e, ro }) {
       {!ro && S.files[e.id] && S.engine && <button className="btn small" onClick={() => doAct("reread")}>Read again carefully</button>}
       {e.readMode && <span className="note">Read by {e.readMode}</span>}
     </div>
-    {e.readNote && <p className="note" style={{ margin: "6px 0 0" }}>{e.readNote}</p>}
+    {e.readNote && <p className="note" style={{ margin: "6px 0 0" }}>{/^New supplier/.test(e.readNote) && supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list: confirm the payment type before approving." : e.readNote}</p>}
     {e.readTrace && e.readTrace.length > 0 && <details className="trace" open={e.status === "draft"}>
       <summary>How this bill was read</summary>
       <ol>{e.readTrace.map((t, i) => <li key={i} className={t.ok ? "tok" : "tno"}><b>{(t.ok ? "✓ " : "✗ ") + t.step}</b>{t.note ? ": " + t.note : ""}</li>)}</ol>
@@ -151,7 +157,7 @@ function YtdSource({ e, c }) {
       {ours.credited ? <> + <b>{money0(ours.credited)}</b> from {ours.bills} bill{ours.bills === 1 ? "" : "s"} here not yet in Tally</> : null}
       {" · read " + fmtDateTime(t.at) + " "}{fetch(busy ? "Reading…" : "Check again")}</p>;
   }
-  if (!bridgeLive()) return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. Connect the Tally Bridge to include what is already booked in Tally.</p>;
+  if (!bridgeLive()) return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. Connect FinCom Bridge to include what is already booked in Tally.</p>;
   if (!led) return <p className="note" style={{ margin: "4px 0 0" }}>Choose the supplier’s Tally ledger below to check what was already credited to it this year.</p>;
   return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. {fetch(busy ? "Reading from Tally…" : "Check " + led + " in Tally")}</p>;
 }
@@ -164,7 +170,7 @@ function Tds({ e, c, v, ro }) {
         <select value={e.natureId} disabled={ro} onChange={(ev) => billSetChoice(e, "natureId", ev.target.value)}>
           {rules().map((r) => <option key={r.id} value={r.id}>{r.label + (r.old !== "—" ? " (old " + r.old + ")" : "")}</option>)}
         </select></label>
-      {newType && <div className="row" style={{ margin: "-4px 0 10px" }}><button className="btn small" onClick={() => doAct("confirmType")}>Confirm payment type</button><span className="note">New supplier: the payment type decides the TDS section.</span></div>}
+      {newType && <div className="row" style={{ margin: "-4px 0 10px" }}><button className="btn small" onClick={() => doAct("confirmType")}>Confirm payment type</button><span className="note">{supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list" : "New supplier"}: the payment type decides the TDS section.</span></div>}
       {e.ai && e.ai.reason && <p className="note" style={{ margin: "-4px 0 10px" }}>{/Claude/.test(e.readMode || "") || !e.readMode ? "Claude: " + e.ai.reason : "Guessed from the bill: " + e.ai.reason.replace(/^Free reading:\s*/, "")}</p>}
       <p className={"verdict " + (v.applicable ? "yes" : "nope")}>{v.applicable ? (v.skip ? "TDS applies: " + money_(v.tdsWould) + ", not booked" : "TDS applies: " + money_(v.tds)) : "No TDS on this invoice"}</p>
       {(v.tdsWould > 0 || e.tdsSkip || !v.never) && !ro ? (
@@ -194,57 +200,126 @@ function Tds({ e, c, v, ro }) {
   );
 }
 
-// a ledger on the draft entry: typed (with the Tally ledger list, data-ac), checked against Tally, fixable
-function LedgerCell({ e, l, ro, tallyCtx }) {
-  const edit = !ro && (l.role === "expense" || l.role === "party");
+// "1,110 ledgers from Tally · 02-Oct 10:56 · Refresh": the client's one ledger list (Ledgers), under each ledger box
+function LedStatus() {
+  const st = Ledgers.status(S.coId);
+  return <div className="ledstat" data-led-status="">
+    {st.busy ? "Reading the ledgers… " : ""}{st.n ? st.n.toLocaleString("en-IN") + " ledgers from Tally" + (st.at ? " · " + Ledgers.when(st.at) : "") : "No ledger list from Tally yet"}
+    {" · "}<button className="linkbtn" disabled={st.busy} onClick={() => Ledgers.refresh(S.coId)}>Refresh</button>
+    {st.err && !st.busy ? <span className="bad"> · <Msg text={st.err} /></span> : null}</div>;
+}
+const TAX_ROLES = ["gst", "rcm-in", "rcm-out", "tds"];
+// a ledger on the draft entry: typed or searched (the client's Tally ledgers, data-ac), checked against Tally, with why
+// it was picked; GST and TDS lines too (a ledger of another tax head or section is refused)
+// review 20-21: a ledger this bill takes from Client setup where FinCom only guessed it: shown, with Confirm (for every
+// bill); posting waits until it is confirmed (src/js/60 billGuessedWhy)
+function GuessedFromSetup({ e, l }) {
+  const co = CO();
+  const ck = l.ck || (l.role === "expense" && /^Client setup/.test(e.expenseFrom || "") && !e.expenseUserSet && e.natureId ? "exp:" + e.natureId : "");
+  if (!ck || !l.ledger || e.exportedAt || choiceState(co, ck) === "confirmed") return null;
+  return <div className="cfm-guess" data-led-guess={ck}><span className="tag warn">guessed, confirm</span> <span className="note">Client setup’s ledger, found by FinCom: not posted until confirmed.</span>{" "}
+    <button type="button" className="linkbtn" data-choice-confirm={ck} onClick={() => { choiceConfirm(co, ck, l.ledger); toast("Confirmed for every bill: " + l.ledger + "."); render(); }}>{"Confirm “" + l.ledger + "”"}</button></div>;
+}
+function LedgerCell({ e, l, ro, tallyCtx, miss }) {
+  const tax = TAX_ROLES.includes(l.role);
+  const edit = !ro && (l.role === "expense" || l.role === "party" || (tax && !!l.key));
   const key = l.role === "expense" ? "expenseLedger" : "partyLedger";
   const h = e.partyHist, ex = l.ledger && tallyCtx && !e.exportedAt ? exactLedger(l.ledger) : null;
+  const val = tax ? (e.taxLed && e.taxLed[l.key] != null ? e.taxLed[l.key] : l.ledger || "") : e[key] || "";
+  const label = l.role === "expense" ? "Expense ledger" : l.role === "party" ? "Party ledger" : l.role === "tds" ? "TDS ledger" : (l.head || "GST") + " ledger";
+  // on a draft, a GST / TDS line's ledger is the bill's own choice; on an approved bill, the fix goes to every bill waiting
+  const fix = (n) => tax && edit ? billSetTaxLed(e, l.key, n) : billFixLedger(l.role, l.ledger, n);
   return <>
-    {edit ? <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" autoComplete="off" value={e[key] || ""}
-      aria-label={l.role === "expense" ? "Expense ledger" : "Party ledger"} placeholder={l.role === "expense" ? "Expense ledger" : "Party ledger"}
-      onChange={(ev) => billSetText(e, key, ev.target.value)} /> : l.ledger ? l.ledger : <span className="missing">Ledger not set</span>}
-    {edit && l.role === "party" && e.partyFromTally && <div className="note">From Tally: {e.partyFromTally}</div>}
+    {edit ? (tax
+      ? <input type="text" data-tl={l.key} data-fk={"tl:" + l.key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val} data-focus-field={l.role === "tds" ? "tdsLedger" : undefined}
+          className={miss && miss === (l.role === "tds" ? "tdsLedger" : "") ? "bk-missing" : undefined}
+          aria-label={label} placeholder={l.ask || label} onChange={(ev) => billSetTaxLed(e, l.key, ev.target.value)} />
+      : <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val} data-focus-field={key} className={miss === key ? "bk-missing" : undefined}
+          aria-label={label} placeholder={label} onChange={(ev) => billSetText(e, key, ev.target.value)} />)
+      : l.ledger ? l.ledger : <span className="missing">{l.ask || "Ledger not set"}</span>}
+    {edit && l.role === "party" && e.partyNote && e.partyFrom && <div className="note" data-led-note="party">{e.partyNote}</div>}
+    {edit && l.role === "party" && (e.partyFrom ? <div className="note" data-led-why="party">{e.partyFrom}</div>
+      : !e.partyLedger && tallyCtx ? <div className="bk-warn" data-led-why="party">No ledger found for this supplier: search or create</div> : null)}
+    {edit && tax && (l.bad ? <div className="bk-warn" data-led-why={l.key}>{l.bad}</div>
+      : !l.ledger ? <div className="bk-warn" data-led-why={l.key}>{l.ask}</div>
+      : l.why ? <div className="note" data-led-why={l.key}>{l.why}</div> : null)}
+    <GuessedFromSetup e={e} l={l} />
     {l.ledger && tallyCtx && !e.exportedAt && (ex
       ? <> <span className="lg-ok" title={"In Tally as “" + ex + "”"}>✔</span></>
       : <div className="lg-miss">Not in Tally
-          {suggestLedgers(l.ledger, l.role, 2).map((n) => <span key={n}> <button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, n)}>Use “{n}”</button></span>)}
-          {" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></div>)}
+          {suggestLedgers(l.ledger, l.role, 2).map((n) => <span key={n}> <button className="linkbtn" onClick={() => fix(n)}>Use “{n}”</button></span>)}
+          {!(tax && edit) && <>{" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></>}</div>)}
     {l.role === "expense" && <>
-      {e.expenseFrom && !e.expenseUserSet && <div className="nr" style={{ color: "var(--ledger)" }}>{e.expenseFrom}</div>}
+      {e.expenseFrom && !e.expenseUserSet && <div className="nr" style={{ color: "var(--ledger)" }} data-led-why="expense">{e.expenseFrom}</div>}
       {h && h.top && h.top.length > 0 && <div className="phist"><span className="muted">Booked before for this supplier:</span>{" "}
         {h.top.map((t) => ro ? <span key={t.ledger} className="chip">{t.ledger} <b>{t.n}×</b> </span>
           : <span key={t.ledger}><button className={"chip" + (norm(t.ledger) === norm(e.expenseLedger) ? " on" : "")} onClick={() => billUseExpense(e, t.ledger)}>{t.ledger} <b>{t.n}×</b></button> </span>)}
       </div>}
     </>}
+    {edit && <LedStatus />}
   </>;
 }
 
-function Slip({ e, c, ro, snap }) {
+function Slip({ e, c, ro, snap, miss }) {
   const co = CO(), x = e.x, lines = snap ? snap.lines : c.lines;
   const tot = lines.reduce((a, l) => { a[l.side] += l.amt; return a; }, { Dr: 0, Cr: 0 });
-  const tallyCtx = !!(S.bank && S.bank.cid === S.coId && !S.bank.loading && hasLedgerList());
+  const tallyCtx = ledgerListFor(S.coId);
   return (
     <section><h3>Draft entry for Tally: {co.tallyName || co.name}</h3><div className="slip">
       <div className="sh"><b>{co.voucherType} voucher</b><span>{fmtDate(x.invoiceDate) + (x.invoiceNo ? ", ref " + x.invoiceNo : "")}</span></div>
-      <table className="vtbl">
+      <table className="vtbl" data-statement="">
         <thead><tr><th></th><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
         <tbody>{lines.map((l, i) => (
-          <tr key={i}><td className="by">{l.side}</td><td><LedgerCell e={e} l={l} ro={ro} tallyCtx={tallyCtx} /></td>
+          <tr key={i}><td className="by">{l.side}</td><td><LedgerCell e={e} l={l} ro={ro} tallyCtx={tallyCtx} miss={miss} /></td>
             <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>
         ))}</tbody>
         <tfoot><tr><td></td><td>Total</td><td className="n">{INR.format(r2(tot.Dr))}</td><td className="n">{INR.format(r2(tot.Cr))}</td></tr></tfoot>
       </table>
       {!ro && !tallyCtx && <p className="note" style={{ margin: "8px 0 0" }}>The ledgers are not checked against Tally yet: this client's ledger list has not been read.{" "}
-        <button className="btn small" onClick={() => billReadLedgers()}>{bridgeLive(co) ? "Read the ledgers from Tally" : "Bring in the ledger list (from Tally)"}</button></p>}
+        <button className="btn small" onClick={() => billReadLedgers()}>{bridgeLive(co) || (typeof TCloud === "object" && TCloud.has(co.id)) ? "Read the ledgers from Tally" : "Bring in the ledger list (from Tally)"}</button></p>}
       {!ro && c.missing.some((m) => /ledger/i.test(m)) && <p className="bk-warn" style={{ margin: "8px 0 0" }}>Approve waits until every line has a Tally ledger: {c.missing.filter((m) => /ledger/i.test(m)).join("; ")}.</p>}
       {ro ? <div className="narr">{e.narration}</div>
         : <label className="f" style={{ marginTop: 10 }}><span>Narration</span><input type="text" data-fk="e:narration" value={e.narration || ""} onChange={(ev) => billSetText(e, "narration", ev.target.value)} /></label>}
       {e.status === "approved" && <div className="stampmark">{e.exportedAt ? "Sent to Tally" : "Approved"}<small>{fmtDate((e.exportedAt || e.approvedAt || "").slice(0, 10))}</small></div>}
+      {e.status === "approved" && <PostedLine e={e} />}
       {e.status === "rejected" && <div className="stampmark rej">No entry</div>}
     </div></section>
   );
 }
 
+// round 15 (B1, B5): what Tally confirmed, from the mark kept on the bill when the result arrived (e.tally.vch: Tally's
+// exact voucher id; e.tally.batchEnd: the last id of a batch, never an id inferred for this bill) or from the cloud's
+// posting naming it; "Matched with Tally" only when tally_post_ids carries matched_at. An older posting: nothing extra
+function PostedLine({ e }) {
+  const m = typeof postMarkFor === "function" ? postMarkFor(S.coId, e.id, e) : null, words = m ? postMarkWords(m) : "";
+  const mt = typeof postMatched === "function" ? postMatched(e.id, S.coId) : null;
+  if (!words && !mt) return null;
+  return <p className="note" data-posted-line="" data-batch-n={m && m.batchN || undefined} style={{ margin: "8px 0 0" }}>{words}
+    {mt && <> <span className="tag ok" data-matched="" title={"Matched with Tally " + (mt.vch ? "voucher " + mt.vch + " " : "") + fmtIST(mt.at)}>Matched with Tally</span></>}</p>;
+}
+
+// a duplicate with its original beside it, and the two choices (review of 02-Oct-2026)
+function DupBeside({ e }) {
+  const o = e.dupOf && e.dupOf.entryId ? D().entries[e.dupOf.entryId] : null;
+  const rows = [["Supplier", (x) => x.x.vendorName || "—"], ["GSTIN / PAN", (x) => x.x.vendorGstin || x.x.vendorPan || "—"], ["Bill no.", (x) => x.x.invoiceNo || "—"],
+    ["Date", (x) => x.x.invoiceDate ? fmtDate(x.x.invoiceDate) : "—"], ["Value", (x) => money(num(x.x.total))], ["File", (x) => x.fileName || "—"],
+    ["Uploaded", (x) => x.createdAt ? fmtDateTime(x.createdAt) : "—"], ["Where it is", (x) => x.status === "duplicate" ? "held as duplicate" : x.status === "approved" ? "approved" + (x.approvedAt ? " on " + fmtDate(x.approvedAt.slice(0, 10)) : "") + " · " + tallyStateOf(x)[1] : statusLabel(x.status)]];
+  return <section data-dup-beside=""><h3>Duplicate</h3>
+    <p className="note" style={{ margin: "0 0 8px" }}>{(e.dupOf && e.dupOf.msg) || "Held as a duplicate."} It does not count towards limits and cannot be approved.</p>
+    {o ? <table className="data" data-statement=""><thead><tr><th></th><th>This copy</th><th>The original</th></tr></thead><tbody>
+      {rows.map(([label, f]) => { const a = f(e), b = f(o); return <tr key={label}><td>{label}</td><td>{a}</td><td className={a !== b ? "bad" : undefined}>{b}</td></tr>; })}
+    </tbody></table> : <p className="note">The original is not on this computer.</p>}
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      <button className="btn danger" onClick={() => doAct("delete")}>Delete this one</button>
+      <button className="btn" onClick={() => doAct("notDup")}>Keep both</button>
+      {o && <button className="btn" onClick={() => doAct("openOriginal")}>Open the original</button>}
+    </div></section>;
+}
+
+function FocusMissing({ id, miss }) {
+  useEffect(() => { if (miss && typeof focusBillField === "function") setTimeout(() => focusBillField(miss), 0); }, [id]);
+  return null;
+}
 export default function BillDetail({ id }) {
   const e = D().entries[id];
   if (!e) return null;
@@ -254,6 +329,10 @@ export default function BillDetail({ id }) {
       {S.previews[e.id] && <section><img className="preview" src={S.previews[e.id]} alt="Invoice being read" /></section>}
     </div>
   );
+  // party, expense: filled by themselves from Tally's ledgers and books, unless a person chose (src/js/01 billAutoLedgers)
+  if (e.status === "draft") billAutoLedgers(e, S.coId);
+  // the client's books (its day book, and each ledger's GSTIN and PAN read with the masters) for those picks
+  if (e.status === "draft" && (!S.books || S.books.cid !== S.coId) && typeof openBooks === "function") setTimeout(() => { if (S.view === "company" && (!S.books || S.books.cid !== S.coId)) openBooks(S.coId); }, 0);
   const co = CO(), c = compute(e), ro = e.status !== "draft", x = e.x, snap = e.status === "approved" && e.snapshot;
   const v = snap ? { applicable: snap.applicable, tds: snap.tds, tdsWould: snap.tdsWould != null ? snap.tdsWould : snap.tds, skip: snap.skip || null, why: snap.why || [], meter: snap.meter || null,
       ref: snap.ref, old: snap.old, pan: snap.pan, indHuf: !!snap.indHuf, fy: snap.fy || fyOf(x.invoiceDate), base: snap.base, tdsBase: snap.tdsBase, rate: snap.rate, rateNote: snap.rateNote || "",
@@ -261,9 +340,12 @@ export default function BillDetail({ id }) {
     : { applicable: c.applicable, tds: c.tds, tdsWould: c.tdsWould, skip: c.skip, why: c.why, meter: c.meter, ref: c.rule.ref, old: c.rule.old, pan: c.pan, indHuf: c.indHuf, fy: c.fy,
       base: c.base, tdsBase: c.tdsBase, rate: c.rate, rateNote: c.rateNote, never: c.rule.basis === "never", flags: e.status === "draft" ? c.flags : [], catchUp: c.catchUp, anyway: c.anyway };
   const closed = typeof ClosedP === "object" && x.invoiceDate && e.status !== "rejected" && !e.exportedAt ? ClosedP.note(x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
-  const f = (label, k, o = {}) => <Field e={e} label={label} k={k} ro={ro} {...o} />;
+  // round 14c (C2): the first missing field is marked (bk-missing) and gets the cursor when the bill opens with missing items
+  const miss = e.status === "draft" && typeof firstMissingField === "function" ? firstMissingField(c.missing) : "";
+  const f = (label, k, o = {}) => <Field e={e} label={label} k={k} ro={ro} miss={miss} {...o} />;
   return (
     <div className="detail">
+      <FocusMissing id={e.id} miss={miss} />
       <section className="dhead">
         <div>
           <h2>{x.vendorName || "New invoice"}</h2>
@@ -280,6 +362,9 @@ export default function BillDetail({ id }) {
         <div className="actions">{e.status === "draft" && canDeleteBills() && <button className="linkbtn" onClick={() => billDelete(e.id)}>Delete…</button>}</div>
       </section>
       {e.readError && <section><p className="banner" style={{ margin: 0 }}>{e.readError}</p></section>}
+      {notReadYet(e) && e.status === "draft" && <section data-notread=""><p className="banner bad" style={{ margin: 0 }}>
+        <b>Not read yet:</b> {e.notRead.reason} <button className="btn small" onClick={() => retryNotRead(e.id)}>Retry</button>
+        <span className="note"> Or type in the supplier, date and amounts below. It cannot be approved until then.</span></p></section>}
       {!ro && e.readMode !== "free (partly read)" && (e.handwritten || (e.uncertain && e.uncertain.length > 0)) && <section><p className="banner" style={{ margin: 0 }}>
         {e.handwritten ? "Handwritten bill. " : ""}
         {e.uncertain && e.uncertain.length ? "Fields marked in amber need a quick look. Compare them with the image; to correct one, click in the box and type. When they are right, press “Fields look right” in the bar at the bottom." : "Check the figures against the image."}
@@ -309,10 +394,12 @@ export default function BillDetail({ id }) {
       <Gst e={e} c={c} ro={ro} snap={snap} />
       <Tds e={e} c={c} v={v} ro={ro} />
       {v.flags.length > 0 && <section><h3>Check before approving</h3><ul className="flags">{v.flags.map((fl, i) => <li key={i} className={fl.lvl}>{fl.t}</li>)}</ul></section>}
-      <Slip e={e} c={c} ro={ro} snap={snap} />
+      <Slip e={e} c={c} ro={ro} snap={snap} miss={miss} />
       {e.status === "deleted" && <section><p className="banner" style={{ margin: 0 }}>Deleted {fmtDateTime(e.deleted && e.deleted.at)} by {(e.deleted && e.deleted.by) || "—"}: {(e.deleted && e.deleted.reason) || "no reason given"}.{" "}
-        {canDeleteBills() && <button className="btn small" onClick={() => billRestore(e.id)}>Restore</button>}</p></section>}
-      {e.status === "duplicate" && <section><p className="banner" style={{ margin: 0 }}>Held as a duplicate. {(e.dupOf && e.dupOf.msg) || ""} It does not count towards limits and cannot be approved.</p></section>}
+        {/* round 14c (C3): a member sees Restore blocked with why beside it, not a toast on click */}
+        <button className="btn small" disabled={!canDeleteBills()} onClick={() => billRestore(e.id)}>Restore</button>
+        {!canDeleteBills() && <span className="bk-warn" data-restore-why="">Only the firm’s owner can restore a deleted bill.</span>}</p></section>}
+      {e.status === "duplicate" && <DupBeside e={e} />}
     </div>
   );
 }

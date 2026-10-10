@@ -5,7 +5,7 @@ const {ctx, x} = load(HTML, ["num", "BridgeSeed"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const sent = [];
-Object.assign(ctx, {CO: () => ({name: "Test"}), Bridge: {on: () => true, openFor: () => ({name: "Test Co"}), cfg: () => ({url: "http://127.0.0.1:9100", key: "k"}), pinQ: () => ""},
+Object.assign(ctx, {CO: () => ({name: "Test"}), Bridge: {ensureProven: async () => true, on: () => true, openFor: () => ({name: "Test Co"}), cfg: () => ({url: "http://127.0.0.1:9100", key: "k"}), pinQ: () => ""},
   fetch: async (url, o) => { const u = new URL(url); sent.push({from: u.searchParams.get("from"), to: u.searchParams.get("to"), body: o.body}); return {ok: true, json: async () => ({ok: true, entries: (o.body.match(/<VOUCHER /g) || []).length})}; }});
 // a year: April 2025 to March 2026, a few entries on most days, big enough to need several pieces a month
 const days = [], pad = "x".repeat(4000);

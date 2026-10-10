@@ -17,7 +17,7 @@ with sync_playwright() as p:
       return openCompany(c.id).then(() => { S.tab = "books"; S.booksTab = "tds"; S.step = null; render(); }); }""")
     pg.wait_for_timeout(1500)
     app = lambda: pg.inner_text("#app")
-    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 4, "TDS & GST has four tabs (MIS, Accounts and Audit have their own pages)")
+    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 5, "TDS & GST has five tabs, the fifth Tie-out (phase 2, H54; MIS, Accounts and Audit have their own pages)")
     ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Read the books from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
        "no day book and no salary: the TDS tab says what to bring in, with a button for each")
     for t, say in [["Tally ledgers", "The Tally ledgers come from the client's books"]]:
@@ -43,7 +43,7 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table button:has-text("Open")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year" and pg.evaluate("S.tdsFy") == "2026-27", "Open: the year")
     pg.click("#app table.bk-table tr:has-text('Q2') button.linkbtn >> nth=-1"); pg.wait_for_timeout(700)
-    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and "Q2 · 24Q" in pg.inner_text("#app .tds-crumbs"), "Q2 24Q: its return opens")
+    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and any(x in pg.inner_text("#app .tds-crumbs") for x in ("Q2 · 24Q", "Q2 · Form 138")), "Q2 24Q: its return opens")
     pg.click("#app .tds-crumbs button:has-text('2026-27')"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
     pg.click('#app button:has-text("Certificates and rate questions")'); pg.wait_for_timeout(500)

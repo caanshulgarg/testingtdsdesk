@@ -381,6 +381,12 @@ async function uploadStatements(files, force){
       const last4 = meta.acct ? meta.acct.replace(/\D/g, "").slice(-4) : "";
       co.bankAccounts = co.bankAccounts || [];
       let acc = co.bankAccounts.find(a => (last4 && a.last4 === last4) && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc));
+      // review 19: a statement whose account number could not be read is the same account when it can only be that one
+      // (the one account of this bank, or the client's only account): it was a new account, with no ledger, each time
+      if (!acc && !last4){
+        const short = String(meta.bank || "").split(" ")[0].toLowerCase(), same = co.bankAccounts.filter(a => short && String(a.bank || "").toLowerCase().startsWith(short));
+        acc = same.length === 1 ? same[0] : co.bankAccounts.length === 1 ? co.bankAccounts[0] : null;
+      }
       let newAcc = false;
       if (!acc && last4){
         const owners = Object.values(S.companies).filter(c => c.id !== co.id && (c.bankAccounts || []).some(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc)));
@@ -394,8 +400,11 @@ async function uploadStatements(files, force){
         const bankLeds = (b.ledgers.list || []).filter(l => BANK_GROUPS.test(l.group || ""));
         const short = String(meta.bank || "").split(" ")[0].toLowerCase();
         const guess = bankLeds.filter(l => last4 && l.name.includes(last4)).concat(bankLeds.filter(l => short && l.name.toLowerCase().includes(short)));
-        acc = {id: uid("ba"), bank: meta.bank || "Bank", last4, acct: meta.acct || "", ifsc: meta.ifsc || "", ledger: guess.length === 1 || (guess.length && last4 && guess[0].name.includes(last4)) ? guess[0].name : ""};
-        co.bankAccounts.push(acc); newAcc = true; Store.saveCompany(co);
+        acc = {id: uid("ba"), bank: meta.bank || "Bank", last4, acct: meta.acct || "", ifsc: meta.ifsc || "", ledger: ""};
+        co.bankAccounts.push(acc); newAcc = true;
+        // a guess only, shown to confirm (src/js/60): not used for posting until a person confirms it
+        if (guess.length === 1 || (guess.length && last4 && guess[0].name.includes(last4))) choiceGuess(co, "bank:" + acc.id, guess[0].name, "its name in Tally fits the statement");
+        Store.saveCompany(co);
       }
       const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
       const sid = uid("st");
@@ -421,7 +430,7 @@ async function uploadStatements(files, force){
       await BankDB.set("stmt:" + b.cid + ":" + sid, rows);
       saveBank({stmts: true, keys: true});
       b.filter = "review";
-      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc && !acc.ledger ? " Choose the Tally ledger for this bank account." : ""));
+      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
       b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
@@ -486,7 +495,8 @@ async function importLedgerList(file){
         const q = sel => { const n = l.querySelector(sel); return n ? n.textContent.trim() : ""; };
         if (name.trim()) list.push({name: name.trim(), group: q("PARENT"), pan: q("INCOMETAXNUMBER"), gstin: q("PARTYGSTIN") || q("GSTREGISTRATIONNUMBER")});
       });
-      doc.querySelectorAll("GROUP").forEach(g => { const n = g.getAttribute("NAME"); if (n && TALLY_GROUPS.indexOf(n) < 0) TALLY_GROUPS.push(n); });
+      // a group already listed in other capitals takes Tally's own spelling ("Cash-in-hand" for "Cash-in-Hand")
+      doc.querySelectorAll("GROUP").forEach(g => { const n = g.getAttribute("NAME"); if (!n) return; const k = TALLY_GROUPS.findIndex(x => x.toLowerCase() === n.toLowerCase()); if (k < 0) TALLY_GROUPS.push(n); else TALLY_GROUPS[k] = n; });
     } else {
       const grids = await gridsFromSheet(file);
       grids.forEach(grid => {
@@ -508,7 +518,9 @@ async function importLedgerList(file){
   list = list.filter(l => { const k = l.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   if (!list.length){ toast("No ledger names found in " + file.name + "."); return; }
   const groupSet = new Set(list.map(l => l.group).filter(Boolean));
-  b.ledgers = {list, groups: Array.from(groupSet).sort(), importedAt: new Date().toISOString(), file: file.name};
+  const now = new Date().toISOString();
+  Ledgers.take(b.cid, {list, parents: {}, at: now, srcAt: now, src: "file", file: file.name});
+  b.ledgers = Object.assign(b.ledgers || {}, {groups: Array.from(new Set((b.ledgers.groups || []).concat(Array.from(groupSet)))).sort()});
   // pending ledgers that now exist in Tally are no longer pending
   b.newLed = b.newLed.filter(n => !seen.has(n.name.toLowerCase()));
   saveBank({ledgers: true, newLed: true});
@@ -711,9 +723,7 @@ async function applyToVisible(ledger){
   const exact = exactLedger(ledger);
   if (!exact){ toast("\u201c" + ledger + "\u201d is not a ledger in Tally. Choose one from the list, or create it."); return; }
   if (!rows.length){ toast("No entries are showing."); return; }
-  const a = await askConfirm({title: "Use \u201c" + exact + "\u201d for " + rows.length + " entries?", ok: "Set them all",
-    body: '<p class="note">These are the entries now showing' + (b.q.trim() ? ' for \u201c' + esc(b.q.trim()) + '\u201d' : "") + ". Entries already sent to Tally are left alone.</p>"});
-  if (!a) return;
+  // no question first (the owner's spec K9, round 2: confirmations only for what cannot be undone): Undo in the bar
   const before = rows.map(r => ({id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet}));
   rows.forEach(r => { r.ledger = exact; r.userSet = true; if (r.state === "attention" || r.state === "suggested") r.state = "ready"; });
   learnRows(rows, "set");
@@ -754,8 +764,8 @@ function bankVisibleRows(){
   const b = B();
   if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
-  const states = tabStates(bankTab());
-  return b.rows.filter(r => inBankRange(r) && (!states || states.includes(r.state) || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
+  const tab = bankTab(), states = tabStates(tab);
+  return b.rows.filter(r => inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
 function bankToggle(cb, shift){
@@ -781,6 +791,8 @@ async function askClaudeForLedgers(){
   try {
     for (let i = 0; i < todo.length; i += 50){
       const batch = todo.slice(i, i + 50);
+      // a long action shows how far it is (spec K7, round 2): "rows 51 to 100 of 150"
+      if (todo.length > 50){ b.busy = "Asking Claude about rows " + (i + 1) + " to " + Math.min(todo.length, i + 50) + " of " + todo.length + "\u2026"; render(); }
       const prompt = "You help an Indian chartered accountant book bank statement lines in Tally.\n" +
         "Client: " + CO(b.cid).name + ".\nExisting Tally ledgers (choose from these when one fits): " + JSON.stringify(names) + "\n" +
         "For each bank line choose one ledger from the list, spelt exactly as listed. If none fits, leave ledger empty.\n" +
@@ -904,8 +916,8 @@ async function exportBankXml(){
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const rows = b.rows.filter(r => r.state === "ready");
   if (!rows.length){ toast("No rows are ready. Accept suggestions or set ledgers first."); return; }
-  if (!acc || !exactLedger(acc.ledger)){ toast("Choose the Tally ledger for this bank account first."); return; }
-  acc.ledger = exactLedger(acc.ledger);
+  if (!acc || !bankLedgerReady(co, acc)){ toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first."); return; }
+  acc.ledger = bankLedgerReady(co, acc);
   const probs = bankExportProblems(rows);
   if (probs.length){ toast("Fix these first: " + probs.slice(0, 3).join("; ") + (probs.length > 3 ? " and " + (probs.length - 3) + " more" : "")); return; }
   const used = new Set(rows.map(r => r.ledger.toLowerCase()));
@@ -943,22 +955,35 @@ function exportBankCsv(){
 /* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
-const BANK_TABS = [["review", "1 \u00b7 To review"], ["ready", "2 \u00b7 Ready to post"], ["done", "3 \u00b7 In Tally"]];
+// the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
+const BANK_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
+// a line is in Tally only when it is matched to a Tally voucher: found there (intally), or posted through the bridge and
+// Tally gave back the voucher (review of 02-Oct-2026: 184 lines showed "In Tally" after a Tally file was only made, with
+// no bank ledger linked and no bank entries in Tally for the year). A line sent in a file and never seen in Tally stays
+// under Post to Tally, marked so, and is not posted again by "Post all"
+// A line whose voucher is no longer among Tally's entries in FinCom's cloud copy (TallyProof.checkBank: 182 HDFC lines
+// posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
+// round 17: a line posted by Tally's reply (FinCom Bridge 2.1.8, no read-back) is matched: Tally said it created it
+function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && (!!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) || r.postByReply === true) && !r.checking)); }
+function bankTabOf(r){
+  if (r.state === "attention" || r.state === "suggested") return "review";
+  if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
+  return "done";
+}
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
-  return {review: (c.attention || 0) + (c.suggested || 0), ready: c.ready || 0, done: (c.sent || 0) + (c.intally || 0) + (c.ignored || 0), attention: c.attention || 0, suggested: c.suggested || 0};
+  const t = {review: 0, ready: 0, done: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
+  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
-function shortDate(iso){
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  return String(d.getDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-}
+// one date format everywhere, DD-MMM-YYYY (review of 01-Oct-2026: lists showed "05 Aug" with no year)
+function shortDate(iso){ return iso ? fmtDate(String(iso).slice(0, 10)) : ""; }
 function bkAmt(n){ return n ? INR.format(r2(n)) : ""; }
-function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || {}; }
+// a statement's account; one missing from the client (lost in an older sync) comes back from the statement (src/js/60)
+function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || (st && st.acctId ? bankAccountOf(co, st) : null) || {}; }
 function stmtLabel(st){
   const acc = accountFor(st);
   return (exactLedger(acc.ledger) || (st.bank + (acc.last4 ? " \u00b7\u00b7" + acc.last4 : ""))) + " \u2014 " + shortDate(st.from) + " to " + shortDate(st.to) + " " + String(st.to || "").slice(0, 4);

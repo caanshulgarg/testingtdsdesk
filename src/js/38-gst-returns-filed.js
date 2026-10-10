@@ -20,7 +20,48 @@ const GSTV = {
         january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12},
   label(form){ return (this.FORMS[form] || {}).l || form || "?"; },
   isAnnual(form){ return !!(this.FORMS[form] || {}).annual; },
-  list(){ const b = S.books || {}; return b.gstVault = b.gstVault || []; },
+  // every record, removed ones included (a removal is a soft delete: the record and its PDF are kept, marked removed)
+  all(){ const b = S.books || {}; b.gstVault = b.gstVault || []; this.fixIff(b.gstVault); return b.gstVault; },
+  // the records in use
+  list(){ return this.all().filter(x => !x.removed); },
+  // a quarterly (QRMP) filer's return for the first or second month of a quarter is an IFF, even when the portal's PDF
+  // prints "FORM GSTR-1" (request of 02-Oct-2026: the Apr-2025 and May-2025 IFFs of Testing AAD were filed as GSTR-1)
+  formFor(form, per, reg){
+    return form === "r1" && /^\d{6}$/.test(per) && reg && typeof GSTSet === "object" && GSTSet.typeOf(per, reg) === "qrmp" && !GSTSet.isQEnd(per) ? "iff" : form;
+  },
+  fixIff(list){
+    list.forEach(x => { const f = this.formFor(x.form, x.per, x.reg); if (f !== x.form){
+      x.formRead = x.form; x.form = f;
+      // the filing date went in as a GSTR-1's; it is the IFF's
+      const r = GSTF.rec(x.per, x.reg); if (x.arnDate && r.r1 === x.arnDate){ if (!r.iff) r.iff = x.arnDate; delete r.r1; }
+    } });
+  },
+  // ---- the figures on a filed return's PDF (request of 02-Oct-2026), for the cross-check of GSTR-1 + IFF against 3B ----
+  // GSTR-1 / IFF: the Total Liability line (value, IGST, CGST, SGST, cess). GSTR-3B: 3.1(a), 3.1(d), 4A(5), 4(C), and the
+  // interest and late fee of 5.1. Amounts may be printed 1,23,456.78 or (1,234.00) for a negative.
+  nums(s, n){
+    const out = [], re = /\(?-?\d[\d,]*\.\d{1,2}\)?|\(?-?\d{1,3}(?:,\d{2,3})+\)?|(?<![\w.])-?\d+(?![\w.])/g; let m;
+    while ((m = re.exec(s)) && out.length < n){ const t = m[0]; out.push((/^\(.*\)$/.test(t) ? -1 : 1) * num(t.replace(/[(),]/g, ""))); }
+    return out;
+  },
+  after(t, re, n){ const m = re.exec(t); return m ? this.nums(t.slice(m.index + m[0].length, m.index + m[0].length + 260), n) : null; },
+  figures(text, form){
+    const t = String(text || "").replace(/\s+/g, " "), five = a => a && a.length >= 4 ? {taxable: a[0], igst: a[1], cgst: a[2], sgst: a[3], cess: a[4] || 0} : null;
+    if (form === "r1" || form === "iff" || form === "r1a"){
+      let a = this.after(t, /Total\s+Liability\s*\(\s*Outward\s+supplies\s+other\s+than\s+Reverse\s+charge\s*\)/i, 6);
+      if (a && a.length === 6 && Number.isInteger(a[0])) a = a.slice(1);
+      return a && a.length >= 4 ? {kind: "r1", tl: five(a)} : null;
+    }
+    if (form === "r3b"){
+      const a = five(this.after(t, /\(a\)\s*Outward\s+taxable\s+supplies\s*\(\s*other\s+than\s+zero\s+rated,?\s*nil\s+rated\s+and\s+exempted\s*\)/i, 5));
+      const d = five(this.after(t, /\(d\)\s*Inward\s+supplies\s*\(\s*liable\s+to\s+reverse\s+charge\s*\)/i, 5));
+      const four = (re) => { const x = this.after(t, re, 4); return x && x.length === 4 ? {igst: x[0], cgst: x[1], sgst: x[2], cess: x[3]} : null; };
+      const itc = four(/\(5\)\s*All\s+other\s+ITC/i), net = four(/C\.?\s*Net\s+ITC\s+[Aa]vailable\s*\(\s*A\s*-\s*B\s*\)/i);
+      const intr = four(/\bInterest\b(?!\s+and)/i), fee = four(/\bLate\s+fee\b/i);
+      return a || d || itc ? {kind: "r3b", a, d, itc, net, interest: intr, lateFee: fee} : null;
+    }
+    return null;
+  },
   // the period's name: a month, a QRMP quarter (by its last month), or a financial year
   perLabel(form, per, reg){
     if (!per) return "?";
@@ -98,7 +139,7 @@ const GSTV = {
   // a record is added once its file is safely stored; the filing date on the GST screens is filled from the ARN date if empty
   addRecord(r){
     const rec = Object.assign({id: "gv" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), at: new Date().toISOString(), by: (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || ""}, r);
-    this.list().push(rec);
+    this.all().push(rec);
     const k = this.filedKey(rec.form);
     if (k && rec.arnDate && /^\d{6}$/.test(rec.per) && rec.reg){ const f = GSTF.rec(rec.per, rec.reg); if (!f[k]) f[k] = rec.arnDate; }
     return rec;
@@ -137,9 +178,9 @@ const GSTV = {
   }
 };
 // ---- reading the words of a PDF's first pages ----
-async function gstvPdfText(file){
+async function gstvPdfText(file, pages){
   const pdf = await getPdf(file); let text = "";
-  for (let i = 1; i <= Math.min(2, pdf.numPages); i++){ try { text += pageTextLines(await (await pdf.getPage(i)).getTextContent()) + "\n"; } catch (e){} }
+  for (let i = 1; i <= Math.min(pages || 2, pdf.numPages); i++){ try { text += pageTextLines(await (await pdf.getPage(i)).getTextContent()) + "\n"; } catch (e){} }
   return text;
 }
 // ---- taking in PDFs: bound to a checklist row when picked from one ----
@@ -148,15 +189,18 @@ async function gstvTake(files, bound){
   let added = 0, sorted = 0; const refused = [], dupes = [];
   for (const file of Array.from(files || [])){
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ refused.push(file.name + " (not a PDF)"); continue; }
-    let d; try { d = GSTV.detect(await gstvPdfText(file), file.name, gstins); } catch (e){ d = GSTV.detect("", file.name, gstins); d.why.push("could not read the PDF"); }
+    let d, text = ""; try { text = await gstvPdfText(file, 8); d = GSTV.detect(text, file.name, gstins); } catch (e){ d = GSTV.detect("", file.name, gstins); d.why.push("could not read the PDF"); }
     // a GSTIN of another PAN is refused; with no PAN on the client, only the GSTINs in its books are taken
     if (d.gstin && (notThisClient([d.gstin]).length || (!clientPan() && gstins.length && !gstins.includes(d.gstin)))){ refused.push(file.name + " (GSTIN " + d.gstin + " is not this client’s)"); continue; }
     let reg = d.gstin ? d.gstin.slice(0, 2) : (bound ? bound.reg : (S.gstReg || ""));
     let form = d.form, per = d.per, sure = d.sure, note = "";
     if (bound && !(d.sure)){ form = form || bound.form; per = per || bound.per; reg = reg || bound.reg; sure = !!(form && per && reg); }
+    const asRead = form; form = GSTV.formFor(form, per, reg);
+    if (form !== asRead){ d.form = form; d.why.push("a quarterly filer's return for " + GSTR.label(per) + " is an IFF, though the PDF says GSTR-1"); }
     if (bound && d.sure && (d.form !== bound.form || d.per !== bound.per)) note = "added from the " + GSTV.label(bound.form) + " " + GSTV.perLabel(bound.form, bound.per, bound.reg) + " line, but the PDF reads as " + GSTV.label(d.form) + " " + GSTV.perLabel(d.form, d.per, reg);
     if (GSTV.list().some(x => x.reg === reg && x.form === form && x.per === per && x.size === file.size && x.name === file.name)){ dupes.push(file.name); continue; }
-    const rec = GSTV.addRecord({reg, form: sure ? form : (form || ""), per: sure ? per : (per || ""), arn: d.arn, arnDate: d.arnDate, name: file.name, size: file.size, sort: !sure, note, why: d.why.join("; ")});
+    const fig = GSTV.figures(text, form);
+    const rec = GSTV.addRecord({reg, form: sure ? form : (form || ""), per: sure ? per : (per || ""), arn: d.arn, arnDate: d.arnDate, name: file.name, size: file.size, sort: !sure, note, why: d.why.join("; "), fig: fig || undefined, formRead: asRead !== form ? asRead : undefined});
     await FileStore.put(co.id, rec.id, file); S.files[rec.id] = file;
     if (typeof CloudDocs === "object" && CloudDocs.on()) CloudDocs.add(co.id, rec.id, file, "gstret");
     if (sure) added++; else sorted++;
@@ -167,7 +211,7 @@ async function gstvTake(files, bound){
 async function gstvFile(rec){ return FileStore.get((CO() || {}).id, rec.id, rec.docPath, rec.name); }
 // the Returns filed page: React (app/src/screens/gst/ReturnsFiled.jsx)
 // what the Returns filed page does (app/src/screens/gst/ReturnsFiled.jsx)
-const gstvFind = id => GSTV.list().find(x => x.id === id);
+const gstvFind = id => GSTV.all().find(x => x.id === id);
 async function gstvOpen(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(URL.createObjectURL(f), "_blank"); }
 async function gstvDownload(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF could not be found."); return; } saveFile(GSTV.fileName(x), f); }
 // a PDF that could not be read for sure: its GSTIN, return or period said by the user, then filed in its place
@@ -179,13 +223,19 @@ function gstvFileIt(id){
   x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
   saveBooks(); render();
 }
+// a soft delete (request of 02-Oct-2026: removals are soft deletes): the record leaves the list, marked removed with who,
+// when and why; the PDF stays in this browser and the firm's cloud documents, and Restore puts it back
 async function gstvRemove(id){
   const x = gstvFind(id); if (!x) return;
-  const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from FinCom and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
+  const ans = await askConfirm({title: "Remove this PDF from the list?", ok: "Remove", danger: true,
+    body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " leaves the list. The PDF is kept and can be restored. The return on the portal is not touched." +
+      '<label class="f" style="margin-top:12px"><span>Reason</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
+    read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim()});
   if (!ans) return;
-  const co = CO(); await FileStore.drop(co.id, x.id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath);
-  S.books.gstVault = GSTV.list().filter(z => z !== x); saveBooks(); render();
+  x.removed = {at: new Date().toISOString(), by: whoAmI(), reason: ans.data || ""};
+  saveBooks(); render();
 }
+function gstvRestore(id){ const x = GSTV.all().find(z => z.id === id); if (!x) return; delete x.removed; saveBooks(); toast("Restored: " + GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + "."); render(); }
 // every PDF of the GSTIN and year in one zip
 async function gstvZip(){
   const reg = S.gstReg || "", fy = S.gstvFy, recs = GSTV.list().filter(x => x.reg === reg && !x.sort && GSTV.fyOfPer(x.per) === fy), files = [], missed = [];

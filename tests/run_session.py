@@ -1,7 +1,7 @@
 """python3 run_session.py - staying signed in (review, Phase 2 check): a page left idle must not land on the sign-in page.
 The firm account is stood in for by a fake server that behaves like Supabase Auth: a refresh token works once, and a
 second refresh with the same token fails with "Refresh Token Not Found" (what staging's auth log showed, 3-5 refreshes
-in the same second). Offline, no client data needed.
+in the same second). Offline, no client data needed. Two real tabs: run_signin_session.py.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_session.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -53,17 +53,16 @@ with sync_playwright() as p:
       Cloud.setSess(Object.assign({}, s, {access_token: 'B9', refresh_token: 'RB9', at: Date.now()}));
       await Cloud.refreshToken('A1'); return {srv: window.__srv, token: Cloud.sess().access_token}; }""")
     ok(r["srv"]["refreshes"] == 0 and r["token"] == "B9", "a token another tab refreshed is used as it is (no second refresh)")
-    # 4. idle sign-out (Settings: sign out after N minutes): the page says why, and signing in again returns to the bill
+    # 4. no automatic sign-out (section D, 03-Oct-2026): 31 minutes without a click, the bill is still open
     cid = pg.evaluate("""() => { const c = newCompany({name: 'ZZ Session Co', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
       const e = newEntry('a.pdf'); Object.assign(e.x, {vendorName: 'Alpha', invoiceNo: '1', invoiceDate: '2026-09-19', taxable: 100, total: 100}); S.data[c.id].entries[e.id] = e;
       Store.saveCompany(c); Store.saveEntry(c.id, e); return [c.id, e.id]; }""")
     pg.evaluate("(a) => openCompany(a[0]).then(() => { S.tab = 'invoices'; S.reviewTable = false; S.selected = a[1]; render(); })", cid); pg.wait_for_timeout(700)
     bill = pg.evaluate("location.hash")
-    pg.evaluate("() => idleSet(5)")
     pg.evaluate("() => { Cloud.on = () => !!Cloud.sess(); }")
-    pg.evaluate("() => { const t = Date.now; Date.now = () => t() + 6 * 60000; }"); pg.wait_for_timeout(31500)
-    ok("minutes without use" in pg.inner_text("#app") and "carry on where you were" in pg.inner_text("#app"), "idle sign-out: the sign-in page says why (it is the setting, not an error)")
-    ok(pg.evaluate("Route.pending") == bill, "and remembers the open bill (" + str(pg.evaluate("Route.pending")) + ")")
+    pg.evaluate("() => { const t = Date.now; Date.now = () => t() + 31 * 60000; }"); pg.wait_for_timeout(31500)
+    ok(pg.evaluate("typeof idleSet === 'undefined' && typeof idleMin === 'undefined'"), "there is no idle timer and no idle setting any more")
+    ok(pg.evaluate("Cloud.on()") and pg.evaluate("location.hash") == bill and "Sign in to see" not in pg.inner_text("#app"), "31 minutes without use: still signed in, the bill still open (" + str(pg.evaluate("location.hash")) + ")")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

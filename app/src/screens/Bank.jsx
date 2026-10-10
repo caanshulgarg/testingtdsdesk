@@ -8,16 +8,23 @@
 //
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
 // The column filters' chips are parts/ChipBar.jsx.
+import Msg from "../parts/Msg.jsx";
 import { useRef } from "react";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
-import ColHead from "../parts/ColHead.jsx";
+import { ColFunnel } from "../parts/ColHead.jsx";
+import ListTable from "../parts/ListTable.jsx";
+import Loading from "../parts/Loading.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
+import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
+import NoticeLine from "../parts/NoticeLine.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
-const EMPTY = { review: "Nothing to review. Every entry has a ledger.", ready: "No entries are ready yet.", done: "Nothing posted or ignored yet." };
+// an empty tab says what to do next (spec K6, round 2)
+const EMPTY = { review: "Nothing to review. Every entry has a ledger: use the Post to Tally tab to send them.", ready: "No entries are ready yet. Give each entry under To review its ledger; it then waits here.",
+  done: "Nothing posted or ignored yet. Use Post on the entries that are ready." };
 const live = () => Bridge.on() && Bridge.up();
 
 
@@ -25,9 +32,22 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : r.tally && r.tally.number ? " · Tally voucher " + r.tally.number : "")
+    // with no Tally ledger chosen for the account, a line is not said to be gone from Tally (review of 02-Oct-2026)
+    const noLed = !bankLedgerReady(CO(), accountFor(curStmt() || {}));
+    // round 15 (B1): bridge 2.1.8 said Tally's voucher id (or the batch's last id) when the line went: that, with the
+    // company, the time in IST and who pressed Post; an older line as before
+    const mark = r.state === "sent" && !r.goneFromTally && typeof postMarkOf === "function" ? postMarkOf(r) : null, words = mark ? postMarkWords(mark) : "";
+    const matched = r.state === "sent" && typeof postMatched === "function" ? postMatched(r.id, b.cid) : null;
+    const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
+      : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
+      : words ? words + (r.checking ? " · checking in Tally…" : "")
+      // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back) and no id came with it: posted, not "not found"
+      : r.state === "sent" && r.postByReply === true && !bankMatched(r) ? "Posted to Tally (Tally's reply) · " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "")
+      : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
+      : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
-    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted">{status}
+    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
+      {matched && <> <span className="tag ok" data-matched="">Matched with Tally</span></>}
       {canUndo && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span></>;
   }
   const held = b.postedTags && String(b.postedTags[fpHash(r.fp || r.id)] || "").startsWith("unconfirmed");
@@ -58,75 +78,58 @@ function RowActions({ r }) {
   return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
 
-function Row({ r, sel }) {
-  const party = MODE_NAME[r.dec.mode] || r.dec.name || r.dec.upi || "";
-  const sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
-  const flag = r.balOk === false ? <> <span className="flag bad" title="This entry does not agree with the running balance">!</span></>
+// the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
+const BST = { attention: ["warn", "No ledger"], suggested: ["warn", "Suggested"], ready: ["ok", "Ready to post"], sent: ["ok", "In Tally"], intally: ["no", "Already in Tally"], ignored: ["no", "Ignored"] };
+const bankParty = (r) => MODE_NAME[r.dec.mode] || r.dec.name || r.dec.upi || "";
+function bankCols(b, total, nSel) {
+  const flag = (r) => r.balOk === false ? <> <span className="flag bad" title="This entry does not agree with the running balance">!</span></>
     : r.repaired ? <> <span className="flag warn" title="Amount read from the balance change: check it">≈</span></> : null;
-  return (
-    <tr className={"st-" + r.state + (sel ? " picked" : "")}>
-      <td className="ck"><input type="checkbox" aria-label="Select" checked={sel} disabled={r.state === "sent"} onChange={() => {}}
-        onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /></td>
-      <td className="dt" title={fmtDate(r.date)}>{shortDate(r.date)}</td>
-      <td className="pt"><div className="pn">{party || r.narr.slice(0, 60)}</div><div className="nr" title={r.narr}>{sub && <><span className="md">{sub}</span> </>}{r.narr}</div></td>
-      <td className="n">{bkAmt(r.debit)}{r.debit ? flag : null}</td>
-      <td className="n">{bkAmt(r.credit)}{r.credit ? flag : null}</td>
-      <td className="lg"><RowLedger r={r} /></td>
-      <td className="ac"><RowActions r={r} /></td>
-    </tr>
-  );
+  return [
+    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} />,
+      cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
+    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
+      const party = bankParty(r), sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
+      return <><div className="pn">{party || r.narr.slice(0, 60)}</div><div className="nr" title={r.narr}>{sub && <><span className="md">{sub}</span> </>}{r.narr}</div></>; } },
+    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
+    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
+    { k: "st", role: "status", label: "Status", v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
+    { k: "ac", role: "act", cls: "ac", cell: (r) => <RowActions r={r} /> },
+  ];
 }
 
 function Table({ tab }) {
-  const b = B(), all = bankVisibleRows(), total = all.length, list = all.slice(0, b.limit);
+  const b = B(), all = bankVisibleRows(), total = all.length;
   const nSel = all.filter((r) => b.sel.has(r.id)).length;
-  return <>
-    <div className="bk-tablewrap">
-      <table className="bk-table">
-        <thead><tr>
-          <th className="ck"><input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} /></th>
-          <ColHead t="bank" k="date" label="Date" cls="dt" /><ColHead t="bank" k="narr" label="Particulars" /><ColHead t="bank" k="wd" label="Withdrawal" cls="n" />
-          <ColHead t="bank" k="dep" label="Deposit" cls="n" /><ColHead t="bank" k="led" label="Ledger" cls="lg" /><th className="ac"></th>
-        </tr></thead>
-        <tbody>{list.map((r) => <Row key={r.id} r={r} sel={b.sel.has(r.id)} />)}</tbody>
-      </table>
-      {!total && (bankRangeOn() ? <NoMatch t="bank" /> : <div className="bk-none">{EMPTY[tab] || "Nothing here."}</div>)}
-    </div>
-    {/* a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button) */}
-    {total > list.length && <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - list.length)} more ({total - list.length} left)</button></div>}
-  </>;
+  // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
+  const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
+  return <ListTable name="bank" cols={bankCols(b, total, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+    rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") })}
+    empty={bankRangeOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("bank")}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />;
 }
 
 // one line per party among the entries to review, to give all its entries one ledger
-function Group({ g }) {
-  const sug = Object.entries(g.ledgers).sort((a, b) => b[1] - a[1])[0];
-  return (
-    <tr>
-      <td className="pt"><div className="pn">{g.name}</div><div className="nr" title={g.sample}>{g.sample}</div></td>
-      <td className="n">{g.n}</td><td className="n">{bkAmt(g.out)}</td><td className="n">{bkAmt(g.inn)}</td>
-      <td className="lg">
-        <LedgerBox className={"lgbox" + (sug ? " sugg" : "")} value={sug ? sug[0] : ""} fk={"gkey:" + g.key} data-gkey={g.key} placeholder="Select ledger"
+function groupCols() {
+  return [
+    { k: "name", role: "party", label: "Party", cls: "pt", v: (g) => g.name, cell: (g) => <><div className="pn">{g.name}</div><div className="nr" title={g.sample}>{g.sample}</div></> },
+    { k: "out", role: "amount", label: "Withdrawals", cls: "n", v: (g) => num(g.out) || null, sum: (g) => num(g.out), cell: (g) => bkAmt(g.out) },
+    { k: "inn", role: "amount", label: "Deposits", cls: "n", v: (g) => num(g.inn) || null, sum: (g) => num(g.inn), cell: (g) => bkAmt(g.inn) },
+    { k: "n", label: "Entries", cls: "n", v: (g) => g.n, sum: (g) => g.n, fmt: (t) => String(t), cell: (g) => g.n },
+    { k: "led", label: "Ledger for all its entries", cls: "lg", cell: (g) => { const sug = Object.entries(g.ledgers).sort((a, b) => b[1] - a[1])[0];
+      return <><LedgerBox className={"lgbox" + (sug ? " sugg" : "")} value={sug ? sug[0] : ""} fk={"gkey:" + g.key} data-gkey={g.key} placeholder="Select ledger"
           aria-label={"Ledger for " + g.name} id={"g-" + g.key} />
-        {sug && <span className="src">Suggested for {sug[1]} of {g.n}</span>}
-      </td>
-      <td className="ac"><button className="btn small primary" onClick={() => { const inp = document.getElementById("g-" + g.key); applyGroup(g.key, inp ? inp.value : ""); acClose(); }}>Apply</button></td>
-    </tr>
-  );
+        {sug && <span className="src">Suggested for {sug[1]} of {g.n}</span>}</>; } },
+    { k: "ac", role: "act", cls: "ac", cell: (g) => <button className="btn small primary" onClick={() => { const inp = document.getElementById("g-" + g.key); applyGroup(g.key, inp ? inp.value : ""); acClose(); }}>Apply</button> },
+  ];
 }
 
 function Groups() {
   const b = B(), q = b.q.trim().toLowerCase();
-  const all = bankGroups().filter((g) => !q || (g.name + " " + g.sample).toLowerCase().includes(q)), groups = all.slice(0, b.limit);
-  return <>
-    <div className="bk-tablewrap">
-      <table className="bk-table">
-        <thead><tr><th>Party</th><th className="n">Entries</th><th className="n">Withdrawals</th><th className="n">Deposits</th><th className="lg">Ledger for all its entries</th><th className="ac"></th></tr></thead>
-        <tbody>{groups.map((g) => <Group key={g.key} g={g} />)}</tbody>
-      </table>
-      {!all.length && <div className="bk-none">Nothing to review.</div>}
-    </div>
-    {all.length > groups.length && <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show more parties ({all.length - groups.length} left)</button></div>}
-  </>;
+  const all = bankGroups().filter((g) => !q || (g.name + " " + g.sample).toLowerCase().includes(q));
+  const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show more parties ({all.length - Math.min(all.length, b.limit)} left)</button></div>;
+  return <ListTable name="bankParties" cols={groupCols()} rows={all} rowKey={(g) => g.key} unit={["party", "parties"]} limit={b.limit} more={more}
+    empty="Nothing to review: every entry has a ledger. Use the Post to Tally tab to send them." />;
 }
 
 // after a search: give every line found the same ledger
@@ -145,7 +148,7 @@ function Found() {
 
 function LastFail({ f }) {
   return (
-    <div className="bk-alert bad"><b>{f.file} was not read.</b> {f.msg}
+    <div className="bk-alert bad"><b>{f.file} was not read.</b> <Msg text={f.msg} />
       <div className="row" style={{ gap: 8, marginTop: 8 }}><span className="note">Read it again:</span>
         <button className="btn small" onClick={() => bankAct("bankRetryFree")}>Try again</button>
         <button className="btn small" disabled={!googleReady()} title={googleReady() ? undefined : "Google OCR is not set up"} onClick={() => bankAct("bankRetryGoogle")}>With Google OCR</button>
@@ -161,13 +164,38 @@ function LastFail({ f }) {
 
 // before the ledgers are known, suggestions cannot be made: how to get them
 function LedgerSetup({ co }) {
+  // one row each (round 3, 05-Oct-2026), the how-to on hover and behind How
   if (hasLedgerList()) return null;
-  if (bridgeLive(co)) return <div className="bk-setup"><div><b>Loading ledgers from Tally…</b><div className="note">{Bridge.openFor(co).name} is open in Tally.</div></div></div>;
-  if (live()) return <div className="bk-setup"><div><b>Open {Bridge.tallyName(co)} in TallyPrime</b><div className="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></div>;
-  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With the Tally Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
+  if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <NoticeLine sev="info" text={"Loading ledgers from FinCom’s cloud copy of the books of " + ((TCloud.book(co.id) || {}).company || co.name) + "…"} />;
+  if (bridgeLive(co)) return <NoticeLine sev="info" text={"Loading ledgers from Tally (" + Bridge.openFor(co).name + " is open)…"} />;
+  if (live()) return <NoticeLine text={"Open " + Bridge.tallyName(co) + " in TallyPrime: its ledgers load by themselves."} how="Or import the ledger list from a file."><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></NoticeLine>;
+  return <NoticeLine text={"Import the Tally ledger list for " + co.name + ": suggestions use only ledgers Tally has."} how="In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens by itself."><button className="btn small" onClick={() => bankAct("ledPick")}>Import ledger list</button></NoticeLine>;
+}
+
+// the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item
+function trashOf(b) {
+  if (b && (b.stmtsTrash === undefined || b.stmtsTrash === null)) {
+    b.stmtsTrash = [];
+    Promise.all([Trash.list(b.cid, "statement"), BankDB.get("stmtsTrash:" + b.cid)]).then(([l, old]) => {
+      b.stmtsTrash = l.concat((old || []).map((x) => ({ label: x.st.bank + " " + fmtDate(x.st.from) + " to " + fmtDate(x.st.to), at: x.at, by: x.by, reason: "" })));
+      if (b.stmtsTrash.length) render();
+    }, () => {});
+  }
+  return b.stmtsTrash || [];
+}
+
+// with no statement open, a deleted one can still be put back
+function RestoreMenu() {
+  const t = trashOf(B());
+  if (!t.length) return null;
+  return <details className="bk-menu" data-more="bank-restore"><summary className="btn small">More</summary><div className="bk-menu-list">
+    <button onClick={() => bankAct("bankRestoreStmt")}>Restore a deleted statement<small>{Trash.say(t[0])}</small></button>
+  </div></details>;
 }
 
 function MoreMenu({ tc }) {
+  const b = B();
+  trashOf(b);
   const M = ({ act, title, children, danger }) => <button className={danger ? "danger" : undefined} onClick={() => bankAct(act)}>{title}{children && <small>{children}</small>}</button>;
   return (
     <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
@@ -182,15 +210,17 @@ function MoreMenu({ tc }) {
       <M act="bankCsv" title="Download as Excel (CSV)" />
       {S.engine && tc.attention > 0 && <M act="bankClaude" title="Ask Claude for the remaining entries" />}
       <M act="bankClearStmt" title="Clear all decisions" />
-      <M act="bankDelStmt" title="Delete this statement" danger />
+      <M act="bankDelStmt" title="Delete this statement" danger>Asks for the client’s name; it can be restored</M>
+      {(b.stmtsTrash || []).length > 0 && <M act="bankRestoreStmt" title="Restore a deleted statement">{Trash.say(b.stmtsTrash[0])}</M>}
     </div></details>
   );
 }
 
 export default function Bank() {
   const b = B(), co = CO();
-  if (!b || b.cid !== co.id) { loadBank(co.id); return <p className="note">Opening bank statements…</p>; }
-  if (b.loading) return <p className="note">Opening bank statements…</p>;
+  if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" />; }
+  if (b.loading) return <Loading what="bank statements" />;
+  setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();
   const top = <>
@@ -208,16 +238,17 @@ export default function Bank() {
     <div className="bk">
       {top}
       <div className="bk-empty" id="bankDrop" tabIndex={0} role="button" onClick={() => bankAct("bankPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); bankAct("bankPick"); } }}>
-        <div className="bk-empty-ic">⤒</div><h2>Upload a bank statement</h2>
-        <p className="note">Excel or CSV from net banking works best. E-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
-        <span className="btn primary">Choose files</span>
+        <div className="bk-empty-ic">⤒</div><h2>No bank statement yet</h2>
+        <p className="note">Drop a statement here, or use <b>Upload statement</b> at the top right. Excel or CSV from net banking works best; e-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
       </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><RestoreMenu /></div>
     </div>
     {b.showSettings && <BankSettings />}
   </>;
 
-  const acc = accountFor(st), accLedger = exactLedger(acc.ledger), tc = tabCounts(bankRangeRows()), tab = bankTab();
+  // the account's Tally ledger as chosen (review 19): shown from what was confirmed, whether or not the ledger list has
+  // loaded yet; asked for only for a new account, a guess to confirm, or a ledger gone from a complete list
+  const acc = accountFor(st), accLedger = bankLedgerChoice(CO(), acc).value, tc = tabCounts(bankRangeRows()), tab = bankTab();
   const repaired = b.rows.filter((r) => r.repaired).length, book = b.books[st.acctId];
   const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
   let range = null;
@@ -227,7 +258,15 @@ export default function Bank() {
   }
   return <>
     <div className="bk">
-      {top}
+      {/* the steps at the top of the page (review of 02-Oct-2026: they were about 490 px down) */}
+      <div className="bk-bar">
+        <div className="bk-tabs" role="tablist">
+          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
+          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
+        </div>
+        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
+        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
+      </div>
       <div className="bk-head">
         <div className="bk-id">
           {b.stmts.length > 1
@@ -252,19 +291,8 @@ export default function Bank() {
       </div>
       {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
       <Recon />
-      {!accLedger && <div className="bk-setup">
-        <div><b>Which Tally ledger is this bank account?</b><div className="note">{st.bank}{acc.last4 ? " ··" + acc.last4 : ""}{acc.ifsc ? " · " + acc.ifsc : ""}</div></div>
-        {hasLedgerList() ? <select aria-label="Tally ledger for this bank account" onChange={(ev) => bankSetAccLedger(acc.id, ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions("", BANK_GROUPS) }} />
-          : <span className="note">Import the ledger list first.</span>}
-      </div>}
-      <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">
-          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
-          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
-        </div>
-        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
-        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
-      </div>
+      <BankLedger co={CO()} acc={acc.id ? acc : Object.assign({ id: st.acctId, bank: st.bank }, acc)} />
+      {top}
       {range}
       <Gone /><DupFind /><BankFocus />
       {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
@@ -283,6 +311,12 @@ export function BankBar() {
   const b = B();
   if (!b || b.loading || !curStmt()) return null;
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
+  // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
+  // said about which lines are in Tally ("184 no longer in Tally · post them again" was shown for lines of an account
+  // with no ledger): posting waits, said in one line with the way to choose it
+  // posting waits until the account's ledger is confirmed (review 19, src/js/60 bankLedgerWhy): one line saying why
+  const accNow = accountFor(curStmt()), noLed = !bankLedgerReady(CO(), accNow), whyLed = noLed ? bankLedgerWhy(CO(), accNow) : "";
+  const chooseLed = () => { const el = document.querySelector('select[aria-label="Tally ledger for this bank account"]') || document.querySelector("[data-bank-ledger-confirm]"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } else bankAct("bankSettings"); };
   let left, right;
   if (nsel) {
     const rows = bankSelected(), ready = rows.filter((r) => r.state === "ready").length;
@@ -294,14 +328,17 @@ export function BankBar() {
       {rows.some((r) => r.state === "suggested") && <button className="btn primary" onClick={() => bankAct("bankBulkAccept")}>Confirm</button>}
       {rows.some((r) => ["attention", "suggested", "ready"].includes(r.state)) && <button className="btn" onClick={() => bankAct("bankBulkIgnore")}>Ignore</button>}
       {rows.some((r) => r.state === "ignored" || r.state === "intally") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}
-      {live() && ready > 0 && <button className="btn primary" onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
+      {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
+    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
+      {tc.gone > 0 && !noLed && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}
+      {noLed && <span className="bk-stat bad" data-bank-noledger="">{whyLed + " "}<button className="linkbtn" onClick={chooseLed}>{/guessed/.test(whyLed) ? "Confirm the ledger" : "Choose the ledger"}</button></span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.ready})</button>
-        : <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.ready})</button>}
+      {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+        : <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
     </>;
   }
   const u = !nsel && b.undo;

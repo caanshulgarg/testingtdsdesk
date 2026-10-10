@@ -5,7 +5,7 @@
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/inbox  #/tally  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -13,6 +13,9 @@ const Route = {
   of(){
     if (S.view !== "company" || !S.coId || !CO()){
       if (S.homeTab === "rules") return "#/settings" + (S.settingsTab ? "/" + encodeURIComponent(S.settingsTab) : "");
+      // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
+      if (S.homeTab !== "tally") S.tallyOld = false;
+      else if (S.tallyOld) return "#/tally/bridge-1.15";
       return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
@@ -37,6 +40,8 @@ const Route = {
   pending: null,                    // a link opened before signing in: applied once signed in
   ready: false,                     // set once the page has started: until then the address is the one opened, not ours
   sync(){
+    // leaving a page with unsaved changes: "Save your changes?" (src/js/60)
+    if (this.ready && S.firm && !signInNeeded() && typeof Drafts === "object"){ try { Drafts.onPage(this.of()); } catch (e){} }
     if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
     if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
     const h = this.of();
@@ -75,7 +80,7 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
-      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }
+      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;
     } finally {

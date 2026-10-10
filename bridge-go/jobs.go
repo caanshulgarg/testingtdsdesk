@@ -1,8 +1,10 @@
 // Posting as a background job (bridge 1.12, jobs.ps1). FinCom hands a batch to POST /jobs and gets a job number at once.
-// The job posts it in small batches, one writer per Tally at a time, and writes its progress to jobs\<id>\progress.json
-// after every batch. The browser may close, the network may drop, the bridge may restart: the job goes on, or is
-// resumed, and nothing is posted twice: anything whose answer was lost is looked for in Tally by its FinCom tag before
-// it is sent again. The same job number sent again returns the same job.
+// The job sends it in batched import requests, one writer per Tally at a time, and writes its progress to
+// jobs\<id>\progress.json after every request. The browser may close, the network may drop, the bridge may restart:
+// the job goes on, or is resumed, and nothing is posted twice: every voucher sent is recorded on this computer
+// (sync\posted-ids.json) and never sent again by this bridge. The same job number sent again returns the same job.
+// Round 15 (03-Oct-2026, the owner's decision): Tally's import reply is trusted; nothing is read back; no voucher id is
+// inferred; the queue is never held by a check.
 package main
 
 import (
@@ -12,10 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
-
-const jobChunk = 25
 
 var (
 	jobsMu      sync.Mutex
@@ -50,11 +51,12 @@ func readProgress(dir string) M {
 
 var progMu sync.Mutex
 
-func writeProgress(dir string, p M) {
+func writeProgress(dir string, p M) error {
 	progMu.Lock()
 	defer progMu.Unlock()
 	p["updatedAt"] = time.Now().Format(time.RFC3339Nano)
-	_ = saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
+	p["seq"] = toInt(p["seq"]) + 1 // round 7 (F4): grows with every change of the job, kept across restarts
+	return saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
 }
 func jobAlive(id string) bool {
 	jobsMu.Lock()
@@ -78,9 +80,7 @@ func jobView(dir string) M {
 		p["status"] = "interrupted"
 		p["message"] = "The posting stopped part-way (the computer or the bridge was restarted). Resume to finish it; nothing already in Tally is sent again."
 	}
-	if st == "done" && p["checking"] == true && !jobAlive(id) && age > 5 {
-		p["checking"], p["checkFailed"] = false, true
-	}
+	p["checking"] = false // round 15: there is no checking cycle any more
 	return p
 }
 
@@ -110,7 +110,7 @@ func activeJobs() []any {
 	return out
 }
 
-// POST /jobs: {jobId, company, port, masters, vouchers, ledger, checkFirst}
+// POST /jobs: {jobId, company, port, masters, vouchers: [{id, xml, bank?}], released}
 func newPostJob(pl M) (M, error) {
 	if err := postingAllowed(); err != nil {
 		return nil, err
@@ -124,7 +124,110 @@ func newPostJob(pl M) (M, error) {
 		return nil, err
 	}
 	if exists(filepath.Join(dir, "progress.json")) {
-		return jobView(dir), nil
+		v := jobView(dir)
+		// Retry (the same job sent again after it failed or was cancelled): the entries not posted go again; whatever
+		// was sent to Tally (posted by its reply, accepted by it, or sent without an answer) is kept and never sent twice
+		var rs []M
+		for _, r := range arr(v["results"]) {
+			if o := obj(r); o != nil {
+				rs = append(rs, o)
+			}
+		}
+		st := str(v["status"])
+		if rel := arr(pl["released"]); len(rel) > 0 && !jobAlive(id) {
+			// round 7 (F2): the owner's releases that came with this hand-back, for the worker to see
+			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+				pay["released"] = rel
+				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+			}
+		}
+		byItem := map[string]string{}
+		if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+			for _, x := range arr(pay["items"]) {
+				if o := obj(x); o != nil {
+					byItem[str(o["id"])] = str(o["xml"])
+				}
+			}
+		}
+		// decision B (migration 55): a posting that ended "done" comes back from the cloud with an entry's release only after
+		// this bridge looked in Tally and did not find it ("Not in Tally - post again": its outcome was unknown, or it was
+		// deleted in Tally by hand since): that entry (and only it) is sent once more, the release honoured once; everything
+		// else of the job is kept as it was
+		releasedHere := func(r M) bool {
+			k := str(r["id"])
+			return releaseFor(arr(pl["released"]), acceptedKey(k, byItem[k]), k, or2(acceptedInfo(acceptedKey(k, byItem[k])), M{})) != nil
+		}
+		// review M1 / L2: the cloud names the entries to send again (resendOnly, after the bridge's "not found"): only
+		// those go, in a done or a failed job alike; every other entry keeps its result and is never sent
+		only := resendOnlyOf(pl)
+		if len(only) > 0 && (st == "done" || st == "failed" || st == "cancelled") && !jobAlive(id) {
+			var kept []any
+			keep := map[string]bool{}
+			for _, r := range rs {
+				if k := str(r["id"]); !only[k] {
+					kept = append(kept, r)
+					keep[k] = true
+				}
+			}
+			if kept == nil {
+				kept = []any{}
+			}
+			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+				var its []any
+				for _, x := range arr(pay["items"]) {
+					if o := obj(x); o != nil && (keep[str(o["id"])] || only[str(o["id"])]) {
+						its = append(its, o)
+					}
+				}
+				if its == nil {
+					its = []any{}
+				}
+				pay["items"] = its
+				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+			}
+			_ = os.Remove(filepath.Join(dir, "cancel"))
+			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
+			startJob(id, dir, v)
+			writeLog(fmt.Sprintf("Posting job %s: only %d released entr%s sent again (%d kept, never sent again)", id, len(only), map[bool]string{true: "y", false: "ies"}[len(only) == 1], len(kept)))
+			return jobView(dir), nil
+		}
+		doneRelease := false
+		if st == "done" && !jobAlive(id) {
+			for _, r := range rs {
+				if releasedHere(r) {
+					doneRelease = true
+				}
+			}
+		}
+		if (st == "failed" || st == "cancelled" || doneRelease) && !jobAlive(id) {
+			var kept []any
+			for _, r := range rs {
+				if doneRelease {
+					if !releasedHere(r) {
+						kept = append(kept, r)
+					}
+					continue
+				}
+				if !confirmedResult(r) {
+					continue
+				}
+				// round 8 (R5): a release the cloud handed with this job, not honoured yet, for an entry sent before: the
+				// worker sees the entry again (and sends it once)
+				if k := str(r["id"]); r["verified"] != true && releaseFor(arr(pl["released"]), acceptedKey(k, byItem[k]), k, or2(acceptedInfo(acceptedKey(k, byItem[k])), M{})) != nil {
+					continue
+				}
+				kept = append(kept, r)
+			}
+			if kept == nil {
+				kept = []any{}
+			}
+			_ = os.Remove(filepath.Join(dir, "cancel"))
+			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
+			startJob(id, dir, v)
+			writeLog(fmt.Sprintf("Posting job %s: retried (%d already sent to Tally kept, never sent again)", id, len(kept)))
+			return jobView(dir), nil
+		}
+		return v, nil
 	}
 	if str(pl["company"]) == "" {
 		return nil, errors.New("No company given.")
@@ -136,17 +239,50 @@ func newPostJob(pl M) (M, error) {
 			items = append(items, M{"id": str(o["id"]), "kind": "master", "xml": str(o["xml"])})
 		}
 	}
+	// review M1 / L2: handed back with resendOnly and no record of the job here: only those entries, no masters
+	only := resendOnlyOf(pl)
+	if len(only) > 0 {
+		items = []any{}
+	}
 	for _, v := range arr(pl["vouchers"]) {
 		if o := obj(v); o != nil {
-			items = append(items, M{"id": str(o["id"]), "kind": "voucher", "xml": str(o["xml"])})
+			if len(only) > 0 && !only[str(o["id"])] {
+				continue
+			}
+			// every voucher carries its FinCom id ("TDSDesk:<id>" first in its narration): FinCom's, else the entry's id
+			x, _ := stampFinComID(str(o["xml"]), str(o["id"]))
+			it := M{"id": str(o["id"]), "kind": "voucher", "xml": x}
+			if truthy(o["bank"]) {
+				it["bank"] = true // round 15: FinCom marks a bank line; else its voucher type tells (isBankItem)
+			}
+			items = append(items, it)
 		}
 	}
-	_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(M{"company": str(pl["company"]), "port": toInt(pl["port"]), "ledger": str(pl["ledger"]), "checkFirst": truthy(pl["checkFirst"]), "items": items}))
-	p := M{"ok": true, "id": id, "status": "queued", "company": str(pl["company"]), "port": 0, "total": len(items), "done": 0, "results": []any{}, "message": "Starting", "pid": os.Getpid(), "resumed": false,
-		"startedAt": time.Now().Format(time.RFC3339Nano), "updatedAt": "", "finishedAt": "", "checking": false, "checkFailed": false}
+	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
+	payload := M{"company": str(pl["company"]), "items": items, "released": arr(pl["released"])}
+	if pt := toInt(pl["port"]); pt > 0 {
+		payload["port"] = pt
+	}
+	_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(payload))
+	p := M{"ok": true, "id": id, "status": "queued", "company": str(pl["company"]), "total": len(items), "done": 0, "results": []any{}, "message": "Starting", "pid": os.Getpid(), "resumed": false,
+		"startedAt": time.Now().Format(time.RFC3339Nano), "updatedAt": "", "finishedAt": "", "checking": false, "checkFailed": false, "reqs": []any{}, "secondsTotal": 0.0}
 	startJob(id, dir, p)
 	writeLog(fmt.Sprintf("Posting job %s: %d item(s) for %s", id, len(items), p["company"]))
 	return p, nil
+}
+
+// the entries the cloud asks to be sent again, by id (resendOnly); none: nil
+func resendOnlyOf(pl M) map[string]bool {
+	var out map[string]bool
+	for _, x := range arr(pl["resendOnly"]) {
+		if k := strings.TrimSpace(str(x)); k != "" {
+			if out == nil {
+				out = map[string]bool{}
+			}
+			out[k] = true
+		}
+	}
+	return out
 }
 
 func startJob(id, dir string, p M) {
@@ -158,6 +294,7 @@ func startJob(id, dir string, p M) {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprint("Posting job stopped: ", r))
+				crashReport("posting_job", r)
 			}
 			jobsMu.Lock()
 			delete(jobsRunning, id)
@@ -188,375 +325,565 @@ func resumePostJob(id string) (M, error) {
 	return p, nil
 }
 
-// keep the computer awake while posting
+// the pause before asking Tally again while a posting waits: 15 s, growing to 60 s; no deadline
+func waitPause(round int) time.Duration {
+	if ms := keepNum("PostWaitMs", 0); ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	steps := []int{15, 15, 30, 45, 60}
+	if round >= len(steps) {
+		round = len(steps) - 1
+	}
+	return time.Duration(steps[round]) * time.Second
+}
+
+// a job cancelled in FinCom (or by POST /jobs/cancel): a mark in its folder, seen while it waits and between batches
+func jobCancelled(dir string) bool { return exists(filepath.Join(dir, "cancel")) }
+func cancelJob(id, why string) (M, error) {
+	dir, err := jobDir(id)
+	if err != nil {
+		return nil, err
+	}
+	if !exists(filepath.Join(dir, "progress.json")) {
+		return nil, errors.New("No such job.")
+	}
+	_ = saveFile(filepath.Join(dir, "cancel"), why)
+	p := jobView(dir)
+	if p != nil && !jobAlive(id) && str(p["status"]) != "done" {
+		// not running now (stopped part-way, or failed): marked cancelled here
+		p["status"], p["message"], p["finishedAt"] = "cancelled", "Cancelled in FinCom; nothing more is sent to Tally", time.Now().Format(time.RFC3339Nano)
+		writeProgress(dir, p)
+	}
+	writeLog("Posting job " + id + " cancelled (" + why + ")")
+	return jobView(dir), nil
+}
+
+// the posting going on now, in its one line (the tray, /status); "" when none
+func postingNow() string {
+	for _, j := range activeJobs() {
+		o := obj(j)
+		if st := str(o["status"]); st == "waiting" || st == "running" || st == "queued" {
+			return str(o["message"])
+		}
+	}
+	return ""
+}
+
+// a job changed: FinCom's queue hears it at once, not at the next few-second turn
+var postsDirty atomic.Bool
+
+// The worker. A posting never fails because Tally is closed, busy or the company is not open: it waits ("Waiting for
+// Tally: ..."), asking again every 15 s up to every 60 s, with no deadline, until it can post or is cancelled. Only
+// Tally's reply fails an entry (needs review, with Tally's words), at once; the others go on. Nothing is posted twice:
+// every voucher sent is recorded on this computer before the next request goes, and whatever has a result is never
+// sent again (the results are kept in progress.json across restarts). The port is found again on every try.
+// Round 15 (03-Oct-2026): Tally sees one company check per job, the master imports and the voucher imports (bills in
+// requests of PostBatchBills, bank lines of PostBatchBank); nothing is read back; the queue is never held.
 func jobWorker(dir string) {
 	p := readProgress(dir)
 	pl := readObjFile(filepath.Join(dir, "payload.json"))
 	if p == nil || pl == nil {
 		return
 	}
-	company, ledger := str(pl["company"]), str(pl["ledger"])
-	p["pid"], p["status"], p["message"] = os.Getpid(), "waiting", "Finding the company in Tally"
+	asked := str(pl["company"])
+	jobID := str(p["id"])
+	hint := toInt(pl["port"])
+	if pp := toInt(p["port"]); pp > 0 {
+		hint = pp
+	}
+	p["pid"] = os.Getpid()
+	p["checking"] = false
 	var results []M
 	for _, r := range arr(p["results"]) {
 		if o := obj(r); o != nil {
 			results = append(results, o)
 		}
 	}
-	doneIDs := map[string]bool{}
-	for _, r := range results {
-		doneIDs[str(r["id"])] = true
+	var all []M
+	for _, x := range arr(pl["items"]) {
+		if o := obj(x); o != nil {
+			all = append(all, o)
+		}
+	}
+	sending := map[string]bool{}
+	// review of 2.1.8, finding 1: a request in flight when the bridge died (its ids in progress.json as inflight, no
+	// result): every such entry is unknown (sent, no answer), never sent again
+	if ids := strs(p["inflight"]); len(ids) > 0 {
+		have := map[string]bool{}
+		for _, r := range results {
+			have[str(r["id"])] = true
+		}
+		byID := map[string]M{}
+		for _, it := range all {
+			byID[str(it["id"])] = it
+		}
+		for _, k := range ids {
+			it := byID[k]
+			if have[k] || it == nil {
+				continue
+			}
+			x := str(it["xml"])
+			r := M{"id": k, "kind": str(it["kind"]), "company": str(p["tallyCompany"]), "port": toInt(p["port"]), "ok": false, "outcomeUnknown": true, "sent": true, "state": "unknown",
+				"message": unknownLine, "detail": "the bridge stopped while this request was at Tally", "batchN": len(ids)}
+			if str(it["kind"]) == "voucher" {
+				r["vchDate"], r["vchType"] = voucherDateType(x)
+				_ = noteSent(acceptedKey(k, x), str(p["tallyCompany"]), jobID, "", len(ids), "", "")
+			}
+			results = append(results, r)
+			writeLog("  entry " + k + ": was at Tally when the bridge stopped; outcome unknown, recorded as sent, not sent again")
+		}
+		p["inflight"] = []any{}
 	}
 	setRes := func() {
 		a := make([]any, len(results))
+		byID := map[string]M{}
 		for i, r := range results {
 			a[i] = r
+			byID[str(r["id"])] = r
 		}
 		p["results"] = a
 		p["done"] = len(results)
+		items := make([]any, 0, len(all))
+		for _, it := range all {
+			k := str(it["id"])
+			r := byID[k]
+			e := M{"id": k, "kind": str(it["kind"]), "state": itemState(r, sending[k])}
+			if r != nil {
+				// round 15: what the cloud shows per entry: posted by Tally's reply (byReply, batchN, batchEnd, vchId when the
+				// request held one voucher), needs review (Tally's counts and words), sent without an answer, or refused
+				for _, f := range []string{"byReply", "vchId", "batchN", "batchEnd", "lastVchId", "needsReview", "accepted", "alreadySent", "sentAt", "secondsReq",
+					"created", "altered", "errors", "exceptions", "ignored", "lineError", "vchDate", "vchType", "verified", "outcomeUnknown", "sent", "sentOn"} {
+					if v, has := r[f]; has {
+						e[f] = v
+					}
+				}
+				if r["outcomeUnknown"] == true {
+					e["reason"] = str(r["message"])
+					if r["acceptedBefore"] == true || r["held"] == true {
+						e["reason"] = str(r["message"]) // older notes: names the earlier job
+					}
+				} else if r["ok"] != true {
+					e["reason"] = failedLine(str(r["message"]))
+					if r["already"] == true {
+						e["already"], e["guid"], e["vchNo"], e["vchDate"] = true, str(r["guid"]), str(r["vchNo"]), str(r["vchDate"])
+					}
+					if r["checkFailed"] == true {
+						e["checkFailed"] = true
+					}
+				}
+			}
+			items = append(items, e)
+		}
+		p["items"] = items
+	}
+	save := func() error {
+		setRes()
+		err := writeProgress(dir, p)
+		postsDirty.Store(true)
+		return err
+	}
+	setStatus := func(st, msg string) {
+		changed := str(p["status"]) != st || str(p["message"]) != msg
+		p["status"], p["message"] = st, msg
+		if changed {
+			save()
+			if st == "waiting" {
+				writeLog("Posting job " + jobID + ": " + msg)
+			}
+		}
+	}
+	finish := func(st, msg string) {
+		p["status"], p["message"], p["finishedAt"] = st, msg, time.Now().Format(time.RFC3339Nano)
+		save()
+		writeLog("Posting job " + jobID + " " + st + ": " + msg)
+	}
+	cancelled := func() bool {
+		if jobCancelled(dir) {
+			finish("cancelled", "Cancelled in FinCom; nothing more is sent to Tally")
+			return true
+		}
+		return false
+	}
+	// sleeps, seeing a cancel or the bridge stopping within a second; false: stop here
+	pause := func(d time.Duration) bool {
+		for t := time.Duration(0); t < d; t += time.Second {
+			if jobCancelled(dir) || stopping() {
+				return false
+			}
+			time.Sleep(time.Second)
+		}
+		return true
+	}
+	// Tally with the company open, found now: its port and the company's name in Tally; false when the job is to stop
+	// (cancelled, or the bridge stops: it is resumed after the restart). why: a reason to wait already known
+	round := 0
+	var port int
+	var company string
+	waitTally := func(why error) bool {
+		for {
+			if cancelled() || stopping() {
+				return false
+			}
+			if why == nil {
+				pt, name, err := findCompanyNow(asked, hint)
+				if err == nil {
+					port, company, hint = pt, name, pt
+					p["port"], p["tallyCompany"] = pt, name
+					return true
+				}
+				why = err
+			}
+			setStatus("waiting", waitingLine(asked, why))
+			if !pause(waitPause(round)) {
+				cancelled()
+				return false
+			}
+			round++
+			why = nil
+		}
 	}
 	setRes()
-	writeProgress(dir, p)
-	port := 0
-	for t := 0; t < 20; t++ {
-		pt, err := findCompanyPort(company, toInt(pl["port"]))
-		if err == nil {
-			port = pt
-			break
-		}
-		p["message"] = "Waiting for Tally: " + tallyTrouble(err.Error())
-		writeProgress(dir, p)
-		time.Sleep(6 * time.Second)
-	}
-	if port == 0 {
-		p["status"], p["message"], p["finishedAt"] = "failed", "Tally did not show "+company+" for two minutes. Open it in TallyPrime and post again.", time.Now().Format(time.RFC3339Nano)
-		writeProgress(dir, p)
+	if err := postingAllowed(); err != nil {
+		finish("failed", "Failed: "+err.Error())
 		return
 	}
-	p["port"] = port
+	// round 11: PostOnly: a posting aimed at a company this computer may not post to is refused here, before one request
+	// goes to Tally
+	if why := postOnlyRefusal(asked); why != "" {
+		for _, it := range itemsToSend(all, results) {
+			results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "refused": true, "postOnly": true, "state": "failed", "message": why})
+		}
+		writeLog("Posting job " + jobID + ": " + why)
+		finish("failed", why)
+		return
+	}
+	// 2.3.1 (inflight.go): a Tally still on an earlier request the bridge stopped waiting for is waited for, in plain words
+	if earlierBusyAny() {
+		setStatus("waiting", "Waiting for Tally to finish an earlier request; this posting follows by itself")
+	}
+	if !waitTally(nil) {
+		return
+	}
+	// only one bridge posts or reads a company at a time (the lease in FinCom's cloud)
+	defer leaseRelease(asked)
+	if !waitLease(asked, setStatus, pause) {
+		cancelled()
+		return
+	}
+	// the company's GUID: one light request before anything is sent; the one held for it, or the whole job is refused
+	// with words and nothing is sent (a restored, re-created or other company of the same name); Tally not answering
+	// the check is waited for
+	coGUID := ""
+	for {
+		g, err := companyCheck(fin, company, port)
+		if err == nil {
+			coGUID = g
+			if gerr := guardCompanyGUID(company, g); gerr != nil {
+				for _, it := range itemsToSend(all, results) {
+					results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()})
+				}
+				finish("failed", "Not posted: "+gerr.Error())
+				return
+			}
+			break
+		}
+		if !waitTally(err) {
+			return
+		}
+	}
+	// 2.2.0: the posting window's a0, Tally's ALTVCHID from the company check before the job (a resumed job keeps the
+	// first one), and the company GUID it gave
+	if _, had := p["a0"]; !had {
+		p["a0"], p["windowGuid"] = companyAlter(company), coGUID
+	}
 	// one writer per Tally: wait for another posting to the same Tally to finish
 	lk, _ := tallyWriter.LoadOrStore(port, &sync.Mutex{})
 	wl := lk.(*sync.Mutex)
 	if !wl.TryLock() {
-		p["message"] = "Waiting for another posting to this Tally to finish"
-		writeProgress(dir, p)
+		setStatus("waiting", "Waiting for Tally: another posting to this Tally is going on — this one follows by itself")
 		wl.Lock()
 	}
 	defer wl.Unlock()
 	keepAwake(true)
 	defer keepAwake(false)
-	fail := func(err error) {
-		p["status"], p["message"], p["finishedAt"] = "failed", tallyTrouble(err.Error()), time.Now().Format(time.RFC3339Nano)
-		setRes()
-		writeProgress(dir, p)
-		writeLog("Posting job " + str(p["id"]) + " failed: " + str(p["message"]))
-	}
-	if err := postingAllowed(); err != nil {
-		fail(err)
-		return
-	}
-	p["status"] = "running"
-	var all, todo []M
-	for _, x := range arr(pl["items"]) {
-		if o := obj(x); o != nil {
-			all = append(all, o)
-			if !doneIDs[str(o["id"])] {
-				todo = append(todo, o)
-			}
-		}
-	}
-	vouchersOf := func(a []M) []M {
-		var o []M
-		for _, x := range a {
-			if str(x["kind"]) == "voucher" {
-				o = append(o, x)
-			}
-		}
-		return o
-	}
-	// resuming (or a posting queued in FinCom's cloud): whatever reached Tally before is counted, not sent again
-	if len(results) > 0 || p["resumed"] == true || truthy(pl["checkFirst"]) {
-		var there map[string]M
-		for a := 0; there == nil && a < 6; a++ {
-			there = findPostedTags(port, company, vouchersOf(todo), ledger)
-			if there == nil {
-				p["message"] = "Checking Tally for entries sent before the stop"
-				writeProgress(dir, p)
-				time.Sleep(time.Duration(5*(a+1)) * time.Second)
-			}
-		}
-		if there == nil {
-			fail(errors.New("Tally did not answer, so it cannot be told which entries arrived before the stop. Open Tally and resume again."))
-			return
-		}
+	todo := itemsToSend(all, results)
+	// A5: this computer's record (sync\posted-ids.json): a voucher this computer already sent is refused, with the date
+	// and Tally's id when known; nothing is asked of Tally. An owner's release handed with the job (the cloud is the
+	// judge) lets an entry go once more
+	{
 		var left []M
 		for _, it := range todo {
-			if h, ok := there[str(it["id"])]; ok {
-				results = append(results, M{"id": it["id"], "kind": "voucher", "ok": true, "verified": true, "alreadyThere": true, "vchNumber": str(h["number"]), "vchType": str(h["type"]),
-					"masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": "Already in Tally (sent before the stop)"})
-			} else {
+			k := str(it["id"])
+			if str(it["kind"]) != "voucher" {
 				left = append(left, it)
+				continue
 			}
+			key := acceptedKey(k, str(it["xml"]))
+			a := acceptedInfo(key)
+			if a == nil {
+				left = append(left, it)
+				continue
+			}
+			if rel := releaseFor(arr(pl["released"]), key, k, a); rel != nil {
+				writeLog("  entry " + k + ": released by " + or(str(rel["by"]), "the owner") + " at " + str(rel["at"]) + " (" + str(rel["why"]) + "); sent once more")
+				acceptedHonour(key, rel)
+				left = append(left, it)
+				continue
+			}
+			r := sentBeforeRefusal(k, str(it["xml"]))
+			r["company"], r["port"] = company, port
+			results = append(results, r)
+			writeLog("  voucher " + k + ": NOT SENT: " + str(r["message"]))
 		}
 		todo = left
 	}
-	p["resumed"] = true
-	setRes()
-	p["message"] = "Posting"
-	writeProgress(dir, p)
-	queue := append([]M{}, todo...)
-	tries := map[string]int{}
-	// entries created before a stop but not yet read back are confirmed with the next read
-	var toConfirm []string
-	for _, r := range results {
-		if r["ok"] == true && r["pendingCheck"] == true {
-			toConfirm = append(toConfirm, str(r["id"]))
-		}
-	}
-	isFast := func(x string) bool {
-		return reTag.MatchString(x) && !re(`<ISOPTIONAL>\s*Yes`).MatchString(x) && re(`^\s*<VOUCHER\b`).MatchString(x) && re(`<DATE>\d{8}</DATE>`).MatchString(x)
-	}
-	for len(queue) > 0 {
-		n := minI(jobChunk, len(queue))
-		chunk := queue[:n]
-		queue = append([]M{}, queue[n:]...)
-		var masters, vouchers, fast []M
-		for _, it := range chunk {
-			if str(it["kind"]) == "master" {
-				masters = append(masters, it)
-			} else {
-				vouchers = append(vouchers, it)
-			}
-		}
-		done := toInt(p["done"])
-		p["message"] = fmt.Sprintf("Posting %d to %d of %d", done+1, done+len(chunk), toInt(p["total"]))
-		writeProgress(dir, p)
-		var res []M
-		// the fast way: the batch's vouchers in one request, then each found in Tally by its tag
-		for _, v := range vouchers {
-			if isFast(str(v["xml"])) {
-				fast = append(fast, v)
-			}
-		}
-		if len(fast) >= 2 {
-			fastIDs := map[string]bool{}
-			for _, v := range fast {
-				fastIDs[str(v["id"])] = true
-			}
-			var rest []M
-			for _, v := range vouchers {
-				if !fastIDs[str(v["id"])] {
-					rest = append(rest, v)
-				}
-			}
-			vouchers = rest
-			var b strings.Builder
-			for _, v := range fast {
-				b.WriteString(`<TALLYMESSAGE xmlns:UDF="TallyUDF">` + str(v["xml"]) + "</TALLYMESSAGE>")
-			}
-			var rr M
-			why := ""
-			if raw, err := invokeTally(fin, port, importEnvelope("Vouchers", company, b.String()), 0); err == nil {
-				rr = readImportResult(raw)
-			} else {
-				why = tallyTrouble(err.Error())
-			}
-			var there map[string]M
-			if rr != nil && toInt(rr["created"]) == len(fast) && toInt(rr["errors"]) == 0 && toInt(rr["exceptions"]) == 0 {
-				// Tally made every one: counted now, read back with the next batch check
-				for _, v := range fast {
-					res = append(res, M{"id": str(v["id"]), "kind": "voucher", "ok": true, "verified": nil, "pendingCheck": true, "created": 1, "company": company, "port": port, "vchNumber": "", "vchType": "", "masterId": "", "guid": "", "vchDate": "", "message": ""})
-					toConfirm = append(toConfirm, str(v["id"]))
-				}
-				fast = nil
-			} else if rr != nil {
-				there = findPostedTags(port, company, fast, ledger)
-			}
-			if len(fast) > 0 {
-				if there == nil {
-					if rr != nil {
-						why = "Tally did not answer the check after posting"
-					}
-					for _, v := range fast {
-						res = append(res, M{"id": str(v["id"]), "kind": "voucher", "ok": false, "message": "Tally did not answer: " + why})
-					}
-				} else {
-					for _, v := range fast {
-						k := str(v["id"])
-						if h, ok := there[k]; ok {
-							res = append(res, M{"id": k, "kind": "voucher", "ok": true, "verified": true, "created": 1, "company": company, "port": port, "vchNumber": str(h["number"]), "vchType": str(h["type"]), "masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": ""})
-						} else if toInt(rr["created"]) >= len(fast) {
-							res = append(res, M{"id": k, "kind": "voucher", "ok": false, "verified": false, "message": "Tally replied 'created', but the entry cannot be found in '" + company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."})
-						} else {
-							vouchers = append(vouchers, v)
-						}
-					}
-				}
-			}
-		}
-		if len(masters)+len(vouchers) > 0 {
-			ms, vs := []any{}, []any{}
-			for _, m := range masters {
-				ms = append(ms, M{"id": m["id"], "xml": m["xml"]})
-			}
-			for _, v := range vouchers {
-				vs = append(vs, M{"id": v["id"], "xml": v["xml"]})
-			}
-			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs})
-			if err != nil {
-				msg := tallyTrouble(err.Error())
-				res = nil
-				for _, it := range chunk {
-					res = append(res, M{"id": it["id"], "kind": it["kind"], "ok": false, "message": "Tally did not answer: " + msg})
-				}
-			} else {
-				for _, x := range arr(r["results"]) {
-					res = append(res, obj(x))
-				}
-			}
-		}
-		// no answer from Tally: look for it in Tally before sending it again, then try again (three times, waiting longer)
-		var lostItems []M
-		lostIDs := map[string]bool{}
-		for _, r := range res {
-			if r["ok"] != true && strings.HasPrefix(str(r["message"]), "Tally did not answer") {
-				lostIDs[str(r["id"])] = true
-			}
-		}
-		for _, it := range chunk {
-			if lostIDs[str(it["id"])] {
-				lostItems = append(lostItems, it)
-			}
-		}
-		if len(lostItems) > 0 {
-			var there map[string]M
-			waits := []int{3, 10, 20, 30, 45}
-			for a := 0; there == nil && a < 5; a++ {
-				there = findPostedTags(port, company, vouchersOf(lostItems), ledger)
-				if there == nil {
-					p["message"] = "Tally is busy: waiting to check what arrived"
-					writeProgress(dir, p)
-					time.Sleep(time.Duration(waits[a]) * time.Second)
-				}
-			}
-			unsure := there == nil
-			if unsure {
-				there = map[string]M{}
-			}
-			var retry []M
-			without := func(k string) {
-				var o []M
-				for _, r := range res {
-					if str(r["id"]) != k {
-						o = append(o, r)
-					}
-				}
-				res = o
-			}
-			for _, it := range lostItems {
-				k := str(it["id"])
-				if h, ok := there[k]; ok {
-					without(k)
-					res = append(res, M{"id": k, "kind": "voucher", "ok": true, "verified": true, "vchNumber": str(h["number"]), "vchType": str(h["type"]), "masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": "Created (Tally answered late)"})
-				} else if unsure && str(it["kind"]) == "voucher" {
-					for _, r := range res {
-						if str(r["id"]) == k {
-							r["message"] = "Tally did not answer, and did not answer a check either, so it is not known whether this entry arrived. It was not sent again: look in Tally before posting it again."
-							r["unsure"] = true
-						}
-					}
-				} else if tries[k] < 3 {
-					tries[k]++
-					without(k)
-					retry = append(retry, it)
-				} else {
-					for _, r := range res {
-						if str(r["id"]) == k {
-							r["message"] = str(r["message"]) + " (tried 4 times)"
-						}
-					}
-				}
-			}
-			if len(retry) > 0 {
-				w := []int{3, 10, 30}[minI(2, tries[str(retry[0]["id"])]-1)]
-				p["message"] = fmt.Sprintf("Tally is busy: trying %d again in %d seconds", len(retry), w)
-				writeProgress(dir, p)
-				time.Sleep(time.Duration(w) * time.Second)
-				queue = append(retry, queue...)
-			}
-		}
-		for _, r := range res {
-			delete(r, "replySnip")
-			results = append(results, r)
-		}
-		setRes()
-		writeProgress(dir, p)
-	}
-	// sending is finished: FinCom shows it at once; the read-back runs after, in one read
-	okN := func() int {
-		n := 0
-		for _, r := range results {
-			if r["ok"] == true {
-				n++
-			}
-		}
-		return n
-	}
-	p["status"], p["checking"] = "done", len(toConfirm) > 0
-	p["message"] = fmt.Sprintf("%d of %d sent to Tally", okN(), toInt(p["total"]))
-	p["finishedAt"] = time.Now().Format(time.RFC3339Nano)
-	setRes()
-	writeProgress(dir, p)
-	if len(toConfirm) > 0 {
-		confirmPosted(port, company, toConfirm, results, all, ledger)
-		for _, r := range results {
-			delete(r, "pendingCheck")
-		}
-		p["checking"] = false
-		p["message"] = fmt.Sprintf("%d of %d in Tally", okN(), toInt(p["total"]))
-		setRes()
-		writeProgress(dir, p)
-	}
-	writeLog("Posting job " + str(p["id"]) + " finished: " + str(p["message"]))
-}
-
-// entries Tally said it created are read back together: found -> confirmed with Tally's voucher number; not found ->
-// not sent again, said so; no answer -> left unconfirmed
-func confirmPosted(port int, company string, pending []string, results []M, items []M, ledger string) {
-	byID := map[string]M{}
-	for _, it := range items {
-		byID[str(it["id"])] = it
-	}
-	var want []M
-	for _, k := range pending {
-		if it := byID[k]; it != nil {
-			want = append(want, it)
-		}
-	}
-	var there map[string]M
-	waits := []int{2, 5, 10, 20}
-	for a := 0; there == nil && a < 4; a++ {
-		there = findPostedTags(port, company, want, ledger)
-		if there == nil {
-			time.Sleep(time.Duration(waits[a]) * time.Second)
-		}
-	}
-	for _, r := range results {
-		k := str(r["id"])
-		if !contains(pending, k) {
+	// what cannot be sent at all (no valid date, not a voucher or master) is said now
+	var masters, vouchers []M
+	for _, it := range todo {
+		x := str(it["xml"])
+		if why := cannotSend(x); why != "" {
+			results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "message": why})
 			continue
 		}
-		if there == nil {
-			r["verified"] = nil
-			r["message"] = "Tally said it created this, but did not answer the check afterwards. Use 'Check Tally' before posting it again."
-		} else if h, ok := there[k]; ok {
-			if it := byID[k]; it != nil {
-				addPostedForCopy(company, h, str(it["xml"]))
-			}
-			r["verified"], r["vchNumber"], r["vchType"], r["masterId"], r["guid"], r["vchDate"], r["message"] = true, str(h["number"]), str(h["type"]), str(h["masterId"]), str(h["guid"]), str(h["date"]), ""
+		if str(it["kind"]) == "master" {
+			masters = append(masters, M{"id": it["id"], "xml": x})
 		} else {
-			r["ok"], r["verified"] = false, false
-			r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
+			vouchers = append(vouchers, M{"id": it["id"], "xml": x, "bank": it["bank"]})
 		}
 	}
+	p["resumed"] = true
+	save()
+	// A3: the requests, planned once: each master on its own, the bills by PostBatchBills, the bank lines by PostBatchBank
+	reqs := planImports(masters, vouchers)
+	K := len(reqs)
+	notes := arr(p["reqs"]) // a resumed job keeps the notes of the requests it sent before
+	secondsTotal := num(p["secondsTotal"])
+	nVouchers := 0
+	total := toInt(p["total"])
+	round = 0
+	for i := 0; i < K; {
+		if cancelled() || stopping() {
+			return
+		}
+		if err := postingAllowed(); err != nil {
+			finish("failed", "Failed: "+err.Error())
+			return
+		}
+		// the port found again on every try; Tally gone meanwhile: waited for
+		if !waitTally(nil) {
+			return
+		}
+		if !waitLease(asked, setStatus, pause) {
+			cancelled()
+			return
+		}
+		r := reqs[i]
+		for _, it := range r.items {
+			sending[str(it["id"])] = true
+		}
+		setStatus("running", sendingLine(len(results)+1, total))
+		save()
+		// the request's ids on disk before it goes (finding 1): a restart mid-request finds them as inflight
+		var inflight []any
+		for _, it := range r.items {
+			inflight = append(inflight, str(it["id"]))
+		}
+		p["inflight"] = inflight
+		var o importOutcome
+		if err := save(); err != nil {
+			// F1: the job's progress (its in-flight ids) could not be written: nothing is sent; waited for like Tally
+			o = importOutcome{err: fmt.Errorf("%w (progress.json: %v)", errRecordNotWritten, err)}
+		} else {
+			gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
+			gate.Lock()
+			o = sendImport(port, company, jobID, r)
+			gate.Unlock()
+		}
+		p["inflight"] = []any{}
+		what := fmt.Sprintf("%d vouchers", len(r.items))
+		if r.kind == "master" {
+			what = "1 master"
+		}
+		var res []M
+		var note M
+		var pinErr *pinRefusedError
+		switch {
+		case errors.As(o.err, &pinErr):
+			// round 6: the bridge refused the request itself (not a request FinCom builds): nothing reached Tally; its
+			// entries fail with the words, never waited on
+			for _, it := range r.items {
+				res = append(res, M{"id": it["id"], "kind": r.kind, "ok": false, "refused": true, "state": "failed", "message": o.err.Error()})
+			}
+			note = M{"n": len(r.items), "kind": r.kind, "seconds": 0, "refused": true, "created": 0, "altered": 0, "exceptions": 0, "ignored": 0, "errors": 0, "lastVchId": ""}
+			writeLog(fmt.Sprintf("Posting job %s: request %d of %d (%s) refused by the bridge: %s", jobID, i+1, K, what, o.err.Error()))
+		case o.err != nil && !tallyNoAnswer(o.err):
+			// nothing reached Tally (refused here, Tally not reachable, or held after a timeout): the same request goes
+			// again after a wait; nothing is recorded
+			writeLog(fmt.Sprintf("Posting job %s: request %d of %d (%s) not sent: %s; waiting for Tally", jobID, i+1, K, what, tallyTrouble(o.err.Error())))
+			setStatus("waiting", waitingLine(asked, o.err))
+			if !pause(waitPause(round)) {
+				cancelled()
+				return
+			}
+			round++
+			continue
+		case o.err != nil:
+			// Tally took the request and did not answer: every entry of it is unknown, recorded as sent, never sent again;
+			// no checking starts (the owner's Check Tally or the next comparison settles it)
+			res = unknownResults(port, company, jobID, r, o.err, o.seconds)
+			note = M{"n": len(r.items), "kind": r.kind, "seconds": o.seconds, "noAnswer": true, "created": 0, "altered": 0, "exceptions": 0, "ignored": 0, "errors": 0, "lastVchId": ""}
+			writeLog(fmt.Sprintf("Posting job %s: request %d of %d: %s, no answer in %.1f s (%s); outcome unknown, recorded as sent, not sent again", jobID, i+1, K, what, o.seconds, tallyTrouble(o.err.Error())))
+		default:
+			res, note = o.results, o.note
+			writeLog(fmt.Sprintf("Posting job %s: request %d of %d: %s in %.1f s (created %d, altered %d, exceptions %d, ignored %d, last Tally id %s)", jobID, i+1, K, what, o.seconds,
+				toInt(note["created"]), toInt(note["altered"]), toInt(note["exceptions"]), toInt(note["ignored"]), or(str(note["lastVchId"]), "none")))
+		}
+		round = 0
+		for _, x := range res {
+			delete(sending, str(x["id"]))
+			results = append(results, x)
+		}
+		if r.kind == "voucher" {
+			nVouchers += len(r.items)
+		}
+		notes = append(notes, note)
+		secondsTotal += o.seconds
+		p["reqs"], p["secondsTotal"] = notes, round3(secondsTotal)
+		p["message"] = sendingLine(minI(len(results)+1, total), total)
+		save() // the cloud hears every request as it is answered (posts_update with seq)
+		i++
+	}
+	writeLog(fmt.Sprintf("Posting job %s: %d requests, %d vouchers, %.1f s total", jobID, K, nVouchers, secondsTotal))
+	// 2.2.0: the posting window, after the last request (never during the job): a1 by one FinComCompany read now, the
+	// counts from Tally's replies; sent with the job's last posts_update (cloud.go)
+	if K > 0 {
+		jobWindow(p, notes, company, port)
+	}
+	// the end: "done" when anything was posted, or Tally created something of a request that needs review (neither
+	// posted nor failed: "Posted N of M; K need review"); "failed" only when nothing was posted and nothing accepted (a
+	// "failed" from the bridge stands in the cloud)
+	okN, unknownN, reviewN, failN, acceptedN, first := 0, 0, 0, 0, 0, ""
+	for _, r := range results {
+		switch {
+		case r["ok"] == true:
+			okN++
+		case r["outcomeUnknown"] == true:
+			unknownN++ // sent, no answer: neither posted nor failed
+		case r["needsReview"] == true:
+			reviewN++
+			if r["accepted"] == true {
+				acceptedN++
+			}
+			if first == "" {
+				first = str(r["message"])
+			}
+		default:
+			failN++ // refused on the record, PostOnly, the GUID, or not sendable
+			if first == "" {
+				first = str(r["message"])
+			}
+		}
+	}
+	p["checking"] = false
+	// (review finding 2) a no-answer entry makes the job done too: on a failed row the cloud would free its id
+	if okN > 0 || acceptedN > 0 || unknownN > 0 {
+		finish("done", postedLine(okN, total, reviewN, unknownN))
+	} else if failN+reviewN > 0 {
+		finish("failed", jobFailedLine(failN+reviewN, total, first))
+	} else {
+		finish("done", postedLine(okN, total, reviewN, unknownN))
+	}
+}
+
+// the lease on the company (FinCom's cloud): taken or renewed; while another bridge holds it the posting waits.
+// false: the job is to stop (cancelled, or the bridge stops)
+// Decision D (05-Oct-2026): the lease is taken for a posting; another bridge's READ gives way to it at its next request
+// (the want is recorded in the cloud; asked again soon, LeaseWantMs); another POSTING is waited for (they serialize)
+func waitLease(company string, setStatus func(string, string), pause func(time.Duration) bool) bool {
+	for r := 0; ; r++ {
+		ok, h := leaseTakeFor(company, "post")
+		if ok {
+			return true
+		}
+		d := waitPause(r)
+		switch {
+		case h.wanted:
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is reading "+company+"; it gives way to this posting at its next request — this one follows by itself")
+			if w := time.Duration(keepNum("LeaseWantMs", 2000)) * time.Millisecond; w < d {
+				d = w
+			}
+		case h.purpose == "post":
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is posting to "+company+" now — this one follows after it, by itself")
+		default:
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is posting to or reading "+company+" now — this one follows by itself")
+		}
+		if !pause(d) {
+			return false
+		}
+	}
+}
+
+// round 21 (2.1.10): a posting actually going on this bridge: a job whose worker is alive and is starting or sending
+// (queued, running), an import request in flight, or a posting being taken from FinCom's queue. A job stopped
+// part-way (interrupted) or waiting for Tally is not one: the light check is never held back by it. The postings
+// themselves still go by activeJobs
+func postingGoing() bool {
+	if importsInFlight.Load() > 0 || postTaking.Load() || benchRunning.Load() { // round 22: the time saving too
+		return true
+	}
+	jobsMu.Lock()
+	var ids []string
+	for id, alive := range jobsRunning {
+		if alive {
+			ids = append(ids, id)
+		}
+	}
+	jobsMu.Unlock()
+	for _, id := range ids {
+		dir, err := jobDir(id)
+		if err != nil {
+			continue
+		}
+		p := readProgress(dir)
+		if p == nil {
+			return true // just started: its progress not written yet
+		}
+		if st := str(p["status"]); st == "queued" || st == "running" {
+			return true
+		}
+	}
+	return false
+}
+
+// 2.2.0 (plan round 20, b.4): the posting window {a0, a1, vouchersCreated, mastersCreated, guid}: a0 the ALTVCHID of the
+// company check before the job, a1 the ALTVCHID of one FinComCompany read after its last request, the counts the sum
+// of CREATED in Tally's replies by kind. The cloud's gap check counts FinCom's own postings by it (index.ts postWindow).
+// a1 not read (Tally did not answer): no window
+func jobWindow(p M, notes []any, company string, port int) {
+	if _, err := companyCheck(fin, company, port); err != nil {
+		writeLog("Posting job " + str(p["id"]) + ": the change numbers after the job could not be read (" + err.Error() + "); no posting window")
+		return
+	}
+	if n := len(notes); n > 0 && truthy(obj(notes[n-1])["noAnswer"]) {
+		// review Low 16: Tally may still be importing the last request: its numbers now are not the job's
+		writeLog("Posting job " + str(p["id"]) + ": the last request had no answer from Tally; no posting window")
+		return
+	}
+	a0, a1 := toI64(p["a0"]), companyAlter(company)
+	vc, mc := 0, 0
+	for _, x := range notes {
+		n := obj(x)
+		if str(n["kind"]) == "master" {
+			mc += toInt(n["created"])
+		} else {
+			vc += toInt(n["created"])
+		}
+	}
+	if a1 < a0 {
+		writeLog(fmt.Sprintf("Posting job %s: ALTVCHID went from %d to %d during the job; no posting window", str(p["id"]), a0, a1))
+		return
+	}
+	p["window"] = M{"a0": a0, "a1": a1, "vouchersCreated": vc, "mastersCreated": mc, "guid": str(p["windowGuid"])}
+	liveAfterWindow(company, str(p["windowGuid"]), a0, a1, vc) // review M4: sources B and C skip FinCom's own entries
+	writeLog(fmt.Sprintf("Posting job %s: posting window ALTVCHID %d to %d, %d voucher(s) and %d master(s) created", str(p["id"]), a0, a1, vc, mc))
 }

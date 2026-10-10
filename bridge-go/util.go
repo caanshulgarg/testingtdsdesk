@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-var BridgeVersion = "2.0.0" // set at build time for test builds (-X main.BridgeVersion=...)
+var BridgeVersion = "2.4.1" // set at build time for test builds (-X main.BridgeVersion=...)
 
 // M is a JSON object, as PowerShell's [ordered]@{} was
 type M = map[string]any
@@ -217,17 +218,29 @@ func contains(a []string, s string) bool {
 
 // --- files
 // written whole, then moved into place, so a reader never sees half a file (Save-KeepFile)
+// the rename that puts a saved file in place (a function so the tests can refuse it). os.Rename replaces the old file
+// in one step: MoveFileEx with MOVEFILE_REPLACE_EXISTING on Windows, rename(2) elsewhere
+var renameFn = os.Rename
+
+// a file written whole: the text in a temporary file beside it, then put in place by one rename. Round 20 (the
+// re-review's Low 2): the old file is never removed first; a rename refused (an antivirus or a backup holding the file)
+// is tried again a few times, and if it still fails the old file stays as it was and the temporary file goes
 func saveFile(path, text string) error {
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
 	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path)
-		return os.Rename(tmp, path)
+	var err error
+	for i := 0; i < 4; i++ {
+		if err = renameFn(tmp, path); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
 	}
-	return nil
+	_ = os.Remove(tmp)
+	return err
 }
 func readText(f string) string {
 	b, err := os.ReadFile(f)
@@ -300,8 +313,22 @@ func esc(s string) string {
 	return r.Replace(s)
 }
 
-func safeName(s string) string {
-	return strings.TrimSpace(regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(s, "_"))
+// a company's name as one folder name inside the sync folder: the characters Windows does not allow in a name (the path
+// separators among them) become "_" as always; a name that is empty, ".", "..", starts with a dot or carries a control
+// character is refused, so a company's folder never leaves the sync folder
+func safeName(s string) (string, error) {
+	n := strings.TrimSpace(regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(s, "_"))
+	switch {
+	case n == "":
+		return "", errors.New("A company with no name has no folder of its own on this computer.")
+	case n == "." || n == ".." || strings.HasPrefix(n, "."):
+		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer (it starts with a dot).", s)
+	case strings.IndexFunc(n, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0:
+		return "", fmt.Errorf("The company name %q carries a control character and cannot be a folder name on this computer.", s)
+	case strings.ContainsAny(n, `/\`) || filepath.Base(n) != n:
+		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer.", s)
+	}
+	return n, nil
 }
 
 func minI(a, b int) int {
@@ -341,4 +368,25 @@ func group(p, s string, i int) string {
 		return ""
 	}
 	return m[i]
+}
+
+// --name value or --name=value from a command's arguments
+func flagValue(args []string, name string) string {
+	for i, a := range args {
+		if a == "--"+name && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(a, "--"+name+"=") {
+			return strings.TrimPrefix(a, "--"+name+"=")
+		}
+	}
+	return ""
+}
+
+// the first map that is not nil
+func or2(a, b M) M {
+	if a != nil {
+		return a
+	}
+	return b
 }

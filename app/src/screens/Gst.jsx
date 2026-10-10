@@ -15,7 +15,16 @@ import { Amendments, Advances, Reversal } from "./gst/Workings.jsx";
 import { Gst9, Gst9c } from "./gst/Annual.jsx";
 import ItcFollow from "./gst/ItcFollow.jsx";
 import ReturnsFiled from "./gst/ReturnsFiled.jsx";
+import FiledCompare from "./gst/FiledCompare.jsx";
+import Recon from "./gst/Recon.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
+
+// Optional entries with GST are in no return (request of 02-Oct-2026): said on the return pages, listed on Filed vs books
+function OptionalNote() {
+  const fy = GSTF.fyOf(S.gstYm || ""), n = fy ? GSTX.optional(S.gstReg || "", fy).length : 0;
+  if (!n) return null;
+  return <p className="note" style={{ margin: "0 0 10px" }} data-optional-note="">{n} Optional entr{n === 1 ? "y" : "ies"} with GST in {fy} {n === 1 ? "is" : "are"} in no return. <button className="linkbtn" onClick={() => { S.reconTab = "optional"; gstPartGo("recon"); }}>See the list</button></p>;
+}
 
 export default function Gst() {
   const b = S.books, months = GSTR.months(), regs = GSTR.gstins(b) || [];
@@ -30,7 +39,7 @@ export default function Gst() {
   if (!S.gstPart || !parts.some((x) => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
   S.gstSeen = seen;
   const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
-  const noDownload = ["r2b", "rev", "inreg", "follow", "qtr", "vault"].includes(part) || ftype === "comp";
+  const noDownload = ["r2b", "rev", "inreg", "follow", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
   const forWhat = ftype === "qrmp" ? " for the quarter" : " for the portal";
   return <>
     <LedgerBanner b={b} which="gst" />
@@ -46,9 +55,10 @@ export default function Gst() {
         {GSTSet.peek(S.gstReg).portalUser ? " · portal user " + GSTSet.peek(S.gstReg).portalUser : ""} · <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button></span>}
       <HelpButton />
     </div>
-    {noBooks && <p className="note" style={{ margin: "0 0 10px", color: "#B9541B" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally” or read from Tally.</p>}
+    {!noBooks && (part === "r1" || part === "r3b" || part === "qtr") && <OptionalNote />}
+    {noBooks && <p className="note" style={{ margin: "0 0 10px", color: "var(--warn)" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally” or read from Tally.</p>}
     {ftype === "qrmp" && (part === "r1" || part === "r3b") && <p className="note" style={{ margin: "0 0 10px" }}>Quarterly (QRMP) filer: this is the working for {GSTR.label(S.gstYm)}
       {GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + GSTSet.qLabel(S.gstYm) + "." : ", for reference; this month has no GSTR-1 or 3B — see “This quarter”."}</p>}
-    {part === "r1" ? <Gstr1 b={b} /> : part === "r3b" ? <Gstr3b b={b} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
+    {part === "r1" ? <Gstr1 b={b} /> : part === "r3b" ? <Gstr3b b={b} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
   </>;
 }

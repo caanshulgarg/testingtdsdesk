@@ -22,7 +22,7 @@ fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-LED, FROM, TO = "A S EVENTS", "20250401", "20251231"
+LED, FROM, TO = ("Peregrine Tent Works" if fake_tally._bd.FIXTURE else "A S EVENTS"), "20250401", "20251231"   # a supplier with two bills in the period
 # the party's entries in Tally (payable +: a credit to the vendor)
 lines = []
 for d, p in fake_tally.V:
@@ -63,10 +63,14 @@ try:
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:8135/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
-        pg.evaluate("""(k) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
-          const c = newCompany({name: "VMS EVENTS PRIVATE LIMITED (2024-25)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "invoices"; render(); }""", key)
+        pg.evaluate("""(k) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k}); /* FinCom 2.3.0 sends nothing to a bridge that has not proved itself; the PowerShell bridge 1.15.0 run here cannot, so this end-to-end test of posting takes it as proved */ Bridge.ensureProven = async () => true; 
+          const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "invoices"; render(); }""".replace("@CO@", fake_tally.COMPANY).replace("@GSTIN@", fake_tally._bd.GSTIN), key)
         pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
         pg.evaluate("syncLedgersFromTally(true)"); pg.evaluate("render()"); pg.wait_for_timeout(300)
+        # 02-Oct-2026 (FinCom Bridge 2.1.4 asks Tally for no balance): the ledger's balance comes from FinCom's copy, stood
+        # in here by the stand-in Tally's balance on the day, as the copy would hold it
+        pg.evaluate("""() => { TCloud.ledgerAt = async (cid, led, to) => { const nx = isoToTally(addDays(Audit.iso(to), 1));
+          const j = await Bridge.call('/ledgerbalance?company=' + encodeURIComponent(CO().name) + '&from=' + nx + '&to=' + nx + '&ledger=' + encodeURIComponent(led) + Bridge.pinQ(), null, 60000); return -r2(num(j.open)); }; }""")
         ok(pg.locator('button[title^="Match a vendor"]').count() == 1, "the purchase page has 'Reconcile a vendor ledger'")
         pg.click('button[title^="Match a vendor"]'); pg.wait_for_timeout(300)
         opts = pg.evaluate("Array.from(document.querySelectorAll('#vrLedgers option')).map(o => o.value)")

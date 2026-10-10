@@ -5,8 +5,10 @@
 //
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
+import Loading from "../../parts/Loading.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const H4 = ({ children, top = 12 }) => <h4 style={{ margin: top + "px 0 4px" }}>{children}</h4>;
@@ -19,7 +21,7 @@ function Registrations({ b, regs }) {
   return (
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST registrations</h3>
       <p className="note" style={{ margin: "0 0 8px" }}>The GSTINs of {co.name || "this client"} (PAN {clientPan() || "not set"}). The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</p>
-      {regs.length ? <div className="bk-tablewrap"><table className="bk-table compact">
+      {regs.length ? <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
         <thead><tr><th>GSTIN</th><th>State</th><th>Filing type now</th><th>Portal username</th><th>Taken from</th><th></th></tr></thead>
         <tbody>{regs.map((g) => { const reg = g.slice(0, 2), src = GSTRegs.source(g, b), only = src.length === 1 && src[0] === "added here", user = GSTSet.peek(reg).portalUser;
           return <tr key={g} data-key={g}><td><b>{g}</b></td><td>{GSTRegs.state(g)}</td><td>{GSTSet.typeLabel(GSTSet.typeOf(latestYm(), reg))}</td>
@@ -27,7 +29,7 @@ function Registrations({ b, regs }) {
             <td>{src.join(", ")}</td>
             <td>{S.gsetReg === reg ? <span className="note">settings below</span> : <button className="linkbtn" onClick={() => setAndShow("gsetReg", reg)}>settings</button>}
               {only && <> · <button className="linkbtn" onClick={() => gregRemove(g)}>remove</button></>}</td></tr>; })}</tbody>
-      </table></div> : <p className="note" style={{ color: "#B9541B" }}>No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>}
+      </table></div> : <p className="note" style={{ color: "var(--warn)" }}>No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
         <input ref={box} type="text" aria-label="New GSTIN" data-fk="gregnew" maxLength={15} placeholder="15-character GSTIN" style={{ width: 240, textTransform: "uppercase" }} autoComplete="off"
           onKeyDown={(ev) => { if (ev.key === "Enter") add(); }} />
@@ -78,11 +80,32 @@ function OneGstin({ b, g, regs }) {
       <H4>Rule 37</H4><label className="note"><input type="checkbox" aria-label="Rule 37" key={k("r37", !!((b.rule37On || {})[reg]))} defaultChecked={!!((b.rule37On || {})[reg])} onChange={shared("r37")} /> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>
       <H4>E-invoicing</H4>
       <select aria-label="E-invoicing" style={{ width: "auto" }} key={k("einv", GSTSet.einvMode(reg))} defaultValue={GSTSet.einvMode(reg)} onChange={shared("einv")}>{[["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      <EinvLogin gstin={(GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || ""} />
       <H4>Tally ledger for GST paid in cash</H4>
       <CommitBox aria-label="Tally ledger for GST paid in cash" data-fk={"gset-cash-" + reg} value={((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")} style={{ width: 320 }} onCommit={(v) => gsetSet("cash", v, reg)} />
       {" "}<span className="note">used in the set-off journal</span>
     </section>
   );
+}
+
+// tax-accuracy: the client's e-invoice (IRP) API user, for IRN and e-way bills from Sales; the password goes straight to
+// the firm's server, which keeps it in Vault: it is never kept in this browser
+function EinvLogin({ gstin }) {
+  const [u, setU] = useState(""), [p, setP] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false);
+  const a = gstin && GSTAPI.on() ? EINV.need(gstin) : undefined;
+  if (!gstin || !GSTAPI.on()) return null;
+  const save = async () => { setBusy(true); try { await EINV.login(gstin, u.trim(), p); setP(""); setMsg("Signed in to the e-invoice portal (" + (EINV.host || "") + ")."); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(false); render(); };
+  return <div data-einv-login={gstin}>
+    <H4>E-invoice and e-way bill API user</H4>
+    {a ? <p className="note">{gstin}: user <b>{a.username}</b>{a.last_error ? <> · <span className="bad">sign-in failed: {a.last_error}</span></> : a.token_until ? " · signed in" : ""}. Give it again to change it.</p>
+      : <p className="note">Made by the taxpayer on the e-invoice portal (API registration → through GSP → TaxPro). FinCom keeps the password on the firm's server, in Vault.</p>}
+    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+      <input type="text" placeholder="API username" aria-label="E-invoice API username" value={u} autoComplete="off" style={{ width: 200 }} onChange={(ev) => setU(ev.target.value)} />
+      <input type="password" placeholder="API password" aria-label="E-invoice API password" value={p} autoComplete="new-password" style={{ width: 200 }} onChange={(ev) => setP(ev.target.value)} />
+      <button className="btn small" disabled={busy || !u.trim() || !p} onClick={save}>{busy ? "Signing in…" : "Save and sign in"}</button>
+    </div>
+    {msg && <p className="note">{msg}</p>}
+  </div>;
 }
 
 function ForClient({ b }) {
@@ -114,12 +137,12 @@ function Contacts({ b }) {
       <p className="note">Email and phone for the letters to suppliers (ITC follow-up) and customers (IMS rejections). Taken from Tally where it has them; type or correct them here.</p>
       <input type="search" aria-label="Party or GSTIN" data-fk="gcontq" value={S.gcontQ || ""} placeholder="Party or GSTIN" style={{ width: 260 }} onChange={(ev) => setAndShow("gcontQ", ev.target.value, true)} />
       {" "}<span className="note">{shown.length} of {all.length} parties with a GSTIN</span>
-      <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Party</th><th>GSTIN</th><th>In the books as</th><th>Email</th><th>Phone</th></tr></thead>
-        <tbody>{shown.slice(0, q ? 200 : 40).map((p, i) => { const k = GSTSet.contact(p.gstin, p.party); return <tr key={p.gstin + ":" + i} data-key={p.gstin}>
+      <ListRows name="gstContacts" className="bk-table compact" unit={["party", "parties"]} of={all.length} empty="No party matches. Clear the search to see them all." head={[{ label: "Party", role: "party" }, { label: "GSTIN" }, { label: "In the books as" }, { label: "Email" }, { label: "Phone" }]}>
+        {shown.slice(0, q ? 200 : 40).map((p, i) => { const k = GSTSet.contact(p.gstin, p.party); return <tr key={p.gstin + ":" + i} data-key={p.gstin}>
           <td>{p.party}</td><td>{p.gstin}</td><td>{p.sides}</td>
           <td><CommitBox type="email" aria-label={"Email of " + p.party} value={(c[p.gstin] || {}).email || k.email} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "email", v)} /></td>
-          <td><CommitBox type="tel" aria-label={"Phone of " + p.party} value={(c[p.gstin] || {}).phone || k.phone} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "phone", v)} /></td></tr>; })}</tbody>
-      </table></div>
+          <td><CommitBox type="tel" aria-label={"Phone of " + p.party} value={(c[p.gstin] || {}).phone || k.phone} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "phone", v)} /></td></tr>; })}
+      </ListRows>
       {!q && shown.length > 40 && <p className="note">The 40 parties with the most documents are shown; search for others.</p>}
     </section>
   );
@@ -127,7 +150,7 @@ function Contacts({ b }) {
 
 export default function GstSettings() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <p className="note">Opening the books…</p>; }
+  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" />; }
   const b = S.books, regs = GSTR.gstins(b) || [];
   if (!regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
   return (
