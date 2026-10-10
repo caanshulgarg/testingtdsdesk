@@ -222,7 +222,18 @@ function S2Import($co, $xml, $label) {
   $r | Add-Member -NotePropertyName mid -NotePropertyValue "$mid" -Force
   return $r
 }
-function S2BridgeLog { if (Test-Path $B[1].log) { @(Get-Content $B[1].log) } else { @() } }
+# run 38004705728: the run crossed midnight and the bridge renamed its log to tds-bridge.log.<yyyy-mm-dd> (config.go
+# rotateLog): the lines before midnight (the companies' GUIDs) were lost to the harness. Its date-named copies (a fresh
+# runner: all of this run) come first, oldest first, then the log itself
+function S2BridgeLog {
+  $f = $B[1].log
+  $old = @(Get-ChildItem -Path (Split-Path $f) -Filter ((Split-Path $f -Leaf) + '.*') -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match '\.\d{4}-\d{2}-\d{2}(-\d+)?$' } | Sort-Object LastWriteTime)
+  $lines = @()
+  foreach ($o in $old) { $lines += @(Get-Content $o.FullName) }
+  if (Test-Path $f) { $lines += @(Get-Content $f) }
+  return $lines
+}
 
 # ---- the run, after the bridges start
 function Slow232 {
