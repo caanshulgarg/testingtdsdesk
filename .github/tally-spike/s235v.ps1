@@ -94,7 +94,17 @@ function StubCtl($stop) {
 }
 
 # ---- the bridge's log, its held list
-function LogLines { if (Test-Path $blog) { return , @(Get-Content $blog -Encoding UTF8) }; return , @() }
+# run 38004703351: the runs crossed midnight and the bridge renamed its log to tds-bridge.log.<yyyy-mm-dd> (config.go
+# rotateLog): line offsets taken before midnight skipped the whole new log (6.2 s3 'did not restart', s4) and the lines
+# before midnight were lost (3.0 s5). The date-named copies (a fresh runner: all of this run) come first, oldest first
+function LogLines {
+  $l = @()
+  $old = @(Get-ChildItem -Path (Split-Path $blog) -Filter ((Split-Path $blog -Leaf) + '.*') -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match '\.\d{4}-\d{2}-\d{2}(-\d+)?$' } | Sort-Object LastWriteTime)
+  foreach ($o in $old) { $l += @(Get-Content $o.FullName -Encoding UTF8) }
+  if (Test-Path $blog) { $l += @(Get-Content $blog -Encoding UTF8) }
+  return , @($l)
+}
 function LogFrom([int]$n) { $l = LogLines; return , @($l | Select-Object -Skip $n) }
 function WaitLog([int]$from, [string]$re, [int]$sec) {
   $until = (Get-Date).AddSeconds($sec)
@@ -396,12 +406,18 @@ try {
   if (-not $trays.Count) { throw 'no tray icon process (FinComBridge.exe tray) runs on the runner: no notification can be shown' }
   $shownRe = 'Notification shown: Tally not open'
   # every log the bridge and the icon write
-  function NotifLines { $f = @(Get-ChildItem -Path $h1, (Join-Path $env:LOCALAPPDATA 'FinCom Bridge') -Recurse -Filter '*.log' -File -ErrorAction SilentlyContinue)
+  function NotifLines { $f = @(Get-ChildItem -Path $h1, (Join-Path $env:LOCALAPPDATA 'FinCom Bridge') -Recurse -Filter '*.log*' -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '\.log(\.\d{4}-\d{2}-\d{2}(-\d+)?)?$' })
     return , @($f | ForEach-Object { $p = $_.FullName; Get-Content $p -Encoding UTF8 | Where-Object { $_ -match 'Notification shown' } | ForEach-Object { "$_" } } | Select-Object -Unique) }
   function NotifFile { if (Test-Path $nf) { try { return (Get-Content $nf -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable) } catch { return @{ '(unreadable)' = "$_" } } }; return @{} }
   $nl = NotifLines; $n0 = @($nl | Where-Object { $_ -match $shownRe }).Count
   $ts0 = Bridge GET '/tray/status'
   Info "s235 s5: before: '$shownRe' lines $n0; tray status tallyOpen $($ts0.tallyOpen), paused $($ts0.paused), readStopped $($ts0.readStopped | ConvertTo-Json -Compress); clock $(Get-Date -Format 'ddd HH:mm')"
+  # run 38004703351 (3.0, 5.1, 7.1): s5 straddled midnight: the second close was a new problem of a new day, rightly shown
+  # once more (notices.go: the problem's key holds the day it started). Both closes must fall in one day: s5 takes about
+  # 15 minutes, so within 20 minutes of midnight the harness waits for the new day first
+  $toMid = ((Get-Date).Date.AddDays(1) - (Get-Date)).TotalMinutes
+  if ($toMid -lt 20) { Info "s235 s5: $([int]$toMid) min to midnight: waiting for the new day so both closes fall in one day"; Start-Sleep ([int]($toMid * 60) + 30) }
+  $day5 = (Get-Date).ToString('yyyy-MM-dd')
   # 1st close: 3+ minutes
   S235StopTally; $c1 = Get-Date
   $first5 = $null; $closedSeen = $null
@@ -426,7 +442,7 @@ try {
   $tallyIds2 = @($file2.Keys | Where-Object { "$_" -like 'tally:*' })
   $nShown = $sh2.Count - $n0
   Shot 's235-s5-end'
-  $st5 = if (-not $closedSeen -or -not $up -or -not $seenOpen) { 'HARNESS' } elseif ($first5 -and $first5 -ge 170 -and $nShown -eq 1 -and $tallyIds2.Count -eq 1) { 'PASS' } else { 'FAIL' }
+  $st5 = if (-not $closedSeen -or -not $up -or -not $seenOpen -or (Get-Date).ToString('yyyy-MM-dd') -ne $day5) { 'HARNESS' } elseif ($first5 -and $first5 -ge 170 -and $nShown -eq 1 -and $tallyIds2.Count -eq 1) { 'PASS' } else { 'FAIL' }
   SRes $CK5 $st5 ("1st close: the bridge saw Tally closed after {0} s; the notification after {1} s; notifications-cleared.json: {2}. Reopened (Tally up {3}, the bridge saw it open {4}), closed again {10} s: '{5}' lines in all since the start of s5: {6}; the file's tally entries: {7} ({8}). Log: {9}" -f `
       $closedSeen, $(if ($first5) { $first5 } else { 'none in 360 s' }), (($file1 | ConvertTo-Json -Compress -Depth 4)), $up, $seenOpen, $shownRe, $nShown, $tallyIds2.Count, (($file2 | ConvertTo-Json -Compress -Depth 4)), $(if ($sh2.Count) { ($sh2 | ForEach-Object { Cut $_ 240 }) -join ' | ' } else { '(none)' }), $wait2)
 } catch { Write-Host "s5 stopped: $_ $($_.ScriptStackTrace)"; if (-not $done[$CK5]) { SRes $CK5 'HARNESS' "the harness stopped: $_" } }
