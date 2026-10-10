@@ -54,7 +54,7 @@ function TgAll {
   $l = @()
   try { $d = [xml]($x -replace '&#4;', '')
     foreach ($v in $d.ENVELOPE.BODY.DATA.COLLECTION.VOUCHER) { $n = Val $v.NARRATION
-      $l += [pscustomobject]@{ id = ($n -split ' ', 2)[0]; guid = Val $v.GUID; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); cancelled = ((Val $v.ISCANCELLED) -eq 'Yes'); optional = ((Val $v.ISOPTIONAL) -eq 'Yes'); vno = Val $v.VOUCHERNUMBER; type = Val $v.VOUCHERTYPENAME; date = Val $v.DATE; narr = $n } }
+      $l += [pscustomobject]@{ id = ($n -split ' ', 2)[0]; guid = Val $v.GUID; vchkey = "$($v.VCHKEY)"; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); cancelled = ((Val $v.ISCANCELLED) -eq 'Yes'); optional = ((Val $v.ISOPTIONAL) -eq 'Yes'); vno = Val $v.VOUCHERNUMBER; type = Val $v.VOUCHERTYPENAME; date = Val $v.DATE; narr = $n } }
   } catch { Write-Host "TgAll parse: $_"; TgSave "vouchers-unparsed-$(Get-Date -Format HHmmss).xml" $x }
   return , $l
 }
@@ -144,20 +144,50 @@ try {
   TgRes $TG2 $(if (-not $want1.Count) { 'HARNESS' } elseif (-not $miss1.Count) { 'PASS' } else { 'FAIL' }) ("{0} entries in Tally; the bridge's lines with Tally's entry reached the stub for {1} in {2} min; not reached: {3}" -f $want1.Count, ($want1.Count - $miss1.Count), [math]::Round(((Get-Date) - $t0).TotalMinutes, 1), $(if ($miss1.Count) { ($miss1 | ForEach-Object { "$($_.id) ($($_.ev))" }) -join ', ' } else { 'none' }))
   $d1 = TgDayBookExport 'p1'; $m1 = TgExportMasters 'p1'
   # ---- phase 2: the amendments after "filing"
+  # which XML form alters an entry in place in this Tally (run 38064141905: the REMOTEID form and the voucher-number form
+  # with a yyyymmdd date each made a NEW entry): tried on a throwaway journal of 1-10-2026 (no tax, outside the months the
+  # returns read); the first form that keeps its MasterID, raises its AlterID and leaves one entry is used for the amendments
+  function TgForm($m, $c, $type, $dateDmy) {
+    switch ($m) {
+      'remoteid-vchkey' { return '<VOUCHER REMOTEID="' + $c.guid + '" VCHKEY="' + $c.vchkey + '" VCHTYPE="' + $type + '" ACTION="Alter">' }
+      'number-dmy' { return '<VOUCHER DATE="' + $dateDmy + '" TAGNAME="Voucher Number" TAGVALUE="' + $c.vno + '" VCHTYPE="' + $type + '" ACTION="Alter">' }
+      'masterid-tag' { return '<VOUCHER TAGNAME="MasterID" TAGVALUE="' + $c.mid + '" VCHTYPE="' + $type + '" ACTION="Alter">' }
+      'guid-tag' { return '<VOUCHER TAGNAME="GUID" TAGVALUE="' + $c.guid + '" VCHTYPE="' + $type + '" ACTION="Alter">' }
+      'inner-ids' { return '<VOUCHER VCHTYPE="' + $type + '" ACTION="Alter"><GUID>' + $c.guid + '</GUID><MASTERID>' + $c.mid + '</MASTERID>' }
+    }
+  }
+  function TgBody($x) { return ($x -replace '^<VOUCHER [^>]*>', '') }
+  $probe = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261001</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>PROBE/1</VOUCHERNUMBER><NARRATION>PROBE alter probe</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  $null = Imp 'Vouchers' $probe 'tdsgst alter probe'
+  $script:tgForm = ''; $tried = @()
+  function TgAllP { $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TgVP</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20261001</SVFROMDATE><SVTODATE>20261001</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="TgVP" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, VOUCHERNUMBER, NARRATION</FETCH><FILTERS>TgPr</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TgPr">$Narration CONTAINS "PROBE"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 60
+    $l = @(); try { $d = [xml]($x -replace '&#4;', ''); foreach ($v in $d.ENVELOPE.BODY.DATA.COLLECTION.VOUCHER) { $l += [pscustomobject]@{ guid = Val $v.GUID; vchkey = "$($v.VCHKEY)"; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); vno = Val $v.VOUCHERNUMBER; narr = Val $v.NARRATION } } } catch {}
+    return , $l }
+  foreach ($m in 'remoteid-vchkey', 'number-dmy', 'masterid-tag', 'guid-tag', 'inner-ids') {
+    $pl = TgAllP; $c = @($pl | Where-Object { $_.narr -like 'PROBE alter probe*' } | Sort-Object mid)[0]
+    if (-not $c) { $tried += "${m}: no probe"; break }
+    $nar = "PROBE alter probe $m"
+    $x = (TgForm $m $c 'Journal' '1-Oct-2026') + ((TgBody $probe) -replace 'PROBE alter probe', $nar -replace '-10\.00', '-20.00' -replace '>10\.00<', '>20.00<')
+    $r = Imp 'Vouchers' $x "tdsgst alter probe $m"; $k = TgCount $r
+    $pl2 = TgAllP; $same = @($pl2 | Where-Object { $_.mid -eq $c.mid })[0]
+    $good = $same -and $same.aid -gt $c.aid -and $same.narr -eq $nar -and $pl2.Count -eq $pl.Count
+    $tried += "${m}: created $($k.c), altered $($k.a), errors $($k.e) $($k.line) -> $(if ($good) { 'altered in place' } else { "not in place (probes $($pl.Count) -> $($pl2.Count))" })"
+    if ($good) { $script:tgForm = $m; break }
+  }
+  Info "tdsgst: the alteration forms tried on the probe journal: $($tried -join ' | '); used: $(if ($script:tgForm) { $script:tgForm } else { 'none: the amendments are made by keys' })"
   $ops = @()
   foreach ($o in $O2.ops) {
     $allNow = TgAll; $cur = @($allNow | Where-Object { $_.id -eq $o.id })[0]
     if ($o.op -eq 'alter') {
       if (-not $cur) { $ops += "$($o.id): not in Tally"; continue }
-      $x = $o.xml -replace '^<VOUCHER ', ('<VOUCHER REMOTEID="' + $cur.guid + '" ') -replace 'ACTION="Create"', 'ACTION="Alter"'
-      $r = Imp 'Vouchers' $x "tdsgst alter $($o.id)"; $k = TgCount $r
+      $how = ''
+      if ($script:tgForm) {
+        $dmy = [datetime]::ParseExact($o.date, 'yyyyMMdd', $null).ToString('d-MMM-yyyy', [Globalization.CultureInfo]::InvariantCulture)
+        $x = (TgForm $script:tgForm $cur $o.type $dmy) + (TgBody $o.xml)
+        $r = Imp 'Vouchers' $x "tdsgst alter $($o.id)"; $k = TgCount $r
+        $how = "$($script:tgForm): created $($k.c), altered $($k.a), errors $($k.e) $($k.line)"
+      } else { $how = 'no XML form alters in place on this Tally' }
       $allNow = TgAll; $aft = @($allNow | Where-Object { $_.id -eq $o.id })
-      $how = "by GUID: created $($k.c), altered $($k.a), errors $($k.e) $($k.line)"
-      if (-not ($aft.Count -eq 1 -and $aft[0].aid -gt $cur.aid -and $aft[0].mid -eq $cur.mid)) {
-        $x2 = $o.xml -replace '^<VOUCHER ', ('<VOUCHER DATE="' + $o.date + '" TAGNAME="Voucher Number" TAGVALUE="' + $o.no + '" ') -replace 'ACTION="Create"', 'ACTION="Alter"'
-        $r = Imp 'Vouchers' $x2 "tdsgst alter $($o.id) by number"; $k2 = TgCount $r
-        $allNow = TgAll; $aft = @($allNow | Where-Object { $_.id -eq $o.id }); $how += "; by number: created $($k2.c), altered $($k2.a), errors $($k2.e) $($k2.line)"
-      }
       $ok = $aft.Count -eq 1 -and $aft[0].aid -gt $cur.aid -and $aft[0].mid -eq $cur.mid -and $aft[0].narr -eq $o.narr
       $ops += "$($o.id) altered: $ok (mid $($cur.mid), AlterID $($cur.aid) -> $(($aft | ForEach-Object { $_.aid }) -join '/'), entries with this id $($aft.Count); $how)"
     } elseif ($o.op -eq 'ledger') {

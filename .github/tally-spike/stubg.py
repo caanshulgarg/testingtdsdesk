@@ -44,7 +44,9 @@ class H(BaseHTTPRequestHandler):
             elif kind == 'hello':
                 out = {'ok': True, 'firm': 'Spike', 'device': 'runner'}
             elif kind == 'companies':
-                out = {'ok': True, 'links': {}}
+                # the company linked to a client in FinCom (production: tally_companies.client_id), so the bridge sends its
+                # ledger list (run 38064141905: links {} and no ledger list reached the stub)
+                out = {'ok': True, 'links': {str(c.get('name', '')): True for c in (body.get('companies') or []) if isinstance(c, dict)}}
             else:
                 out = {'ok': True}
             with open(LOG, 'a', encoding='utf-8') as f:
