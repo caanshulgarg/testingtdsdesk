@@ -25,23 +25,23 @@
  },
  "Form 140 Q1 (as filed): Tau Goods Supplier, amount paid or credited": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Form 140 Q1 (as filed): Tau Goods Supplier, rate %": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Form 140 Q1 (as filed): Tau Goods Supplier, the file's amount paid and tax": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Form 140 Q1 (as filed): rows / amount paid / tax": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Form 140 Q1 correction: rows / amount paid / tax": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Form 140 Q1 correction: a correction statement for the filed quarter": {
   "cause": "FinCom builds a fresh regular statement only; a correction statement (C1-C9 against the filed token) is not built",
@@ -49,67 +49,67 @@
  },
  "May 2026 table 4A/6B (b2b): 3 inv_typ": {
   "cause": "a supply to an SEZ unit was reported as a regular B2B invoice (inv_typ R) or dropped, and missed in 3.1(b)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 4A/6B (b2b): 4 33AABCD4444D1Z7 in the table": {
   "cause": "a supply to an SEZ unit was reported as a regular B2B invoice (inv_typ R) or dropped, and missed in 3.1(b)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 6A (exp): 6 exp_typ": {
   "cause": "an export under LUT (no IGST) was reported as WPAY",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 7 (b2cs): nothing else": {
   "cause": "a credit note to an unregistered buyer against a B2C large invoice was netted into B2C small instead of cdnur (typ B2CL)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 8 (nil) INTRAB2B: nil / exempt / non-GST": {
   "cause": "table 8 put every nil or exempt supply in one row (INTRB2B); it must be one row per supply type (intra/inter-state, to registered/unregistered)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 8 (nil) INTRB2C: nil / exempt / non-GST": {
   "cause": "table 8 put every nil or exempt supply in one row (INTRB2B); it must be one row per supply type (intra/inter-state, to registered/unregistered)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 8 (nil) INTRB2B: nil / exempt / non-GST": {
   "cause": "table 8 put every nil or exempt supply in one row (INTRB2B); it must be one row per supply type (intra/inter-state, to registered/unregistered)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 9B registered (cdnr): 1 27AABCB2222B1ZI in the table": {
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 9B unregistered (cdnur): 2 09 in the table": {
   "cause": "a credit note to an unregistered buyer against a B2C large invoice was netted into B2C small instead of cdnur (typ B2CL)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 table 13 documents, nature 4: from / to / total / cancelled": {
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 3.1(a) outward taxable: taxable value": {
   "cause": "the SEZ supply with IGST (S03) was counted in 3.1(a) instead of 3.1(b), the SEZ supply under LUT (S04) was left out, and the debit note raised on a customer (DN1) was read as a purchase note",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 3.1(a) outward taxable: IGST": {
   "cause": "the SEZ supply with IGST (S03) was counted in 3.1(a) instead of 3.1(b), the SEZ supply under LUT (S04) was left out, and the debit note raised on a customer (DN1) was read as a purchase note",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 3.1(b) zero-rated: taxable value": {
   "cause": "a supply to an SEZ unit was reported as a regular B2B invoice (inv_typ R) or dropped, and missed in 3.1(b)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 3.1(b) zero-rated: IGST": {
   "cause": "a supply to an SEZ unit was reported as a regular B2B invoice (inv_typ R) or dropped, and missed in 3.1(b)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 3.1(c) nil and exempt: taxable value": {
   "cause": "the SEZ supply under LUT (S04, 80,000) was counted as nil-rated or exempt instead of zero-rated",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 4(A)(5) all other ITC: IGST": {
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): CGST": {
   "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
@@ -121,7 +121,7 @@
  },
  "May 2026 4(C) net ITC: IGST": {
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "May 2026 4(C) net ITC: CGST": {
   "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
@@ -133,18 +133,18 @@
  },
  "Jul 2026 GSTR-3B 3.1(a) outward taxable: taxable value": {
   "cause": "July's 3B did not carry the differences of the amendments reported in July's GSTR-1 (9A, 9C, 10)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Jul 2026 GSTR-3B 3.1(a) outward taxable: IGST": {
   "cause": "July's 3B did not carry the differences of the amendments reported in July's GSTR-1 (9A, 9C, 10)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Jul 2026 GSTR-3B 3.1(a) outward taxable: CGST": {
   "cause": "July's 3B did not carry the differences of the amendments reported in July's GSTR-1 (9A, 9C, 10)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
  "Jul 2026 GSTR-3B 3.1(a) outward taxable: SGST": {
   "cause": "July's 3B did not carry the differences of the amendments reported in July's GSTR-1 (9A, 9C, 10)",
-  "fix": "FIXED on arc-ui (f39efcea7, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
+  "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  }
 }
