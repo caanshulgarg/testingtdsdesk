@@ -4914,6 +4914,8 @@ const Books = {
       country: this.one(s, "COUNTRYOFRESIDENCE"),
       rcm: this.yesFlag(this.one(s, "GSTOVRDNISREVCHARGEAPPL")) || this.one(s, "ISREVERSECHARGEAPPLICABLE") === "Yes",
       taxability: this.one(s, "GSTOVRDNTAXABILITY"),
+      // round 43: Tally's nature of the transaction ("Sales to SEZ - Taxable", "Exports - LUT/Bond", ...), the first a line has
+      nature: this.one(s, "GSTOVRDNNATURE"),
       supply: this.one(s, "GSTOVRDNTYPEOFSUPPLY"),
       ineligibleFlag: this.yesFlag(this.one(s, "GSTOVRDNINELIGIBLEITC")),
       hsn: Array.from(new Set((s.match(/<GSTHSNNAME>([^<]*)<\/GSTHSNNAME>/g) || []).map(x => x.replace(/<[^>]*>/g, "").trim()).filter(Boolean))),
@@ -5195,7 +5197,7 @@ const Books = {
     const country = String(v.country || "").toLowerCase();
     const exportish = /EXPORT/i.test(v.type) || (country && country !== "india");
     if (exportish) return "export";
-    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "")) return "sez";
+    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "") || /SEZ/i.test(v.nature || "")) return "sez";
     if (/exempt/i.test(v.taxability || "")) return "exempt";
     if (/nil/i.test(v.taxability || "")) return "nil";
     if (/non.?gst/i.test(v.taxability || "")) return "nongst";
@@ -5217,8 +5219,13 @@ const Books = {
     if (/JOURNAL|PAYMENT|RECEIPT|CONTRA/i.test(v.type)) return false;
     return v.ent.some(e => (debit ? e.a < 0 : e.a > 0) && (this.groupPath(e.l).some(g => re.test(g)) || (!this.groupPath(e.l).length && (debit ? /PURCHASE/i : /\bSALES?\b/i).test(e.l))));
   },
+  // round 43 (the TDS and GST proof on a real TallyPrime 7.1): a debit note raised on a CUSTOMER (more value on an invoice:
+  // the customer debited, a sales ledger and output tax credited) is an outward note (GSTR-1 9B, ntty D; 3B 3.1(a)), not a
+  // purchase that takes input tax away. Known by what it credits: a sales ledger, and no purchase ledger
+  saleNote(v){ return /DEBIT NOTE/i.test(v.type) && this.byContent(v, /^sales accounts$/i, false) && !this.byContent(v, /^purchase accounts$/i, false); },
   isPurchase(v){
     if (this.NONACC.test(v.type)) return false;
+    if (this.saleNote(v)) return false;
     if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
@@ -5243,7 +5250,7 @@ const Books = {
   },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;
-    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return true;
+    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type) || this.saleNote(v)) return true;
     if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
     return this.byContent(v, /^sales accounts$/i, false);
   },
@@ -5641,7 +5648,8 @@ const Audit = {
     tdsLate(A, V, ctx){
       const fy = TDS.fyOf(ctx.to), rows = [];
       ["Q1", "Q2", "Q3", "Q4"].forEach(q => TDS.interest(fy, q).forEach(x => rows.push({vid: "", date: x.row.date, no: x.row.voucher || "", type: "", party: x.row.party,
-        amount: x.amount, note: "TDS " + A.money(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " months"})));
+        amount: x.amount, note: x.kind === "deduct" ? "TDS " + A.money(x.row.tds) + " deducted on " + fmtDate(tallyDate(x.row.date)) + " for the bill of " + fmtDate(tallyDate(x.from)) + ", " + x.months + " months at 1%"
+          : "TDS " + A.money(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " months"})));
       if (!rows.length) return null;
       return {area: "tds", sev: "medium", clause: "3CD 34(c); section 201(1A)", title: "TDS paid after the due date", problem: rows.length + " deductions paid late.",
         impact: "Interest under section 201(1A) of \u20b9" + INR.format(r2(rows.reduce((s, r) => s + r.amount, 0))) + "; it is reported in clause 34(c) and is not a deductible expense.",
@@ -7406,6 +7414,12 @@ const TDS = {
       if (hit) return {paid: r2(hit), rate, how: "section"};
       if (!cand.length) continue;
     }
+    // round 43: 194Q is deducted only on the purchase value above 50 lakh in the year, so the bill is larger than what the
+    // TDS was worked on: the amount the deduction is on (the TDS at 0.1%) is what is paid or credited for the return
+    if (this.sec(t.section) === "194Q" && L.tds.length === 1){
+      const want = r2(t.amount / 0.001);
+      if (want > 0 && cand.some(c => c > want + 0.5)) return {paid: want, rate: 0.1, how: "section (above 50 lakh)"};
+    }
     if (std.length && L.tds.length === 1 && !cand.some(c => std.some(rate => Math.abs(r2(t.amount / (rate / 100)) - c) <= 2))){
       // the expense does not fit any usual rate: show the rate the books imply
       const paid = L.taxable || 0;
@@ -7477,7 +7491,10 @@ const TDS = {
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
           party: v.party, pan: TDS.panOf(v.party), section: t.section, ledger: t.ledger,
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
-          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""
+          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
+          // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
+          // section (TDSRate, src/js/66)
+          pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
         });
       });
     });
@@ -7511,37 +7528,56 @@ const TDS = {
     const ay = num(A.slice(0, 4)), am = num(A.slice(4, 6)), by = num(B.slice(0, 4)), bm = num(B.slice(4, 6));
     return (by - ay) * 12 + (bm - am) + 1;                       // part of a month counts as a month
   },
-  // 1% a month for deducting late, 1.5% for paying late, under section 201(1A)
-  interest(fy, q){
-    const ch = {};
+  // the rows of a return: 26Q, 27Q, 27EQ, or 24Q (salary TDS the books carry under 192)
+  formRows(form){
+    if (form === "24Q") return this.salaryRows();
+    return typeof TDS_FORMS === "object" && TDS_FORMS[form] ? TDS_FORMS[form].rows() : this.rows();
+  },
+  // interest under section 201(1A), for each form (T-S3, 10-Oct-2026): 1% a month (or part of one) for deducting late, from
+  // the bill to the TDS entry (TDSInt, src/js/66), and 1.5% a month for paying late, from the deduction to the challan when
+  // the challan is after the due date. TCS (27EQ) is 1% a month under 206C(7). Each entry says which (kind "deduct" or "pay")
+  interest(fy, q, form){
+    form = form || "26Q";
+    const ch = {}, pct = form === "27EQ" ? 1 : 1.5;
     this.challans().forEach(c => { ch[c.id] = c; });
     const out = [];
-    this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+    this.formRows(form).filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+      if (form !== "27EQ" && typeof TDSInt === "object"){
+        const L = TDSInt.lateDeduct(r);
+        if (L){ const amount = r2(r.tds * 0.01 * L.months); if (amount >= 1) out.push({kind: "deduct", rate: 1, row: r, from: L.date, bill: L.voucher, to: r.date, months: L.months, amount}); }
+      }
       const c = ch[r.challan];
       if (!c) return;
       const due = this.dueDate(r.date);
       if (this.ymd(c.date) <= this.ymd(due)) return;
       const months = this.monthsBetween(r.date, c.date);
-      const amount = r2(r.tds * 0.015 * months);
+      const amount = r2(r.tds * pct / 100 * months);
       if (amount < 1) return;
-      out.push({row: r, challan: c, due, months, amount});
+      out.push({kind: "pay", rate: pct, row: r, challan: c, due, months, amount});
     });
     return out.sort((a, b) => b.amount - a.amount);
   },
-  // the fee for filing the statement late: 200 a day, capped at the TDS of the quarter
-  lateFee(fy, q, filedOn){
-    const rows = this.rows().filter(r => r.fy === fy && r.q === q);
-    if (!rows.length) return null;
-    const last = {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
-    const y = num(fy.slice(0, 4)) + (q === "Q3" || q === "Q4" ? 1 : 0);
-    const due = String(y) + last;
-    const filed = this.ymd(filedOn) || this.ymd(new Date().toISOString().slice(0, 10));
-    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: r2(rows.reduce((a, r) => a + r.tds, 0))};
+  // the due date of a quarter's statement: 31 Jul, 31 Oct, 31 Jan, 31 May; TCS (27EQ) the 15th of those months
+  returnDue(fy, q, form){
+    const last = form === "27EQ" ? {Q1: "0715", Q2: "1015", Q3: "0115", Q4: "0515"}[q] : {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
+    return String(num(fy.slice(0, 4)) + (q === "Q3" || q === "Q4" ? 1 : 0)) + last;
+  },
+  // the fee for filing the statement late (234E): 200 a day, capped at the tax of the quarter; worked out to the date it was
+  // filed, else to today. penaltyBy: a year after the due date; filed after it, a penalty of 10,000 to 1,00,000 can be
+  // levied under 271H (and filed by it with the fee and interest paid, it is not)
+  lateFee(fy, q, filedOn, form){
+    form = form || "26Q";
+    let tax = null;
+    if (form === "24Q" && ((S.books || {}).salary || []).length && typeof TDS24Q === "object"){ const a = TDS24Q.annexI(fy, q); if (a.length) tax = r2(a.reduce((s, e) => s + num(e.tds), 0)); }
+    if (tax == null){ const rows = this.formRows(form).filter(r => r.fy === fy && r.q === q); if (!rows.length) return null; tax = r2(rows.reduce((a, r) => a + r.tds, 0)); }
+    const due = this.returnDue(fy, q, form);
+    const filed = this.ymd(filedOn) || this.ymd(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10));
+    const penaltyBy = String(num(due.slice(0, 4)) + 1) + due.slice(4);
+    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: tax, penaltyBy, p271h: false};
     const d1 = new Date(due.slice(0, 4) + "-" + due.slice(4, 6) + "-" + due.slice(6, 8));
     const d2 = new Date(filed.slice(0, 4) + "-" + filed.slice(4, 6) + "-" + filed.slice(6, 8));
     const days = Math.round((d2 - d1) / 86400000);
-    const cap = r2(rows.reduce((a, r) => a + r.tds, 0));
-    return {due, filed, days, fee: Math.min(200 * days, cap), cap};
+    return {due, filed, days, fee: Math.min(200 * days, tax), cap: tax, penaltyBy, p271h: filed > penaltyBy};
   },
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
@@ -7963,7 +7999,7 @@ const GSTR = {
       const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
       out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: v.pos || "",
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
-        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : (cls === "export" || cls === "sez") ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
+        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         rate, total: L.total, note, type: v.type});
     });
@@ -8073,6 +8109,17 @@ const GSTR = {
       b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
       series: Object.values(series), total: this.sum(rows)};
   },
+  // round 43: a credit or debit note to a buyer with no GSTIN goes in table 9B unregistered (cdnur) when the invoice it
+  // changes is a B2C large one (inter-state, above the limit: typ B2CL) or an export (EXPWP / EXPWOP); otherwise it adjusts
+  // B2C small. The invoice is not named on the note in the books: a B2C large invoice to the same buyer and place, on or
+  // before the note, is taken as it
+  cdnurTyp(r){
+    if (r.gstin || !(r.kind === "CDNR" || r.kind === "DBNR")) return "";
+    if (r.cls === "export") return r.igst ? "EXPWP" : "EXPWOP";
+    if (!(r.igst > 0)) return "";
+    const b2cl = this.outward("", "").filter(x => x.kind === "B2CL" && x.party === r.party && String(x.pos || "") === String(r.pos || "") && String(x.date) <= String(r.date));
+    return b2cl.length ? "B2CL" : "";
+  },
   // each row's rate and HSN parts; a row with none is one part at its own rate
   partsOf(rows){
     const out = [];
@@ -8089,6 +8136,24 @@ const GSTR = {
     return signed > 0.004 ? -1 : signed < -0.004 ? 1 : (/DEBIT NOTE/i.test(v.type) ? -1 : 1);
   },
   signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
+  // the differences the amendments reported in a month's GSTR-1 make to outward tax (round 43): {out, zero, rows}
+  amendDiff(ym, reg){
+    const z = () => ({taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}), res = {out: z(), zero: z(), rows: []};
+    if (!reg || typeof GSTAmend !== "object" || !((S.books || {}).filed) || !Object.keys(S.books.filed).length) return res;
+    let p = null; try { p = GSTAmend.pending(ym, reg); } catch (e){ return res; }
+    const pick = d => ({taxable: num(d && d.txval), igst: num(d && d.iamt), cgst: num(d && d.camt), sgst: num(d && d.samt), cess: num(d && d.csamt)});
+    (p.rows || []).forEach(r => {
+      if (r.act === "skip" || !(r.what === "amend" || (r.what === "gone" && r.act === "nil"))) return;
+      const now = r.kind === "B2CS" ? pick(r.b2cs.now) : pick(r.now), was = r.kind === "B2CS" ? pick(r.was && {txval: r.was.txval, iamt: (r.was.iamt || 0)}) : pick(r.was);
+      if (r.kind === "B2CS"){ const w = (GSTAmend.state(reg, ym).b2cs[r.P] || new Map()).get(r.b2cs.pos + "|" + r.b2cs.rt + "|" + r.b2cs.sply_ty); if (w) Object.assign(was, pick(w)); }
+      const sg = r.kind === "CDNR" && ((r.now || r.was || {}).ntty || "C") === "C" ? -1 : 1;
+      const zeroRated = r.kind === "EXP" || /^SEW/.test(String((r.now || r.was || {}).inv_typ || ""));
+      const to = zeroRated ? res.zero : res.out;
+      Object.keys(to).forEach(k => { to[k] = r2(to[k] + sg * (now[k] - was[k])); });
+      res.rows.push({P: r.P, kind: r.kind, num: (r.now || r.was || {}).num, sign: sg});
+    });
+    return res;
+  },
   // the 3B as filed for a month: a monthly filer's month, or at the end of a QRMP quarter the quarter's
   threeB(ym, reg){ return typeof perRender === "function" ? perRender(this, "3b|" + ym + "|" + (reg || ""), () => this.threeBNow(ym, reg)) : this.threeBNow(ym, reg); },
   threeBNow(ym, reg){
@@ -8162,12 +8227,16 @@ const GSTR = {
     const unregPos = {};
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
+    // round 43: the amendments of earlier months reported in this month's GSTR-1 (tables 9A, 9C, 10): their differences are
+    // paid with this month's 3B (3.1(a); an SEZ or export invoice's in 3.1(b)); the earlier month's filed 3B is not changed
+    const amd = this.amendDiff(ym, reg);
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
     // our credit notes rejected by the customer in IMS: the portal adds the tax back to 3.1(a)
     const cust = typeof CustIMS === "object" ? CustIMS.month(ym, reg) : {add: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}, back: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}};
     const cx = k => r2(cust.add[k] - cust.back[k]);
-    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable")), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst")), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst")),
-      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst")), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess"))};
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable") + amd.out.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst") + amd.out.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst") + amd.out.sgst),
+      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst") + amd.out.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess") + amd.out.cess)};
+    ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { zero[k] = r2(num(zero[k]) + amd.zero[k]); });
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
@@ -8177,7 +8246,7 @@ const GSTR = {
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
-    return {sale: taxableOut, cn, net, adv, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
+    return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
@@ -8235,15 +8304,53 @@ const GSTR = {
       if (e.uses){ add("Invoices to registered customers without an e-invoice (IRN)", e.missing, "Generate the IRN before reporting; GSTR-1 is filled from e-invoices and an invoice without one is not a valid tax invoice where e-invoicing applies.");
         add("E-invoices generated more than 30 days after the invoice date", e.late, "For turnover of \u20b910 crore and above the IRP refuses these; check the date and the turnover limit that applies."); } }
     add("Invoices with items at more than one rate", out.filter(r => r.mixed), "Split rate by rate in the return, from each item's rate in Tally.");
+    // G-A1, G-A2 (10-Oct-2026): what the portal refuses, found before the file is made
+    add("Buyer GSTINs that are not valid", out.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party})), "The 15th character (the check digit) or the form of the GSTIN is wrong, so the portal refuses the invoice. Correct the GSTIN on the party ledger in Tally.");
+    const dn = this.docNoIssues(ym, reg);
+    add("Invoice numbers longer than 16 characters", dn.long, "The portal takes at most 16 characters. Shorten the number in Tally (and on the invoice), e.g. drop the year's prefix.");
+    add("Invoice numbers with characters the portal does not take", dn.chars, "Only letters, digits, / and - are allowed, and a number cannot be only zeros. Change the number in Tally.");
+    add("Invoice numbers used twice in the financial year", dn.dup, "Each invoice (and each credit or debit note) needs its own number in the year. Renumber one of them in Tally.");
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
+    add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
     add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
+    // for the year's grid: a check that is only for information is not an error
+    list.forEach(c => { if (/^(Purchases marked ITC not to be taken|Inward supplies under reverse charge|Advances kept on account, not counted|Invoices with items at more than one rate)$/.test(c.what)) c.info = true; c.ret = /^(Purchases|Supplier|Inward)/.test(c.what) ? "r3b" : "r1"; });
     if (GSTAdv.ready()){
       const a = GSTAdv.month(ym, reg);
       add("Advances where the rate was assumed at 18%", a.at.filter(r => r.rateFrom === "assumed").map(r => ({no: r.no, party: r.party})), "The customer has no invoice to take a rate from. Set it under Advances.");
       add("Advances kept on account, not counted", a.untaxed.filter(r => /on account/.test(r.why)).map(r => ({no: r.ref, party: r.party})), "Mark any that are advances under Advances.");
     }
     return list;
+  },
+  // G-A2: the invoice and note numbers of a month that the portal refuses: over 16 characters; characters other than letters,
+  // digits, / and -, or only zeros; the same number twice in the financial year (invoices and notes counted apart, capitals
+  // and small letters the same, as the portal counts them). Only documents reported one by one (B2B, B2C large, exports,
+  // notes); B2C small goes as totals
+  docNoIssues(ym, reg){
+    const ONE = {B2B: 1, B2CL: 1, EXP: 1, CDNR: 1, DBNR: 1};
+    const rows = this.outward(ym, reg).filter(r => ONE[r.kind] && String(r.no || "").trim());
+    const s = r => String(r.no).trim();
+    const fyM = (() => { const y = num(String(ym).slice(0, 4)), m = num(String(ym).slice(4, 6)), f = m >= 4 ? y : y - 1, out = []; for (let i = 0; i < 12; i++){ const mm = (i + 3) % 12 + 1; out.push((mm >= 4 ? f : f + 1) + String(mm).padStart(2, "0")); } return out; })();
+    const idx = typeof perRender === "function" ? perRender(this, "docNos|" + reg + "|" + fyM[0], () => this.docNoIndex(fyM, reg)) : this.docNoIndex(fyM, reg);
+    const keyOf = r => (r.note ? "N|" : "I|") + s(r).toUpperCase();
+    return {long: rows.filter(r => s(r).length > 16), chars: rows.filter(r => !/^[A-Za-z0-9/-]+$/.test(s(r)) || /^0+$/.test(s(r))),
+      dup: rows.filter(r => (idx[keyOf(r)] || []).some(id => id !== r.id))};
+  },
+  docNoIndex(months, reg){
+    const ONE = {B2B: 1, B2CL: 1, EXP: 1, CDNR: 1, DBNR: 1}, have = new Set(this.months()), idx = {};
+    months.filter(m => have.has(m)).forEach(m => this.outward(m, reg).forEach(r => {
+      if (!ONE[r.kind] || !String(r.no || "").trim()) return;
+      const k = (r.note ? "N|" : "I|") + String(r.no).trim().toUpperCase();
+      (idx[k] = idx[k] || []).includes(r.id) || idx[k].push(r.id);
+    }));
+    return idx;
+  },
+  // G-E1: the errors to fix before filing a month's GSTR-1 (sales side) and 3B (purchase side), for the year's grid
+  errorsFor(ym, reg){
+    const all = typeof perRender === "function" ? perRender(this, "chk|" + ym + "|" + reg, () => this.checks(ym, reg)) : this.checks(ym, reg);
+    const n = ret => all.filter(c => !c.info && c.ret === ret).reduce((a, c) => a + c.n, 0);
+    return {r1: n("r1"), r3b: n("r3b")};
   },
   // the file the portal takes: GSTR-1 as JSON
   toJson(ym, reg, opts){
@@ -8263,7 +8370,7 @@ const GSTR = {
         pos: posOf(r), rchrg: r.rcm ? "Y" : "N", inv_typ: "R", itms: items(r)
       } : {
         inum: String(r.no), idt: dmy(r.date), val: r2(r.total), pos: posOf(r),
-        rchrg: r.rcm ? "Y" : "N", inv_typ: r.cls === "sez" ? "SEWP" : "R", itms: items(r)
+        rchrg: r.rcm ? "Y" : "N", inv_typ: r.cls === "sez" ? (r.igst > 0 ? "SEWP" : "SEWOP") : "R", itms: items(r)
       })}));
     };
     const b2csMap = {};
@@ -8275,14 +8382,18 @@ const GSTR = {
     // a credit or debit note to a buyer with no GSTIN (request of 02-Oct-2026: Puresens Exports LLP's credit note 12 of
     // 31-Mar-2026, 1,500, was left out of the GSTR-1 file, so GSTR-1 and 3.1(a) differed): it adjusts B2C small (table 7)
     // by place of supply and rate, as the portal takes it
-    this.partsOf(g.cdnr.filter(r => !r.gstin)).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
+    const urTyp = r => this.cdnurTyp(r), cdnur = g.cdnr.filter(r => !r.gstin && urTyp(r));
+    this.partsOf(g.cdnr.filter(r => !r.gstin && !urTyp(r))).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
       const pos = posOf(r), key = pos + "|" + q.rate + "|" + (r.igst ? "INTER" : "INTRA");
       const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
       x.txval = r2(x.txval + sg * Math.abs(q.taxable)); x.iamt = r2(x.iamt + sg * Math.abs(q.igst)); x.camt = r2(x.camt + sg * Math.abs(q.cgst)); x.samt = r2(x.samt + sg * Math.abs(q.sgst)); x.csamt = r2(x.csamt + sg * Math.abs(q.cess));
     });
-    const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
-      nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),
-      {expt_amt: 0, nil_amt: 0, ngsup_amt: 0});
+    // table 8: one row per kind of supply, intra- or inter-state (the place of supply against the registration's state),
+    // to a registered or an unregistered person (round 43: every nil, exempt and non-GST supply went in one INTRB2B row)
+    const nilBy = {};
+    g.nil.forEach(r => { const pos = posOf(r), own = String(reg || (gstin || "").slice(0, 2)), k = (pos && own && pos !== own && pos !== "00" ? "INTR" : "INTRA") + (r.gstin ? "B2B" : "B2C");
+      const o = nilBy[k] = nilBy[k] || {sply_ty: k, expt_amt: 0, nil_amt: 0, ngsup_amt: 0};
+      if (r.cls === "exempt") o.expt_amt = r2(o.expt_amt + r.taxable); else if (r.cls === "nil") o.nil_amt = r2(o.nil_amt + r.taxable); else o.ngsup_amt = r2(o.ngsup_amt + r.taxable); });
     const fe = this.pEnd(ym), out = {gstin, fp: fe.slice(4, 6) + fe.slice(0, 4), version: "GST3.2.1", hash: "hash"};
     if (g.b2b.length) out.b2b = byParty(g.b2b, "inv");
     if (g.b2cl.length){
@@ -8291,9 +8402,13 @@ const GSTR = {
       out.b2cl = Object.entries(m).map(([pos, rs]) => ({pos, inv: rs.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}));
     }
     if (Object.keys(b2csMap).length) out.b2cs = Object.values(b2csMap);
-    if (g.cdnr.length) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
-    if (g.exp.length) out.exp = [{exp_typ: "WPAY", inv: g.exp.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}];
-    if (nilSum.expt_amt || nilSum.nil_amt || nilSum.ngsup_amt) out.nil = {inv: [Object.assign({sply_ty: "INTRB2B"}, nilSum)]};
+    if (g.cdnr.some(r => r.gstin)) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
+    if (cdnur.length) out.cdnur = cdnur.map(r => ({typ: urTyp(r), ntty: r.note === "credit" ? "C" : "D", nt_num: String(r.no), nt_dt: dmy(r.date), val: r2(Math.abs(r.total)),
+      ...(urTyp(r) === "B2CL" ? {pos: posOf(r)} : {}), itms: items(r)}));
+    // exports with payment of IGST (WPAY) and under a bond or LUT, without it (WOPAY): two lists (round 43: all went as WPAY)
+    if (g.exp.length) out.exp = ["WPAY", "WOPAY"].map(t => ({exp_typ: t, inv: g.exp.filter(r => (r.igst > 0) === (t === "WPAY")).map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))})).filter(x => x.inv.length);
+    const nilRows = Object.values(nilBy).filter(o => o.expt_amt || o.nil_amt || o.ngsup_amt);
+    if (nilRows.length) out.nil = {inv: nilRows};
     const adv = GSTAdv.month(ym, reg);
     if (adv.at.length) out.at = GSTAdv.json(adv.at);
     if (adv.txpd.length) out.txpd = GSTAdv.json(adv.txpd);
@@ -9288,6 +9403,10 @@ const Certs = {
       const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
       return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
     }
+    // who the deductee is (the PAN's 4th letter) and what was paid for decide the rate within a section (TDSRate, src/js/66):
+    // 194C to a company 2%, to an individual 1%; 194J professional 10%, technical 2%; 194-I building 10%, machinery 2%
+    const by = typeof TDSRate === "object" ? TDSRate.expect(r) : null;
+    if (by) return {rate: by.rate, why: by.why};
     if (near == null) return {rate: null, why: ""};
     return {rate: near, why: "usual rate for " + r.section};
   },
@@ -9401,7 +9520,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
@@ -31417,5 +31536,166 @@ const TDSCH = {
       (bad.length ? " Nothing read from " + bad.slice(0, 3).join(", ") + (bad.length > 3 ? " and " + (bad.length - 3) + " more" : "") + "." : ""));
     render();
     return Object.assign({read: read.length, bad}, r);
+  }
+};
+/* ================================================================== */
+/* TDS: returns marked filed, the rate by who the deductee is, and    */
+/* interest for deducting late (the owner's list of 10-Oct-2026)      */
+/* ================================================================== */
+// T-E1. A TDS return marked filed on its File tab: the date and the token (or RRR) number, per return and quarter, kept
+// with the books (b.tdsFiled, one of BOOKS_KEYS, so it is shared through client_books like the challans). The year's grid
+// and the late fee read it. A date typed earlier under Settings › Closed periods ("TDS returns filed", one per quarter) is
+// read too, for every form of that quarter, so nothing typed there is lost; marking a return filed also fills that date
+// when it is empty, so the closed-period warning before posting knows of it (a date so filled counts for that return
+// only, and is cleared again when its mark is taken off).
+const TDSFiled = {
+  key(fy, q, form){ return fy + "|" + q + "|" + (form || "26Q"); },
+  closedOf(fy, q){
+    let co = null; try { co = CO(); } catch (e){}
+    return co && typeof ClosedP === "object" ? String((ClosedP.cfg(co).tdsFiled || {})[fy + "|" + q] || "") : "";
+  },
+  get(fy, q, form){
+    const b = S.books || {}, r = (b.tdsFiled || {})[this.key(fy, q, form)];
+    if (r && r.on) return {on: r.on, token: r.token || "", from: "return", by: r.by || "", at: r.at || ""};
+    // the Closed periods date counts for every form of the quarter, unless FinCom itself filled it when another form of the
+    // quarter was marked filed (that return's date says nothing of this one)
+    const cp = this.closedOf(fy, q);
+    const auto = cp && Object.keys(b.tdsFiled || {}).some(k => k.indexOf(fy + "|" + q + "|") === 0 && b.tdsFiled[k].closedFilled && TDS.ymd(b.tdsFiled[k].on) === TDS.ymd(cp));
+    if (cp && !auto) return {on: cp, token: "", from: "closed"};
+    // a date kept by an earlier build as b.filedOn (26Q only), should one be there
+    const old = (b.filedOn || {})[fy + q];
+    if (old && (form || "26Q") === "26Q") return {on: old, token: "", from: "old"};
+    return null;
+  },
+  // the last day of the quarter: a return cannot be filed before it ends
+  qEnd(fy, q){ const y = num(String(fy).slice(0, 4)); return {Q1: y + "0630", Q2: y + "0930", Q3: y + "1231", Q4: (y + 1) + "0331"}[q] || ""; },
+  todayIst(){ return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10).replace(/-/g, ""); },
+  // what is wrong with what was typed, in words ("" when it can be kept)
+  problem(fy, q, on, token){
+    const d = TDS.ymd(on);
+    if (d.length !== 8) return "Give the date the return was filed.";
+    if (d <= this.qEnd(fy, q)) return "The date is before the quarter ended (" + fmtDate(tallyDate(this.qEnd(fy, q))) + "): a return is filed after its quarter.";
+    if (d > this.todayIst()) return "The date is after today.";
+    const t = String(token || "").replace(/\s/g, "");
+    if (t && !/^\d{15}$/.test(t)) return "The token (or RRR) number is 15 digits, as on the acknowledgement.";
+    return "";
+  },
+  async mark(fy, q, form, on, token){
+    const why = this.problem(fy, q, on, token);
+    if (why){ toast(why); return false; }
+    const d = TDS.ymd(on), iso = d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8), t = String(token || "").replace(/\s/g, "");
+    const name = TDS.formShort(form, fy) + ", " + q + " " + fy, fee = TDS.lateFee(fy, q, d, form);
+    const ok = await askConfirm({title: "Mark " + name + " filed?",
+      body: "Filed on <b>" + esc(fmtDate(iso)) + "</b>" + (t ? ", token " + esc(t) : ", no token number given") + ".<br>" +
+        "The year's grid shows it filed, and the late fee is worked out to this date" + (fee && fee.days > 0 ? " (<b>₹" + INR.format(fee.fee) + "</b>, " + fee.days + " days late)" : " (none: filed by the due date)") + "." +
+        (this.closedOf(fy, q) ? "" : "<br>Settings › Closed periods gets this date for " + q + " " + fy + ", so FinCom warns before an entry of the quarter is posted.") +
+        (typeof TDSDrift === "object" ? "<br>A copy of the quarter's entries is kept, so a change made in Tally later is spotted." : ""),
+      ok: "Mark filed"});
+    if (!ok || !ok.ok) return false;
+    const b = S.books, fill = !this.closedOf(fy, q); b.tdsFiled = Object.assign({}, b.tdsFiled);
+    b.tdsFiled[this.key(fy, q, form)] = Object.assign({on: iso, token: t, at: new Date().toISOString(), by: typeof whoAmI === "function" ? whoAmI() : ""}, fill ? {closedFilled: true} : {});
+    if (typeof TDSDrift === "object") TDSDrift.keep(fy, q, form);
+    try { const co = CO(); if (co && fill){ const f = Object.assign({}, ClosedP.cfg(co).tdsFiled); f[fy + "|" + q] = iso; ClosedP.set(co, "tdsFiled", f); } } catch (e){}
+    try { auditEvent("tds_return_filed", {form, fy, q, on: iso, token: t}, S.coId); } catch (e){}
+    saveBooks(); toast(name + " marked filed on " + fmtDate(iso) + "."); render();
+    return true;
+  },
+  async unmark(fy, q, form){
+    const name = TDS.formShort(form, fy) + ", " + q + " " + fy;
+    const b = S.books, r = (b.tdsFiled || {})[this.key(fy, q, form)] || {}, cp = this.closedOf(fy, q);
+    const clear = r.closedFilled && cp && TDS.ymd(cp) === TDS.ymd(r.on);
+    const ok = await askConfirm({title: "Take off the filed mark?", body: esc(name) + " goes back to not filed: the late fee is again worked out as if it were filed today." +
+      (clear ? " The date under Settings › Closed periods, filled when it was marked, is cleared too." : cp ? " The date under Settings › Closed periods is not changed." : ""), ok: "Take it off", danger: true});
+    if (!ok || !ok.ok) return false;
+    b.tdsFiled = Object.assign({}, b.tdsFiled); delete b.tdsFiled[this.key(fy, q, form)];
+    if (clear) try { const co = CO(), f = Object.assign({}, ClosedP.cfg(co).tdsFiled); delete f[fy + "|" + q]; ClosedP.set(co, "tdsFiled", f); } catch (e){}
+    if (b.tdsSnap){ b.tdsSnap = Object.assign({}, b.tdsSnap); delete b.tdsSnap[this.key(fy, q, form)]; }
+    saveBooks(); render(); return true;
+  }
+};
+
+// T-A2. The rate that applies, decided by who the deductee is (the PAN's 4th letter) and what was paid for (the expense
+// ledger's nature of payment in Tally, else its name, else the TDS ledger's). Used by Certs.expected (src/js/18) after a
+// certificate and the 206AA higher rate, which are unchanged; where nothing here decides, the nearest usual rate is used
+// as before.
+const TDSRate = {
+  PAN_KIND: {P: "an individual", H: "a HUF", C: "a company", F: "a firm or LLP", A: "an association of persons", T: "a trust", B: "a body of individuals",
+    L: "a local authority", J: "an artificial juridical person", G: "a government body"},
+  panKind(pan){ const p = String(pan || "").toUpperCase(); return Certs.validPan(p) ? p[3] : ""; },
+  // what a ledger's words say was paid for, among the kinds that decide a rate within one section
+  kindOf(text){
+    const u = String(text || "").toUpperCase();
+    if (!u) return "";
+    if (/TECHNICAL|CALL\s*CENT(RE|ER)/.test(u)) return "technical";
+    if (/DIRECTOR/.test(u)) return "director";
+    if (/PROFESSIONAL|PROFF?\b|LEGAL|AUDIT|ADVOCATE|RETAINER|CONSULT|ARCHITECT|DOCTOR|MEDICAL FEE|CHARTERED/.test(u)) return "professional";
+    if (/(RENT|HIRE|LEASE).*(PLANT|MACHIN|EQUIPMENT)|(PLANT|MACHIN|EQUIPMENT).*(RENT|HIRE|LEASE)/.test(u)) return "rent_machinery";
+    if (/RENT|LEASE|LAND|BUILDING|GODOWN|WAREHOUSE|PREMISES|FURNITURE/.test(u)) return "rent_building";
+    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/.test(u)) return "contractor";
+    return "";
+  },
+  // a deduction's payment type: the expense ledgers of its entry first (their nature in Tally, then their names), then the
+  // TDS ledger (its nature, then its name)
+  payType(t, v){
+    const b = S.books || {}, info = b.ledInfo || {}, out = [];
+    (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== v.party && !Books.ledgerOf(e.l).kind) out.push(e.l); });
+    for (const l of out){ const k = this.kindOf((info[l] || {}).tdsNature); if (k) return k; }
+    for (const l of out){ const k = this.kindOf(l); if (k) return k; }
+    return this.kindOf((info[t.ledger] || {}).tdsNature) || this.kindOf(t.ledger);
+  },
+  // {rate, why} where the deductee and the payment type decide it, else null
+  expect(r){
+    const sec = TDS.sec(r.section), pk = this.panKind(r.pan), who = this.PAN_KIND[pk] || "";
+    if (sec === "194C" && pk) return pk === "P" || pk === "H"
+      ? {rate: 1, why: "194C to " + who + " (PAN's 4th letter " + pk + "): 1%"}
+      : {rate: 2, why: "194C to " + who + " (PAN's 4th letter " + pk + "): 2%"};
+    const k = r.pay || "";
+    if (sec === "194J"){
+      if (k === "technical") return {rate: 2, why: "194J, fees for technical services: 2%"};
+      if (k === "professional") return {rate: 10, why: "194J, professional fees: 10%"};
+      if (k === "director") return {rate: 10, why: "194J, director's fees: 10%"};
+    }
+    if (sec === "194I"){
+      if (k === "rent_machinery") return {rate: 2, why: "194-I, rent of plant or machinery: 2%"};
+      if (k === "rent_building") return {rate: 10, why: "194-I, rent of land, building or furniture: 10%"};
+    }
+    return null;
+  }
+};
+
+// T-S3. Interest under 201(1A)(i): 1% a month (or part of one) from when the tax was to be deducted to when it was. Tally
+// shows this as a TDS entry of its own (party debited, TDS credited, no expense) dated after the bill it is for. The bill
+// is the latest entry before it that credits the same party with an expense whose TDS at a usual rate of the section is
+// this amount. Nothing is found where the TDS is in the bill's own entry.
+const TDSInt = {
+  lateDeduct(r){
+    if (!r || r.paid > 0 || !(r.tds > 0)) return null;
+    const idx = typeof perRender === "function" ? perRender(this, "byParty", () => this.index()) : this.index();
+    const std = TDS.STD[TDS.sec(r.section)] || [];
+    const vid = String(r.id).split("|")[0], d = TDS.ymd(r.date);
+    let hit = null;
+    (idx[r.party] || []).forEach(x => {
+      if (x.id === vid || x.date > d) return;
+      if (!std.some(rate => Math.abs(x.amount * rate / 100 - r.tds) <= Math.max(1, r.tds * 0.005))) return;
+      if (!hit || x.date > hit.date) hit = x;
+    });
+    if (!hit || hit.date >= d) return null;
+    const months = TDS.monthsBetween(hit.date, d);
+    return months > 0 ? {date: hit.date, voucher: hit.no, amount: hit.amount, months} : null;
+  },
+  // every entry that credits a party with an expense and carries no TDS of its own, by party
+  index(){
+    const out = {};
+    ((S.books || {}).vouchers || []).forEach(v => {
+      if (v.opt || v.cancel || !v.party) return;
+      const L = Books.lines(v);
+      if (L.tds.length) return;
+      const pe = (v.ent || []).find(e => e.l === v.party);
+      if (!pe || !(pe.a > 0)) return;
+      let exp = 0;
+      (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== v.party && !Books.ledgerOf(e.l).kind) exp += -e.a; });
+      if (exp > 0) (out[v.party] = out[v.party] || []).push({id: v.id, date: TDS.ymd(v.date), no: v.no || v.ref || "", amount: r2(exp)});
+    });
+    return out;
   }
 };
