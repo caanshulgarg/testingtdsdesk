@@ -86,13 +86,18 @@ function TgWaitLines($want, $label, $min = 25) {
   return , $miss
 }
 function TgDayBookExport($tag) {
+  # Tally's Day Book report answers the day its screen last showed (31-5-2026, set by the keys) whatever period is asked (run
+  # 38060636032); so each month's entries are exported as Tally stores them: a voucher collection of the month with every
+  # stored field of the entry and of its lists (the fields the owner's Day Book export carries)
   $tot = 0
+  $fl = '*, ALLLEDGERENTRIES.*, ALLLEDGERENTRIES.BILLALLOCATIONS.*, ALLLEDGERENTRIES.RATEDETAILS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*, ALLLEDGERENTRIES.BANKALLOCATIONS.*, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.*, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.*, LEDGERENTRIES.*, ALLINVENTORYENTRIES.*'
   foreach ($ym in '202604', '202605', '202606', '202607') {
     $y = [int]$ym.Substring(0, 4); $mo = [int]$ym.Substring(4, 2); $last = [DateTime]::DaysInMonth($y, $mo)
-    $x = Post ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $ym + '01</SVFROMDATE><SVTODATE>' + $ym + $last + '</SVTODATE><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>') "daybook $tag $ym" 300
+    $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TgDay</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $ym + '01</SVFROMDATE><SVTODATE>' + $ym + $last + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="TgDay" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>' + $fl + '</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') "daybook $tag $ym" 300
     TgSave "daybook-$tag-$ym.xml" $x
-    $n = ([regex]::Matches("$x", '<VOUCHER ')).Count; $tot += $n
-    Info "tdsgst: Day Book $tag $ym exported: $n entries, $("$x".Length) characters"
+    $ds = @([regex]::Matches("$x", '<VOUCHER [\s\S]*?<DATE[^>]*>(\d{8})</DATE>') | ForEach-Object { $_.Groups[1].Value })
+    $n = $ds.Count; $tot += $n; $out = @($ds | Where-Object { $_.Substring(0, 6) -ne $ym }).Count
+    Info "tdsgst: entries of $tag $ym exported: $n entries ($out outside the month), $("$x".Length) characters"
   }
   return $tot
 }
@@ -141,17 +146,17 @@ try {
   # ---- phase 2: the amendments after "filing"
   $ops = @()
   foreach ($o in $O2.ops) {
-    $cur = @(TgAll | Where-Object { $_.id -eq $o.id })[0]
+    $allNow = TgAll; $cur = @($allNow | Where-Object { $_.id -eq $o.id })[0]
     if ($o.op -eq 'alter') {
       if (-not $cur) { $ops += "$($o.id): not in Tally"; continue }
       $x = $o.xml -replace '^<VOUCHER ', ('<VOUCHER REMOTEID="' + $cur.guid + '" ') -replace 'ACTION="Create"', 'ACTION="Alter"'
       $r = Imp 'Vouchers' $x "tdsgst alter $($o.id)"; $k = TgCount $r
-      $aft = @(TgAll | Where-Object { $_.id -eq $o.id })
+      $allNow = TgAll; $aft = @($allNow | Where-Object { $_.id -eq $o.id })
       $how = "by GUID: created $($k.c), altered $($k.a), errors $($k.e) $($k.line)"
       if (-not ($aft.Count -eq 1 -and $aft[0].aid -gt $cur.aid -and $aft[0].mid -eq $cur.mid)) {
         $x2 = $o.xml -replace '^<VOUCHER ', ('<VOUCHER DATE="' + $o.date + '" TAGNAME="Voucher Number" TAGVALUE="' + $o.no + '" ') -replace 'ACTION="Create"', 'ACTION="Alter"'
         $r = Imp 'Vouchers' $x2 "tdsgst alter $($o.id) by number"; $k2 = TgCount $r
-        $aft = @(TgAll | Where-Object { $_.id -eq $o.id }); $how += "; by number: created $($k2.c), altered $($k2.a), errors $($k2.e) $($k2.line)"
+        $allNow = TgAll; $aft = @($allNow | Where-Object { $_.id -eq $o.id }); $how += "; by number: created $($k2.c), altered $($k2.a), errors $($k2.e) $($k2.line)"
       }
       $ok = $aft.Count -eq 1 -and $aft[0].aid -gt $cur.aid -and $aft[0].mid -eq $cur.mid -and $aft[0].narr -eq $o.narr
       $ops += "$($o.id) altered: $ok (mid $($cur.mid), AlterID $($cur.aid) -> $(($aft | ForEach-Object { $_.aid }) -join '/'), entries with this id $($aft.Count); $how)"
@@ -161,10 +166,10 @@ try {
     } elseif ($o.op -eq 'delete-keys') {
       if (-not $cur) { $ops += "$($o.id): not in Tally"; continue }
       TgDayBook 'delete' $o.day; KeysTo '{END}' 2; KeysTo '%d' 3; KeysTo 'y' 4 'tg-deleted'
-      $gone = -not @(TgAll | Where-Object { $_.id -eq $o.id }).Count
+      $allNow = TgAll; $gone = -not @($allNow | Where-Object { $_.id -eq $o.id }).Count
       if (-not $gone) {
         $r = Imp 'Vouchers' ('<VOUCHER DATE="20260531" TAGNAME="Voucher Number" TAGVALUE="' + $cur.vno + '" VCHTYPE="' + $cur.type + '" ACTION="Delete"><DATE>20260531</DATE><VOUCHERTYPENAME>' + $cur.type + '</VOUCHERTYPENAME><VOUCHERNUMBER>' + $cur.vno + '</VOUCHERNUMBER></VOUCHER>') "tdsgst delete $($o.id) by XML"
-        $gone = -not @(TgAll | Where-Object { $_.id -eq $o.id }).Count
+        $allNow = TgAll; $gone = -not @($allNow | Where-Object { $_.id -eq $o.id }).Count
         $ops += "$($o.id) deleted: $gone (the keys did not; by XML ACTION Delete)"
       } else { $ops += "$($o.id) deleted: True (by keys, Alt+D)" }
       $script:tgDel = $cur
