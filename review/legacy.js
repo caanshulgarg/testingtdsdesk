@@ -18741,6 +18741,8 @@ function doAct(act, t){
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
+    // round 39: the open client's Link to Tally card (Client setup → Tally)
+    case "coTally": S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); break;
     case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
@@ -18807,7 +18809,9 @@ function saveNewCompany(v){
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
-  openCompany(co.id);
+  // round 39: the new client opens on its Link to Tally card (Client setup → Tally): linked at once when the company was
+  // chosen and the cloud has it, else the card says what to do and lists the companies as they appear
+  openCompany(co.id); S.tab = "cotally"; render();
   if (tco) linkNewClient(co, tco).catch(() => {});
   return true;
 }
@@ -22788,25 +22792,19 @@ function closedSet(co, k, v){
 /* ================================================================== */
 const ONB = {
   steps(co){
-    const b = S.books && S.books.cid === co.id ? S.books : null, ts = typeof tallyStatus === "function" ? tallyStatus(co) : {state: "none"};
-    const bridge = !["none", "offline"].includes(ts.state);
-    // linked: a Tally company is this client's, in the cloud or open through the bridge here (review item 6)
-    // review of 01-Oct-2026: a company linked in the cloud is linked whether or not the Tally computer is on now (it was
-    // shown not done for a client linked in "Books in the cloud" while that computer was off)
-    const cloudLinked = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof TCloud === "object" && TCloud.has(co.id));
-    const linked = cloudLinked || (bridge && ts.state !== "unlinked" && typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co));
-    // review of 02-Oct-2026: each tick says what is done, wherever it was done. The bridge is set up once a Tally computer
-    // has sent this client's books (it may be off now); the day book and opening balances are read when the cloud copy
-    // holds them, not only when this browser has loaded them
+    const b = S.books && S.books.cid === co.id ? S.books : null;
+    // round 39: one step, Link to Tally, ticked only when FinCom's cloud has this client's Tally company (a Tally name typed
+    // in Client setup links nothing; the link holds whether or not the Tally computer is on now). Its button opens the
+    // client's own Link to Tally card (Client setup → Tally), which says what to do: install, open the company, Link
+    const linked = (typeof tallyLinkOf === "function" ? tallyLinkOf(co).state !== "unlinked" : false) || (typeof TCloud === "object" && TCloud.has(co.id));
+    // review of 02-Oct-2026: each tick says what is done, wherever it was done. The day book and opening balances are read
+    // when the cloud copy holds them, not only when this browser has loaded them
     const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(co.id) : null;
-    const bridgeSet = bridge || !!bk || ts.state === "offline";
     const dayBook = !!((b && (b.vouchers || []).length) || (bk && bk.entries > 0));
     const opening = !!((b && b.tb && b.tb.led && Object.keys(b.tb.led).length) || (bk && bk.openAsOn));
     const tallyBank = b && typeof FC === "object" ? Object.keys(Object.assign({}, b.under, b.ledInfo)).filter(l => ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"].some(g => FC.inGroup(l, g))).length : 0;
     return [
-      {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
-      {id: "bridge", done: bridgeSet, t: "Connect FinCom Bridge", d: "A small Windows program on the computer where Tally is open; install it from the Tally page.", btn: ["Connect", {act: "tallyGuide"}]},
-      {id: "link", done: !!linked, t: "Link the Tally company", d: "The company in Tally with this client's books: linked by itself when its GSTIN is the client's.", btn: ["Link Tally company", {act: "goTcloud"}]},
+      {id: "link", done: !!linked, t: "Link to Tally", d: "Choose this client's company in Tally, so its books come in and its entries go to the right company.", btn: ["Link to Tally", {act: "coTally"}]},
       {id: "books", done: dayBook, t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
       {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the balances", {go: "books:import", focus: "opening"}]},
       {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},
@@ -23731,10 +23729,13 @@ const TCloud = {
     try { await this.rpc("tally_device_revoke", {p_id: id}); toast(name + " removed."); } catch (e){ toast("Could not remove it: " + ((e && e.message) || e)); }
     await this.refreshPane();
   },
+  // true when the cloud took it (round 39: the Link to Tally card sets the client's Tally name only then)
   async link(company, client){
-    try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
+    let ok = false;
+    try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); ok = true; toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
     catch (e){ toast("Could not link it: " + ((e && e.message) || e)); }
     await this.refreshPane();
+    return ok;
   }
 
 };
@@ -24657,13 +24658,73 @@ function tallyCompaniesSeen(){
   ((p && p.companies) || []).forEach(c => put(c.company, Object.assign({reported: true, gstin: c.gstin || "", client: c.client_id || ""}, by.has(ledNm(c.company)) ? {} : {where: "seen by the firm's Tally computer"})));
   return Array.from(by.values()).sort((a, b) => (a.client ? 1 : 0) - (b.client ? 1 : 0) || (b.open ? 1 : 0) - (a.open ? 1 : 0) || a.name.localeCompare(b.name));
 }
+// Round 39 (10-Oct-2026, the owner: "can't tell if a client is linked, when it will link, or whether he needs a port"):
+// a person links a client to its Tally company in one action. The cloud link (tally_company_link, the same RPC as
+// Settings → Books in the cloud) and the client's Tally name (co.tallyName, what the bridge on this computer matches by)
+// are set together; the name only once the cloud took the link. cid null: unlinked (the name is kept).
+async function tallyLinkClient(company, cid){
+  if (typeof TCloud !== "object" || !TCloud.on() || !company) return false;
+  const co = cid ? CO(cid) : null;
+  if (co){ try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){} }
+  const ok = await TCloud.link(company, cid || null);
+  if (!ok) return false;
+  // what this browser shows follows at once; the next read of the cloud confirms it
+  const mark = rows => (rows || []).forEach(r => { if (r.company === company) r.client_id = cid || null; else if (cid && r.client_id === cid) r.client_id = null; });
+  if (typeof TLight === "object"){ mark(TLight.st.cos); TLight.st.at = 0; }
+  mark(TCloud.pane.companies);
+  if (co && co.tallyName !== company){ co.tallyName = company; Store.saveCompany(co); }
+  render();
+  return true;
+}
+// The one link state of a client, in four words, for its Link to Tally card (app/src/parts/TallyLink.jsx), the Clients
+// list and the top bar's sign:
+//   unlinked "Not linked"          no Tally company is this client's in FinCom's cloud (a Tally name typed alone links
+//                                  nothing; without the firm account: the bridge here does not have it open);
+//   waiting  "Waiting for Tally"   linked, but no computer has it open now (offline, Tally closed, never heard from);
+//   reading  "Linked and reading"  linked, and a computer has it open in Tally;
+//   needs    "Needs you"           linked, and a person must act: reading stopped, Tally not answering or paused, held
+//                                  entries (that day's Day Book, the starting point, others), days not received.
+// {state, word, level, company, computer, line (tallyLine), needs: [{kind, n}]}
+const TALLY_LINK_WORDS = {unlinked: "Not linked", waiting: "Waiting for Tally", reading: "Linked and reading", needs: "Needs you"};
+const TALLY_LINK_LEVEL = {unlinked: "warn", waiting: "warn", reading: "ok", needs: "bad"};
+function tallyLinkOf(co){
+  if (!co) return null;
+  if (typeof TLight === "object") TLight.refresh();
+  const st = (typeof TLight === "object" && TLight.st) || {}, pane = (typeof TCloud === "object" && TCloud.pane) || {};
+  const cloud = typeof TCloud === "object" && TCloud.on();
+  // the companies as TLight last read them (every 30 s), else as the Tally page read them
+  const cos = (st.cos && st.cos.length ? st.cos : pane.companies) || [];
+  const row = cos.find(c => String(c.client_id || "") === String(co.id));
+  const l = tallyLine(co), local = !cloud && l && typeof Bridge === "object" ? Bridge.openFor(co) : null;
+  // the cloud's copy of this client's books names its company too (tally_books, TCloud.book)
+  const bk = cloud && TCloud.book ? TCloud.book(co.id) : null;
+  const company = (row && row.company) || (bk && bk.company) || (local && local.name) || "";
+  const dev = row && row.device_id && [].concat(st.devs || [], pane.devices || []).find(d => d.id === row.device_id);
+  const out = (state, needs) => ({state, word: TALLY_LINK_WORDS[state], level: TALLY_LINK_LEVEL[state], company, computer: (l && l.computer) || (dev ? tallyPcLabel(dev) : ""), line: l, needs: needs || []});
+  if (!company) return out("unlinked");
+  const needs = [];
+  if (l && l.state === "stopped") needs.push({kind: "stopped"});
+  const held = {daybook: 0, baseline: 0, other: 0};
+  if (typeof AlertHub === "object" && AlertHub.heldFor && typeof Rec === "object" && Rec.needKind){
+    let lines = []; try { lines = AlertHub.heldFor([co.id]) || []; } catch (e){ lines = []; }
+    lines.forEach(x => { const k = Rec.needKind(x); if (!k || k === "readstop") return; if (k === "daybook" || k === "dupid") held.daybook++; else if (k === "baseline") held.baseline++; else held.other++; });
+  }
+  const gaps = typeof Rec === "object" && Rec.gapFor && cloud ? (Rec.gapFor(co.id) || []).length : 0;
+  if (held.daybook || gaps) needs.push({kind: "daybook", n: held.daybook, gaps});
+  if (held.baseline) needs.push({kind: "baseline", n: held.baseline});
+  if (held.other) needs.push({kind: "held", n: held.other});
+  if (l && (l.state === "notanswering" || l.state === "paused")) needs.push({kind: l.state});
+  if (needs.length) return out("needs", needs);
+  return out(l && l.state === "open" ? "reading" : "waiting");
+}
 // a new client linked to its Tally company in the cloud: the client is sent to the server first, then linked
+// (round 39: a company the cloud has not seen yet is not linked here: the client's Link to Tally card, where Add client
+// lands, lists it once a Tally computer reports it, and a person links it there)
 async function linkNewClient(co, company){
-  if (typeof TCloud !== "object" || !TCloud.on()) return;
+  if (typeof TCloud !== "object" || !TCloud.on()) return false;
   const seen = tallyCompaniesSeen().find(x => x.name === ledNm(company));
-  if (!seen || !seen.reported){ toast(co.name + " is set to " + company + ". It is linked once the Tally computer reports that company (keep it open in Tally)."); return; }
-  try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){}
-  await TCloud.link(company, co.id);
+  if (!seen || !seen.reported) return false;
+  return tallyLinkClient(seen.name, co.id);
 }
 /* ================================================================== */
 /* Posting from any computer: the queue in FinCom's cloud (build 199)  */
@@ -30924,7 +30985,7 @@ const Smart = {
   dropReturn(h){ const r = S.returnTo; if (r && h !== r.hash && !/\/setup\/|^#\/settings|^#\/tally/.test(h)) S.returnTo = null; },
 
   /* ---------------------------------------------------------------- 10. getting ready: the next step */
-  ONB_DONE: {tally: "Tally name saved", bridge: "FinCom Bridge connected", link: "Linked", books: "The books are read", opening: "Opening balances read", gst: "GSTIN added", bank: "Bank account added", bills: "First bills uploaded"},
+  ONB_DONE: {link: "Linked to Tally", books: "The books are read", opening: "Opening balances read", gst: "GSTIN added", bank: "Bank account added", bills: "First bills uploaded"},
   // a step that was not done when last looked at, and is now: "Linked · Next: Read the books →" (looked at once in two
   // seconds, after a drawing, for the open client)
   onbWatch(){
