@@ -67,7 +67,7 @@ function Bar({ months, regs, gNow, ftype }) {
 // one cell of the grid
 function Cell({ c, ym, part, label }) {
   if (!c) return <td><div className="rp-cell st-na" aria-hidden="true">—</div></td>;
-  const words = c.st === "none" ? c.none || "Not started" : c.st === "bad" ? "Mismatch " + c.n : c.st === "filed" ? "Filed " + c.on : c.ready || "Ready";
+  const words = c.st === "none" ? c.none || "Not started" : c.st === "bad" ? (c.errors ? "Errors " : "Mismatch ") + c.n : c.st === "filed" ? "Filed " + c.on : c.ready || "Ready";
   return <td><button className={"rp-cell st-" + c.st} data-cell={label + "|" + ym} data-status={c.st} aria-label={label + " " + (ym.length === 6 ? GSTR.label(ym) : ym) + ": " + words}
     aria-current={S.gstView === "return" && S.gstYm === ym && S.gstPart === part || undefined} onClick={() => gstOpen(ym.length === 6 ? ym : S.gstYm, part)}>
     <span className="rp-s">{words}</span>{c.amount && <span className="rp-a">{c.amount}</span>}
@@ -82,7 +82,10 @@ function status(reg, form, ym, inBooks, cmp) {
   const n = part && part.any ? part.rows.filter((r) => r.any).length : 0;
   if (n) return { st: "bad", n, lines: on ? ["filed " + dmy(on)] : [] };
   if (on) return { st: "filed", on: dmy(on), lines: part ? ["matches the books"] : [] };
-  return inBooks ? { st: "ready" } : { st: "none" };
+  if (!inBooks) return { st: "none" };
+  // G-E1 (10-Oct-2026): before filing, the month's errors to fix (GSTR.checks) show as "Errors N", as TDS's grid does
+  const e = GSTR.errorsFor(ym, reg)[form === "r3b" ? "r3b" : "r1"];
+  return e ? { st: "bad", errors: true, n: e, lines: ["to fix before filing"] } : { st: "ready" };
 }
 
 function Grid({ months, reg }) {
@@ -120,7 +123,7 @@ function Grid({ months, reg }) {
       </tbody>
     </table></div>
     <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready / 2B fetched</span>
-      <span style={{ "--k": "var(--bad)" }}>Filed return differs from the books</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
+      <span style={{ "--k": "var(--bad)" }}>Errors to fix, or the filed return differs from the books</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
   </section>;
 }
 

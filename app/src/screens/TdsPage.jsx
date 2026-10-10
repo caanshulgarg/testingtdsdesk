@@ -108,9 +108,10 @@ function Cell({ fy, q, form, st, n, lines, amount }) {
 }
 
 // the status of each form in a quarter, from what the year's table showed: the quarter's figures (TDSYear.quarters) and
-// the counts of the rows with something to fix. Filed: the date kept with the books (b.filedOn), where there is one
+// the counts of the rows with something to fix. Filed (T-E1, 10-Oct-2026): the return marked filed on its File tab, or the
+// quarter's date under Settings › Closed periods (TDSFiled, src/js/65), for every form
 function cells(b, fy, x) {
-  const filed = (b.filedOn || {})[fy + x.q], out = {};
+  const fd = (form) => { const f = TDSFiled.get(fy, x.q, form); return f ? TDS.ymd(f.on) : ""; }, filed = fd("26Q"), out = {};
   const q = x.q, rowsQ = TDS.rows().filter((r) => r.fy === fy && r.q === q);
   // 26Q (Form 140): deductions from residents other than salary
   if (!x.deductions && !x.challans) out["26Q"] = { st: "none", lines: [] };
@@ -124,14 +125,14 @@ function cells(b, fy, x) {
   // 27Q (Form 144) and 27EQ (Form 143)
   [["27Q", x.nr, TDS.nrRows()], ["27EQ", x.tcs, TDS.tcsRows()]].forEach(([form, o, all]) => {
     if (!o.n) { out[form] = { st: "none", lines: [] }; return; }
-    const un = all.filter((r) => r.fy === fy && r.q === q && !r.challan).length, n = un + o.noPan;
-    out[form] = { st: n ? "bad" : "ready", n, amount: money(o.tds), lines: [{ t: o.n + (form === "27EQ" ? " collections" : " deductions") }]
+    const un = all.filter((r) => r.fy === fy && r.q === q && !r.challan).length, n = un + o.noPan, on = fd(form);
+    out[form] = { st: on ? "filed" : n ? "bad" : "ready", n: on ? day(on) : n, amount: money(o.tds), lines: [{ t: o.n + (form === "27EQ" ? " collections" : " deductions") }]
       .concat([o.unallocated ? { t: money(o.unallocated) + " not against a challan", bad: 1 } : null, o.noPan ? { t: o.noPan + " without PAN", bad: 1 } : null].filter(Boolean)) };
   });
   // 24Q (Form 138): from the salary sheet, or what the books carry under 192
   if (x.salaryEmployees) {
-    const n = TDS24Q.checks(fy, q).length;
-    out["24Q"] = { st: n ? "bad" : "ready", n, amount: money(x.salaryTds), lines: [{ t: x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") }] };
+    const n = TDS24Q.checks(fy, q).length, on = fd("24Q");
+    out["24Q"] = { st: on ? "filed" : n ? "bad" : "ready", n: on ? day(on) : n, amount: money(x.salaryTds), lines: [{ t: x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") }] };
   } else {
     const booksTds = r2(TDS.salaryRows().filter((r) => r.fy === fy && r.q === q).reduce((a, r) => a + r.tds, 0));
     out["24Q"] = { st: "none", amount: booksTds > 0 ? money(booksTds) : null, lines: booksTds > 0 ? [{ t: "in the books under 192" }, { t: "bring in the salary sheet" }] : (b.salary || []).length ? [] : [{ t: "bring in the salary sheet" }] };

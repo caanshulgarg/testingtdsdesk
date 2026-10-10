@@ -29,6 +29,10 @@ const Certs = {
       const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
       return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
     }
+    // who the deductee is (the PAN's 4th letter) and what was paid for decide the rate within a section (TDSRate, src/js/65):
+    // 194C to a company 2%, to an individual 1%; 194J professional 10%, technical 2%; 194-I building 10%, machinery 2%
+    const by = typeof TDSRate === "object" ? TDSRate.expect(r) : null;
+    if (by) return {rate: by.rate, why: by.why};
     if (near == null) return {rate: null, why: ""};
     return {rate: near, why: "usual rate for " + r.section};
   },
@@ -142,7 +146,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)

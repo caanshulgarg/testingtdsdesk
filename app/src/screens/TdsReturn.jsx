@@ -12,6 +12,7 @@
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
 import { useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
+import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -244,24 +245,9 @@ function BySection({ fy, q, form }) {
   </table></div></section>;
 }
 
-function Checks26({ fy, q, int1A, fee, issues }) {
-  const total = r2(int1A.reduce((a, x) => a + x.amount, 0));
+function Checks26({ fy, q, int1A, fee, issues, filed }) {
   return <>
-    <section className="dash-card" style={{ marginBottom: 12 }}><h3>Interest and late fee</h3>
-      <div className="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>{money(total)}</b></div>
-      <div className="dash-row"><span>Late filing fee under 234E, if filed today</span><b>{money(fee && fee.days > 0 ? fee.fee : 0)}</b></div>
-      {fee && fee.days > 0 && <p className="note">{fee.days} day{fee.days === 1 ? "" : "s"} past {day(fee.due)} at 200 a day, capped at the TDS of the quarter ({money(fee.cap)}).</p>}
-      {int1A.length ? <ListTable name="tdsLate" rows={int1A} rowKey={(x, i) => (x.row.id || "") + ":" + i} unit={["late deduction", "late deductions"]} limit={100}
-        cols={[
-          { k: "date", role: "date", label: "Deducted", cls: "dt", v: (x) => TDS.ymd(x.row.date), cell: (x) => day(x.row.date) },
-          { k: "party", role: "party", label: "Deductee", v: (x) => x.row.party, cell: (x) => x.row.party },
-          { k: "int", role: "amount", label: "Interest", cls: "n", v: (x) => num(x.amount), fmt: money, td: () => ({ className: "bad" }), cell: (x) => money(x.amount) },
-          { k: "tds", label: "TDS", cls: "n", v: (x) => num(x.row.tds), sum: true, fmt: money, cell: (x) => money(x.row.tds) },
-          { k: "due", label: "Due", v: (x) => TDS.ymd(x.due), cell: (x) => day(x.due) },
-          { k: "paid", label: "Paid", v: (x) => TDS.ymd(x.challan.date), cell: (x) => day(x.challan.date) },
-          { k: "m", label: "Months", cls: "n", v: (x) => x.months, cell: (x) => x.months },
-        ]} /> : <p className="note">No deduction was paid late.</p>}
-    </section>
+    <InterestFee fy={fy} q={q} form="26Q" list={int1A} fee={fee} filed={filed} />
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
   </>;
 }
@@ -278,9 +264,10 @@ function NrInfo({ party }) {
     <label className="nr"><input type="checkbox" defaultChecked={!!i.trc} onChange={(ev) => tdsNrSet(party, "trc", ev.target.checked)} /> Tax residency certificate and Form 10F on file</label>
   </td></tr>;
 }
-function ChecksOther({ fy, q, form, other, rows }) {
+function ChecksOther({ fy, q, form, other, rows, int1A, fee, filed }) {
   const parties = Array.from(new Set(rows.map((r) => r.party)));
   return <>
+    <InterestFee fy={fy} q={q} form={form} list={int1A} fee={fee} filed={filed} />
     <section className="dash-card" style={{ marginBottom: 12 }} data-checks={form}><h3>Before the file is made</h3>
       {other.length ? <ul>{other.map((x, i) => <li key={i}>{x.party ? <><b>{x.party}</b>: missing {x.missing.join(", ")}</> : x.why}</li>)}</ul>
         : <p className="note">Nothing is missing.</p>}
@@ -306,7 +293,11 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
   if (!["summary", "challans", "deductees", "deductions", "checks", "file"].includes(S.tdsTab)) S.tdsTab = "summary";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
-  const int1A = form === "26Q" ? TDS.interest(fy, q) : [], fee = form === "26Q" ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null, noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
+  // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
+  // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
+  const filed = TDSFiled.get(fy, q, form), filedOn = filed ? filed.on : "";
+  const int1A = TDS.interest(fy, q, form), fee = TDS.lateFee(fy, q, filedOn, form), noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
+  const feeErr = !filed && fee && fee.days > 0;
   const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
   const title = CO().name + " " + fname + " " + q + " " + fy;
   const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
@@ -328,9 +319,9 @@ export function Return26({ b, allRows, form = "26Q" }) {
     if (f.rate === "ok" && issueOf[r.id]) return false;
     return true;
   };
-  const checksN = int1A.length || (fee && fee.days > 0) || issues.length || other.length ? int1A.length + issues.length + other.length + (fee && fee.days > 0 ? 1 : 0) : null;
+  const checksN = int1A.length || feeErr || issues.length || other.length ? int1A.length + issues.length + other.length + (feeErr ? 1 : 0) : null;
   const common_ = { rows, issueOf, pass, common, chOpts, title };
-  const errN = un.length + noPan + issues.length + other.length + int1A.length + (fee && fee.days > 0 ? 1 : 0);
+  const errN = un.length + noPan + issues.length + other.length + int1A.length + (feeErr ? 1 : 0);
   const unit = form === "27EQ" ? "collections" : "deductions";
   return <>
     <Tabs tabs={[["summary", "Summary"], ["challans", "Challans", ch.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["deductions", "Entries", rows.length],
@@ -364,12 +355,13 @@ export function Return26({ b, allRows, form = "26Q" }) {
             <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
             <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
             <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
-          </div></section></>
+          </div></section>
+        <MarkFiled fy={fy} q={q} form={form} /></>
       : <>
         {(un.length > 0 || noPan > 0) && <section className="dash-card" style={{ marginBottom: 12 }} data-fix=""><h3>To fix before the file</h3>
           {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(un.reduce((a, r) => a + r.tds, 0))}</b></div>}
           {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
-        {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />}</>}
+        {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} filed={filedOn} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} int1A={int1A} fee={fee} filed={filedOn} />}</>}
   </>;
 }
 
@@ -430,8 +422,11 @@ export function Return24({ b }) {
   if (inBooks.length && Math.abs(booksTds - sheetTds) >= 1) checks.push({ what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length,
     how: "Tally has " + money(booksTds) + " under section 192 this quarter; the sheet has " + money(sheetTds) + ".", who: Array.from(new Set(inBooks.map((r) => r.party))).slice(0, 3) });
   const use = S.tdsTab === "challans" ? TDS.challanUse() : null;
+  // T-E1, T-S3: 24Q's interest (the books' salary TDS under 192 against its challans) and late fee, to the date marked filed
+  const filed = TDSFiled.get(fy, q, "24Q"), filedOn = filed ? filed.on : "", int1A = TDS.interest(fy, q, "24Q"), fee = TDS.lateFee(fy, q, filedOn, "24Q");
+  const late = int1A.length + (!filed && fee && fee.days > 0 ? 1 : 0);
   return <>
-    <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length || null) : null])} />
+    <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length + late || null) : null])} />
     {S.tdsTab === "summary" ? <>
       <div className="dash-tiles" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <Tile label="Employees this quarter" value={a1.length} sub={money(a1.reduce((s, e) => s + e.paid, 0)) + " paid"} />
@@ -441,8 +436,9 @@ export function Return24({ b }) {
       <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
         {checks.length > 0 && <button className="btn small" onClick={() => tdsTabGo("checks")}>Errors to fix ({checks.length})</button>}
         <button className="btn small primary" onClick={() => tdsTabGo("file")}>The file and the salary sheet</button></div></>
-      : S.tdsTab === "file" ? <section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
+      : S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
         <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}</section>
+        <MarkFiled fy={fy} q={q} form="24Q" /></>
       : S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
       : S.tdsTab === "challans" ? <>
         <p className="note">Challans deposited in {q}. Salary TDS is paid under section 192; add a challan under 26Q’s Challans tab if it is not here.</p>
@@ -462,9 +458,10 @@ export function Return24({ b }) {
           <tbody>{TDS24Q.annexII(fy).map((e) => <tr key={e.pan || e.name}><td>{e.name}</td><td>{e.pan || "—"}</td><td>{e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "—"}</td>
             <td className="n">{money(e.gross)}</td><td className="n">{money(e.exempt)}</td><td className="n">{money(e.standard)}</td><td className="n">{money(e.chapter6)}</td><td className="n">{money(e.taxable)}</td><td className="n">{money(e.tds)}</td></tr>)}</tbody>
         </table></div>
-      : checks.length ? <section className="dash-card"><h3>Before filing</h3>{checks.map((c, i) => <span key={i} style={{ display: "contents" }}>
+      : <><InterestFee fy={fy} q={q} form="24Q" list={int1A} fee={fee} filed={filedOn} />
+        {checks.length ? <section className="dash-card"><h3>Before filing</h3>{checks.map((c, i) => <span key={i} style={{ display: "contents" }}>
           <div className="dash-row"><span>{c.what}</span><b>{c.n}</b></div><p className="note">{c.how}{c.who.length ? " e.g. " + c.who.join(", ") : ""}</p></span>)}</section>
-        : <p className="note">Nothing to fix for this quarter.</p>}
+        : <p className="note">Nothing to fix for this quarter.</p>}</>}
   </>;
 }
 

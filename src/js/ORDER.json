@@ -62,5 +62,6 @@
  "60-choices.js",
  "61-recorder.js",
  "63-alerts.js",
- "64-smart-moves.js"
+ "64-smart-moves.js",
+ "65-tds-smart.js"
 ]

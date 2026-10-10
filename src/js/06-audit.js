@@ -188,7 +188,8 @@ const Audit = {
     tdsLate(A, V, ctx){
       const fy = TDS.fyOf(ctx.to), rows = [];
       ["Q1", "Q2", "Q3", "Q4"].forEach(q => TDS.interest(fy, q).forEach(x => rows.push({vid: "", date: x.row.date, no: x.row.voucher || "", type: "", party: x.row.party,
-        amount: x.amount, note: "TDS " + A.money(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " months"})));
+        amount: x.amount, note: x.kind === "deduct" ? "TDS " + A.money(x.row.tds) + " deducted on " + fmtDate(tallyDate(x.row.date)) + " for the bill of " + fmtDate(tallyDate(x.from)) + ", " + x.months + " months at 1%"
+          : "TDS " + A.money(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " months"})));
       if (!rows.length) return null;
       return {area: "tds", sev: "medium", clause: "3CD 34(c); section 201(1A)", title: "TDS paid after the due date", problem: rows.length + " deductions paid late.",
         impact: "Interest under section 201(1A) of \u20b9" + INR.format(r2(rows.reduce((s, r) => s + r.amount, 0))) + "; it is reported in clause 34(c) and is not a deductible expense.",

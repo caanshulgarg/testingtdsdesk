@@ -144,7 +144,10 @@ const TDS = {
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
           party: v.party, pan: TDS.panOf(v.party), section: t.section, ledger: t.ledger,
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
-          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""
+          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
+          // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
+          // section (TDSRate, src/js/65)
+          pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
         });
       });
     });
@@ -178,37 +181,56 @@ const TDS = {
     const ay = num(A.slice(0, 4)), am = num(A.slice(4, 6)), by = num(B.slice(0, 4)), bm = num(B.slice(4, 6));
     return (by - ay) * 12 + (bm - am) + 1;                       // part of a month counts as a month
   },
-  // 1% a month for deducting late, 1.5% for paying late, under section 201(1A)
-  interest(fy, q){
-    const ch = {};
+  // the rows of a return: 26Q, 27Q, 27EQ, or 24Q (salary TDS the books carry under 192)
+  formRows(form){
+    if (form === "24Q") return this.salaryRows();
+    return typeof TDS_FORMS === "object" && TDS_FORMS[form] ? TDS_FORMS[form].rows() : this.rows();
+  },
+  // interest under section 201(1A), for each form (T-S3, 10-Oct-2026): 1% a month (or part of one) for deducting late, from
+  // the bill to the TDS entry (TDSInt, src/js/65), and 1.5% a month for paying late, from the deduction to the challan when
+  // the challan is after the due date. TCS (27EQ) is 1% a month under 206C(7). Each entry says which (kind "deduct" or "pay")
+  interest(fy, q, form){
+    form = form || "26Q";
+    const ch = {}, pct = form === "27EQ" ? 1 : 1.5;
     this.challans().forEach(c => { ch[c.id] = c; });
     const out = [];
-    this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+    this.formRows(form).filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+      if (form !== "27EQ" && typeof TDSInt === "object"){
+        const L = TDSInt.lateDeduct(r);
+        if (L){ const amount = r2(r.tds * 0.01 * L.months); if (amount >= 1) out.push({kind: "deduct", rate: 1, row: r, from: L.date, bill: L.voucher, to: r.date, months: L.months, amount}); }
+      }
       const c = ch[r.challan];
       if (!c) return;
       const due = this.dueDate(r.date);
       if (this.ymd(c.date) <= this.ymd(due)) return;
       const months = this.monthsBetween(r.date, c.date);
-      const amount = r2(r.tds * 0.015 * months);
+      const amount = r2(r.tds * pct / 100 * months);
       if (amount < 1) return;
-      out.push({row: r, challan: c, due, months, amount});
+      out.push({kind: "pay", rate: pct, row: r, challan: c, due, months, amount});
     });
     return out.sort((a, b) => b.amount - a.amount);
   },
-  // the fee for filing the statement late: 200 a day, capped at the TDS of the quarter
-  lateFee(fy, q, filedOn){
-    const rows = this.rows().filter(r => r.fy === fy && r.q === q);
-    if (!rows.length) return null;
-    const last = {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
-    const y = num(fy.slice(0, 4)) + (q === "Q3" || q === "Q4" ? 1 : 0);
-    const due = String(y) + last;
-    const filed = this.ymd(filedOn) || this.ymd(new Date().toISOString().slice(0, 10));
-    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: r2(rows.reduce((a, r) => a + r.tds, 0))};
+  // the due date of a quarter's statement: 31 Jul, 31 Oct, 31 Jan, 31 May; TCS (27EQ) the 15th of those months
+  returnDue(fy, q, form){
+    const last = form === "27EQ" ? {Q1: "0715", Q2: "1015", Q3: "0115", Q4: "0515"}[q] : {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
+    return String(num(fy.slice(0, 4)) + (q === "Q3" || q === "Q4" ? 1 : 0)) + last;
+  },
+  // the fee for filing the statement late (234E): 200 a day, capped at the tax of the quarter; worked out to the date it was
+  // filed, else to today. penaltyBy: a year after the due date; filed after it, a penalty of 10,000 to 1,00,000 can be
+  // levied under 271H (and filed by it with the fee and interest paid, it is not)
+  lateFee(fy, q, filedOn, form){
+    form = form || "26Q";
+    let tax = null;
+    if (form === "24Q" && ((S.books || {}).salary || []).length && typeof TDS24Q === "object"){ const a = TDS24Q.annexI(fy, q); if (a.length) tax = r2(a.reduce((s, e) => s + num(e.tds), 0)); }
+    if (tax == null){ const rows = this.formRows(form).filter(r => r.fy === fy && r.q === q); if (!rows.length) return null; tax = r2(rows.reduce((a, r) => a + r.tds, 0)); }
+    const due = this.returnDue(fy, q, form);
+    const filed = this.ymd(filedOn) || this.ymd(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10));
+    const penaltyBy = String(num(due.slice(0, 4)) + 1) + due.slice(4);
+    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: tax, penaltyBy, p271h: false};
     const d1 = new Date(due.slice(0, 4) + "-" + due.slice(4, 6) + "-" + due.slice(6, 8));
     const d2 = new Date(filed.slice(0, 4) + "-" + filed.slice(4, 6) + "-" + filed.slice(6, 8));
     const days = Math.round((d2 - d1) / 86400000);
-    const cap = r2(rows.reduce((a, r) => a + r.tds, 0));
-    return {due, filed, days, fee: Math.min(200 * days, cap), cap};
+    return {due, filed, days, fee: Math.min(200 * days, tax), cap: tax, penaltyBy, p271h: filed > penaltyBy};
   },
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
