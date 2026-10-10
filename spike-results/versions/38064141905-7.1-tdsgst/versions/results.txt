@@ -1,0 +1,50 @@
+INFO TallyPrime 7.1, mode tdsgst, runner GitHub Actions 1000007189, 2026-10-10T15:46:34
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.6 s after start, GET 519 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+INFO tdsgst masters company: created 0, altered 1, errors 0
+INFO tdsgst masters vchtypes: created 0, altered 7, errors 0
+INFO tdsgst masters natures: created 8, altered 0, errors 0
+INFO tdsgst masters ledgers: created 63, altered 0, errors 0
+INFO tdsgst company as Tally keeps it: STARTINGFROM=20260401, BOOKSFROM=20260401, INCOMETAXNUMBER=AAACF1234A, TANUMBER=DELF01234E, GSTREGISTRATIONTYPE=Regular, STATENAME=Delhi, ISTDSON=Yes, ISTCSON=Yes, ISGSTON=Yes
+INFO tdsgst: masters exported (p0): 69 ledgers, 2103187 characters
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: 176dcfb68d90a282d759d2227b559e907b981724 go-live: the new app replaces the old at the root of app.fincom.live; publish-live.sh keeps Build 199 in retired/build-199 and refuses deletes and overwrites; put-back step in GO-LIVE.md 1.4
+INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO tdsgst: Update now (the masters): asked
+INFO tdsgst: after Update now (the masters): no ledger list in 240 s
+INFO tdsgst phase 1: 39 of 39 entries made by XML; refused: none
+INFO tdsgst: FC/26-27/012 cancelled: by keys (Alt+X)
+PASS g1 masters and entries made in Tally: 39 of 39 entries made by XML, FC/26-27/012 cancelled by keys (Alt+X); refused: none; the company's GST/TDS settings and the masters as Tally kept them in company-p0.xml / masters-p0.xml
+PASS g2 the bridge sent every entry (phase 1): 39 entries in Tally; the bridge's lines with Tally's entry reached the stub for 39 in 6 min; not reached: none
+INFO tdsgst: entries of p1 202604 exported: 41 entries (31 outside the month), 1886705 characters
+INFO tdsgst: entries of p1 202605 exported: 41 entries (15 outside the month), 1886705 characters
+INFO tdsgst: entries of p1 202606 exported: 41 entries (38 outside the month), 1886705 characters
+INFO tdsgst: entries of p1 202607 exported: 41 entries (40 outside the month), 1886705 characters
+INFO tdsgst: masters exported (p1): 69 ledgers, 2105368 characters
+INFO tdsgst phase 2: S02 altered: False (mid 4, AlterID 4 -> 4/43/44, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | CN1 altered: False (mid 19, AlterID 19 -> 19/45/46, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | T02 altered: False (mid 29, AlterID 29 -> 29/47/48, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | SIGMA ledger altered: True (altered 1, errors 0 ) | S13 deleted: True (by keys, Alt+D)
+INFO tdsgst: Update now (the PAN corrected): asked
+INFO tdsgst: after Update now (the PAN corrected): no ledger list in 240 s
+HARNESS g3 the amendments made in Tally and sent (phase 2): S02 altered: False (mid 4, AlterID 4 -> 4/43/44, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | CN1 altered: False (mid 19, AlterID 19 -> 19/45/46, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | T02 altered: False (mid 29, AlterID 29 -> 29/47/48, entries with this id 3; by GUID: created 1, altered 0, errors 0 ; by number: created 1, altered 0, errors 0 ) | SIGMA ledger altered: True (altered 1, errors 0 ) | S13 deleted: True (by keys, Alt+D); the bridge's lines for 4 of 4 in 0 min; not reached: none
+INFO tdsgst: entries of p2 202604 exported: 46 entries (34 outside the month), 2119801 characters
+INFO tdsgst: entries of p2 202605 exported: 46 entries (17 outside the month), 2119801 characters
+INFO tdsgst: entries of p2 202606 exported: 46 entries (43 outside the month), 2119801 characters
+INFO tdsgst: entries of p2 202607 exported: 46 entries (45 outside the month), 2119801 characters
+INFO tdsgst: masters exported (p2): 69 ledgers, 2105397 characters
+PASS g4 the Day Book and masters exported: Day Book April-July 2026: 164 entries (phase 1), 184 (phase 2); masters: 69 and 69 ledgers
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 1 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1

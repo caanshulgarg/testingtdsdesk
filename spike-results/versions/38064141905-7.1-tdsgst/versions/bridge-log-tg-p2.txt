@@ -1,0 +1,14 @@
+2026-10-10 15:59:43  Recorder: Sales 13 of 31-May-2026 (MasterID 15, line 568506d7…): asking Tally by MasterID
+2026-10-10 15:59:43  Recorder: entry fetch of FinCom Spike Co: answered in 2 ms
+2026-10-10 15:59:43  Recorder: entry fetch of FinCom Spike Co: answered in 1 ms
+2026-10-10 15:59:43  Recorder: FinCom Spike Co: delete of mid 15: not in this Tally (asked by MasterID): proven deleted here
+2026-10-10 15:59:43  Recorder: FinCom Spike Co: delete of mid 15: GUID from the bridge's record: cf33cde5-fde7-4c35-8869-5d67625a76e7-0000000f; the GUID its MasterID makes agrees
+2026-10-10 15:59:43  Renumbering: deleted Sales 13 of 31-May-2026 in FinCom Spike Co: FinCom holds 0 later Sales entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-10 15:59:46  Update from Tally asked for now
+2026-10-10 15:59:46  Update from Tally: asked for now
+2026-10-10 15:59:46  Update from Tally: waiting, someone is working in Tally
+2026-10-10 16:00:01  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 69 ledger(s) (0.2s); saved
+2026-10-10 16:00:03  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.4s); saved
+2026-10-10 16:00:03  Keeping FinCom Spike Co: the ledger list read (69 ledgers, 28 groups, 3 request(s)): 0 new, 1 changed, 0 renamed, 0 gone
+2026-10-10 16:00:03  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=50 ALTMSTID=298
+2026-10-10 16:00:03  Update from Tally: done (5 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
