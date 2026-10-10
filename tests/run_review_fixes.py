@@ -66,7 +66,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("Object.values(D().parties).some(p => p.name === 'Shree Nandik Technologies')"), "8. Save and fill in: the supplier is in the list")
     # 5. one Tally status
     st = pg.evaluate("tallyStatus(CO()).label")
-    ok(st == "Not set up" and "Tally: Not set up" in pg.inner_text("#top, header, body"), "5. one status everywhere: “Tally: Not set up” with no bridge and no computer sending")
+    # round 39: Client setup says the client's link in the four words of its Link to Tally card
+    ok(st == "Not set up" and "Tally: Not linked" in pg.inner_text("#top, header, body"), "5. one status: “Not set up” with no bridge and no computer sending; Client setup: “Tally: Not linked”")
     # 9 and 10. a new sales invoice
     pg.evaluate("(cid) => { goClient('sales'); }", cid); pg.wait_for_timeout(800)
     pg.evaluate("startDraft()"); pg.wait_for_timeout(700)

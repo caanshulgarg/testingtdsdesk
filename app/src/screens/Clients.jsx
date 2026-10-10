@@ -53,8 +53,10 @@ function TallyLight({ cid }) {
   const co = CO(cid), t = tallyStatus(co), x = TLight.st.by[cid];
   // the one status (review item 5); the heartbeat's detail (updated when, Tally closed) stays in the tip
   // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
-  const l = typeof tallyLine === "function" ? tallyLine(co) : null;
-  return <span className={"tag " + t.level} title={(l ? l.text + ". " : "") + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")} data-tally={t.state} data-tally-line-tip={l ? l.state : ""}>{MARK[t.level] + t.label}</span>;
+  // round 39: the chip says the client's link in the same four words as its Link to Tally card and the top bar's sign
+  const l = typeof tallyLine === "function" ? tallyLine(co) : null, k = tallyLinkOf(co);
+  return <span className={"tag " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
+    data-tally={t.state} data-tally-link-chip={k.state} data-tally-line-tip={l ? l.state : ""}>{MARK[k.level] + k.word}</span>;
 }
 
 export default function Clients() {

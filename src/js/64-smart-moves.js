@@ -170,7 +170,7 @@ const Smart = {
   dropReturn(h){ const r = S.returnTo; if (r && h !== r.hash && !/\/setup\/|^#\/settings|^#\/tally/.test(h)) S.returnTo = null; },
 
   /* ---------------------------------------------------------------- 10. getting ready: the next step */
-  ONB_DONE: {tally: "Tally name saved", bridge: "FinCom Bridge connected", link: "Linked", books: "The books are read", opening: "Opening balances read", gst: "GSTIN added", bank: "Bank account added", bills: "First bills uploaded"},
+  ONB_DONE: {link: "Linked to Tally", books: "The books are read", opening: "Opening balances read", gst: "GSTIN added", bank: "Bank account added", bills: "First bills uploaded"},
   // a step that was not done when last looked at, and is now: "Linked · Next: Read the books →" (looked at once in two
   // seconds, after a drawing, for the open client)
   onbWatch(){

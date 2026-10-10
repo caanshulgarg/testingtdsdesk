@@ -129,7 +129,7 @@ function ReviewLink() {
 // 3, 05-Oct-2026): "Tally connected on this computer", "… through Office computer (NWS144)", "… through 2 computers",
 // "Tally not connected. Last seen on …", "Tally is open on … with a different company"; on a phone the dot and the
 // computer's name. The detail on hover, and in the Tally panel on a click
-export function TallyDetail({ s }) {
+export function TallyDetail({ s, link = null }) {
   // round 3 (05-Oct-2026): connected through more than one computer: each, with its company and last contact
   if (s.many) return <dl className="tdetail" data-tally-detail="" data-tally-reason="">
     {s.many.map((m) => <span key={m.computer} style={{ display: "contents" }}><dt>Computer</dt><dd>{m.computer}</dd><dt>Company</dt><dd>{m.company || "\u2014"}</dd><dt>Last contact</dt><dd>{m.at || "never"}</dd></span>)}
@@ -137,18 +137,20 @@ export function TallyDetail({ s }) {
   return <dl className="tdetail" data-tally-detail="" data-tally-reason={s.on ? "" : s.code}>
     <dt>Computer</dt><dd>{s.computer || "none heard from"}</dd>
     <dt>Company</dt><dd>{s.company || "\u2014"}</dd>
+    {link && <><dt>Link</dt><dd data-tally-link-word={link.state}>{link.word}</dd></>}
     <dt>Last contact</dt><dd>{s.at || "never"}</dd>
     {!s.on && <><dt>Why</dt><dd className="why">{s.reason}</dd><dt>What to do</dt><dd>{s.fix}</dd></>}
   </dl>;
 }
 function TallySign() {
-  const co = S.view === "company" ? CO() : null, s = tallySign(co), t = tallyStatus(co);
+  // round 39: in a client, the hover also says its link in the four words of its Link to Tally card
+  const co = S.view === "company" ? CO() : null, s = tallySign(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
   return <span className="tsign-wrap">
-    <button className={"tsign tallychip " + (s.on ? "on" : "off")} data-tally-sign={s.on ? "on" : "off"} data-tally={t.state} aria-haspopup="dialog"
-      title={tallySignWords(s)} onClick={() => doAct("tallyPanel")}>
+    <button className={"tsign tallychip " + (s.on ? "on" : "off")} data-tally-sign={s.on ? "on" : "off"} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined} aria-haspopup="dialog"
+      title={tallySignWords(s) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
       <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{s.words}</span><span className="tsign-short">{s.short || s.computer}</span>
     </button>
-    {!S.tallyPanel && <span className="tsign-pop" role="tooltip"><TallyDetail s={s} /></span>}
+    {!S.tallyPanel && <span className="tsign-pop" role="tooltip"><TallyDetail s={s} link={k} /></span>}
   </span>;
 }
 
@@ -186,7 +188,7 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
-        <TallyDetail s={tallySign(co)} />
+        <TallyDetail s={tallySign(co)} link={co ? tallyLinkOf(co) : null} />
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>

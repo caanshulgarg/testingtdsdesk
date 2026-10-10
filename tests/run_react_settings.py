@@ -50,7 +50,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     save()
     nav("Tally"); pg.wait_for_timeout(300)
-    ok(head() == "Tally" and "The company in Tally" in pg.inner_text("#app .setbody"), "Tally section")
+    ok(head() == "Tally" and "Link to Tally" in pg.inner_text("#app .setbody"), "Tally section (round 39: the Link to Tally card)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
@@ -99,13 +99,15 @@ with sync_playwright() as p:
     pg.check('label:has-text("Follow the company open in Tally") input'); pg.wait_for_timeout(200)
     ok(pg.evaluate("Bridge.cfg().follow") is True, "following Tally is kept")
     pg.evaluate("render()"); pg.wait_for_timeout(300)
+    # round 39: the Tallys found, with their ports, are under Details (for support)
+    pg.click("#app [data-bridge-support]"); pg.wait_for_timeout(300)
     pg.click('tr:has(td:text-is("Port 9001")) button:text-is("Use this Tally")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("Bridge.cfg().port") == 9001 and "In use" in pg.inner_text("#app table.data"), "one Tally chosen")
     pg.click('button:text-is("Automatic")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("Bridge.cfg().port") == 0, "and back to automatic")
     name = pg.evaluate("CO().name")
-    pg.select_option('select[aria-label="Client for ACME LTD"]', pg.evaluate("S.coId")); pg.wait_for_timeout(300)
-    ok(pg.evaluate("CO().tallyName") == "ACME LTD", "a Tally company linked to the client")
+    # round 39: this computer's Tallys link nothing (that only set a Tally name); a client is linked on its Link to Tally card
+    ok(pg.locator('select[aria-label="Client for ACME LTD"]').count() == 0 and "not linked" in pg.inner_text("#app table.data"), "this computer's Tallys: no 'Link to a client…', the company said not linked")
     pg.evaluate("""() => { window.__tc = []; TCloud.on = () => true; TCloud.refreshPane = async () => {}; TCloud.rpc = async (f, a) => { window.__tc.push([f, a]); return {}; };
       TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', last_seen: null}], companies: [{company: 'BETA', client_id: null}]}; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"""); pg.wait_for_timeout(400)
     pg.select_option('select[aria-label="Client for BETA"]', pg.evaluate("S.coId")); pg.wait_for_timeout(400)

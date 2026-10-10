@@ -450,6 +450,20 @@ function ClientOf({ company, dev }) {
   if (!co || co.deleted) return null;
   return <>{" ("}<button className="linkbtn" data-client-open={co.id} onClick={() => openCompany(co.id)}>{co.name + " \u203a"}</button>{")"}</>;
 }
+// round 39: the companies a computer reported that no client has yet, each with Link… (a person picks the client; the
+// same tally_company_link as the client's Link to Tally card, and the client's Tally name is set with it)
+function SeenNotLinked({ r }) {
+  const rows = (TCloud.pane.companies || []).filter((c) => c.company && !c.client_id && c.device_id === r.device.id);
+  if (!rows.length) return null;
+  const may = S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true;
+  const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
+  return <div data-card-seen="">{"Seen, not linked: "}{rows.map((c, i) => { const m = gstinMatch(c);
+    return <span key={c.company} className="tseen">{i > 0 && " "}<b>{c.company}</b>{" "}
+      {may && <select data-card-link={c.company} aria-label={"Link " + c.company + " to a client"} value="" onChange={(ev) => ev.target.value && tallyLinkClient(c.company, ev.target.value)}>
+        <option value="">Link…</option>
+        {m && <option value={m.id}>{m.name + " (same GSTIN)"}</option>}
+        {cos.filter((k) => !m || k.id !== m.id).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</select>}</span>; })}</div>;
+}
 // the card's state in words
 function cardState(r, n) {
   if (r.go && !r.old && !r.online) return ["bad", "Not connected"];
@@ -473,17 +487,18 @@ function ComputerCard({ r, latest, m, focus }) {
   return <div className={"tcard" + (focus ? " tcard-focus" : "")} data-computer={r.device.id} data-bridge-user={r.user || ""} data-read-state={live ? rd.state : "old"} data-card-state={word} data-focus={focus ? "" : undefined}>
     <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       <b data-card-name="">{pcName(r)}</b><span className={"tag " + lv} data-bridge-state="">{word}</span>
-      {live && <span style={{ marginLeft: "auto" }}><MoreToggle k={k} label="Details" less="Hide details" aria-label={"Details of " + pcName(r)} /></span>}
+      {live && <span style={{ marginLeft: "auto" }}><MoreToggle k={k} label="Details (for support)" less="Hide details" aria-label={"Details of " + pcName(r)} /></span>}
     </div>
     <div className="tcard-facts">
       <div data-card-companies="">{cos.length ? <>{r.online ? "Reads " : "Read when last connected: "}{cos.map((c, i) => <span key={c}>{i > 0 && ", "}<b>{c}</b><ClientOf company={c} dev={r.device.id} /></span>)}</> : <span className="note">{live && r.online ? "No company open in Tally" : "No company being read"}</span>}</div>
+      {live && <SeenNotLinked r={r} />}
       <div data-card-last="">{last ? "Last entry received " + whenWords(last) : <span className="note">No entry received yet</span>}</div>
     </div>
     <div data-status-line="" data-bridge-line={r.id || "old"} data-level={n ? (lv === "ok" ? "warn" : lv) : lv} className="tcard-line">
       {n ? <><span data-bridge-act="">{n.text}</span>{" "}<NeedAct r={r} n={n} m={m} /></> : quiet ? <span className="note">{quiet}</span> : null}
     </div>
     {open && <div data-card-more="" className="tcard-more">
-      <div className="tcard-sub">Details</div>
+      <div className="tcard-sub">Details (for support)</div>
       <div className="row" style={ROW}><span className="note" data-card-version="">{"FinCom Bridge " + (r.version || "") + (r.runMode ? " · " + (RUN[r.runMode] || r.runMode) : "") + (r.main ? " · main bridge: reads and posts" : " · reads only")}</span></div>
       {rd.state !== "reading" && <div className="row" style={ROW}><span className="note" data-read-text="">{rd.state === "paused" ? "Reading paused" : rd.text}</span></div>}
       <div className="row" style={ROW}><BridgeWhere r={r} /></div>
@@ -542,14 +557,14 @@ function PageMore({ rows, latest, m }) {
   const owner = isOwner(), open = moreOpen("page");
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   return <div className="pane" data-page-more="" style={{ padding: "8px 16px" }}>
-    <MoreToggle k="page" data-bridge-details="" label="Details: versions, every bridge, ports and Windows sessions, install help" less="Hide details" />
+    <MoreToggle k="page" data-bridge-details="" label="Details (for support)" less="Hide details" />
     {open && <div data-bridge-more="" style={{ marginTop: 10 }}>
       <Release rows={rows} latest={latest} owner={owner} />
       {owner && TCloud.on() && !allStopped && <div className="row" style={{ gap: 8, margin: "6px 0 10px" }}>
         <button className="btn small" data-read-stop-all="" onClick={() => TCloud.readStop(null)}>Stop reading on all computers</button></div>}
       <BridgesHeard />
       <ClientLines />
-      {TCloud.on() && <BridgeSettings />}
+      {TCloud.on() && <BridgeSettings inDetails />}
       <BridgeDownload m={m} again={rows.length > 0} />
     </div>}
   </div>;
@@ -563,12 +578,16 @@ function PageMore({ rows, latest, m }) {
 function TallyGuide({ rows, m, connectStep }) {
   const p = TCloud.pane;
   if (!TCloud.on() || p.devices == null) return null;
-  // review of f0f1531f: once a company is linked the guide folds to one link, "Connect another computer", that opens it again
-  const linked = (p.companies || []).some((c) => c.client_id), again = linked && moreOpen("guide");
+  // round 39: the guide stays while any client is not linked to its Tally company; then it folds to one link, "Connect
+  // another computer", that opens it again (review of f0f1531f)
+  const unlinked = Object.values(S.companies || {}).filter((c) => !c.deleted && tallyLinkOf(c).state === "unlinked").sort((a, c) => a.name.localeCompare(c.name));
+  const linked = (p.companies || []).some((c) => c.client_id) && !unlinked.length, again = linked && moreOpen("guide");
   if (linked && !again) return <p className="note" style={{ margin: "0 0 10px" }}><button className="linkbtn" data-guide-again="" onClick={() => moreFlip("guide")}>Connect another computer</button></p>;
   const devs = (p.devices || []).filter((d) => !d.revoked), heard = rows.filter((r) => r.go && !r.old && r.at).sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  const seen = p.companies || [];
-  const done = { install: devs.length > 0, connect: heard.length > 0, link: false };
+  const seen = (p.companies || []).filter((c) => !c.client_id);
+  const done = { install: devs.length > 0, connect: heard.length > 0, link: linked };
+  // the first client not linked: its own Link to Tally card (Client setup → Tally)
+  const linkFirst = () => { const c = unlinked[0]; if (!c) return; openCompany(c.id); S.tab = "cotally"; render(); };
   const next = ["install", "connect", "link"].find((k) => !done[k]);
   const openConnect = () => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { page: true }); render();
     setTimeout(() => { const e = document.querySelector("#app [data-connect-section]"); if (e && e.scrollIntoView) e.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); };
@@ -579,12 +598,13 @@ function TallyGuide({ rows, m, connectStep }) {
     <h3 style={{ margin: "0 0 4px" }}>{again ? "Connect another computer" : "Connect Tally in three steps"}{again && <>{" "}<button className="linkbtn note" data-guide-hide="" onClick={() => moreFlip("guide")}>Hide</button></>}</h3>
     <ul className="tguide-steps">
       <Step k="install" n={1} title="Install FinCom Bridge">{done.install && !again ? "Installed: " + devs.map((d) => (d.info && d.info.computer) || d.name).join(", ") + "."
-        : <>On the computer where TallyPrime runs. <DownloadBtn m={m} primary={next === "install"} /> If Windows says “Windows protected your PC”, press More info, then Run anyway (more help under More, below).</>}</Step>
+        : <>On the computer where TallyPrime runs. <DownloadBtn m={m} primary={next === "install"} /> If Windows says “Windows protected your PC”, press More info, then Run anyway (more help under Details, below).</>}</Step>
       <Step k="connect" n={2} title="Connect it to FinCom">{done.connect && !again ? "FinCom Bridge on " + heard[0].computer + " is talking to FinCom (last heard " + agoWords(heard[0].at) + ")."
         : <span data-guide-connect-slot="">{connectStep || <>Right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b> and type the 6-digit code here. <button className={"btn small" + (next === "connect" ? " primary" : "")} data-guide-connect="" onClick={openConnect}>Open the connect steps</button></>}</span>}</Step>
-      <Step k="link" n={3} title="Link a Tally company to its client">{seen.length ? "Tally companies seen: " + seen.map((c) => c.company).join(", ") + ". Choose the client for each. "
-        : "Open the company in TallyPrime; it shows up within a minute. "}
-        <button className={"btn small" + (next === "link" ? " primary" : "")} data-guide-link="" onClick={() => goSettings("tcloud")}>Link companies to clients</button></Step>
+      <Step k="link" n={3} title="Link each client to its Tally company">{unlinked.length ? (unlinked.length === 1 ? unlinked[0].name + " is not linked yet." : unlinked.length + " clients are not linked yet: " + unlinked.slice(0, 3).map((c) => c.name).join(", ") + (unlinked.length > 3 ? " and " + (unlinked.length - 3) + " more" : "") + ".")
+          + (seen.length ? " Tally companies seen, not linked: " + seen.map((c) => c.company).join(", ") + ". " : " Open each company in TallyPrime; it shows up within a minute. ") : linked ? "Every client is linked. " : "Add a client, then link it to its Tally company here. "}
+        {unlinked.length > 0 ? <button className={"btn small" + (next === "link" ? " primary" : "")} data-guide-link={unlinked[0].id} onClick={linkFirst}>{"Link " + unlinked[0].name}</button>
+          : !linked && <button className={"btn small" + (next === "link" ? " primary" : "")} data-guide-link="" onClick={() => doAct("addCo")}>Add a client</button>}</Step>
     </ul>
   </div>;
 }
@@ -690,7 +710,7 @@ function SetupSteps() {
   const Step = ({ n, done, title, children }) => <li className={done ? "done" : ""}><b>{(done ? "✔ " : "") + title}</b>{children && <div>{children}</div>}</li>;
   return <div className="setupcard" data-connect-steps=""><h3 style={{ margin: "0 0 6px" }}>Connect this browser to FinCom Bridge</h3><ol className="setup">
     <Step n={1} done={connected} title="FinCom Bridge on the Tally computer">Download it from the card on this page and run it there. No admin rights needed.</Step>
-    <Step n={2} done={connected && st.tallyUp} title="Open TallyPrime and your company">In TallyPrime: F1 Help → Settings → Connectivity → <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, …).</Step>
+    <Step n={2} done={connected && st.tallyUp} title="Open TallyPrime and your company">In TallyPrime: F1 Help → Settings → Connectivity → <b>TallyPrime acts as: Both</b>.</Step>
     <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
   </ol></div>;
 }
@@ -713,15 +733,16 @@ const SESSION0 = "Other Tally windows on this computer that belong to other Wind
 // the Tallys the bridge found: whose, the companies open, the client each is, and which one to use
 function Sessions({ c, st }) {
   if (!st.sessions.length) return <p className="note">No TallyPrime found. Start TallyPrime in this Windows session.</p>;
-  const cos = sortedCompanies(), skipped = st.sessions.some((se) => se.skipped);
+  const skipped = st.sessions.some((se) => se.skipped);
   return <>{skipped && <p className="note" data-session0="" style={{ margin: "0 0 6px" }}><b>Another user — not used:</b>{" " + SESSION0}</p>}<table className="data" data-statement=""><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>
     {st.sessions.filter((se) => se.ok || se.skipped || num(c.port) === se.port || st.mode !== "fallback").map((se) => {
       const pinned = num(c.port) === se.port;
       return <tr key={se.port}><td>{"Port " + se.port}</td>
         <td>{se.skipped ? <span className="tag no">Another user — not used</span> : se.mine === true ? <span className="tag ok">Your session</span> : <span className="tag warn">Not checked</span>}</td>
         <td>{se.skipped ? <span className="note">hidden</span> : !se.ok ? <span className="note">{se.error ? "not answering" : "—"}</span> : se.companies.length ? se.companies.map((o, i) => <span key={i}>{i > 0 && <br />}<b>{o.name}</b></span>) : <span className="note">no company open</span>}</td>
+        {/* round 39: no linking here (it only set a Tally name): a client is linked on its Link to Tally card */}
         <td>{se.skipped || !se.ok ? null : se.companies.map((o, i) => { const cl = Bridge.clientFor(o.name);
-          return <span key={i}>{i > 0 && <br />}{cl ? cl.name : <select aria-label={"Client for " + o.name} value="" onChange={(ev) => bridgeLink(o.name, ev.target.value)}><option value="">Link to a client…</option>{cos.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>}</span>; })}</td>
+          return <span key={i}>{i > 0 && <br />}{cl ? cl.name : <span className="note">not linked</span>}</span>; })}</td>
         <td>{se.skipped ? null : pinned ? <><span className="tag ok">In use</span> <button className="linkbtn" onClick={() => bridgePin(0)}>Automatic</button></> : se.ok ? <button className="btn small" onClick={() => bridgePin(se.port)}>Use this Tally</button> : null}</td></tr>;
     })}</tbody></table></>;
 }
@@ -744,7 +765,9 @@ function BridgeLog() {
   </div>;
 }
 
-export function BridgeSettings() {
+// inDetails: drawn inside the page's Details (for support); elsewhere the Tallys found, with their ports and Windows
+// sessions, the checks and the log fold under their own "Details (for support)" (round 39: no port in the main steps)
+export function BridgeSettings({ inDetails = false }) {
   const c = Bridge.cfg(), st = Bridge.st;
   if (Bridge.blocked()) return <div className="pane"><h2>FinCom Bridge on this computer</h2><p className="note" style={{ margin: 0 }}>Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>;
   const MODE = { auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + st.user + ")" : "") + " and ignores other users’ Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below." };
@@ -759,12 +782,16 @@ export function BridgeSettings() {
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
         <p className="note" style={{ margin: "0 0 6px" }}>{"FinCom Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
         <p className="note" style={{ margin: "0 0 6px" }}>{MODE[st.mode] || ""}</p>
-        {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
-        <Sessions c={c} st={st} />
-        {num(c.port) && !st.sessions.some((se) => se.port === num(c.port)) ? <p className="bk-warn">{"The chosen Tally (port " + num(c.port) + ") is not running. "}<button className="linkbtn" onClick={() => bridgePin(0)}>Go back to automatic</button></p> : null}
-        <Diagnosis />
-        <BridgeLog />
-        {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help → Settings → Connectivity → set “TallyPrime acts as” to Both, port 9000.</p>}
+        {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours under Details (for support) with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
+        {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help → Settings → Connectivity → set “TallyPrime acts as” to Both.</p>}
+        {!inDetails && <MoreToggle k="bridgeSupport" data-bridge-support="" label="Details (for support)" less="Hide details" />}
+        {(inDetails || moreOpen("bridgeSupport")) && <div data-bridge-support-more="">
+          <Sessions c={c} st={st} />
+          {num(c.port) && !st.sessions.some((se) => se.port === num(c.port)) ? <p className="bk-warn">{"The chosen Tally (port " + num(c.port) + ") is not running. "}<button className="linkbtn" onClick={() => bridgePin(0)}>Go back to automatic</button></p> : null}
+          {!st.tallyUp && <p className="note">Each Windows user’s TallyPrime needs its own port (9000, 9001, …).</p>}
+          <Diagnosis />
+          <BridgeLog />
+        </div>}
       </> : <><p className="bk-warn">{st.error || "Not checked yet."}</p>{st.state === "down" && <DownHelp c={c} />}</>}</div>}
     </div>
     <TallyHistory />

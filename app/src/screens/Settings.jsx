@@ -216,43 +216,12 @@ function SupInvFrom({ co }) {
   </fieldset>;
 }
 
-// the one Tally company this client's entries may be posted to (review of 02-Oct-2026): nothing is posted, from any
-// computer, until it is chosen; the owner's rule of 05-Oct-2026: chosen and confirmed by any member who may write, asked
-// first (who and when are kept)
-function PostTo({ co, open }) {
-  const bk = typeof TCloud === "object" ? TCloud.book(co.id) : null, canWrite = S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true;
-  const names = [...new Set([co.postTo, bk && bk.company, co.tallyName, ...(open || []).map((o) => o.name)].filter(Boolean))];
-  const set = (v) => askConfirm({ title: v ? "Post " + co.name + "’s entries into " + v + "?" : "Stop posting for " + co.name + "?", ok: v ? "Allow" : "Stop posting",
-    body: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(v) + "</b>. A posting meant for any other company is refused.</p>"
-      : "<p>Nothing will be posted for this client until a company is chosen again.</p>" }).then((ok) => { if (!ok) return; choiceConfirm(co, "postTo", v); if (S.postStop && S.postStop.cid === co.id) S.postStop = null; toast(v ? "Posting allowed into " + v + "." : "Posting stopped."); render(); });
-  const pc = choiceGet(co, "postTo");
-  return <Card title="Posting allowed to company" note="Entries are posted only into this Tally company, from any computer. Nothing is posted until it is chosen.">
-    <div className="row" data-post-to="" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      {co.postTo ? <span className={"tag " + (pc && pc.state === "confirmed" ? "ok" : "warn")}>{co.postTo}</span> : <span className="tag bad">None chosen: posting is off</span>}
-      {co.postTo && pc && pc.state !== "confirmed" && <span className="cfm-guess" data-choice="postTo" data-choice-state="guessed"><span className="note">Found by FinCom (the one Tally company linked, same GSTIN): not used for posting until confirmed.</span>{" "}
-        {canWrite ? <button type="button" className="btn small primary" data-choice-confirm="postTo" onClick={() => set(co.postTo)}>Confirm</button> : <span className="note">A member of the firm who may make changes confirms it.</span>}</span>}
-      {canWrite ? <select aria-label="Posting allowed to company" value="" onChange={(ev) => ev.target.value && set(ev.target.value === "\u0000" ? "" : ev.target.value)}>
-        <option value="">{co.postTo ? "Change…" : "Choose the company…"}</option>{names.map((n) => <option key={n} value={n}>{n}</option>)}{co.postTo && <option value={"\u0000"}>Stop posting</option>}</select>
-        : <span className="note">A member of the firm who may make changes chooses it.</span>}
-      {co.postToAt && pc && pc.state === "confirmed" && <span className="note">{"confirmed " + fmtDateTime(pc.at || co.postToAt) + (pc.by || co.postToBy ? " by " + (pc.by || co.postToBy) : "")}</span>}
-    </div>
-    {bk && bk.company && co.postTo && ledNm(bk.company).toLowerCase() !== ledNm(co.postTo).toLowerCase() && <p className="bk-warn" style={{ margin: "8px 0 0" }}>{"This client’s books in FinCom’s cloud come from " + bk.company + ", not " + co.postTo + ". Postings through the cloud are refused until the two agree."}</p>}
-  </Card>;
-}
-
 function TallySetup() {
-  const co = CO(), open = Bridge.up() && Bridge.st.open.length ? Bridge.st.open : null, auto = co.vchNumbering === "tally";
+  const co = CO(), auto = co.vchNumbering === "tally";
+  // round 39: the Link to Tally card says it all: the company (linked by a person's click), the client's Tally name (its
+  // More: Name differs in Tally) and the one company entries are posted into (its tick)
   return <>
     <TallyLink co={co} where="setup" />
-    <Card title="The company in Tally" note="Entries go into this company. The name must match Tally’s exactly.">
-      <div className="grid">
-        <CoText label="Company name in Tally" path="tallyName" />
-        {open && <label className="f"><span>Or pick the company open in Tally</span>
-          <select value={open.some((o) => o.name === co.tallyName) ? co.tallyName : ""} onChange={(ev) => coSetTallyName(ev.target.value)}>
-            <option value="">—</option>{open.map((o) => <option key={o.name}>{o.name}</option>)}</select></label>}
-      </div>
-    </Card>
-    <PostTo co={co} open={open} />
     <Card title="How purchase bills are entered">
       <VoucherType co={co} />
       <SupInvFrom co={co} />
@@ -359,7 +328,7 @@ function clientGroups() {
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the ledgers used in every entry.", "Tally: " + tallyStatus(co).label + (co.tallyName ? " · " + co.tallyName : "")),
+      it("cotally", "Which Tally company entries go into, how they are numbered, and the ledgers used in every entry.", "Tally: " + tallyLinkOf(co).word + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the ledgers each kind of payment uses.", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),

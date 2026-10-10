@@ -1886,6 +1886,8 @@ function doAct(act, t){
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
+    // round 39: the open client's Link to Tally card (Client setup → Tally)
+    case "coTally": S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); break;
     case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
@@ -1952,7 +1954,9 @@ function saveNewCompany(v){
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
-  openCompany(co.id);
+  // round 39: the new client opens on its Link to Tally card (Client setup → Tally): linked at once when the company was
+  // chosen and the cloud has it, else the card says what to do and lists the companies as they appear
+  openCompany(co.id); S.tab = "cotally"; render();
   if (tco) linkNewClient(co, tco).catch(() => {});
   return true;
 }

@@ -289,8 +289,9 @@ def main():
         l6 = line(ro["id"])
         open_all()
         ok("Tally is not open on RO-PC" in l6 and "reads only" in txt(card(ro["id"]) + " [data-card-more]"), "a reads-only bridge: Tally not open said, 'reads only' under Details (%s)" % l6)
-        scene([OK_DEV], LINKED)
-        ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "linked: the guide folds to 'Connect another computer'")
+        # round 39: the guide folds once every client is linked (here: each client to a company of its own)
+        scene([OK_DEV], LINKED + [{"company": "CO " + str(i), "client_id": c, "device_id": D1, "gstin": "", "last_seen": "ago:1"} for i, c in enumerate(E("Object.values(S.companies).filter(c => !c.deleted).map(c => c.id)"))])
+        ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
         ok(pg.locator("#app [data-tally-guide]").count() == 1 and pg.locator('#app [data-tally-guide] [data-guide-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with

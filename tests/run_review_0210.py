@@ -110,8 +110,8 @@ with sync_playwright() as p:
 
     # 14. setup checklist from what is done (cloud copy, opening balances, a bank account with its ledger)
     st = E("ONB.steps(CO()).map(s => [s.id, s.done])")
-    ok(dict(st).get("opening") is True and dict(st).get("books") is True and dict(st).get("bridge") is True and dict(st).get("bank") is True,
-       "14. checklist: books and opening balances read, bridge set up (cloud copy), bank done once its account has the ledger (HDFC BANK, linked from Tally) (%s)" % st)
+    ok(dict(st).get("opening") is True and dict(st).get("books") is True and dict(st).get("link") is True and "bridge" not in dict(st) and dict(st).get("bank") is True,
+       "14. checklist: books and opening balances read, linked to Tally (cloud copy; round 39: one Link to Tally step), bank done once its account has the ledger (HDFC BANK, linked from Tally) (%s)" % st)
 
     # 15. Remove this client: in More, behind the client's name
     E("() => { S.tab = 'settings'; render(); }"); pg.wait_for_timeout(700)

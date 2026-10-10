@@ -72,12 +72,13 @@ with sync_playwright() as p:
     # review 20-21 (02-Oct-2026): the company found by itself is a guess: posting waits until a person confirms it
     ok(E("choiceState(CO(), 'postTo')") == "guessed" and "confirm the Tally company" in prob() and prob().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % prob())
     ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
-    # #11 (the owner's rule of 05-Oct-2026): any member who may write chooses and confirms "Posting allowed to company" (who and when kept)
+    # #11 (the owner's rule of 05-Oct-2026): any member who may write confirms the posting company (who and when kept);
+    # round 39: the tick on the client's Link to Tally card, "Post this client's entries into X"
     E("() => { window.__acct = S.account; S.account = Object.assign({}, S.account || {}, {me: Object.assign({}, (S.account || {}).me || {}, {role: 'staff'})}); S.postStop = null; S.step = null; S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(500)
-    pt = pg.inner_text("#app [data-post-to]") if pg.locator("#app [data-post-to]").count() else ""
-    ok(pg.locator('#app [data-post-to] select[aria-label="Posting allowed to company"]').count() == 1 and pg.locator('#app [data-choice-confirm="postTo"]').count() == 1 and "An owner of the firm" not in pt,
-       "#11. staff: the company can be chosen and Confirmed (no 'An owner of the firm chooses it') (%s)" % pt.replace("\n", " ")[:160])
-    pg.click('#app [data-choice-confirm="postTo"]'); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
+    pt = pg.inner_text("#app [data-tally-link-post]") if pg.locator("#app [data-tally-link-post]").count() else ""
+    ok(pg.locator('#app [data-tally-link-post-tick]:not([disabled])').count() == 1 and not pg.is_checked('#app [data-tally-link-post-tick]') and "Found by FinCom" in pt and "An owner of the firm" not in pt,
+       "#11. staff: the found company is not ticked, and can be ticked (no 'An owner of the firm chooses it') (%s)" % pt.replace("\n", " ")[:160])
+    pg.click('#app [data-tally-link-post-tick]'); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
     pc = E("(() => { const r = choiceGet(CO(), 'postTo'); return {state: r && r.state, by: !!(r && r.by), at: !!(r && r.at)}; })()")
     ok(pc == {"state": "confirmed", "by": True, "at": True}, "#11. staff's Confirm: confirmed, with who and when kept (%s)" % pc)
     E("() => { S.account = window.__acct; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
@@ -130,7 +131,7 @@ with sync_playwright() as p:
        "B14. the bills stay under Post to Tally, waiting, not failed nor sent (%s)" % st)
     ok(any(r[0] == "tally_post_enqueue" for r in E("window.__rpc")), "B11. the posting went to the cloud queue (the client is linked there)")
     pg.click("#app [data-not-allowed] [data-choose-company]"); pg.wait_for_timeout(500)
-    ok(E("S.tab") == "cotally" and pg.locator("#app [data-post-to]").count() == 1, "B14. the button opens Client setup → Tally (the company choice)")
+    ok(E("S.tab") == "cotally" and pg.locator("#app [data-tally-link-post]").count() == 1, "B14. the button opens Client setup → Tally (the Link to Tally card and its posting tick)")
     E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     # B11: with the bridge on this computer too, the posting goes through the queue (not to /jobs)
     E("""() => { window.__rpc = []; window.__enqueue = {ok: true}; S.postStop = null; window.__direct = 0;
