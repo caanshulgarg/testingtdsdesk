@@ -113,10 +113,10 @@ def main():
             ok(len(st) == 1 and st[0][1] == want and words == [want], "%s: exactly one status line, %r (%s; words in the card %s)" % (label, want, st, words))
             return st[0][2] if st else ""
         def confirm(yes=True):
-            pg.wait_for_timeout(300)
+            # the question is asked first (askConfirm): wait for it, answer, and wait for it to close
             sel = '#confirmBox [data-cbx="%s"]' % ("yes" if yes else "no")
-            if pg.locator(sel).count(): pg.click(sel)
-            pg.wait_for_timeout(600)
+            pg.wait_for_selector(sel, state="visible", timeout=10000); pg.click(sel)
+            pg.wait_for_selector(sel, state="hidden", timeout=10000); pg.wait_for_timeout(400)
         def no_port(where):
             # what shows outside Details (for support): the open Details are taken out of the words
             t = E("""() => { const a = document.querySelector('#app').cloneNode(true);
@@ -174,7 +174,7 @@ def main():
         ok(E("(c) => postToProblem ? !!postToProblem(S.companies[c]) : true", cid), "5. posting is refused while not ticked (postToProblem)")
         pg.click(tick); confirm(False)
         ok(not pg.is_checked(tick) and E("(c) => choiceState(S.companies[c], 'postTo')", cid) != "confirmed", "5. tick, then No: still off")
-        pg.click(tick); pg.wait_for_timeout(300)
+        pg.click(tick); pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000)
         ok("Post Link Co\u2019s entries into GARG SHEKHAR?" in (txt("#confirmBox") or ""), "5. it asks first: \u201cPost Link Co's entries into GARG SHEKHAR?\u201d (%s)" % txt("#confirmBox")[:80])
         confirm(True)
         c5 = E("(c) => [S.companies[c].postTo, choiceState(S.companies[c], 'postTo')]", cid)
