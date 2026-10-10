@@ -226,7 +226,9 @@ function S2Import($co, $xml, $label) {
 # rotateLog): the lines before midnight (the companies' GUIDs) were lost to the harness. Its date-named copies (a fresh
 # runner: all of this run) come first, oldest first, then the log itself
 function S2BridgeLog {
-  $f = $B[1].log
+  # run 38010875710: B233LedgerBurst's own $b (PowerShell names ignore case) hid the script's $B: no log, as before
+  $f = $script:B[1].log
+  if (-not $f) { return @() }
   $old = @(Get-ChildItem -Path (Split-Path $f) -Filter ((Split-Path $f -Leaf) + '.*') -File -ErrorAction SilentlyContinue |
       Where-Object { $_.Name -match '\.\d{4}-\d{2}-\d{2}(-\d+)?$' } | Sort-Object LastWriteTime)
   $lines = @()
