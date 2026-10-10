@@ -26,7 +26,9 @@ WORDS = ["Not linked", "Waiting for Tally", "Linked and reading", "Needs you"]
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []
+LAST, PAGE = [""], [None]
 def ok(c, w):
+    LAST[0] = w
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 # the firm's computers as tally_devices keeps them (made-up, as run_tally_ux.py): times are "ago:<minutes>"
@@ -97,7 +99,7 @@ def main():
             cid = pg.evaluate("""(g) => { const c = newCompany({name: 'Link Co', gstin: g}); c.tallyName = 'Link Co'; S.companies[c.id] = c;
                 S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; Store.saveCompany(c); return c.id; }""", GSTIN)
             return pg, cid
-        pg, cid = open_page(1440, 900)
+        pg, cid = open_page(1440, 900); PAGE[0] = pg
         E = lambda js, *a: pg.evaluate(js, *a)
         txt = lambda sel: pg.inner_text(sel).strip() if pg.locator(sel).count() else ""
         card = "#app [data-tally-link]"
@@ -237,10 +239,12 @@ def main():
         ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "9. every client linked: the guide folds to 'Connect another computer'")
         # this computer's Tallys (Details): no linking there
         E("""() => { Bridge.cfg = () => ({url: 'http://localhost:1', key: 'k', follow: false, port: 0}); Bridge.blocked = () => false; Bridge.on = () => true; Bridge.up = () => true;
-              Object.assign(Bridge.st, {state: 'ok', version: '2.4.1', mode: 'auto', user: 'anshul', tallyUp: true, at: Date.now(), open: [{name: 'ZZ OTHER'}],
-              sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'ZZ OTHER'}]}, {port: 9001, skipped: true, ok: false, companies: []}]}); S.tallyMore = {page: true}; render(); }""")
+              Object.assign(Bridge.st, {state: 'ok', version: '2.4.1', mode: 'auto', user: 'anshul', tallyUp: true, at: Date.now(), open: [{name: 'QQ ELSEWHERE'}],
+              sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'QQ ELSEWHERE'}]}, {port: 9001, skipped: true, ok: false, companies: []}]}); S.tallyMore = {page: true}; render(); }""")
         pg.wait_for_timeout(700)
         ok("Use this Tally" in txt("#app [data-bridge-more]") and "Link to a client" not in txt("#app"), "9. Details: the Tallys with Use this Tally; no 'Link to a client…'")
+        # no bridge on this computer again (it would follow the company open in Tally to another client)
+        E("() => { Bridge.on = () => false; Bridge.up = () => false; S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
 
         # ---- 10. Add client lands on the card
         E("() => doAct('addCo')"); pg.wait_for_timeout(500)
@@ -287,4 +291,12 @@ def main():
     sys.exit(1 if fails else 0)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as ex:
+        # what stopped it, said last (a CI log shows only the end): the check before, and a question left open
+        box = ""
+        try: box = PAGE[0].inner_text("#confirmBox") if PAGE[0] and PAGE[0].locator("#confirmBox").is_visible() else ""
+        except Exception: pass
+        print("STOPPED after %r: %s; question open: %r" % (LAST[0][:120], str(ex).split("\n")[0][:160], box[:200]))
+        sys.exit(1)
