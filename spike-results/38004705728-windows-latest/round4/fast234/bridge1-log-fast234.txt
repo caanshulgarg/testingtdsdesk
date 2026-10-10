@@ -1,0 +1,79 @@
+2026-10-10 00:00:00  Recorder: FinCom asks again for 20 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 20 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-10 00:06:27  Recorder: Sales 2 of 02-Apr-2026 (MasterID 4, line 23bed84e…): asking Tally by MasterID
+2026-10-10 00:06:30  Tally 9000 did not answer in time at 00:06:30 (FinComVoucherObject, try 1); trying again by itself at 00:06:45
+2026-10-10 00:06:30  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped)
+2026-10-10 00:06:30  Recorder: Sales 2 of 02-Apr-2026 (MasterID 4, line 23bed84e…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 00:11 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+2026-10-10 00:06:30  Recorder: Journal 3 of 01-Apr-2026 (MasterID 5, line 6b9a9dd3…): asking Tally by MasterID
+2026-10-10 00:06:30  Recorder: Journal 3 of 01-Apr-2026 (MasterID 5, line 6b9a9dd3…): held at once: waiting: Tally busy; FinCom asks again at 00:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-10 00:06:30  Recorder: Journal 4 of 01-Apr-2026 (MasterID 6, line b6e0854f…): asking Tally by MasterID
+2026-10-10 00:06:30  Recorder: Journal 4 of 01-Apr-2026 (MasterID 6, line b6e0854f…): held at once: waiting: Tally busy; FinCom asks again at 00:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-10 00:06:31  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 1.5s after the stop; its answer is discarded and the next request goes now
+2026-10-10 00:06:31  Recorder: Journal 3 of 01-Apr-2026 (MasterID 5, line 6b9a9dd3…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-10 00:06:32  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+2026-10-10 00:06:32  Recorder: entry fetch of FinCom Spike Co: answered in 151 ms
+2026-10-10 00:06:32  Recorder: Journal 3 of 01-Apr-2026 (MasterID 5, line 6b9a9dd3…): taken: Tally's GUID e6f5560d-ce9e-4149-a7f7-902653186871-00000005, AlterID 5
+2026-10-10 00:06:32  Recorder: Journal 3 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID e6f5560d-ce9e-4149-a7f7-902653186871-00000005 and body
+2026-10-10 00:06:32  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-10 00:06:32  Recorder: Journal 5 of 01-Apr-2026 (MasterID 7, line d91ee185…): asking Tally by MasterID
+2026-10-10 00:06:32  Recorder: entry fetch of FinCom Spike Co: answered in 51 ms
+2026-10-10 00:06:32  Recorder: Journal 5 of 01-Apr-2026 (MasterID 7, line d91ee185…): taken: Tally's GUID e6f5560d-ce9e-4149-a7f7-902653186871-00000007, AlterID 7
+2026-10-10 00:06:32  Recorder: Journal 4 of 01-Apr-2026 (MasterID 6, line b6e0854f…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-10 00:06:33  Recorder: entry fetch of FinCom Spike Co: answered in 62 ms
+2026-10-10 00:06:33  Recorder: Journal 4 of 01-Apr-2026 (MasterID 6, line b6e0854f…): taken: Tally's GUID e6f5560d-ce9e-4149-a7f7-902653186871-00000006, AlterID 6
+2026-10-10 00:06:33  Recorder: Journal 4 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID e6f5560d-ce9e-4149-a7f7-902653186871-00000006 and body
+2026-10-10 00:06:33  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-10 00:09:32  Tally 9000 did not answer in time at 00:09:32 (TDSDeskKeepList, try 1); trying again by itself at 00:09:47
+2026-10-10 00:09:32  Nightly check of FinCom Big Co: not now: Tally did not answer in time earlier; the bridge is waiting to try again
+2026-10-10 00:09:32  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 00:09; trying again by itself at 00:09 (nothing was sent))
+2026-10-10 00:10:00  Recorder: FinCom asks again for 20 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 20 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-10 00:10:00  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-10 00:10:08  Recorder: entry fetch of FinCom Big Co: answered in 51 ms
+2026-10-10 00:10:08  Recorder: Journal 8001 of 01-Apr-2026 (MasterID 40001, line a01b5296…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c41, AlterID 40001
+2026-10-10 00:10:09  Recorder: entry fetch of FinCom Big Co: answered in 49 ms
+2026-10-10 00:10:09  Recorder: Journal 8002 of 01-Apr-2026 (MasterID 40002, line 79d06c69…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c42, AlterID 40002
+2026-10-10 00:10:10  Recorder: Journal 8003 of 01-Apr-2026 (MasterID 40003, line b049cde3…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c43, AlterID 40003
+2026-10-10 00:10:11  Recorder: entry fetch of FinCom Big Co: answered in 50 ms
+2026-10-10 00:10:11  Recorder: Journal 8004 of 01-Apr-2026 (MasterID 40004, line 19a0cc5a…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c44, AlterID 40004
+2026-10-10 00:10:12  Recorder: Journal 8005 of 01-Apr-2026 (MasterID 40005, line fd9d8c23…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c45, AlterID 40005
+2026-10-10 00:10:13  Recorder: Journal 8006 of 01-Apr-2026 (MasterID 40006, line ae9f4ba7…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c46, AlterID 40006
+2026-10-10 00:10:15  Recorder: entry fetch of FinCom Big Co: answered in 61 ms
+2026-10-10 00:10:15  Recorder: Journal 8007 of 01-Apr-2026 (MasterID 40007, line ff1e13e5…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c47, AlterID 40007
+2026-10-10 00:10:16  Recorder: entry fetch of FinCom Big Co: answered in 47 ms
+2026-10-10 00:10:16  Recorder: Journal 8008 of 01-Apr-2026 (MasterID 40008, line d0f746c9…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c48, AlterID 40008
+2026-10-10 00:10:17  Recorder: entry fetch of FinCom Big Co: answered in 48 ms
+2026-10-10 00:10:17  Recorder: Journal 8009 of 01-Apr-2026 (MasterID 40009, line c3d7c9e0…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c49, AlterID 40009
+2026-10-10 00:10:18  Recorder: Journal 8010 of 01-Apr-2026 (MasterID 40010, line 2dab752e…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4a, AlterID 40010
+2026-10-10 00:10:19  Recorder: entry fetch of FinCom Big Co: answered in 55 ms
+2026-10-10 00:10:19  Recorder: Journal 8011 of 01-Apr-2026 (MasterID 40011, line ec68493a…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4b, AlterID 40011
+2026-10-10 00:10:20  Recorder: Journal 8012 of 01-Apr-2026 (MasterID 40012, line 40fdcca1…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4c, AlterID 40012
+2026-10-10 00:10:21  Recorder: entry fetch of FinCom Big Co: answered in 44 ms
+2026-10-10 00:10:21  Recorder: Journal 8013 of 01-Apr-2026 (MasterID 40013, line c532eff3…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4d, AlterID 40013
+2026-10-10 00:10:23  Recorder: Journal 8014 of 01-Apr-2026 (MasterID 40014, line b20af67b…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4e, AlterID 40014
+2026-10-10 00:10:24  Recorder: entry fetch of FinCom Big Co: answered in 59 ms
+2026-10-10 00:10:24  Recorder: Journal 8015 of 01-Apr-2026 (MasterID 40015, line 6bd2de12…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c4f, AlterID 40015
+2026-10-10 00:10:25  Recorder: Journal 8016 of 01-Apr-2026 (MasterID 40016, line 7362edc3…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c50, AlterID 40016
+2026-10-10 00:10:26  Recorder: entry fetch of FinCom Big Co: answered in 68 ms
+2026-10-10 00:10:26  Recorder: Journal 8017 of 01-Apr-2026 (MasterID 40017, line f099561f…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c51, AlterID 40017
+2026-10-10 00:10:27  Recorder: Journal 8018 of 01-Apr-2026 (MasterID 40018, line 9576a278…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c52, AlterID 40018
+2026-10-10 00:10:28  Recorder: Journal 8019 of 01-Apr-2026 (MasterID 40019, line 2406a6c7…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c53, AlterID 40019
+2026-10-10 00:10:29  Recorder: entry fetch of FinCom Big Co: answered in 52 ms
+2026-10-10 00:10:30  Recorder: Journal 8020 of 01-Apr-2026 (MasterID 40020, line f5b60110…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c54, AlterID 40020
+2026-10-10 00:10:31  Recorder: Journal 8021 of 01-Apr-2026 (MasterID 40021, line cc58b4c3…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c55, AlterID 40021
+2026-10-10 00:10:32  Recorder: entry fetch of FinCom Big Co: answered in 46 ms
+2026-10-10 00:10:32  Recorder: Journal 8022 of 01-Apr-2026 (MasterID 40022, line b01b9a76…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c56, AlterID 40022
+2026-10-10 00:10:33  Recorder: Journal 8023 of 01-Apr-2026 (MasterID 40023, line aa1f874f…): taken: Tally's GUID 0dedab28-5153-4ccc-94eb-ee9b7600f450-00009c57, AlterID 40023
+2026-10-10 00:11:30  Recorder: Sales 2 of 02-Apr-2026 (MasterID 4, line 23bed84e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-10 00:11:32  Tally 9000 did not answer in time at 00:11:32 (FinComVoucherObject, try 1); trying again by itself at 00:11:47
+2026-10-10 00:11:32  Recorder: Sales 2 of 02-Apr-2026 (MasterID 4, line 23bed84e…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-10 00:11:32  Recorder: Sales 2 of 02-Apr-2026 (MasterID 4, line 23bed84e…): held: Tally took longer than 2 s for this entry; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-10 00:11:32  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-10 00:11:34  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 1.5s after the stop; its answer is discarded and the next request goes now
+2026-10-10 00:19:30  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-10 00:19:33  Tally 9000 did not answer in time at 00:19:33 (TDSDeskKeepList, try 1); trying again by itself at 00:19:48
+2026-10-10 00:20:00  Recorder: FinCom asks again for 20 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 20 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-10 00:20:00  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-10 00:29:31  Recorder: Journal 5 of 01-Apr-2026 (MasterID 7, line 23b3cf1a…): asking Tally by MasterID
+2026-10-10 00:29:32  Recorder: entry fetch of FinCom Spike Co: answered in 42 ms
+2026-10-10 00:29:32  Recorder: entry fetch of FinCom Spike Co: answered in 40 ms
+2026-10-10 00:29:32  Recorder: FinCom Spike Co: delete of mid 7: not in this Tally (asked by MasterID): proven deleted here
+2026-10-10 00:29:32  Recorder: FinCom Spike Co: delete of mid 7: GUID from the bridge's record: e6f5560d-ce9e-4149-a7f7-902653186871-00000007; the GUID its MasterID makes agrees
