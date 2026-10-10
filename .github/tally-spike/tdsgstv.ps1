@@ -163,7 +163,9 @@ try {
   function TgAllP { $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TgVP</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20261001</SVFROMDATE><SVTODATE>20261001</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="TgVP" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, VOUCHERNUMBER, NARRATION</FETCH><FILTERS>TgPr</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TgPr">$Narration CONTAINS "PROBE"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 60
     $l = @(); try { $d = [xml]($x -replace '&#4;', ''); foreach ($v in $d.ENVELOPE.BODY.DATA.COLLECTION.VOUCHER) { $l += [pscustomobject]@{ guid = Val $v.GUID; vchkey = "$($v.VCHKEY)"; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); vno = Val $v.VOUCHERNUMBER; narr = Val $v.NARRATION } } } catch {}
     return , $l }
-  foreach ($m in 'remoteid-vchkey', 'number-dmy', 'masterid-tag', 'guid-tag', 'inner-ids') {
+  # the forms naming the entry by an id of its own first: run 38066717288's number form altered ANOTHER entry for CN1 (number
+  # 1 on 2-5-2026 is also a receipt's and a debit note's: Tally numbers each type from 1 and did not keep the given numbers)
+  foreach ($m in 'guid-tag', 'masterid-tag', 'inner-ids', 'remoteid-vchkey', 'number-dmy') {
     $pl = TgAllP; $c = @($pl | Where-Object { $_.narr -like 'PROBE alter probe*' } | Sort-Object mid)[0]
     if (-not $c) { $tried += "${m}: no probe"; break }
     $nar = "PROBE alter probe $m"
