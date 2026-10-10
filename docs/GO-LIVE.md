@@ -387,29 +387,37 @@ writes down live's current version of each function: that is the way back.
 - **The live publish script: `app/publish-live.sh`** (written 10-Oct, **not run**). It does nothing unless `LIVE_GO=1`;
   with `DRY=1` as well it does everything except the push. It refuses a checkout with uncommitted changes (and, when
   `LIVE_SOURCE_COMMIT` is set, any commit other than that one), builds `app/dist` (`build.py --react`, `npm run build`),
-  and stops unless dist's `legacy.js` names live's project id and nothing in dist names staging or carries Sentry. Then,
-  like publish-preview.sh, it copies the build into one folder of the live site's repository, commits, and refuses to push
-  if any file outside that folder would change. The repository holds no live project id: the owner writes his settings in
-  **`~/.fincom/live.env`** (or the path in `LIVE_CONFIG`), outside the repository (the script refuses a settings file
-  inside a git work tree that is not ignored there):
+  and stops unless dist's `legacy.js` names live's project id and nothing in dist names staging or carries Sentry. The
+  repository holds no live project id: the owner writes his settings in **`~/.fincom/live.env`** (or the path in
+  `LIVE_CONFIG`), outside the repository (the script refuses a settings file inside a git work tree that is not ignored
+  there, and one that tries to change the site, branch or keep folder):
 
   ```sh
   LIVE_PROJECT_ID=<live's project id>          # 20 letters and digits; the build must name it
-  LIVE_FOLDER=app                              # the folder the build goes into (not the root)
   LIVE_SOURCE_COMMIT=601e57ad                  # optional: the commit staging shows
-  LIVE_URL=https://app.fincom.live/app/        # optional: only printed
   ```
   Run: `cd app && npm ci && LIVE_GO=1 DRY=1 ./publish-live.sh`, read the list of files, then `LIVE_GO=1 ./publish-live.sh`.
-  Tried here only on its refusals (no LIVE_GO, no settings file, staging's id, a settings file inside the repository, a
-  wrong folder, uncommitted changes); a full dry run needs live's id, which this session may not name.
-- **Build from the staging commit.** Build from the commit staging shows: pub-241 601e57ad (main b6d6fcdd; arc-ui
-  840b5331 merged with tax-accuracy c89c58ff). Run `npm ci` first.
-- **Hosting (owner's answer, 10-Oct-2026):** the live site is GitHub Pages of **`caanshulgarg/tds-desk`, branch
-  `main`** (Build 199 is its root `index.html`). `app/publish-live.sh` has that repository and branch written in; the
-  settings file cannot change them (it refuses one that tries). Because the script changes one folder only, the React
-  build lands at `<site>/<folder>/` and Build 199's root page stays until a separate, reviewed one-file commit makes the
-  root forward to the folder, as staging's root forwards to /review/ (**still open**: which folder, and when the root
-  switches; switching it back is the way back). tds-desk was not read from this session.
+- **Hosting and the switch (owner's answers, 10-Oct-2026):** the live site is GitHub Pages of **`caanshulgarg/tds-desk`,
+  branch `main`**, at app.fincom.live; both are written into the script, not settings. **The new app replaces the old one
+  at the root at once**, at the end of the go-live (step 8). What the script does in a fresh clone of tds-desk:
+  1. **keeps the old app**, the first time only: copies the root `index.html` (Build 199 is that one page) to
+     **`retired/build-199/index.html`**; the files the old page loads stay at the root untouched;
+  2. copies the build on top of the root (`index.html`, `legacy.js`, `assets/…`), one commit, and pushes to main.
+  It never deletes a file. It refuses to push if a file would be deleted, if anything other than the build's files and
+  the kept page would change, or if the build would overwrite an existing file other than `index.html` / `legacy.js`
+  with different content (so `CNAME` and the bridge downloads under `assets/connector` cannot be touched).
+- **Putting the old app back (about a minute)**, in a clone of tds-desk on branch main:
+
+  ```sh
+  cp retired/build-199/index.html index.html && git commit -am "Put back Build 199" && git push origin main
+  ```
+  GitHub Pages shows Build 199 again at app.fincom.live within about a minute (a browser may need a reload). The new
+  build's other files stay on the site but are not used. (Or `git revert` the "Live: React FinCom" commit and push.)
+  Going forward again: run the script again, or `git revert` the put-back commit.
+- Tried on a throwaway local copy of a site (not tds-desk, which was not accessed): the DRY run, the publish, a second
+  publish (no second keep), the refusal to overwrite `assets/connector/latest.json`, and the put-back step, which
+  restored the old page. Also its refusals (no LIVE_GO, no settings file, staging's id, settings inside the repository or
+  changing the site, uncommitted changes). A full run needs live's id, which this session may not name.
 - **Changes the live build needs:** vite.config.js ships `assets/bridge-go` only for a test build with
   `FINCOM_SHIP_BRIDGE=1`, and build.py's live form still hands out the old PowerShell setup (`bridge-setup`). For live
   users to get 2.4.1, both need a small reviewed change. (A live build has no Sentry; that is intended.)
@@ -445,7 +453,7 @@ Who: O = owner, C = Claude. The times are estimates; the rehearsal replaces them
 | 5 | O sets the Vault secret `fincom_project_url` (1.1.1); O runs the dry runs again (1.1.2). Migrations in the order of 1.1 (13, 16 and schema.sql as go-live copies), each md5-checked; 48 and 50 by O in the SQL editor; functions read back by md5(prosrc) as on staging | C (+O) | 2½–3½ h | each file: md5 equal, functions matched; the checks of 1.1.2 before and after 13/23/27/32/37 agree with the dry runs | stop; restore from step 2 (or PITR to before step 5) |
 | 6 | Vault and settings: `gst_cron_key` (made by schema.sql), the GSP items, Auth URLs, platform keys | O | 15 m | cron jobs listed; `tally-work` runs without an error in `cron.job_run_details` | — |
 | 7 | Function secrets (1.3), then deploy the 7 functions; tally-ingest checked byte for byte | C | 30 m | CORS check from `server/_shared/README.md` against live; versions noted | redeploy the versions noted in step 3 |
-| 8 | Build and publish the live app with `app/publish-live.sh` (1.4: DRY first; it checks legacy.js names live) | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | revert the tds-desk commit (Build 199 comes back) |
+| 8 | Build and publish the live app with `app/publish-live.sh` (1.4: DRY first; it checks legacy.js names live) | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | put the old app back (1.4: `cp retired/build-199/index.html index.html`, commit, push; about a minute) |
 | 9 | Put the 2.4.1 files and latest.json on live; pair the first computer | C, O | 20 m | the setup's SHA-256 matches; the Tally page shows 2.4.1 | the old setup is still in tds-desk's history |
 | 10 | Smoke checks: sign in (owner and one staff), open a client, upload a bill, Look up, **Post to Tally into a test company**, bridge beat within 1 minute, `tally-recorder-drain` cron runs | O, C | 30 m | each one passes | step 8's way back; the data stays |
 | 11 | **Put the hook back**; tell staff to start | O | 5 m | C cannot reach live | — |
@@ -516,13 +524,13 @@ the backup from step 2 is a full way back.
    runs its own tally-ingest; 1.14 computers keep syncing, so the dry runs are repeated just before each file.
 8. **The bridge release table.** On live, `tally_bridge_releases` and the allow-list are empty. Staging runs with "any
    computer, no pilot". The owner should check whether live needs the same release rows before 2.4.1 is allowed.
-9. **The live build ships no Go bridge** (1.4). `app/publish-live.sh` now exists (not run). The bridge files and the
-   root page still need a small reviewed change before the go-live.
+9. **The live build ships no Go bridge** (1.4). `app/publish-live.sh` now exists (not run) and publishes to the root,
+   keeping the old app. The bridge files still need a small reviewed change before the go-live.
 10. **signup's source is not in the repository.** Live keeps its own copy, untested against the new schema.
 11. **What cannot be undone without a restore:** the data changes in item 3, the privileges revoked by 4, 58, 61 and
     70, and pg_cron jobs that have already called out.
 12. **The window's length depends on live's data size.** 23, 32, 37 and the RESTRICT swaps in 45 lock tables. The
     rehearsal measures how long.
 13. **Owner's answers (10-Oct-2026):** live site = GitHub Pages of `caanshulgarg/tds-desk`, branch main; go-live copies
-    approved; 31 skipped, 61 run; live-members-fix unknown, so the check in 1.1.3. **Still open:** which folder the React
-    build goes into, and when the root page switches to it.
+    approved; 31 skipped, 61 run; live-members-fix unknown, so the check in 1.1.3. the new app replaces the old one at
+    the root at once, the old one kept in `retired/build-199/` (1.4).
