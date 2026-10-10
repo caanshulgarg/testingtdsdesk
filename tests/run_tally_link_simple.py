@@ -243,10 +243,10 @@ def main():
               sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'QQ ELSEWHERE'}]}, {port: 9001, skipped: true, ok: false, companies: []}]}); S.tallyMore = {page: true}; render(); }""")
         pg.wait_for_timeout(700)
         ok("Use this Tally" in txt("#app [data-bridge-more]") and "Link to a client" not in txt("#app"), "9. Details: the Tallys with Use this Tally; no 'Link to a client…'")
-        # no bridge on this computer again (it would follow the company open in Tally to another client)
-        E("() => { Bridge.on = () => false; Bridge.up = () => false; S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
 
-        # ---- 10. Add client lands on the card
+        # ---- 10. Add client lands on the card (a fresh page: nothing of this computer's bridge stubs left over)
+        pg.close(); pg, cid = open_page(1440, 900); PAGE[0] = pg
+        scene(SEEN)
         E("() => doAct('addCo')"); pg.wait_for_timeout(500)
         pg.fill("#ncName", "ZZ New Client"); pg.click('#app button:has-text("Add and open")'); pg.wait_for_timeout(1200)
         ok(E("[S.view, S.tab, CO() && CO().name]") == ["company", "cotally", "ZZ New Client"] and E("document.querySelector('#app [data-tally-link]') && document.querySelector('#app [data-tally-link]').getAttribute('data-tally-link')") == "unlinked",
