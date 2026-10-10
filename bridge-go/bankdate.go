@@ -105,10 +105,15 @@ type bankCo struct {
 	Night          string // the night (its window's start, yyyymmdd) the nightly list went
 	ReadAt         string // release-240: when Tally's list was last read (RFC3339); the nightly route's 3-day notice
 	Cands          []bankCand
-	// this run only
+	// 2.4.1 (the coordinator's item from the real-Tally dry run 37938029402): kept in bankdate.json WITH Seen (one write),
+	// no longer this run only: a restart before the next light check forgot the add-on's lines and read again (and sent
+	// again) the entries they explained
 	addonN int              // the add-on's voucher lines read since Seen moved
 	addon  map[string]int64 // MasterID -> the AlterID its add-on line's read took (0: not read yet)
 	listed map[string]bool  // MasterIDs the last list named (their late add-on lines are not counted again)
+	// 2.4.1 (the real-Tally gate 37981697177, upg u2): the saved state has no add-on line count (a bridge older than 2.4.1
+	// wrote it): its counter is not trusted against this run's lines; Tally's counter of now is taken (bankFromOlder)
+	older bool
 }
 
 var bank = struct {
@@ -140,6 +145,22 @@ func bankFresh() {
 		}
 		st := &bankCo{Company: str(e["company"]), CGUID: str(e["cguid"]), Seen: toI64(e["seen"]), Route: or(str(e["route"]), "small"), Why: str(e["why"]),
 			ListMs: toI64(e["listMs"]), Night: str(e["night"]), ReadAt: str(e["readAt"]), addon: map[string]int64{}, listed: map[string]bool{}}
+		if _, has := e["addonN"]; !has || e["older"] == true {
+			st.older = true // re-review M1: kept on disk ("older": true) until bankFromOlder ran for the company
+		}
+		if n := toI64(e["addonN"]); n > 0 && n < 1<<31 {
+			st.addonN = int(n)
+		}
+		for mid, a := range obj(e["addon"]) {
+			if onlyDigits(mid) == mid && mid != "" && len(st.addon) < 20000 {
+				st.addon[mid] = toI64(a)
+			}
+		}
+		for _, mid := range arr(e["listed"]) {
+			if m := str(mid); m != "" && onlyDigits(m) == m && len(st.listed) < 20000 {
+				st.listed[m] = true
+			}
+		}
 		for _, x := range arr(e["cands"]) {
 			c := obj(x)
 			st.Cands = append(st.Cands, bankCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), Alter: toI64(c["alter"]), Asks: toInt(c["asks"]), Night: c["night"] == true, Next: str(c["next"])})
@@ -161,7 +182,25 @@ func bankSave() {
 		for _, c := range st.Cands {
 			l = append(l, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "alter": c.Alter, "asks": c.Asks, "night": c.Night, "next": c.Next})
 		}
-		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l}
+		ad, ls := M{}, []any{}
+		for mid, a := range st.addon {
+			ad[mid] = a
+		}
+		for mid := range st.listed {
+			ls = append(ls, mid)
+		}
+		sort.Slice(ls, func(i, j int) bool { return str(ls[i]) < str(ls[j]) })
+		e := M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l,
+			"addonN": st.addonN, "addon": ad, "listed": ls}
+		if st.older {
+			// re-review M1: the older bridge's mark stays until the company's own first check took the counter
+			// (bankFromOlder); no line count is written for it, so a restart in between still finds the mark
+			delete(e, "addonN")
+			delete(e, "addon")
+			delete(e, "listed")
+			e["older"] = true
+		}
+		cs[k] = e
 	}
 	a := M{}
 	for k, e := range bank.alerts {
@@ -211,6 +250,7 @@ func bankNoteAddon(c *change) {
 			st.addon[mid] = 0
 		}
 	}
+	bankSave() // 2.4.1: the count kept with the counter (a restart must not forget it)
 }
 
 // the add-on's line took Tally's entry at this AlterID
@@ -227,6 +267,7 @@ func bankNoteTaken(c *change) {
 	bankFresh()
 	if st := bank.cos[bankKey(c.company, c.companyGuid)]; st != nil && a > st.addon[mid] && len(st.addon) < 20000 {
 		st.addon[mid] = a
+		bankSave() // 2.4.1: kept with the counter
 	}
 }
 
@@ -304,6 +345,28 @@ func bankState(company, guid string, v, sp int64) (*bankCo, bool) {
 	return st, true
 }
 
+// under bank.mu: 2.4.1 (the real-Tally gate 37981697177, upg from 2.4.0, u2): a company whose saved state has no add-on line
+// count (2.4.0 or older kept it in memory only) takes Tally's counter of now as the route's starting point, as 2.4.0 did
+// at its own first check (bankState), instead of counting the whole move since that bridge's last processed counter as
+// entries with no add-on line (which read again and sent again the entries its add-on lines had sent). A bank date set in
+// that stretch is not listed by this route; the nightly self-check (selfcheck.go, its own mark) finds it. Said once
+func bankFromOlder(st *bankCo, v, sp int64) bool {
+	if !st.older {
+		return false
+	}
+	st.older = false
+	st.Seen, st.addonN, st.addon, st.listed = v, 0, map[string]int64{}, map[string]bool{}
+	if st.Seen < sp {
+		st.Seen = sp
+	}
+	writeLog(fmt.Sprintf("Bank dates: %s: state from an older bridge, counter taken as the starting point (ALTVCHID=%d)", st.Company, st.Seen))
+	if !selfCheckOn() {
+		// re-review L1: nothing else finds a bank date set in that stretch
+		writeLog("Bank dates: " + st.Company + ": the nightly self-check is off; a bank date set during the upgrade will need that day's Day Book.")
+	}
+	return true
+}
+
 // under bank.mu: whether the move from Seen to v is explained by the add-on's lines (and FinCom's posting windows); when
 // it is, Seen moves on
 func bankExplained(st *bankCo, v int64, ws [][2]int64) bool {
@@ -342,7 +405,7 @@ func bankAfterLightCheck(company string, port int) {
 	if made {
 		writeLog(fmt.Sprintf("Bank dates: %s: following Tally's voucher counter from ALTVCHID=%d (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)", company, st.Seen))
 	}
-	if made || bankExplained(st, v, ws) {
+	if made || bankFromOlder(st, v, sp) || bankExplained(st, v, ws) {
 		bankSave()
 		bank.mu.Unlock()
 		return
@@ -520,6 +583,10 @@ func bankNightTurn() {
 		bank.mu.Unlock()
 		cws := bankWindows(c.Company, c.CGUID)
 		bank.mu.Lock()
+		if bankFromOlder(c, cv, csp) {
+			bankSave()
+			continue
+		}
 		if bankExplained(c, cv, cws) {
 			c.Night = night // nothing tonight
 			bankSave()

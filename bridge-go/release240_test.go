@@ -13,13 +13,13 @@ import (
 // item with the owner's words where they are recorded; and the cloud's 63 and 67 carrying ONE combined
 // tally_recorder_line (whichever runs last leaves the same function)
 func TestRelease240VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.0" {
+	if BridgeVersion != "2.4.1" { // 2.4.1 (release241_test.go): this release's decisions kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range []string{
-		"allowed for 2.4.0 by the owner's decision of 2026-10-07",
+		"as for 2.4.0: the owner's decision of 2026-10-07", // 2.4.1: kept as history (release241_test.go)
 		`"Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C. One entry per request, read only, nothing else added. Work out the rate as tax divided by assessable amount where Tally stores 0, and mark it as worked out."`,
 		"FinComVoucherByNumber's fetch adds the two items (its shape 111afcb61eb9 -> 2167477221dc",
 		"FinComVoucherObject is unchanged byte for byte (ce0e72f74e72",

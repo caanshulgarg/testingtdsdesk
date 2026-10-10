@@ -941,7 +941,13 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		return "", err
 	}
 	if err := datedRefused(tc, x); err != nil {
-		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: it carries a period and reading old entries is off (ReadDays)", port, tallyRequestID(x)))
+		// 2.4.1 (item 6): FinComVoucherByNumber is refused by its own rule (one day, from the starting day to today, within
+		// the last 3 days or a line just asked), whatever ReadDays says: the log names that rule
+		why := "it carries a period and reading old entries is off (ReadDays)"
+		if tallyRequestID(x) == vchByNumberID {
+			why = or(voucherByNumberWhy(x), "it is not exactly as the bridge builds it")
+		}
+		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: %s", port, tallyRequestID(x), why))
 		return "", err
 	}
 	// plan items 10-11: while reading is stopped on this computer only what a posting needs goes (selfwatch.go)

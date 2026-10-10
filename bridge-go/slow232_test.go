@@ -374,7 +374,7 @@ func TestSlow232MarkSurvivesRestartLiftsOnVersion(t *testing.T) {
 	}
 	// a newer bridge: the mark lifts by itself, the entry is asked again (now answered in time)
 	old := BridgeVersion
-	BridgeVersion = "2.4.1" // a newer version than this one
+	BridgeVersion = "2.4.2" // a newer version than this one
 	t.Cleanup(func() { BridgeVersion = old })
 	liveResetState()
 	slowForget()

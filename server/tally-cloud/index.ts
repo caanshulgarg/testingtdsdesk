@@ -1466,6 +1466,13 @@ function cleanMasterLine(x: any, me: { id: string }): { line?: Record<string, un
     pc: s(x?.pc, 60), user: s(x?.user, 60), company_guid: s(x?.company_guid, 100), bridge: me.id } };
 }
 const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024, QUEUE_OVER = 50;
+// 2.4.1: an ISO time the bridge sent (not more than 5 minutes ahead of now), else ""
+function bridgeTime(v: unknown): string {
+  const t = typeof v === "string" ? v.trim().slice(0, 40) : "";
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d{1,9})?)?(Z|[+-]\d\d:\d\d)$/i.test(t)) return "";
+  const ms = Date.parse(t);
+  return isNaN(ms) || ms > Date.now() + 300000 ? "" : new Date(ms).toISOString();
+}
 const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
 function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
   const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
@@ -1506,6 +1513,9 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // a deliberate resend of a ":resolved" line): kept as sent (in the payload too); the database answers a repeat of the
   // same line id and marker "already have", never storing it twice. An older bridge sends no key: none is added
   if (typeof x?.again === "string") line.again = s(x.again, 20);
+  // 2.4.1: the bridge's own clock when it read the line (received_at) kept in the payload (tally-ingest dropped it before)
+  const ra = bridgeTime(x?.received_at);
+  if (ra) line.received_at = ra;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };

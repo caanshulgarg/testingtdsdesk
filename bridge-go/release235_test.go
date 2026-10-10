@@ -11,7 +11,7 @@ import (
 // changed; TestAllowListUnchanged keeps the table and its hash as in 2.3.4), and the notes and test sheet with the owner's
 // words for what 2.3.5 carries (the Tally pages, Clear notifications, the three held-line fixes and their conditions)
 func TestRelease235VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.0" {
+	if BridgeVersion != "2.4.1" { // 2.4.1 (release241_test.go): this release's decisions kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

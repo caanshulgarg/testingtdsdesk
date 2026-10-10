@@ -272,7 +272,7 @@ func testFetchOf(request string) string {
 // --- 2.3.4: the version, the allow-list's decision line naming FinComVoucherObject with the owner's words of 08-Oct-2026,
 // the notes and the test sheet
 func TestFast234VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.0" {
+	if BridgeVersion != "2.4.1" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

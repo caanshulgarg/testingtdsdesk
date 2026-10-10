@@ -64,28 +64,39 @@ func liveNumberAsked(company, date, typ, no string) bool {
 	return ok && time.Since(at) <= 2*time.Minute
 }
 
-func voucherByNumberExact(x string) bool {
+func voucherByNumberExact(x string) bool { return voucherByNumberWhy(x) == "" }
+
+// 2.4.1 (item 6): why the guard refuses FinComVoucherByNumber, in the log's words ("" : it goes)
+func voucherByNumberWhy(x string) string {
 	if tallyRequestID(x) != vchByNumberID {
-		return false
+		return "it is not the entry request by number"
 	}
 	a, z := requestFrom(x)
 	if len(a) != 8 || a != z {
-		return false
+		return "it is not for one day"
 	}
 	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
 	no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND \$VoucherTypeName = &#34;`, x, 1))
 	typ := pinQuoted(x, "$VoucherTypeName")
 	if b := voucherByNumberRequest(co, a, typ, no); b == "" || x != b {
-		return false
+		return "it is not exactly as the bridge builds it"
 	}
 	if _, ok := startPointOf(co); !ok {
-		return false
+		return "the company's starting point is not recorded"
 	}
 	day, today := startPointDay(co), nowFn().Format("20060102")
-	if day == "" || a < day || a > today {
-		return false
+	switch {
+	case day == "":
+		return "the company's starting day is not known"
+	case a < day:
+		return "the date is before the company's starting day (" + liveDay(day) + ")"
+	case a > today:
+		return "the date is after today"
 	}
-	return a >= nowFn().AddDate(0, 0, -3).Format("20060102") || liveNumberAsked(co, a, typ, no)
+	if a >= nowFn().AddDate(0, 0, -3).Format("20060102") || liveNumberAsked(co, a, typ, no) {
+		return ""
+	}
+	return "older than 3 days and not just asked"
 }
 
 // the day (yyyymmdd) the company's starting point was recorded on ("" : none)
@@ -232,6 +243,18 @@ func liveVoucherWrong(x, who string, w liveWant) (string, string) {
 	}
 	return "", ""
 }
+
+// 2.4.1 (item 5): a MasterID answer the line is asked by its number for (once, on its first fetch): an older entry (below
+// the starting point), no entry with that MasterID, or an entry of another type, date or number than the line's
+// Review M1 of next-241: only an older entry or no entry; another type, date or number keeps 2.4.0's hold (a renumbering
+// gives the MasterID another number: Sales 6 with MasterID 26500 was taken as MasterID 26501)
+func liveFallbackWhy(why string) bool {
+	return strings.Contains(why, "not a change after the starting point") || strings.HasPrefix(why, "Tally gave no voucher with MasterID ")
+}
+
+// 2.4.1: the words for a line whose MasterID is an older entry in this Tally, once it was asked by its number too (the
+// owner's 09-Oct-2026: "Needs you" showed the misleading "starting point" words)
+const liveOlderWhy = "the voucher with that MasterID in this Tally is an older entry, not this save"
 
 // the hex digits s are exactly the number n
 func guidHexIs(s string, n int64) bool {

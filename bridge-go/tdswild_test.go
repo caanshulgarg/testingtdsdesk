@@ -112,7 +112,7 @@ func TestTDSWildAllowListShapes(t *testing.T) {
 	// draft), names the change and quotes the owner's approval of 2026-10-07 (option A); 2.3.1's decisions kept as history
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.4.0 by the owner's decision of 2026-10-07 (option A", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.* and ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*",
+	for _, w := range []string{"as for 2.4.0: the owner's decision of 2026-10-07 (option A" /* 2.4.1: kept as history */, "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.* and ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*",
 		"one entry per request, read only, nothing else added",
 		`the owner's words: "Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C. One entry per request, read only, nothing else added. Work out the rate as tax divided by assessable amount where Tally stores 0, and mark it as worked out."`,
 		"as for 2.3.1: the owner's decision of 2026-10-06"} {
