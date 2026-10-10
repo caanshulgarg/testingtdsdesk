@@ -750,6 +750,8 @@ function istParts(v){
 function p2ist(n){ return String(n).padStart(2, "0"); }
 // the day in India of a moment, yyyy-mm-dd ("" when none): for "today" and "yesterday" by Indian time
 function istDay(v){ const p = istParts(v); return p ? p.y + "-" + p2ist(p.mo) + "-" + p2ist(p.d) : ""; }
+// today in India, yyyymmdd: what the default periods count from (smart moves round 1), whatever this computer's clock zone
+function istToday(){ return istDay(Date.now()).replace(/-/g, ""); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -821,7 +823,10 @@ function plainMessage(s){
 }
 // the plain words alone, for a message built into a sentence
 function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$/, "") : String(s == null ? "" : s); }
-function toast(msg){
+// toast(msg, {actions: [{label, run}]}): the message, and after it a button for each action ("Stay here", "Undo",
+// "Review them →"; smart moves round 1, 09-Oct-2026). The message keeps its own words; the buttons sit beside it in
+// their own span (data-toast-acts), so a check of the message's words is not changed by them
+function toast(msg, o){
   const t = document.getElementById("toast"); if (!t) return;
   let s = msg == null ? "" : String(msg);
   toastWire(t);
@@ -833,10 +838,21 @@ function toast(msg){
     more.addEventListener("click", ev => { ev.stopPropagation(); clearTimeout(toastTimer); const d = document.createElement("div"); d.className = "toast-raw"; d.textContent = plain.details; more.replaceWith(d); });
     t.appendChild(more);
   } else t.textContent = s;
+  const acts = ((o && o.actions) || []).filter(a => a && a.label && typeof a.run === "function");
+  if (acts.length){
+    const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
+    acts.forEach(a => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = a.label; b.dataset.toastAct = a.label;
+      b.addEventListener("click", ev => { ev.stopPropagation(); toastHide(); try { a.run(); } catch (e){ console.error(e); } });
+      box.appendChild(b);
+    });
+    t.appendChild(box);
+  }
   t.dataset.tone = plain ? "stop" : toastTone(s);
   clearTimeout(toastTimer);
   t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
-  toastTimer = setTimeout(toastHide, Math.min(9000, 4000 + s.length * 35));
+  // a message with buttons stays long enough to reach them
+  toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
 }
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
@@ -3804,6 +3820,8 @@ async function enqueueFiles(files, target){
     j.donePromise = new Promise(res => { j.markDone = res; });
     if (j.status === "failed") j.markDone();
     j.id = uid("j"); j.target = target; j.status = j.status || "waiting";
+    // the page the upload started on: the page moves to Review at the end only if it is still that page (smart moves)
+    j.from = typeof Smart === "object" ? Smart.here() : "";
     j.force = j.force || null;
     j.name = j.file.name + (j.page ? (Array.isArray(j.page) ? " · pages " + j.page[0] + "\u2013" + j.page[j.page.length - 1] : " · page " + j.page) : "");
     S.jobs.push(j);
@@ -3848,20 +3866,39 @@ function afterBatch(){
     lines.forEach(l => { const c = l.cid || S.coId; (by[c] = by[c] || []).push(l); });
     Object.keys(by).forEach(c => { S.lastUpload[c] = {at: Date.now(), lines: by[c], text: uploadSummary(by[c])}; });
   }
-  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
-  S.advanceAfterRead = false;
-  const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial", "notread"].includes(j.status)), held = mine.filter(j => j.status === "held");
-  mine.forEach(j => { j.advanced = true; });
-  if (!mine.length) return;
-  const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
-  if (!fresh.length){
-    // only duplicates held: the Duplicates list opens on the copy, with its original beside it
-    if (held.length){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; }
+  // smart moves round 1 (2): each finished file is counted once, here, whichever page is open (it was counted again at
+  // the next upload when this batch ended on another page: "1 bill read" for 3)
+  const ended = S.jobs.filter(j => !j.advanced && ["done", "partial", "held", "duplicate", "failed", "unsorted", "notread"].includes(j.status));
+  ended.forEach(j => { j.advanced = true; });
+  if (!ended.length){ if (lines.length) render(); return; }
+  const cidOf = j => j.cid || (j.target && j.target !== "auto" ? j.target : "");
+  const fresh = ended.filter(j => ["done", "partial", "notread"].includes(j.status) && cidOf(j) && j.entryId);
+  // the client with the most bills read (the open one first)
+  const per = {}; fresh.forEach(j => { const c = cidOf(j); per[c] = (per[c] || 0) + 1; });
+  const cid = Object.keys(per).sort((a, b) => (per[b] - per[a]) || ((b === S.coId) - (a === S.coId)))[0] || "";
+  // the page the upload started on (an older upload, or one made from a test, has none: the purchase pages count)
+  const from = (ended.find(j => j.from) || {}).from || "";
+  const onBills = S.view === "company" && (S.step === "collect" || ["invoices", "export", "done"].includes(S.tab));
+  if (!cid){
+    // nothing to review: only duplicates held (their list opens on the copy, with its original beside it), or files not read
+    const held = ended.filter(j => j.status === "held" && j.cid === S.coId);
+    const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
+    if (held.length && (from ? from === Smart.here() : onBills) && !Smart.held()){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; S.step = null; }
     toast(said + "."); render(); return;
   }
-  goStep("review", "bills");
-  toast(said + ". Review " + (fresh.length === 1 ? "it" : "them") + " below.");
+  const n = per[cid], one = n === 1 ? fresh.find(j => cidOf(j) === cid) : null, co = S.companies[cid] || {name: ""};
+  const e1 = one && S.data[cid] && S.data[cid].entries[one.entryId];
+  const where = "#/c/" + encodeURIComponent(cid) + (one ? "/bill/" + encodeURIComponent(one.entryId) : "/purchase/review");
+  const rest = (S.lastUpload && S.lastUpload[cid] && S.lastUpload[cid].lines) || [];
+  const more = uploadSummary(rest.filter(l => l.kind !== "ok"));
+  const bills = n + (n === 1 ? " bill" : " bills");
+  Smart.go(where, one && e1 ? "Moved to Review: " + (e1.x.vendorName || e1.fileName || "the bill") + (e1.x.invoiceNo ? " " + e1.x.invoiceNo : "") + " is open" + (more ? " (" + more + ")" : "")
+    : "Moved to Review (" + bills + (more ? "; " + more : "") + ")", {
+    kind: "upload", from: from || (onBills && S.coId === cid ? Smart.here() : "#none"),
+    label: one ? "Open it →" : "Review them →",
+    idle: bills + " read for " + co.name + (more ? " (" + more + ")" : "")
+  });
+  if (!Smart.last.moved) render();
 }
 let readTick = null;
 function keepBusyCardAlive(){
@@ -4060,7 +4097,8 @@ function finishNewEntry(e, cid, j){
     j.status = e.status === "duplicate" ? "held" : "done";
     j.msg = e.status === "duplicate" ? dup.msg : (j.target === "auto" ? "Filed under " + CO(cid).name + (e.routedBy ? " by " + e.routedBy : "") : "") ;
   }
-  if (cid === S.coId && S.view === "company" && (S.batchSize === 1 || !S.selected)){
+  // (not while the person is typing on a bill: the bill on screen stays the one being typed in)
+  if (cid === S.coId && S.view === "company" && (S.batchSize === 1 || !S.selected) && !(typeof Smart === "object" && Smart.held())){
     S.filter = e.status; S.selected = e.id;
   }
 }
@@ -4255,7 +4293,8 @@ async function assignInbox(id, cid){
 /* ------------------------------------------------------------------ */
 /* Approve / undo / reject (current client)                            */
 /* ------------------------------------------------------------------ */
-function approve(e){
+// o.bulk: one of many approved from the review table (its own toast says how many; the page does not move per bill)
+function approve(e, o){
   if (notReadYet(e)){ toast(e.fileName + " is not read yet (" + e.notRead.reason.replace(/\.$/, "") + "). Press Retry, or type in the supplier, date and total, before approving."); return; }
   const cid = S.coId, c = compute(e, cid);
   if (c.missing.length){ toast("Fill in " + c.missing.join(", ") + " before approving."); return; }
@@ -4289,10 +4328,24 @@ function approve(e){
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
-  toast("Approved. " + (c.skip ? "TDS not booked (" + (SKIP_REASONS[c.skip.reason] || c.skip.reason) + "); would have been " + money0(c.tdsWould) + "." : c.tds ? "TDS " + money0(c.tds) + " drafted for Tally." : "No TDS on this invoice."));
-  const next = Object.values(D(cid).entries).filter(o => o.status === "draft" && !S.reading[o.id]).sort(byDate)[0];
-  if (next) S.selected = next.id;
-  refreshStats(cid); render();
+  const said = "Approved. " + (c.skip ? "TDS not booked (" + (SKIP_REASONS[c.skip.reason] || c.skip.reason) + "); would have been " + money0(c.tdsWould) + "." : c.tds ? "TDS " + money0(c.tds) + " drafted for Tally." : "No TDS on this invoice.");
+  refreshStats(cid);
+  if (o && o.bulk){ render(); return; }
+  billMoveOn(e, said, "draft", {label: "Undo", run: () => { if (e.status === "approved" && !e.exportedAt){ undoApproval(e); S.selected = e.id; render(); } }});
+}
+// smart moves round 1 (5): after a bill is approved, set aside (No entry needed), kept as a separate bill or moved back,
+// the next bill of the list it was in opens: "Approved · Next: MASTERCAD INV-4412 (4 left) · Undo". The page does not
+// move while a box has focus or the switch is off: the same words, with "Next →". At the end of To review, the bill
+// stays and the list says "All N bills reviewed · Post N to Tally →" (Invoices.jsx, QueueDone)
+function billMoveOn(e, said, list, undo){
+  const cid = S.coId;
+  const left = Object.values(D(cid).entries).filter(x => x.status === list && x.id !== e.id && !S.reading[x.id]).sort(list === "draft" ? byDate : (a, b) => byDate(b, a));
+  const next = left[0];
+  if (!next){ toast(said, {actions: undo ? [undo] : []}); render(); return; }
+  const name = [next.x.vendorName || next.fileName || "the next bill", next.x.invoiceNo].filter(Boolean).join(" ");
+  Smart.go(() => { S.filter = list; S.selected = next.id; S.reviewTable = S.reviewTable && S.drawerOpen && list === "draft"; },
+    said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
+  render();
 }
 function unapply(e, cid){
   const a = e.applied, p = a && D(cid).parties[a.partyId];
@@ -9641,8 +9694,10 @@ function printView(title, html){
 }
 
 
+// the quick periods count from today in India (smart moves round 1, the owner's choice of 09-Oct-2026: MIS opens on this
+// financial year to date); when the books end earlier, the MIS page says so in one line with Read from Tally
 function misRangeQuick(k, b){
-  const t = Audit.today(), last = String((b.meta || {}).to || t), end = last < t ? last : t;
+  const t = typeof istToday === "function" ? istToday() : Audit.today(), end = t;
   const d = new Date(Audit.iso(end) + "T00:00:00"), ymd = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0");
   if (k === "month") return {from: end.slice(0, 6) + "01", to: end};
   if (k === "lastmonth"){ const pm = new Date(d.getFullYear(), d.getMonth(), 0); return {from: ymd(pm).slice(0, 6) + "01", to: ymd(pm)}; }
@@ -9786,7 +9841,7 @@ function gstParts(b){
 }
 // one part of the GST tab, as the old pages draw it
 function gstPartGo(id){ S.gstPart = id; S.gstView = "return"; S.gstSub = ""; render(); }
-function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
+function gstSetYm(ym){ S.gstYm = ym; Smart.keep("gst", {ym}); S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 
 
@@ -13539,8 +13594,9 @@ function fsMapSet(l, v){ const c = FS.cfg(S.books); c.map = Object.assign({}, c.
 function fsUnmap(l){ const c = FS.cfg(S.books); delete c.map[l]; fsRedo(c); }
 // MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
 // marked MSME (the run is worked out again), a month of the budget
-function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
-function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); }
+// the period chosen is kept for the client in this browser (smart moves round 1)
+function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); Smart.keep("mis", S.misRange); render(); }
+function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; Smart.keep("mis", S.misRange); render(); }
 function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
 function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); render(); }
 function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); }
@@ -17494,7 +17550,9 @@ async function openCompany(cid){
   closeSwitcher();
   const changed = S.coId !== cid;
   S.coId = cid; S.view = "company"; S.arm = null;
-  if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null; }
+  if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null;
+    // the periods of the books pages are the client's own (smart moves round 1): chosen again for this client when shown
+    S.tdsFy = ""; S.tdsQ = ""; S.tdsView = ""; S.tdsPickForm = ""; S.gstYm = ""; S.gstView = ""; S.gstPart = ""; S.gstSub = ""; S.misRange = null; S.rptFy = ""; }
   lsSet("tdsdesk-test:last", cid);
   const rec = recentIds().filter(x => x !== cid); rec.unshift(cid); lsSet("tdsdesk-test:recent", JSON.stringify(rec.slice(0, 10)));
   if (!D(cid).loaded){
@@ -17910,23 +17968,23 @@ const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
 function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
-  S.tdsFy = fy;
+  S.tdsFy = fy; Smart.keep("tds", {fy, q: q || ""});
   if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
   else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
 }
-function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "year"; render(); }
+function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsView === "return") S.tdsView = "year"; render(); }
 // the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
 // return; either left at "every" shows the year's grid of forms and quarters
 function tdsPick(fy, q, form){
   const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
-  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || "";
+  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; Smart.keep("tds", {fy, q: q || ""});
   if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
   else S.tdsView = "year";
   render();
 }
 // the GST pages (redesign of 09-Oct-2026): the year's grid of returns and months, or one return and period with its tabs
-function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; if (S.books) S.books.reco = null; }
+function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; Smart.keep("gst", {ym}); if (S.books) S.books.reco = null; }
   S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
   S.gstPart = part; S.gstView = "return"; S.gstSub = ""; render(); window.scrollTo(0, 0); }
 function gstViewGo(v){ S.gstView = v; render(); }
@@ -17935,7 +17993,8 @@ function gstSubGo(sub){ S.gstSub = sub; render(); }
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
 function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
-function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); if (e.status === "approved") toast("Approved."); render(); } }
+// one row of the review table: the table stays (smart moves 5: with Undo)
+function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e, {bulk: true}); refreshStats(S.coId); if (e.status === "approved") toast("Approved.", {actions: [{label: "Undo", run: () => { if (e.status === "approved" && !e.exportedAt){ undoApproval(e); S.reviewTable = true; S.selected = null; render(); } }}]}); render(); } }
 function revNature(id, v){ const e = D().entries[id]; if (e){ e.natureId = v; e.confirmType = false; Store.saveEntry(S.coId, e); render(); } }
 function revTds(id, on){
   const e = D().entries[id]; if (!e) return;
@@ -18118,9 +18177,15 @@ function doAct(act, t){
     case "revApprove": case "revApproveAll": {
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; return; } approve(r.e); ok++; });
+      const heldIds = [];
+      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; });
       S.revSel = new Set();
-      toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".");
+      // smart moves round 1 (8): "5 approved · Post 5 to Tally → · Show the 2 that need details" (buttons; nothing is posted by itself)
+      const waiting = Object.values(D().entries).filter(x => x.status === "approved" && !x.exportedAt).length;
+      toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".", {actions: [
+        ok && waiting ? {label: "Post " + waiting + " to Tally →", run: () => goStep("post", "bills")} : null,
+        held ? {label: "Show the " + held + (held === 1 ? " that needs" : " that need") + " details", run: () => { S.reviewTable = true; S.revSel = new Set(heldIds); render();
+          setTimeout(() => { const el = document.querySelector('#app input[type="checkbox"]:checked:not([aria-label="Select all shown"])'); if (el && el.scrollIntoView) el.scrollIntoView({block: "center", behavior: Smart.reduced() ? "auto" : "smooth"}); }, 60); }} : null]});
       refreshStats(S.coId); render(); break;
     }
     case "revCheckTally": reviewCheckTally(draftRows().filter(r => S.revSel.has(r.e.id))); break;
@@ -18161,7 +18226,10 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
+        // back where you left off (smart moves 7), once the firm's clients are known, if the page is still the one signed in on
+        render(); const at = Smart.here();
+        loadAccount(true).then(() => { render(); setTimeout(() => Smart.afterSignIn(at), 0); }); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -18190,7 +18258,7 @@ function doAct(act, t){
       if (docType() === "bank"){
         if (S.tab !== "bank" || curStep() !== "review") goStep("review", "bank");
         setTimeout(() => { const el = document.getElementById("bankIn"); if (el){ S.advanceAfterBank = true; el.click(); } }, 60);
-      } else { S.advanceAfterRead = true; pickMode = "company"; document.getElementById("fileIn").click(); }
+      } else { pickMode = "company"; document.getElementById("fileIn").click(); }   // Review opens at the end if this page is still open (afterBatch)
       break;
     }
     case "signOutNow": {
@@ -18579,7 +18647,7 @@ function doAct(act, t){
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
-    case "tallyGuide": S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
+    case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
     case "firmMenuClose": S.firmMenu = false; render(); break;
     case "docSendPending": if (S.coId) CloudDocs.sendPending(S.coId); break;
@@ -18673,7 +18741,7 @@ function doAct(act, t){
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
-    case "goTcloud": S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
+    case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
     case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
@@ -18686,14 +18754,19 @@ function doAct(act, t){
     case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
     case "pasteOpen": S.pasteOpen = true; render(); break;
     case "pasteClose": S.pasteOpen = false; render(); break;
-    case "notDup": if (e){ e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId); toast("Kept as a separate bill."); render(); } break;
+    case "notDup": if (e){ const was = e.status; e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId);
+      // the next duplicate held, if any (smart moves 5); else this bill, now in To review
+      if (was === "duplicate") billMoveOn(e, "Kept as a separate bill.", "duplicate"); else { toast("Kept as a separate bill."); render(); } } break;
     case "openOriginal": if (e && e.dupOf && D().entries[e.dupOf.entryId]){ const o = D().entries[e.dupOf.entryId]; S.filter = o.status; S.selected = o.id; render(); } break;
     case "clearJobs": { const keep = S.view === "company" ? (j => !(j.target === S.coId || j.cid === S.coId)) : (j => j.target !== "auto"); S.jobs = S.jobs.filter(j => keep(j) || ["waiting","checking","reading"].includes(j.status)); render(); } break;
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected", "Marked as no entry needed."); } break;
-    case "restore": if (e) setStatus(e, "draft"); break;
+    case "reject": if (e){ const was = e.status; if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected");
+      billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
+    case "restore": if (e){ const was = e.status; setStatus(e, "draft");
+      // the next bill set aside, if any (smart moves 5); this one waits in To review
+      if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;
     case "undo": if (e) undoApproval(e); break;
     case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
@@ -19042,7 +19115,8 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk-test:last") || recentIds()[0];
-  if (!linked && last && S.companies[last]) openCompany(last);
+  // smart moves round 1 (7): the client's page last shown, not only its dashboard (Settings → Move on by itself)
+  if (!linked && last && S.companies[last]) Smart.resume(last);
   // the Tally redesign (09-Oct-2026): a firm page opened by its address (#/tally after a refresh) keeps the client open
   // last time, so the Tally page can say "← Back to <client>" and the sidebar names it
   else if (linked && S.view === "home" && !S.coId && last && S.companies[last]) S.coId = last;
@@ -21715,8 +21789,9 @@ const FC = {
   d8(iso){ return String(iso || "").replace(/-/g, "").slice(0, 8); },
   iso(d){ return Audit.iso(d); },
   today(){ return Audit.today(); },
-  // the date the quick periods are counted from: today, or the last day in the books when they end earlier
-  anchor(){ const t = this.today(), to = String(((S.books || {}).meta || {}).to || ""); return to && to < t ? to : t; },
+  // the date the quick periods are counted from: today in India (smart moves round 1, the owner of 09-Oct-2026: "this
+  // month" is this month, not the books' last month; when the books end earlier, Look up says so in one line)
+  anchor(){ return typeof istToday === "function" ? istToday() : this.today(); },
   monthEnd(y, m){ return String(y) + String(m).padStart(2, "0") + String(new Date(y, m, 0).getDate()).padStart(2, "0"); },
   period(k, at){
     const a = at || this.anchor(), y = num(a.slice(0, 4)), m = num(a.slice(4, 6)), fs = Audit.fyStart(a), fy = num(fs.slice(0, 4));
@@ -21784,7 +21859,9 @@ const LK = {
   KINDS: [["ledger", "Ledger account"], ["group", "Group summary"], ["tb", "Trial balance on a date"], ["monthly", "Month by month"], ["bills", "Open bills of a party"], ["find", "Find entries"]],
   st(){
     const cid = S.coId;
-    if (!S.lk || S.lk.cid !== cid){ const p = FC.period("ytd"); S.lk = {cid, kind: "ledger", led: "", grp: "", from: p.from, to: p.to, asOn: p.to, q: "", typ: "", ask: "", res: null, open: {}}; }
+    // the dates last used for this client (kept in this browser), else this year so far: 1 April to today
+    if (!S.lk || S.lk.cid !== cid){ const k = Smart.recall("lookup", cid), p = k && /^\d{8}$/.test(k.from) && /^\d{8}$/.test(k.to) ? k : FC.period("ytd");
+      S.lk = {cid, kind: "ledger", led: "", grp: "", from: p.from, to: p.to, asOn: p.to, q: "", typ: "", ask: "", res: null, open: {}}; }
     return S.lk;
   },
   recentKey(){ return "tdsdesk-test:lkrecent:" + (S.coId || ""); },
@@ -21987,7 +22064,8 @@ const LK = {
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
     } catch (e){ if (e) throw e; return; }
-    x.open = {};
+    x.open = {}; x.early = false;
+    if (["ledger", "group", "monthly", "find"].includes(x.kind)) Smart.keep("lookup", {from: x.from, to: x.to});
     if (cloud){
       x.busy = "Working it out from FinCom\u2019s copy\u2026"; render();
       try {
@@ -22262,6 +22340,8 @@ function lkLed(l){
   Object.assign(x, {kind: "ledger", led: l, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto");
 }
 function lkMonth(ym){ const x = LK.st(), y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); }
+// the books end before the dates asked: their last year instead ("Show 2025-26")
+function lkShowFy(fyStart){ const x = LK.st(); x.from = fyStart; x.to = (num(fyStart.slice(0, 4)) + 1) + "0331"; x.asOn = x.to; LK.run("auto"); }
 function lkOpen(id){ const x = LK.st(); x.open[id] = !x.open[id]; render(); }
 // a question in plain words (also from the dashboard's question box)
 function lkAsk(q){
@@ -22353,15 +22433,21 @@ const RPT = {
     const from = fy + "0401", to = (num(fy) + 1) + "0331", c = entryCount(from, to);
     return {n: c.n, text: c.text, sales: c.list.filter(v => typeof Books === "object" && Books.isSale(v)).length};
   },
+  // the year shown: the one chosen (kept for the client in this browser), else the current financial year (the owner's
+  // choice of 09-Oct-2026, smart moves round 1; it was the latest year with sales). A year the books in FinCom do not
+  // reach yet is notRead: the page says so in one line, with Read from Tally, and works nothing out for it
   range(){
-    const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
-    const fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : (withSales || ys[0]);
-    if (!fy) return null;
+    const ys = this.fys();
+    if (!ys.length) return null;
+    const now = Smart.fyStartOf(Smart.today()).slice(0, 4), k = Smart.recall("reports");
+    const fy = S.rptFy && (ys.includes(S.rptFy) || S.rptFy === now) ? S.rptFy : k && k.fy && ys.includes(k.fy) ? k.fy : now;
     const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
-    return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};
+    return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to, notRead: !ys.includes(fy), end};
   },
+  years(){ const R = this.range(), ys = this.fys(); return R && !ys.includes(R.fy) ? [R.fy].concat(ys) : ys; },
+  pickFy(fy){ S.rptFy = fy; Smart.keep("reports", {fy}); render(); },
   data(){
-    const b = S.books, R = this.range(); if (!R) return null;
+    const b = S.books, R = this.range(); if (!R || R.notRead) return null;
     const key = [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
     if (this._d && this._d.key === key) return this._d.d;
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
@@ -22387,7 +22473,7 @@ const RPT = {
   },
   open(id){
     const r = this.LIST.find(x => x[0] === id); if (!r) return;
-    const to = r[4], R = this.range(), b = S.books;
+    const to = r[4], R0 = this.range(), R = R0 && !R0.notRead ? R0 : null, b = S.books;
     if (to.mis){
       if (!(b.vouchers || []).length){ FC.go("import"); return; }
       const last = (b.mis || {}).last;
@@ -22437,7 +22523,8 @@ const LTR = {
   st(){
     const cid = S.coId;
     if (!S.ltr || S.ltr.cid !== cid){
-      // confirmations are asked for at the year end: the last 31 March up to the books' last day
+      // confirmations are asked for at the year end: the last 31 March (the last full year, as before); dues reminders
+      // are as on today, in India (smart moves round 1, 09-Oct-2026)
       const a = FC.anchor(), lastFyEnd = a.slice(4) === "0331" ? a : num(Audit.fyStart(a).slice(0, 4)) + "0331";
       S.ltr = {cid, asOn: lastFyEnd, remOn: a, sides: {r: true, p: true, o: false}, min: 1, q: "", show: "all", sel: {}, credit: 30, tone: "friendly", busy: "", tally: null};
     }
@@ -22721,7 +22808,7 @@ const ONB = {
       {id: "bridge", done: bridgeSet, t: "Connect FinCom Bridge", d: "A small Windows program on the computer where Tally is open; install it from the Tally page.", btn: ["Connect", {act: "tallyGuide"}]},
       {id: "link", done: !!linked, t: "Link the Tally company", d: "The company in Tally with this client's books: linked by itself when its GSTIN is the client's.", btn: ["Link Tally company", {act: "goTcloud"}]},
       {id: "books", done: dayBook, t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
-      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the books", {go: "books:import"}]},
+      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the balances", {go: "books:import", focus: "opening"}]},
       {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},
       {id: "bank", done: !!(co.bankAccounts || []).some(a => a.ledger), t: "Add a bank account", d: (tallyBank ? tallyBank + " bank account" + (tallyBank === 1 ? "" : "s") + " in Tally. " : "") + "Add the one to bring statements for, with its Tally ledger.", btn: ["Bank", {go: "bank"}]},
       {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", {go: "bills"}]}
@@ -25333,6 +25420,9 @@ const Route = {
     const h = this.of();
     // the Tally redesign (09-Oct-2026): the client's page last shown, for "← Back to <client>" on the Tally page
     if (/^#\/c\//.test(h)) S.lastClientHash = h;
+    // smart moves round 1: the client's page kept for the next opening (7), the way back from a setup page let go once
+    // the person has gone elsewhere (9), a Getting ready step just done (10)
+    if (typeof Smart === "object"){ try { Smart.remember(h); Smart.dropReturn(h); setTimeout(() => Smart.onbWatch(), 0); } catch (e){} }
     if (h === location.hash){ this.replaceNext = false; return; }
     try {
       if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
@@ -27254,7 +27344,7 @@ function postStatusFor(co){
   if (why) out.problem = p(why + " Confirm it in Client setup.", "Open Client setup", () => goSetupFor(why), "ledger");
   return out;
 }
-function goSetupFor(msg){ S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
+function goSetupFor(msg){ Smart.setReturn(); S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
 
 // ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
@@ -27779,7 +27869,7 @@ const PostOwner = {
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 
-function goChooseTallyCompany(){ S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
+function goChooseTallyCompany(){ Smart.setReturn(); S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
 function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
 const PV_ROLE = {party: "party", expense: "expense", gst: "gst", "rcm-in": "gst", "rcm-out": "gst", tds: "tds"};
@@ -27894,8 +27984,8 @@ async function postAllToTally(only){
   const co = CO();
   if (!co) return;
   S.postRefused = null;
-  const said = [], t0 = toast;
-  window.toast = m => { said.push(String(m)); return t0(m); };
+  const said = [], t0 = toast, from = typeof Smart === "object" ? Smart.here() : "";
+  window.toast = (m, o) => { said.push(String(m)); return t0(m, o); };
   try {
     if (!co.postTo) await autoPostTo(co);
     if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
@@ -27913,6 +28003,7 @@ async function postAllToTally(only){
     rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
     S.billPost = null;
     await postBillsToTally(trial ? {ids: rows.map(r => r.id), trialOk: true} : {ids: rows.map(r => r.id)});
+    if (S.billPost && S.billPost.done && !S.billPost.notAllowed) postRunShow(co.id, S.billPost, from);
     // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
     if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
   } catch (err){
@@ -27922,6 +28013,25 @@ async function postAllToTally(only){
     if (S.billPost && S.billPost.busy) S.billPost = null;
     render();
   }
+}
+// smart moves round 1 (6): when a posting run ends, its result is shown: everything posted → the Posted tab ("6 posted ·
+// Stay here"); anything not posted → the Errors tab, the run's failed bills first, each with "Fix in bill →"
+// (PostStep, app/src/screens/Post.jsx). Only the tab shown changes; Back (or Stay here) shows the tab there was before.
+function postRunShow(cid, bp, from){
+  bp.cid = cid;
+  const bad = (bp.failed || []).length + (bp.checkFailed || 0), ok = bp.ok || 0;
+  if (!bad && !ok) return false;
+  S.postTabs = S.postTabs || {};
+  const was = S.postTabs[cid], tab = bad ? "errors" : "posted";
+  if (was === tab) return false;
+  const words = bad ? (ok ? ok + " posted, " : "") + bad + " not posted: the failed " + (bad === 1 ? "one is" : "ones are") + " first under Errors" : ok + " posted";
+  return Smart.go(() => { S.postTabs[cid] = tab; }, words, {kind: "post", from, label: bad ? "Show Errors →" : "Show Posted →", undo: () => { S.postTabs[cid] = was; }});
+}
+// a bill of the last run that Tally did not take: opened to be put right (the Errors tab's "Fix in bill →")
+function postFixBill(id){
+  const e = D().entries[id]; if (!e) return;
+  S.step = null; S.tab = "invoices"; S.reviewTable = false; S.drawerOpen = false; S.filter = e.status; S.selected = id;
+  render(); window.scrollTo(0, 0);
 }
 // the row on the Errors tab when a press of Post ended in neither a job nor a result line: {cid, at, name, why, what}
 function postRefusedShow(cid, err, what){
@@ -29465,7 +29575,7 @@ const Drafts = {
   // Save: what was chosen is confirmed and saved, with who and when
   save(id){
     const s = this.secs[id]; if (!s) return false;
-    if (s.custom){ const ok = s.custom.save(); if (ok !== false){ this.stamp(s); delete this.secs[id]; render(); } return ok !== false; }
+    if (s.custom){ const ok = s.custom.save(); if (ok !== false){ this.stamp(s); delete this.secs[id]; render(); if (typeof Smart === "object") setTimeout(() => Smart.afterSave(), 0); } return ok !== false; }
     const ch = this.changes(s);
     this.bypassN++;
     try {
@@ -29489,6 +29599,8 @@ const Drafts = {
     } finally { this.bypassN--; }
     delete this.secs[id];
     render();
+    // smart moves round 1 (9): saved on a setup page reached from another page: "Saved · Back to Post to Tally →"
+    if (typeof Smart === "object") setTimeout(() => Smart.afterSave(), 0);
     return true;
   },
   // "Saved · <time> · <who>", kept with the client (or the firm) so every computer shows it
@@ -30640,3 +30752,252 @@ function postThroughWords(co){
   if (s.local) return "This will post through this computer.";
   return "This will post through " + (s.through && s.through.length === 1 ? s.through[0] : s.computer) + ".";
 }
+/* ================================================================== */
+/* Smart moves (round 1, approved by the owner on 09-Oct-2026): after  */
+/* a piece of work ends, the page moves on to what comes next, or says */
+/* where to go. Navigation and display only.                           */
+/* ================================================================== */
+// The rules every move keeps (the owner's):
+//   - nothing is approved, posted or sent to Tally by a move; it only changes the page shown;
+//   - a move happens only when no box has focus, no dialog is open and no change is left unsaved (Drafts), and only if
+//     the page is still the one where the work started; otherwise the same words come as a toast with a button;
+//   - each move says so in a toast with "Stay here" (and Undo where there is one), and Back undoes it (a new step in the
+//     browser's history);
+//   - each kind of move has its own switch under Settings → How the work is done → Move on by itself (on unless turned
+//     off), kept in this browser for the person using it.
+const Smart = {
+  // [kind, what ends, what the page then does]: the switches on the Settings page, in this order
+  KINDS: [
+    ["upload", "When bills have been read", "Open Review, or the bill when there is only one"],
+    ["approve", "After a bill is approved, set aside, or kept as a separate bill", "Open the next bill in the same list"],
+    ["post", "When a posting to Tally ends", "Show Posted, or Errors with the failed entries first"],
+    ["setup", "After a setup page is saved", "Go back to the page that sent you there"],
+    ["resume", "On opening FinCom, and after signing in", "Open the page where you left off for the last client"],
+  ],
+  key(kind){ return "tdsdesk-test:move:" + kind; },
+  on(kind){ return lsGet(this.key(kind)) !== "0"; },
+  set(kind, on){ lsSet(this.key(kind), on ? "1" : "0"); },
+  // a box with the cursor in it: a text box, a choice list, an editable area (a button or a tick box is not typing)
+  typing(){
+    const a = typeof document !== "undefined" ? document.activeElement : null;
+    if (!a || a === document.body) return false;
+    if (a.isContentEditable) return true;
+    if (a.tagName === "TEXTAREA" || a.tagName === "SELECT") return true;
+    return a.tagName === "INPUT" && !/^(button|submit|reset|checkbox|radio|file|image|range|color)$/i.test(a.type || "");
+  },
+  // a dialog on the page: the confirm box, the client switcher, a modal (the bill's drawer counts unless it is where
+  // the work was done, o.drawer)
+  dialog(o){
+    if (typeof document === "undefined") return false;
+    const cb = document.getElementById("confirmBox");
+    if (cb && cb.childElementCount && !cb.classList.contains("hidden") && getComputedStyle(cb).display !== "none") return true;
+    if (S.switcher) return true;
+    return Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], dialog[open]')).some(d => !(o && o.drawer && d.classList.contains("drawer")) && d.getClientRects().length > 0);
+  },
+  unsaved(){ try { return typeof Drafts === "object" && Drafts.anyDirty(); } catch (e){ return false; } },
+  // why the page may not move now ("" when it may)
+  held(o){ return this.typing() ? "typing" : this.dialog(o) ? "dialog" : this.unsaved() ? "unsaved" : ""; },
+  here(){ try { return typeof Route === "object" ? Route.of() : ""; } catch (e){ return ""; } },
+  // Undo for a move that does not change the address (a tab of the Post page): a step in the history with its own mark;
+  // Back past the mark puts the page back
+  marks: [], n: 0,
+  pushMark(undo){
+    const id = ++this.n;
+    this.marks.push({id, undo});
+    try { history.pushState({smart: id}, "", location.href); } catch (e){}
+  },
+  popTo(state){
+    const keep = (state && state.smart) || 0;
+    let undone = false;
+    while (this.marks.length && this.marks[this.marks.length - 1].id > keep){ const m = this.marks.pop(); try { m.undo(); undone = true; } catch (e){} }
+    if (undone) render();
+  },
+  // the move itself: an address (#/c/<client>/purchase/review), or a function that sets the page (o.undo puts it back
+  // when the address stays the same)
+  move(where, o){
+    if (typeof where === "string"){
+      if (where === location.hash){ return; }
+      if (typeof history !== "undefined" && typeof Route === "object" && Route.ready){ try { history.pushState(null, "", location.pathname + location.search + where); } catch (e){} }
+      return Route.apply(where);
+    }
+    const before = location.hash;
+    where();
+    render();
+    if (location.hash === before && o && o.undo) this.pushMark(o.undo);
+    if (!this.reduced()) { try { window.scrollTo(0, 0); } catch (e){} } else { try { window.scrollTo({top: 0, behavior: "instant"}); } catch (e){} }
+  },
+  reduced(){ try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e){ return false; } },
+  // Smart.go(where, words, o): move to `where` and say `words` with "Stay here" (Back), when the switch o.kind is on, the
+  // page is still o.from (the page where the work started; default: this one) and nothing is held; else say o.idle (or
+  // the same words) with a button o.label that makes the move when pressed. o.actions: more buttons (Undo).
+  // Returns true when the page moved.
+  go(where, words, o){
+    o = o || {};
+    const from = o.from === undefined ? this.here() : o.from;
+    const still = !from || from === this.here();
+    const why = !this.on(o.kind) ? "off" : !still ? "elsewhere" : this.held(o);
+    const extra = (o.actions || []).filter(Boolean);
+    if (!why){
+      if (o.before) o.before();
+      const r = this.move(where, o);
+      const stay = {label: o.stayLabel || "Stay here", run: () => { try { history.back(); } catch (e){} }};
+      Promise.resolve(r).then(() => toast(words, {actions: extra.concat(o.noStay ? [] : [stay])}));
+      this.last = {kind: o.kind, moved: true, words};
+      return true;
+    }
+    const go = {label: o.label || "Open →", run: () => { if (o.before) o.before(); this.move(where, o); }};
+    toast(o.idle || words, {actions: [go].concat(extra)});
+    this.last = {kind: o.kind, moved: false, why, words: o.idle || words};
+    return false;
+  },
+  // the name of a page, for "Back to <page>" (from its address)
+  pageName(h){
+    const p = String(h || "").replace(/^#\/?/, "").split("/");
+    if (p[0] === "c"){
+      const w = p[2] || "dash";
+      if (w === "post") return "Post to Tally";
+      if (w === "done") return "In Tally";
+      if (w === "bill") return "the bill";
+      if (w === "purchase") return p[3] === "review" ? "Review" : "Purchase bills";
+      if (w === "upload") return "Upload";
+      if (w === "books") return {reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", tds: "TDS", gst: "GST", import: "From Tally"}[p[3]] || "the books";
+      if (w === "setup") return "Client setup";
+      return {dash: "Dashboard", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
+    }
+    return {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", help: "Help", settings: "Settings"}[p[0]] || "the last page";
+  },
+
+  /* ---------------------------------------------------------------- 7. where you left off */
+  lastKey(cid){ return "tdsdesk-test:lastHash:" + cid; },
+  // after each drawing (Route.sync): the client's page shown, kept for the next opening
+  remember(h){
+    const m = /^#\/c\/([^/]+)\//.exec(h || "");
+    if (!m || this._kept === h) return;
+    this._kept = h;
+    let cid = m[1]; try { cid = decodeURIComponent(cid); } catch (e){}
+    lsSet(this.lastKey(cid), h);
+  },
+  lastHash(cid){
+    const h = lsGet(this.lastKey(cid)) || "";
+    return h.indexOf("#/c/" + encodeURIComponent(cid) + "/") === 0 ? h : "";
+  },
+  // opening FinCom without an address: the last client's page last shown (its dashboard when the switch is off)
+  async resume(cid){
+    const h = this.on("resume") ? this.lastHash(cid) : "";
+    if (!h){ await openCompany(cid); return false; }
+    await openCompany(cid);
+    const bill = /\/bill\/([^/]+)$/.exec(h);
+    let to = h;
+    if (bill){ let id = bill[1]; try { id = decodeURIComponent(id); } catch (e){} if (!D(cid).entries[id]) to = "#/c/" + encodeURIComponent(cid) + "/purchase/draft"; }
+    return Route.apply(to);
+  },
+  // after signing in on the sign-in page: back to the last client's page, with "Back where you left off · Clients"
+  afterSignIn(from){
+    const cid = lsGet("tdsdesk-test:last") || "";
+    if (!cid || !S.companies[cid] || S.view === "company") return false;
+    const h = this.lastHash(cid) || "#/c/" + encodeURIComponent(cid) + "/dash";
+    return this.go(h, "Back where you left off", {kind: "resume", from, label: "Open " + (S.companies[cid].name || "the client") + " →", idle: "Signed in. Your last client was " + (S.companies[cid].name || "") + ".",
+      noStay: true, actions: [{label: "Clients", run: () => navHome("clients")}]});
+  },
+
+  /* ---------------------------------------------------------------- 9. back to where the setup was asked for */
+  // a jump into a setup page (Client setup, the Tally page, Books in the cloud) from another page: that page is kept
+  setReturn(){
+    const h = this.here();
+    if (!h || /\/setup\/|^#\/settings|^#\/tally/.test(h)) return;
+    S.returnTo = {hash: h, label: this.pageName(h), cid: S.coId || ""};
+  },
+  // the page now is a setup page with a page to go back to
+  returnHere(){
+    const r = S.returnTo, h = this.here();
+    return r && r.hash !== h && (/\/setup\/|^#\/settings|^#\/tally/.test(h)) ? r : null;
+  },
+  goBack(){ const r = S.returnTo; S.returnTo = null; if (r) this.move(r.hash); },
+  // after Save on a setup page: "Saved · Back to <page> →", moving back by itself when the switch is on
+  afterSave(){
+    const r = this.returnHere(); if (!r) return false;
+    // moved: the way back is used up; not moved: it stays for "← Back to …" and the toast's button
+    const moved = this.go(r.hash, "Saved. Back to " + r.label, {kind: "setup", label: "Back to " + r.label + " →", idle: "Saved", before: () => { S.returnTo = null; }});
+    return moved;
+  },
+  // after each drawing: a person who went somewhere else on their own no longer needs the way back
+  dropReturn(h){ const r = S.returnTo; if (r && h !== r.hash && !/\/setup\/|^#\/settings|^#\/tally/.test(h)) S.returnTo = null; },
+
+  /* ---------------------------------------------------------------- 10. getting ready: the next step */
+  ONB_DONE: {tally: "Tally name saved", bridge: "FinCom Bridge connected", link: "Linked", books: "The books are read", opening: "Opening balances read", gst: "GSTIN added", bank: "Bank account added", bills: "First bills uploaded"},
+  // a step that was not done when last looked at, and is now: "Linked · Next: Read the books →" (looked at once in two
+  // seconds, after a drawing, for the open client)
+  onbWatch(){
+    const co = S.view === "company" && typeof CO === "function" ? CO() : null;
+    if (!co || co.onbHide || typeof ONB !== "object") return;
+    const t = Date.now(); if (this._onbAt && t - this._onbAt < 2000) return;
+    // another message on screen (a move just said): this one waits for a later drawing
+    const tw = document.getElementById("toast"); if (tw && !tw.classList.contains("hidden") && !tw.classList.contains("out")) return;
+    this._onbAt = t;
+    let st; try { st = ONB.steps(co); } catch (e){ return; }
+    const seen = (this._onb = this._onb || {})[co.id], now = {};
+    st.forEach(s => { now[s.id] = !!s.done; });
+    this._onb[co.id] = now;
+    if (!seen) return;
+    const fresh = st.find(s => s.done && seen[s.id] === false);
+    if (!fresh) return;
+    const next = st.find(s => !s.done);
+    const words = this.ONB_DONE[fresh.id] || "Done";
+    if (!next){ toast(words + ". " + co.name + " is ready."); return; }
+    toast(words, {actions: [{label: "Next: " + next.t + " →", run: () => onbStepGo(next)}]});
+  },
+
+  /* ---------------------------------------------------------------- 11. the period a page opens on */
+  // remembered per page and client (only for the person in this browser)
+  pkey(page, cid){ return "tdsdesk-test:period:" + page + ":" + (cid || S.coId || ""); },
+  recall(page, cid){ try { return JSON.parse(lsGet(this.pkey(page, cid)) || "null"); } catch (e){ return null; } },
+  keep(page, v, cid){ try { lsSet(this.pkey(page, cid), JSON.stringify(v)); } catch (e){} },
+  today(){ return typeof istToday === "function" ? istToday() : Audit.today(); },
+  fyStartOf(d){ const y = num(String(d).slice(0, 4)), m = num(String(d).slice(4, 6)); return (m >= 4 ? y : y - 1) + "0401"; },
+  fyLabelOf(d){ const y = num(this.fyStartOf(d).slice(0, 4)); return y + "-" + String(y + 1).slice(2); },
+  // TDS: the quarter whose return is due now: the last quarter that has ended (on 09-Oct-2026, Q2 of 2026-27, due
+  // 31-Oct). Its tax year is the quarter's own, so in April and May it is Q4 of the year before (still the old forms
+  // for 2025-26; Form 138/140/144/143 from 2026-27, TDS.formName)
+  tdsDue(today){
+    const t = today || this.today(), y = num(t.slice(0, 4)), m = num(t.slice(4, 6));
+    // the quarter today falls in: Q1 Apr-Jun ... Q4 Jan-Mar; the one before it has ended
+    const qNow = m >= 4 && m <= 6 ? 1 : m >= 7 && m <= 9 ? 2 : m >= 10 && m <= 12 ? 3 : 4;
+    const fyNow = m >= 4 ? y : y - 1;
+    const q = qNow === 1 ? 4 : qNow - 1, fy = qNow === 1 ? fyNow - 1 : fyNow;
+    const due = {1: fy + "0731", 2: fy + "1031", 3: (fy + 1) + "0131", 4: (fy + 1) + "0531"}[q];
+    return {fy: fy + "-" + String(fy + 1).slice(2), q: "Q" + q, due};
+  },
+  // GST: the return due now. Monthly: last month (3B by the 20th). QRMP: the last quarter that has ended (its GSTR-1
+  // by the 13th and 3B by the 22nd/24th after it). With filing marks kept for that year, the oldest month (quarter) up
+  // to then that is not marked filed.
+  gstDue(reg, today){
+    const t = today || this.today(), y = num(t.slice(0, 4)), m = num(t.slice(4, 6));
+    let ym = m === 1 ? (y - 1) + "12" : y + String(m - 1).padStart(2, "0");
+    const qrmp = typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp";
+    if (qrmp){ while (!GSTSet.isQEnd(ym)) ym = this.prevYm(ym); }
+    const first = this.fyStartOf(ym + "01").slice(0, 6);
+    if (typeof GSTV === "object" && GSTV.filedOn){
+      const list = []; for (let x = first; x <= ym; x = this.nextYm(x)) if (!qrmp || GSTSet.isQEnd(x)) list.push(x);
+      const filed = (x) => { try { return !!GSTV.filedOn(reg, "r3b", x); } catch (e){ return false; } };
+      if (list.some(filed)){ const open = list.find(x => !filed(x)); if (open) ym = open; }
+    }
+    return ym;
+  },
+  nextYm(ym){ const y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
+  prevYm(ym){ const y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); return m === 1 ? (y - 1) + "12" : y + String(m - 1).padStart(2, "0"); },
+  // the books in FinCom end before the date asked for: their last day ("" when they reach it, or there are none)
+  booksEndBefore(d){
+    const to = String(((S.books || {}).meta || {}).to || "");
+    return to && d && to < d ? to : "";
+  },
+};
+// a step of the Getting ready card, pressed (or its toast's Next): where it goes
+function onbStepGo(s){
+  if (!s || !s.btn) return;
+  const b = s.btn[1] || {};
+  if (b.focus) S.upFocus = b.focus;
+  // a setup page reached from here leads back here once saved (9)
+  if (b.act) Smart.setReturn();
+  if (b.act) doAct(b.act); else goClient(b.go);
+}
+if (typeof window !== "undefined") window.addEventListener("popstate", ev => Smart.popTo(ev.state));
