@@ -117,3 +117,45 @@ td .linkbtn { white-space: nowrap; }
 .logo-pick:hover .logo-pick-face { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); }
 .logo-pick[data-over] .logo-pick-face { border-style: solid; border-color: var(--accent); background: var(--accent-subtle); }
 .logo-pick:focus-within .logo-pick-face { outline: 2px solid var(--focus-outline, var(--accent)); outline-offset: 2px; }
+
+/* ---------- Step 5 (10-Oct-2026): the last old-look parts. Styles only; markup, words and actions as they were. ---------- */
+/* a text box with the cursor in it: Arc's accent border and soft ring (arc-look.css), not the old thick focus outline as well */
+input[type=text]:focus-visible, input[type=password]:focus-visible, input[type=number]:focus-visible, input[type=email]:focus-visible,
+input[type=search]:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-radius: var(--radius-control); }
+
+/* notices inside a page (.bk-alert, .bk-warn): Arc's alert, a soft fill inside a thin border, not the old bar at the left */
+.bk-alert, .bk-warn { padding: 9px 12px; border: 1px solid color-mix(in oklab, var(--warn) 38%, var(--border)); border-left-width: 1px;
+  border-radius: var(--radius-control); background: var(--warn-soft); color: var(--foreground); font-size: 13.5px; line-height: 1.5; }
+.bk-alert.bad { border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+.bk-alert.ok { border-color: color-mix(in oklab, var(--ok) 38%, var(--border)); background: var(--ok-soft); }
+
+/* the old HTML pieces (parts/Legacy.jsx): GST Annual (GSTR-9's tables), Books → Accounts (the statements) and
+   Books → Audit (the Form 3CD draft). Their HTML is also the PDF's, so its inline colours are overridden here, not edited. */
+/* GSTR-9: a part's heading row in the table, Arc's quiet band */
+.dash-card .bk-table td[colspan][style*="background"] { background: var(--surface-muted) !important; color: var(--foreground);
+  border-top: 1px solid var(--border); font-size: 13px; }
+.dash-card .bk-tablewrap + h3, .dash-card .bk-tablewrap ~ h3 { margin: 18px 0 8px !important; color: var(--foreground); font-size: 14px; font-weight: 600; }
+/* Accounts: the statements' titles and the notes */
+.dash-card h2 { font-family: var(--font-display); letter-spacing: var(--tracking-display); }
+/* Form 3CD draft: the head (a hard black rule and a grey caption in the HTML) and each clause's title */
+.audit3cd div[style*="border-bottom:2px"] { border-bottom: 1px solid var(--border) !important; padding-bottom: 12px !important; margin-bottom: 16px !important; }
+.audit3cd div[style*="#5A6B63"] { color: var(--text-muted) !important; font-size: 12px !important; font-weight: 600; letter-spacing: .04em; }
+.audit3cd h1 { font-family: var(--font-display); letter-spacing: var(--tracking-display); color: var(--foreground); }
+.audit3cd h2 { margin: 20px 0 6px !important; padding-top: 14px; border-top: 1px solid var(--border-subtle); font-family: var(--font-body);
+  font-size: 14px !important; font-weight: 600; color: var(--foreground); }
+.audit3cd div[style*="border-bottom:2px"] + h2 { border-top: 0; padding-top: 0; }
+
+/* Settings: the sections still drawn as old panes (FinCom Bridge, Sign-in) in the same card as the others (.setcard) */
+.setbody .pane { padding: 16px 20px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); }
+.setbody .pane > h2, .setbody .pane > h3 { margin: 0 0 6px !important; font-family: var(--font-body); font-size: 15px; font-weight: 600; letter-spacing: -.005em; color: var(--foreground); }
+.setcard { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); }
+.setcard h3 { color: var(--foreground); }
+/* the bridge's "Connect this browser" steps: a quiet inset panel, numbered steps, a done step ticked in green */
+.setupcard { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--border-subtle, var(--border)); border-radius: var(--radius-panel); background: var(--surface-muted); }
+.setupcard > h3 { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--foreground); }
+ol.setup { margin: 8px 0 0 20px; line-height: 1.55; }
+ol.setup li { margin: 8px 0; padding-left: 2px; }
+ol.setup li::marker { color: var(--text-muted); font-weight: 600; }
+ol.setup li div { color: var(--text-secondary); }
+ol.setup li div b { color: var(--foreground); }
+ol.setup li .btn.small { vertical-align: baseline; }
