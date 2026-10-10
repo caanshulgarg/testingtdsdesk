@@ -89,6 +89,8 @@ const Books = {
       country: this.one(s, "COUNTRYOFRESIDENCE"),
       rcm: this.yesFlag(this.one(s, "GSTOVRDNISREVCHARGEAPPL")) || this.one(s, "ISREVERSECHARGEAPPLICABLE") === "Yes",
       taxability: this.one(s, "GSTOVRDNTAXABILITY"),
+      // round 43: Tally's nature of the transaction ("Sales to SEZ - Taxable", "Exports - LUT/Bond", ...), the first a line has
+      nature: this.one(s, "GSTOVRDNNATURE"),
       supply: this.one(s, "GSTOVRDNTYPEOFSUPPLY"),
       ineligibleFlag: this.yesFlag(this.one(s, "GSTOVRDNINELIGIBLEITC")),
       hsn: Array.from(new Set((s.match(/<GSTHSNNAME>([^<]*)<\/GSTHSNNAME>/g) || []).map(x => x.replace(/<[^>]*>/g, "").trim()).filter(Boolean))),
@@ -370,7 +372,7 @@ const Books = {
     const country = String(v.country || "").toLowerCase();
     const exportish = /EXPORT/i.test(v.type) || (country && country !== "india");
     if (exportish) return "export";
-    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "")) return "sez";
+    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "") || /SEZ/i.test(v.nature || "")) return "sez";
     if (/exempt/i.test(v.taxability || "")) return "exempt";
     if (/nil/i.test(v.taxability || "")) return "nil";
     if (/non.?gst/i.test(v.taxability || "")) return "nongst";
@@ -392,8 +394,13 @@ const Books = {
     if (/JOURNAL|PAYMENT|RECEIPT|CONTRA/i.test(v.type)) return false;
     return v.ent.some(e => (debit ? e.a < 0 : e.a > 0) && (this.groupPath(e.l).some(g => re.test(g)) || (!this.groupPath(e.l).length && (debit ? /PURCHASE/i : /\bSALES?\b/i).test(e.l))));
   },
+  // round 43 (the TDS and GST proof on a real TallyPrime 7.1): a debit note raised on a CUSTOMER (more value on an invoice:
+  // the customer debited, a sales ledger and output tax credited) is an outward note (GSTR-1 9B, ntty D; 3B 3.1(a)), not a
+  // purchase that takes input tax away. Known by what it credits: a sales ledger, and no purchase ledger
+  saleNote(v){ return /DEBIT NOTE/i.test(v.type) && this.byContent(v, /^sales accounts$/i, false) && !this.byContent(v, /^purchase accounts$/i, false); },
   isPurchase(v){
     if (this.NONACC.test(v.type)) return false;
+    if (this.saleNote(v)) return false;
     if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
@@ -418,7 +425,7 @@ const Books = {
   },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;
-    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return true;
+    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type) || this.saleNote(v)) return true;
     if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
     return this.byContent(v, /^sales accounts$/i, false);
   },

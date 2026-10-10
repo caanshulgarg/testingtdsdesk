@@ -74,7 +74,7 @@ const GSTR = {
       const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
       out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: v.pos || "",
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
-        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : (cls === "export" || cls === "sez") ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
+        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         rate, total: L.total, note, type: v.type});
     });
@@ -184,6 +184,17 @@ const GSTR = {
       b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
       series: Object.values(series), total: this.sum(rows)};
   },
+  // round 43: a credit or debit note to a buyer with no GSTIN goes in table 9B unregistered (cdnur) when the invoice it
+  // changes is a B2C large one (inter-state, above the limit: typ B2CL) or an export (EXPWP / EXPWOP); otherwise it adjusts
+  // B2C small. The invoice is not named on the note in the books: a B2C large invoice to the same buyer and place, on or
+  // before the note, is taken as it
+  cdnurTyp(r){
+    if (r.gstin || !(r.kind === "CDNR" || r.kind === "DBNR")) return "";
+    if (r.cls === "export") return r.igst ? "EXPWP" : "EXPWOP";
+    if (!(r.igst > 0)) return "";
+    const b2cl = this.outward("", "").filter(x => x.kind === "B2CL" && x.party === r.party && String(x.pos || "") === String(r.pos || "") && String(x.date) <= String(r.date));
+    return b2cl.length ? "B2CL" : "";
+  },
   // each row's rate and HSN parts; a row with none is one part at its own rate
   partsOf(rows){
     const out = [];
@@ -200,6 +211,24 @@ const GSTR = {
     return signed > 0.004 ? -1 : signed < -0.004 ? 1 : (/DEBIT NOTE/i.test(v.type) ? -1 : 1);
   },
   signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
+  // the differences the amendments reported in a month's GSTR-1 make to outward tax (round 43): {out, zero, rows}
+  amendDiff(ym, reg){
+    const z = () => ({taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}), res = {out: z(), zero: z(), rows: []};
+    if (!reg || typeof GSTAmend !== "object" || !((S.books || {}).filed) || !Object.keys(S.books.filed).length) return res;
+    let p = null; try { p = GSTAmend.pending(ym, reg); } catch (e){ return res; }
+    const pick = d => ({taxable: num(d && d.txval), igst: num(d && d.iamt), cgst: num(d && d.camt), sgst: num(d && d.samt), cess: num(d && d.csamt)});
+    (p.rows || []).forEach(r => {
+      if (r.act === "skip" || !(r.what === "amend" || (r.what === "gone" && r.act === "nil"))) return;
+      const now = r.kind === "B2CS" ? pick(r.b2cs.now) : pick(r.now), was = r.kind === "B2CS" ? pick(r.was && {txval: r.was.txval, iamt: (r.was.iamt || 0)}) : pick(r.was);
+      if (r.kind === "B2CS"){ const w = (GSTAmend.state(reg, ym).b2cs[r.P] || new Map()).get(r.b2cs.pos + "|" + r.b2cs.rt + "|" + r.b2cs.sply_ty); if (w) Object.assign(was, pick(w)); }
+      const sg = r.kind === "CDNR" && ((r.now || r.was || {}).ntty || "C") === "C" ? -1 : 1;
+      const zeroRated = r.kind === "EXP" || /^SEW/.test(String((r.now || r.was || {}).inv_typ || ""));
+      const to = zeroRated ? res.zero : res.out;
+      Object.keys(to).forEach(k => { to[k] = r2(to[k] + sg * (now[k] - was[k])); });
+      res.rows.push({P: r.P, kind: r.kind, num: (r.now || r.was || {}).num, sign: sg});
+    });
+    return res;
+  },
   // the 3B as filed for a month: a monthly filer's month, or at the end of a QRMP quarter the quarter's
   threeB(ym, reg){ return typeof perRender === "function" ? perRender(this, "3b|" + ym + "|" + (reg || ""), () => this.threeBNow(ym, reg)) : this.threeBNow(ym, reg); },
   threeBNow(ym, reg){
@@ -273,12 +302,16 @@ const GSTR = {
     const unregPos = {};
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
+    // round 43: the amendments of earlier months reported in this month's GSTR-1 (tables 9A, 9C, 10): their differences are
+    // paid with this month's 3B (3.1(a); an SEZ or export invoice's in 3.1(b)); the earlier month's filed 3B is not changed
+    const amd = this.amendDiff(ym, reg);
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
     // our credit notes rejected by the customer in IMS: the portal adds the tax back to 3.1(a)
     const cust = typeof CustIMS === "object" ? CustIMS.month(ym, reg) : {add: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}, back: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}};
     const cx = k => r2(cust.add[k] - cust.back[k]);
-    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable")), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst")), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst")),
-      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst")), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess"))};
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable") + amd.out.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst") + amd.out.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst") + amd.out.sgst),
+      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst") + amd.out.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess") + amd.out.cess)};
+    ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { zero[k] = r2(num(zero[k]) + amd.zero[k]); });
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
@@ -288,7 +321,7 @@ const GSTR = {
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
-    return {sale: taxableOut, cn, net, adv, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
+    return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
@@ -412,7 +445,7 @@ const GSTR = {
         pos: posOf(r), rchrg: r.rcm ? "Y" : "N", inv_typ: "R", itms: items(r)
       } : {
         inum: String(r.no), idt: dmy(r.date), val: r2(r.total), pos: posOf(r),
-        rchrg: r.rcm ? "Y" : "N", inv_typ: r.cls === "sez" ? "SEWP" : "R", itms: items(r)
+        rchrg: r.rcm ? "Y" : "N", inv_typ: r.cls === "sez" ? (r.igst > 0 ? "SEWP" : "SEWOP") : "R", itms: items(r)
       })}));
     };
     const b2csMap = {};
@@ -424,14 +457,18 @@ const GSTR = {
     // a credit or debit note to a buyer with no GSTIN (request of 02-Oct-2026: Puresens Exports LLP's credit note 12 of
     // 31-Mar-2026, 1,500, was left out of the GSTR-1 file, so GSTR-1 and 3.1(a) differed): it adjusts B2C small (table 7)
     // by place of supply and rate, as the portal takes it
-    this.partsOf(g.cdnr.filter(r => !r.gstin)).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
+    const urTyp = r => this.cdnurTyp(r), cdnur = g.cdnr.filter(r => !r.gstin && urTyp(r));
+    this.partsOf(g.cdnr.filter(r => !r.gstin && !urTyp(r))).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
       const pos = posOf(r), key = pos + "|" + q.rate + "|" + (r.igst ? "INTER" : "INTRA");
       const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
       x.txval = r2(x.txval + sg * Math.abs(q.taxable)); x.iamt = r2(x.iamt + sg * Math.abs(q.igst)); x.camt = r2(x.camt + sg * Math.abs(q.cgst)); x.samt = r2(x.samt + sg * Math.abs(q.sgst)); x.csamt = r2(x.csamt + sg * Math.abs(q.cess));
     });
-    const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
-      nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),
-      {expt_amt: 0, nil_amt: 0, ngsup_amt: 0});
+    // table 8: one row per kind of supply, intra- or inter-state (the place of supply against the registration's state),
+    // to a registered or an unregistered person (round 43: every nil, exempt and non-GST supply went in one INTRB2B row)
+    const nilBy = {};
+    g.nil.forEach(r => { const pos = posOf(r), own = String(reg || (gstin || "").slice(0, 2)), k = (pos && own && pos !== own && pos !== "00" ? "INTR" : "INTRA") + (r.gstin ? "B2B" : "B2C");
+      const o = nilBy[k] = nilBy[k] || {sply_ty: k, expt_amt: 0, nil_amt: 0, ngsup_amt: 0};
+      if (r.cls === "exempt") o.expt_amt = r2(o.expt_amt + r.taxable); else if (r.cls === "nil") o.nil_amt = r2(o.nil_amt + r.taxable); else o.ngsup_amt = r2(o.ngsup_amt + r.taxable); });
     const fe = this.pEnd(ym), out = {gstin, fp: fe.slice(4, 6) + fe.slice(0, 4), version: "GST3.2.1", hash: "hash"};
     if (g.b2b.length) out.b2b = byParty(g.b2b, "inv");
     if (g.b2cl.length){
@@ -440,9 +477,13 @@ const GSTR = {
       out.b2cl = Object.entries(m).map(([pos, rs]) => ({pos, inv: rs.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}));
     }
     if (Object.keys(b2csMap).length) out.b2cs = Object.values(b2csMap);
-    if (g.cdnr.length) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
-    if (g.exp.length) out.exp = [{exp_typ: "WPAY", inv: g.exp.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}];
-    if (nilSum.expt_amt || nilSum.nil_amt || nilSum.ngsup_amt) out.nil = {inv: [Object.assign({sply_ty: "INTRB2B"}, nilSum)]};
+    if (g.cdnr.some(r => r.gstin)) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
+    if (cdnur.length) out.cdnur = cdnur.map(r => ({typ: urTyp(r), ntty: r.note === "credit" ? "C" : "D", nt_num: String(r.no), nt_dt: dmy(r.date), val: r2(Math.abs(r.total)),
+      ...(urTyp(r) === "B2CL" ? {pos: posOf(r)} : {}), itms: items(r)}));
+    // exports with payment of IGST (WPAY) and under a bond or LUT, without it (WOPAY): two lists (round 43: all went as WPAY)
+    if (g.exp.length) out.exp = ["WPAY", "WOPAY"].map(t => ({exp_typ: t, inv: g.exp.filter(r => (r.igst > 0) === (t === "WPAY")).map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))})).filter(x => x.inv.length);
+    const nilRows = Object.values(nilBy).filter(o => o.expt_amt || o.nil_amt || o.ngsup_amt);
+    if (nilRows.length) out.nil = {inv: nilRows};
     const adv = GSTAdv.month(ym, reg);
     if (adv.at.length) out.at = GSTAdv.json(adv.at);
     if (adv.txpd.length) out.txpd = GSTAdv.json(adv.txpd);
