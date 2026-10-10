@@ -1,0 +1,27 @@
+2026-10-10 16:37:39  Recorder: Sales 13 of 31-May-2026 (MasterID 15, line 101db5a0…): asking Tally by MasterID
+2026-10-10 16:37:39  Recorder: entry fetch of FinCom Spike Co: answered in 2 ms
+2026-10-10 16:37:39  Recorder: FinCom Spike Co: delete of mid 15: not in this Tally (asked by MasterID): proven deleted here
+2026-10-10 16:37:39  Recorder: FinCom Spike Co: delete of mid 15: GUID from the bridge's record: 98b41e80-9e2b-49a6-ade3-aeb387793a91-0000000f; the GUID its MasterID makes agrees
+2026-10-10 16:37:39  Renumbering: deleted Sales 13 of 31-May-2026 in FinCom Spike Co: FinCom holds 0 later Sales entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-10 16:37:42  Update from Tally asked for now
+2026-10-10 16:37:42  Update from Tally: asked for now
+2026-10-10 16:37:42  Update from Tally: waiting, someone is working in Tally
+2026-10-10 16:37:57  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 69 ledger(s) (0.2s); saved
+2026-10-10 16:37:58  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-10 16:37:58  Keeping FinCom Spike Co: the ledger list read (69 ledgers, 28 groups, 3 request(s)): 0 new, 1 changed, 0 renamed, 0 gone
+2026-10-10 16:37:58  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=51 ALTMSTID=298
+2026-10-10 16:37:58  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+2026-10-10 16:37:58  Update from Tally: done (5 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+2026-10-10 16:46:02  Recorder (Tally's change list) for FinCom Spike Co: 5 change(s) found
+2026-10-10 16:46:02  Recorder: An entry of 01-Oct-2026 (MasterID 43, line e8e8401e…): asking Tally by MasterID
+2026-10-10 16:46:02  Ledger changes for FinCom Spike Co: Tally's master counter 297 -> 298: 1 request(s) for AlterID 298-298, 1 ledger(s) sent to FinCom; the last number is 298
+2026-10-10 16:46:02  Ledger changes for FinCom Spike Co: 1 ledger(s) created or altered in Tally sent to FinCom
+2026-10-10 16:46:03  Recorder: Journal 15 of 01-Oct-2026 (MasterID 43, line e8e8401e…): taken: Tally's GUID 98b41e80-9e2b-49a6-ade3-aeb387793a91-0000002b, AlterID 44
+2026-10-10 16:46:03  Recorder: An entry of 01-Oct-2026 (MasterID 42, line 82ad601d…): asking Tally by MasterID
+2026-10-10 16:46:03  Recorder: Journal 14 of 01-Oct-2026 (MasterID 42, line 82ad601d…): taken: Tally's GUID 98b41e80-9e2b-49a6-ade3-aeb387793a91-0000002a, AlterID 45
+2026-10-10 16:46:03  Recorder: An entry of 01-May-2026 (MasterID 4, line 9addfca0…): asking Tally by MasterID
+2026-10-10 16:46:03  Recorder: Sales 2 of 01-May-2026 (MasterID 4, line 9addfca0…): taken: Tally's GUID 98b41e80-9e2b-49a6-ade3-aeb387793a91-00000004, AlterID 46
+2026-10-10 16:46:03  Recorder: An entry of 02-May-2026 (MasterID 18, line 55b94b1e…): asking Tally by MasterID
+2026-10-10 16:46:04  Recorder: Credit Note 3 of 02-May-2026 (MasterID 18, line 55b94b1e…): taken: Tally's GUID 98b41e80-9e2b-49a6-ade3-aeb387793a91-00000012, AlterID 47
+2026-10-10 16:46:04  Recorder: An entry of 01-Apr-2026 (MasterID 29, line 206e0211…): asking Tally by MasterID
+2026-10-10 16:46:04  Recorder: Journal 4 of 01-Apr-2026 (MasterID 29, line 206e0211…): taken: Tally's GUID 98b41e80-9e2b-49a6-ade3-aeb387793a91-0000001d, AlterID 49
