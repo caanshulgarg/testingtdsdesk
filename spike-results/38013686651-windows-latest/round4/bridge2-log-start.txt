@@ -1,0 +1,17 @@
+2026-10-10 02:06:09  FinCom Bridge 2.4.1: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+2026-10-10 02:06:09  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+2026-10-10 02:06:09  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+2026-10-10 02:06:09  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-10 02:06:09  Recorder: re-scan of the add-on's files for 2.4.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-10 02:06:09  Check:  - 
+2026-10-10 02:06:09  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-10 02:06:09  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+2026-10-10 02:06:12  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-10 02:06:12  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-10 02:06:13  Company FinCom Spike U2: its Tally GUID 6e3e4531-e71e-4e64-bea7-e13edb8a3bad is held from now on
+2026-10-10 02:06:13  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-10 02:06:13  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+2026-10-10 02:06:13  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+2026-10-10 02:06:13  Bank dates: FinCom Spike U2: following Tally's voucher counter from ALTVCHID=1 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+2026-10-10 02:06:13  Nightly check of FinCom Spike U2: not now: Tally has just opened; letting it finish loading
+2026-10-10 02:06:22  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
