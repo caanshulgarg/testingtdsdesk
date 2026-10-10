@@ -154,3 +154,8 @@ After install: watch NWS144 for a working day (timeouts, retries, longest wait f
 - tally-ingest version 42: index.ts deployed with whole-line `//` comments stripped (repo e65d5107…6383fb5, deployed 2f254a42…b99f3250; details in docs/bridge-2.4.0-notes.md); the other files exact. Rollback copy: v41.
 - Publish needs `npm ci` in the publish worktree: app/package.json now has @sentry/browser, which the shared /home/user/testingtdsdesk/app/node_modules lacks.
 - Install by hand on NWS144 as for 2.3.3 (owner first, then Ranjeet); steps in docs/bridge-2.4.0-test-sheet.txt.
+
+## 10-Oct: 2.4.1 published (08:31 IST)
+- 2.4.0 -> 2.4.1 (no migration). Published to staging review 10-Oct 08:31 IST: main b6d6fcdd from pub-241 601e57ad (arc-ui 840b5331, Arc UI step 4 + smart moves round 1, merged with tax-accuracy c89c58ff); setup 79e95ba3…e06a, program f59866e0…6eab. CI 38004703627 and Windows CI 38004703567 green (pub-241: CI 38011898041); real-Tally gate 38004703351 + 38011201298 (s235 re-run after a harness fix: the runs crossed midnight and the bridge's log rotation hid lines from the harness) and 38013686651 (fast234 20/20) on the committed setup.
+- tally-ingest version 43: index.ts deployed with whole-line `//` comments stripped (repo ba4a2d20…c4d4, deployed 82d4e873…18f7; details in docs/bridge-2.4.1-notes.md); the other files exact. Rollback copy: v42.
+- Install by hand on NWS144 as for 2.4.0 (owner first, then Ranjeet); steps in docs/bridge-2.4.1-test-sheet.txt.
