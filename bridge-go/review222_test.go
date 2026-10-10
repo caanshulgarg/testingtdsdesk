@@ -144,7 +144,8 @@ func TestR222UnnumberedJournalByMaster(t *testing.T) {
 }
 
 // --- 5. the MasterID gives another voucher (a Payment, not this Journal): 2.3.4 (the independent review, L5) held for
-// good, never asked by its type, number and date (a scan of the company); Tally's own voucher J-77 is not taken
+// good, never asked by its type, number and date (a scan of the company); Tally's own voucher J-77 is not taken. 2.4.1
+// (review M1 of next-241): kept so, another type, date or number is never asked by its number
 func TestR222FallbackByNumber(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20)) // the background read waits its turn behind the company lookup (about 4 s here)

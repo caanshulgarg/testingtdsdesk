@@ -181,7 +181,8 @@ func TestFast234UnreadShapeHeld(t *testing.T) {
 }
 
 // --- L5: a line WITH a MasterID whose voucher is another entry: held (the Day Book words), never asked by its type and
-// number (a scan of the company: 12-17 s at 100,000 vouchers)
+// number (a scan of the company: 12-17 s at 100,000 vouchers). 2.4.1 (review M1 of next-241): kept so for another type, date or
+// number; only an older entry or no entry is asked by its number
 func TestFast234MasterIDLineNeverByNumber(t *testing.T) {
 	p, f, c := r222bBridge(t, `,"RecorderResolveSec":0`)
 	r222Vch(f, 25683, "Payment", "P-4", "20261005", 54502)
