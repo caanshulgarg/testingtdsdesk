@@ -24,6 +24,14 @@ PLANT = """() => { const b = S.books;
   const v = b.vouchers.find(v => (v.no || v.ref) === 'LFE/25-26/001'); if (v) v.gstin = '07AAJFQ3158R1ZJ';
   b.tdsFiled = {'2025-26|Q1|26Q': {on: '2025-07-25', token: '123456789012345', at: new Date().toISOString(), by: 'this computer'}};
   render(); }"""
+# group 2: a certificate with a limit, a journal adjusting a TDS ledger, Q1 filed and then changed in Tally
+PLANT2 = """() => { const b = S.books;
+  b.certs = [{id: 'ct1', party: 'Nightjar Sound & Light Co', pan: 'AABFN1234Q', section: '194C', certNo: 'LDC2025NJ01', rate: 0.5, from: '2025-04-01', to: '2026-03-31', limit: 150000}];
+  b.challans = [{id: 'cA', bsr: '0240020', serial: '1', date: '20250407', tax: 1200, interest: 0}, {id: 'cB', bsr: '0240020', serial: '2', date: '20260207', tax: 10000, interest: 0}];
+  b.vouchers.push({id: 'zz-adj', date: '20250915', no: 'JV/5', type: 'Journal', party: '', ent: [{l: 'TDS ON CONTRACT 194C', a: -500}, {l: 'Sundry Balances Written Off', a: 500}]});
+  TDSDrift.keep('2025-26', 'Q1', '26Q');
+  const v = b.vouchers.find(v => v.party === 'Nightjar Sound & Light Co' && v.date === '20250508'); v.ent.find(e => /TDS ON CONTRACT/.test(e.l)).a = 1500;
+  render(); }"""
 STATES = [
  ("tds-year-2025-26", "S.booksTab='tds'; S.tdsFy='2025-26'; S.tdsView='year'; S.tdsQ='';"),
  ("tds-26q-2025-26-q2-checks", "S.booksTab='tds'; S.tdsFy='2025-26'; S.tdsQ='Q2'; S.tdsForm='26Q'; S.tdsView='return'; S.tdsTab='checks';"),
@@ -47,7 +55,7 @@ with sync_playwright() as p:
             pg.evaluate("(t) => { document.documentElement.setAttribute('data-theme', t); }", scheme)
             pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600); pg.evaluate(CHALLANS); pg.evaluate(PLANT)
             if group == "2":
-                pg.evaluate("() => { if (window.__plant2) window.__plant2(); }")
+                pg.evaluate(PLANT2)
             for name, js in STATES:
                 if tag and name not in PHONE: continue
                 pg.evaluate("() => { document.querySelectorAll('.toast').forEach((t) => t.remove()); S.gstSeen = ''; " + js + " S.gstSeen = (S.gstReg||'') + '|' + GSTSet.typeOf(S.gstYm||'', S.gstReg||''); render(); window.scrollTo(0, 0); }")

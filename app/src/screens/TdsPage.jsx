@@ -16,6 +16,7 @@ import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
 import NotRead from "../parts/NotRead.jsx";
+import { TieOut, Limits } from "./tds/Smart.jsx";
 import "../parts/returns.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -97,8 +98,8 @@ function Years({ rows, fys }) {
 }
 
 // one cell of the grid: the status in words and colour, then the counts and amounts as the year's table had them
-function Cell({ fy, q, form, st, n, lines, amount }) {
-  const label = st === "none" ? "Not started" : st === "bad" ? "Errors " + n : st === "filed" ? "Filed" + (n ? " " + n : "") : "Ready";
+function Cell({ fy, q, form, st, n, lines, amount, corr }) {
+  const label = st === "none" ? "Not started" : st === "bad" ? (corr ? "Correction " + corr : "Errors " + n) : st === "filed" ? "Filed" + (n ? " " + n : "") : "Ready";
   return <td><button className={"rp-cell st-" + st} data-cell={form + "|" + q} data-status={st}
     aria-label={TDS.formShort(form, fy) + " " + q + ": " + label} onClick={() => tdsGo(fy, q, form)}>
     <span className="rp-s">{label}</span>
@@ -137,6 +138,12 @@ function cells(b, fy, x) {
     const booksTds = r2(TDS.salaryRows().filter((r) => r.fy === fy && r.q === q).reduce((a, r) => a + r.tds, 0));
     out["24Q"] = { st: "none", amount: booksTds > 0 ? money(booksTds) : null, lines: booksTds > 0 ? [{ t: "in the books under 192" }, { t: "bring in the salary sheet" }] : (b.salary || []).length ? [] : [{ t: "bring in the salary sheet" }] };
   }
+  // T-S2: a filed return whose entries changed in Tally since it was filed: "Correction N", red, with its filed date
+  ["26Q", "27Q", "27EQ"].forEach((form) => {
+    const c = out[form]; if (!c || c.st !== "filed") return;
+    const d = TDSDrift.check(fy, q, form);
+    if (d && d.rows.length) Object.assign(c, { st: "bad", corr: d.rows.length, lines: [{ t: "filed " + c.n }, { t: "changed in Tally since", bad: 1 }] });
+  });
   return out;
 }
 
@@ -170,6 +177,8 @@ function Year({ b }) {
       <button className="btn small" onClick={() => doAct("yearExcel24")}>Download the year, {TDS.formName("24Q", fy)}</button>
       <button className="btn small primary" onClick={() => doAct("yearExcelAll")}>Download the whole year</button>
     </div>
+    <TieOut fy={fy} />
+    <Limits fy={fy} />
   </>;
 }
 

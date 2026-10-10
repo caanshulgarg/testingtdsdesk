@@ -1113,7 +1113,7 @@ function certAdd(c){
   const party = String(c.party || "").trim();
   if (!party){ toast("Name the deductee as it appears in Tally."); return false; }
   S.books.certs = (S.books.certs || []).concat([{id: uid("ct"), party, pan: String(c.pan || "").toUpperCase().trim(), section: String(c.section || "").toUpperCase().trim(),
-    certNo: String(c.certNo || "").trim(), rate: num(c.rate), from: c.from || "", to: c.to || ""}]);
+    certNo: String(c.certNo || "").trim(), rate: num(c.rate), from: c.from || "", to: c.to || "", limit: num(c.limit)}]);
   saveBooks(); toast("Certificate added."); render(); return true;
 }
 function certDelete(id){ S.books.certs = (S.books.certs || []).filter(c => c.id !== id); saveBooks(); render(); }

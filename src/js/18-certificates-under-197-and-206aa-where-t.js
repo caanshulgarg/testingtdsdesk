@@ -4,8 +4,9 @@
 const Certs = {
   all(){ return ((S.books || {}).certs || []).slice().sort((a, b) => String(a.party).localeCompare(String(b.party))); },
   // the certificate that covers this payment, if there is one
+  // T-A3 (10-Oct-2026): by PAN where both have one, else by name; its section; its dates (TDSLdc, src/js/66)
   forRow(r){
-    return this.all().find(c => (!c.section || c.section === r.section) &&
+    return typeof TDSLdc === "object" ? this.all().find(c => TDSLdc.covers(c, r)) : this.all().find(c => (!c.section || c.section === r.section) &&
       normName(c.party) === normName(r.party) &&
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
@@ -20,7 +21,21 @@ const Certs = {
   // what the rate should have been, and why
   expected(r){
     const cert = this.forRow(r);
-    if (cert) return {rate: num(cert.rate), why: "certificate " + (cert.certNo || "under 197"), cert};
+    if (cert){
+      // T-A3: the certificate's rate up to its amount; a payment that crosses the amount at the usual rate for the rest
+      const lim = num(cert.limit), name = "certificate " + (cert.certNo || "under 197");
+      if (!lim || typeof TDSLdc !== "object") return {rate: num(cert.rate), why: name, cert};
+      const before = num(((TDSLdc.use()[cert.id] || {}).byRow || {})[r.id]), left = r2(Math.max(0, lim - before)), paid = num(r.paid);
+      const normal = this.expectedNormal(r);
+      if (left >= paid || normal.rate == null) return {rate: num(cert.rate), why: name + " (\u20b9" + INR.format(left) + " of its \u20b9" + INR.format(lim) + " left before this)", cert};
+      if (left <= 0) return {rate: normal.rate, why: name + "'s amount of \u20b9" + INR.format(lim) + " used up: " + normal.why};
+      return {rate: r2((left * num(cert.rate) + (paid - left) * normal.rate) / paid), cert,
+        why: name + ": \u20b9" + INR.format(left) + " left at " + num(cert.rate) + "%, the other \u20b9" + INR.format(r2(paid - left)) + " at " + normal.rate + "%"};
+    }
+    return this.expectedNormal(r);
+  },
+  // the rate without a certificate
+  expectedNormal(r){
     const std = (TDS.STD[TDS.sec(r.section)] || []);
     const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
     // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O

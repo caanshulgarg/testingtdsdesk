@@ -13,6 +13,7 @@
 import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
 import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
+import { Correction } from "./tds/Smart.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -384,6 +385,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const filed = TDSFiled.get(fy, q, form), filedOn = filed ? filed.on : "";
   const int1A = TDS.interest(fy, q, form), fee = TDS.lateFee(fy, q, filedOn, form), noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
   const feeErr = !filed && fee && fee.days > 0;
+  // T-S2: a filed return whose entries changed in Tally since (TDSDrift, src/js/66)
+  const drift = filed ? TDSDrift.check(fy, q, form) : null, driftN = drift ? drift.rows.length : 0;
   const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
   const title = CO().name + " " + fname + " " + q + " " + fy;
   const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
@@ -407,7 +410,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   };
   const checksN = int1A.length || feeErr || issues.length || other.length ? int1A.length + issues.length + other.length + (feeErr ? 1 : 0) : null;
   const common_ = { rows, issueOf, pass, common, chOpts, title };
-  const errN = un.length + noPan + issues.length + other.length + int1A.length + (feeErr ? 1 : 0);
+  const errN = un.length + noPan + issues.length + other.length + int1A.length + (feeErr ? 1 : 0) + driftN;
   const unit = form === "27EQ" ? "collections" : "deductions";
   return <>
     <Tabs tabs={[["summary", "Summary"], ["challans", "Challans", ch.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["deductions", "Entries", rows.length],
@@ -447,6 +450,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
         {(un.length > 0 || noPan > 0) && <section className="dash-card" style={{ marginBottom: 12 }} data-fix=""><h3>To fix before the file</h3>
           {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(un.reduce((a, r) => a + r.tds, 0))}</b></div>}
           {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
+        <Correction fy={fy} q={q} form={form} drift={drift} />
         {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} filed={filedOn} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} int1A={int1A} fee={fee} filed={filedOn} />}</>}
   </>;
 }
@@ -558,7 +562,7 @@ export function Return24({ b }) {
 /* ---------------------------------------------------------------- certificates */
 
 function NewCert() {
-  const blank = { party: "", pan: "", section: "", certNo: "", rate: "", from: "", to: "" }, [c, setC] = useState(blank);
+  const blank = { party: "", pan: "", section: "", certNo: "", rate: "", limit: "", from: "", to: "" }, [c, setC] = useState(blank);
   const box = (k, props) => <input value={c[k]} onChange={(ev) => setC({ ...c, [k]: ev.target.value })} {...props} />;
   return <tr className="lt-new">
     <td>{box("from", { type: "date", "aria-label": "New certificate: from" })}</td>
@@ -567,7 +571,9 @@ function NewCert() {
     <td>{box("pan", { type: "text", placeholder: "PAN", "aria-label": "New certificate: PAN", style: { width: 110 } })}</td>
     <td>{box("section", { type: "text", placeholder: "194C", "aria-label": "New certificate: section", style: { width: 80 } })}</td>
     <td className="n">{box("rate", { type: "text", inputMode: "decimal", placeholder: "0.5", "aria-label": "New certificate: rate", style: { width: 70, textAlign: "right" } })}</td>
+    <td className="n">{box("limit", { type: "text", inputMode: "decimal", placeholder: "amount", "aria-label": "New certificate: amount limit", style: { width: 110, textAlign: "right" } })}</td>
     <td>{box("to", { type: "date", "aria-label": "New certificate: to" })}</td>
+    <td colSpan={3}></td>
     <td className="ac"><button className="btn small" onClick={() => { if (certAdd(c)) setC(blank); }}>Add</button></td>
   </tr>;
 }
@@ -575,8 +581,8 @@ function NewCert() {
 export function CertsPage() {
   const list = Certs.all(), iss = Certs.issues(S.tdsFy || "", "");
   return <>
-    <section className="dash-card" style={{ marginBottom: 12 }}><h3>Certificates under section 197</h3>
-      <p className="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate.</p>
+    <section className="dash-card" style={{ marginBottom: 12 }} data-certs=""><h3>Certificates under section 197</h3>
+      <p className="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate, up to the certificate's amount and until its last day; then the usual rate applies again. Matched by PAN where both have one.</p>
       {list.length ? <ListTable name="tdsCerts" rows={list} rowKey={(c) => c.id} unit={["certificate", "certificates"]} tail={<NewCert />}
         cols={[
           { k: "from", role: "date", label: "From", v: (c) => c.from || "", cell: (c) => (c.from ? fmtDate(c.from) : "") },
@@ -585,10 +591,15 @@ export function CertsPage() {
           { k: "pan", label: "PAN", v: (c) => c.pan || "", cell: (c) => c.pan || "" },
           { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => c.section || "any" },
           { k: "rate", label: "Rate", cls: "n", v: (c) => num(c.rate), cell: (c) => num(c.rate) + "%" },
+          { k: "limit", label: "Amount limit", cls: "n", v: (c) => num(c.limit), cell: (c) => (num(c.limit) ? money(c.limit) : "none given") },
           { k: "to", label: "To", v: (c) => c.to || "", cell: (c) => (c.to ? fmtDate(c.to) : "") },
+          // T-A3: how much of the certificate the books have used, what is left, and a warning at 80% and near its end
+          { k: "used", label: "Used", cls: "n", v: (c) => TDSLdc.state(c).used, cell: (c) => money(TDSLdc.state(c).used) },
+          { k: "left", label: "Left", cls: "n", v: (c) => num(TDSLdc.state(c).left), cell: (c) => (TDSLdc.state(c).left == null ? "—" : money(TDSLdc.state(c).left)) },
+          { k: "st", label: "State", v: (c) => TDSLdc.state(c).st, cell: (c) => { const x = TDSLdc.state(c); return <span className={"tag " + (x.st === "ok" ? "ok" : x.st === "warn" ? "warn" : "bad")}>{x.words}</span>; } },
           { k: "ac", role: "act", cls: "ac", cell: (c) => <button className="icon danger" aria-label="Remove this certificate" onClick={() => certDelete(c.id)}>✕</button> },
         ]} /> : <><p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>No certificate yet. Type one in below and use Add.</p>
-        <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>From</th><th>Certificate no.</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Rate</th><th>To</th><th className="ac"></th></tr></thead><tbody><NewCert /></tbody></table></div></>}
+        <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>From</th><th>Certificate no.</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Rate</th><th className="n">Amount limit</th><th>To</th><th className="n">Used</th><th className="n">Left</th><th>State</th><th className="ac"></th></tr></thead><tbody><NewCert /></tbody></table></div></>}
     </section>
     <section className="dash-card"><h3>Rate questions</h3>
       <p className="note">Where the books deducted at a rate different from the one that applies: a certificate, 20% under section 206AA when there is no valid PAN, or the usual rate for the section.</p>
