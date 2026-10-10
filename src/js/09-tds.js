@@ -73,6 +73,12 @@ const TDS = {
       if (hit) return {paid: r2(hit), rate, how: "section"};
       if (!cand.length) continue;
     }
+    // round 43: 194Q is deducted only on the purchase value above 50 lakh in the year, so the bill is larger than what the
+    // TDS was worked on: the amount the deduction is on (the TDS at 0.1%) is what is paid or credited for the return
+    if (this.sec(t.section) === "194Q" && L.tds.length === 1){
+      const want = r2(t.amount / 0.001);
+      if (want > 0 && cand.some(c => c > want + 0.5)) return {paid: want, rate: 0.1, how: "section (above 50 lakh)"};
+    }
     if (std.length && L.tds.length === 1 && !cand.some(c => std.some(rate => Math.abs(r2(t.amount / (rate / 100)) - c) <= 2))){
       // the expense does not fit any usual rate: show the rate the books imply
       const paid = L.taxable || 0;
