@@ -26,10 +26,10 @@ select id from storage.buckets order by 1;
 ```
 
 The list below starts after Build 199. It follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which
-`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files: 66 to run, plus 31 for the owner to decide**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
+`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **66 files to run; 31 is listed but skipped (the owner's decision of 10-Oct-2026)**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
 `gst-taxpro/schema.sql`, 1.1.1) if live has no `gst_sessions` table: its header says "apply the same on live before
 gst-taxpro goes there". Run it before step 13 (16 alters `gst_sessions`).
-Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's comes from branch `perms-61`.
+Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's is the same on tax-accuracy and on branch `perms-61`.
 Folders are under `server/`. "GO-LIVE COPY" means the original names staging's web address in a pg_cron job, so live
 runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DATA": see the dry runs in 1.1.2.
 
@@ -62,7 +62,7 @@ runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DA
 | 25 | 28 | `tally-cloud/migration-28-ledger-ids.sql` | `12a0901fd5ef8cfb78172f2ecf90f94c` |  |
 | 26 | 29 | `security/migration-29-backups-history.sql` | `484b2c1997ea781c10befb96f18a87a1` | delete from: inside a function only |
 | 27 | 30 | `security/migration-30-client-keys-kept.sql` | `321de21d22027a5336def15d380774bd` |  |
-| 28 | 31 | `tally-cloud/migration-31-clean-names.sql` | `45ed0b283c274132b3dc27abdd9527c8` | **NOT run on staging** (no `raw_name` column there). **Recommended: skip** (1.1.3) |
+| 28 | 31 | `tally-cloud/migration-31-clean-names.sql` | `45ed0b283c274132b3dc27abdd9527c8` | **SKIP** (owner, 10-Oct-2026; 1.1.3). Never ran on staging (no `raw_name` column there) |
 | 29 | 32 | `tally-cloud/migration-32-sync-safety.sql` | `a04b1c71802bce5b7231306f63c393d6` | **CHANGES DATA**: `tally_vouchers.origin` = 'fincom' where the narration has a TDSDesk id |
 | 30 | 33 | `tally-cloud/migration-33-ledger-lists.sql` | `1d64b0145738d7358d4ce42c63ecf0ca` |  |
 | 31 | 35 | `tally-cloud/migration-35-bridge-control.sql` | `d13b234cbdb5e3429e23389acef742bd` | never run again after 34 |
@@ -93,9 +93,9 @@ runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DA
 | 56 | 58 | `tally-cloud/migration-58-lows.sql` | `db5b429519308c9768f6e6e6befee08a` |  |
 | 57 | 59 | `tally-cloud/migration-59-ledger-aliases.sql` | `882de3e601fb7b57a370ab275cbb61b9` |  |
 | 58 | 60 | `tally-cloud/migration-60-recorder-lows.sql` | `adbec22537f274cc5deaf170a339095f` |  |
-| 59 | 61 | `tally-cloud/migration-61-privileges.sql` | `cec075a148f26144fd1808c94b841684` | **only on branch perms-61** (not in tax-accuracy's tree): bring the file over first; closes members self-promotion. **Recommended: run** (1.1.3) |
-| 60 | 68 | `tally-cloud/migration-68-alert-dismissals.sql` | `184e795994242b41f4edbaaaa7d530f9` | owner ran it in the SQL editor |
-| 61 | 70 | `tally-cloud/migration-70-alert-dismissals-tighten.sql` | `3457411cc0bacfdbdc174191e0629b63` |  |
+| 59 | 68 | `tally-cloud/migration-68-alert-dismissals.sql` | `184e795994242b41f4edbaaaa7d530f9` | owner ran it in the SQL editor |
+| 60 | 70 | `tally-cloud/migration-70-alert-dismissals-tighten.sql` | `3457411cc0bacfdbdc174191e0629b63` |  |
+| 61 | 61 | `tally-cloud/migration-61-privileges.sql` | `cec075a148f26144fd1808c94b841684` | **RUN** (owner, 10-Oct-2026; 1.1.3). Brought over from perms-61 byte for byte (same md5). Placed where `tests/run_migration_order.py` runs it in both orders (after 70, before 62; passed 10-Oct); privileges only; closes members self-promotion and the anon TRUNCATE hole |
 | 62 | 62 | `tally-cloud/migration-62-tds-rate-worked-out.sql` | `bcdfd7b72b1d69b429e6b15a5e9652c6` |  |
 | 63 | 67 | `tally-cloud/migration-67-recorder-renumbered.sql` | `78676805ebdaf9b24e41bc2708ed0a90` | tested fresh order runs 67 before 63 (staging ran 63 first) |
 | 64 | 63 | `tally-cloud/migration-63-recorder-repeat.sql` | `ff8011351b8856025710b68bad0b690c` |  |
@@ -131,7 +131,7 @@ in the file); the file stops with a clear message, before changing anything, if 
 form `https://<project id>.supabase.co`, or names staging; and it runs twice cleanly (13 adds `tally_jobs` to the realtime
 publication only when it is not there yet; 16 and schema.sql now run in one transaction).
 
-| Go-live copy (run on live) | md5 (for the owner to approve) | Replaces on live |
+| Go-live copy (run on live) | md5 (**approved by the owner 10-Oct-2026**) | Replaces on live |
 |---|---|---|
 | `gst-taxpro/golive/schema-golive.sql` | `a3f27ffa473266bb46400b5925fefcea` | `gst-taxpro/schema.sql` (3adf1dc2779cef249651126c3bdc852b): cron `gst-taxpro-refresh`, vault `gst_cron_key` |
 | `tally-cloud/golive/migration-13-golive.sql` | `23175e76972a90cf4e08cfeef0db568d` | `tally-cloud/migration-13-fast-sync.sql` (d142e44b596319a1e39fed77657e0929): crons `tally-work`, `tally-post-requeue` |
@@ -308,25 +308,45 @@ select coalesce(to_jsonb(t)->>'origin', '(no origin column yet)') as origin, cou
 After 32: the `fincom` row's `entries` grows by the dry run's number. After 37: `with_fincom_id` grows by the dry run's
 number. Total entries the same. Plus the money check.
 
-#### 1.1.3 Migrations 31 and 61: run or skip
+#### 1.1.3 Migrations 31 and 61, and live-members-fix.sql (owner's decisions of 10-Oct-2026)
 
-- **31 (`tally-cloud/migration-31-clean-names.sql`): recommended SKIP.** It is a one-time rewrite of names already kept
-  (entities, two spaces read for a line break, twins with one key). It never ran on staging, so staging, which is
-  what was tested and reviewed, has lived without it since 02-Oct; the tested fresh order goes from 30 to 32 without it.
-  Everything after it copes without it: 34, 36 and 41 check whether its column `before_clean` is there, 36 adds that
-  column itself, and tally-ingest reads it only when present. Running it on live would be its first run anywhere on real
-  data, after 36–66 instead of before them (an order nobody has tested), and it rewrites names in every table of the
-  cloud copy. The names it would fix also get fixed the normal way: tally-ingest now cleans names on the way in, the
-  next ledger list rebuilds the masters, and "Read the kept day books again" rebuilds a book's entries. If, after the
-  go-live, a book shows one ledger under two names, read that book again rather than run 31.
-- **61 (`tally-cloud/migration-61-privileges.sql`, branch perms-61, md5 cec075a148f26144fd1808c94b841684):
-  recommended RUN**, as step 59. It ran on staging on 06-Oct and staging has worked with it since (pub-241 included). It
-  closes two real holes that live has today: anyone with the public key could empty (TRUNCATE) most public tables, and a
-  staff member can make themselves owner with one request (members self-promotion). It only revokes privileges (no row,
-  table or policy removed) and checks itself at the end. Before it runs: bring the file (with `tests/run_migration61.py`)
-  onto tax-accuracy and check the md5. Risks: a Build 199 tab left open would fail its writes, so it runs in the window
-  while no one works and everyone reloads after; a page refused afterwards is fixed by the one grant its header names.
-  If 61 is skipped, run `live-members-fix.sql` (perms-61, md5 fd84f633…) at least, unless the owner already did.
+- **31 (`tally-cloud/migration-31-clean-names.sql`): SKIP.** It is a one-time rewrite of names already kept (entities,
+  two spaces read for a line break, twins with one key). It never ran on staging, which has lived without it since
+  02-Oct; the tested order goes from 30 to 32 without it. Everything after it copes without it: 34, 36 and 41 check
+  whether its column `before_clean` is there, 36 adds that column itself, and tally-ingest reads it only when present.
+  Running it on live would be its first run anywhere, on real data, in an order nobody has tested. The names it would
+  fix get fixed the normal way: tally-ingest cleans names on the way in, the next ledger list rebuilds the masters, and
+  "Read the kept day books again" rebuilds a book's entries. If a book shows one ledger under two names after the
+  go-live, read that book again.
+- **61 (`tally-cloud/migration-61-privileges.sql`, md5 cec075a148f26144fd1808c94b841684): RUN**, as step 61 of the list
+  (after 70, before 62: the order `tests/run_migration_order.py` runs it in, both orders, twice; 239 checks passed on
+  10-Oct with the file in the tree). The file is now on tax-accuracy, byte for byte the perms-61 file, with its test
+  `tests/run_migration61.py` (and its helper `tests/members_stand.py`): 67 checks passed. It ran on staging on 06-Oct.
+  It only revokes privileges from anon and authenticated and checks itself at the end. It closes two holes live has
+  today: anyone with the public key could empty (TRUNCATE) most public tables, and a staff member can make themselves
+  owner with one request. A Build 199 tab left open would fail its writes, so it runs in the window and everyone reloads
+  after; a page refused afterwards is fixed by the one grant its header names.
+- **`live-members-fix.sql`** (perms-61, md5 fd84f633…; one statement: `revoke insert, update, delete on table
+  public.members from authenticated`). The owner does not know whether it was run on live. He pastes this read-only
+  query into live's SQL editor (tested on pg_stand both ways):
+
+  ```sql
+  select case when has_table_privilege('authenticated', 'public.members', 'INSERT')
+                or has_table_privilege('authenticated', 'public.members', 'UPDATE')
+                or has_table_privilege('authenticated', 'public.members', 'DELETE')
+                or exists (select 1 from pg_attribute a where a.attrelid = 'public.members'::regclass and a.attnum > 0 and not a.attisdropped
+                             and (has_column_privilege('authenticated', 'public.members', a.attname, 'INSERT')
+                               or has_column_privilege('authenticated', 'public.members', a.attname, 'UPDATE')))
+              then 'NOT applied: signed-in members can still write the members table'
+              else 'applied: signed-in members cannot write the members table' end as live_members_fix;
+  ```
+
+  - **"applied"**: nothing to do; 61 runs as planned (it runs cleanly on top of the fix: tested).
+  - **"NOT applied"**: the self-promotion hole is open on live today. Either the owner runs `live-members-fix.sql` now
+    (it is safe and small, and closes it before the go-live), or he leaves it to 61 in the window, which does the same
+    and more. In both cases, also look at the trail for anyone who used the hole (read-only; from the file's header):
+    `select a.at, a.firm_id, a.user_id, a.detail from public.activity a where a.what = 'person.update' order by a.at desc;`
+    and check that each person's role on the People page is the one they should have.
 
 ### 1.2 Edge functions (staging versions, read 10-Oct)
 
@@ -375,8 +395,6 @@ writes down live's current version of each function: that is the way back.
 
   ```sh
   LIVE_PROJECT_ID=<live's project id>          # 20 letters and digits; the build must name it
-  LIVE_SITE_REPO=https://github.com/caanshulgarg/tds-desk.git
-  LIVE_SITE_BRANCH=main                        # the branch Pages publishes from
   LIVE_FOLDER=app                              # the folder the build goes into (not the root)
   LIVE_SOURCE_COMMIT=601e57ad                  # optional: the commit staging shows
   LIVE_URL=https://app.fincom.live/app/        # optional: only printed
@@ -386,12 +404,12 @@ writes down live's current version of each function: that is the way back.
   wrong folder, uncommitted changes); a full dry run needs live's id, which this session may not name.
 - **Build from the staging commit.** Build from the commit staging shows: pub-241 601e57ad (main b6d6fcdd; arc-ui
   840b5331 merged with tax-accuracy c89c58ff). Run `npm ci` first.
-- **Hosting.** Per docs/setup.md (step 7), live is `caanshulgarg/tds-desk` on GitHub Pages (Build 199 is its root
-  `index.html`, one file). The repository does not say that app.fincom.live is that repository's Pages address (this
-  repository's own CNAME is staging.fincom.live; tds-desk cannot be read from this session): **owner question**. Because
-  the script changes one folder only, the React build lands at `<site>/<folder>/` and Build 199's root page stays until a
-  separate, reviewed one-file commit makes the root forward to the folder, as staging's root forwards to /review/
-  (**owner question**: which folder, and when the root switches; switching it back is the way back).
+- **Hosting (owner's answer, 10-Oct-2026):** the live site is GitHub Pages of **`caanshulgarg/tds-desk`, branch
+  `main`** (Build 199 is its root `index.html`). `app/publish-live.sh` has that repository and branch written in; the
+  settings file cannot change them (it refuses one that tries). Because the script changes one folder only, the React
+  build lands at `<site>/<folder>/` and Build 199's root page stays until a separate, reviewed one-file commit makes the
+  root forward to the folder, as staging's root forwards to /review/ (**still open**: which folder, and when the root
+  switches; switching it back is the way back). tds-desk was not read from this session.
 - **Changes the live build needs:** vite.config.js ships `assets/bridge-go` only for a test build with
   `FINCOM_SHIP_BRIDGE=1`, and build.py's live form still hands out the old PowerShell setup (`bridge-setup`). For live
   users to get 2.4.1, both need a small reviewed change. (A live build has no Sentry; that is intended.)
@@ -460,13 +478,14 @@ the backup from step 2 is a full way back.
 - Say "go", in writing, after the rehearsal has passed.
 - Run 48 and 50 (and any piece the tool times out on) in live's SQL editor.
 - Paste the inventory query and send back what it shows.
-- Approve the go-live copies of 13, 16 and schema.sql (md5s in 1.1.1), and set `fincom_project_url` in live's Vault.
+- Set `fincom_project_url` in live's Vault (the go-live copies' md5s: approved 10-Oct-2026).
+- Run the live-members-fix check (1.1.3) and act on its answer.
 - Run the dry runs of 1.1.2 in live's SQL editor before go and send the numbers.
 - Fill in `~/.fincom/live.env` for `app/publish-live.sh` (1.4).
 - Set the secret values: function secrets, vault, platform keys, Resend domain, Auth settings.
 - Install bridge 2.4.1 on each live user's computer (NWS144 steps as in docs/bridge-2.4.1-test-sheet.txt), and pair
   each one with a connect code.
-- Decide on 31 (recommended: skip) and 61 (recommended: run) (1.1.3), whether whether Sentry stays off on live, and which computers get the bridge.
+- Decide whether Sentry stays off on live, and which computers get the bridge.
 
 ## 5. Risks and open questions
 
@@ -479,10 +498,10 @@ the backup from step 2 is a full way back.
    `postTo`; 32 and 37 re-mark voucher origins; 13 gives every device a new wake token. None of these is undone by a later migration. Only the backup undoes them. **Addressed:** a dry run and a
    before/after check for each (1.1.2), tested; the owner runs the dry runs before go.
 4. **31 never ran on staging** (`tally_ledgers.raw_name` is missing there), yet it is in the numbered chain. The tested
-   order goes from 30 to 32 without it. **Recommended: skip** (1.1.3).
-5. **61 is not on tax-accuracy** (only on `perms-61`). It narrows what `authenticated` may write on clients, records
+   order goes from 30 to 32 without it. **Decided: skip** (owner, 10-Oct; 1.1.3).
+5. **61** is now on tax-accuracy (same md5 as perms-61) and runs as step 61 (owner, 10-Oct). It narrows what `authenticated` may write on clients, records
    and activity. Old Build 199 tabs left open would then fail their writes. `live-members-fix.sql` (perms-61, md5
-   fd84f633…) was for the owner to run on live: was it run? **Recommended: run 61** (1.1.3).
+   fd84f633…): the owner does not know if it was run; 1.1.3 has the check and what to do.
 6. **Staff accounts:** 61 closes members self-promotion; invites need `APP_URL` and Resend; the platform admin's
    second step (admin function) is not switched on. Check that every live staff member can still sign in during step 10.
 7. **Bridges 1.14 during and after the window.** **Tested 10-Oct:** tally-ingest as in the repository (staging's v43)
@@ -504,7 +523,6 @@ the backup from step 2 is a full way back.
     70, and pg_cron jobs that have already called out.
 12. **The window's length depends on live's data size.** 23, 32, 37 and the RESTRICT swaps in 45 lock tables. The
     rehearsal measures how long.
-13. **Owner questions (10-Oct):** (a) is app.fincom.live the GitHub Pages address of `caanshulgarg/tds-desk`, and from
-    which branch does it publish? (b) which folder should the React build go into, and when does the root page switch to
-    it? (c) approve the three go-live copies' md5s (1.1.1); (d) skip 31 and run 61, as recommended (1.1.3)? (e) was
-    `live-members-fix.sql` run on live?
+13. **Owner's answers (10-Oct-2026):** live site = GitHub Pages of `caanshulgarg/tds-desk`, branch main; go-live copies
+    approved; 31 skipped, 61 run; live-members-fix unknown, so the check in 1.1.3. **Still open:** which folder the React
+    build goes into, and when the root page switches to it.
