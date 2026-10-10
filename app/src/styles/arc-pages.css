@@ -125,7 +125,8 @@ input[type=search]:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* notices inside a page (.bk-alert, .bk-warn): Arc's alert, a soft fill inside a thin border, not the old bar at the left */
 .bk-alert, .bk-warn { padding: 9px 12px; border: 1px solid color-mix(in oklab, var(--warn) 38%, var(--border)); border-left-width: 1px;
-  border-radius: var(--radius-control); background: var(--warn-soft); color: var(--foreground); font-size: 13.5px; line-height: 1.5; }
+  border-radius: var(--radius-control); background: var(--warn-soft); color: var(--foreground); font-size: 13.5px; }
+.bk-alert.not-read { padding-block: 6px; }   /* the books-not-read line stays one row (the notice rule: 40px at most) */
 .bk-alert.bad { border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
 .bk-alert.ok { border-color: color-mix(in oklab, var(--ok) 38%, var(--border)); background: var(--ok-soft); }
 
