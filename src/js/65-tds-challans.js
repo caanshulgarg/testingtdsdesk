@@ -124,7 +124,7 @@ const TDSCH = {
     groups().forEach(g => {
       const due = TDS.dueDate(g.ym + "01");
       const near = cands(g.section, g.ym).filter(c => this.secOk(c.section, g.section))
-        .sort((a, b) => Math.abs(TDS.monthsBetween(due, a.date) - 1) - Math.abs(TDS.monthsBetween(due, b.date) - 1) || Math.abs(num(TDS.ymd(a.date)) - num(due)) - Math.abs(num(TDS.ymd(b.date)) - num(due)))[0];
+        .sort((a, b) => Math.abs(this.days(a.date, due)) - Math.abs(this.days(b.date, due)) || String(a.date).localeCompare(String(b.date)))[0];
       if (near) put("auto", near, g.rows, g.section, [g.ym]);
     });
     return out;
