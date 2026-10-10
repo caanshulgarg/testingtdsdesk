@@ -1,0 +1,301 @@
+[14:54:34] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 9 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1527 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 9 ms, 'FinCom Spike Co' in it: True
+[14:55:09] ---- the stub cloud and the bridge
+[ledger Spike Income] 19 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[14:55:12] ---- tdsgst masters (before the bridge)
+[tdsgst company] 17 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO tdsgst masters company: created 0, altered 1, errors 0
+[tdsgst natures] 23 ms: <RESPONSE><CREATED>8</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO tdsgst masters natures: created 8, altered 0, errors 0
+[tdsgst ledgers] 281 ms: <RESPONSE><LINEERROR>TDS Rate &apos;Salary&apos; does not exist!</LINEERROR><CREATED>49</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>14</EXCEPTIONS></RESPONSE>
+  INFO tdsgst masters ledgers: created 49, altered 0, errors 0; Tally said: TDS Rate &apos;Salary&apos; does not exist!
+[tdsgst company] 5 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>50</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>8</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FB...
+  INFO tdsgst company as Tally keeps it: STARTINGFROM=20260401, BOOKSFROM=20260401, INCOMETAXNUMBER=AAACF1234A, TANUMBER=DELF01234E, GSTREGISTRATIONTYPE=Regular, STATENAME=Delhi, ISTDSON=Yes, ISTCSON=Yes, ISGSTON=Yes
+[masters p0] 242 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><CURRENCY NAME="?" RESERVEDNAME=""><ACTIVEFROM/><ACTIVETO/><GUID>ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001d</GUID><MAILINGNAME>INR</MAILINGNAME><NARRATION/><ENTEREDBY/><ALTEREDBY/><TYPEOFUPDATEACTIVITY/><OBJECTUPDATEACTION/><REQUESTORRULE/><ORIGINALNAME>?</ORIGINALNAME><ISOCURRENCYCODE/><EXPANDEDSYMBOL>INR</EXPAN...
+  INFO tdsgst: masters exported (p0): 55 ledgers, 1806323 characters
+[renum journal] 42 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: 176dcfb68d90a282d759d2227b559e907b981724 go-live: the new app replaces the old at the root of app.fincom.live; publish-live.sh keeps Build 199 in retired/build-199 and refuses deletes and overwrites; put-back step in GO-LIVE.md 1.4
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-10 14:55:20  FinCom Bridge 2.4.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-10 14:55:20  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-10 14:55:20  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-10 14:55:20  Recorder: re-scan of the add-on's files for 2.4.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-10 14:55:20  Check:  - 
+  bridge log: 2026-10-10 14:55:23  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-10 14:55:23  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-10 14:55:23  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-10-10 14:55:23  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-10 14:55:23  Company FinCom Spike Co: its Tally GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6 is held from now on
+  bridge log: 2026-10-10 14:55:24  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=269 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-10 14:55:24  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=269
+  bridge log: 2026-10-10 14:55:24  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=269)
+  INFO add-on: recorder files after start: none
+[14:56:06] ---- tdsgst: the entries, the bridge, the amendments
+  INFO tdsgst: Update now (the masters): asked
+  INFO tdsgst: after Update now (the masters): no ledger list in 240 s
+[tdsgst S01] 97 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>3</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S02] 49 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>4</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S03] 50 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>5</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S04] 52 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S05] 56 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>7</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S06] 53 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>8</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S07] 54 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>9</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S08] 46 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>10</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S09] 44 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>11</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S10] 47 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>12</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S11] 37 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>13</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S12] 42 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>14</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S13] 45 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>15</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S14] 31 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>16</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S15] 55 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>17</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst RV1] 26 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>18</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst CN1] 66 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>19</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst CN2] 46 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>20</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst DN1] 55 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>21</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst P01] 85 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>22</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst P02] 62 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>23</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst P03] 60 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>24</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst P04] 68 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>25</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst P05] 42 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>26</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst DN2] 62 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>27</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst T01] 21 ms: <RESPONSE><LINEERROR>Ledger &apos;Contract Charges&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T01 (no TDS allocation)] 20 ms: <RESPONSE><LINEERROR>Ledger &apos;Contract Charges&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T01: refused with its TDS allocation (Ledger &apos;Contract Charges&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Contract Charges&apos; does not exist!
+[tdsgst T02] 22 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T02 (no TDS allocation)] 22 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T02: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+[tdsgst T03] 24 ms: <RESPONSE><LINEERROR>Ledger &apos;Commission Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T03 (no TDS allocation)] 21 ms: <RESPONSE><LINEERROR>Ledger &apos;Commission Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T03: refused with its TDS allocation (Ledger &apos;Commission Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Commission Paid&apos; does not exist!
+[tdsgst T04] 22 ms: <RESPONSE><LINEERROR>Ledger &apos;Rent&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T04 (no TDS allocation)] 22 ms: <RESPONSE><LINEERROR>Ledger &apos;Rent&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T04: refused with its TDS allocation (Ledger &apos;Rent&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Rent&apos; does not exist!
+[tdsgst T05] 35 ms: <RESPONSE><LINEERROR>Ledger &apos;TDS Payable 194Q&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T05 (no TDS allocation)] 29 ms: <RESPONSE><LINEERROR>Ledger &apos;TDS Payable 194Q&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T05: refused with its TDS allocation (Ledger &apos;TDS Payable 194Q&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;TDS Payable 194Q&apos; does not exist!
+[tdsgst T06] 25 ms: <RESPONSE><LINEERROR>Ledger &apos;Interest Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T06 (no TDS allocation)] 27 ms: <RESPONSE><LINEERROR>Ledger &apos;Interest Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T06: refused with its TDS allocation (Ledger &apos;Interest Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Interest Paid&apos; does not exist!
+[tdsgst T07] 23 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T07 (no TDS allocation)] 21 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T07: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+[tdsgst T08] 21 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T08 (no TDS allocation)] 20 ms: <RESPONSE><LINEERROR>Ledger &apos;Professional Fees&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T08: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+[tdsgst T09] 21 ms: <RESPONSE><LINEERROR>Ledger &apos;Contract Charges&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T10] 27 ms: <RESPONSE><LINEERROR>Ledger &apos;Royalty Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T10 (no TDS allocation)] 23 ms: <RESPONSE><LINEERROR>Ledger &apos;Royalty Paid&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T10: refused with its TDS allocation (Ledger &apos;Royalty Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Royalty Paid&apos; does not exist!
+[tdsgst T11] 24 ms: <RESPONSE><LINEERROR>Ledger &apos;TDS on Salary 192&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[tdsgst T11 (no TDS allocation)] 23 ms: <RESPONSE><LINEERROR>Ledger &apos;TDS on Salary 192&apos; does not exist!</LINEERROR><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO tdsgst T11: refused with its TDS allocation (Ledger &apos;TDS on Salary 192&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;TDS on Salary 192&apos; does not exist!
+[tdsgst TC1] 81 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>28</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst TC2] 75 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>29</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[tdsgst S20] 74 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>30</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO tdsgst phase 1: 28 of 39 entries made by XML; refused: T01 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T02 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T03 (created 0, errors 0: Ledger &apos;Commission Paid&apos; does not exist!); T04 (created 0, errors 0: Ledger &apos;Rent&apos; does not exist!); T05 (created 0, errors 0: Ledger &apos;TDS Payable 194Q&apos; does not exist!); T06 (created 0, errors 0: Ledger &apos;Interest Paid&apos; does not exist!); T07 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T08 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T09 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T10 (created 0, errors 0: Ledger &apos;Royalty Paid&apos; does not exist!); T11 (created 0, errors 0: Ledger &apos;TDS on Salary 192&apos; does not exist!)
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-5-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-tg-cancel-daybook (1024x768)
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[keys] '%x' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-tg-cancelled (1024x768)
+  INFO tdsgst: FC/26-27/012 cancelled: by keys (Alt+X)
+  tally spike Journal/1/20260401 mid 1 aid 1 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000001 cancelled False optional False
+  tally S01 Sales/1/20260501 mid 3 aid 3 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000003 cancelled False optional False
+  tally S02 Sales/2/20260501 mid 4 aid 4 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000004 cancelled False optional False
+  tally S03 Sales/3/20260501 mid 5 aid 5 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000005 cancelled False optional False
+  tally S04 Sales/4/20260501 mid 6 aid 6 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000006 cancelled False optional False
+  tally P01 Purchase/1/20260501 mid 22 aid 22 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000016 cancelled False optional False
+  tally P02 Purchase/2/20260501 mid 23 aid 23 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000017 cancelled False optional False
+  tally S05 Sales/5/20260502 mid 7 aid 7 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000007 cancelled False optional False
+  tally S06 Sales/6/20260502 mid 8 aid 8 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000008 cancelled False optional False
+  tally S07 Sales/7/20260502 mid 9 aid 9 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000009 cancelled False optional False
+  tally S08 Sales/8/20260502 mid 10 aid 10 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000a cancelled False optional False
+  tally S09 Sales/9/20260502 mid 11 aid 11 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000b cancelled False optional False
+  tally S10 Sales/10/20260502 mid 12 aid 12 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000c cancelled False optional False
+  tally S11 Sales/11/20260502 mid 13 aid 13 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000d cancelled False optional False
+  tally S14 Sales/18/20260502 mid 16 aid 16 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000010 cancelled False optional True
+  tally S15 Sales/14/20260502 mid 17 aid 17 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000011 cancelled False optional False
+  tally RV1 Receipt/1/20260502 mid 18 aid 18 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000012 cancelled False optional False
+  tally CN1 Credit Note/1/20260502 mid 19 aid 19 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000013 cancelled False optional False
+  tally CN2 Credit Note/2/20260502 mid 20 aid 20 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000014 cancelled False optional False
+  tally DN1 Debit Note/1/20260502 mid 21 aid 21 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000015 cancelled False optional False
+  tally P03 Purchase/3/20260502 mid 24 aid 24 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000018 cancelled False optional False
+  tally P04 Purchase/4/20260502 mid 25 aid 25 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000019 cancelled False optional False
+  tally P05 Purchase/5/20260502 mid 26 aid 26 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001a cancelled False optional False
+  tally DN2 Debit Note/2/20260502 mid 27 aid 27 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001b cancelled False optional False
+  tally S12 Sales/12/20260531 mid 14 aid 31 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e cancelled True optional False
+  tally S13 Sales/13/20260531 mid 15 aid 15 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000f cancelled False optional False
+  tally TC1 Sales/15/20260601 mid 28 aid 28 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001c cancelled False optional False
+  tally TC2 Sales/16/20260602 mid 29 aid 29 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001d cancelled False optional False
+  tally S20 Sales/17/20260701 mid 30 aid 30 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001e cancelled False optional False
+  tally renum Journal/2/20261001 mid 2 aid 2 guid ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000002 cancelled False optional False
+######## HARNESS g1 masters and entries made in Tally: 28 of 39 entries made by XML, FC/26-27/012 cancelled by keys (Alt+X); refused: T01 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T02 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T03 (created 0, errors 0: Ledger &apos;Commission Paid&apos; does not exist!); T04 (created 0, errors 0: Ledger &apos;Rent&apos; does not exist!); T05 (created 0, errors 0: Ledger &apos;TDS Payable 194Q&apos; does not exist!); T06 (created 0, errors 0: Ledger &apos;Interest Paid&apos; does not exist!); T07 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T08 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T09 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T10 (created 0, errors 0: Ledger &apos;Royalty Paid&apos; does not exist!); T11 (created 0, errors 0: Ledger &apos;TDS on Salary 192&apos; does not exist!); the company's GST/TDS settings and the masters as Tally kept them in company-p0.xml / masters-p0.xml
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 27 of 28: S01, S02, S03, S04, P01, P02, S05, S06, S07, S08, S09, S10, S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+[tdsgst] phase 1 waiting for 15 of 28: S11, S14, S15, RV1, CN1, CN2, DN1, P03, P04, P05, DN2, S13, TC1, TC2, S20
+  bridge log: 2026-10-10 14:56:36  Update from Tally asked for now
+  bridge log: 2026-10-10 14:56:36  Update from Tally: asked for now
+  bridge log: 2026-10-10 14:56:36  Update from Tally: waiting, Tally has just opened; letting it finish loading
+  bridge log: 2026-10-10 14:57:41  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-10 14:57:42  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 55 ledger(s) (0.2s); saved
+  bridge log: 2026-10-10 14:57:42  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-10 14:57:42  Keeping FinCom Spike Co: the ledger list read (55 ledgers, 28 groups, 3 request(s)): 55 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-10 14:57:42  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=2 ALTMSTID=269
+  bridge log: 2026-10-10 14:57:42  Update from Tally: done (5 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  bridge log: 2026-10-10 15:01:08  Recorder: Sales 12 of 31-May-2026 (MasterID 14, line 7b409294…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:01:08  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+  bridge log: 2026-10-10 15:01:08  Recorder: FinCom Spike Co: cancel of mid 14: GUID from Tally (asked by MasterID): ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e; the GUID its MasterID makes agrees
+  bridge log: 2026-10-10 15:05:53  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=31, ALTMSTID=269
+  bridge log: 2026-10-10 15:05:54  Recorder (Tally's change list) for FinCom Spike Co: 28 change(s) found
+  bridge log: 2026-10-10 15:05:54  Recorder: An entry of 01-May-2026 (MasterID 3, line fc5f4e4e…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:54  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-10 15:05:54  Recorder: Sales 1 of 01-May-2026 (MasterID 3, line fc5f4e4e…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000003, AlterID 3
+  bridge log: 2026-10-10 15:05:54  Recorder: An entry of 01-May-2026 (MasterID 4, line 3e4ccf8b…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:55  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-10 15:05:55  Recorder: Sales 2 of 01-May-2026 (MasterID 4, line 3e4ccf8b…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000004, AlterID 4
+  bridge log: 2026-10-10 15:05:55  Recorder: An entry of 01-May-2026 (MasterID 5, line ac9255d2…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:55  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-10 15:05:55  Recorder: Sales 3 of 01-May-2026 (MasterID 5, line ac9255d2…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000005, AlterID 5
+  bridge log: 2026-10-10 15:05:55  Recorder: An entry of 01-May-2026 (MasterID 6, line a1f313ac…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:55  Recorder: Sales 4 of 01-May-2026 (MasterID 6, line a1f313ac…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000006, AlterID 6
+  bridge log: 2026-10-10 15:05:55  Recorder: An entry of 01-May-2026 (MasterID 22, line 91c3b3fd…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:56  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-10 15:05:56  Recorder: Purchase 1 of 01-May-2026 (MasterID 22, line 91c3b3fd…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000016, AlterID 22
+  bridge log: 2026-10-10 15:05:56  Recorder: An entry of 01-May-2026 (MasterID 23, line ebdec37c…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:56  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-10 15:05:56  Recorder: Purchase 2 of 01-May-2026 (MasterID 23, line ebdec37c…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000017, AlterID 23
+  bridge log: 2026-10-10 15:05:56  Recorder: An entry of 02-May-2026 (MasterID 7, line b98c32a0…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:56  Recorder: Sales 5 of 02-May-2026 (MasterID 7, line b98c32a0…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000007, AlterID 7
+  bridge log: 2026-10-10 15:05:56  Recorder: An entry of 02-May-2026 (MasterID 8, line 14cd8910…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:57  Recorder: entry fetch of FinCom Spike Co: answered in 16 ms
+  bridge log: 2026-10-10 15:05:57  Recorder: Sales 6 of 02-May-2026 (MasterID 8, line 14cd8910…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000008, AlterID 8
+  bridge log: 2026-10-10 15:05:57  Recorder: An entry of 02-May-2026 (MasterID 9, line cf181d99…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:57  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-10 15:05:57  Recorder: Sales 7 of 02-May-2026 (MasterID 9, line cf181d99…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-00000009, AlterID 9
+  bridge log: 2026-10-10 15:05:57  Recorder: An entry of 02-May-2026 (MasterID 10, line af959b4d…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:57  Recorder: Sales 8 of 02-May-2026 (MasterID 10, line af959b4d…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000a, AlterID 10
+  bridge log: 2026-10-10 15:05:57  Recorder: An entry of 02-May-2026 (MasterID 11, line bdc730d4…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:57  Recorder: Sales 9 of 02-May-2026 (MasterID 11, line bdc730d4…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000b, AlterID 11
+  bridge log: 2026-10-10 15:05:57  Recorder: An entry of 02-May-2026 (MasterID 12, line b1696009…): asking Tally by MasterID
+  bridge log: 2026-10-10 15:05:58  Recorder: Sales 10 of 02-May-2026 (MasterID 12, line b1696009…): taken: Tally's GUID ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000c, AlterID 12
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 13, line 2492a01b…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 16, line d3aecce8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 17, line 432582bc…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 18, line 2b10218a…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 19, line f98b8ee5…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 20, line 8ad8d800…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 21, line 0892eb5b…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 24, line 91748db8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 25, line bbcf13aa…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 26, line 1f66db29…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-May-2026 (MasterID 27, line ce72bf57…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 31-May-2026 (MasterID 15, line da768ac1…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 31-May-2026 (MasterID 14, line 180f81a8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 01-Jun-2026 (MasterID 28, line a5720bdf…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 02-Jun-2026 (MasterID 29, line 405d4e73…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-10 15:05:58  Recorder: An entry of 01-Jul-2026 (MasterID 30, line d0995b2a…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 15:06 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+######## FAIL g2 the bridge sent every entry (phase 1): 28 entries in Tally; the bridge's lines with Tally's entry reached the stub for 13 in 25 min; not reached: S11 (body), S14 (body), S15 (body), RV1 (body), CN1 (body), CN2 (body), DN1 (body), P03 (body), P04 (body), P05 (body), DN2 (body), S13 (body), TC1 (body), TC2 (body), S20 (body)
+[daybook p1 202604] 32 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e" VCHKEY="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000b45c:00000008" VCHTYPE="Sales" ACTION="Cancel" OBJVIEW="Accounting Voucher View"><VATREGISTRATIONDATE/><CSTREGISTRATIONDATE/><FROMDATE/><TODATE/><ACTIVETO/><ALTEREDON/><DATE>20260531</DATE><LUTDATEOFISS...
+  INFO tdsgst: Day Book p1 202604 exported: 2 entries, 94609 characters
+[daybook p1 202605] 18 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e" VCHKEY="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000b45c:00000008" VCHTYPE="Sales" ACTION="Cancel" OBJVIEW="Accounting Voucher View"><VATREGISTRATIONDATE/><CSTREGISTRATIONDATE/><FROMDATE/><TODATE/><ACTIVETO/><ALTEREDON/><DATE>20260531</DATE><LUTDATEOFISS...
+  INFO tdsgst: Day Book p1 202605 exported: 2 entries, 94609 characters
+[daybook p1 202606] 17 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e" VCHKEY="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000b45c:00000008" VCHTYPE="Sales" ACTION="Cancel" OBJVIEW="Accounting Voucher View"><VATREGISTRATIONDATE/><CSTREGISTRATIONDATE/><FROMDATE/><TODATE/><ACTIVETO/><ALTEREDON/><DATE>20260531</DATE><LUTDATEOFISS...
+  INFO tdsgst: Day Book p1 202606 exported: 2 entries, 94609 characters
+[daybook p1 202607] 17 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000000e" VCHKEY="ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000b45c:00000008" VCHTYPE="Sales" ACTION="Cancel" OBJVIEW="Accounting Voucher View"><VATREGISTRATIONDATE/><CSTREGISTRATIONDATE/><FROMDATE/><TODATE/><ACTIVETO/><ALTEREDON/><DATE>20260531</DATE><LUTDATEOFISS...
+  INFO tdsgst: Day Book p1 202607 exported: 2 entries, 94609 characters
+[masters p1] 212 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><CURRENCY NAME="?" RESERVEDNAME=""><ACTIVEFROM/><ACTIVETO/><GUID>ec16b391-afe4-42f8-b1d3-99cb4d60e7f6-0000001d</GUID><MAILINGNAME>INR</MAILINGNAME><NARRATION/><ENTEREDBY/><ALTEREDBY/><TYPEOFUPDATEACTIVITY/><OBJECTUPDATEACTION/><REQUESTORRULE/><ORIGINALNAME>?</ORIGINALNAME><ISOCURRENCYCODE/><EXPANDEDSYMBOL>INR</EXPAN...
+  INFO tdsgst: masters exported (p1): 55 ledgers, 1808508 characters
+[tdsgst alter S02] 51 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>31</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+tdsgst stopped: Could not compare "1" to "1 3 4 5 6 22 23 7 8 9 10 11 12 13 16 17 18 19 20 21 24 25 26 27 31 15 28 29 30 2". Error: "Cannot convert the "System.Object[]" value of type "System.Object[]" to type "System.Int32"." at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\tdsgstv.ps1: line 151
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flowv.ps1: line 305
+at <ScriptBlock>, D:\a\_temp\049ae08e-a55a-475c-beda-d567f064bf0c.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+######## HARNESS g3 the amendments made in Tally and sent (phase 2): the harness stopped: Could not compare "1" to "1 3 4 5 6 22 23 7 8 9 10 11 12 13 16 17 18 19 20 21 24 25 26 27 31 15 28 29 30 2". Error: "Cannot convert the "System.Object[]" value of type "System.Object[]" to type "System.Int32"."
+######## HARNESS g4 the Day Book and masters exported: the harness stopped: Could not compare "1" to "1 3 4 5 6 22 23 7 8 9 10 11 12 13 16 17 18 19 20 21 24 25 26 27 31 15 28 29 30 2". Error: "Cannot convert the "System.Object[]" value of type "System.Object[]" to type "System.Int32"."

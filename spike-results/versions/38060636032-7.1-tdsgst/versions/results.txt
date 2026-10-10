@@ -1,0 +1,51 @@
+INFO TallyPrime 7.1, mode tdsgst, runner GitHub Actions 1000007186, 2026-10-10T14:54:33
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-10, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1527 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 9 ms, 'FinCom Spike Co' in it: True
+INFO tdsgst masters company: created 0, altered 1, errors 0
+INFO tdsgst masters natures: created 8, altered 0, errors 0
+INFO tdsgst masters ledgers: created 49, altered 0, errors 0; Tally said: TDS Rate &apos;Salary&apos; does not exist!
+INFO tdsgst company as Tally keeps it: STARTINGFROM=20260401, BOOKSFROM=20260401, INCOMETAXNUMBER=AAACF1234A, TANUMBER=DELF01234E, GSTREGISTRATIONTYPE=Regular, STATENAME=Delhi, ISTDSON=Yes, ISTCSON=Yes, ISGSTON=Yes
+INFO tdsgst: masters exported (p0): 55 ledgers, 1806323 characters
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: 176dcfb68d90a282d759d2227b559e907b981724 go-live: the new app replaces the old at the root of app.fincom.live; publish-live.sh keeps Build 199 in retired/build-199 and refuses deletes and overwrites; put-back step in GO-LIVE.md 1.4
+INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO tdsgst: Update now (the masters): asked
+INFO tdsgst: after Update now (the masters): no ledger list in 240 s
+INFO tdsgst T01: refused with its TDS allocation (Ledger &apos;Contract Charges&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Contract Charges&apos; does not exist!
+INFO tdsgst T02: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+INFO tdsgst T03: refused with its TDS allocation (Ledger &apos;Commission Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Commission Paid&apos; does not exist!
+INFO tdsgst T04: refused with its TDS allocation (Ledger &apos;Rent&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Rent&apos; does not exist!
+INFO tdsgst T05: refused with its TDS allocation (Ledger &apos;TDS Payable 194Q&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;TDS Payable 194Q&apos; does not exist!
+INFO tdsgst T06: refused with its TDS allocation (Ledger &apos;Interest Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Interest Paid&apos; does not exist!
+INFO tdsgst T07: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+INFO tdsgst T08: refused with its TDS allocation (Ledger &apos;Professional Fees&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Professional Fees&apos; does not exist!
+INFO tdsgst T10: refused with its TDS allocation (Ledger &apos;Royalty Paid&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;Royalty Paid&apos; does not exist!
+INFO tdsgst T11: refused with its TDS allocation (Ledger &apos;TDS on Salary 192&apos; does not exist!); without it: created 0, errors 0 Ledger &apos;TDS on Salary 192&apos; does not exist!
+INFO tdsgst phase 1: 28 of 39 entries made by XML; refused: T01 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T02 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T03 (created 0, errors 0: Ledger &apos;Commission Paid&apos; does not exist!); T04 (created 0, errors 0: Ledger &apos;Rent&apos; does not exist!); T05 (created 0, errors 0: Ledger &apos;TDS Payable 194Q&apos; does not exist!); T06 (created 0, errors 0: Ledger &apos;Interest Paid&apos; does not exist!); T07 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T08 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T09 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T10 (created 0, errors 0: Ledger &apos;Royalty Paid&apos; does not exist!); T11 (created 0, errors 0: Ledger &apos;TDS on Salary 192&apos; does not exist!)
+INFO tdsgst: FC/26-27/012 cancelled: by keys (Alt+X)
+HARNESS g1 masters and entries made in Tally: 28 of 39 entries made by XML, FC/26-27/012 cancelled by keys (Alt+X); refused: T01 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T02 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T03 (created 0, errors 0: Ledger &apos;Commission Paid&apos; does not exist!); T04 (created 0, errors 0: Ledger &apos;Rent&apos; does not exist!); T05 (created 0, errors 0: Ledger &apos;TDS Payable 194Q&apos; does not exist!); T06 (created 0, errors 0: Ledger &apos;Interest Paid&apos; does not exist!); T07 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T08 (created 0, errors 0: Ledger &apos;Professional Fees&apos; does not exist!); T09 (created 0, errors 0: Ledger &apos;Contract Charges&apos; does not exist!); T10 (created 0, errors 0: Ledger &apos;Royalty Paid&apos; does not exist!); T11 (created 0, errors 0: Ledger &apos;TDS on Salary 192&apos; does not exist!); the company's GST/TDS settings and the masters as Tally kept them in company-p0.xml / masters-p0.xml
+FAIL g2 the bridge sent every entry (phase 1): 28 entries in Tally; the bridge's lines with Tally's entry reached the stub for 13 in 25 min; not reached: S11 (body), S14 (body), S15 (body), RV1 (body), CN1 (body), CN2 (body), DN1 (body), P03 (body), P04 (body), P05 (body), DN2 (body), S13 (body), TC1 (body), TC2 (body), S20 (body)
+INFO tdsgst: Day Book p1 202604 exported: 2 entries, 94609 characters
+INFO tdsgst: Day Book p1 202605 exported: 2 entries, 94609 characters
+INFO tdsgst: Day Book p1 202606 exported: 2 entries, 94609 characters
+INFO tdsgst: Day Book p1 202607 exported: 2 entries, 94609 characters
+INFO tdsgst: masters exported (p1): 55 ledgers, 1808508 characters
+HARNESS g3 the amendments made in Tally and sent (phase 2): the harness stopped: Could not compare "1" to "1 3 4 5 6 22 23 7 8 9 10 11 12 13 16 17 18 19 20 21 24 25 26 27 31 15 28 29 30 2". Error: "Cannot convert the "System.Object[]" value of type "System.Object[]" to type "System.Int32"."
+HARNESS g4 the Day Book and masters exported: the harness stopped: Could not compare "1" to "1 3 4 5 6 22 23 7 8 9 10 11 12 13 16 17 18 19 20 21 24 25 26 27 31 15 28 29 30 2". Error: "Cannot convert the "System.Object[]" value of type "System.Object[]" to type "System.Int32"."
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 2 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
