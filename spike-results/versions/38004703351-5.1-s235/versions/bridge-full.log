@@ -1,0 +1,11 @@
+2026-10-10 00:00:15  Nightly catch-up (19:00): Tally is not open, so nothing is read; looked at again until the night's window ends
+2026-10-10 00:01:11  Notification shown: Tally not open (tally:d47ca5d986f61bed; not shown again for this problem)
+2026-10-10 00:01:45  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-10 00:01:45  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+2026-10-10 00:02:15  Tally 9000: TDSDeskCompanies took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-10 00:02:15  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-10 00:02:15  Nightly catch-up: not finished (no company is open in Tally) (1 request(s) to Tally)
+2026-10-10 00:02:31  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line e98cb6ad…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-10 00:02:31  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line e98cb6ad…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+2026-10-10 00:02:31  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-10 00:05:21  Notification shown: Tally not open (tally:b0c3246c7e211ce7; not shown again for this problem)

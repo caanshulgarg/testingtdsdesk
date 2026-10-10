@@ -1,0 +1,7 @@
+2026-10-10 00:00:08  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-10 00:00:08  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+2026-10-10 00:00:13  Nightly catch-up: not finished (no company is open in Tally) (0 request(s) to Tally)
+2026-10-10 00:00:20  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line a91fa5a3…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-10 00:00:20  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line a91fa5a3…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+2026-10-10 00:00:20  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-10 00:03:12  Notification shown: Tally not open (tally:b0c3246c7e211ce7; not shown again for this problem)

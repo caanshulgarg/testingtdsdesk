@@ -1,0 +1,32 @@
+INFO TallyPrime 7.1, mode bankb, runner GitHub Actions 1000006960, 2026-10-09T23:50:20
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-09, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-09, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.1 s after start, GET 1028 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+INFO bankb: four contras with bank allocations (2-10-2026, Share Bank): <CREATED>4</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a; bridge source: c89c58ffa929d561d1de3d7bf3ca175dbc24af22 Bridge 2.4.1 built (from the published 2.4.0, after the gate fix): setup SHA-256 79e95ba3…e06a (program f59866e0…6eab), release log row (2.4.0 superseded; the withdrawn build 8c5b8b07…75b3 recorded), notes and test sheet fingerprint and build time (10-Oct-2026 04:59 IST); 2.4.0 assets moved to bridge-go-old; not published
+INFO bridge on 127.0.0.1:9100, version 2.4.1, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO bankb: the bridge's bank route started (its first light check) before the bank dates: True
+INFO bankb: Tally's contras (FinCom's copy seeded with them, as from a Day Book upload): mid 3 'bank probe C1' AlterID 3 bank date ''; mid 4 'bank probe C2' AlterID 4 bank date ''; mid 5 'bank probe C3' AlterID 5 bank date ''; mid 6 'bank probe C4' AlterID 6 bank date ''
+INFO B1-brs the dated contra stored whole: every date field: DATE=20261002, VCHSTATUSDATE=20261002, EFFECTIVEDATE=20261002, INSTRUMENTDATE=20261002, BANKERSDATE=20261002
+INFO B1-brs bank date in Bank Reconciliation: Alt+R Manual Recon: Tally bank-dated 'bank probe C1' (mid 3, bank date '', found by its AlterID: no BANKERSDATE in the export); AlterID 3 -> 7; company AltVchId 6 -> 7, AltMstId 212 -> 212; Ctrl+A to a still screen 107 ms (47.2;107.1); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO B2-brs the dated contra stored whole: every date field: DATE=20261002, VCHSTATUSDATE=20261002, EFFECTIVEDATE=20261002, INSTRUMENTDATE=20261002, BANKERSDATE=20261002
+INFO B2-brs bank date in Bank Reconciliation: Alt+R Manual Recon: Tally bank-dated 'bank probe C2' (mid 4, bank date '', found by its AlterID: no BANKERSDATE in the export); AlterID 4 -> 8; company AltVchId 7 -> 8, AltMstId 212 -> 212; Ctrl+A to a still screen 107 ms (48.5;106.7); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO bankb: Tally after the bank dates: mid 3 'bank probe C1' AlterID 7 bank date '20261002'; mid 4 'bank probe C2' AlterID 8 bank date '20261002'; mid 5 'bank probe C3' AlterID 5 bank date ''; mid 6 'bank probe C4' AlterID 6 bank date ''
+PASS b1 bank dates set in Bank Reconciliation reach FinCom: Tally bank-dated 2 contra(s): mid 3 'bank probe C1' AlterID 7 bank date '20261002'; mid 4 'bank probe C2' AlterID 8 bank date '20261002'; FinCom's copy holds Tally's bank date and AlterID for every contra (4) after 500 s; 2 altered line(s) from the bridge (source bankdate): mid 3 x1, mid 4 x1; bridge log: FinCom Spike Co: Tally's voucher counter moved with no add-on line for 2 entries (a bank date set in Bank Reconciliation, or another change Tally makes without a voucher form); each is read again from Tally
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 1 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
