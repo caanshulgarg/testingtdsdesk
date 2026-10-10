@@ -212,8 +212,10 @@ const TDS = {
   },
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
+  // (tds-challans, 10-Oct-2026: the salary TDS the books carry under 192 counts too, as it can now be tagged; untagged
+  // before, so no figure moves)
   challanUse(){
-    const rows = this.rows().concat(this.nrRows(), this.tcsRows()), used = {};
+    const rows = this.rows().concat(this.nrRows(), this.tcsRows(), this.salaryRows()), used = {};
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },

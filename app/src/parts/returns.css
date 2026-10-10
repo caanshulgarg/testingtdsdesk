@@ -37,3 +37,20 @@
 }
 .rp-tabs button{white-space:nowrap;flex:0 0 auto}
 .rp-grid .rp-cell{min-width:84px}
+/* challan tagging (tds-challans, 10-Oct-2026): the suggestions, one per line, and the bar of the ticked deductions */
+.tch-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.tch-prop{border-top:1px solid var(--rule);padding:10px 0}
+.tch-prop:first-child{border-top:0}
+.tch-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0}
+.tch-line>span{min-width:0;overflow-wrap:anywhere}
+.tch-line .tch-act{margin-left:auto}
+.tch-line .tag:not(.ok):not(.warn):not(.bad):not(.info){background:var(--sheet-2);color:var(--muted);border:1px solid var(--rule)}
+.tch-review{margin-top:8px}
+.tch-review .bk-tablewrap{max-height:320px;overflow:auto}
+.tch-bar{background:var(--sheet-2);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;margin:0 0 10px}
+.tch-bar .bad,.tch-review .bad{color:var(--bad);font-weight:600}
+@media (max-width:640px){
+  .tch-line .tch-act{margin-left:0;width:100%}
+  .tch-line .tch-act .btn{width:100%;white-space:normal}
+  .tch-bar select{flex:1 1 100%}
+}

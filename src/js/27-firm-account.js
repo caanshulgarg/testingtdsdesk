@@ -1075,7 +1075,18 @@ function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}});
 function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
 // one row opened under a table (a challan's deductions, a deductee's, an employee's months); a second click closes it
 function tdsToggle(which, key){ S[which] = S[which] === key ? "" : key; render(); }
-function tdsAlloc(rowId, chId){ S.books.alloc = S.books.alloc || {}; if (chId) S.books.alloc[rowId] = chId; else delete S.books.alloc[rowId]; saveBooks(); render(); }
+// tds-challans (10-Oct-2026): a challan is never used beyond its amount; the tagging goes through TDSCH.tag (src/js/65)
+function tdsAlloc(rowId, chId){
+  if (!chId){ TDSCH.untag([rowId]); render(); return; }
+  const r = TDSCH.tag([rowId], chId);
+  if (!r.ok) toast(r.why);
+  render();
+}
+// many deductions at once (Entries: the ticked ones): to a challan, or off their challans
+function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
+function tdsUntagMany(ids){ const r = TDSCH.untag(ids); toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
+function tdsConfirm(pid, opt){ const r = TDSCH.confirm(pid, Object.assign({form: S.tdsForm || "26Q"}, opt)); toast(r.ok ? r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged." : r.why); render(); return r; }
+function tdsConfirmAll(){ const r = TDSCH.confirmAllExact(S.tdsFy, S.tdsQ, S.tdsForm || "26Q"); toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + "."); render(); return r; }
 function challanAdd(c){
   const bsr = String(c.bsr || "").trim(), ser = String(c.serial || "").trim(), dt = String(c.date || "").replace(/-/g, ""), tax = num(c.tax);
   if (!bsr || !ser || !dt || !tax){ toast("Fill the BSR code, serial number, date and tax."); return false; }
@@ -1087,11 +1098,15 @@ function challanDelete(id){
   Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === id) delete S.books.alloc[k]; });
   saveBooks(); render();
 }
-// a TDS payment voucher in Tally becomes a challan, once its BSR code and serial are given
+// a TDS payment voucher in Tally becomes a challan, once its BSR code and serial are given, or its CIN (tds-challans:
+// the CIN's own date of deposit then; the voucher's section when it pays one section only)
 function challanFromBooks(vid, bsr, ser){
   const p = TDS.paymentsFromBooks().find(x => x.vid === vid); if (!p) return false;
-  if (!String(bsr || "").trim() || !String(ser || "").trim()){ toast("Fill the BSR code and the challan serial number first."); return false; }
-  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: bsr.trim(), serial: ser.trim(), date: p.date, tax: p.tax, interest: 0, fromVoucher: p.vid}]);
+  const k = TDSCH.cin(bsr);
+  if (!k && (!String(bsr || "").trim() || !String(ser || "").trim())){ toast("Fill the BSR code and the challan serial number, or the 20-digit CIN, first."); return false; }
+  const secs = (p.sections || []).filter(Boolean);
+  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: 0, fromVoucher: p.vid,
+    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "tally"}].map(c => { if (k) c.cin = k.cin; return c; }));
   saveBooks(); toast("Challan added from the books."); render(); return true;
 }
 function certAdd(c){

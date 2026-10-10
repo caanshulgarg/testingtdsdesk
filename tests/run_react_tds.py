@@ -30,7 +30,12 @@ with sync_playwright() as p:
     pg.fill('#app input[aria-label="New challan: date"]', d); pg.fill('#app input[aria-label="New challan: tax"]', "50000")
     pg.click('#app tr:has(input[aria-label="New challan: tax"]) button:has-text("Add")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.books.challans.length") == 1 and "0240020" in pg.inner_text("#tdsChTable") and pg.input_value('#app input[aria-label="New challan: BSR code"]') == "", "a challan added: in the table, and the new-challan row empties")
-    pg.click('#app button:has-text("Put them against challans")'); pg.wait_for_timeout(600)
+    # tds-challans (10-Oct-2026): "Put them against challans" gave way to the suggested tagging (run_tds_challans.py); a
+    # challan typed in with no section is tagged from Entries: here the quarter's deductions that fit, through TDSCH.tag
+    ok(pg.locator("#app [data-challan-suggest]").count() == 1, "the suggested tagging is on the Challans tab")
+    pg.evaluate("""([fy, q]) => { const c = S.books.challans[0]; let room = Math.round(c.tax * 100); const ids = [];
+      TDS.rows().filter(r => r.fy === fy && r.q === q && !r.challan).forEach(r => { const v = Math.round(r.tds * 100); if (v <= room) { ids.push(r.id); room -= v; } });
+      tdsTagMany(ids, c.id); }""", [fy, q]); pg.wait_for_timeout(600)
     used = pg.evaluate("TDS.challanUse()[S.books.challans[0].id] || 0")
     ok(used > 0, "deductions put against it (%s used)" % used)
     pg.click('#tdsChTable button.linkbtn:has-text("0240020")'); pg.wait_for_timeout(400)

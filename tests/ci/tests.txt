@@ -224,3 +224,5 @@ run_tally_ux.py                       240  TDSDESK_SITE=../app/dist-test
 run_tally_link_simple.py              300  TDSDESK_SITE=../app/dist-test
 # app-tdsgst (09-Oct-2026): the TDS and GST return pages redesigned; every file and amount as before (tests/fixtures/tdsgst-before.json)
 run_tdsgst_ui.py                      600  TDSDESK_SITE=../app/dist-test
+# tds-challans (10-Oct-2026): smart challan tagging: auto-match, Tally bill-wise, many at once, uploads, FVU challan records
+run_tds_challans.py                   240  TDSDESK_SITE=../app/dist-test
