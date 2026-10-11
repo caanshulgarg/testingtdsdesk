@@ -282,11 +282,12 @@ try:
         # bridge 2.4.2 (migration 72): each entry's GST type as the REST read gives it (null: none in the cloud for the entry);
         # a cloud without the columns gives none
         try:
-            gt = {r["guid"]: r for r in db.rows("select guid, (gst_rcm is not null)::text as rd, gst_reg_type, gst_country, gst_rcm::text as gst_rcm, gst_nature, gst_taxability, gst_supply, gst_ineligible::text as gst_ineligible from tally_vouchers where book_id = %s" % B)}
+            gt = {r["guid"]: r for r in db.rows("select guid, (gst_rcm is not null)::text as rd, gst_reg_type, gst_country, gst_rcm::text as gst_rcm, gst_nature, gst_taxability, gst_supply, gst_ineligible::text as gst_ineligible, gst_mixed::text as gst_mixed, gst_alter_id::text as gst_alter_id from tally_vouchers where book_id = %s" % B)}
             for r in tv:
                 g = gt.get(r["guid"]) or {}
                 for k in ("gst_reg_type", "gst_country", "gst_nature", "gst_taxability", "gst_supply"): r[k] = (g.get(k) or "") if g.get("rd") == "true" else None
-                for k in ("gst_rcm", "gst_ineligible"): r[k] = (g.get(k) == "true") if g.get("rd") == "true" else None
+                for k in ("gst_rcm", "gst_ineligible", "gst_mixed"): r[k] = (g.get(k) == "true") if g.get("rd") == "true" else None
+                r["gst_alter_id"] = int(g["gst_alter_id"]) if g.get("gst_alter_id") else None
         except RuntimeError:
             pass
         tl = db.rows("select book_id::text as book_id, guid, ledger, amount::text as amount, hsn, rate::text as rate from tally_lines where book_id = %s" % B)

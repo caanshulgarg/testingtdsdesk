@@ -337,7 +337,8 @@ const TCloud = {
       const cols = [BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
       for (let i = 0; ; i++){
         try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
-        catch (e){ if (i === cols.length - 1 || !/gst_|irn|42703/i.test(String((e && e.message) || e))) throw e; }
+        // review L2: only a missing column (42703, PGRST204, "does not exist") falls back; any other error is the error
+        catch (e){ if (i === cols.length - 1 || !(/42703|PGRST204|does not exist/i.test(String((e && e.message) || e) + " " + String((e && e.code) || "")))) throw e; }
       }
     };
     let seen = c ? c.seen || "" : "", heads;

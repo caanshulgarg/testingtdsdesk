@@ -16,7 +16,7 @@ const BookSrc = {
   HEADS_OLD: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin",
   // bridge 2.4.2 (round 44 part B, migration 72): each entry's GST type as Tally stores it, read first; a cloud without the
   // columns is read with HEADS, then HEADS_OLD
-  HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible",
+  HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id",
   // the GST kind a bridge before 2.4.2 does not send (its entry has no type in the cloud copy): kept from the Day Book's
   // version of the same entry when such a bridge brings a later one, so an altered SEZ, export or reverse-charge entry
   // stays so. A 2.4.2 entry carries Tally's own type (gstRead): nothing is carried onto it
@@ -72,12 +72,18 @@ const BookSrc = {
     return out;
   },
   // bridge 2.4.2: the cloud copy's GST type (migration 72's columns, null when the cloud has none for the entry) as the
-  // Day Book's fields of the same names; {} when there is none
+  // Day Book's fields of the same names; {} when there is none. Review H1: the type is the entry's own only when it was
+  // read at the entry's AlterID (gst_alter_id); read at an older version (a later version came from a bridge before 2.4.2
+  // or by number) it is kept aside (gstStale) and used only when no earlier version is held, marked carried. Review M3: a
+  // type with no nature and no taxability does not stop the Day Book's kind being carried (gstRead false). Review M2: the
+  // entry's GST lines disagree (gstMixed)
   gstOf(h){
     if (!h || ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible"].every(k => h[k] == null)) return {};
     const t = (x) => String(x == null ? "" : x).trim(), yes = (x) => x === true || x === "true";
-    return {regType: t(h.gst_reg_type), country: t(h.gst_country), rcm: yes(h.gst_rcm), taxability: t(h.gst_taxability), nature: t(h.gst_nature), supply: t(h.gst_supply),
-      ineligibleFlag: yes(h.gst_ineligible), gstRead: true};
+    const vals = {regType: t(h.gst_reg_type), country: t(h.gst_country), rcm: yes(h.gst_rcm), taxability: t(h.gst_taxability), nature: t(h.gst_nature), supply: t(h.gst_supply),
+      ineligibleFlag: yes(h.gst_ineligible)};
+    if (h.gst_alter_id == null || h.gst_alter_id === "" || this.alt(h.gst_alter_id) !== this.alt(h.alter_id)) return {gstStale: vals};
+    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstRead: !!(vals.nature || vals.taxability)});
   },
   // one entry into the books by the rule above; true when the books changed
   put(b, v, by){
@@ -88,7 +94,11 @@ const BookSrc = {
     if (have && !v.gstRead){
       const kept = this.CARRY.filter(k => have[k] && !v[k]);
       if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = have[k]; }); v.carried = kept; }
+    } else if (!have && v.gstStale){
+      const st = v.gstStale, kept = this.CARRY.filter(k => st[k] && !v[k]);
+      if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = st[k]; }); v.carried = kept; }
     }
+    if (v.gstStale !== undefined){ v = Object.assign({}, v); delete v.gstStale; }
     if (i >= 0) b.vouchers[i] = v; else { by.set(v.id, b.vouchers.length); b.vouchers.push(v); }
     if (b.gone && b.gone[v.id] && !b.gone[v.id].back) b.gone[v.id].back = new Date().toISOString().slice(0, 10);
     return true;
