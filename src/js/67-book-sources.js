@@ -19,7 +19,7 @@ const BookSrc = {
   HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id",
   // the GST kind a bridge before 2.4.2 does not send (its entry has no type in the cloud copy): kept from the Day Book's
   // version of the same entry when such a bridge brings a later one, so an altered SEZ, export or reverse-charge entry
-  // stays so. A 2.4.2 entry carries Tally's own type (gstRead): nothing is carried onto it
+  // stays so. A 2.4.2 entry's own type (gstOwn): only a blank nature and goods/services are carried (put, below)
   CARRY: ["regType", "country", "rcm", "taxability", "nature", "supply", "ineligibleFlag"],
   words(v){ return v && v.src === "bridge" ? "Bridge" : "Day Book"; },
   d8(x){ return String(x || "").replace(/-/g, "").slice(0, 8); },
@@ -72,11 +72,10 @@ const BookSrc = {
     return out;
   },
   // bridge 2.4.2: the cloud copy's GST type (migration 72's columns, null when the cloud has none for the entry) as the
-  // Day Book's fields of the same names; {} when there is none. Review H1: the type is the entry's own only when it was
-  // read at the entry's AlterID (gst_alter_id); read at an older version (a later version came from a bridge before 2.4.2
-  // or by number) it is kept aside (gstStale) and used only when no earlier version is held, marked carried. Review M3: a
-  // type with no nature and no taxability does not stop the Day Book's kind being carried (gstRead false). Review M2: the
-  // entry's GST lines disagree (gstMixed)
+  // Day Book's fields of the same names; {} when there is none. Read at the entry's AlterID (gst_alter_id) it is Tally's
+  // own type for this version (gstOwn); read at an older version it is kept aside (gstStale, with that AlterID). What is
+  // carried onto the entry from the version held or the older type is decided in put (below). A mixed entry (its GST
+  // lines disagree, gstMixed) takes no single nature or taxability
   gstOf(h){
     if (!h || ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible"].every(k => h[k] == null)) return {};
     const t = (x) => String(x == null ? "" : x).trim(), yes = (x) => x === true || x === "true";
@@ -86,9 +85,7 @@ const BookSrc = {
     // not taken (the returns place it as before 2.4.2, by its ledgers and tax), and it says so (gstMixed)
     if (yes(h.gst_mixed)){ vals.nature = ""; vals.taxability = ""; }
     if (h.gst_alter_id == null || h.gst_alter_id === "" || this.alt(h.gst_alter_id) !== this.alt(h.alter_id)) return {gstStale: Object.assign(vals, {at: this.alt(h.gst_alter_id), mixed: yes(h.gst_mixed)})};
-    // review round 2 M3: Tally's own type stops the Day Book's being carried only when it names the nature (TallyPrime
-    // 3.0-6.2 give an item a taxability and no nature, 7.1 neither)
-    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstRead: !!vals.nature, gstOwn: true});
+    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstOwn: true});
   },
   // one entry into the books by the rule above; true when the books changed
   put(b, v, by){
