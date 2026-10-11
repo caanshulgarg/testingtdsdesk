@@ -31,6 +31,16 @@ function Root() {
   return <MotionConfig reducedMotion="always"><Guard name="the app" v={v}><App /></Guard></MotionConfig>;
 }
 
+function registerWorker() {
+  try {
+    if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    let asked = null; try { asked = localStorage.getItem("fincom.sw"); } catch (e) { /* storage blocked */ }
+    if (asked === "off" || (local && asked !== "on")) return;
+    navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+  } catch (e) { /* never in the way of the page */ }
+}
+
 // an old browser was told it is not supported (public/oldcheck.js): nothing more is started
 if (!window.__fincomOld) {
   // error reports to Sentry: in a test build only (never in a live build: the import is dropped), and src/sentry.js
@@ -49,4 +59,11 @@ if (!window.__fincomOld) {
   watchFresh();
   // the other screens' files (screens/lazy.js), fetched once the first page is up
   idle(preloadScreens, 1200);
+  // stability batch 4: the service worker (sw/sw.js) keeps the app's own files on this computer: instant second opens,
+  // FinCom without a line. On the site only (staging.fincom.live, the live site); on a test's local server only when
+  // asked for (localStorage "fincom.sw" = "on"), so the tests see the network as before
+  idle(registerWorker, 4000);
+  // the line going and coming back: said in the sidebar's quiet line at once ("No internet · work kept on this computer")
+  const redrawNow = () => { try { if (window.S && S.firm && typeof window.render === "function") window.render(); } catch (e) { /* the next drawing shows it */ } };
+  window.addEventListener("online", redrawNow); window.addEventListener("offline", redrawNow);
 }

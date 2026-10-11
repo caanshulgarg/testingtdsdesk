@@ -147,7 +147,7 @@ export function FootLine() {
     const st = Cloud.st || {}, sv = (typeof Live === "object" && Live.sv) || {};
     t = sv.state === "offline" || (typeof navigator === "object" && navigator.onLine === false) ? "No internet · work kept on this computer"
       : st.lastSync ? "Synced " + fmtTime(st.lastSync) + " · saved on this computer" : "Saved on this computer · syncing";
-  } else t += " only";
+  } else t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }
 

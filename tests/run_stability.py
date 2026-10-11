@@ -14,7 +14,9 @@ build (app/dist-test, or TDSDESK_SITE), with a made-up firm kept in this browser
   7. the Overview drawn once, final: no opening motion, no count-up, "N of 6 done" the same from its first frame;
   8. page changes that take longer than 300 ms show a thin bar under the top bar (nav.js), still under reduced motion;
   9. one message at a time (#toast), none for something that happened by itself (the sidebar's quiet line instead), a
-     message that must stay (a newer FinCom) coming back after any other.
+     message that must stay (a newer FinCom) coming back after any other;
+ 10. the service worker (forced on for the local server): FinCom opens without a line; only the site's own files are
+     kept (no Supabase, no build.json); a new build is said ("A newer FinCom is out. Reload"); sign-out clears the kept files.
 Screenshots to tests/out/stability/."""
 import os, sys, json, time, threading, functools, http.server, re
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -31,8 +33,17 @@ def ok(c, w):
 
 # the server: legacy.js can be held back (HOLD[0] seconds) to see what shows before the program runs
 HOLD = [0.0]
+NEWBUILD = [False]   # serve another sw.js and build.json, as a new release would
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
+    def send_head(self):
+        if NEWBUILD[0] and re.search(r"/(sw\.js|build\.json)(\?|$)", self.path):
+            import io
+            p = self.translate_path(self.path.split("?")[0]); body = open(p, "rb").read()
+            body = body.replace(b'"build":"', b'"build":"new-') if p.endswith(".json") else body + b"\n// a new build\n"
+            self.send_response(200); self.send_header("Content-Type", "application/json" if p.endswith(".json") else "text/javascript")
+            self.send_header("Content-Length", str(len(body))); self.end_headers(); return io.BytesIO(body)
+        return super().send_head()
     def end_headers(self):
         # nothing kept by the browser between the opens: each open fetches legacy.js (held back or not) again
         self.send_header("Cache-Control", "no-store"); super().end_headers()
@@ -236,6 +247,34 @@ try:
             ok("A newer FinCom is out." in pg.inner_text("#toast") and not E("document.getElementById('toast').classList.contains('hidden')"), "the message that must stay comes back after the other one")
             pg.click('#toast [data-toast-act="Reload"]'); W(400)
             ok(E("window.__reloaded") == 1 and E("document.getElementById('toast').classList.contains('hidden')"), "its button acts, and then it goes")
+        ctx.close()
+
+        print("10. the service worker: the app without a line, the firm's data never kept, a new build said")
+        ctx, pg = setup(br)
+        pg.goto(URL); pg.wait_for_timeout(1500)
+        if not pg.evaluate("fetch('sw.js').then(r => r.ok)"):
+            print("  (not in this build yet: stability batch 4)")
+        else:
+            pg.evaluate("() => localStorage.setItem('fincom.sw', 'on')"); seed(pg)
+            ok(pg.evaluate("() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 15000))])"), "the worker is ready")
+            pg.reload(); pg.wait_for_timeout(2500)
+            ok(pg.evaluate("!!navigator.serviceWorker.controller"), "the page is served by it after a reload")
+            keys = pg.evaluate("() => caches.keys().then(ks => Promise.all(ks.map(k => caches.open(k).then(c => c.keys()).then(rs => rs.map(r => r.url))))).then(a => a.flat())")
+            ok(keys and all(k.startswith(URL) for k in keys), "only this site's own files are kept (%d, none from Supabase or the bridge)" % len(keys))
+            ok(not [k for k in keys if re.search(r"supabase|/rest/v1|/auth/v1|build\.json", k)], "no data and no build.json in its caches")
+            ctx.set_offline(True)
+            pg.reload(); pg.wait_for_timeout(3000)
+            ok(pg.locator("#side .side-link").count() > 3 and pg.locator("#app .react-host").count() == 1, "with no line, FinCom opens from this computer (the sidebar and the page)")
+            ctx.set_offline(False); pg.reload(); pg.wait_for_timeout(2500)
+            # a new build: another worker, another build.json; the open page says so, quietly, and keeps working
+            NEWBUILD[0] = True
+            pg.evaluate("() => navigator.serviceWorker.getRegistration().then(r => r.update())"); pg.wait_for_timeout(3000)
+            ok("A newer FinCom is out." in pg.inner_text("#toast") and pg.locator('#toast [data-toast-act="Reload"]').count() == 1, "a new build: “A newer FinCom is out. Reload”, in the one message region")
+            NEWBUILD[0] = False
+            # signing out clears what was kept after the first open
+            pg.evaluate("() => caches.open('fincom-files:/').then(c => c.put('./assets/x.js', new Response('1')))")
+            pg.evaluate("() => Cloud.signOut()"); pg.wait_for_timeout(600)
+            ok(not pg.evaluate("() => caches.keys().then(ks => ks.filter(k => k.startsWith('fincom-files:')))"), "signing out clears the files kept after the first open")
         ctx.close(); br.close()
 finally:
     srv.shutdown()

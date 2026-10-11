@@ -75,7 +75,9 @@ const Cloud = {
     const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
     if (Date.now() > until - 120000) await this.refreshToken();
   },
-  signOut(){ try { Live.stop(); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  // stability batch 4: and the files the service worker kept after the first open (only app code is ever kept there,
+  // never the firm's data; cleared all the same, so nothing of this sign-in stays behind)
+  signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith("fincom-files:")).forEach(k => caches.delete(k))).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
     if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();

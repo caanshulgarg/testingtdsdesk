@@ -66,7 +66,7 @@ function legacy(mode) {
       }
       // the frame drawn before the program loads (index.html, stability batch 1): its little script gets this build's
       // storage prefix (the test build keeps its own, tdsdesk-test:) and id, and is allowed by its hash, the one inline script
-      html = html.replace("__FINCOM_LS__", test ? "tdsdesk-test:" : "tdsdesk:").replace("__FINCOM_BUILD__", BUILD_ID);
+      html = html.replace("__FINCOM_LS__", test ? "tdsdesk-test:" : "tdsdesk:").replaceAll("__FINCOM_BUILD__", BUILD_ID);
       const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].filter((m) => !/type="module"/.test(m[0]))
         .map((m) => " 'sha256-" + crypto.createHash("sha256").update(m[1], "utf8").digest("base64") + "'").join("");
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode, hashes) + '">\n</head>');
@@ -120,11 +120,27 @@ function fresh() {
   };
 }
 
+// stability batch 4: the service worker (sw/sw.js), with this build's id and the files of its first open: the page, the
+// program (legacy.js?v=…), the app's scripts, styles and fonts (not the source maps, not the downloads)
+function serviceWorker(mode) {
+  const legacyFile = new URL("./legacy/" + (mode === "test" ? "test" : "live") + ".js", import.meta.url);
+  return {
+    name: "fincom-sw",
+    // written once the files are on disk (Vite drops a CSS-only chunk after generateBundle): only files that are there
+    writeBundle(o, bundle) {
+      const v = fs.existsSync(legacyFile) ? crypto.createHash("sha256").update(fs.readFileSync(legacyFile, "utf8")).digest("hex").slice(0, 12) : "";
+      const files = ["./", "./legacy.js?v=" + v, "./guard.js", "./oldcheck.js"].concat(Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f)).map((f) => "./" + f));
+      const src = fs.readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8").replace("__SW_BUILD__", BUILD_ID).replace("__SW_FILES__", JSON.stringify(files));
+      fs.writeFileSync(o.dir + "/sw.js", src);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: "./",
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
     __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
-  plugins: [react(), legacy(mode), fresh(), preloadFonts()],
+  plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
 }));
