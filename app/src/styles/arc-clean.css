@@ -182,3 +182,6 @@
 /* its two-word headings may take two lines rather than widen the list */
 #app table.lt.revtbl thead th, #app table.lt.revtbl thead th .lt-sort, #app table.lt.revtbl thead th .colh { white-space: normal; }
 #app .revfilter .colpick { margin-left: auto; }
+#app .revtbl select { min-width: 140px; }
+/* a phone: a figure with ₹ fits its box (two to a row) */
+@media (max-width: 600px) { #app .dash-tiles .dtile b { font-size: clamp(14px, 4.3vw, 22px); white-space: nowrap; } }

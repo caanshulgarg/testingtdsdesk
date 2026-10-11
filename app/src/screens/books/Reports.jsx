@@ -130,7 +130,7 @@ export default function Reports({ b }) {
   const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
   return <>{head}
     <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a) => { const h = heads(a.id, d);
-      return <section key={a.id} className={"rpt-group rpt-" + a.id} data-rpt-group={a.id}><header><h3>{a.title}</h3>{yr && <span className="note">{yr}</span>}</header>
+      return <section key={a.id} className={"rpt-group rpt-g-" + a.id} data-rpt-group={a.id}><header><h3>{a.title}</h3>{yr && <span className="note">{yr}</span>}</header>
         {h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}
         <ul className="rpt-list">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul></section>; })}</div>
     {/* the areas' figures and charts, as they were, folded */}

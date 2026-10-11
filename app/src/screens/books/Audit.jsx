@@ -120,7 +120,7 @@ function Finding({ f }) {
 
 function Findings({ b }) {
   const au = b.audit || {}, run = au.last;
-  if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>The audit has not been run for this period yet. <button className="linkbtn" onClick={() => doAct("auditRun")}>Run now</button></div></>;
+  if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => doAct("auditRun")}>Run now</button></div></>;
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)

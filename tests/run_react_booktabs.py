@@ -126,6 +126,7 @@ with sync_playwright() as p:
     pg.click('#app [data-confirm-foot="books:mis-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # review 18: saved with Save
     # Reports: charts, the year, finding a report, a figure and a report opening their screens
     pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; render(); }"); pg.wait_for_timeout(800)
+    pg.click("#app [data-rpt-charts] > summary"); pg.wait_for_timeout(500)   # clean-up batch 3: the charts are under "Figures and charts"
     ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20 and pg.locator(".rpt-link").count() >= 30, "every area with its chart, every report listed")
     ys = pg.evaluate("RPT.fys()"); y = ys[1] if len(ys) > 1 else ys[0]   # the client's books may hold one year only
     pg.select_option('select[aria-label="Year"]', y); pg.wait_for_timeout(600)
