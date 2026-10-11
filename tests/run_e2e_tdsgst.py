@@ -93,7 +93,7 @@ STAGING = ["migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "mig
            "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql", "migration-59-ledger-aliases.sql", "migration-60-recorder-lows.sql",
            "migration-68-alert-dismissals.sql", "migration-70-alert-dismissals-tighten.sql", "migration-61-privileges.sql",
            "migration-62-tds-rate-worked-out.sql", "migration-63-recorder-repeat.sql", "migration-64-pages-live.sql", "migration-65-selfchecks.sql", "migration-66-recorder-masters.sql",
-           "migration-67-recorder-renumbered.sql", "migration-72-gst-type.sql"]
+           "migration-67-recorder-renumbered.sql", "migration-72-gst-type.sql", "migration-73-tds-fields.sql"]
 FILES = [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql") if f == "@34" else os.path.join(SQLDIR, f) for f in STAGING]
 FILES = [f for f in FILES if os.path.exists(f)]
 FIRM, OWNER, BOOK, CID = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "11111111-1111-1111-1111-111111111143", "tg"
@@ -606,12 +606,88 @@ try:
     MODE.update(name="both", prefix="[both] "); compare(APPS["both"])
     MODE.update(name="daybook", prefix="")
 
+    # ================================================================ E. bridge 2.4.3: TDS challans and TDS masters from Tally
+    # Tally's real entries and masters of TallyPrime 7.1 (tally-versions mode tdsch, run 38155837948, test data only:
+    # bridge-go/testdata/tdsfields243/7.1): the ledger list and the natures exactly as bridge 2.4.3 sends them
+    # (ledger-list-243.json, written by the Go test TestTDS243LedgerRowsReal), and the bridge 2.4.3 bodies of a TDS deduction
+    # typed on Tally's screen (K1), the Stat Payment that pays it (SP1) and a payment with its challan, interest and late fee
+    # (PX1), sent as recorder lines through the cloud function into the database, then read by the app as TCloud.load does.
+    # The entries' AlterIDs and MasterIDs are those of the measuring company; they are raised by 1000 here (the test
+    # company's own starting point is above them); nothing else of Tally's text is changed
+    print("== E. bridge 2.4.3: TDS challans and TDS masters from Tally (real TallyPrime 7.1 entries and masters)")
+    T243 = os.path.join(HERE, "..", "bridge-go", "testdata", "tdsfields243", "7.1")
+    MODE.update(name="bridge", prefix="")
+    if not os.path.exists(os.path.join(T243, "ledger-list-243.json")):
+        row("TDS from Tally", "E. the 2.4.3 captures are there", True, False, "bridge-go/testdata/tdsfields243 missing")
+    else:
+        LL = json.load(open(os.path.join(T243, "ledger-list-243.json")))
+        c, r = call({"kind": "ledger_list", "company": CO, "ledgers": LL["ledgers"], "natures": LL["natures"], "last": True})
+        row("TDS from Tally", "E1. the ledger list with the TDS settings and the natures of payment taken", "200, 2 natures", "%s, %s natures" % (c, r.get("natures")), json.dumps(r)[:300])
+        ledr = {x["name"]: x for x in FS.T.get("tally_ledgers", []) if x.get("book_id") == BOOK}
+        row("TDS from Tally", "E1. the duty ledgers' nature of payment in FinCom's copy", ["FC Contract 194C", "FC Prof Fees 194J"],
+            [(ledr.get("FC TDS 194C Keys") or {}).get("tds_nature"), (ledr.get("FC TDS 194J XML") or {}).get("tds_nature")])
+        row("TDS from Tally", "E1. the certificate and special rate on the party in FinCom's copy", [[["FC Prof Fees 194J", "20260401", "20270331", "197", "LDC197CERT0001", "0", "500000.00"]], "1"],
+            [(ledr.get("FC LDC Party") or {}).get("tds_ldc"), (ledr.get("FC LDC Party") or {}).get("tds_special_rate")])
+        row("TDS from Tally", "E1. the natures of payment in FinCom's copy (section, threshold)", ["FC Contract 194C 194C 30000.00", "FC Prof Fees 194J 194J 30000.00"],
+            [r_["name"] + " " + r_["s"] + " " + r_["t"] for r_ in db.rows("select name, categories->0->>1 as s, categories->0->>6 as t from tally_tds_natures where book_id = %s order by name" % q(BOOK))])
+        cg = next((x["body"].get("company_guid") for x in reqs if x["kind"] == "recorder_lines" and x["body"].get("company_guid")), "")
+        tmpl = next(l for x in reqs if x["kind"] == "recorder_lines" for l in (x["body"].get("lines") or []) if l.get("event") == "created" and l.get("xml"))
+        brg = next(x["body"].get("bridge") for x in reqs if x["kind"] == "recorder_lines")
+        lines243, G243 = [], {}
+        for n, id_ in enumerate(("K1", "SP1", "PX1")):
+            xml = open(os.path.join(T243, "obj-%s-stripped.xml" % id_), encoding="utf-8").read()
+            bump = lambda tag, t: re.sub(r"<%s>\s*(\d+)</%s>" % (tag, tag), lambda m: "<%s>%d</%s>" % (tag, int(m.group(1)) + 1000, tag), t)
+            xml = bump("MASTERID", bump("ALTERID", xml))
+            g = re.search(r"<GUID>([^<]+)</GUID>", xml).group(1); G243[id_] = g
+            l = dict(tmpl, line_id="e243%028d" % n, event="created", object_guid=g, company_guid=cg, master_id=re.search(r"<MASTERID>(\d+)", xml).group(1),
+                     alter_id=re.search(r"<ALTERID>(\d+)", xml).group(1), vch_type=re.search(r'VCHTYPE="([^"]*)"', xml).group(1), vch_no=re.search(r"<VOUCHERNUMBER>([^<]*)<", xml).group(1),
+                     vch_date=re.search(r"<DATE>(\d{8})<", xml).group(1), narration=(re.search(r"<NARRATION>([^<]*)<", xml) or [None, ""])[1], xml=xml, full="True", fid="", again="")
+            lines243.append(l)
+        c, r = call({"kind": "recorder_lines", "company": CO, "company_guid": cg, "version": "2.4.3", "bridge": dict(brg, version="2.4.3"), "lines": lines243})
+        row("TDS from Tally", "E2. the three entries the bridge 2.4.3 sent applied", 3, r.get("applied"), json.dumps(r)[:300])
+        TT = {r_["guid"]: r_ for r_ in db.rows("select guid, coalesce(tds_tally::text, '') as t, (tds_tally_alter_id = alter_id)::text as at from tally_vouchers where book_id = %s and guid in (%s)" % (q(BOOK), ", ".join(q(g) for g in G243.values())))}
+        pxt = json.loads(TT.get(G243["PX1"], {}).get("t") or "{}")
+        row("TDS from Tally", "E3. PX1's challan in FinCom's copy at its AlterID (BSR, number, date; tax / interest / late fee lines)",
+            ["0510308", "54321", "20261231", ["Tax", "Interest", "Late Fee"], "true"], [(pxt.get("challan") or {}).get("bsr"), (pxt.get("challan") or {}).get("no"), (pxt.get("challan") or {}).get("date"), [k["kind"] for k in pxt.get("kinds", [])], TT.get(G243["PX1"], {}).get("at")])
+        # the app, as TCloud.load reads the copy
+        snap = copy_snapshot()
+        tvx = {r_["guid"]: r_ for r_ in db.rows("select guid, tds_tally::text as t, tds_tally_alter_id::text as a from tally_vouchers where book_id = %s" % q(BOOK))}
+        for r_ in snap["tables"]["tally_vouchers"]:
+            x_ = tvx.get(r_["guid"]) or {}
+            r_["tds_tally"] = json.loads(x_["t"]) if x_.get("t") else None; r_["tds_tally_alter_id"] = int(x_["a"]) if x_.get("a") else None
+        snap["ledgers"] = [dict(l, tds_nature=(ledr.get(l["name"]) or {}).get("tds_nature"), tds_special_rate=(ledr.get(l["name"]) or {}).get("tds_special_rate"), tds_ldc=(ledr.get(l["name"]) or {}).get("tds_ldc")) for l in snap["ledgers"]]
+        snap["tables"]["tally_tds_natures"] = [{"book_id": BOOK, "name": r_["name"], "guid": r_["guid"], "categories": json.loads(r_["c"])} for r_ in db.rows("select name, guid, categories::text as c from tally_tds_natures where book_id = %s" % q(BOOK))]
+        snap["guids"] = list(G243.values())
+        snap["upload"] = {"bsr": "0240020", "serial": "00979", "date": "2026-12-01", "tax": 2000, "interest": 0, "section": "194C", "minor": "200"}
+        inp = os.path.join(TMP, "in243.json"); outp = os.path.join(TMP, "out243.json")
+        json.dump({"setup": os.path.join(FX, "setup.json"), "phases": [{"name": "t243", "months": [], "t243": snap}]}, open(inp, "w"))
+        rr = subprocess.run(["node", os.path.join(HERE, "e2e_tdsgst_app.js"), inp, outp], capture_output=True, text=True, cwd=HERE)
+        if rr.returncode: row("TDS from Tally", "E4. the app read the copy", True, False, (rr.stderr or rr.stdout)[-600:])
+        else:
+            A = json.load(open(outp))["phases"]["t243"]["t243"]
+            px_ = next((c_ for c_ in A["challans"] if c_.get("fromVoucher") == G243["PX1"]), {})
+            row("TDS from Tally", "E4. PX1 made a challan From Tally: BSR, number, date, tax, interest, late fee, section",
+                ["tally", "0510308", "54321", "20261231", 10000, 150, 200, "194J"], [px_.get("from"), px_.get("bsr"), px_.get("serial"), px_.get("date"), px_.get("tax"), px_.get("interest"), px_.get("fee"), px_.get("section")])
+            row("TDS from Tally", "E4. the books' TDS payment PX1: the tax alone, the interest and the fee apart", [10000, 150, 200],
+                next(([p_["tax"], p_.get("interest"), p_.get("fee")] for p_ in A["payments"] if p_["vid"] == G243["PX1"]), None))
+            up_ = next((c_ for c_ in A["challans"] if c_.get("bsr") == "0240020"), {})
+            k1r = G243["K1"] + "|FC TDS 194C Keys"
+            row("TDS from Tally", "E5. K1 tagged to the challan of the payment Tally links it to (SP1), From Tally", [up_.get("id") or "the uploaded challan", "tally"], [A["alloc"].get(k1r), A["allocFrom"].get(k1r)],
+                "the uploaded challan matched to SP1 by date and amount: %s" % up_.get("fromVoucher"))
+            row("TDS from Tally", "E6. the TDS ledgers' sections from Tally's nature of payment", {"FC TDS 194C Keys": "194C", "FC TDS 194J XML": "194J"}, A["sections"])
+            c1_ = next((c_ for c_ in A["certs"] if c_.get("certNo") == "LDC197CERT0001"), {})
+            row("TDS from Tally", "E7. Tally's certificate in FinCom's list (party, PAN, section, rate, limit, from, to)", ["tally", "FC LDC Party", "AAACL0005E", "194J", 0, 500000, "20260401", "20270331"],
+                [c1_.get("src"), c1_.get("party"), c1_.get("pan"), c1_.get("section"), c1_.get("rate"), c1_.get("limit"), c1_.get("from"), c1_.get("to")])
+            w_ = next((y for y in A["watch"] if y["party"] == "FC Party Company"), {})
+            row("TDS from Tally", "E8. the limits tracker on Tally's threshold of the nature of payment", "FC Contract 194C", w_.get("limitFrom"), w_.get("limitWords", ""))
+            row("TDS from Tally", "E9. nothing to decide between Tally and FinCom here (no differing tag or certificate)", 0, len(A["disagree"]) + len(A["conflicts"]), json.dumps(A["disagree"] + A["conflicts"])[:300])
+
     # ================================================================ the table
     for r in ROWS:
         if r["state"] == "FAIL" and not r["known"]: fails.append(r["figure"])
     now_pass = [f for f in KNOWN if any(r["figure"] == f and r["state"] == "PASS" for r in ROWS)]
     for f in now_pass: print("note: listed in known-fails.json, PASS in this build (fixed): " + f)
-    areas = ["TDS", "TCS", "GSTR-1", "GSTR-3B", "Amendments", "Cloud copy (bridge)", "Ledger setup", "Both sources"]
+    areas = ["TDS", "TCS", "GSTR-1", "GSTR-3B", "Amendments", "Cloud copy (bridge)", "Ledger setup", "Both sources", "TDS from Tally"]
     def summ_of(mode):
         rs = [r for r in ROWS if r["mode"] == mode]
         return {a: {"PASS": sum(1 for r in rs if r["area"] == a and r["state"] == "PASS"), "FAIL": sum(1 for r in rs if r["area"] == a and r["state"] == "FAIL")} for a in areas if any(r["area"] == a for r in rs)}

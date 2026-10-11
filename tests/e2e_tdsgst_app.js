@@ -12,7 +12,7 @@
 // ledger list (as TCloud.load reads it: TallyRead.balances' groups, BookSrc.ledgersInto). `months` may be empty (bridge only).
 const fs = require("fs"), path = require("path"), {load, HTML} = require("./harness"), {restStub} = require("./copy_rest_stub");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "TDS26Q", "TDS_FORMS",
-  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ", "TallyRead", "BookSrc", "TCloud"];
+  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ", "TallyRead", "BookSrc", "TCloud", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH"];
 (async () => {
   const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), outPath = process.argv[3];
   const setup = JSON.parse(fs.readFileSync(inp.setup, "utf8"));
@@ -25,6 +25,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
   let keep = {};          // what the person did and FinCom keeps between the phases: filed returns, certificates, challans, allocation, ledger choices
   for (const ph of inp.phases){
     const R = out.phases[ph.name] = {};
+    if (ph.t243){ R.t243 = await run243(ph.t243); continue; }
     // ---- the books: every month's day files, as TCloud.load brings them in (one envelope a month, Books.importDayBook)
     const vouchers = [], gst = new Set(); const days = {};
     for (const m of ph.months){
@@ -116,4 +117,28 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
     keep = {filed: b.filed, alloc: b.alloc, map: b.map, vouchers: b.vouchers, copyMeta: b.meta.copy, gone: b.gone};
   }
   fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
+  // bridge 2.4.3 (run_e2e_tdsgst.py part E): the cloud copy's TDS challans and Tally's TDS masters, as TCloud.load reads them
+  // (the ledger list with its TDS settings, the natures, the entries with their TDS details), then TDSTally.sync as on load;
+  // then a challan uploaded for the Stat Payment (matched by date and amount) and the sync again
+  async function run243(c){
+    const b = {cid: cl.id, vouchers: [], meta: {}, challans: [], alloc: {}, certs: [], under: {}, groups: {}};
+    (c.ledgers || []).forEach(l => { if (l.name && l.parent) b.under[l.name] = l.parent; });
+    ctx.S.books = b;
+    x.BookSrc.ledgersInto(b, c.ledgers || [], "");
+    const st = restStub(c.tables); ctx.Cloud = {api: st.api};
+    const bk = {book: c.book};
+    await x.TCloud.naturesInto(b, c.book);
+    const heads = await x.TCloud.copyHeads(b, bk, true);
+    await x.TCloud.copyInto(b, bk, heads);
+    b.vouchers = b.vouchers.filter(v => (c.guids || []).includes(v.id));
+    b.map = x.Books.mapLedgers(b.vouchers, {});
+    let uidN = 0; ctx.uid = ctx.uid || ((p) => (p || "id") + ++uidN); ctx.saveBooks = ctx.saveBooks || (() => {});
+    const s1 = x.TDSTally.sync(b);
+    x.TDSCH.add([c.upload]);
+    const s2 = x.TDSTally.sync(b);
+    const secs = {}; ["FC TDS 194C Keys", "FC TDS 194J XML"].forEach(n => { secs[n] = (b.map[n] || {}).section || ""; });
+    return {first: s1, second: s2, challans: b.challans, alloc: b.alloc, allocFrom: b.allocFrom || {}, certs: b.certs, sections: secs,
+      payments: x.TDS.paymentsFromBooks(), watch: x.TDSWatch.year("2026-27").map(y => ({party: y.party, limitFrom: y.limitFrom, limitWords: y.limitWords, over: y.over})),
+      disagree: x.TDSTally.disagreements(), conflicts: x.TDSTally.conflicts(), natures: Object.keys(b.tdsNat || {})};
+  }
 })().catch(e => { console.error(e && e.stack || e); process.exit(1); });
