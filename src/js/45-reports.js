@@ -95,11 +95,15 @@ const RPT = {
       v.ent.forEach(e => { if (Audit.isCash(e.l) || Audit.isBankL(e.l)){ if (e.a < 0) inM[m] = r2(inM[m] - e.a); else outM[m] = r2(outM[m] + e.a); } });
     });
     const H = k => (pl.heads[k] || {m: {}, t: 0});
-    months.forEach(m => { sales[m] = r2((H("rev").m[m] || 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
+    // sales are MIS's sales (MIS.sales: the Sales Accounts ledgers once the masters are read, else the sale entries), the
+    // figure MIS's "Sales" tile shows for the same dates. The profit and loss's "Revenue from operations" counted, without
+    // the ledgers' groups, only ledgers named "Sales...", and showed sales of nil beside MIS's 7,70,000 (audit of 11-Oct-2026)
+    const st = MIS.sales(R.from, R.to);
+    months.forEach(m => { sales[m] = r2(st.rows.reduce((a, x) => a + (x.m[m] || 0), 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
     let comp = null; try { comp = MIS.compliance(R.from, R.to); } catch (e){ comp = {gst: [], tds: [], audit: null}; }
     const cashBank = balTo ? r2(Object.keys(balTo).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((s, l) => s - balTo[l], 0)) : null;
     const au = (b.audit || {}).last, open = au ? au.findings.filter(f => Audit.status(f.id).s === "open") : [];
-    const d = {R, months, pl, bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
+    const d = {R, months, pl, salesTotal: st.total, groups: !!Audit.mastersIn(), bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
       tdsDeductees: new Set(TDS.rows().filter(r => r.date >= R.from && r.date <= R.to).map(r => r.pan || r.party)).size};
     this._d = {key, d};
     return d;

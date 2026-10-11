@@ -26,8 +26,11 @@ function AreaDash({ id, d }) {
     const rev = (d.pl.heads.rev || { t: 0 }).t;
     const yc = RPT.yearCount(d.R.fy);
     const salesSub = yc.sales ? yearSub : "no sales entries in " + FC.fyLabel(d.R.fy) + " yet (" + yc.text + " in the books this year)";
-    return <><Tiles><T l="Sales" v={m(rev)} sub={salesSub} rid="mis-sales" /><T l="Gross profit" v={m(d.pl.gross.t)} sub={pct(d.pl.gross.t, rev) + " of sales"} rid="mis-pl" />
-      <T l="Profit before tax" v={m(d.pl.pbt.t)} sub={pct(d.pl.pbt.t, rev) + " of sales"} rid="mis-pl" cls={d.pl.pbt.t < 0 ? "warn" : ""} />
+    // sales: MIS's figure for the same dates (RPT.data, MIS.sales). Without the ledgers' groups the profit is not known
+    // (expenses cannot be told apart): a dash, as MIS shows it, not 0.00 (audit of 11-Oct-2026)
+    const noGroups = !d.groups, ng = "the ledgers' groups are not read yet";
+    return <><Tiles><T l="Sales" v={m(d.salesTotal)} sub={salesSub} rid="mis-sales" /><T l="Gross profit" v={noGroups ? "—" : m(d.pl.gross.t)} sub={noGroups ? ng : pct(d.pl.gross.t, rev) + " of sales"} rid="mis-pl" />
+      <T l="Profit before tax" v={noGroups ? "—" : m(d.pl.pbt.t)} sub={noGroups ? ng : pct(d.pl.pbt.t, rev) + " of sales"} rid="mis-pl" cls={!noGroups && d.pl.pbt.t < 0 ? "warn" : ""} />
       <T l="Cash and bank" v={d.cashBank == null ? "—" : m(d.cashBank)} sub={d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to)} rid="lk-group-bank" /></Tiles>
       <Bars labels={mon} series={[{ name: "Sales", cls: "c1", values: d.months.map((x) => d.sales[x]) }, { name: "Purchases and direct costs", cls: "c2", values: d.months.map((x) => d.purch[x]) }]} label="Sales and purchases by month" /></>;
   }
