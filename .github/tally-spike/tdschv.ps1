@@ -337,8 +337,9 @@ try {
         $t = TdsScreen "ch$($tr[0])-period-box"
         if ($t -match 'Period|From') { $null = TK '1-4-2026{ENTER}' 1; $null = TK '31-3-2027{ENTER}' 3 "ch$($tr[0])-period-set" } else { $null = TK '{ESC}' 1.5 }
         foreach ($k in $tr[1]) { $null = TK $k 2.5 "ch$($tr[0])-key" }
-        # distinct values: whatever column each lands in, the stored tag shows which
-        foreach ($v in '456789', '12345', '2-12-2026', '0240020', 'HDFC Bank Ltd', '31-12-2026') { $null = TK ((SK $v) + '{ENTER}') 1.5 "ch$($tr[0])-v$($v -replace '\W', '')" }
+        # distinct values: whatever column each lands in, the stored tag shows which. Reconcile (run 38155837948): the
+        # cursor starts on E-TDS quarter period From, then To, Cheque/DD no., its date, BSR code, challan no., challan date
+        foreach ($v in $(if ($tr[0] -eq 'R') { @('1-10-2026', '31-12-2026', '456789', '1-12-2026', '0240020', '12345', '2-12-2026', 'HDFC Bank Ltd', 'Connaught Place') } else { @('456789', '12345', '2-12-2026', '0240020', 'HDFC Bank Ltd', '31-12-2026') })) { $null = TK ((SK $v) + '{ENTER}') 1.5 "ch$($tr[0])-v$($v -replace '\W', '')" }
         $null = TK '^a' 2.5 "ch$($tr[0])-ctrl-a"
         $t = TdsScreen "ch$($tr[0])-accept-q"; if ($t -match 'Yes or No|Accept \?') { $null = TK 'y' 3 "ch$($tr[0])-yes" }
         $null = TdsGateway "after challan try $($tr[0])"
