@@ -32,7 +32,7 @@ export default function DueAll() {
       rowProps={(x) => ({ "data-due": x.cid + "|" + x.kind + "|" + (x.form || x.what) + "|" + x.per, "data-status": x.status })}
       empty={f === "todo" ? "Nothing due or overdue for any client." : "Nothing here."}
       cols={[
-        { k: "due", role: "date", label: "Due on", v: (x) => x.due, cell: (x) => fmtDate(x.due) },
+        { k: "due", role: "date", label: "Due date", v: (x) => x.due, cell: (x) => fmtDate(x.due) },
         { k: "client", role: "party", label: "Client", v: (x) => x.client, cell: (x) => <><b>{x.client}</b>{x.gstin ? <div className="nr">{x.gstin}</div> : x.tan ? <div className="nr">TAN {x.tan}</div> : null}</> },
         { k: "what", label: "Return or payment", v: (x) => x.what, cell: (x) => <button className="linkbtn" data-due-open="" onClick={() => DueList.open(x)}>{x.what}</button> },
         { k: "per", label: "Period", v: (x) => x.per, cell: (x) => x.per },
