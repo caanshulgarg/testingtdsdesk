@@ -2280,11 +2280,17 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   S.askClaudeNewSupplier = lsGet("tdsdesk:askClaudeNew") === "1";
   const samplePromise = (async () => { try { return window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch(e){ return null; } })();
   if (!window.claude) S.sampleReady = false;
+  // stability batch 2: the opening work in short steps, the browser free to draw and to take a click between them (one
+  // long block of up to 200 ms on an office computer before); the same work, in the same order
+  const pause = () => new Promise(r => (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield().then(r, r) : setTimeout(r, 0));
   await Store.init();
+  await pause();
   try { await Store.loadFirm(); }
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
+  await pause();
   Object.keys(S.data).forEach(refreshStats);
   render();
+  await pause();
   // a page link (#/…) opens that page; otherwise the client open last time
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
@@ -2308,10 +2314,18 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
   startCloudSync();
-  if (!Cloud.on()) fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
-    .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => {});
+  // stability batch 2: asked only for the sign-in page, where its "Create an account" line is (SignIn.jsx asks too, when
+  // the page is shown later), not on every open of FinCom used without an account
+  if (!Cloud.on() && signInNeeded()) loadSignupInfo();
   render();
 })();
+// whether new firms may sign up, and their starting credit (the sign-in page's "New here? Create an account" line)
+function loadSignupInfo(){
+  if (Cloud.on() || S.signupInfo || S.signupAsked) return;
+  S.signupAsked = true;
+  fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
+    .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => { S.signupAsked = false; });
+}
 window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk:last", S.coId); });
 
 // an owner clears a client's wrong GSTIN or PAN, with a reason (review of 02-Oct-2026): on the server through

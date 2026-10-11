@@ -13,8 +13,8 @@
      green done, amber needs attention, red failed, grey waiting; each with a soft background */
     --st-done:var(--ok); --st-done-soft:var(--ok-soft); --st-attention:var(--warn); --st-attention-soft:var(--warn-soft);
     --st-failed:var(--bad); --st-failed-soft:var(--bad-soft); --st-waiting:var(--muted); --st-waiting-soft:var(--rule-soft);
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --sans:"Inter","Inter Variable",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
