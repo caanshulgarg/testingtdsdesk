@@ -71,6 +71,10 @@ const CloudDocs = {
     } else if (job.kind === "gstret"){
       const x = S.books && S.books.cid === job.cid && typeof GSTV === "object" ? GSTV.list().find(z => z.id === job.id) : null;
       if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
+    } else if (job.kind === "f16a"){
+      // a Form 16A kept with its deductee (src/js/70-traces-files.js)
+      const x = S.books && S.books.cid === job.cid && Array.isArray(S.books.f16a) ? S.books.f16a.find(z => z.id === job.id) : null;
+      if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
     } else if (job.kind === "notice"){
       const n = S.books && S.books.cid === job.cid ? ((S.books.ai || {}).notices || []).find(z => z.id === job.id) : null;
       if (n){ n.docPath = path; n.docSize = size; saveBooks(); }

@@ -1,0 +1,11 @@
+File Creation Date^Permanent Account Number (PAN)^Current Status of PAN^Financial Year^Assessment Year^Name of Assessee^Address Line 1^Address Line 2^Address Line 3^Address Line 4^Address Line 5^Statecode^Pin Code
+11-10-2026^AAJFJ1234K^Active^2025-2026^2026-2027^JUNIPER LEGAL ASSOCIATES^1 COURT LANE^^NEW DELHI^^^07^110002
+
+^PART-I - Details of Tax Deducted at Source^
+Sr. No.^Name of Deductor^TAN of Deductor^^^^^Total Amount Paid / Credited^Total Tax Deducted^Total TDS Deposited
+^Sr. No.^Section^Transaction Date^Status of Booking^Date of Booking^Remarks^Amount Paid / Credited^Tax Deducted^TDS Deposited
+1^LARKSPUR FIXTURE EVENTS PRIVATE LIMITED^DELZ12345A^^^^^70000.00^7000.00^7000.00
+^1^194J^05-Nov-2025^F^31-Jan-2026^^60000.00^6000.00^6000.00
+^2^194J^12-Aug-2025^F^31-Oct-2025^^10000.00^1000.00^1000.00
+2^ORION PARTNERS^DELO99999Z^^^^^50000.00^5000.00^5000.00
+^1^194J^01-Dec-2025^F^31-Jan-2026^^50000.00^5000.00^5000.00

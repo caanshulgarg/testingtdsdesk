@@ -1,0 +1,31 @@
+File Creation Date^Permanent Account Number (PAN)^Current Status of PAN^Financial Year^Assessment Year^Name of Assessee^Address Line 1^Address Line 2^Address Line 3^Address Line 4^Address Line 5^Statecode^Pin Code
+11-10-2026^AAGCL4827M^Active^2025-2026^2026-2027^LARKSPUR FIXTURE EVENTS PRIVATE LIMITED^12 FIXTURE ROAD^^NEW DELHI^^^07^110001
+
+^PART-I - Details of Tax Deducted at Source^
+Sr. No.^Name of Deductor^TAN of Deductor^^^^^Total Amount Paid / Credited^Total Tax Deducted^Total TDS Deposited
+^Sr. No.^Section^Transaction Date^Status of Booking^Date of Booking^Remarks^Amount Paid / Credited^Tax Deducted^TDS Deposited
+1^QUILLFEATHER WEDDINGS LLP^DELQ12345A^^^^^722000.00^13000.00^13000.00
+^1^194C^25-May-2025^F^31-Jul-2025^^472000.00^8000.00^8000.00
+^2^194C^20-Aug-2025^F^31-Oct-2025^^250000.00^5000.00^5000.00
+2^VELLICHOR LEARNING FOUNDATION^DELV12345B^^^^^45000.00^4500.00^4500.00
+^1^194J^10-Nov-2025^F^31-Jan-2026^^20000.00^2000.00^2000.00
+^2^194J^15-Jan-2026^F^31-May-2026^^25000.00^2500.00^2500.00
+3^ZINNIA RESORTS AND RETREATS LTD^MUMZ12345C^^^^^150000.00^3000.00^3000.00
+^1^194C^05-Feb-2026^F^31-May-2026^^75000.00^1500.00^1500.00
+^2^194C^25-Feb-2026^U^31-May-2026^^75000.00^1500.00^1500.00
+
+^PART-II - Details of Tax Deducted at Source for 15G / 15H^
+Sr. No.^Name of Deductor^TAN of Deductor^^^^^Total Amount Paid / Credited^Total Tax Deducted #^Total TDS Deposited
+No Transactions Present
+
+^PART-III - Details of Transactions under Proviso to section 194B/First Proviso to sub-section (1) of section 194R/ Proviso to sub-section(1) of section 194S/Sub-section (2) of section 194BA^
+No Transactions Present
+
+^PART-VI - Details of Tax Collected at Source^
+Sr. No.^Name of Collector^TAN of Collector^^^^^Total Amount Paid / Debited^Total Tax Collected^Total TCS Deposited
+^Sr. No.^Section^Transaction Date^Status of Booking^Date of Booking^Remarks^Amount Paid / Debited^Tax Collected^TCS Deposited
+1^ACME MOTORS PRIVATE LIMITED^DELA54321D^^^^^1200000.00^12000.00^12000.00
+^1^206CL^10-Mar-2026^F^15-May-2026^^1200000.00^12000.00^12000.00
+
+^PART-VII - Details of Paid Refund^
+No Transactions Present

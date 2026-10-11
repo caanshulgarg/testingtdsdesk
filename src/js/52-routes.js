@@ -48,6 +48,8 @@ const Route = {
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
       if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
+      if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
@@ -64,6 +66,8 @@ const Route = {
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
       if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (p[1] === "26as"){ S.tdsView = "recon"; return; }
+      if (p[1] === "traces"){ S.tdsView = "traces"; return; }
       if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;

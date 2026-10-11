@@ -15,6 +15,7 @@ import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
 import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
 import { Correction } from "./tds/Smart.jsx";
+import { TracesDefaults, F16Link } from "./tds/Files.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -255,7 +256,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
         { k: "party", role: "party", label: "Deductee", v: (p) => p.party, cell: (p) => <><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</> },
         { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (p) => p.paid, fmt: money, cell: (p) => money(p.paid) },
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
-        { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <Pan pan={p.pan} /> },
+        { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <><Pan pan={p.pan} /><F16Link pan={p.pan} fy={S.tdsFy} q={S.tdsQ} /></> },
         { k: "code", label: "Code", cell: (p) => (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—") },
         { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).map((x) => secText(x)).join(", ") },
         { k: "n", label: "Deductions", cls: "n", v: (p) => p.n, sum: true, fmt: String, cell: (p) => <button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button> },
@@ -453,6 +454,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
           {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(un.reduce((a, r) => a + r.tds, 0))}</b></div>}
           {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
         <Correction fy={fy} q={q} form={form} drift={drift} />
+        <TracesDefaults jr={TRF.jrFor(fy, q, form)} />
         {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} filed={filedOn} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} int1A={int1A} fee={fee} filed={filedOn} />}</>}
   </>;
 }
@@ -557,7 +559,8 @@ export function Return24({ b }) {
       : <><InterestFee fy={fy} q={q} form="24Q" list={int1A} fee={fee} filed={filedOn} />
         {checks.length ? <section className="dash-card"><h3>Before filing</h3>{checks.map((c, i) => <span key={i} style={{ display: "contents" }}>
           <div className="dash-row"><span>{c.what}</span><b>{c.n}</b></div><p className="note">{c.how}{c.who.length ? " e.g. " + c.who.join(", ") : ""}</p></span>)}</section>
-        : <p className="note">Nothing to fix for this quarter.</p>}</>}
+        : <p className="note">Nothing to fix for this quarter.</p>}
+        <TracesDefaults jr={TRF.jrFor(fy, q, "24Q")} /></>}
   </>;
 }
 

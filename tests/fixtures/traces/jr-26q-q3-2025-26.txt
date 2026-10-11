@@ -1,0 +1,38 @@
+Justification Report
+TAN ^ DELZ12345A
+Name of Deductor ^ ZZ TDSGST
+Financial Year ^ 2025-26
+Quarter ^ Q3
+Form Type ^ 26Q
+Token Number ^ 123456789012345
+
+Summary of Defaults
+Short Payment ^ 0.00
+Short Deduction ^ 1,200.00
+Interest on Payment Default ^ 450.00
+Interest on Deduction Default ^ 120.00
+Late Filing Fee u/s 234E ^ 2,000.00
+Interest u/s 220(2) ^ 0.00
+PAN Errors ^ 1
+Total Default ^ 3,770.00
+
+Short Deduction
+Sr. No. ^ PAN ^ Name of Deductee ^ Section ^ Date of Payment ^ Amount Paid ^ TDS Deducted ^ TDS Deductible ^ Short Deduction
+1 ^ AAJFJ1234K ^ JUNIPER LEGAL ASSOCIATES ^ 194J ^ 05-11-2025 ^ 60,000.00 ^ 4,800.00 ^ 6,000.00 ^ 1,200.00
+
+Interest on Payment Default
+Sr. No. ^ Challan Serial No ^ BSR Code ^ Date of Deposit ^ Amount ^ Months ^ Interest
+1 ^ 10002 ^ 0240020 ^ 10-12-2025 ^ 6,000.00 ^ 3 ^ 270.00
+2 ^ 10002 ^ 0240020 ^ 10-12-2025 ^ 4,000.00 ^ 3 ^ 180.00
+
+Interest on Deduction Default
+Sr. No. ^ PAN ^ Name of Deductee ^ Section ^ Date of Payment ^ Date of Deduction ^ TDS ^ Interest
+1 ^ AAJFJ1234K ^ JUNIPER LEGAL ASSOCIATES ^ 194J ^ 05-11-2025 ^ 20-12-2025 ^ 6,000.00 ^ 120.00
+
+Late Filing Fee u/s 234E
+Sr. No. ^ Due Date ^ Date of Filing ^ Days ^ Late Fee
+1 ^ 31-01-2026 ^ 10-02-2026 ^ 10 ^ 2,000.00
+
+PAN Errors
+Sr. No. ^ PAN ^ Name of Deductee ^ Section ^ Amount Paid ^ TDS
+1 ^ PANNOTAVBL ^ ORCHID EVENTS ^ 194C ^ 50,000.00 ^ 1,000.00

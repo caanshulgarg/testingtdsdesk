@@ -1,0 +1,17 @@
+{
+  "assessee": {"pan": "AAGCL4827M", "name": "LARKSPUR FIXTURE EVENTS PRIVATE LIMITED", "financialYear": "2025-26"},
+  "partB": {
+    "tdsTcsInformation": [
+      {"infoCode": "TDS-194C", "infoDesc": "Payment to contractors", "infoSource": "QUILLFEATHER WEDDINGS LLP (DELQ12345A)",
+       "details": [
+         {"srNo": 1, "quarter": "Q1(Apr-Jun)", "dateOfPaymentCredit": "25/05/2025", "amountPaidCredited": 472000, "tdsDeducted": 8000, "tdsDeposited": 8000, "status": "Active"},
+         {"srNo": 2, "quarter": "Q2(Jul-Sep)", "dateOfPaymentCredit": "20/08/2025", "amountPaidCredited": 250000, "tdsDeducted": 5000, "tdsDeposited": 5000, "status": "Active"}]},
+      {"infoCode": "TDS-194J", "infoDesc": "Fees for professional services", "infoSource": "VELLICHOR LEARNING FOUNDATION (DELV12345B)",
+       "details": [
+         {"srNo": 1, "quarter": "Q3(Oct-Dec)", "dateOfPaymentCredit": "10/11/2025", "amountPaidCredited": 20000, "tdsDeducted": 2000, "tdsDeposited": 2000, "status": "Active"}]},
+      {"infoCode": "TCS-206CL", "infoDesc": "Sale of motor vehicle", "infoSource": "ACME MOTORS PRIVATE LIMITED (DELA54321D)",
+       "details": [
+         {"srNo": 1, "quarter": "Q4(Jan-Mar)", "dateOfPaymentCredit": "10/03/2026", "amountPaidCredited": 1200000, "tcsCollected": 12000, "tcsDeposited": 12000, "status": "Active"}]}
+    ]
+  }
+}

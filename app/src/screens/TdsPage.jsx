@@ -9,7 +9,7 @@
 // (Protean's RPU 1.2). Earlier years keep the old names alone. Nothing here works out a figure: the amounts are
 // TDSYear.quarters() and the rows of TDS, as before; the counts in a cell are of those rows.
 //
-// State: S.tdsView (years | year | return | certs | notices), S.tdsFy, S.tdsQ, S.tdsForm (the return open),
+// State: S.tdsView (years | year | return | certs | notices | recon: 26AS and AIS | traces: TRACES files), S.tdsFy, S.tdsQ, S.tdsForm (the return open),
 // S.tdsPickForm (the form chosen in the bar while no quarter is), all kept in the address (Route.booksMore, src/js/52).
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
@@ -17,6 +17,7 @@ import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { TieOut, Limits } from "./tds/Smart.jsx";
+import { Recon26, TracesFiles } from "./tds/Files.jsx";
 import "../parts/returns.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -41,7 +42,7 @@ function Bar({ fys }) {
   return (
     <div className="rp-bar" role="group" aria-label="Choose the return" data-tds-bar="">
       <label className="rp-f">{TDS.yearWord(fy)}
-        <select aria-label="Year" value={fy} onChange={(ev) => tdsPick(ev.target.value, q, form)}>
+        <select aria-label="Year" value={fy} onChange={(ev) => { if (v === "recon" || v === "traces") { S.tdsFy = ev.target.value; render(); } else tdsPick(ev.target.value, q, form); }}>
           {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></label>
       <label className="rp-f">Quarter
         <select aria-label="Quarter" value={q} onChange={(ev) => tdsPick(fy, ev.target.value, form)}>
@@ -53,6 +54,8 @@ function Bar({ fys }) {
           {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></label>
       <span className="rp-links">
         <button className="linkbtn" onClick={() => tdsNav("certs")} aria-current={v === "certs" || undefined}>Certificates and rate questions</button>
+        <button className="linkbtn" data-tds-link="recon" onClick={() => tdsNav("recon")} aria-current={v === "recon" || undefined}>26AS and AIS</button>
+        <button className="linkbtn" data-tds-link="traces" onClick={() => tdsNav("traces")} aria-current={v === "traces" || undefined}>TRACES files</button>
         {AIH.enabled("notices") && <button className="linkbtn" onClick={() => tdsNav("notices")}>Notices</button>}
         <button className="linkbtn" onClick={() => tdsNav("years")}>All years</button>
         <HelpButton />
@@ -70,6 +73,8 @@ function Crumbs() {
       {fy && v !== "years" && v !== "notices" && <><span className="note">›</span><button className="linkbtn" onClick={() => tdsGo(fy)}>{TDS.yearWord(fy)} {fy}</button></>}
       {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
       {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
+      {v === "recon" && <><span className="note">›</span><b>26AS and AIS</b></>}
+      {v === "traces" && <><span className="note">›</span><b>TRACES files</b></>}
       {v === "return" && <><span className="note">›</span><b data-return-title="">{S.tdsQ} ({Q_MONTHS[S.tdsQ]}) · {TDS.formLabel(S.tdsForm || "26Q", fy)}</b></>}
     </div>
   );
@@ -192,7 +197,7 @@ export default function Tds({ b }) {
   // client. The quarter's own tax year names its forms (Form 140 from 2026-27, 26Q before: TDS.formLabel)
   if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
-  if (["year", "return", "certs"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
+  if (["year", "return", "certs", "recon", "traces"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices"].includes(S.tdsView)) S.tdsView = "years";
   const v = S.tdsView;
   // a return's tab is settled before the way back is drawn: the guide beside it is for that tab
@@ -209,16 +214,19 @@ export default function Tds({ b }) {
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   return <>
     <LedgerBanner b={b} which="tds" />
-    {!had.length && v !== "notices" ? <>
+    {!had.length && !["notices", "recon", "traces"].includes(v) ? <>
       {notRead}
       <div className="bk-none">TDS is worked out from the day book. Salary for 24Q can also be brought in on its own, from a salary sheet. The years appear here once either is in.</div>
-      <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button><button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button><button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button>
+        <button className="btn small" data-tds-link="recon" onClick={() => { S.tdsFy = S.tdsFy || fys[0]; tdsNav("recon"); }}>26AS and AIS</button><button className="btn small" data-tds-link="traces" onClick={() => { S.tdsFy = S.tdsFy || fys[0]; tdsNav("traces"); }}>TRACES files</button></div>
     </> : <>
       <Bar fys={fys} />
       <Crumbs />
       {v === "notices" ? <Notices b={b} kind="tds" />
         : v === "years" ? <Years rows={rows} fys={had} />
         : v === "certs" ? <CertsPage />
+        : v === "recon" ? <Recon26 />
+        : v === "traces" ? <TracesFiles />
         : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
         : notRead ? notRead
         : <Year b={b} />}
