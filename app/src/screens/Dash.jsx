@@ -29,7 +29,15 @@ export default function Dash() {
   const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // ready to post: the one count for Tally (postCounts, src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
-  const tds = v.filter((e) => e.status !== "rejected" && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0);
+  // TDS of this year (audit of 11-Oct-2026: "TDS this year 0.00" beside the TDS page's 20,000): two sources, each named.
+  // On bills approved here: of this year only, as the client's figure for the year (refreshStats tdsFy; it counted every
+  // year's bills). In the books: the TDS ledgers in Tally's Day Book, the TDS page's Form 140 total for the year
+  // (TDSYear.quarters: TDS.rows of the year), when this client's books are open
+  const fy = fyOf(null);
+  const tds = v.filter((e) => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0);
+  const bk = S.books && S.books.cid === co.id && (S.books.vouchers || []).length ? S.books : null;
+  let tdsBooks = null;
+  if (bk) { try { tdsBooks = TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { tdsBooks = null; } }
   const recent = v.filter(billInTally).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
@@ -51,8 +59,10 @@ export default function Dash() {
       {CloudDocs.on() && <p className="note" style={{ margin: "-6px 0 14px" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.
         {CloudDocs.queue.length > 0 && <> <b>{CloudDocs.queue.length} waiting to go up.</b></>}</p>}
       <div className="dash-cols">
-        <section className="dash-card" data-tone="violet"><h3>TDS this year</h3><div className="dash-big">{money(tds)}</div>
-          <p className="note">On bills approved here for {fyOf(null)}. Deductees over their limit show in red on the bills list.</p>
+        <section className="dash-card" data-tone="violet"><h3>TDS {fy}</h3>
+          <div className="dash-row"><span>On bills approved here</span><b>{money(tds)}</b></div>
+          {tdsBooks != null && <div className="dash-row"><span>In the books (Tally), {TDS.formShort("26Q", fy)}</span><b>{money(tdsBooks)}</b></div>}
+          <p className="note">{tdsBooks != null ? "The books’ figure is the TDS page’s for the year. " : "The books’ TDS for the year is on the TDS page. "}Deductees over their limit show in red on the bills list.</p>
           <button className="btn small" onClick={() => goClient("post")}>Open Post to Tally</button></section>
         <section className="dash-card" data-tone="sky"><h3>Bank</h3>
           {stmt ? <><p><b>{stmt.bank || ""}</b> · {fmtDate(stmt.from)} to {fmtDate(stmt.to)}</p>

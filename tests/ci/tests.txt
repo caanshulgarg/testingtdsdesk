@@ -34,6 +34,7 @@ run_contrast.py                       120
 run_cors_preflight.js                 120
 run_dates.js                          120
 run_dups_posted.py                    120
+run_figures_agree.py                     120  TDSDESK_SITE=../app/dist-test
 run_fixture_books.js                  120
 run_fs.js                             120
 run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
