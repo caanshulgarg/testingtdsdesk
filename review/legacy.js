@@ -24890,12 +24890,12 @@ function tallySignNow(co){
   if (good){
     const company = co ? good.open.find(same) : good.open.join(", ");
     // round 3 (05-Oct-2026): the sign says which computer: this one, the other one, or how many
-    // 11-Oct-2026: "ready", and the computer with its Windows user ("NWS144 (anshul)"); "via" for a computer that is not
-    // this one
+    // 11-Oct-2026: "ready", and the computer with its Windows user: "Tally ready on NWS144 (anshul)" (the owner: never
+    // "via" or "through")
     if (good.local) return out({on: true, code: "ok", local: true, computer: "this computer (" + good.computer + ")", pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on this computer", short: "This computer", through: [good.computer]});
-    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), pc: goods.map(x => x.pc).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally ready via " + goods.length + " computers",
+    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), pc: goods.map(x => x.pc).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally ready on " + goods.length + " computers",
       short: goods.length + " computers", through: goods.map(x => x.computer), many: goods.map(x => ({computer: x.computer, company: co ? x.open.find(same) : x.open.join(", "), at: tallyIst(x.at)}))});
-    return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready via " + good.pc, short: good.pc, through: [good.computer]});
+    return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on " + good.pc, short: good.pc, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
   const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];
@@ -27790,11 +27790,11 @@ function postStatusFor(co){
   const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
   const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
   // the steady sign (11-Oct-2026): the connection in the line is the firm's sign for this client (tallySign, src/js/49),
-  // in its words and as steady as the top bar ("Tally ready via NWS144 (anshul)"; not ready only once that held a
-  // minute). Only the words: posting itself checks the bridge and the cloud at the moment it posts (canPostTally, the
-  // posting's own checks), never this
+  // as steady as the top bar: "Posting into X on NWS144 (anshul) · Tally ready · read 15:34" (the owner: no "via"); not
+  // ready only once that held a minute. Only the words: posting itself checks the bridge and the cloud at the moment it
+  // posts (canPostTally, the posting's own checks), never this
   const sg = typeof tallySign === "function" ? tallySign(co) : null;
-  if (sg && sg.on){ out.where = sg.words; if (l){ out.read = l.read; out.reading = !!l.reading; } }
+  if (sg && sg.on){ out.where = "Tally ready"; out.on = sg.many ? sg.many.length + " computers" : sg.pc || ""; if (l){ out.read = l.read; out.reading = !!l.reading; } }
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
