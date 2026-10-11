@@ -544,12 +544,6 @@ function FocusLine({ f, cards }) {
     {f.co.name + ": " + (r ? "linked to " + (f.company || "its Tally company") + " on " + pcName(r) + " (marked below)." : f.company ? "no computer reads " + f.company + " yet." : "not linked to a Tally company yet.")}
     {" "}<button className="linkbtn" data-focus-clear="" onClick={() => { S.tallyFocus = ""; render(); }}>Show all computers</button></p>;
 }
-// "← Back to <client>" on every Tally view while a client is open (backToClient, src/js/52)
-function BackToClient() {
-  const co = S.coId && S.companies && S.companies[S.coId];
-  if (!co || co.deleted || typeof backToClient !== "function") return null;
-  return <p className="tback" style={{ margin: "0 0 8px" }}><button className="linkbtn" data-back-client={co.id} onClick={() => backToClient()}>{"← Back to " + co.name}</button></p>;
-}
 // the page's Details: the versions (hold, let go, roll back, withdraw), Stop reading on all computers, every bridge heard
 // from, this browser's own connection (its Connect steps, the Tallys found with their ports and Windows sessions, Check
 // my Tally, the bridge's log), the connection history, the clients' lines, and FinCom Bridge's install help
@@ -866,10 +860,10 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const rows = TCloud.on() ? TCloud.bridgesHeard() : [], latest = m && m.setup ? m.setup.version : "";
   // phase 2 (H49-H51): Computers (as before), Sync activity (the recorder's lines), Everything sent (the post log)
   const tab = TALLY_TABS.some(([id]) => id === S.tallyTab) ? S.tallyTab : "computers";
-  // the Tally redesign (09-Oct-2026): "← Back to <client>" on every view; Needs you first, then one card a computer
+  // the Tally redesign (09-Oct-2026): Needs you first, then one card a computer. The way back to the open client is the
+  // sidebar's client card (clean-up batch 1: no in-page "← Back to <client>")
   const cards = cardsOf(rows), f = focusOf(S.tallyFocus);
   return <>
-    <BackToClient />
     <nav className="sbar" aria-label="Tally">{TALLY_TABS.map(([id, label]) =>
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />

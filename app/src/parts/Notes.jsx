@@ -64,7 +64,7 @@ export function MultiUpload() {
   const m = S.multiUp;
   const intro = <><h3 style={{ marginTop: 0 }}>Day books for several clients at once</h3><p className="note" style={{ margin: "0 0 8px" }}>Choose the day book XML files exported from Tally, one or more per client. Each file’s company is read from the file and matched to a client; check the matches, then start. A file whose company or GSTIN is not the client’s is not taken.</p></>;
   const pick = (label, cls) => <button className={cls} onClick={() => doAct("multiPick")}>{label}</button>;
-  if (!m) return <div className="pane">{intro}{pick("Choose day book files", "btn")}</div>;
+  if (!m) return <div className="pane">{intro}{pick("Bring in from Tally", "btn")}</div>;
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
   return <div className="pane">{intro}{m.reading && <p className="note">Reading the files…</p>}
     <ListRows name="multiUpload" className="data" unit={["file", "files"]} head={[{ label: "File", role: "number" }, { label: "Company in the file", role: "party" }, { label: "Client" }, { label: "Status", role: "status" }]}>

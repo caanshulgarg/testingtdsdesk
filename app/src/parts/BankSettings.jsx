@@ -27,7 +27,7 @@ function PanelBody({ b, co, std, pendingNew, nh }) {
     <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? fmtDateTime(b.ledgers.importedAt) : "—") + "."}</p><Btn act="bankSync">Refresh from Tally</Btn></>
       : <>{hasLedgerList() ? <p className="note">{b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + (b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "")}</p>
         : <p className="note">Not imported yet. In Tally: Display More Reports → List of Accounts → Export (Excel or XML).</p>}
-        <Btn act="ledPick">{hasLedgerList() ? "Update ledger list" : "Import ledger list"}</Btn>
+        <Btn act="ledPick">{hasLedgerList() ? "Update ledger list" : "Bring in from Tally"}</Btn>
         {pendingNew > 0 && <p className="note">{plural(pendingNew, "new ledger") + " will be created in Tally with the next Tally file."}</p>}</>}</section>
     <section><h3>Bank accounts</h3>{(co.bankAccounts || []).length ? <div className="bk-accs">{co.bankAccounts.map((a) =>
       <div key={a.id} className="bk-acc"><span className="note">{a.bank + (a.last4 ? " ··" + a.last4 : "") + (a.ifsc ? " · " + a.ifsc : "")}</span><BankLedger co={co} acc={a} compact /></div>)}</div>

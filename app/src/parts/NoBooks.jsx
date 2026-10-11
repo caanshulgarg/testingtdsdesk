@@ -8,6 +8,6 @@ export default function NoBooks({ what }) {
   return <div className="fc-empty arc-empty">
     <EmptyState title={what + " needs the books"} description="Read the day book and balances from Tally first. It takes a minute a month through FinCom Bridge."
       icon={<BookOpen width={22} height={22} strokeWidth={1.5} />}
-      action={<><Button className="btn primary" onClick={() => FC.go("import")}>Read the books from Tally</Button>{!live && <Button className="btn" onClick={() => doAct("tallyGuide")}>Set up FinCom Bridge</Button>}</>} />
+      action={<><Button className="btn primary" onClick={() => FC.go("import")}>Bring in from Tally</Button>{!live && <Button className="btn" onClick={() => doAct("tallyGuide")}>Set up FinCom Bridge</Button>}</>} />
   </div>;
 }

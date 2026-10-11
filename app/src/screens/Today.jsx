@@ -1,4 +1,6 @@
 // Today: what needs doing, across every client. Was viewToday() in src/js/18.
+// One set of count words everywhere (clean-up batch 1, 11-Oct-2026): To read · To review · Ready to post · Needs you, the
+// same on Today, Clients, a client's Overview and the review table's status.
 import ListTable from "../parts/ListTable.jsx";
 import { DueLine } from "../parts/DueList.jsx";
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
@@ -30,8 +32,8 @@ export default function Today() {
       <div className="metrics">
         <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} tone="violet" Icon={Inbox} />
         <Metric label="To review" n={sum("review")} tone="amber" Icon={ReceiptText} />
-        <Metric label="To post" n={sum("post")} tone="indigo" Icon={Send} />
-        <Metric label="Need a look" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
+        <Metric label="Ready to post" n={sum("post")} tone="indigo" Icon={Send} />
+        <Metric label="Needs you" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
       </div>
       {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
         {/* the one list table (spec K6) */}
@@ -40,8 +42,8 @@ export default function Today() {
             { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
             { k: "read", label: "To read", cls: "n", v: (r) => r.read, sum: true, fmt: String, cell: (r) => cell(r, "read", "collect") },
             { k: "review", label: "To review", cls: "n", v: (r) => r.review, sum: true, fmt: String, cell: (r) => cell(r, "review", "review") },
-            { k: "post", label: "To post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },
-            { k: "look", label: "Need a look", cls: "n", v: (r) => r.look, sum: true, fmt: String, cell: (r) => cell(r, "look", "review") },
+            { k: "post", label: "Ready to post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },
+            { k: "look", label: "Needs you", cls: "n", v: (r) => r.look, sum: true, fmt: String, cell: (r) => cell(r, "look", "review") },
           ]} />
         <p className="note" style={{ marginTop: 8 }}>Counts cover clients opened on this computer; open a client to bring its figures up to date.</p>
         {/* round 46: the returns due are on the Compliance page; Today keeps one line */}

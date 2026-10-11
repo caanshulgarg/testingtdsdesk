@@ -153,8 +153,8 @@ function Status({ b }) {
     </div>) : <div className="led-status-line" data-led-status-line="none">No ledgers from Tally yet</div>}
     {again}
     {!live && !cloud && <div className="led-upload" data-led-upload="">
-      <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then upload the file here.</span>
-      <button className="btn small primary" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Upload the ledger masters (XML)</button></div>}
+      <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then bring the file in here.</span>
+      <button className="btn small primary" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Bring in from Tally</button></div>}
   </div>;
 }
 
@@ -210,7 +210,7 @@ export default function LedgersTab({ b }) {
   const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co), cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid);
   const readAct = (k) => live ? <button className="btn small" data-led-read-need={k} onClick={() => doAct("ledRead")}>Read the ledgers again</button>
     : cloud ? <button className="btn small" data-led-read-need={k} onClick={() => Ledgers.refresh(cid)}>Read the ledgers again</button>
-    : <button className="btn small" data-led-read-need={k} onClick={() => doAct("mastersPick")}>Upload the ledger masters</button>;
+    : <button className="btn small" data-led-read-need={k} onClick={() => doAct("mastersPick")}>Bring in from Tally</button>;
   const lines = [];
   LedPage.unknown(cid).forEach((x) => lines.push({ key: x.key, kind: "unknown", text: x.text, act: readAct("unknown") }));
   if (typeof Rec === "object" && Rec.flow) Rec.flow().needs.filter((g) => g.cid === cid && g.kind === "masters").forEach((g) => lines.push({ key: "rec:" + g.key, kind: "masters", text: g.text, act: <NeedAction g={g} canApply={Rec.canWrite()} /> }));

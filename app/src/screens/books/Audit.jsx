@@ -18,10 +18,13 @@ const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--war
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
 const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => doAct(act)}>{children}</button>;
 
-function Tabs() {
-  const t = S.auditTab || "find";
-  return <nav className="sbar" aria-label="Audit" style={{ marginBottom: 10 }}>{[["find", "Findings"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"]].map(([id, l]) =>
-    <button key={id} aria-selected={t === id} onClick={() => setAndShow("auditTab", id)}>{l}</button>)}</nav>;
+// clean-up batch 1 (11-Oct-2026): the tie-out with Tally (a month-end check of the books against Tally) is Audit's
+// fourth tab (booksTab "tieout", its address …/books/tieout as before); the other three are S.auditTab
+export function Tabs() {
+  const tie = booksTab() === "tieout", t = tie ? "tieout" : S.auditTab || "find";
+  const go = (id) => { if (id === "tieout") { goClient("books:tieout"); return; } if (tie) S.booksTab = "audit"; setAndShow("auditTab", id); };
+  return <nav className="sbar" aria-label="Audit" style={{ marginBottom: 10 }}>{[["find", "Findings"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"], ["tieout", "Tie-out with Tally"]].map(([id, l]) =>
+    <button key={id} data-audit-tab={id} aria-selected={t === id} onClick={() => go(id)}>{l}</button>)}</nav>;
 }
 
 // the period, run now, how often by itself, and the report once run

@@ -243,3 +243,5 @@ run_supplier_health.py                180  TDSDESK_SITE=../app/dist-test
 run_e2e_tdsgst.py                     600
 # round 44: TDS and GST from both the Day Book and the bridge (the cloud copy): one entry per Tally GUID, the later AlterID
 run_book_sources.js                   120
+# clean-up batch 1, "Find your way": the sidebar tree, page titles, old addresses, count words, the phone bar
+run_nav_clean.py                      300  TDSDESK_SITE=../app/dist-test

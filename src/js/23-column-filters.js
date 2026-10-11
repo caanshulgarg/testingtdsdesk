@@ -100,7 +100,7 @@ function colPopHtml(){
   } else if (!bank && p.k === "tds"){
     title = "TDS"; body = radio("tds", f.tds, [["", "All bills"], ["yes", "TDS booked"], ["no", "No TDS"]]);
   } else if (!bank && p.k === "look"){
-    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Need a look"], ["no", "Ready to approve"]]);
+    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Needs you"], ["no", "Ready to approve"]]);
   }
   return '<div class="colpop" id="colpop" role="dialog" aria-label="Filter ' + esc(title) + '"><div class="cp-head"><b>Filter: ' + esc(title) + '</b><button class="icon" data-cpclose aria-label="Close">\u2715</button></div>' +
     '<div class="cp-body">' + body + "</div>" +
@@ -192,7 +192,7 @@ function colChips(t){
     if (f.min || f.max) chips.push(["val", "Value " + rng(f.min, f.max)]);
     if (f.natures && f.natures.length) chips.push(["nature", "Type: " + f.natures.map(n => lab[n] || n).join(", ")]);
     if (f.tds) chips.push(["tds", f.tds === "yes" ? "TDS booked" : "No TDS"]);
-    if (f.look) chips.push(["look", f.look === "yes" ? "Need a look" : "Ready to approve"]);
+    if (f.look) chips.push(["look", f.look === "yes" ? "Needs you" : "Ready to approve"]);
   }
   return chips;
 }
@@ -360,7 +360,7 @@ function acDraw(input){
   if (!AC.box) return;
   if (!input || !AC.items.length){
     AC.box.style.display = "block";
-    AC.box.innerHTML = '<div class="acempty">' + (knownLedgers().size ? "No Tally ledger matches \u201c" + esc(AC.q) + "\u201d" : "Import the Tally ledger list first (Bank \u2192 Settings).") + "</div>";
+    AC.box.innerHTML = '<div class="acempty">' + (knownLedgers().size ? "No Tally ledger matches \u201c" + esc(AC.q) + "\u201d" : "Bring in the Tally ledger list first (Bank \u2192 Settings).") + "</div>";
     if (!input){ acClose(); return; }
   } else {
     AC.box.innerHTML = AC.items.map((it, i) => '<div class="aci' + (i === AC.idx ? " on" : "") + '" data-aci="' + i + '" role="option">' +
@@ -1396,7 +1396,7 @@ const MultiUp = {
     }
     S.coId = keepCo; S.view = keepView; m.busy = false; render();
     const ok = m.rows.filter(r => r.ok).length;
-    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
+    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under From Tally.");
   }
 
 };

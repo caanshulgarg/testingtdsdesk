@@ -66,6 +66,28 @@ a { text-underline-offset: 2px; }
   .side .side-link[aria-current="page"] { background: var(--accent-subtle); }
 }
 
+/* clean-up batch 1 (11-Oct-2026): the menu's groups are wrappers only; on a phone the bar keeps five (four pages and
+   More), and More opens a sheet with the rest (Side.jsx) */
+.side-grp { display: contents; }
+.side-more { display: none; }
+.side-sheet-wrap { display: none; }
+@media (max-width: 600px) {
+  .side .side-link:not([data-bar]), .side .side-client, .side .side-firm-label { display: none; }
+  .side .side-more { display: flex; }
+  .side, .side:not(.hidden) { overflow-x: hidden; justify-content: space-around; }
+  .side .side-link[data-bar] { flex: 1 1 0; min-width: 0; }
+  .side-sheet-wrap { display: block; position: fixed; inset: 0; z-index: 60; }
+  .side-sheet-back { position: absolute; inset: 0; border: 0; padding: 0; background: rgb(var(--shade) / .32); cursor: pointer; }
+  .side-sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 78vh; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 1px; padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+    background: var(--surface); color: var(--foreground); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; box-shadow: var(--shadow-floating); }
+  .side-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; font-size: 15px; }
+  .side-sheet .side-link { display: flex; flex-direction: row; width: 100%; min-height: 40px; padding: 0 10px; font-size: 14px; }
+  .side-sheet .side-sep { margin: 8px 6px; }
+  .side-sheet .side-client { padding: 0 0 4px; }
+  .side-sheet .side-co { width: 100%; }
+}
+
 /* ---------- the header (Arc's page header) ---------- */
 header.top { background: var(--surface); box-shadow: inset 0 -1px 0 var(--border); border-bottom: 0; }
 .tbar-title { flex-direction: column-reverse; align-items: flex-start; gap: 2px; }

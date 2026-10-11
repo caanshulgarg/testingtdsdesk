@@ -307,7 +307,7 @@ const Rec = {
         : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
         : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
         : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
-        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: From Tally \u2192 Tally ledgers"
         : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
         : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
     });

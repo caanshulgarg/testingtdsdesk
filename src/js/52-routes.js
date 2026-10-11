@@ -5,7 +5,7 @@
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]  (#/people, #/plan: Settings' sections)
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -117,7 +117,10 @@ const Route = {
         const what = p[2] || "dash", arg = p[3] || "";
         S.step = null; S.drawerOpen = false; S.colPop = null;
         if (what === "upload"){ S.tab = S.tab === "dash" ? "invoices" : S.tab; S.step = "collect"; }
-        else if (what === "dash") S.tab = "dash";
+        // clean-up batch 1 (11-Oct-2026): Overview (was Dashboard) and From Tally have their names as addresses too;
+        // the addresses written stay …/dash and …/books/import, so every old link opens the same page
+        else if (what === "dash" || what === "overview") S.tab = "dash";
+        else if (what === "from-tally"){ S.tab = "books"; S.booksTab = arg === "ledgers" ? "ledgers" : "import"; }
         else if (what === "inbox") S.tab = "clientInbox";
         else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
         else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
@@ -133,6 +136,8 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
+      // People and Plan and credit are sections of Settings (clean-up batch 1): their own addresses open them there
+      else if (p[0] === "people" || p[0] === "plan"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[0] === "people" ? "account" : "plan"; }
       else if (["clients", "today", "compliance", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;

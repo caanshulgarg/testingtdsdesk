@@ -84,7 +84,7 @@ function Status({ b, days }) {
 // 2. the one drop area (the same file box as the top bar's Upload Tally data)
 function Drop() {
   const [over, setOver] = useState(false);
-  return <div className={"drop up-drop" + (over ? " over" : "")} role="button" tabIndex={0} aria-label="Upload Tally data" data-up-drop=""
+  return <div className={"drop up-drop" + (over ? " over" : "")} role="button" tabIndex={0} aria-label="Bring in from Tally" data-up-drop=""
     onClick={() => doAct("tallyPick")}
     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); doAct("tallyPick"); } }}
     onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -114,7 +114,7 @@ function Upload({ b }) {
   const waiting = ((b.meta || {}).parts || []).filter((p) => /^(not sent|waiting)/.test(String(p.cloud || "")));
   // from Getting ready's "Read the balances" (smart moves round 1): where the opening balances come from, said here
   const opening = S.upFocus === "opening" && !(b.tb && Object.keys(b.tb.led || {}).length);
-  return <section className="dash-card" data-up-card="" style={{ marginBottom: 12 }}><h3>Upload Tally data</h3>
+  return <section className="dash-card" data-up-card="" style={{ marginBottom: 12 }}><h3>Bring in from Tally</h3>
     {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update now reads them by itself.</p>}
     <Drop />
     {lim && <p className="note" data-up-limit="" style={{ margin: "8px 0 0" }}>{"Only " + fmtDate(lim[0]) + (lim[1] !== lim[0] ? " to " + fmtDate(lim[1]) : "") + " is taken from the next Day Book. "}

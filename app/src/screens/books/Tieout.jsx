@@ -60,7 +60,7 @@ export default function Tieout({ b }) {
     <p className="note">For each month, type five figures from Tally as at the month’s end (Balance Sheet and Trial Balance in Tally) beside FinCom’s own from its copy of the books. A difference shows at once. Save keeps them with FinCom’s figures of the moment; the owner ticks a month that ties out and may lock it, so a later change in Tally to that month waits for approval.</p>
     {no44 && <p className="bk-warn" data-not-ready="">{"Tie-out: " + REC_NOT44 + ". FinCom’s figures are shown; nothing can be saved yet."}</p>}
     {t.err && <p className="bk-warn"><Msg text={t.err} /></p>}
-    {!months.length ? <p className="note">No months yet: the copy of the books has no period. Read the books from Tally first.</p>
+    {!months.length ? <p className="note">No months yet: the copy of the books has no period. Bring in the books from Tally first.</p>
       : <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tieout-table="">
         <thead><tr><th>Month</th>{Rec.FIGS.map(([k, name]) => <th key={k} className="n">{name}</th>)}<th></th></tr></thead>
         <tbody>{months.map((m) => <Month key={m} cid={cid} m={m} t={t} no44={no44} />)}</tbody>

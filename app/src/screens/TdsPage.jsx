@@ -264,7 +264,7 @@ export default function Tds({ b }) {
     <Head />
     {!none && fys.length > 0 && v !== "years" && v !== "notices" && <Bar fys={fys} />}
     {none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
-      <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button>
+      <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => goClient("books:import")}>Bring in from Tally</button>
         <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div></Calm>
       : v === "notices" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← Returns</button></p><Notices b={b} kind="tds" /></>
       : v === "years" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p><Years rows={rows} fys={had} /></>

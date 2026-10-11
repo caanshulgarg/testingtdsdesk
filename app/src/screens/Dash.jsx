@@ -1,4 +1,5 @@
-// A client's dashboard: what is waiting (inbox, bills, posting, bank), and a card each for TDS, the bank statement,
+// A client's Overview (was Dashboard; clean-up batch 1 names it as the sidebar does, and its counts in Today's words:
+// To read · To review · Ready to post): what is waiting (inbox, bills, posting, bank), and a card each for TDS, the bank statement,
 // sales and what was posted lately. Was viewClientDash (src/js/18). The first-steps card (ONB.card, src/js/48)
 // is still an old piece.
 import { useEffect, useState } from "react";
@@ -52,8 +53,8 @@ export default function Dash() {
       </form>
       <div className="dash-tiles">
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
-        <Tile tone="amber" Icon={ReceiptText} label="Bills to review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
-        <Tile tone="indigo" Icon={Send} label="Post to Tally" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need attention" : "")} go="post" />
+        <Tile tone="amber" Icon={ReceiptText} label="To review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
+        <Tile tone="indigo" Icon={Send} label="Ready to post" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need you" : "")} go="post" />
         <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
       </div>
       {CloudDocs.on() && <p className="note" style={{ margin: "-6px 0 14px" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.

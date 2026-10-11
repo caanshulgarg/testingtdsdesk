@@ -39,8 +39,8 @@ function revCols(rows, sel, nSel) {
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
       </> },
     { k: "val", role: "amount", label: "Value", cls: "n", filter: <ColFunnel t="rev" k="val" label="Value" />, v: ({ e }) => num(e.x.total), cell: ({ e }) => money(num(e.x.total)) },
-    { k: "st", role: "status", label: "Status", v: (r) => (needsLook(r) ? "Needs a check" : "Ready to approve"),
-      cell: (r, p) => <span className={"tag " + (p.miss ? "warn" : "ok")}>{p.miss ? "Needs a check" : "Ready to approve"}</span> },
+    { k: "st", role: "status", label: "Status", v: (r) => (needsLook(r) ? "Needs you" : "Ready to approve"),
+      cell: (r, p) => <span className={"tag " + (p.miss ? "warn" : "ok")}>{p.miss ? "Needs you" : "Ready to approve"}</span> },
     { k: "nature", label: "Payment type", filter: <ColFunnel t="rev" k="nature" label="Payment type" />, v: ({ c }) => (c.rule && c.rule.label) || "",
       cell: ({ e }) => <select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select> },
     { k: "tdson", label: "Book TDS", cls: "ck", filter: <ColFunnel t="rev" k="tds" label="Book TDS" />, cell: ({ e, c }) => <input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}

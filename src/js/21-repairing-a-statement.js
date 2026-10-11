@@ -619,7 +619,7 @@ function suggestRow(row, ctx){
   const d = row.dec;
   const dir = row.debit ? "out" : "in";
   const none = why => ({ledger: "", level: "none", why, label: "", source: ""});
-  if (!ctx.hasList) return none("Import the Tally ledger list to get suggestions.");
+  if (!ctx.hasList) return none("Bring in the Tally ledger list to get suggestions.");
   const rule = findRule(ctx, d, dir);
   if (rule){
     const l = exactLedger(rule.ledger);

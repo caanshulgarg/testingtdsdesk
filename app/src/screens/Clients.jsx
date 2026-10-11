@@ -6,6 +6,9 @@ import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 
+// "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
+const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
+
 function AddClient() {
   const others = sortedCompanies();
   const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false, tallyCompany: "", postOnly: true });
@@ -101,8 +104,9 @@ export default function Clients() {
           { k: "tally", role: "status", label: "Tally", v: (c) => tallyStatus(c).label, cell: (c) => <TallyLight cid={c.id} /> },
           { k: "gstin", label: "GSTIN", v: (c) => c.gstin || "", cell: (c) => c.gstin || "—" },
           { k: "drafts", label: "To review", cls: "n", v: (c) => (c.stats || {}).drafts || 0, sum: true, fmt: String, cell: (c) => (c.stats || {}).drafts || "—" },
-          { k: "check", label: "Need a check", cls: "n", v: (c) => (c.stats || {}).check || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.check ? <span className="tag warn">{st.check}</span> : "—"; } },
-          { k: "waiting", label: "Waiting for Tally", cls: "n", v: (c) => (c.stats || {}).waiting || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"; } },
+          // the count words of Today (clean-up batch 1): Ready to post, then Needs you (duplicates and bills to check, as Today counts them)
+          { k: "waiting", label: "Ready to post", cls: "n", v: (c) => (c.stats || {}).waiting || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"; } },
+          { k: "check", label: "Needs you", cls: "n", v: (c) => needsYou(c), sum: true, fmt: String, cell: (c) => { const k = needsYou(c); return k ? <span className="tag warn">{k}</span> : "—"; } },
           // round 46: no return figures here (TDS of the year was one); returns and payments due are on the Compliance page
           { k: "free", label: "Read free", cls: "n", cell: (c) => <Free c={c} /> },
           { k: "ac", role: "act", cls: "n", cell: (c) => <button className="btn small" onClick={(e) => { e.stopPropagation(); openCompany(c.id); }}>Open</button> },

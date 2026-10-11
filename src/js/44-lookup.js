@@ -303,7 +303,7 @@ const LK = {
     } else if (!have && this.COPY.includes(x.kind)){
       x.res = this.copyNone(x, "FinCom\u2019s copy of these books is not in the cloud yet; it comes with the next update from Tally");
     } else if (!have){
-      toast("Read the books first (Books \u2192 From Tally), or wait for FinCom\u2019s copy to come in."); return;
+      toast("Bring in the books from Tally first (From Tally), or wait for FinCom\u2019s copy to come in."); return;
     } else {
       x.res = x.kind === "ledger" ? this.ledgerBooks(x.led, x.from, x.to) : x.kind === "group" ? this.group(x.grp, x.from, x.to) : x.kind === "tb" ? this.tbBooks(x.asOn)
         : x.kind === "monthly" ? this.monthly(x.led, x.grp, x.from, x.to) : x.kind === "bills" ? this.bills(x.led, x.asOn) : this.find(x.q, x.from, x.to, x.typ);

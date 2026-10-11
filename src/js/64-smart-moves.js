@@ -108,7 +108,7 @@ const Smart = {
       if (w === "upload") return "Upload";
       if (w === "books") return {reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", tds: "TDS", gst: "GST", import: "From Tally"}[p[3]] || "the books";
       if (w === "setup") return "Client setup";
-      return {dash: "Dashboard", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
+      return {dash: "Overview", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
     }
     return {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", help: "Help", settings: "Settings"}[p[0]] || "the last page";
   },

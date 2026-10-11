@@ -114,5 +114,5 @@ export function ClosedPeriods({ co }) {
     <div className="stack" style={{ gap: 6, marginTop: 10 }}><label className="chk"><input type="checkbox" checked={!!c.gst} onChange={(ev) => closedSet(co, "gst", ev.target.checked)} /> Warn for a month whose GSTR-1 or GSTR-3B is marked filed{lastGst && <> <span className="note">{"(the latest marked filed: " + FC.monthLabel(lastGst) + ")"}</span></>}</label>
       <label className="chk"><input type="checkbox" checked={!!c.tds} onChange={(ev) => closedSet(co, "tds", ev.target.checked)} /> Warn for an entry with TDS in a quarter whose TDS return is filed</label></div>
     <h3 style={{ margin: "14px 0 6px", fontSize: 14 }}>TDS returns filed</h3><div className="cp-q">{ClosedP.quarters().map((k) => <label key={k} className="f"><span>{ClosedP.qLabel(k)}</span><DateBox aria-label={"Filed: " + ClosedP.qLabel(k)} value={(c.tdsFiled || {})[k] || ""} onChange={(ev) => closedSet(co, "q:" + k, ev.target.value)} /></label>)}</div>
-    <p className="note" style={{ marginTop: 8 }}>GST months are marked filed under TDS & GST, GST, on the GSTR-3B page or from the portal.</p></div>;
+    <p className="note" style={{ marginTop: 8 }}>GST months are marked filed under GST, on the GSTR-3B page or from the portal.</p></div>;
 }

@@ -311,7 +311,7 @@ export default function Sales() {
     {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />
       : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <NoticeLine sev="info" text="Loading ledgers from FinCom’s cloud copy of the books…" />
       : <NoticeLine text="Tally ledgers are needed for Sales vouchers." how={Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect FinCom Bridge."}>
-        <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></NoticeLine>)}
+        <button className="btn small" onClick={() => salesAct("ledPick")}>Bring in from Tally</button></NoticeLine>)}
     <div className="bk-head">
       {/* the page is named in the top bar (one heading, spec I); here only what it holds */}
       <div className="bk-id"><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
