@@ -201,7 +201,7 @@ function MoreMenu({ b, n }) {
 export default function FromTally({ b }) {
   const n = (b.vouchers || []).length, m = b.meta || {}, other = m.gstins ? notThisClient(m.gstins) : [];
   const days = needDays(b, S.coId);
-  return <div className="up-page" data-upload-page="" style={{ maxWidth: 760 }}>
+  return <div className="up-page" data-upload-page="">
     {/* clean-up batch 2: the Link to Tally card's home is Client setup → Tally; here its one status line and a link */}
     <div style={{ marginTop: 10 }}><TallyLinkLine co={CO()} where="books" b={b} /></div>
     <Status b={b} days={days} />

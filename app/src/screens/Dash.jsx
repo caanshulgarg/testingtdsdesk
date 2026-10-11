@@ -3,6 +3,7 @@
 // to one line when done) and the four counts, each opening its page, with the client's Tally link in one line once the
 // checklist no longer shows it. The ask box is Look up's own (and "/" opens it); TDS, the bank statement and sales are
 // under "More about this client", folded; what was posted lately is on Purchase → In Tally.
+import HowPage from "../parts/HowPage.jsx";
 import { OnbCard } from "../parts/Notes.jsx";
 import PageSkeleton from "../parts/PageSkeleton.jsx";
 import { TallyLinkLine } from "../parts/TallyLink.jsx";
@@ -45,7 +46,7 @@ export default function Dash() {
   let tdsBooks = null;
   if (bk) { try { tdsBooks = TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { tdsBooks = null; } }
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
-  return (
+  return (<>
     <section className="dash">
       <OnbCard co={co} />
       {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open) */}
@@ -82,5 +83,7 @@ export default function Dash() {
         </div>
       </details>
     </section>
-  );
+    {/* clean-up batch 3: what the page is for, folded, under it */}
+    <HowPage page="dash" />
+  </>);
 }

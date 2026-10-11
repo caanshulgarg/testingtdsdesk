@@ -115,7 +115,7 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(400)
     pg.click("#misFc tbody tr:first-child button.linkbtn"); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.misWeek") == 0 and pg.locator("#misFc th:text-is('Why this date')").count() == 1, "a week of the forecast opens")
-    pg.click('nav[aria-label="MIS"] button:text-is("Budget")'); pg.wait_for_timeout(400)
+    pg.click('nav[aria-label="MIS"] [data-tabs-more] > summary'); pg.click('nav[aria-label="MIS"] button:text-is("Budget")')   # clean-up batch 3: under More; pg.wait_for_timeout(400)
     box = pg.locator('input[aria-label="Budget Revenue from operations Apr-2025"]')
     box.fill("250000"); box.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.books.budget['2025'].rev['202504']") == 250000, "a budget month is kept")
@@ -126,6 +126,7 @@ with sync_playwright() as p:
     pg.click('#app [data-confirm-foot="books:mis-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # review 18: saved with Save
     # Reports: charts, the year, finding a report, a figure and a report opening their screens
     pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; render(); }"); pg.wait_for_timeout(800)
+    pg.click("#app [data-rpt-charts] > summary"); pg.wait_for_timeout(500)   # clean-up batch 3: the charts are under "Figures and charts"
     ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20 and pg.locator(".rpt-link").count() >= 30, "every area with its chart, every report listed")
     ys = pg.evaluate("RPT.fys()"); y = ys[1] if len(ys) > 1 else ys[0]   # the client's books may hold one year only
     pg.select_option('select[aria-label="Year"]', y); pg.wait_for_timeout(600)

@@ -101,4 +101,5 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 
 /* ---------- the bar along the foot of Purchase's review table: always its two lines (the counts, then the buttons) ----------
    It sat on one line or two depending on the width of its words in the first frames, so it jumped up as the page opened */
-@media (min-width: 641px) { .bk-actionbar > .ab-right { flex-basis: 100%; } }
+/* (from 901 px the bar is one row that does not wrap: arc-clean.css, clean-up batch 3) */
+@media (min-width: 641px) and (max-width: 900px) { .bk-actionbar > .ab-right { flex-basis: 100%; } }

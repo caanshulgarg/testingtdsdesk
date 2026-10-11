@@ -13,7 +13,8 @@ import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import More from "../../parts/More.jsx";
 
-const m = (v) => INR.format(r2(v || 0));
+// ₹ on every amount (clean-up batch 3)
+const m = (v) => money(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
 const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--warn)"], low: ["MINOR", "var(--muted)"] };
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
@@ -108,7 +109,7 @@ function Finding({ f }) {
         <div className="nr" style={{ color: col, fontWeight: 700 }}>{word + " · " + ((Audit.AREAS.find((a) => a[0] === f.area) || [])[1] || "") + (f.clause ? " · " + f.clause : "")}
           {f.isNew ? <> <span className="tag warn">new</span></> : f.more > 0 ? <> <span className="tag warn">+{f.more}</span></> : null}</div>
         <button className="linkbtn" style={{ fontSize: 16, fontWeight: 600, textAlign: "left" }} onClick={() => tdsToggle("auditOpen", f.id)}>{(open ? "▾ " : "▸ ") + f.title}</button>
-        <div className="note">{f.problem + (f.amount ? " · ₹" + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "var(--ok)" }}>{solved} put right</span></>}</div>
+        <div className="note">{f.problem + (f.amount ? " · " + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "var(--ok)" }}>{solved} put right</span></>}</div>
       </div>
       <div><select aria-label={"Status of " + f.title} style={{ width: "auto" }} value={st.s} onChange={(ev) => auditFindingSet(f.id, "s", ev.target.value)}>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         {f.je && <div className="nr">{f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies")}</div>}</div>
@@ -119,7 +120,7 @@ function Finding({ f }) {
 
 function Findings({ b }) {
   const au = b.audit || {}, run = au.last;
-  if (!run) return <><Head b={b} run={run} /><div className="bk-none" style={{ marginTop: 12 }}>Not run yet. Choose the period and press Run now.</div></>;
+  if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => doAct("auditRun")}>Run now</button></div></>;
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
@@ -131,24 +132,26 @@ function Findings({ b }) {
   const open = f0.filter((f) => Audit.status(f.id).s === "open").length, fresh = f0.filter((f) => f.isNew).length;
   const area = S.auditArea || "", fs = S.auditSt || "", list = f0.filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
   const gone = (run.solved || []).filter((x) => x.n && !f0.some((f) => f.id === x.id) && (!area || x.area === area));
-  // the area tabs first, at the top (review of 01-Oct-2026), then the period, the last run and the tiles
+  // the period, the last run and the tiles; then the findings with their filters (clean-up batch 3: the areas are a row of
+  // chips beside the status, not a second row of tabs)
   return <>
-    <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
-      {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
     {/* clean-up batch 2: the run in one line; its result code and notes under Details */}
     <div className="note audit-runline" data-audit-runline="" style={{ margin: "10px 0" }}>{"Last run on " + fmtDateTime(run.at) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. "}
       {(run.errors || []).length > 0 && <><span className="bad">Some checks could not run: {run.errors.join("; ")}</span>{" "}</>}
       <details className="inline-more" style={{ display: "inline" }}><summary className="linkbtn" style={{ display: "inline", cursor: "pointer" }}>Details</summary>
         <span>{" Result code "}<b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}</span></details></div>
-    <div className="dash-tiles">
+    <div className="dash-tiles audit-tiles">
       <div className={"dtile" + (sev("high").length ? " warn" : "")}><span>Serious</span><b>{sev("high").length}</b><small>{m(sum(sev("high")))} involved</small></div>
       <div className="dtile"><span>To look at</span><b>{sev("medium").length}</b><small>{m(sum(sev("medium")))}</small></div>
       <div className="dtile"><span>Minor</span><b>{sev("low").length}</b><small>for good books</small></div>
       <div className="dtile"><span>Still open</span><b>{open}</b><small>{"of " + f0.length + " findings" + (fresh ? ", " + fresh + " new since the last run" : "")}</small></div>
       <div className="dtile"><span>Put right</span><b>{(run.solved || []).reduce((s2, x) => s2 + x.n, 0)}</b><small>items found earlier and gone when checked again</small></div>
     </div>
-    <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+    <div className="audit-filters" data-audit-filters="">
+      <div className="chip-filter" role="group" aria-label="Areas" data-audit-areas=""><button aria-pressed={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
+        {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-pressed={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</div>
+      <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div></div>
     {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
     {!list.length && <div className="bk-none lt-empty" data-list-empty="" style={{ marginTop: 10 }}>Nothing here. Choose Every status above, or run the audit again.</div>}
     {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid var(--ok)" }}><h3 style={{ color: "var(--ok)" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
@@ -183,7 +186,7 @@ function Related({ b }) {
 // the Form 3CD draft, filled from the last run: Audit.form3cdHtml is also the PDF's template, so it stays HTML
 function Form3cd({ b }) {
   const run = (b.audit || {}).last;
-  if (!run) return <div className="bk-none">Run the audit first (Findings → Run now); the draft is filled from it.</div>;
+  if (!run) return <div className="bk-none">The draft is filled from the audit, which has not been run yet. <button className="linkbtn" onClick={() => setAndShow("auditTab", "find")}>Open Findings</button></div>;
   return <section className="dash-card"><div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}><More label="Download" align="start" data-audit3cd-download="" items={[["Download the draft (PDF)", () => doAct("audit3cdPdf")], ["Excel", () => doAct("audit3cdExcel")]]} /></div>
     <div className="audit3cd"><Legacy html={Audit.form3cdHtml(Audit.form3cd(run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
 }

@@ -1808,8 +1808,10 @@ function tallyPcShort(win, user, name){ const b = String(win || name || "").trim
 function tallySignNow(co){
   if (typeof TLight === "object") TLight.refresh();
   const now = Date.now(), st = (typeof TLight === "object" && TLight.st) || {};
-  const devs = (st.devs || []).filter(d => d && !d.revoked);
-  const link = co ? (st.cos || []).find(c => c.client_id === co.id) : null;
+  // the heartbeats as TLight read them, else as the Tally page read them (the same table, tally_devices)
+  const pane = (typeof TCloud === "object" && TCloud.pane) || {};
+  const devs = ((st.devs && st.devs.length) ? st.devs : (pane.devices || [])).filter(d => d && !d.revoked);
+  const link = co ? ((st.cos && st.cos.length ? st.cos : pane.companies) || []).find(c => c.client_id === co.id) : null;
   const want = co ? (link && link.company) || co.tallyName || co.name : "";
   const same = n => !!co && (norm(n) === norm(want) || norm(n) === norm(co.tallyName || "") || norm(n) === norm(co.name));
   const localOn = typeof Bridge === "object" && Bridge.on(), localUp = localOn && Bridge.up(), lst = (typeof Bridge === "object" && Bridge.st) || {};

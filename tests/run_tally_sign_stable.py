@@ -14,7 +14,8 @@ Beat sequences played on a made-up clock (Date.now), the React test build (app/d
   - one Windows user's bridge is not taken for another's on the same computer (NWS144: anshul and Ranjeet);
   - the cloud's heartbeats: the last beat of a stopped bridge, first seen late, is not "fresh" (its age is from beat.at);
     tallyStatus never says "Reconnecting…"; a missed beat or two do not change the firm's sign;
-  - posting reads the real state (tallySignNow / postThroughWords), never the steady one.
+  - posting reads the real state (tallySignNow / postThroughWords), never the steady one;
+  - the Post to Tally page's status line says the same sign's words, steady; its posting gate stays real-time.
 """
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -195,6 +196,28 @@ with sync_playwright() as p:
     steady, now_ = pg.evaluate("(cid) => [tallySign(S.companies[cid]).on, tallySignNow(S.companies[cid]).on]", cid)
     ok(steady is True and now_ is False, "Tally just closed: the words may still say ready for a minute, the real state says not (%s, %s)" % (steady, now_))
     ok(pg.evaluate("(cid) => postThroughWords(S.companies[cid])", cid) == "", "before Post: no “This will post through …” from a stale ready")
+
+    # 9b. the Post to Tally page's status line: its words from the same steady sign; the gate stays real-time
+    pg.evaluate("(cid) => { const c = S.companies[cid]; c.postTo = 'TESTING AAD'; window.choiceState = () => 'confirmed'; TallySteady.reset(); }", cid)
+    put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5)])
+    pg.evaluate("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
+    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySign(S.companies[cid]).words]; }", cid)
+    ok(ps[0] == ps[2] == "Tally ready via NWS144 (anshul)" and not ps[1], "Post line: the sign's words, “Tally ready via NWS144 (anshul)”, no problem (%s)" % (ps,))
+    pl = pg.evaluate("() => { const e = document.querySelector('#app [data-post-line]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
+    ok("Tally ready via NWS144 (anshul)" in pl, "on the page: “%s”" % pl)
+    put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5, tallyState="closed", tally=False, open=[])]); tick(1)
+    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySignNow(S.companies[cid]).on, postThroughWords(S.companies[cid])]; }", cid)
+    ok(ps[0] == "Tally ready via NWS144 (anshul)" and not ps[1], "Tally just closed: the Post line does not flicker (%s)" % (ps[:2],))
+    ok(ps[2] is False and ps[3] == "", "…but the gate reads the real state: not ready, no “This will post through …” (%s)" % (ps[2:],))
+    tick(61)
+    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, s.problem && s.problem.button, s.problem && s.problem.kind]; }", cid)
+    ok(not ps[0] and ps[1] and "TallyPrime is closed on" in ps[1] and "Open TallyPrime" in ps[1] and ps[2] == "Check again", "closed for a minute: the sign's reason and fix, with Check again (%s)" % (ps,))
+    prob = pg.evaluate("() => { const e = document.querySelector('#app [data-post-problem]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
+    ok("TallyPrime is closed on" in prob, "on the page: “%s”" % prob[:120])
+    put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5)])
+    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text]; }", cid)
+    ok(ps[0] == "Tally ready via NWS144 (anshul)" and not ps[1], "open again: ready at once (%s)" % (ps,))
+    pg.evaluate("(cid) => { S.companies[cid].postTo = ''; S.view = 'company'; S.tab = 'dash'; S.step = null; render(); }", cid)
 
     # 10. a phone: the dot and a short word
     pg.set_viewport_size({"width": 390, "height": 800}); pg.evaluate("TallySteady.reset()"); put(local()); pg.wait_for_timeout(300)

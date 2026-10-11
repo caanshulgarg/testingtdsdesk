@@ -50,7 +50,7 @@ function Month({ cid, m, t, no44 }) {
 
 export default function Tieout({ b }) {
   const cid = S.coId;
-  if (!TCloud.on()) return <section className="dash-card" data-tieout=""><h3>Tie-out with Tally</h3><p className="note">Sign in to the firm account to keep the month’s tie-out.</p></section>;
+  if (!TCloud.on()) return <section className="dash-card" data-tieout=""><h3>Tie-out with Tally</h3><p className="note" data-tieout-signin="">The month’s tie-out is kept in the firm account, so it needs you signed in. <button className="linkbtn" onClick={() => goSettings("account")}>Sign in</button></p></section>;
   const t = Rec.tieOf(cid), months = Rec.months(cid), no44 = !!t.no44;
   const nas = new Set();
   months.forEach((m) => { const f = Rec.fincom(cid, m); Rec.FIGS.forEach(([k, name]) => { if (f[k] == null) nas.add(name + ": " + f.why[k]); }); });
