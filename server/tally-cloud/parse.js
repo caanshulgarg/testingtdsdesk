@@ -101,6 +101,74 @@ const IGSTNAME = /\bIGST\b|integrated tax/i, CSNAME = /\b(?:C|S|UT)GST\b|central
 function rateOf(t){ t = String(t || ""); const i = t.indexOf("/"); return amt(i >= 0 ? t.slice(0, i) : t); }
 function qtyOf(t){ const m = String(t || "").trim().match(/^(-?[\d.,]+)\s*(.*)$/); return m ? [Math.abs(num(m[1].replace(/,/g, ""))), m[2].trim().split(/\s+/)[0] || ""] : [null, ""]; }
 const rupees = (x) => "Rs " + (Math.round(Math.abs(x) * 100) / 100).toFixed(2);
+// ---- bridge 2.4.2 (the owner's approval of 11-Oct-2026: "the bridge sends each entry's GST type"; migration 72). The entry's
+// GST type as Tally stores it, read the same way from a Day Book export and from the bridge's entry body (the fields its
+// FinComVoucherObject answer keeps from 2.4.2 on; measured on real TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1, tally-versions
+// mode gsttype): the party's GST registration type and country (on the entry), reverse charge (the entry's
+// ISREVERSECHARGEAPPLICABLE, or a line's override), and from the lines (the ledger lines, the items and the ledger lines
+// under them) the nature of the transaction (SEZ with or without payment, exports with payment or under LUT, ...), the
+// taxability (Taxable, Nil Rated, Exempt, Non-GST), goods or services, and the ineligible (blocked, 17(5)) input credit
+// mark. Stored values only, nothing worked out. null when the text carries none of these fields (a body from a bridge
+// before 2.4.2): the cloud then keeps what it has
+const GSTTYPE_TAGS = ["GSTREGISTRATIONTYPE", "COUNTRYOFRESIDENCE", "ISREVERSECHARGEAPPLICABLE", "GSTOVRDNISREVCHARGEAPPL", "GSTOVRDNNATURE", "GSTOVRDNTAXABILITY", "GSTOVRDNTYPEOFSUPPLY", "GSTOVRDNINELIGIBLEITC"];
+// Tally's "\u0004 Not Applicable" (an override not set) is no value; its "\u0004 Applicable" / "Applicable" / "Yes" is set
+const gstNone = (t) => !String(t || "").replace(/[^A-Za-z ]/g, " ").trim() || /^not applicable$/i.test(String(t).replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim());
+const gstSet = (t) => { const w = String(t || "").replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim().toLowerCase(); return w === "yes" || w === "applicable"; };
+// the text of s without each <TAG ...>...</TAG> of the given tags (the outermost spans), in one linear pass (review M1 of
+// 2.4.2: a lazy regular expression over an opener never closed scanned to the end once for every opener); an opener never
+// closed takes the rest of the text with it
+function cutOut(s, tags){
+  if (!tags.some((t) => s.indexOf("<" + t) >= 0)) return s;
+  const re = new RegExp("<(/?)(" + tags.map(reEsc).join("|") + ")(?:\\s[^<>]*[^\\/<>])?\\s*>", "g");
+  let out = "", at = 0, depth = 0, m;
+  while ((m = re.exec(s))){
+    if (!m[1]){ if (depth === 0) out += s.slice(at, m.index); depth++; }
+    else if (depth > 0){ depth--; if (depth === 0) at = m.index + m[0].length; }
+  }
+  return depth > 0 ? out : out + s.slice(at);
+}
+// the entry's lines, each once, in the document's order (review M2 of 2.4.2): its ledger lines (ALLLEDGERENTRIES,
+// LEDGERENTRIES) and its items, each item with the ledger lines under it (ACCOUNTINGALLOCATIONS: one supply; the item's
+// own value first, else the ledger line's under it)
+function gstUnits(s){
+  const u = [];
+  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"].forEach((t) => { if (s.indexOf("<" + t) >= 0) after(s, t).forEach(({a, p}) => u.push({a, t: upTo(p, t)})); });
+  return u.sort((x, y) => x.a - y.a).map((x) => x.t);
+}
+// each part of the entry judged on its own (review round 2 N1): every ledger line, each item without the ledger lines
+// under it, and each of those ledger lines
+function gstParts(s){
+  const u = [];
+  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((t) => { if (s.indexOf("<" + t) >= 0) after(s, t).forEach(({p}) => u.push(upTo(p, t))); });
+  if (s.indexOf("<ALLINVENTORYENTRIES.LIST") >= 0) after(s, "ALLINVENTORYENTRIES.LIST").forEach(({p}) => u.push(cutOut(upTo(p, "ALLINVENTORYENTRIES.LIST"), ["ACCOUNTINGALLOCATIONS.LIST"])));
+  return u;
+}
+function gstType(s){
+  if (!GSTTYPE_TAGS.some((t) => s.indexOf("<" + t) >= 0)) return null;
+  const clean = (t) => String(t || "").replace(/[\u0000-\u001f]/g, "").trim();
+  // a tag's first value that is set (an item's own, else the ledger line's under it)
+  const val = (u, tag) => { const re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>", "g"); let m; while ((m = re.exec(u))){ const x = unesc(m[1]); if (!gstNone(x)) return clean(x); } return ""; };
+  const head = cutOut(s, ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"]);
+  // a line is a GST line when Tally gives it a taxability or a nature (a ledger without GST details carries Tally's
+  // "Applicable" for the ineligible credit with neither: TallyPrime 7.1, a TDS journal's purchase ledger, run 38072484999)
+  const gl = gstUnits(s).filter((u) => val(u, "GSTOVRDNTAXABILITY") || val(u, "GSTOVRDNNATURE"));
+  // review M2: the nature, the taxability and goods or services together, from the first GST line in the document's order;
+  // mixed when the GST lines disagree on the nature or the taxability
+  const parts = gstParts(s).filter((u) => val(u, "GSTOVRDNTAXABILITY") || val(u, "GSTOVRDNNATURE"));
+  const lead = gl[0] || "", kind = (u) => (val(u, "GSTOVRDNNATURE") + "|" + val(u, "GSTOVRDNTAXABILITY")).toLowerCase();
+  return {
+    reg: val(head, "GSTREGISTRATIONTYPE").slice(0, 60),
+    country: val(head, "COUNTRYOFRESIDENCE").slice(0, 60),
+    // the blocked-credit and reverse-charge marks: each part on its own GST details (round 2 N1: a ledger line without GST
+    // details under a GST item carries Tally's default "Applicable"; it does not count)
+    rcm: gstSet(one(head, "ISREVERSECHARGEAPPLICABLE")) || parts.some((u) => gstSet(one(u, "GSTOVRDNISREVCHARGEAPPL"))),
+    nature: val(lead, "GSTOVRDNNATURE").slice(0, 100),
+    taxability: val(lead, "GSTOVRDNTAXABILITY").slice(0, 40),
+    supply: val(lead, "GSTOVRDNTYPEOFSUPPLY").slice(0, 20),
+    ineligible: parts.some((u) => gstSet(one(u, "GSTOVRDNINELIGIBLEITC"))),
+    mixed: gl.some((u) => kind(u) !== kind(lead))
+  };
+}
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
   const narrFull = one(s, "NARRATION");
@@ -329,6 +397,8 @@ function takeVoucher(s){
     });
   }
   v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
+  // bridge 2.4.2: the entry's GST type (null: none of its fields in the text)
+  const gt = gstType(s); if (gt) v.gst = gt;
   // ---- part A, the owner's accuracy checks: lines totalling zero; item lines' taxable value plus tax against the ledger
   // lines for that invoice; bill-wise and cost centre allocations against their line. Each failure in plain words. The
   // owner's rule after review (06-Oct-2026): the recorder path holds an entry only when its lines do not total zero (the
@@ -396,4 +466,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, skipped, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8 };
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType };

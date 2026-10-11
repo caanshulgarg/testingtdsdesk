@@ -24,6 +24,9 @@ import { fileURLToPath } from "url";
 import { parseDay } from "../server/tally-cloud/parse.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "fast234kinds");
+// bridge 2.4.2: the entry's GST type (parse.js's "gst", from the fields the strip keeps since 2.4.2) is in the object answer only:
+// the Voucher collection answer of today's request never fetched those fields (tests/run_parse_gsttype.mjs reads them)
+const gst242 = (k) => /\.gst(\.|$)/.test(k);
 let fails = 0, n = 0, onAcc = 0, tdsMore = 0, held = 0, costMore = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const flat = (o, p, out) => { if (o === null || typeof o !== "object") { out[p] = JSON.stringify(o); return out; } if (Array.isArray(o)) { out[p + ".length"] = String(o.length); o.forEach((x, i) => flat(x, p + "[" + i + "]", out)); return out; } for (const k of Object.keys(o).sort()) flat(o[k], p ? p + "." + k : k, out); return out; };
@@ -46,7 +49,7 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
     costMore += cm;
     onAcc += oa; tdsMore += tm;
     const a = flat(canon(today), "", {}), b = flat(canon(got), "", {});
-    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort(), diff = keys.filter((k) => a[k] !== b[k]);
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort(), diff = keys.filter((k) => !gst242(k) && a[k] !== b[k]);
     n++;
     ok(diff.length === 0, rel + " " + kind + ": " + keys.length + " fields of parse.js's output the same" + (oa ? "; " + oa + " On Account bill(s) only in today's" : "") + (tm ? "; TDS details only in the object" : "") + (cm ? "; cost centres only in the object" : "") +
       (diff.length ? "; differ: " + diff.slice(0, 8).map((k) => k + " today " + a[k] + " fast " + b[k]).join(" | ") : ""));

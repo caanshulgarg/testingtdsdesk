@@ -26,6 +26,7 @@ NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migra
 for _k, _o in ORDERS.items():
     if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
     _o.extend(NEXT240[_k])
+    _o.append((72, "migration-72-gst-type.sql"))   # bridge 2.4.2 (round 44 part B): each entry's GST type, after 62
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
