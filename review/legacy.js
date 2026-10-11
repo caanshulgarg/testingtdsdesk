@@ -390,6 +390,10 @@ const CloudDocs = {
     } else if (job.kind === "gstret"){
       const x = S.books && S.books.cid === job.cid && typeof GSTV === "object" ? GSTV.list().find(z => z.id === job.id) : null;
       if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
+    } else if (job.kind === "f16a"){
+      // a Form 16A kept with its deductee (src/js/70-traces-files.js)
+      const x = S.books && S.books.cid === job.cid && Array.isArray(S.books.f16a) ? S.books.f16a.find(z => z.id === job.id) : null;
+      if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
     } else if (job.kind === "notice"){
       const n = S.books && S.books.cid === job.cid ? ((S.books.ai || {}).notices || []).find(z => z.id === job.id) : null;
       if (n){ n.docPath = path; n.docSize = size; saveBooks(); }
@@ -9537,7 +9541,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
@@ -9970,7 +9974,7 @@ function gstParts(b){
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
-      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["health", "Supplier health"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
   if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
   // request of 02-Oct-2026: the books invoice by invoice against the returns filed and 2B, for the year
@@ -19981,6 +19985,9 @@ const Help = {
       steps: ["Click a category chip to see its items; the red ones need action.", "For each item choose what to do: follow up the supplier, book it in Tally, reject in IMS, take the credit, and so on. Your choice follows the bill from month to month.", "Before filing 3B, open the Excel\u2019s \u201cIMS actions\u201d sheet and do those actions on the portal\u2019s IMS.", "Under \u201cSuppliers to write to\u201d, copy, email or WhatsApp the letter; the date is kept.", "Bring in the 2B for months not yet checked; until then those bills sit in \u201cNot checked yet\u201d."],
       from: "Worked out again each time from the books and every 2B brought in. Only your decisions, notes, contacts and the dates you wrote are kept.",
       watch: ["Credit for a year\u2019s bills can be taken only up to 30 November after the year (section 16(4)); items near that date are marked.", "Once 3B is filed, an IMS action for that month cannot be changed."]},
+    "gst:health": {t: "Supplier health", what: "The client\u2019s suppliers as its 2B shows them: who is not filing, whose bills are missing from 2B, who files late, and a GSTIN that cannot be right \u2014 with the credit at risk.",
+      steps: ["Bring in or fetch 2B for the months of the year.", "Look at \u201cNot filing\u201d first: their bills are in the books but nothing of theirs is in 2B for the last months.", "Check those suppliers on the GST portal (Search Taxpayer) before taking their credit, and write to them from ITC follow-up.", "Choose after how many months without 2B a supplier counts as not filing."],
+      from: "The books\u2019 purchase bills and every 2B brought in; the filing date 2B gives for each supplier\u2019s return.", watch: ["FinCom\u2019s GST connection has no \u201csearch taxpayer\u201d call, so a cancelled or suspended registration is not shown here.", "A supplier filing quarterly may show its bills only in the quarter\u2019s last 2B."]},
     "gst:adv": {t: "Advances", what: "Money received before the invoice for services, and the tax on it (tables 11A and 11B of GSTR-1, carried into 3.1(a)).",
       steps: ["Check each receipt listed as an advance.", "Tick \u201cNot an advance\u201d for a receipt against an earlier invoice or a loan.", "Correct the rate where the nearest invoice gives the wrong one.", "When the invoice is issued, the advance is adjusted in 11B."],
       from: "Receipts from customers in Tally, before the customer\u2019s invoice.", watch: ["An advance billed in the same month is left out, as the return asks.", "Advances for goods are not taxed on receipt."]},
@@ -20001,6 +20008,12 @@ const Help = {
     "tds:year": {t: "TDS \u2014 the year", what: "The year\u2019s four quarters with 26Q (other than salary) and 24Q (salary), and the due dates.",
       steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
       from: "Tally vouchers with TDS; the salary sheet for 24Q.", watch: ["Due: Q1 31 July, Q2 31 October, Q3 31 January, Q4 31 May."]},
+    "tds:recon": {t: "26AS and AIS", what: "The tax credit Form 26AS, AIS or TIS shows, against the TDS receivable in the books, deductor by deductor; and a deductee\u2019s 26AS against FinCom\u2019s returns.",
+      steps: ["Download the client\u2019s 26AS from TRACES (View Tax Credit \u2192 Export as Text), or its AIS JSON, and upload it.", "Link a deductor to its party in the books where the names differ.", "Work the lines Only in 26AS (ask for the entry to be booked) and Only in the books (ask the deductor to file or correct its return)."],
+      from: "The file uploaded and the debits to the TDS (and TCS) receivable ledgers in Tally.", watch: ["A line with status U, P or O in 26AS is not yet final credit.", "A PDF is read as text: if its lines do not add up to its totals, use the text file."]},
+    "tds:traces": {t: "TRACES files", what: "Form 16A certificates kept with each deductee, the justification report\u2019s defaults, and the consolidated file checked against FinCom\u2019s return.",
+      steps: ["Upload the zip TRACES gives (type its password when asked), or the files inside it.", "Download a deductee\u2019s Form 16A from its line, or from the return\u2019s Deductees tab.", "Pay and correct each default the justification report lists; the list shows on the return\u2019s Errors to fix tab.", "Before a correction, check the consolidated file\u2019s PANs and names against the return."],
+      from: "The files uploaded. Nothing in the books or the return changes.", watch: ["A zip locked with AES cannot be opened here: unzip it on the computer first.", "A Form 16A zip holding only a text file is for TRACES-PDF-CONVERTER: convert it first."]},
     "tds:certs": {t: "Certificates and rate questions", what: "Lower or nil deduction certificates (section 197) and deductions made at a rate that does not match the law.",
       steps: ["Add each certificate: number, PAN, section, rate, limit and period.", "Deductions under a certificate stop being flagged as short.", "Correct the rest in Tally, or note why the rate is right."],
       from: "Tally deductions and the certificates typed here.", watch: ["A deductee without a valid PAN is deducted at 20% or the rate in force, whichever is higher (section 206AA).", "A certificate applies only up to its amount and within its period."]},
@@ -25660,6 +25673,8 @@ const Route = {
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
       if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
+      if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
@@ -25676,6 +25691,8 @@ const Route = {
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
       if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (p[1] === "26as"){ S.tdsView = "recon"; return; }
+      if (p[1] === "traces"){ S.tdsView = "traces"; return; }
       if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;
@@ -32327,5 +32344,725 @@ const DueList = {
     if (x.status === "filed") return (paid ? "Paid " : "Filed ") + fmtDate(x.on) + (x.late ? ", " + x.late + " day" + (x.late === 1 ? "" : "s") + " late" : "");
     if (x.status === "overdue") return "Overdue " + x.late + " day" + (x.late === 1 ? "" : "s");
     return x.left === 0 ? "Due today" : "Due in " + x.left + " day" + (x.left === 1 ? "" : "s");
+  }
+};
+/* ================================================================== */
+/* 26AS / AIS / TIS against the books, by upload (TDS/GST round 2,   */
+/* item 2, T-A6)                                                      */
+/* ================================================================== */
+// The CA downloads the client's Form 26AS from TRACES (View Tax Credit → Export as Text, or the PDF) or its AIS / TIS from
+// the compliance portal (JSON or PDF) and uploads it here. FinCom reads the tax deducted (and collected) on each line and
+// lists, by TAN, section, quarter and amount:
+//   - the client's own tax credit (the file's PAN is the client's): against the TDS receivable entries in the books
+//     (a debit to a ledger the ledger check calls TDS or TCS receivable), party by party;
+//   - the client as deductor (the file's PAN is someone else's, a deductee of the client): the lines whose TAN is the
+//     client's, against the deductee's rows in FinCom's TDS returns.
+// Each line is Matched, Only in 26AS (or AIS) or Only in the books (or FinCom's return). Nothing here changes a figure;
+// linking a deductor's TAN to a party in the books only says which party it is (kept as b.tanParty).
+//
+// THE FILE LAYOUTS ARE ASSUMED (the government sites cannot be reached from where FinCom is built, so no official sample
+// was read; the fixtures in tests/fixtures/tds-26as/ are written from the layouts as commonly known):
+//   26AS text (TRACES "Export as Text"): one record a line, fields separated by "^". A header pair of lines ("File
+//     Creation Date^Permanent Account Number (PAN)^…" and its values); then each part opens with a line naming it
+//     ("PART-I - Details of Tax Deducted at Source", "PART-VI - Details of Tax Collected at Source", …). In a part, a
+//     deductor's line: Sr. No.^Name of Deductor^TAN of Deductor^…^Total Amount Paid / Credited^Total Tax Deducted^Total
+//     TDS Deposited; under it, each transaction on a line beginning "^": ^Sr. No.^Section^Transaction Date^Status of
+//     Booking^Date of Booking^Remarks^Amount Paid / Credited^Tax Deducted^TDS Deposited. Dates as dd-Mon-yyyy. Read: by
+//     the TAN, the section code (19x, 206C…), the dates and the last three amounts of each line, not by column number, so
+//     an extra or missing empty column does not move a figure.
+//   26AS PDF: the same tables as text lines (pdf.js); a deductor line ends in TAN and three amounts, a transaction line
+//     carries Sr. No., section, date, the status letter, and three amounts. A row broken over two lines is not read: the
+//     self-check below then says so.
+//   AIS / TIS JSON (compliance portal "Download JSON"): any nesting. Each object whose keys name an amount paid and a tax
+//     deducted (or collected) is a line; the TAN, deductor name, section (from an information code such as "TDS-194J")
+//     and quarter are taken from it or the objects around it. The assessee's PAN from a key named PAN.
+//   AIS PDF: lines "TDS-194J … NAME (TAN)" open a source; detail lines "1 Q1 15/04/2025 1,00,000 10,000 10,000 Active".
+// Self-check: where a file gives each deductor's totals (26AS), the lines read must add up to them; a difference is shown
+// once, at the top, and the file is marked "check".
+const AS26 = {
+  TAN: /\b([A-Z]{4}\d{5}[A-Z])\b/,
+  PAN: /\b([A-Z]{5}\d{4}[A-Z])\b/,
+  MON: {JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12},
+  amt(s){ const t = String(s == null ? "" : s).replace(/[₹,\s]/g, ""); return /^-?\d+(\.\d+)?$/.test(t) ? num(t) : null; },
+  isAmt(s){ return /^-?[\d,]+\.\d{1,2}$/.test(String(s || "").trim()) || /^-?\d[\d,]*$/.test(String(s || "").trim()); },
+  // dd-Mon-yyyy, dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd → yyyymmdd
+  date(s){
+    const t = String(s || "").trim();
+    let m = t.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[A-Za-z]*[-\/ ](\d{4})$/);
+    if (m && this.MON[m[2].toUpperCase()]) return m[3] + String(this.MON[m[2].toUpperCase()]).padStart(2, "0") + m[1].padStart(2, "0");
+    m = t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/); if (m) return m[3] + m[2].padStart(2, "0") + m[1].padStart(2, "0");
+    m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + m[2] + m[3];
+    return "";
+  },
+  sec(s){
+    const t = String(s || "").toUpperCase().replace(/\s+/g, "");
+    const m = t.match(/(206C[A-Z0-9()]*|19[0-9][A-Z0-9()]*|39[0-9]\(\d+\)[A-Z0-9()]*)/);
+    return m ? m[1].replace(/[()]/g, "") : "";
+  },
+  // ---------------- 26AS text ----------------
+  parseText(text){
+    const lines = String(text || "").replace(/\r/g, "").split("\n");
+    const out = {kind: "26AS", pan: "", holder: "", fy: "", rows: [], totals: []};
+    // the header: a line naming the fields, the next line their values
+    for (let i = 0; i < Math.min(lines.length - 1, 30); i++){
+      if (/Permanent Account Number/i.test(lines[i])){
+        const k = lines[i].split("^").map(x => x.trim()), v = lines[i + 1].split("^").map(x => x.trim());
+        k.forEach((name, j) => {
+          if (/Permanent Account Number/i.test(name) && this.PAN.test(v[j] || "")) out.pan = v[j].match(this.PAN)[1];
+          else if (/Name of Assessee/i.test(name)) out.holder = v[j] || "";
+          else if (/Financial Year/i.test(name)) out.fy = this.fyWords(v[j]);
+        });
+        break;
+      }
+    }
+    if (!out.pan){ const m = String(text).match(/Permanent Account Number[^\n]*\n[^\n]*?\b([A-Z]{5}\d{4}[A-Z])\b/i); if (m) out.pan = m[1]; }
+    let part = "", ded = null;
+    lines.forEach(raw => {
+      const line = raw.trim(); if (!line) return;
+      const head = line.replace(/\^/g, " ").trim();
+      if (/^PART[-\s]*[IVX]+\b/i.test(head)){ part = /Collected at Source/i.test(head) ? "TCS" : /Deducted at Source/i.test(head) && !/15G|15H/i.test(head) ? "TDS" : ""; ded = null; return; }
+      if (!part) return;
+      const f = raw.split("^").map(x => x.trim());
+      if (/Name of (Deductor|Collector)|Section\s*\^?\s*Transaction|Sr\.?\s*No/i.test(line) && !/\d{2}-[A-Za-z]{3}-\d{4}/.test(line)) return;
+      const nums = f.filter(x => this.isAmt(x) && /\./.test(x)).map(x => this.amt(x));
+      const tan = (f.find(x => /^[A-Z]{4}\d{5}[A-Z]$/.test(x)) || "");
+      if (tan){
+        // a deductor's line: Sr. No., name, TAN, …, the three totals
+        const name = f.filter(x => x && !/^\d+$/.test(x) && x !== tan && !this.isAmt(x))[0] || "";
+        ded = {tan, name};
+        if (nums.length >= 3){ const t = nums.slice(-3); out.totals.push({part, tan, name, amount: t[0], tax: t[1], deposited: t[2]}); }
+        return;
+      }
+      if (!ded) return;
+      // a transaction: section, transaction date, status, booking date, the three amounts
+      // the section is the field just before the transaction date (a serial number such as 194 is not a section)
+      const di = f.findIndex(x => this.date(x)), sec = di > 0 ? this.sec(f[di - 1]) : "", dates = f.map(x => this.date(x)).filter(Boolean);
+      if (!sec || !dates.length || nums.length < 2) return;
+      const st = (f.find(x => /^[FUPOM]$/.test(x)) || "");
+      const t = nums.slice(-3);
+      out.rows.push(this.row({part, tan: ded.tan, name: ded.name, section: sec, date: dates[0], booked: dates[1] || "", status: st,
+        amount: t.length === 3 ? t[0] : null, tax: t.length === 3 ? t[1] : t[0], deposited: t.length === 3 ? t[2] : t[1]}));
+    });
+    if (!out.fy && out.rows.length) out.fy = this.majorFy(out.rows);
+    return this.check(out);
+  },
+  fyWords(s){ const m = String(s || "").match(/(20\d{2})\s*-\s*(20)?(\d{2})/); return m ? m[1] + "-" + m[3] : ""; },
+  majorFy(rows){ const c = {}; rows.forEach(r => { c[r.fy] = (c[r.fy] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ""; },
+  row(r){ const d = r.date || ""; return Object.assign(r, {fy: d ? TDS.fyOf(d) : r.fy || "", q: d ? TDS.qOf(d) : r.q || "", tax: r2(num(r.tax)), amount: r.amount == null ? null : r2(num(r.amount)), deposited: r.deposited == null ? null : r2(num(r.deposited))}); },
+  // the lines read against the deductor's totals the file gives
+  check(f){
+    const diffs = [];
+    (f.totals || []).forEach(t => {
+      const rows = f.rows.filter(r => r.tan === t.tan && r.part === t.part), s = r2(rows.reduce((a, r) => a + r.tax, 0));
+      if (Math.abs(s - t.tax) >= 1) diffs.push({tan: t.tan, name: t.name, file: t.tax, read: s});
+    });
+    f.check = {ok: !diffs.length, diffs};
+    return f;
+  },
+  // ---------------- PDF (26AS, AIS) ----------------
+  async pdfLines(file, password){
+    await ensurePdfJs();
+    if (!window.pdfjsLib) throw {code: "pdf_unavailable"};
+    let pdf;
+    try { pdf = await window.pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer()), password: password || undefined, isEvalSupported: false, enableXfa: false}).promise; }
+    catch (e){ if (/password/i.test(String(e && (e.name || e.message)))) throw {code: password ? "pdf_wrong_password" : "pdf_password"}; throw {code: "pdf_broken"}; }
+    const out = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 300); p++){
+      const tc = await (await pdf.getPage(p)).getTextContent(), rows = [];
+      (tc.items || []).filter(it => it.str && it.str.trim()).forEach(it => {
+        const y = Math.round(it.transform[5]), x = it.transform[4];
+        let r = rows.find(z => Math.abs(z.y - y) <= 2); if (!r){ r = {y, items: []}; rows.push(r); }
+        r.items.push({x, s: it.str.replace(/\s+/g, " ").trim()});
+      });
+      rows.sort((a, b) => b.y - a.y).forEach(r => out.push(r.items.sort((a, b) => a.x - b.x).map(i => i.s).join(" ")));
+    }
+    return out;
+  },
+  parsePdfLines(lines){
+    const text = lines.join("\n");
+    if (/Annual Information Statement|Taxpayer Information Summary|\bAIS\b|\bTIS\b/i.test(text) && !/Annual Tax Statement|Form\s*26AS/i.test(text)) return this.parseAisLines(lines);
+    const out = {kind: "26AS", pan: "", holder: "", fy: "", rows: [], totals: [], fromPdf: true};
+    const pm = text.match(/Permanent Account Number\s*\(?PAN\)?\s*:?\s*([A-Z]{5}\d{4}[A-Z])/i) || text.match(this.PAN); if (pm) out.pan = pm[1];
+    const nm = text.match(/Name of Assessee\s*:?\s*([^\n]+)/i); if (nm) out.holder = nm[1].replace(/Address.*$/i, "").trim();
+    const fm = text.match(/Financial Year\s*:?\s*(20\d{2}\s*-\s*(?:20)?\d{2})/i); if (fm) out.fy = this.fyWords(fm[1]);
+    const A = "(-?[\\d,]+\\.\\d{2})", D = "(\\d{2}-[A-Za-z]{3}-\\d{4})";
+    const dedRe = new RegExp("^\\d+\\s+(.+?)\\s+([A-Z]{4}\\d{5}[A-Z])\\s+" + A + "\\s+" + A + "\\s+" + A + "$");
+    const rowRe = new RegExp("^\\d+\\s+(\\S+)\\s+" + D + "\\s+([FUPOM])\\s+(?:" + D + "\\s+)?(?:(\\S.*?)\\s+)?" + A + "\\s+" + A + "\\s+" + A + "$");
+    let part = "", ded = null;
+    lines.forEach(l => {
+      const line = l.trim();
+      if (/^PART[-\s]*[IVX]+\b/i.test(line)){ part = /Collected at Source/i.test(line) ? "TCS" : /Deducted at Source/i.test(line) && !/15G|15H/i.test(line) ? "TDS" : ""; ded = null; return; }
+      if (!part) return;
+      let m = line.match(dedRe);
+      if (m){ ded = {tan: m[2], name: m[1].trim()}; out.totals.push({part, tan: m[2], name: ded.name, amount: this.amt(m[3]), tax: this.amt(m[4]), deposited: this.amt(m[5])}); return; }
+      m = line.match(rowRe);
+      if (m && ded && this.sec(m[1])) out.rows.push(this.row({part, tan: ded.tan, name: ded.name, section: this.sec(m[1]), date: this.date(m[2]), status: m[3], booked: m[4] ? this.date(m[4]) : "",
+        amount: this.amt(m[6]), tax: this.amt(m[7]), deposited: this.amt(m[8])}));
+    });
+    if (!out.fy && out.rows.length) out.fy = this.majorFy(out.rows);
+    return this.check(out);
+  },
+  parseAisLines(lines){
+    const text = lines.join("\n"), out = {kind: "AIS", pan: "", holder: "", fy: "", rows: [], totals: [], fromPdf: true};
+    const pm = text.match(/\bPAN\b\s*:?\s*([A-Z]{5}\d{4}[A-Z])/i) || text.match(this.PAN); if (pm) out.pan = pm[1];
+    const fm = text.match(/Financial Year\s*:?\s*(20\d{2}\s*-\s*(?:20)?\d{2})/i); if (fm) out.fy = this.fyWords(fm[1]);
+    let src = null;
+    lines.forEach(l => {
+      const line = l.trim();
+      const s = line.match(/\b(TDS|TCS)-([0-9A-Z()]+)\b.*?([A-Za-z0-9&.,'\- ]+?)\s*\(([A-Z]{4}\d{5}[A-Z])\)/);
+      if (s){ src = {part: s[1], section: this.sec(s[2]), name: s[3].trim(), tan: s[4]}; return; }
+      const m = line.match(/^\d+\s+(Q[1-4])\b.*?(\d{2}[\/-]\d{2}[\/-]\d{4})\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)(?:\s+(\w+))?/);
+      if (m && src) out.rows.push(this.row({part: src.part, tan: src.tan, name: src.name, section: src.section, date: this.date(m[2]), status: m[6] || "",
+        amount: this.amt(m[3]), tax: this.amt(m[4]), deposited: this.amt(m[5])}));
+    });
+    if (!out.fy && out.rows.length) out.fy = this.majorFy(out.rows);
+    return this.check(out);
+  },
+  // ---------------- AIS / TIS JSON ----------------
+  parseJson(j){
+    const out = {kind: "AIS", pan: "", holder: "", fy: "", rows: [], totals: []};
+    const K = {
+      amount: /^(amount|amt)?.*(paid|credited|debited|gross|receipt)|^amount$|^amt$|^value$/i,
+      tax: /(tds|tcs|tax).*(deducted|collected|amt|amount)$|^(tds|tcs|tax)$|^taxdeducted$|^tdsamt$/i,
+      deposited: /deposit/i, date: /date|^dt|dt$/i, quarter: /quarter|qtr/i,
+      tan: /tan/i, name: /name|source|deductor|collector|infosrc/i, section: /section|infocode|info_code|code$|category/i, status: /status/i
+    };
+    const str = v => (v == null ? "" : String(v)).trim();
+    const walk = (o, ctx, depth) => {
+      if (depth > 12 || o == null) return;
+      if (Array.isArray(o)){ o.forEach(x => walk(x, ctx, depth + 1)); return; }
+      if (typeof o !== "object") return;
+      const c = Object.assign({}, ctx), keys = Object.keys(o);
+      let amount = null, tax = null, deposited = null, date = "", q = "", status = "";
+      keys.forEach(k => {
+        const v = o[k]; if (v && typeof v === "object") return;
+        const s = str(v), lk = k.replace(/[^A-Za-z]/g, "");
+        if (!out.pan && /^(pan|assesseepan|panno)$/i.test(lk) && this.PAN.test(s)) { out.pan = s.match(this.PAN)[1]; return; }
+        if (!out.holder && /^(name|assesseename|nameofassessee)$/i.test(lk) && depth <= 2) out.holder = s;
+        if (!out.fy && /financialyear|^fy$/i.test(lk)) out.fy = this.fyWords(s);
+        if (K.tan.test(lk) && /^[A-Z]{4}\d{5}[A-Z]$/.test(s)) { c.tan = s; return; }
+        if (K.section.test(lk) && this.sec(s)) { c.section = this.sec(s); if (/^TCS/i.test(s)) c.part = "TCS"; else if (/^TDS/i.test(s)) c.part = "TDS"; }
+        if (K.name.test(lk) && /[A-Za-z]{3}/.test(s) && !this.isAmt(s)) { const tm = s.match(/\(([A-Z]{4}\d{5}[A-Z])\)/); if (tm) c.tan = tm[1]; c.name = s.replace(/\s*\([A-Z]{4}\d{5}[A-Z]\)\s*/, "").trim(); }
+        if (K.deposited.test(lk) && this.amt(s) != null) deposited = this.amt(s);
+        else if (K.tax.test(lk) && this.amt(s) != null) tax = this.amt(s);
+        else if (K.amount.test(lk) && this.amt(s) != null) amount = this.amt(s);
+        if (K.quarter.test(lk)) { const m = s.match(/Q[1-4]/i); if (m) q = m[0].toUpperCase(); }
+        else if (K.date.test(lk) && this.date(s)) date = date || this.date(s);
+        if (K.status.test(lk)) status = s;
+      });
+      if (tax != null && (amount != null || deposited != null) && c.tan){
+        out.rows.push(this.row({part: c.part || "TDS", tan: c.tan, name: c.name || "", section: c.section || "", date, q, status, amount, tax, deposited}));
+        if (!date && q && out.fy){ const r = out.rows[out.rows.length - 1]; r.fy = out.fy; r.q = q; }
+      }
+      keys.forEach(k => { const v = o[k]; if (v && typeof v === "object") walk(v, c, depth + 1); });
+    };
+    walk(j, {}, 0);
+    if (!out.fy && out.rows.length) out.fy = this.majorFy(out.rows.filter(r => r.fy));
+    out.rows.forEach(r => { if (!r.fy) r.fy = out.fy; });
+    return this.check(out);
+  },
+  // ---------------- a file brought in ----------------
+  async read(file, password){
+    const name = String(file.name || "").toLowerCase();
+    if (/\.json$/.test(name)){ let j; try { j = JSON.parse(await file.text()); } catch (e){ throw {code: "not_json"}; } return this.parseJson(j); }
+    if (/\.pdf$/.test(name) || file.type === "application/pdf") return this.parsePdfLines(await this.pdfLines(file, password));
+    const t = await file.text();
+    if (/^\s*[{\[]/.test(t)){ try { return this.parseJson(JSON.parse(t)); } catch (e){} }
+    return this.parseText(t);
+  },
+  files(){ const b = S.books || {}; return Array.isArray(b.tds26as) ? b.tds26as : []; },
+  clientPan(){ const co = CO() || {}; const p = String(co.pan || "").toUpperCase(); if (Certs.validPan(p)) return p; const g = String(co.gstin || "").toUpperCase(); return GSTIN_RE.test(g) ? g.slice(2, 12) : ""; },
+  clientTan(){ return String((CO() || {}).tan || "").toUpperCase().trim(); },
+  // whose file it is: the client's own (its tax credit) or a deductee's (the client's deductions as they see them)
+  whose(f){ const p = this.clientPan(); return !f.pan || !p || f.pan === p ? "own" : "deductee"; },
+  async add(file){
+    let f;
+    try { f = await this.read(file); }
+    catch (e){
+      if (e && e.code === "pdf_password"){
+        const ans = await askConfirm({title: "This PDF has a password", ok: "Open",
+          body: "TRACES and the compliance portal lock these PDFs. Type the password (26AS: the date of birth or incorporation as DDMMYYYY; AIS: the PAN in small letters followed by it).<br><input type=\"password\" id=\"as26pw\" aria-label=\"PDF password\" style=\"margin-top:8px;width:100%\">",
+          read: () => (document.getElementById("as26pw") || {}).value || "", validate: v => v ? "" : "Type the password."});
+        if (!ans || !ans.ok) return null;
+        try { f = await this.read(file, ans.data); }
+        catch (e2){ toast(e2 && e2.code === "pdf_wrong_password" ? "That password did not open the PDF." : "The PDF could not be read."); return null; }
+      } else { toast(e && e.code === "not_json" ? file.name + " is not a JSON file the portal gives." : file.name + " could not be read."); return null; }
+    }
+    if (!f.rows.length){ toast(file.name + ": no tax deducted or collected was found in it. Use the 26AS text file (TRACES: Export as Text) or the AIS JSON."); return null; }
+    const b = S.books;
+    f.id = uid("as"); f.file = file.name; f.at = new Date().toISOString(); f.by = typeof whoAmI === "function" ? whoAmI() : "";
+    // the same statement brought in again replaces the earlier one (same kind, PAN and year)
+    const same = this.files().find(x => x.kind === f.kind && x.pan === f.pan && x.fy === f.fy);
+    b.tds26as = this.files().filter(x => x !== same).concat([f]);
+    saveBooks(); render();
+    toast(f.kind + (f.pan ? " of " + f.pan : "") + (f.fy ? ", " + f.fy : "") + ": " + f.rows.length + " line" + (f.rows.length === 1 ? "" : "s") + " read" + (same ? ", in place of the one brought in earlier" : "") + ".");
+    return f;
+  },
+  async remove(id){
+    const f = this.files().find(x => x.id === id); if (!f) return false;
+    const ok = await askConfirm({title: "Take this file out?", body: esc(f.kind + " " + (f.pan || "") + " " + (f.fy || "") + " (" + f.file + ")") + " leaves the reconciliation. Upload it again to bring it back.", ok: "Take it out"});
+    if (!ok || !ok.ok) return false;
+    S.books.tds26as = this.files().filter(x => x.id !== id); saveBooks(); render(); return true;
+  },
+  // ---------------- the client's own tax credit against its books ----------------
+  // each debit to a TDS or TCS receivable ledger: the date, the party (the entry's party, else the ledger on the other
+  // side that is not tax or bank), the amount. A transfer between two receivable ledgers is not a credit
+  bookCredits(){
+    const out = [];
+    ((S.books || {}).vouchers || []).forEach(v => {
+      if (v.opt || v.cancel) return;
+      const rec = e => { const k = Books.ledgerOf(e.l).kind || ""; const w = (Books.ledgerOf(e.l).what || ""); return k === "tds_receivable" || k === "tcs_receivable" || w === "tds_receivable" || w === "tcs_receivable"; };
+      const deb = v.ent.filter(e => rec(e) && e.a < 0), cred = v.ent.filter(e => rec(e) && e.a > 0);
+      if (!deb.length || cred.length) return;
+      let party = v.party && !rec({l: v.party}) && !Books.ledgerOf(v.party).kind ? v.party : "";
+      if (!party){ const o = v.ent.find(e => e.a > 0 && !Books.ledgerOf(e.l).kind); if (o) party = o.l; }
+      deb.forEach((e, i) => out.push({id: v.id + "|" + i, vid: v.id, date: v.date, fy: TDS.fyOf(v.date), q: TDS.qOf(v.date), party, ledger: e.l,
+        tcs: /tcs/.test(Books.ledgerOf(e.l).kind || Books.ledgerOf(e.l).what || ""), tax: r2(Math.abs(e.a)), voucher: v.no || v.ref || "", type: v.type}));
+    });
+    return out;
+  },
+  parties(){ return Array.from(new Set(this.bookCredits().map(x => x.party).filter(Boolean))).sort(); },
+  // the party a TAN is, as the person linked it, else the one party whose name is the deductor's
+  partyOf(tan, name){
+    const m = ((S.books || {}).tanParty || {})[tan];
+    if (m) return {party: m, how: "linked"};
+    const list = this.parties(); let best = null, sc = 0;
+    list.forEach(p => { const s = nameSim(p, name); if (s > sc){ sc = s; best = p; } });
+    return sc >= 0.9 ? {party: best, how: "name"} : {party: "", how: ""};
+  },
+  link(tan, party){ const b = S.books; b.tanParty = Object.assign({}, b.tanParty); if (party) b.tanParty[tan] = party; else delete b.tanParty[tan]; saveBooks(); render(); },
+  // match the file's lines with the books: the same party, year and tax (within a rupee), the same quarter first and the
+  // nearest date; then what is left of a party's quarter as a whole when the totals agree
+  near(a, b){ return Math.abs(num(a) - num(b)) < 1; },
+  pair(lines, books, keyL, keyB){
+    const used = new Set(), out = [];
+    lines.forEach(l => {
+      const c = books.filter(x => !used.has(x.id) && keyL(l) && keyL(l) === keyB(x) && x.fy === l.fy && this.near(x.tax, l.tax));
+      if (!c.length) return;
+      c.sort((a, b) => ((a.q === l.q ? 0 : 1) - (b.q === l.q ? 0 : 1)) || Math.abs(Date.parse(tallyDate(a.date)) - Date.parse(tallyDate(l.date))) - Math.abs(Date.parse(tallyDate(b.date)) - Date.parse(tallyDate(l.date))));
+      used.add(c[0].id); l._m = c[0]; out.push({status: "matched", how: c[0].q === l.q ? "line" : "line, another quarter", line: l, book: c[0]});
+    });
+    // the quarter's totals
+    const left = lines.filter(l => !l._m), byK = {};
+    left.forEach(l => { const k = keyL(l) + "|" + l.fy + "|" + l.q; if (keyL(l)) (byK[k] = byK[k] || {l: [], b: []}).l.push(l); });
+    books.filter(x => !used.has(x.id)).forEach(x => { const k = keyB(x) + "|" + x.fy + "|" + x.q; if (byK[k]) byK[k].b.push(x); });
+    Object.values(byK).forEach(g => {
+      if (!g.b.length) return;
+      const a = r2(g.l.reduce((s, x) => s + x.tax, 0)), b = r2(g.b.reduce((s, x) => s + x.tax, 0));
+      if (!this.near(a, b)) return;
+      g.l.forEach(l => { l._m = g.b[0]; out.push({status: "matched", how: "quarter total", line: l, book: null, group: g.b}); });
+      g.b.forEach(x => used.add(x.id));
+    });
+    lines.filter(l => !l._m).forEach(l => out.push({status: "file", line: l}));
+    books.filter(x => !used.has(x.id)).forEach(x => out.push({status: "books", book: x}));
+    lines.forEach(l => { delete l._m; });
+    return out;
+  },
+  own(fy){
+    const files = this.files().filter(f => this.whose(f) === "own" && (!fy || f.fy === fy));
+    // one file per year: the 26AS first (the tax credit as TRACES books it), else the AIS
+    const f = files.find(x => x.kind === "26AS") || files[0];
+    if (!f) return null;
+    const lines = f.rows.filter(r => r.fy === f.fy).map(r => Object.assign({}, r, {party: this.partyOf(r.tan, r.name)}));
+    const books = this.bookCredits().filter(x => x.fy === f.fy);
+    const res = this.pair(lines, books, l => l.party.party, x => x.party);
+    // by deductor: the file's tax, the books' tax for the party it is linked to, the difference
+    const by = {};
+    lines.forEach(l => { const d = by[l.tan] = by[l.tan] || {tan: l.tan, name: l.name, party: l.party, file: 0, books: 0, pending: 0}; d.file = r2(d.file + l.tax); if (l.status && l.status !== "F") d.pending = r2(d.pending + l.tax); });
+    Object.values(by).forEach(d => { d.books = r2(books.filter(x => d.party.party && x.party === d.party.party).reduce((a, x) => a + x.tax, 0)); d.diff = r2(d.file - d.books); });
+    const linked = new Set(Object.values(by).map(d => d.party.party).filter(Boolean));
+    const noTan = {};
+    books.filter(x => !linked.has(x.party)).forEach(x => { const k = x.party || "(no party)"; noTan[k] = r2((noTan[k] || 0) + x.tax); });
+    return {file: f, rows: res, deductors: Object.values(by).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)), booksOnly: noTan,
+      sum: {file: r2(lines.reduce((a, l) => a + l.tax, 0)), books: r2(books.reduce((a, x) => a + x.tax, 0))}};
+  },
+  // ---------------- the client as deductor: what its deductees' statements show against its returns ----------------
+  deductees(fy){
+    const tan = this.clientTan(), out = [];
+    this.files().filter(f => this.whose(f) === "deductee" && (!fy || f.fy === fy)).forEach(f => {
+      const lines = f.rows.filter(r => r.fy === f.fy && (tan ? r.tan === tan : false));
+      const rows = ["26Q", "27Q", "27EQ", "24Q"].flatMap(form => TDS.formRows(form).map(r => Object.assign({form}, r))).filter(r => r.fy === f.fy && String(r.pan || "").toUpperCase() === f.pan);
+      const books = rows.map(r => ({id: r.id, date: r.date, fy: r.fy, q: r.q, tax: r.tds, amount: r.paid, section: TDS.sec(r.section), party: r.party, form: r.form, pan: r.pan}));
+      const res = this.pair(lines, books, () => f.pan, () => f.pan);
+      res.forEach(x => { if (x.status === "matched" && x.book && x.line.section && x.book.section && TDS.sec(x.line.section) !== x.book.section) x.note = "section " + x.line.section + " in " + f.kind + ", " + x.book.section + " in FinCom"; });
+      res.forEach(x => { if (x.status === "books"){ const fl = TDSFiled.get(x.book.fy, x.book.q, x.book.form); x.note = fl ? "the return was filed: a correction may be needed (PAN or the row)" : "the return is not marked filed yet"; } });
+      out.push({file: f, tan, party: (rows[0] || {}).party || f.holder || "", rows: res, sum: {file: r2(lines.reduce((a, l) => a + l.tax, 0)), books: r2(books.reduce((a, x) => a + x.tax, 0))}, noTan: !tan});
+    });
+    return out;
+  }
+};
+/* ================================================================== */
+/* TRACES files by upload (TDS/GST round 2, item 3, T-S4): Form 16A,  */
+/* the justification report and the consolidated file                 */
+/* ================================================================== */
+// The CA downloads these from TRACES (there is no API) and uploads them on the TDS page › TRACES files:
+//   Form 16A (Form 131 from tax year 2026-27): the zip of certificates, or the PDFs themselves. Each PDF is kept with its
+//     deductee (by the deductee's PAN, from the file name or the certificate's text), in this browser's file store and the
+//     firm's cloud documents, and can be downloaded from the deductee's line.
+//   Justification report: the defaults TRACES found in a statement (short deduction, short payment, interest for paying
+//     or deducting late, the late fee, PAN errors), read into the "TRACES defaults" list of that return, with what to do.
+//   Consolidated file: the statement as TRACES holds it; its deductee lines (PAN, name, amounts) are checked against
+//     FinCom's return before a correction is prepared.
+// Nothing here changes a figure of the return. A file brought in again for the same return replaces the earlier one.
+//
+// THE FILE LAYOUTS ARE ASSUMED (TRACES cannot be reached from where FinCom is built; the fixtures in
+// tests/fixtures/traces/ are written from the layouts as commonly known):
+//   zip: a plain zip, or one locked with a password using the zip format's original encryption (ZipCrypto). A zip locked
+//     with AES is not opened: FinCom asks for the files unzipped. A zip may hold another zip.
+//   Form 16A: PDFs (TRACES-PDF-CONVERTER's output), one per deductee and quarter. The file name usually starts with the
+//     deductee's PAN ("ABCPD1234E_Q1_2025-26.pdf"); else the PAN is read from the certificate ("PAN of the Deductee"). A
+//     zip holding only the converter's text file is named as such: convert it with TRACES-PDF-CONVERTER first.
+//   Justification report (text): a header with TAN, financial year, quarter and form; a "Summary of Defaults" of
+//     "label ^ amount" lines; then one table per kind of default under a heading naming it ("Short Deduction", "Short
+//     Payment", "Interest on Payment Default", "Interest on Deduction Default", "Late Filing Fee u/s 234E", "PAN Errors"),
+//     fields separated by "^" (or tabs). A line of a table is read by its PAN, section, dates and the last amount, which
+//     is taken as the default's amount; the summary's own figure is shown beside the lines' total, and a difference is
+//     said once.
+//   Consolidated file: the statement's FVU text layout ("^"-separated FH, BH, CD, DD records). BH gives the TAN, form,
+//     year and quarter; each DD a deductee: its PAN (or PANNOTAVBL / PANINVALID / PANAPPLIED), its name, its amounts.
+//     The DD's fields are read by what they look like, not by column number.
+const TRF = {
+  // ---------------- zip ----------------
+  CRC: null,
+  crcTable(){ if (this.CRC) return this.CRC; const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return (this.CRC = t); },
+  crc32(c, b){ return (this.crcTable()[(c ^ b) & 0xff] ^ (c >>> 8)) >>> 0; },
+  // the zip format's original password protection
+  zipDecrypt(data, password){
+    const T = this; let k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890;
+    const upd = (b) => { k0 = T.crc32(k0, b); k1 = (k1 + (k0 & 0xff)) >>> 0; k1 = (Math.imul(k1, 134775813) + 1) >>> 0; k2 = T.crc32(k2, k1 >>> 24); };
+    const pw = new TextEncoder().encode(password || ""); for (const b of pw) upd(b);
+    const out = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++){ const t = (k2 | 2) & 0xffff, kb = (Math.imul(t, t ^ 1) >>> 8) & 0xff, c = data[i] ^ kb; upd(c); out[i] = c; }
+    return out;
+  },
+  async inflate(data){
+    if (typeof DecompressionStream !== "function") throw {code: "zip_unsupported"};
+    const s = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  },
+  // [{name, data: Uint8Array}]; a password asked once if a file in it is locked
+  async unzip(bytes, ask){
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    let e = -1; for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50){ e = i; break; }
+    if (e < 0) throw {code: "zip_broken"};
+    const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+    const out = []; let password = null;
+    for (let i = 0; i < n; i++){
+      if (dv.getUint32(p, true) !== 0x02014b50) throw {code: "zip_broken"};
+      const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true), crc = dv.getUint32(p + 16, true), csize = dv.getUint32(p + 20, true);
+      const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lo = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+      p += 46 + nl + xl + cl;
+      if (/\/$/.test(name)) continue;
+      const ds = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true);
+      let data = u8.subarray(ds, ds + csize);
+      if (method === 99) throw {code: "zip_aes"};
+      if (flags & 1){
+        if (password == null){ password = ask ? await ask() : null; if (password == null) throw {code: "zip_cancelled"}; }
+        const d = this.zipDecrypt(data, password);
+        // the 12th byte of the header is the check byte: the CRC's top byte (or the file time's, when sizes follow the data)
+        const check = flags & 8 ? dv.getUint16(lo + 10, true) >>> 8 : crc >>> 24;
+        if (d[11] !== check) throw {code: "zip_password"};
+        data = d.subarray(12);
+      }
+      if (method === 8) data = await this.inflate(data);
+      else if (method !== 0) throw {code: "zip_unsupported"};
+      out.push({name: name.split("/").pop(), data});
+    }
+    return out;
+  },
+  async askPassword(what){
+    const ans = await askConfirm({title: "This zip has a password", ok: "Open",
+      body: esc(what) + " is locked. Type the password TRACES gave with the download.<br><input type=\"password\" id=\"trfpw\" aria-label=\"Zip password\" style=\"margin-top:8px;width:100%\">",
+      read: () => (document.getElementById("trfpw") || {}).value || "", validate: v => v ? "" : "Type the password."});
+    return ans && ans.ok ? ans.data : null;
+  },
+  // every file of an upload: a zip opened (and a zip inside it), anything else as it is
+  async expand(file){
+    const isZip = /\.zip$/i.test(file.name || "") || file.type === "application/zip";
+    if (!isZip) return [file];
+    const parts = await this.unzip(new Uint8Array(await file.arrayBuffer()), () => this.askPassword(file.name));
+    const out = [];
+    for (const x of parts){
+      const f = new File([x.data], x.name, {type: /\.pdf$/i.test(x.name) ? "application/pdf" : /\.zip$/i.test(x.name) ? "application/zip" : "text/plain"});
+      if (/\.zip$/i.test(x.name)) (await this.expand(f)).forEach(y => out.push(y)); else out.push(f);
+    }
+    return out;
+  },
+  zipWords(e){
+    const c = e && e.code;
+    return c === "zip_aes" ? "it is locked with AES, which FinCom cannot open: unzip it on the computer (7-Zip or WinZip, with TRACES' password) and upload the files inside."
+      : c === "zip_password" ? "the password did not open it." : c === "zip_cancelled" ? "no password was given." : c === "zip_unsupported" ? "it is packed in a way FinCom cannot open: unzip it on the computer and upload the files inside."
+      : "it could not be opened as a zip.";
+  },
+  // ---------------- the kind of a TRACES text file ----------------
+  kindOfText(t){
+    if (/^\s*\d+\^FH\^/m.test(t) && /^\s*\d+\^DD\^/m.test(t)) return "conso";
+    if (/Justification Report|Short Deduction|Short Payment|Interest on (Payment|Deduction) Default|Late Filing Fee/i.test(t)) return "jr";
+    return "";
+  },
+  // ---------------- Form 16A ----------------
+  f16(){ const b = S.books || {}; return Array.isArray(b.f16a) ? b.f16a : []; },
+  // the deductee's PAN, the quarter and year of a certificate: from its file name, else its text
+  async f16Facts(file){
+    const own = typeof AS26 === "object" ? AS26.clientPan() : "", name = String(file.name || "").toUpperCase();
+    let pan = (name.match(/(?:^|[^A-Z])([A-Z]{5}\d{4}[A-Z])(?![A-Z0-9])/) || [])[1] || "";
+    let q = (name.match(/(?:^|[^A-Z0-9])Q([1-4])(?![0-9])/) || [])[1] || "", fy = "";
+    const fm = name.match(/(20\d{2})[-_]?(\d{2})(?!\d)/); if (fm) fy = fm[1] + "-" + fm[2];
+    let cert = "";
+    try {
+      const lines = await AS26.pdfLines(file), text = lines.join("\n");
+      if (!pan){
+        const i = lines.findIndex(l => /PAN of the Deductee/i.test(l));
+        const scan = (i >= 0 ? lines.slice(i, i + 3) : lines).join(" ").match(/[A-Z]{5}\d{4}[A-Z]/g) || [];
+        pan = scan.filter(p => p !== own).pop() || "";
+      }
+      if (!q){ const m = text.match(/\bQ([1-4])\b/); if (m) q = m[1]; }
+      if (!fy){ const m = text.match(/Assessment Year\s*:?\s*(20\d{2})\s*-\s*(?:20)?(\d{2})/i); if (m){ const y = num(m[1]) - 1; fy = y + "-" + String(y + 1).slice(2); } }
+      if (!fy){ const m = text.match(/Tax Year\s*:?\s*(20\d{2})\s*-\s*(?:20)?(\d{2})/i); if (m) fy = m[1] + "-" + m[2]; }
+      const cm = text.match(/Certificate\s*No\.?\s*:?\s*([A-Z0-9]{5,10})/i); if (cm) cert = cm[1];
+    } catch (e){ /* a certificate whose text cannot be read is kept by its file name alone */ }
+    return {pan, q: q ? "Q" + q : "", fy, cert};
+  },
+  partyOfPan(pan){
+    const b = S.books || {}, pans = b.pans || {};
+    const hit = Object.keys(pans).find(p => String(pans[p] || "").toUpperCase() === pan);
+    if (hit) return hit;
+    const r = TDS.rows().concat(TDS.nrRows(), TDS.tcsRows(), TDS.salaryRows()).find(x => String(x.pan || "").toUpperCase() === pan);
+    return r ? r.party : "";
+  },
+  async addF16(pdfs){
+    const co = CO(), b = S.books, kept = [], skipped = [];
+    for (const f of pdfs){
+      const x = await this.f16Facts(f);
+      if (!x.pan){ skipped.push(f.name); continue; }
+      const id = uid("f16");
+      const rec = {id, pan: x.pan, party: this.partyOfPan(x.pan), fy: x.fy, q: x.q, cert: x.cert, name: f.name, size: f.size, at: new Date().toISOString()};
+      await FileStore.put(co.id, id, f); S.files[id] = f;
+      if (typeof CloudDocs === "object" && CloudDocs.on()) CloudDocs.add(co.id, id, f, "f16a");
+      // the same deductee, quarter and year brought in again: the newer certificate in its place
+      const same = this.f16().filter(r => r.pan === rec.pan && r.q === rec.q && r.fy === rec.fy);
+      b.f16a = this.f16().filter(r => same.indexOf(r) < 0).concat([rec]);
+      kept.push(rec);
+    }
+    if (kept.length) saveBooks();
+    return {kept, skipped};
+  },
+  async downloadF16(id){
+    const r = this.f16().find(x => x.id === id); if (!r) return;
+    try { const f = await FileStore.get((CO() || {}).id, id, r.docPath, r.name); if (!f) throw new Error("missing"); saveFile(r.name, f); }
+    catch (e){ toast("The certificate is not on this computer" + (r.docPath ? " and could not be fetched from the firm's documents." : ". Upload it again here.")); }
+  },
+  // ---------------- justification report ----------------
+  JR_KINDS: [
+    ["shortDed", /short\s*deduction/i, "Short deduction", "Deduct and pay the difference with interest by a challan, and file a correction with the deductee's row changed (C3)."],
+    ["shortPay", /short\s*payment/i, "Short payment", "Pay the difference by a challan and tag it to the return in a correction (C9, or C2 for the challan)."],
+    ["intPay", /interest.*(payment\s*default|late\s*payment)|late\s*payment.*interest/i, "Interest for paying late", "Pay the interest by a challan (minor head 400) and tag it to the return in a correction."],
+    ["intDed", /interest.*(deduction\s*default|late\s*deduction)|late\s*deduction.*interest/i, "Interest for deducting late", "Pay the interest by a challan (minor head 400) and tag it to the return in a correction."],
+    ["lateFee", /late\s*filing\s*fee|234E|section\s*427/i, "Late filing fee", "Pay the fee by a challan and tag it to the return in a correction."],
+    ["int220", /220\s*\(\s*2\s*\)/i, "Interest on the demand (220(2))", "Pay the demand with this interest; it grows each month it is unpaid."],
+    ["pan", /PAN\s*error|invalid\s*PAN|PAN\s*not\s*available|PANNOTAVBL|PANINVALID/i, "PAN error", "Get the deductee's right PAN and file a correction (C5); until then 20% applies (206AA)."]
+  ],
+  parseJr(text){
+    const t = String(text || "").replace(/\r/g, ""), lines = t.split("\n");
+    const out = {kind: "jr", tan: "", fy: "", q: "", form: "", token: "", summary: {}, items: []};
+    const tm = t.match(/\bTAN\b[^A-Z0-9\n]*([A-Z]{4}\d{5}[A-Z])/i) || t.match(/\b([A-Z]{4}\d{5}[A-Z])\b/); if (tm) out.tan = tm[1];
+    const fm = t.match(/Financial\s*Year[^0-9\n]*(20\d{2})\s*-\s*(?:20)?(\d{2})/i); if (fm) out.fy = fm[1] + "-" + fm[2];
+    const qm = t.match(/Quarter[^A-Z0-9\n]*Q?([1-4])\b/i); if (qm) out.q = "Q" + qm[1];
+    const om = t.match(/Form\s*(?:Type|No\.?)?[^A-Z0-9\n]*(24Q|26Q|27Q|27EQ|13[0-9]|14[0-9])\b/i); if (om) out.form = ({138: "24Q", 140: "26Q", 144: "27Q", 143: "27EQ"})[om[1]] || om[1].toUpperCase();
+    const km = t.match(/Token\s*(?:Number|No\.?)?[^0-9\n]*(\d{15})/i); if (km) out.token = km[1];
+    let sec = "", inSummary = false;
+    const kindOf = s => (this.JR_KINDS.find(k => k[1].test(s)) || [])[0] || "";
+    lines.forEach(raw => {
+      const line = raw.trim(); if (!line) return;
+      const f = (/\^/.test(line) ? line.split("^") : line.split(/\t|\s{2,}/)).map(x => x.trim());
+      const amts = f.filter(x => /^-?[\d,]+\.\d{2}$/.test(x)).map(x => num(x.replace(/,/g, "")));
+      if (/summary\s*of\s*defaults?/i.test(line)){ inSummary = true; sec = ""; return; }
+      const k = kindOf(f[0] || line), cells = f.filter(Boolean);
+      if (inSummary && cells.length >= 2){
+        // "label ^ amount" (or "PAN Errors ^ 2", a count)
+        if (k && amts.length) out.summary[k] = r2((out.summary[k] || 0) + amts[amts.length - 1]);
+        else if (k && /^\d+$/.test(cells[cells.length - 1])) out.summary[k + "N"] = num(cells[cells.length - 1]);
+        else if (/total/i.test(line) && amts.length) out.summary.total = amts[amts.length - 1];
+        return;
+      }
+      // a heading: names a kind and carries no amount
+      if (k && !amts.length && cells.length <= 2){ sec = k; inSummary = false; return; }
+      if (inSummary) return;
+      if (!sec || !amts.length) return;
+      if (/^(sr\.?\s*no|s\.?\s*no|#)/i.test(f[0]) || /^total/i.test(f[0] || "")) return;
+      const pan = (f.find(x => /^(?:[A-Z]{5}\d{4}[A-Z]|PANNOTAVBL|PANINVALID|PANAPPLIED)$/.test(x)) || "");
+      const di = f.findIndex(x => /^\d{2}[-\/]([A-Za-z]{3}|\d{2})[-\/]\d{4}$/.test(x));
+      const section = f.map(x => (/^(19\d[A-Z0-9]*|206C\w*|9\d[A-Z]{1,3}|4[A-Z]{2,3})$/.test(x) ? x : "")).find(Boolean) || "";
+      const challan = (f.find(x => /^\d{7}$/.test(x)) || "") + (f.find(x => /^\d{5}$/.test(x)) ? "/" + f.find(x => /^\d{5}$/.test(x)) : "");
+      const name = f.find(x => /[A-Za-z]{3}/.test(x) && x !== pan && !/^\d/.test(x) && x !== section && !/^(Q[1-4]|F|U|P)$/.test(x)) || "";
+      out.items.push({kind: sec, pan, name, section, date: di >= 0 ? (AS26.date(f[di]) || "") : "", challan: sec === "shortPay" || sec === "intPay" ? challan.replace(/^\//, "") : "", amount: r2(amts[amts.length - 1])});
+    });
+    // the lines read against the summary's own figures
+    out.diffs = [];
+    this.JR_KINDS.forEach(([k, , label]) => {
+      const s = out.summary[k], read = r2(out.items.filter(x => x.kind === k).reduce((a, x) => a + x.amount, 0));
+      if (s != null && k !== "pan" && Math.abs(s - read) >= 1 && out.items.some(x => x.kind === k)) out.diffs.push({kind: k, label, summary: s, read});
+    });
+    return out;
+  },
+  jrs(){ const b = S.books || {}; return Array.isArray(b.tracesJr) ? b.tracesJr : []; },
+  jrFor(fy, q, form){ return this.jrs().find(x => x.fy === fy && x.q === q && x.form === (form || "26Q")) || null; },
+  // ---------------- consolidated file ----------------
+  parseConso(text){
+    const out = {kind: "conso", tan: "", fy: "", q: "", form: "", rows: [], challans: 0};
+    String(text || "").replace(/\r/g, "").split("\n").forEach(raw => {
+      const f = raw.split("^").map(x => x.trim()); if (f.length < 3) return;
+      const rt = f[1];
+      if (rt === "BH"){
+        out.tan = (f.find(x => /^[A-Z]{4}\d{5}[A-Z]$/.test(x)) || "");
+        const fm = f.find(x => /^(24Q|26Q|27Q|27EQ|13[0-9]|14[0-9])$/.test(x)); if (fm) out.form = ({138: "24Q", 140: "26Q", 144: "27Q", 143: "27EQ"})[fm] || fm;
+        const y = f.find(x => /^20\d{4}$/.test(x)); if (y) out.fy = y.slice(0, 4) + "-" + y.slice(4);
+        const q = f.find(x => /^Q[1-4]$/.test(x)); if (q) out.q = q;
+      } else if (rt === "CD") out.challans++;
+      else if (rt === "DD"){
+        const pan = f.find(x => /^(?:[A-Z]{5}\d{4}[A-Z]|PANNOTAVBL|PANINVALID|PANAPPLIED)$/.test(x)) || "";
+        const pi = f.indexOf(pan);
+        const name = f.slice(pi + 1).find(x => /[A-Za-z]{2}/.test(x) && !/^(?:[A-Z]{5}\d{4}[A-Z]|PAN\w+)$/.test(x) && !/^[A-Z]?\d/.test(x)) || "";
+        const amounts = f.filter(x => /^-?\d+\.\d{2}$/.test(x)).map(x => num(x)).filter(x => x > 0);
+        const date = f.find(x => /^\d{8}$/.test(x)) || "";
+        out.rows.push({challan: f[3] || "", n: f[4] || "", pan, name, amounts, date: date ? date.slice(4, 8) + date.slice(2, 4) + date.slice(0, 2) : ""});
+      }
+    });
+    return out;
+  },
+  consos(){ const b = S.books || {}; return Array.isArray(b.tracesConso) ? b.tracesConso : []; },
+  // TRACES' deductee lines against FinCom's return: the same PAN, the name, the TDS
+  consoCheck(c){
+    const rows = TDS.formRows(c.form || "26Q").filter(r => r.fy === c.fy && r.q === c.q), out = [], seen = new Set();
+    const nm = s => normName(s).replace(/ /g, "").replace(/(pvtltd|privatelimited|limited|ltd|pvt|llp|ms)/g, "");
+    c.rows.forEach(d => {
+      const mine = rows.filter(r => String(r.pan || "").toUpperCase() === d.pan && d.pan.length === 10 && !/^PAN/.test(d.pan));
+      const tdsHit = mine.find(r => !seen.has(r.id) && d.amounts.some(a => Math.abs(a - r.tds) < 1));
+      if (tdsHit) seen.add(tdsHit.id);
+      const words = [];
+      if (/^PAN/.test(d.pan)) words.push(d.pan === "PANNOTAVBL" ? "no PAN in TRACES' statement" : d.pan === "PANINVALID" ? "PAN marked invalid by TRACES" : "PAN applied for");
+      else if (!mine.length){
+        const byName = rows.find(r => nameSim(r.party, d.name) >= 0.9);
+        words.push(byName ? "FinCom has " + byName.party + " under PAN " + (byName.pan || "none") : "this PAN is not in FinCom's return");
+      } else {
+        if (mine.every(r => nm(r.party) !== nm(d.name)) && nameSim(mine[0].party, d.name) < 0.9) words.push("name in Tally: " + mine[0].party);
+        if (!tdsHit) words.push("TDS differs: FinCom has " + mine.map(r => "₹" + INR.format(r.tds)).join(", "));
+      }
+      out.push(Object.assign({}, d, {party: (tdsHit || mine[0] || {}).party || "", ok: !words.length, words}));
+    });
+    const extra = rows.filter(r => !seen.has(r.id) && !c.rows.some(d => d.pan === String(r.pan || "").toUpperCase()));
+    return {rows: out, extra};
+  },
+  // ---------------- an upload: what each file is ----------------
+  async add(fileList){
+    const files = Array.from(fileList || []), said = [];
+    let all = [];
+    for (const f of files){
+      try { (await this.expand(f)).forEach(x => all.push(x)); }
+      catch (e){ said.push(f.name + ": " + this.zipWords(e)); }
+    }
+    const pdfs = all.filter(f => /\.pdf$/i.test(f.name)), texts = all.filter(f => /\.(txt|csv|tds)$/i.test(f.name) || f.type === "text/plain");
+    const b = S.books;
+    for (const f of texts){
+      const t = await f.text(), k = this.kindOfText(t);
+      if (k === "jr"){
+        const r = this.parseJr(t); r.file = f.name; r.at = new Date().toISOString(); r.id = uid("jr");
+        if (!r.form) r.form = "26Q";
+        b.tracesJr = this.jrs().filter(x => !(x.fy === r.fy && x.q === r.q && x.form === r.form)).concat([r]);
+        said.push("Justification report, " + TDS.formShort(r.form, r.fy) + " " + r.q + " " + r.fy + ": " + r.items.length + " default" + (r.items.length === 1 ? "" : "s") + " read.");
+      } else if (k === "conso"){
+        const r = this.parseConso(t); r.file = f.name; r.at = new Date().toISOString(); r.id = uid("cs");
+        b.tracesConso = this.consos().filter(x => !(x.fy === r.fy && x.q === r.q && x.form === r.form)).concat([r]);
+        said.push("Consolidated file, " + TDS.formShort(r.form || "26Q", r.fy) + " " + r.q + " " + r.fy + ": " + r.rows.length + " deductee line" + (r.rows.length === 1 ? "" : "s") + " read.");
+      } else if (texts.length && !pdfs.length && /\.txt$/i.test(f.name)) said.push(f.name + ": this text file is not a justification report or a consolidated file. A Form 16A zip holding only a text file is for TRACES-PDF-CONVERTER: convert it there, then upload the PDFs (or their zip) here.");
+    }
+    if (pdfs.length){
+      const r = await this.addF16(pdfs);
+      if (r.kept.length) said.push("Form 16A: " + r.kept.length + " certificate" + (r.kept.length === 1 ? "" : "s") + " kept with " + new Set(r.kept.map(x => x.pan)).size + " deductee" + (new Set(r.kept.map(x => x.pan)).size === 1 ? "" : "s") + ".");
+      if (r.skipped.length) said.push("Not kept (no deductee's PAN in the file name or the certificate): " + r.skipped.join(", ") + ".");
+    }
+    saveBooks(); render();
+    return said;
+  },
+  remove(key, id){
+    const b = S.books, list = Array.isArray(b[key]) ? b[key] : [], x = list.find(r => r.id === id);
+    if (!x) return Promise.resolve(false);
+    return askConfirm({title: "Take this out?", body: esc(x.file || x.name || "") + " leaves FinCom. Upload it again to bring it back.", ok: "Take it out"}).then(ok => {
+      if (!ok || !ok.ok) return false;
+      b[key] = list.filter(r => r.id !== id);
+      if (key === "f16a") try { FileStore.drop((CO() || {}).id, id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); } catch (e){}
+      saveBooks(); render(); return true;
+    });
+  }
+};
+/* ================================================================== */
+/* Supplier health for GST (TDS/GST round 2, item 4, G-S3): who is    */
+/* not filing, who files late, and GSTINs that cannot be right        */
+/* ================================================================== */
+// What FinCom can know. The firm's GST API (TaxPro, server/gst-taxpro and src/js/39-gst-api.js) has no "search
+// taxpayer" or "return status of another GSTIN" call: its calls are the client's own OTP sign-in, 2B, the filed GSTR-1
+// and 3B, the client's own return status list (RETTRACK) and e-invoice / e-way bill. So a supplier's registration status
+// (active, cancelled, suspended) cannot be seen here, and the page says so. What the client's 2B shows is used instead:
+//   - not filing: the supplier's bills are in the books for a month, and nothing of the supplier is in that month's 2B or
+//     the next one, nor matched in any 2B brought in; the latest N such months in a row (N chosen, 2 by default) make
+//     the supplier "Not filing"; earlier gaps are "Bills missing from 2B";
+//   - files late: 2B gives the date the supplier filed (supfildt) for its return period (supprd); after the 13th of the
+//     month after that period it was late (the 11th for a monthly filer, the 13th for a quarterly one: the later date
+//     is used, as 2B does not say which the supplier is);
+//   - a GSTIN in the books that fails the check digit (gstinValid).
+// The credit at risk is the tax on the supplier's bills in the books that no 2B brought in has (GST2B.run's onlyBooks).
+// Only the months whose 2B has been brought in or fetched are looked at. Nothing here changes a figure.
+const SupHealth = {
+  N: 2,
+  ddmmyyyy(s){ const m = String(s || "").match(/^(\d{2})-(\d{2})-(\d{4})$/); return m ? m[3] + m[2] + m[1] : ""; },
+  // the last day to file GSTR-1 (or IFF) for a supplier's return period mmyyyy, as yyyymmdd (the 13th: see above)
+  dueOf(supPrd){ const p = String(supPrd || ""); if (!/^\d{6}$/.test(p)) return ""; const n = GSTR.nextYm(p.slice(2) + p.slice(0, 2)); return n + "13"; },
+  days(a, b){ const f = s => Date.parse(s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8)); return Math.round((f(b) - f(a)) / 86400000); },
+  run(reg, fy, n){
+    n = n || this.N;
+    const all = GST2B.all2b(reg), months = all.map(t => t.ym).filter(m => !fy || GSTF.fyOf(m) === fy);
+    if (!months.length) return {months: [], list: [], n};
+    const R = GST2B.run(reg), first = months[0], last = months[months.length - 1], loaded = new Set(all.map(t => t.ym));
+    const by = {};
+    const sup = g => by[g] = by[g] || {gstin: g, party: "", billed: {}, rows2b: [], matched: new Set(), missing: [], late: []};
+    // the supplier's bills in the books, in the months looked at (a bill's month: its date in the books)
+    R.books.forEach(d => {
+      if (!d.gstin || d.rcm || d.dir < 0 || d.ym < first || d.ym > last) return;
+      const s = sup(d.gstin); s.party = s.party || d.party; s.billed[d.ym] = (s.billed[d.ym] || 0) + 1;
+    });
+    R.pairs.forEach(x => x.books.forEach(d => { if (by[d.gstin]) by[d.gstin].matched.add(d.ym); }));
+    R.portal.forEach(p => { if (p.gstin && by[p.gstin]) by[p.gstin].rows2b.push(p); });
+    R.onlyBooks.forEach(d => { if (by[d.gstin] && !d.rcm && d.dir > 0 && d.ym >= first && d.ym <= last) by[d.gstin].missing.push(d); });
+    const tax = d => r2(num(d.igst) + num(d.cgst) + num(d.sgst) + num(d.cess));
+    const list = Object.values(by).map(s => {
+      const seen2b = new Set(s.rows2b.map(p => p.ym));
+      const billedMonths = Object.keys(s.billed).sort();
+      const absent = billedMonths.filter(m => !s.matched.has(m) && !seen2b.has(m) && !(loaded.has(GSTR.nextYm(m)) && seen2b.has(GSTR.nextYm(m))));
+      // the latest billed months in a row with nothing in 2B
+      let run = 0; for (let i = billedMonths.length - 1; i >= 0 && absent.indexOf(billedMonths[i]) >= 0; i--) run++;
+      // late filings, by the supplier's return period
+      const per = {};
+      s.rows2b.forEach(p => { const on = this.ddmmyyyy(p.filedOn), due = this.dueOf(p.supPrd); if (on && due && on > due){ const k = p.supPrd; per[k] = per[k] || {supPrd: k, on, due, days: this.days(due, on), docs: 0}; per[k].docs++; } });
+      const late = Object.values(per).sort((a, b) => a.supPrd.slice(2) + a.supPrd.slice(0, 2) < b.supPrd.slice(2) + b.supPrd.slice(0, 2) ? -1 : 1);
+      const lastSeen = Array.from(seen2b).sort().pop() || "";
+      const flags = [];
+      if (!gstinValid(s.gstin)) flags.push("bad");
+      if (run >= n) flags.push("notfiling"); else if (absent.length) flags.push("missing");
+      if (late.length) flags.push("late");
+      return {gstin: s.gstin, party: s.party, billed: billedMonths, absent, run, late, lastSeen, missing: s.missing.length, atRisk: r2(s.missing.reduce((a, d) => a + tax(d), 0)),
+        docs2b: s.rows2b.length, flags, status: flags.includes("notfiling") ? "notfiling" : flags.includes("bad") ? "bad" : flags.includes("missing") ? "missing" : flags.includes("late") ? "late" : "ok"};
+    });
+    const rank = {notfiling: 0, bad: 1, missing: 2, late: 3, ok: 4};
+    list.sort((a, b) => rank[a.status] - rank[b.status] || b.atRisk - a.atRisk || a.party.localeCompare(b.party));
+    return {months, list, n};
+  },
+  words(x){
+    const out = [], m = ym => GSTR.label(ym);
+    if (x.flags.includes("bad")) out.push("the GSTIN fails its check digit: check it in Tally");
+    if (x.flags.includes("notfiling")) out.push("nothing in 2B for its bills of the last " + x.run + " month" + (x.run === 1 ? "" : "s") + " (" + x.absent.slice(-x.run).map(m).join(", ") + ")" + (x.lastSeen ? "; last in 2B " + m(x.lastSeen) : "; in no 2B brought in"));
+    else if (x.flags.includes("missing")) out.push("bills of " + x.absent.map(m).join(", ") + " not in 2B");
+    x.late.forEach(l => out.push("filed " + GSTR.label(l.supPrd.slice(2) + l.supPrd.slice(0, 2)) + " on " + fmtDate(tallyDate(l.on)) + ", " + l.days + " day" + (l.days === 1 ? "" : "s") + " late"));
+    return out;
   }
 };
