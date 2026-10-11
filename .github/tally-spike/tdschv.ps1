@@ -130,9 +130,9 @@ try {
   # each list is read by a Ledger collection fetching it; the lists are given with candidate field names (a name Tally
   # does not have is dropped, one it has makes the element, whose fields the fetch then shows)
   function LedLists([string]$name, [string]$tag) {
-    $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FcLed</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FcLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*, LOWERDEDUCTION.*, TDSCATEGORYDETAILS.*, TDSEXEMPTIONRULES.*, DEDUCTINSAMEVCHRULES.*</FETCH><FILTERS>FcLedF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FcLedF">$Name = "' + $name + '"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') "ledger lists $tag" 60
+    $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FcLed</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FcLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*, LOWERDEDUCTION.*, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.*, TDSCATEGORYDETAILS.*, TDSEXEMPTIONRULES.*, DEDUCTINSAMEVCHRULES.*</FETCH><FILTERS>FcLedF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FcLedF">$Name = "' + $name + '"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') "ledger lists $tag" 60
     XSave "ledger-lists-$tag.xml" $x
-    foreach ($lst in 'LOWERDEDUCTION.LIST', 'TDSCATEGORYDETAILS.LIST', 'TDSEXEMPTIONRULES.LIST', 'DEDUCTINSAMEVCHRULES.LIST') {
+    foreach ($lst in 'LOWERDEDUCTIONDETAILS.LIST', 'LOWERDEDUCTION.LIST', 'TDSCATEGORYDETAILS.LIST', 'TDSEXEMPTIONRULES.LIST', 'DEDUCTINSAMEVCHRULES.LIST') {
       $blk = [regex]::Match("$x", '(?s)<' + [regex]::Escape($lst) + '>(.*?)</' + [regex]::Escape($lst) + '>').Groups[1].Value
       $flds = @([regex]::Matches($blk, '<([A-Z][A-Z0-9_]*)(?:\s[^>]*)?/?>') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
       Info "tdsch: $name $lst ($tag): fields $($flds -join ', '); values: $((TagVals $blk '.') -join ' | ')"
@@ -145,6 +145,10 @@ try {
     '<RATE>1</RATE><TDSRATE>1</TDSRATE><RATEOFTAX>1</RATEOFTAX><LOWERRATE>1</LOWERRATE><TAXRATE>1</TAXRATE>' +
     '<LIMIT>500000.00</LIMIT><AMOUNTLIMIT>500000.00</AMOUNTLIMIT><EXEMPTIONLIMIT>500000.00</EXEMPTIONLIMIT><THRESHOLDLIMIT>500000.00</THRESHOLDLIMIT><AMOUNT>500000.00</AMOUNT><MAXAMOUNT>500000.00</MAXAMOUNT>'
   $null = XImp 'All Masters' ('<LEDGER NAME="FC LDC Party" ACTION="Alter"><NAME.LIST><NAME>FC LDC Party</NAME></NAME.LIST><TDSDEDUCTEEISSPECIALRATE>Yes</TDSDEDUCTEEISSPECIALRATE><TDSDEDUCTEESPECIALRATE>1</TDSDEDUCTEESPECIALRATE><LOWERDEDUCTION.LIST>' + $cand + '</LOWERDEDUCTION.LIST><TDSCATEGORYDETAILS.LIST>' + $cand + '</TDSCATEGORYDETAILS.LIST><TDSEXEMPTIONRULES.LIST>' + $cand + '</TDSEXEMPTIONRULES.LIST></LEDGER>') 'the lower-deduction party, candidate field names (XML)'
+  $cand2 = $cand + '<APPLICABLEDATE>20260401</APPLICABLEDATE><TILLDATE>20270331</TILLDATE><UPTODATE>20270331</UPTODATE><VALIDTILL>20270331</VALIDTILL><DATEOFCERTIFICATE>20260415</DATEOFCERTIFICATE><CERTNO>LDC197CERT0001</CERTNO><CERTIFICATE>LDC197CERT0001</CERTIFICATE><LDCCERTIFICATENO>LDC197CERT0001</LDCCERTIFICATENO><LOWERDEDUCTIONCERTNO>LDC197CERT0001</LOWERDEDUCTIONCERTNO>' +
+    '<SECTIONNO>197</SECTIONNO><TDSSECTIONNUMBER>197</TDSSECTIONNUMBER><RATEOFTDS>1</RATEOFTDS><TDSLOWERRATE>1</TDSLOWERRATE><LOWERDEDUCTIONRATE>1</LOWERDEDUCTIONRATE><SPECIALRATE>1</SPECIALRATE><TDSDEDUCTEESPECIALRATE>1</TDSDEDUCTEESPECIALRATE>' +
+    '<LIMITAMOUNT>500000.00</LIMITAMOUNT><AMOUNTUPTO>500000.00</AMOUNTUPTO><MAXLIMIT>500000.00</MAXLIMIT><CERTIFICATEAMOUNT>500000.00</CERTIFICATEAMOUNT><LOWERDEDUCTIONLIMIT>500000.00</LOWERDEDUCTIONLIMIT><REASON>Section 197</REASON><TDSREASON>Section 197</TDSREASON>'
+  $null = XImp 'All Masters' ('<LEDGER NAME="FC LDC Party" ACTION="Alter"><NAME.LIST><NAME>FC LDC Party</NAME></NAME.LIST><LOWERDEDUCTION.LIST><NATUREOFPAYMENT>' + (LE $NAT2use) + '</NATUREOFPAYMENT><LOWERDEDUCTIONDETAILS.LIST>' + $cand2 + '</LOWERDEDUCTIONDETAILS.LIST></LOWERDEDUCTION.LIST></LEDGER>') 'the lower-deduction details under the nature, candidate field names (XML)'
   LedLists 'FC LDC Party' 'candidates'
   # the party ledger's own form, walked by Enter (screens kept: where the lower deduction is asked on 7.1), left unchanged
   try {
@@ -153,6 +157,8 @@ try {
       $null = TK ('{BACKSPACE}' * 30) 0.5
       $null = TK ((SK 'Ledger') + '{ENTER}') 2 'tour-ledger'
       $null = TK ((SK 'FC LDC Party') + '{ENTER}') 2.5 'tour-form'
+      $null = TK '{F12}' 2.5 'tour-f12'; $null = TK '{ESC}' 2 'tour-f12-esc'
+      $null = TK '^i' 2.5 'tour-more-details'; $null = TK '{ESC}' 2 'tour-more-esc'
       for ($i = 1; $i -le 28; $i++) { $t = TdsScreen ("tour-{0:d2}" -f $i); if ($t -match 'Yes or No|Accept \?') { break }; & $script:TdsSend '{ENTER}'; Start-Sleep 1.2 }
       $null = TK '{ESC}' 2 'tour-esc'
     }
@@ -249,13 +255,14 @@ try {
       $t = TdsScreen 'sp-taxtype-check2'
       if ($t -match 'Spelling Error|Oops') { $null = TK '{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 'sp-bs2'; $null = TK '{ENTER}' 1.5 'sp-keep2' }
     }
-    # the other fields as Tally offers them (type of payment, period, section / nature, deductee status...), defaults kept
-    for ($j = 1; $j -le 10; $j++) {
-      $t = TdsScreen "sp-box-$j"
-      if ($t -match 'Yes or No|Accept \?') { & $script:TdsSend 'y'; Start-Sleep 3; break }
-      if ($t -match 'Spelling Error|Oops') { & $script:TdsSend '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}'; Start-Sleep 1 }
-      if ($t -match 'Tax Type|Type of Payment|Period|Section|Nature of Pay|Deductee|Resident') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break }
-    }
+    # run 38149336261 (7.1): after the tax type the box asks Period From, To, Deducted Till Date, Section, Nature of
+    # Payment, Deductee Status, Residential Status (defaults kept) and Cash/Bank (mandatory: an empty one held the box)
+    for ($j = 1; $j -le 7; $j++) { $null = TK '{ENTER}' 1.2 "sp-field-$j" }
+    $t = TdsScreen 'sp-at-bank'
+    $null = TK ((SK 'HDFC Bank') + '{ENTER}') 2.5 'sp-bank'
+    $t = TdsScreen 'sp-bank-check'
+    if ($t -match 'Yes or No|Accept \?') { $null = TK 'y' 3 'sp-box-yes0' }
+    elseif ($t -match 'Spelling Error|Oops') { $null = TK ('{BACKSPACE}' * 12) 1 'sp-bank-bs'; $null = TK '^a' 2.5 'sp-box-ctrl-a0'; $t = TdsScreen 'sp-box-q0'; if ($t -match 'Yes or No|Accept \?') { $null = TK 'y' 3 'sp-box-yes0b' } }
     $t = TdsScreen 'sp-after-box'
     if ($t -match 'Tax Type|Type of Payment' -and $t -match 'Autofill') { $null = TK '^a' 3 'sp-box-ctrl-a'; $t = TdsScreen 'sp-box-after-ctrl-a'; if ($t -match 'Yes or No|Accept \?') { $null = TK 'y' 3 'sp-box-yes' } }
     $t = TdsScreen 'sp-filled'
@@ -312,15 +319,15 @@ try {
   if ($ids[$chId]) {
     $tries = @(
       @('A', @()),
-      @('B', @('%s')))
+      @('B', @('%s')),
+      @('C', @('{ENTER}')))
     foreach ($tr in $tries) {
       try {
         $null = TdsGateway "before challan try $($tr[0])"
         $null = TK '%g' 2 "ch$($tr[0])-goto"
-        $null = TK (SK 'Challan Reconciliation') 2 "ch$($tr[0])-typed"
+        $null = TK (SK 'TDS Challan Reconciliation') 2 "ch$($tr[0])-typed"
         $null = TK '{ENTER}' 3 "ch$($tr[0])-open"
         $t = TdsScreen "ch$($tr[0])-report"
-        if ($t -match 'List of|Select|Tax Type|Type of Tax|TDS' -and $t -notmatch 'Challan No') { $null = TK ((SK 'TDS') + '{ENTER}') 3 "ch$($tr[0])-tds" }
         $null = TK '{F2}' 1.5 "ch$($tr[0])-period"
         $t = TdsScreen "ch$($tr[0])-period-box"
         if ($t -match 'Period|From') { $null = TK '1-4-2026{ENTER}' 1; $null = TK '31-3-2027{ENTER}' 3 "ch$($tr[0])-period-set" } else { $null = TK '{ESC}' 1.5 }
