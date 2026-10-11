@@ -8,7 +8,9 @@ import Guard from "./Guard.jsx";
 import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
 import SCREENS from "./screens/index.js";
-import Loading from "./parts/Loading.jsx";
+import PageSkeleton from "./parts/PageSkeleton.jsx";
+import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
+import { StatusTabs } from "./TopBar.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
@@ -31,7 +33,8 @@ function Screen() {
   if (open && isSetupTab(S.tab)) return <ClientSetup />;
   if (open && S.step === "collect") return docType() === "sales" ? <Sales /> : <Collect />;
   if (S.view === "company" && co) {
-    if (S.loadingCo) return <Loading what={co.name + "’s work"} />;
+    // stability batch 1: one wait, in the page's shape (the same as the frame before the program loads), not a "Loading…" note
+    if (S.loadingCo) return <PageSkeleton what={co.name + "’s work"} />;
     if (S.tab === "invoices") return VR.st() ? <VendorRecon /> : S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
     if (S.tab === "bank") return <Bank />;
     if (S.tab === "sales") return <Sales />;
@@ -51,12 +54,16 @@ function Bar() {
 }
 
 export default function Main({ v }) {
-  if (!S.firm) return <Loading />;
+  if (!S.firm) return null;   // the frame index.html drew stays until then (App.jsx)
   if (signInNeeded()) return <Guard name="the sign-in page" v={v}><SignIn /></Guard>;
+  // just signed in: FinCom opening until the firm's first sync is done (one wait, not an empty list filling in)
+  if (openingAfterSignIn()) return <OpenLoader />;
   const company = S.view === "company" && CO();
   return <>
     {/* round 3 (05-Oct-2026): no warnings on the pages; the credit, the storage, the self-test and Tally's alerts are in
         the bell in the top bar (parts/Bell.jsx, AlertHub in src/js/63-alerts.js) */}
+    {/* a client's status tabs, the first thing on the page (were a second row of the header: stability batch 1) */}
+    {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Screen /></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}

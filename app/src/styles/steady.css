@@ -1,0 +1,104 @@
+/* A steady frame (stability batch 1, 11-Oct-2026; the owner: "as stable and strong as Claude, anthropic.com, Microsoft").
+   Nothing in the frame moves when the page changes:
+   - the top bar's right side has fixed places: the page's own buttons (How this tab works, the review link, Saving…,
+     the page's main button) to the left, then the bell, the Tally sign and the firm, each in a place of its own width,
+     always at the same spot on every page. The sign and the firm's name are cut with … when longer than their place
+     (the whole words are on hover and in the panel they open);
+   - the header is the same height on every page: a client's status tabs (To review · Post to Tally · In Tally …) are at
+     the top of the page itself, kept in view under the header while the page scrolls (--head-h, TopBar.jsx);
+   - the sidebar's date line stays at the foot of the sidebar;
+   - a page's shape while its data comes (PageSkeleton.jsx), the same as the frame index.html draws before the program loads. */
+:root { --slot-bell: 34px; --slot-tally: 204px; --slot-firm: 196px; }
+
+/* ---------- the top bar's places ---------- */
+header.top .topright { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; margin-left: auto; }
+header.top .topright > .tb-page { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 10px; min-width: 0; }
+header.top .topright > .tb-page:empty { display: none; }
+header.top .topright > .tb-global { display: flex; flex: none; align-items: center; gap: 10px; }
+.tb-slot { display: flex; flex: none; align-items: center; justify-content: flex-end; min-width: 0; }
+.tb-slot.tb-bell { width: var(--slot-bell); justify-content: center; }
+.tb-slot.tb-tally { width: var(--slot-tally); justify-content: flex-start; }
+.tb-slot.tb-firm { width: var(--slot-firm); }
+.tb-slot.tb-tally .tsign-wrap { display: inline-flex; max-width: 100%; min-width: 0; }
+.tb-slot.tb-tally .tsign { max-width: 100%; min-width: 0; overflow: hidden; }
+.tb-slot.tb-tally .tsign .tsign-long, .tb-slot.tb-tally .tsign .tsign-short { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-slot.tb-firm .firmbtn { max-width: 100%; min-width: 0; align-items: stretch; overflow: hidden; }
+.tb-slot.tb-firm .firmbtn b, .tb-slot.tb-firm .firmbtn small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.tb-slot .boot-pill { width: 100%; }
+/* the header row: the title, then the right side; the right side never wraps under the title on a computer */
+@media (min-width: 761px) {
+  header.top .headrow, header.top .headrow:not(:has(> .sbar)) { display: flex; flex-wrap: nowrap; align-items: center; gap: 16px; }
+  /* the title's part has one width on every page (a share of the row), so the right side starts at the same place on
+     every page; a long client name in the line over the title is cut with … (it is in full in the sidebar) */
+  header.top .headrow > .tbar { flex: 0 0 clamp(180px, 18%, 320px); min-width: 0; flex-wrap: nowrap; }
+  header.top .headrow > .tbar > .tbar-title { flex: 1 1 auto; min-width: 0; }
+  header.top .tbar-title h2 { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header.top .tbar-title .note { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header.top .tbar-title .note::before { margin-right: 6px; }
+  header.top .headrow > .topright { flex: 1 1 0; }
+}
+/* a phone or a narrow window: two lines of the same height on every page: the title with the page's own buttons beside
+   it, then the bell, the Tally sign and the firm */
+@media (max-width: 760px) {
+  :root { --slot-tally: 150px; --slot-firm: 132px; }
+  header.top .headrow, header.top .headrow:not(:has(> .sbar)) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t p" "g g"; align-items: center; gap: 8px 12px; }
+  header.top .headrow > .tbar { grid-area: t; min-width: 0; }
+  header.top .headrow > .topright { display: contents; }
+  header.top .topright > .tb-page { grid-area: p; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; }
+  header.top .topright > .tb-global { grid-area: g; justify-content: flex-end; }
+  header.top .tbar-title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header.top .tbar-title .note { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* "How this tab works" as its "?" (its words on hover and for a screen reader) */
+  header.top .tb-page .help-btn { width: 30px; height: 30px; padding: 0; overflow: hidden; white-space: nowrap; text-indent: -999px; position: relative; }
+  header.top .tb-page .help-btn::after { content: "?"; position: absolute; inset: 0; display: grid; place-items: center; text-indent: 0; font-weight: 600; }
+}
+
+/* ---------- a client's status tabs, at the top of the page (were a second row of the header) ---------- */
+#app > .react-host > .sbar-band, #app .sbar-band { position: sticky; top: var(--head-h, 0px); z-index: 3; margin: 0 -4px 12px; padding: 14px 4px 4px; background: var(--background); }
+.sbar-band > nav.sbar { display: flex; margin: 0; }
+@media (max-width: 600px) { .sbar-band { position: static; } }
+
+/* ---------- the sidebar: the date line at its foot on every page ---------- */
+@media (min-width: 601px) {
+  .side .side-ver { position: sticky; bottom: 0; z-index: 1; margin: 0 -10px -36px; padding: 10px 20px 32px; background: var(--surface); }
+}
+
+/* ---------- a page's shape while its data comes (PageSkeleton.jsx) ---------- */
+.pg-skel { opacity: 0; animation: pg-skel-in 1ms linear 300ms both; }
+.pg-skel.now { animation: none; opacity: 1; }
+@keyframes pg-skel-in { to { opacity: 1; } }
+.pg-skel .boot-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+.pg-skel .boot-card { height: 118px; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--surface); }
+.pg-skel .boot-rows { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 6px 18px; }
+.pg-skel .boot-row { display: flex; gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--border-subtle); }
+.pg-skel .boot-row:last-child { border-bottom: 0; }
+.pg-skel .boot-row .boot-bar { flex: 1; }
+.pg-skel .boot-row .boot-bar:first-child { flex: 0 0 18%; }
+.boot-bar { display: block; height: 12px; border-radius: 6px; background: var(--surface-muted); }
+@media (max-width: 900px) { .pg-skel .boot-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* a figure not known yet: a grey block the size of the figure, never "…" or a number that changes */
+.fig-wait { display: inline-block; width: 2.2em; height: .9em; border-radius: 6px; background: var(--surface-muted); vertical-align: -.05em; }
+.fig-wait.wide { width: 6em; }
+
+/* ---------- the sign-in page: the card at a fixed height from the top (it grows downwards only) ---------- */
+.signin { align-items: flex-start; padding-top: max(24px, 8vh); min-height: 0; }
+
+/* words for a screen reader only */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- FinCom opening after a sign-in (OpenLoader.jsx): the mark from 300 ms to 1.3 s, then the page's shape ---------- */
+.open-wait { position: relative; min-height: calc(100vh - 140px); }
+.open-loader { position: absolute; left: 0; right: 0; top: min(28vh, 220px); display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none;
+  opacity: 0; animation: open-loader 1300ms linear both; }
+.open-loader small { color: var(--text-muted); font-size: 13px; }
+.open-wait .boot-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff;
+  font: 700 24px/1 var(--font-display); box-shadow: 0 6px 18px rgb(79 70 229 / .25); }
+.pg-skel.open-late { animation-delay: 1300ms; }
+@keyframes open-loader { 0%, 23% { opacity: 0; } 31%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) { .open-wait .boot-mark { animation: open-pulse 1.4s ease-in-out infinite; } }
+@keyframes open-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.94); opacity: .72; } }
+@media (prefers-reduced-motion: reduce) { @keyframes open-loader { 0%, 23% { opacity: 0; } 24%, 99% { opacity: 1; } 100% { opacity: 0; } } }
+
+/* ---------- the bar along the foot of Purchase's review table: always its two lines (the counts, then the buttons) ----------
+   It sat on one line or two depending on the width of its words in the first frames, so it jumped up as the page opened */
+@media (min-width: 641px) { .bk-actionbar > .ab-right { flex-basis: 100%; } }

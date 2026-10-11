@@ -1,6 +1,6 @@
 // The sidebar: the open client and its areas, then all clients and help. Was renderSide() in src/js/02-the-layout.js.
 // S, CO, docType, ... are the business logic's globals (legacy.js); goClient/navHome/toggleSetup are its navigation.
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 // Arc UI (arc-ui, 09-Oct-2026): the sidebar in Arc's look (styles/arc-shell.css): a light surface, Lucide icons as
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
@@ -141,6 +141,17 @@ export default function Side() {
   const [folded, setFolded] = useState(readFold);
   const [more, setMore] = useState(false);
   useLayoutEffect(() => { const el = document.getElementById("side"); el.classList.toggle("hidden", hide); el.classList.toggle("side-folded", folded); });
+  // the menu swapped under a keyboard user (firm ↔ client): the focus goes to the item of the same name, or the first item
+  const mode = S.view === "home" || !(CO() || (S.coId && S.companies[S.coId])) ? "firm" : "client";
+  const focusName = useRef(null);
+  focusName.current = (() => { const a = document.activeElement; return a && a.closest && a.closest("#side") ? (a.dataset.side || "") : null; })();
+  useLayoutEffect(() => {
+    const was = focusName.current;
+    if (was == null || (document.activeElement && document.activeElement !== document.body)) return;
+    const side = document.getElementById("side");
+    const el = (was && side.querySelector('.side-link[data-side="' + CSS.escape(was) + '"]')) || side.querySelector(".side-link");
+    if (el) el.focus();
+  }, [mode]);
   // the sheet closes when the page changes (a link, Back, a key)
   const where = S.view + ":" + S.homeTab + ":" + S.tab + ":" + S.booksTab + ":" + S.coId;
   useEffect(() => { setMore(false); }, [where]);
@@ -151,8 +162,11 @@ export default function Side() {
   const home = S.view === "home" || !open;
   const groups = tree();
   const all = groups.flatMap(([, items]) => items), barOn = all.some((x) => x.bar && x.on);
+  // stability batch 1: the firm's menu and a client's are two different trees; each is drawn whole (keyed by which one),
+  // so going from one to the other replaces the menu in one go instead of sliding the shared items (Help, the separator)
+  // up or down. The date line is fixed at the sidebar's foot (steady.css)
   return (
-    <>
+    <div key={home ? "firm" : "client"} className="side-tree" style={{ display: "contents" }}>
       <div className="side-brand"><span className="side-mark" aria-hidden="true">F</span><span className="side-name">FinCom</span>
         <button type="button" className="side-fold" onClick={fold} aria-label={folded ? "Show the menu's words" : "Fold the menu to its icons"} title={folded ? "Show the menu's words" : "Fold the menu to its icons"}>
           {folded ? <PanelLeftOpen width={16} height={16} strokeWidth={1.75} aria-hidden="true" /> : <PanelLeftClose width={16} height={16} strokeWidth={1.75} aria-hidden="true" />}</button></div>
@@ -168,6 +182,6 @@ export default function Side() {
       {/* review of 01-Oct-2026: the date here was the build's, read as today's; now each says what it is */}
       {/* the build stamp moved to the About line in Settings (owner's spec K1, 04-Oct-2026) */}
       <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span></div>
-    </>
+    </div>
   );
 }

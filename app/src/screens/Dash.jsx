@@ -3,32 +3,35 @@
 // to one line when done) and the four counts, each opening its page, with the client's Tally link in one line once the
 // checklist no longer shows it. The ask box is Look up's own (and "/" opens it); TDS, the bank statement and sales are
 // under "More about this client", folded; what was posted lately is on Purchase → In Tally.
-import { useEffect, useState } from "react";
 import { OnbCard } from "../parts/Notes.jsx";
+import PageSkeleton from "../parts/PageSkeleton.jsx";
 import { TallyLinkLine } from "../parts/TallyLink.jsx";
 import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
 
-// a figure in Arc's metric-card look, with its own accent and icon (styles/arc-shell.css). A number counts up from 0 on
-// the page's first showing (styles/arc-motion.css draws the count over it; the figure's own text is the value throughout)
+// a figure in Arc's metric-card look, with its own accent and icon (styles/arc-shell.css). Stability batch 1: drawn as it
+// is from the first frame: no count-up from 0, no rising in (a figure that moves after it appears reads as "not sure yet")
 function Tile({ label, n, sub, go, tone, Icon }) {
-  const count = typeof n === "number" && n > 0 && n < 100000;
   return <button className="dtile" data-tone={tone} onClick={() => goClient(go)}><span>{label}</span>
-    <b data-count={count ? "" : undefined} style={count ? { "--to": n } : undefined}>{n}</b><small>{sub}</small>
+    <b>{n}</b><small>{sub}</small>
     {Icon && <i className="dtile-chip" aria-hidden="true"><Icon width={16} height={16} strokeWidth={2} /></i>}</button>;
 }
 
-// the dashboard's opening motion (the owner, 09-Oct-2026: the release board's motion, calm but visible) plays once a page
-// load: the first showing carries data-intro, and a redraw or a later visit does not replay it (styles/arc-motion.css,
-// only when the computer does not ask for reduced motion)
-let introShown = false;
+// the client's books in this browser: not known until their copy here has been read (openBooks, src/js/18). Until then
+// the checklist's "N of 6 done" would be wrong for a moment (1 of 6, then 2 of 6), so the page waits in its shape
+export function booksUnknown(co) {
+  const b = S.books;
+  return !b || b.cid !== co.id || (b.loading && !b.vouchers);
+}
 
 export default function Dash() {
-  const [intro] = useState(() => !introShown);
-  useEffect(() => { introShown = true; }, []);
   const co = CO(), v = Object.values(D().entries);
+  if (booksUnknown(co)) {
+    if (typeof openBooks === "function") setTimeout(() => { if (S.view === "company" && S.coId === co.id && (!S.books || S.books.cid !== co.id)) openBooks(co.id); }, 0);
+    return <PageSkeleton what={"the overview of " + co.name} />;
+  }
   const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // ready to post: the one count for Tally (postCounts, src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
@@ -43,7 +46,7 @@ export default function Dash() {
   if (bk) { try { tdsBooks = TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { tdsBooks = null; } }
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
-    <section className="dash" data-intro={intro ? "" : undefined}>
+    <section className="dash">
       <OnbCard co={co} />
       {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open) */}
       {!(ONB.steps(co).some((x) => !x.done) && !co.onbHide) && <TallyLinkLine co={co} />}
@@ -51,7 +54,10 @@ export default function Dash() {
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
         <Tile tone="amber" Icon={ReceiptText} label="To review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
         <Tile tone="indigo" Icon={Send} label="Ready to post" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need you" : "")} go="post" />
-        <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
+        {/* the bank's lines are counted from its statements, read when Bank is opened: until then a grey block while they
+            are being read, or a dash with where to see them, never "…" that changes later */}
+        <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc && !bank.loading ? bc.review : bank ? <i className="fig-wait" aria-label="being counted" /> : "\u2014"}
+          sub={bc && !bank.loading ? bc.ready + " ready to post" : bank ? <i className="fig-wait wide" aria-hidden="true" /> : "counted when Bank is opened"} go="bank" />
       </div>
       <details className="dash-more" data-dash-more="">
         <summary>More about this client</summary>

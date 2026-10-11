@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-boot="app">
 <head>
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
@@ -11,26 +11,109 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
+<!-- steady open (stability batch 1, 11-Oct-2026): before the first paint, which frame to draw. The sign-in page when nobody is
+     signed in and "without an account" was not chosen (signInNeeded, src/js/27), else the app; a client's frame when one was
+     open last time; and whether this build has opened here before (then no FinCom loader: the files are in the cache).
+     The loader and the page's shape are timed from the first frame on screen (data-boot-shown). The vite plugin (vite.config.js, fincom-boot) puts in the storage prefix and the build id, and allows this script by
+     its hash in the page's Content-Security-Policy. -->
+<script id="fincom-boot">(function(){var d=document.documentElement,P="__FINCOM_LS__",ls=function(k){try{return localStorage.getItem(P+k)}catch(e){return null}},ss=function(k){try{return sessionStorage.getItem(P+k)}catch(e){return null}},j=function(t){try{return JSON.parse(t||"null")}catch(e){return null}};var c=j(ls("cloud"))||{},s=j(ss("cloudsess"))||j(ls("cloudsess")),h=String(location.hash||"").toLowerCase();var signin=!(s&&s.access_token)&&(c.gate!==false||h==="#register"||h==="#signin");if(/access_token=/.test(h)&&/type=(invite|recovery|signup|magiclink)/.test(h))signin=true;d.setAttribute("data-boot",signin?"signin":"app");try{requestAnimationFrame(function(){d.setAttribute("data-boot-shown","")})}catch(e){d.setAttribute("data-boot-shown","")}if(!signin&&ls("last")&&!/^#\/(today|clients|compliance|inbox|tally|settings|help|people|plan|rules)\b/.test(h))d.setAttribute("data-boot-co","");try{if(localStorage.getItem("fincom:opened")==="__FINCOM_BUILD__")d.setAttribute("data-boot-quick","")}catch(e){}})();</script>
+<style id="fincom-boot-css">
+/* The frame drawn from this page before the program has loaded (stability batch 1): the sidebar with the FinCom mark, the
+   top bar with its fixed places (bell, Tally sign, firm), and the page's shape. The program draws over it in place.
+   Nothing here moves when the real page arrives: the same classes, the same sizes (app/src/styles/steady.css). */
+.boot-bar{display:block;height:12px;border-radius:6px;background:var(--surface-muted,#EEF1F5)}
+.boot-side{display:contents}
+.boot-side .boot-co{display:none;height:58px;margin:4px 0 10px;border:1px solid var(--border,#E2E8F0);border-radius:12px;background:var(--surface,#fff)}
+[data-boot-co] .boot-side .boot-co{display:block}
+.boot-side .boot-item{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 10px}
+.boot-side .boot-item::before{content:"";flex:none;width:26px;height:26px;border-radius:7px;background:var(--surface-muted,#EEF1F5)}
+.boot-side .boot-item .boot-bar{flex:0 1 auto;width:var(--w,96px);height:10px}
+.boot-side .boot-lbl{padding:14px 10px 6px}
+.boot-side .boot-lbl .boot-bar{width:56px;height:9px}
+.boot-side .boot-co-only{display:none}
+[data-boot-co] .boot-side .boot-co-only{display:block}
+[data-boot-co] .boot-side .boot-firm-only{display:none}
+@media (max-width:600px){.boot-side .boot-lbl,.boot-side .boot-co,.boot-side .boot-firm-only,.boot-side .boot-co-only{display:none!important}
+  .boot-side .boot-item{flex:1 1 0;flex-direction:column;justify-content:center;gap:4px;min-height:50px;padding:0}
+  .boot-side .boot-item:nth-of-type(n+6){display:none}.boot-side .boot-item .boot-bar{width:36px;height:8px}}
+.boot-head .tbar-title h2 .boot-bar{display:inline-block;width:150px;height:22px;vertical-align:-3px;border-radius:7px}
+.boot-head .tbar-title .note .boot-bar{display:inline-block;width:120px;height:10px}
+.boot-pill{display:block;height:32px;border-radius:999px;background:var(--surface-muted,#EEF1F5)}
+.boot-head .tb-firm .boot-pill{border-radius:8px}
+/* the page: the FinCom mark while the program loads (only when it takes more than 300 ms, for at most a second, and never
+   when this build has opened here before), then the page's shape */
+.boot-page{position:relative;min-height:calc(100vh - 140px)}
+.boot-loader{position:absolute;left:0;right:0;top:min(28vh,220px);display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;pointer-events:none}
+[data-boot-shown] .boot-loader{animation:boot-loader 1300ms linear both}
+.boot-mark{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#4F46E5,#7C3AED);color:#fff;
+  font:700 24px/1 "Geist","Geist Variable","Inter",system-ui,sans-serif;box-shadow:0 6px 18px rgb(79 70 229 / .25)}
+.boot-loader small{color:var(--text-muted,#64748B);font-size:13px}
+.boot-skel{opacity:0}
+[data-boot-shown] .boot-skel{animation:boot-show 1ms linear 1300ms both}
+[data-boot-quick] .boot-loader{display:none}
+[data-boot-shown][data-boot-quick] .boot-skel{animation-delay:300ms}
+@keyframes boot-loader{0%,23%{opacity:0}31%,88%{opacity:1}100%{opacity:0}}
+@keyframes boot-show{to{opacity:1}}
+@media (prefers-reduced-motion:no-preference){.boot-mark{animation:boot-pulse 1.4s ease-in-out infinite}}
+@keyframes boot-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.94);opacity:.72}}
+@media (prefers-reduced-motion:reduce){@keyframes boot-loader{0%,23%{opacity:0}24%,99%{opacity:1}100%{opacity:0}}}
+.boot-skel .boot-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.boot-skel .boot-card{height:118px;border:1px solid var(--border,#E2E8F0);border-radius:16px;background:var(--surface,#fff)}
+.boot-skel .boot-rows{border:1px solid var(--border,#E2E8F0);border-radius:12px;background:var(--surface,#fff);padding:6px 18px}
+.boot-skel .boot-row{display:flex;gap:18px;padding:13px 0;border-bottom:1px solid var(--border-subtle,#EEF1F5)}
+.boot-skel .boot-row:last-child{border-bottom:0}
+.boot-skel .boot-row .boot-bar{flex:1}
+.boot-skel .boot-row .boot-bar:first-child{flex:0 0 18%}
+@media (max-width:900px){.boot-skel .boot-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* the sign-in page: no sidebar and no top bar from the first frame, the card where the sign-in card will be */
+html[data-boot="signin"] #side,html[data-boot="signin"] header.top{display:none!important}
+html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
+[data-boot="signin"] .boot-page{display:none}
+.boot-signin{display:none}
+[data-boot="signin"] .boot-signin{display:flex}
+.boot-signin .signin-box h1{margin:0}
+.boot-signin .boot-bar{margin:14px 0 0}
+.boot-signin .boot-field{height:38px;margin:6px 0 0;border:1px solid var(--border,#E2E8F0);border-radius:7px}
+</style>
 <script src="./guard.js"></script>
 </head>
 <body>
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
 <div class="shell">
-<nav class="side" id="side" aria-label="Main"></nav>
+<nav class="side" id="side" aria-label="Main">
+<div class="boot-side" data-boot-part="" aria-hidden="true">
+<div class="side-brand"><span class="side-mark">F</span><span class="side-name">FinCom</span></div>
+<div class="boot-co"></div>
+<div class="boot-lbl boot-firm-only"><i class="boot-bar"></i></div>
+<div class="boot-item"><i class="boot-bar"></i></div>
+<div class="boot-lbl boot-co-only"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:70px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:110px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:84px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:100px"><i class="boot-bar"></i></div>
+<div class="boot-lbl boot-co-only"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:76px"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:64px"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:118px"><i class="boot-bar"></i></div>
+</div>
+</nav>
 <div class="mainwrap">
 <header class="top">
   <div class="wrap">
     <div class="toprow">
-      <div class="brand">
-        <h1>FinCom</h1>
-        <p id="firmLine"></p>
-      </div>
-      <div class="cobar" id="cobar"></div>
+      <div class="cobar" id="cobar"><div class="headrow boot-head" data-boot-part="" aria-hidden="true">
+        <div class="tbar"><div class="tbar-title"><h2>&#8203;<i class="boot-bar"></i></h2><span class="note">&#8203;<i class="boot-bar"></i></span></div></div>
+        <div class="topright"><span class="tb-page"></span><span class="tb-global"><span class="tb-slot tb-bell"><i class="boot-pill"></i></span><span class="tb-slot tb-tally"><i class="boot-pill"></i></span><span class="tb-slot tb-firm"><i class="boot-pill"></i></span></span></div>
+      </div></div>
     </div>
     <nav class="tabs" role="tablist" id="tabs"></nav>
   </div>
 </header>
-<main class="wrap" id="app"><p class="note">Loading…</p></main>
+<main class="wrap" id="app"><div class="boot-page" data-boot-part="">
+  <div class="boot-loader" role="status" aria-label="Opening FinCom"><span class="boot-mark" aria-hidden="true">F</span><small aria-hidden="true">Opening FinCom</small></div>
+  <div class="boot-skel" aria-hidden="true"><div class="boot-cards"><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div></div>
+    <div class="boot-rows"><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div></div></div>
+</div><div class="signin boot-signin" data-boot-part="" aria-hidden="true"><div class="signin-box"><h1>FinCom</h1><i class="boot-bar" style="width:62%"></i><i class="boot-bar" style="width:34%"></i><i class="boot-bar" style="width:88%"></i><i class="boot-bar" style="width:20%;margin-top:18px"></i><div class="boot-field"></div><i class="boot-bar" style="width:24%"></i><div class="boot-field"></div></div></div></main>
 <script src="./oldcheck.js"></script>
 </div>
 </div>

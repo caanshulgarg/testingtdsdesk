@@ -30,7 +30,7 @@ const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 function Title({ title, sub, crumb, children }) {
   return (
     <div className="tbar" data-crumb={crumb}>
-      <div className="tbar-title"><h2>{title}</h2><span className="note">{sub}</span></div>
+      <div className="tbar-title"><h2>{title}</h2><span className="note" title={sub || undefined}>{sub}</span></div>
       {children}
     </div>
   );
@@ -92,10 +92,26 @@ function ClientHeader() {
       </div>
     </Title>
   );
-  if (["dash", "clientInbox", "txn", "books"].includes(S.tab)) return head;
-  if (setup) return head;   // its sections are listed on the left of the page (screens/Settings.jsx)
+  return head;
+}
+
+// whether this client page has the status tabs (To review · Post to Tally · In Tally …)
+export function statusTabsShown() {
+  const co = S.view === "company" ? CO() : null;
+  if (!co || S.loadingCo) return false;
+  const setup = isSetupTab(S.tab), t = docType();
+  if (["dash", "clientInbox", "txn", "books"].includes(S.tab)) return false;
+  if (setup) return false;   // its sections are listed on the left of the page (screens/Settings.jsx)
   // sales and the bank page have their own tabs
-  if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
+  if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return false;
+  return true;
+}
+
+// a client's status tabs: were a second row of the header, which made the header taller on these pages only (the page
+// jumped 53 px between Purchase and TDS). Now the first thing on the page, kept in view under the header (steady.css)
+export function StatusTabs() {
+  if (!statusTabsShown()) return null;
+  const t = docType();
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
   // purchase bills: one row of tabs (review of 02-Oct-2026: a second row under it repeated "To review"): the three steps,
   // then the bills held as duplicates, deleted, or needing no entry
@@ -107,14 +123,14 @@ function ClientHeader() {
   // each tab's words first, as the tests read them; the chosen tab's pill is drawn in styles/arc-look.css. A tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
   // (activationMode "manual"), so going along the tabs never opens a page on the way
   const cur = onSide ? S.filter : now || "";
-  return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
+  return <div className="sbar-band"><nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
     <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
       <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
         {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsPrimitive.Trigger>)}
     {side.map(([id, label]) => <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsPrimitive.Trigger>)}
     </TabsPrimitive.List></Tabs>
-  </nav></>;
+  </nav></div>;
 }
 
 // Saving shows only when it matters (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click
@@ -175,13 +191,22 @@ function TallySign() {
 function TopRight() {
   const bal = accountBalance(), plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
   const inCo = S.view === "company" && CO();
+  // stability batch 1: two parts. The page's own buttons (left), which come and go with the page; then the bell, the
+  // Tally sign and the firm, each in a place of its own width (steady.css), at the same spot on every page
   return (
     <div className="topright">
+      {/* keyed by the page: a page's own buttons are its own, drawn new with it (not slid along when their width changes) */}
+      <span className="tb-page" key={S.view + ":" + (inCo ? S.tab + ":" + (S.tab === "books" ? booksTab() : "") : S.homeTab)}>
       {inCo && <HelpButton page />}
       <ReviewLink />
       <SaveState />
-      <Bell />
-      <TallySign />
+      {/* the page's one primary action, at the right of the page's own buttons, in the same place on every page (spec I, K2) */}
+      {inCo && !isSetupTab(S.tab) && <MainAction />}
+      </span>
+      <span className="tb-global">
+      <span className="tb-slot tb-bell"><Bell /></span>
+      <span className="tb-slot tb-tally"><TallySign /></span>
+      <span className="tb-slot tb-firm">
       <Menu.Root open={!!S.firmMenu && !signInNeeded()} onOpenChange={(o) => { if (o !== !!S.firmMenu) doAct(o ? "firmMenu" : "firmMenuClose"); }} modal={false}>
         <Menu.Trigger asChild><button className="firmbtn" title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
           <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
@@ -189,8 +214,8 @@ function TopRight() {
         </button></Menu.Trigger>
         <FirmMenu />
       </Menu.Root>
-      {/* the page's one primary action, always at the far right, in the same place on every page (spec I, K2) */}
-      {inCo && !isSetupTab(S.tab) && <MainAction />}
+      </span>
+      </span>
     </div>
   );
 }
@@ -239,12 +264,19 @@ function FirmMenu() {
   </Menu.Content></Menu.Portal>;
 }
 
+// the header's height as --head-h, for what stays in view under it (the status tabs)
+let headObs = null;
+function watchHead(top) {
+  if (headObs || !top || typeof ResizeObserver !== "function") return;
+  headObs = new ResizeObserver(() => document.documentElement.style.setProperty("--head-h", Math.round(top.getBoundingClientRect().height) + "px"));
+  headObs.observe(top);
+}
+
 export default function TopBar() {
   const hide = signInNeeded();
-  useLayoutEffect(() => { const top = document.querySelector("header.top"); if (top) top.style.display = hide ? "none" : ""; });
+  useLayoutEffect(() => { const top = document.querySelector("header.top"); if (top) { top.style.display = hide ? "none" : ""; watchHead(top); } });
   const inCo = S.view === "company" && CO();
   return <>
-    {createPortal(S.firm.firmName || "", document.getElementById("firmLine"))}
     {createPortal(
       <div className="headrow">
         {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
