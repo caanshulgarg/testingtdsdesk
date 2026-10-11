@@ -171,6 +171,21 @@ try:
         an = pg.evaluate("() => { const m = document.querySelector('.boot-mark'); return m ? getComputedStyle(m).animationName : 'gone'; }")
         ok(an in ("none", "gone"), "reduced motion: the FinCom mark does not pulse (%s)" % an); HOLD[0] = 0; pg.wait_for_timeout(2500); ctx.close()
 
+        print("11. what a first open sends, and no error or message during an open (stability batch 5: the guard)")
+        import gzip, glob
+        gz = lambda f: len(gzip.compress(open(f, "rb").read(), 6)) // 1024
+        main_js = [f for f in glob.glob(os.path.join(SITE, "assets", "index-*.js"))]
+        leg, rj = gz(os.path.join(SITE, "legacy.js")), sum(gz(f) for f in main_js)
+        ok(leg <= 600, "legacy.js within its budget: %d KB gzip <= 600 (was 782 before minifying)" % leg)
+        ok(rj <= 260, "the React app's first file within its budget: %d KB gzip <= 260 (was 453 before the screens were split)" % rj)
+        ctx, pg = setup(br); cid = seed(pg)
+        cons = []; pg.on("console", lambda m: cons.append(m.text[:120]) if m.type == "error" else None)
+        pg.reload(); pg.wait_for_timeout(3000)
+        toasts = pg.evaluate("() => document.getElementById('toast').classList.contains('hidden') ? '' : document.getElementById('toast').innerText")
+        ok(not cons, "no console error while FinCom opens without an account (was 1: signup_info) %s" % cons[:2])
+        ok(not toasts, "no message pops up while FinCom opens (%s)" % toasts)
+        ctx.close()
+
         print("5-6. page changes: no shift, the top bar's places and the header the same everywhere")
         ctx, pg = setup(br); cid = seed(pg)
         E, W = pg.evaluate, pg.wait_for_timeout

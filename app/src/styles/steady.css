@@ -140,3 +140,5 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 /* ---------- the sidebar's foot: the quiet line (where the work is kept, last sync, or a background event) and the date ---------- */
 .side .side-ver { display: flex; flex-direction: column; gap: 2px; }
 .side .side-quiet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2.8em; line-height: 1.4; font-size: 11.5px; color: var(--text-muted); }
+.side .side-data { font-size: inherit; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.side .side-data:hover { color: var(--foreground); }
