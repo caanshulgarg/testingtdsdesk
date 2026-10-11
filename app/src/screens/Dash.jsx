@@ -31,7 +31,7 @@ export default function Dash() {
   const co = CO(), v = Object.values(D().entries);
   if (booksUnknown(co)) {
     if (typeof openBooks === "function") setTimeout(() => { if (S.view === "company" && S.coId === co.id && (!S.books || S.books.cid !== co.id)) openBooks(co.id); }, 0);
-    return <PageSkeleton what={"the overview of " + co.name} />;
+    return <PageSkeleton what={co.name + "’s work"} />;
   }
   const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // ready to post: the one count for Tally (postCounts, src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;

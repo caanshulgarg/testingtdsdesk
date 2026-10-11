@@ -133,7 +133,7 @@ try:
             ok(on[-1] - on[0] <= 1150, "the loader is on screen for at most about a second (%d ms)" % (on[-1] - on[0]))
             after = [f for f in m["frames"] if f["t"] > on[-1] + 50 and not f["app"]]
             ok(any(f["skel"] > 0.5 for f in after), "after the loader, the page's shape until the program has drawn")
-        ok(not m["words"], "no 'Loading…' words in the page during the open (%s)" % m["words"])
+        ok(len(m["words"]) <= 1, "one line of 'Loading…' words at most during the open, with the page's shape (%s)" % m["words"])
         k = [x for x in m["kinds"] if x != "blank"]
         react_waits = [x for x in k[k.index("page-shape") if "page-shape" in k else len(k):] if x in ("page-shape", "lt-loading", "loader")]
         ok("lt-loading" not in k and len(set(react_waits)) <= 1, "one loading state: the frame's shape, at most one wait after the program (%s)" % k)

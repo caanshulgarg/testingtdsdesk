@@ -106,3 +106,7 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
    It sat on one line or two depending on the width of its words in the first frames, so it jumped up as the page opened */
 /* (from 901 px the bar is one row that does not wrap: arc-clean.css, clean-up batch 3) */
 @media (min-width: 641px) and (max-width: 900px) { .bk-actionbar > .ab-right { flex-basis: 100%; } }
+/* the page shape's one line of words (K7), in the place of the first card row's top; the bars do not pulse */
+.pg-skel .pg-skel-t { margin: 18px 0 0; }
+.pg-skel .boot-cards { margin-top: 10px; }
+.pg-skel .skel { animation: none; flex: 1; height: 12px; }
