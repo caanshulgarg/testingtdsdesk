@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,7 +68,7 @@ func TestTDS243LedgerRowsReal(t *testing.T) {
 	for _, r := range rows {
 		by[r.name] = r
 	}
-	if len(by) != 7 {
+	if len(by) != 10 {
 		t.Fatalf("%d ledgers: %v", len(by), by)
 	}
 	if by["FC TDS 194C Keys"].nature != "FC Contract 194C" || by["FC TDS 194J XML"].nature != "FC Prof Fees 194J" {
@@ -81,6 +82,24 @@ func TestTDS243LedgerRowsReal(t *testing.T) {
 		if r := by[n]; r.special != "" || r.ldc != "" || r.nature != "" || r.dtype == "" {
 			t.Fatalf("%s: %+v", n, r)
 		}
+	}
+	if by["FC Contract Exp"].nature != "FC Contract 194C" || by["HDFC Bank"].nature != "" {
+		t.Fatalf("the expense and the bank: %+v %+v", by["FC Contract Exp"], by["HDFC Bank"])
+	}
+	// the ledger list as bridge 2.4.3 sends these ledgers and the natures (tests/run_e2e_tdsgst.py's 2.4.3 case reads it)
+	led := []any{}
+	for _, n := range []string{"FC TDS 194C Keys", "FC TDS 194J XML", "FC Party Company", "FC Party Individual", "FC Party HUF", "FC Party Firm", "FC LDC Party", "FC Contract Exp", "FC Prof Exp", "HDFC Bank"} {
+		r := by[n]
+		led = append(led, append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...))
+	}
+	nat, _ := natRowsOf(gz242(t, filepath.Join("testdata", "tdsfields243", "7.1", "natures.xml.gz")))
+	golden := filepath.Join("testdata", "tdsfields243", "7.1", "ledger-list-243.json")
+	if g := jsonText(M{"ledgers": led, "natures": nat}); os.Getenv("TDS243_GOLDEN") != "" {
+		if err := os.WriteFile(golden, []byte(g), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	} else if readText(golden) != g {
+		t.Errorf("%s: not what the bridge sends now (TDS243_GOLDEN=1 rewrites it)", golden)
 	}
 	// as the ledger_list / ledger_changes columns
 	c := ledTDSCols(l.nature, l.special, l.ldc)
