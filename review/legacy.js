@@ -11658,7 +11658,7 @@ function suggestRow(row, ctx){
   const d = row.dec;
   const dir = row.debit ? "out" : "in";
   const none = why => ({ledger: "", level: "none", why, label: "", source: ""});
-  if (!ctx.hasList) return none("Import the Tally ledger list to get suggestions.");
+  if (!ctx.hasList) return none("Bring in the Tally ledger list to get suggestions.");
   const rule = findRule(ctx, d, dir);
   if (rule){
     const l = exactLedger(rule.ledger);
@@ -12856,7 +12856,7 @@ function colPopHtml(){
   } else if (!bank && p.k === "tds"){
     title = "TDS"; body = radio("tds", f.tds, [["", "All bills"], ["yes", "TDS booked"], ["no", "No TDS"]]);
   } else if (!bank && p.k === "look"){
-    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Need a look"], ["no", "Ready to approve"]]);
+    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Needs you"], ["no", "Ready to approve"]]);
   }
   return '<div class="colpop" id="colpop" role="dialog" aria-label="Filter ' + esc(title) + '"><div class="cp-head"><b>Filter: ' + esc(title) + '</b><button class="icon" data-cpclose aria-label="Close">\u2715</button></div>' +
     '<div class="cp-body">' + body + "</div>" +
@@ -12948,7 +12948,7 @@ function colChips(t){
     if (f.min || f.max) chips.push(["val", "Value " + rng(f.min, f.max)]);
     if (f.natures && f.natures.length) chips.push(["nature", "Type: " + f.natures.map(n => lab[n] || n).join(", ")]);
     if (f.tds) chips.push(["tds", f.tds === "yes" ? "TDS booked" : "No TDS"]);
-    if (f.look) chips.push(["look", f.look === "yes" ? "Need a look" : "Ready to approve"]);
+    if (f.look) chips.push(["look", f.look === "yes" ? "Needs you" : "Ready to approve"]);
   }
   return chips;
 }
@@ -13116,7 +13116,7 @@ function acDraw(input){
   if (!AC.box) return;
   if (!input || !AC.items.length){
     AC.box.style.display = "block";
-    AC.box.innerHTML = '<div class="acempty">' + (knownLedgers().size ? "No Tally ledger matches \u201c" + esc(AC.q) + "\u201d" : "Import the Tally ledger list first (Bank \u2192 Settings).") + "</div>";
+    AC.box.innerHTML = '<div class="acempty">' + (knownLedgers().size ? "No Tally ledger matches \u201c" + esc(AC.q) + "\u201d" : "Bring in the Tally ledger list first (Bank \u2192 Settings).") + "</div>";
     if (!input){ acClose(); return; }
   } else {
     AC.box.innerHTML = AC.items.map((it, i) => '<div class="aci' + (i === AC.idx ? " on" : "") + '" data-aci="' + i + '" role="option">' +
@@ -14152,7 +14152,7 @@ const MultiUp = {
     }
     S.coId = keepCo; S.view = keepView; m.busy = false; render();
     const ok = m.rows.filter(r => r.ok).length;
-    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
+    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under From Tally.");
   }
 
 };
@@ -21091,7 +21091,7 @@ const SUP = {
   // the screen, the client and what went wrong lately, taken when Help is opened from somewhere
   context(){
     const co = typeof CO === "function" && S.view === "company" ? CO() : null;
-    const where = S.view === "company" ? [S.tab === "books" ? "TDS & GST → " + (typeof booksTab === "function" ? booksTab() : "") + (typeof booksTab === "function" && booksTab() === "gst" ? " → " + (S.gstPart || "") : typeof booksTab === "function" && booksTab() === "tds" ? " → " + (S.tdsView || "") : "") : S.tab].filter(Boolean).join("") : "home → " + (S.homeTab || "clients");
+    const where = S.view === "company" ? [S.tab === "books" ? "books → " + (typeof booksTab === "function" ? booksTab() : "") + (typeof booksTab === "function" && booksTab() === "gst" ? " → " + (S.gstPart || "") : typeof booksTab === "function" && booksTab() === "tds" ? " → " + (S.tdsView || "") : "") : S.tab].filter(Boolean).join("") : "home → " + (S.homeTab || "clients");
     return {screen: where, view: S.view || "", tab: S.tab || "", client: co ? co.name : "", gstin: co ? (co.gstin || "") : "", build: APP_VERSION,
       browser: (typeof navigator !== "undefined" ? navigator.userAgent : "").replace(/\s*\(KHTML.*$/, "").slice(0, 160), at: new Date().toISOString(), recent: this.recent.slice(-6)};
   },
@@ -21175,7 +21175,7 @@ const SUP = {
 const GUIDE = {
   A: {
     "start": {area: "Getting started", t: "Getting started with FinCom", what: "FinCom reads purchase bills, bank statements and sales, checks them, and posts them to Tally; it also works out TDS and GST returns from the Tally books.",
-      steps: ["Add a client under All clients, with its GSTIN and PAN.", "Connect Tally on this computer (Tally chip at the top) so entries can be posted and the day book read.", "Bring in documents: Purchase, Bank and Sales on the left.", "Review what was read, then post to Tally.", "For returns, open TDS & GST and read the day book from Tally."],
+      steps: ["Add a client under All clients, with its GSTIN and PAN.", "Connect Tally on this computer (Tally chip at the top) so entries can be posted and the day book read.", "Bring in documents: Purchase, Bank and Sales on the left.", "Review what was read, then post to Tally.", "For returns, bring in the books from Tally (From Tally), then open TDS or GST."],
       watch: ["Work is saved in this browser unless you sign in to the firm account, which keeps it in the cloud for everyone in the firm."]},
     "bills": {area: "Documents", t: "Purchase bills", what: "Bills are read from PDFs and photos, checked against the supplier's ledger and GST, and posted to Tally as purchase or journal vouchers with TDS where it applies.",
       steps: ["Drop the bills, or send them to the client's inbox address.", "Check each bill: supplier, number, date, ledger, GST, TDS section.", "Approve, then post the approved bills to Tally from the Post step."],
@@ -21191,7 +21191,7 @@ const GUIDE = {
       steps: ["On the computer with TallyPrime, open FinCom's Tally page and press Download FinCom Bridge.", "Run the downloaded FinComBridge-Setup file. If Windows says “Windows protected your PC”, press More info → Run anyway. It installs just for you, without an administrator; it replaces any older bridge, keeps the pairing, and becomes the main bridge.", "The FinCom icon near the clock shows the bridge's status. Right-click it for Open FinCom, Test connection and Show log.", "In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post one entry first and check it in Tally."],
       watch: ["Tally must be open with the right company when posting.", "If FinCom says the bridge is not answering, check the FinCom Bridge icon near the clock (right-click → Test connection).", "Everything sent to Tally is listed under Tally: everything sent."]},
     "gstapi": {area: "GST", t: "Fetching from the GST portal (GST API)", what: "With the firm account, 2B can be fetched straight from the GST portal after an OTP sent to the taxpayer.",
-      steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "TDS & GST → GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
+      steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
       watch: ["The portal session lasts a few hours and is never saved.", "Until the API is available, bring in the 2B JSON downloaded from the portal; the reconciliation is the same."]},
     "gstset": {area: "GST", t: "GST settings and GSTINs", what: "Client setup → GST keeps the client's GSTINs and each GSTIN's settings: filing type, credit basis, opening credit, rule 37, e-invoicing, portal username.",
       steps: ["Add each GSTIN; its PAN must be the client's PAN.", "Choose the GSTIN in the list to see its settings.", "When a setting changes, choose whether it is for this GSTIN only, for all, or for the ones you tick."]},
@@ -21205,7 +21205,7 @@ const GUIDE = {
       steps: ["Keep TDS on payments to non-residents on a TDS ledger of its own whose name says so (for example “TDS on Non Resident Payments”); FinCom reads such a ledger as section 195. Before filing 26Q, check that none of these deductions is in it.", "Prepare 27Q, and Form 15CA/15CB where they apply, in the return preparation utility or your usual software."],
       watch: ["The Audit screen flags parties that look foreign (Inc, LLC, GmbH, no GSTIN) as possibly section 195 or the equalisation levy, so they are not missed.", "Rates for non-residents depend on the Act and the tax treaty; FinCom does not work them out."]},
     "tcs": {area: "TDS", t: "TCS (tax collected at source)", what: "FinCom does not prepare 27EQ (the TCS return) yet. It recognises TCS ledgers in the books and shows them in MIS and the compliance calendar.",
-      steps: ["Under TDS & GST → Tally ledgers → TDS and TCS, check that each TCS ledger is marked TCS payable or TCS receivable, with its section.", "File 27EQ in the return preparation utility or your usual software.", "TCS deducted by an e-commerce operator on your sales (GST, section 52) is shown in GSTR-1 table 14 and claimed from the cash ledger."],
+      steps: ["Under From Tally → Tally ledgers → TDS and TCS, check that each TCS ledger is marked TCS payable or TCS receivable, with its section.", "File 27EQ in the return preparation utility or your usual software.", "TCS deducted by an e-commerce operator on your sales (GST, section 52) is shown in GSTR-1 table 14 and claimed from the cash ledger."],
       watch: ["MIS lists TDS and TCS ledgers together, and the compliance calendar shows “TDS and TCS deposit” by the 7th.", "Interest on late TDS or TCS is not allowed as an expense; MIS points it out."]},
     "reports": {area: "Reports", t: "Reports", what: "Every report for the client in one place, in six areas: how the business is doing, customers and suppliers, bank and cash, GST, TDS, and audit and accounts.",
       steps: ["Open Reports on the left and choose the year.", "Click a figure or a report name to open it (each opens its own screen: MIS, GST, TDS, Audit, Look up or Letters).", "Type in “Find a report” (ageing, 3B, cash, ratios…) to go straight to one.", "Refresh books (the button at the top) reads the latest from Tally first."],
@@ -22260,7 +22260,7 @@ const LK = {
     } else if (!have && this.COPY.includes(x.kind)){
       x.res = this.copyNone(x, "FinCom\u2019s copy of these books is not in the cloud yet; it comes with the next update from Tally");
     } else if (!have){
-      toast("Read the books first (Books \u2192 From Tally), or wait for FinCom\u2019s copy to come in."); return;
+      toast("Bring in the books from Tally first (From Tally), or wait for FinCom\u2019s copy to come in."); return;
     } else {
       x.res = x.kind === "ledger" ? this.ledgerBooks(x.led, x.from, x.to) : x.kind === "group" ? this.group(x.grp, x.from, x.to) : x.kind === "tb" ? this.tbBooks(x.asOn)
         : x.kind === "monthly" ? this.monthly(x.led, x.grp, x.from, x.to) : x.kind === "bills" ? this.bills(x.led, x.asOn) : this.find(x.q, x.from, x.to, x.typ);
@@ -22986,8 +22986,8 @@ const ONB = {
     const tallyBank = b && typeof FC === "object" ? Object.keys(Object.assign({}, b.under, b.ledInfo)).filter(l => ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"].some(g => FC.inGroup(l, g))).length : 0;
     return [
       {id: "link", done: !!linked, t: "Link to Tally", d: "Choose this client's company in Tally, so its books come in and its entries go to the right company.", btn: ["Link to Tally", {act: "coTally"}]},
-      {id: "books", done: dayBook, t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
-      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the balances", {go: "books:import", focus: "opening"}]},
+      {id: "books", done: dayBook, t: "Bring in the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Bring in from Tally", {go: "books:import"}]},
+      {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Bring in the balances", {go: "books:import", focus: "opening"}]},
       {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},
       {id: "bank", done: !!(co.bankAccounts || []).some(a => a.ledger), t: "Add a bank account", d: (tallyBank ? tallyBank + " bank account" + (tallyBank === 1 ? "" : "s") + " in Tally. " : "") + "Add the one to bring statements for, with its Tally ledger.", btn: ["Bank", {go: "bank"}]},
       {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", {go: "bills"}]}
@@ -24357,7 +24357,7 @@ const TLight = {
         else if (ds.tally === "closed") x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
         else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
         else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
-        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
+        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". From Tally \u2192 Update now."};
         else x = {level: "ok", short: "updated " + when(at), say: c.company + " is up to date as of " + when(at) + " (" + d.name + ")."};
         if (beat.updating && x.level !== "bad") x.short = "updating now";
       }
@@ -25640,7 +25640,7 @@ async function aihNote(how, id){
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]  (#/people, #/plan: Settings' sections)
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -25752,7 +25752,10 @@ const Route = {
         const what = p[2] || "dash", arg = p[3] || "";
         S.step = null; S.drawerOpen = false; S.colPop = null;
         if (what === "upload"){ S.tab = S.tab === "dash" ? "invoices" : S.tab; S.step = "collect"; }
-        else if (what === "dash") S.tab = "dash";
+        // clean-up batch 1 (11-Oct-2026): Overview (was Dashboard) and From Tally have their names as addresses too;
+        // the addresses written stay …/dash and …/books/import, so every old link opens the same page
+        else if (what === "dash" || what === "overview") S.tab = "dash";
+        else if (what === "from-tally"){ S.tab = "books"; S.booksTab = arg === "ledgers" ? "ledgers" : "import"; }
         else if (what === "inbox") S.tab = "clientInbox";
         else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
         else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
@@ -25768,6 +25771,8 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
+      // People and Plan and credit are sections of Settings (clean-up batch 1): their own addresses open them there
+      else if (p[0] === "people" || p[0] === "plan"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[0] === "people" ? "account" : "plan"; }
       else if (["clients", "today", "compliance", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;
@@ -30296,7 +30301,7 @@ const Rec = {
         : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
         : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
         : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
-        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: From Tally \u2192 Tally ledgers"
         : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
         : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
     });
@@ -31172,7 +31177,7 @@ const Smart = {
       if (w === "upload") return "Upload";
       if (w === "books") return {reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", tds: "TDS", gst: "GST", import: "From Tally"}[p[3]] || "the books";
       if (w === "setup") return "Client setup";
-      return {dash: "Dashboard", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
+      return {dash: "Overview", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
     }
     return {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", help: "Help", settings: "Settings"}[p[0]] || "the last page";
   },
