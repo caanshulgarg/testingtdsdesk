@@ -5,6 +5,7 @@
 // A screen whose file is here draws at once, in the same drawing as before (no wait, no second frame); one still on its
 // way shows the page's shape (Main.jsx: <Suspense fallback={<PageSkeleton/>}>) and the page is drawn again when it comes.
 import { createElement } from "react";
+import { FinComNav } from "../nav.js";
 
 const loaders = [];
 export function lazyModule(load) {
@@ -21,7 +22,9 @@ export function lazyModule(load) {
       // the file could not be fetched (no internet, or FinCom was updated meanwhile): say so, with a way out
       if (failed) return createElement("p", { className: "note", "data-lazy-failed": "" }, "This page could not be loaded. ",
         createElement("button", { className: "linkbtn", onClick: () => { failed = null; location.reload(); } }, "Reload FinCom"));
-      throw get();
+      // the thin bar under the top bar while it comes (stability batch 3)
+      const p = get(); if (!p.tracked) { p.tracked = true; FinComNav.track(p); }
+      throw p;
     }
     Lazy.displayName = "Lazy(" + name + ")";
     return Lazy;

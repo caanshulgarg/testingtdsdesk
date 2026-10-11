@@ -146,7 +146,7 @@ async function openBooks(cid){
     const pull = BookSync.pull(cid).catch(() => {});
     const late = await Promise.race([pull.then(() => false), new Promise(ok => setTimeout(() => ok(true), 6000))]);
     if (!S.books || S.books.cid !== cid) return;
-    if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
+    if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
   S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
   // names kept with line breaks or entities (a copy from before they were cleaned) cleaned once (TallyRead.cleanNames)

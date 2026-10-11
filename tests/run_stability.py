@@ -12,7 +12,9 @@ build (app/dist-test, or TDSDESK_SITE), with a made-up firm kept in this browser
      the bell, the Tally sign and the firm in the same places, and the header the same height, on every page;
   6. the sidebar's date line in the same place on the firm's pages and a client's;
   7. the Overview drawn once, final: no opening motion, no count-up, "N of 6 done" the same from its first frame;
-  8. page changes that take longer than 300 ms show a thin bar under the top bar (once batch 3 is in: data-nav-progress).
+  8. page changes that take longer than 300 ms show a thin bar under the top bar (nav.js), still under reduced motion;
+  9. one message at a time (#toast), none for something that happened by itself (the sidebar's quiet line instead), a
+     message that must stay (a newer FinCom) coming back after any other.
 Screenshots to tests/out/stability/."""
 import os, sys, json, time, threading, functools, http.server, re
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -200,17 +202,40 @@ try:
         ok(pg.locator(".dash .dtile b[data-count]").count() == 0 and "…" not in (pg.inner_text(".dash .dash-tiles") or ""), "the four figures final: no count-up, no '…'")
 
         print("8. the thin bar for a page change over 300 ms")
-        if pg.locator("[data-nav-progress]").count() == 0 and not E("typeof window.FinComNav === 'object'"):
+        if not E("typeof window.FinComNav === 'object'"):
             print("  (not in this build yet: stability batch 3)")
         else:
-            # a quick change: nothing; a slow one (a 700 ms change made by holding the main thread): the bar, then gone
-            t0 = E("() => window.__st.reset()"); E("navHome('clients')"); W(900)
-            m = state(pg); ok(not any(f["prog"] > 0.05 for f in m["frames"] if f["t"] >= t0), "a quick page change shows no bar")
+            # a quick change (a sidebar click): no bar
+            E("navHome('today')"); W(600)
+            t0 = E("() => window.__st.reset()"); pg.click('#side .side-link[data-side="Clients"]'); W(900)
+            m = state(pg); ok(not any(f["prog"] > 0.05 for f in m["frames"] if f["t"] >= t0) and E("S.homeTab") == "clients", "a quick page change (a click) shows no bar, and the page changes")
+            # a wait of 700 ms: the bar after about 300 ms, gone once it is over; the page says aria-busy meanwhile
             t0 = E("() => window.__st.reset()")
-            E("() => { FinComNav.start(); setTimeout(() => { const e = performance.now() + 700; while (performance.now() < e) {} navHome('today'); FinComNav.done(); }, 0); }"); W(1800)
+            E("() => { FinComNav.start(); setTimeout(() => { navHome('today'); FinComNav.done(); }, 700); }"); W(200)
+            busy = E("document.getElementById('app').getAttribute('aria-busy')"); W(1400)
             m = state(pg); on = [f["t"] for f in m["frames"] if f["t"] >= t0 and f["prog"] > 0.05]
-            ok(bool(on) and on[0] - t0 >= 250, "a slow page change shows the bar after about 300 ms (%s)" % (on[0] - t0 if on else None))
-            ok(not E("document.querySelector('[data-nav-progress]') && getComputedStyle(document.querySelector('[data-nav-progress]')).opacity > 0.05 && document.querySelector('[data-nav-progress]').getAttribute('data-on') === '1'"), "the bar has gone once the page is drawn")
+            ok(bool(on) and on[0] - t0 >= 250, "a 700 ms wait shows the bar after about 300 ms (%s)" % (on[0] - t0 if on else None))
+            ok(busy == "true" and not E("document.getElementById('app').getAttribute('aria-busy')"), "the page says aria-busy while it waits, and not after")
+            ok(E("(document.querySelector('[data-nav-progress]') || {}).getAttribute ? document.querySelector('[data-nav-progress]').getAttribute('data-on') : null") in (None, "0"), "the bar is finished once the page is drawn")
+            # reduced motion: still (its fill does not move)
+            ctx2, pg2 = setup(br, reduced=True); seed(pg2)
+            pg2.evaluate("() => FinComNav.start()"); pg2.wait_for_timeout(500)
+            an = pg2.evaluate("() => getComputedStyle(document.querySelector('[data-nav-progress] > i')).animationName")
+            ok(an == "none", "reduced motion: the bar's fill does not move (%s)" % an); ctx2.close()
+
+        print("9. one message at a time, none for what happened by itself")
+        if not E("typeof toast === 'function' && toast.length >= 1 && typeof toastStay !== 'undefined'"):
+            print("  (not in this build yet: stability batch 3)")
+        else:
+            E("() => { toastHide(); toast('Something the colleague did', {background: true}); }"); W(400)
+            ok(E("document.getElementById('toast').classList.contains('hidden')") and "Something the colleague did" in pg.inner_text("#side [data-quiet-note]"), "a background event is no toast: it is in the sidebar's quiet line")
+            E("() => toast('A newer FinCom is out.', {stay: true, actions: [{label: 'Reload', run: () => { window.__reloaded = 1; }}]})"); W(300)
+            E("() => toast('Saved.')"); W(300)
+            ok(pg.locator("#toast").count() == 1 and "Saved." in pg.inner_text("#toast") and pg.locator("#fresh-note").count() == 0, "one message region: the new message replaces the one showing, nothing stacked")
+            E("() => toastHide()"); W(500)
+            ok("A newer FinCom is out." in pg.inner_text("#toast") and not E("document.getElementById('toast').classList.contains('hidden')"), "the message that must stay comes back after the other one")
+            pg.click('#toast [data-toast-act="Reload"]'); W(400)
+            ok(E("window.__reloaded") == 1 and E("document.getElementById('toast').classList.contains('hidden')"), "its button acts, and then it goes")
         ctx.close(); br.close()
 finally:
     srv.shutdown()

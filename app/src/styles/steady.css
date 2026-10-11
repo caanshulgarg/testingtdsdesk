@@ -110,3 +110,33 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 .pg-skel .pg-skel-t { margin: 18px 0 0; }
 .pg-skel .boot-cards { margin-top: 10px; }
 .pg-skel .skel { animation: none; flex: 1; height: 12px; }
+
+/* ---------- the thin bar under the top bar (nav.js, stability batch 3): only after 300 ms, never full-screen ---------- */
+.nav-progress { position: absolute; left: 0; right: 0; bottom: -1px; z-index: 6; height: 3px; overflow: hidden; pointer-events: none; opacity: 0; }
+.nav-progress > i { display: block; width: 100%; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left center; }
+.nav-progress[data-on="1"] { animation: nav-show 1ms linear 300ms both; }
+.nav-progress[data-on="1"] > i { animation: nav-grow 8s cubic-bezier(.08, .7, .2, 1) 300ms both; }
+.nav-progress[data-on="0"] { opacity: 1; animation: nav-hide 200ms linear 200ms both; }
+.nav-progress[data-on="0"] > i { transform: scaleX(1); transition: transform 180ms ease-out; }
+@keyframes nav-show { to { opacity: 1; } }
+@keyframes nav-grow { from { transform: scaleX(.08); } to { transform: scaleX(.9); } }
+@keyframes nav-hide { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress[data-on="1"] > i { animation: none; transform: scaleX(1); }
+  .nav-progress[data-on="0"] > i { transition: none; }
+}
+
+/* ---------- a whole page waiting for its data, in its own shape (parts/Loading.jsx page=…, stability batch 3) ---------- */
+.lt-page { animation: pg-skel-in 1ms linear 300ms both; opacity: 0; }
+.lt-page .skel { animation: none; }
+.lt-page-tabs { display: flex; gap: 22px; height: 40px; align-items: center; margin: 10px 0 12px; border-bottom: 1px solid var(--border); }
+.lt-page-tabs .skel { flex: 0 0 72px; height: 12px; }
+.lt-page-boxes { display: flex; gap: 12px; margin: 0 0 14px; }
+.lt-page-boxes .skel { flex: 0 0 180px; height: 36px; border-radius: var(--radius-control); }
+.lt-page-head { display: flex; justify-content: space-between; align-items: center; height: 84px; margin: 0 0 14px; padding: 0 20px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.lt-page-head .skel { flex: 0 0 220px; height: 16px; }
+.lt-page-head .skel + .skel { flex-basis: 160px; }
+
+/* ---------- the sidebar's foot: the quiet line (where the work is kept, last sync, or a background event) and the date ---------- */
+.side .side-ver { display: flex; flex-direction: column; gap: 2px; }
+.side .side-quiet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2.8em; line-height: 1.4; font-size: 11.5px; color: var(--text-muted); }

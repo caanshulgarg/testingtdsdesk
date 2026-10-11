@@ -85,9 +85,9 @@ export default function Books() {
 
 function BooksPage() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" />; }
+  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" page="books" />; }
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
-  if (S.books.loading) return <Loading what="the books" note="The latest from FinCom’s server." />;
+  if (S.books.loading) return <Loading what="the books" page="books" note="The latest from FinCom’s server." />;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);

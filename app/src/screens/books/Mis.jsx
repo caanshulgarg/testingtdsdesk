@@ -19,7 +19,9 @@ const m = (v) => INR.format(r2(v || 0));
 // clean-up batch 3: ₹ on every amount of the summary (its figures and the cash and bank table); the same figure as m()
 const rs = (v) => money(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
-const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
+import { FinComNav } from "../../nav.js";
+// stability batch 3: Run now shows the thin bar while the run takes over 300 ms
+const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => (act === "misRun" || act === "auditRun" ? FinComNav.go(() => doAct(act)) : doAct(act))}>{children}</button>;
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
 // MIS statements and schedules (profit and loss, ages, months): their rows in the report's order
 const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><table className="bk-table" id={id} style={style} data-statement="">{head && <thead><tr>{head}</tr></thead>}<tbody>{children}</tbody></table></div>;
@@ -344,7 +346,7 @@ export default function Mis({ b }) {
   // clean-up batch 3: six tabs (the statements and the figures most asked for), the rest under More (parts/PageTabs.jsx)
   const tabs = <PageTabs label="MIS" attr="data-mis-tab" value={tab} onPick={misTabGo} tabs={TAB_ORDER.map((id) => TABS.find((t) => t[0] === id))} />;
   if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
-  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => doAct("misRun")}>Run now</button></div></>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("misRun"))}>Run now</button></div></>;
   const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;

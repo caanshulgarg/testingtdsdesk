@@ -18,7 +18,9 @@ const m = (v) => money(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
 const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--warn)"], low: ["MINOR", "var(--muted)"] };
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
-const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => doAct(act)}>{children}</button>;
+import { FinComNav } from "../../nav.js";
+// stability batch 3: Run now shows the thin bar while the run takes over 300 ms
+const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => (act === "misRun" || act === "auditRun" ? FinComNav.go(() => doAct(act)) : doAct(act))}>{children}</button>;
 
 // clean-up batch 1 (11-Oct-2026): the tie-out with Tally (a month-end check of the books against Tally) is Audit's
 // fourth tab (booksTab "tieout", its address …/books/tieout as before); the other three are S.auditTab
@@ -120,7 +122,7 @@ function Finding({ f }) {
 
 function Findings({ b }) {
   const au = b.audit || {}, run = au.last;
-  if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => doAct("auditRun")}>Run now</button></div></>;
+  if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("auditRun"))}>Run now</button></div></>;
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)

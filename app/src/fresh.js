@@ -10,7 +10,12 @@ async function current() {
     return j && j.build ? j.build : null;
   } catch (e) { return null; }
 }
+// stability batch 3: in the page's one message region (#toast), in its look, staying until Reload is pressed (and coming
+// back after any other message), never a second box of its own stacked with a message
+let noted = null;
 function note(build) {
+  if (noted === build) return;
+  if (typeof window.toast === "function") { noted = build; window.toast("A newer FinCom is out.", { stay: true, actions: [{ label: "Reload", run: () => go(build) }] }); return; }
   if (document.getElementById("fresh-note")) return;
   const d = document.createElement("div");
   d.id = "fresh-note"; d.setAttribute("role", "status");

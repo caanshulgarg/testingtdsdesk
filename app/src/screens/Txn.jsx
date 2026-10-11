@@ -30,7 +30,7 @@ export default function Txn() {
   if (all === null || (tab === "bank" && S.bank && S.bank.loading) || (tab === "sales" && S.sales && S.sales.loading)) {
     if (all === null && tab === "sales" && (!S.sales || S.sales.cid !== co.id)) loadSales(co.id).then(() => render());
     if (all === null && tab === "bank" && (!S.bank || S.bank.cid !== co.id)) loadBank(co.id).then(() => render());
-    return <Loading what={tab === "sales" ? "sales invoices" : "bank lines"} />;
+    return <Loading what={tab === "sales" ? "sales invoices" : "bank lines"} page="table" />;
   }
   if (!S.fileIndex || S.fileIndexCid !== co.id) { S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
   const rows = txnFiltered(all), bank = tab === "bank", c = txnColShown;
