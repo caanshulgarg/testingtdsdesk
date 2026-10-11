@@ -18,7 +18,7 @@ def ok(c, w):
 # the buttons that upload (or choose a file to upload) on the page, wherever they are
 UPLOADS = """() => [...document.querySelectorAll('#app button, #app .btn, #app [role=button], #cobar button, #cobar .btn')].filter(b => b.offsetParent !== null)
   .filter(b => !b.closest('[data-need-day]'))
-  .filter(b => /\\bupload\\b|choose files|choose the day ?book|day book xml/i.test(b.innerText || '') && (b.matches('button, .btn')))
+  .filter(b => (b.hasAttribute('data-upload') || /\\bupload\\b|choose files|choose the day ?book|day book xml/i.test(b.innerText || '')) && (b.matches('button, .btn')))
   .map(b => { const r = b.getBoundingClientRect(); return {text: b.innerText.trim(), top: !!b.closest('#cobar'), data: b.getAttribute('data-upload'), right: Math.round(r.right), y: Math.round(r.top)}; })"""
 PAGES = [("Purchase · To review", "purchase-review", "bills", "Upload bills"), ("Purchase · upload", "purchase-upload", "bills", "Upload bills"),
          ("Purchase · In Tally", "purchase-in-tally", "bills", "Upload bills"), ("Bank", "bank", "bank", "Upload statement"),

@@ -55,7 +55,7 @@ function tree() {
       { icon: "today", label: "Today", on: t === "today" || t === "inbox", go: () => navHome("today"), bar: true, title: "What needs doing, every client" },
       { icon: "compliance", label: "Compliance", on: t === "compliance", go: () => navHome("compliance"), bar: true, title: "Returns and payments due, every client" },
       { icon: "clients", label: "Clients", on: t === "clients", go: () => navHome("clients"), bar: true },
-      { icon: "books", label: "Tally", on: t === "tally", go: () => { S.tallyFocus = ""; navHome("tally"); }, bar: true, title: "Computers, sync activity and everything sent to Tally" },
+      { icon: "books", label: "Tally", on: t === "tally", go: () => { S.tallyFocus = ""; navHome("tally"); }, bar: true },
       // People and Plan and credit are sections of Settings (and the firm menu's own items)
       { icon: "settings", label: "Settings", on: t === "rules", go: () => goSettings(null), title: "The firm's settings, people, plan and credit" },
     ]], ["sep", [help]]];

@@ -1,7 +1,7 @@
 """python3 run_round4_ux.py - round 4 of the UI pass (09-Oct-2026, the owner: "check complete ui and ux"). Checks the
 fixes of that round on the React test build (app/dist-test), offline, the made-up client of shots_ui_pass.py:
   1. a way back to the open client from the firm's pages (Clients, Today, Inbox, Settings, Help), desktop and phone:
-     "Back to <client>" in the side menu, which opens that client;
+     "Back to <client>" in the side menu (clean-up batch 1: the client card; on a phone under More), which opens that client;
   2. no heading that repeats the page title (Help, the firm's Inbox);
   3. plain words: no "office automation" on the inboxes; Transactions says "uploaded <date>", not "up <date>";
   4. Purchase -> To review: the tick column is "Book TDS", so only one column is called "TDS";
@@ -30,7 +30,9 @@ def ok(c, w):
     if not c: fails.append(w)
 
 APP = "() => document.getElementById('app').innerText"
-BACK = '#side .side-link:has-text("Back to Testing AAD")'
+# clean-up batch 1 (11-Oct-2026): the way back is the sidebar's client card ("Back to <client>"); on a phone it is in More
+BACK = '#side [aria-label="Back to Testing AAD"]'
+PHONE_BACK = '[data-side-sheet] [aria-label="Back to Testing AAD"]'
 
 def start(pg):
     pg.goto("http://localhost:8253/"); pg.wait_for_timeout(2500)
@@ -98,9 +100,10 @@ with sync_playwright() as p:
     ph = br.new_page(viewport={"width": 390, "height": 844}); start(ph)
     ph.click('button[data-act="useOffline"]'); ph.wait_for_timeout(1000); ph.evaluate(U.SEED, None); ph.wait_for_timeout(800)
     ph.evaluate("() => navHome('clients')"); ph.wait_for_timeout(600)
-    ok(ph.locator(BACK).count() == 1 and ph.locator(BACK).is_visible(), "phone, Clients: Back to Testing AAD is in the bottom menu")
-    if ph.locator(BACK).count():
-        ph.locator(BACK).click(); ph.wait_for_timeout(800)
+    ph.click("#side .side-more"); ph.wait_for_timeout(500)
+    ok(ph.locator(PHONE_BACK).count() == 1 and ph.locator(PHONE_BACK).is_visible(), "phone, Clients: Back to Testing AAD is in the bottom menu's More")
+    if ph.locator(PHONE_BACK).count():
+        ph.locator(PHONE_BACK).click(); ph.wait_for_timeout(800)
         ok(ph.evaluate("() => S.view") == "company", "phone: it opens the client")
     # 8 (phone). a tile's amount on one line (Reports with the books of tests/data, and the Dashboard's tiles)
     ph.evaluate(U.SEED, U.books()); ph.wait_for_timeout(800)

@@ -64,6 +64,8 @@ try:
         ok("after today" in pg.evaluate("TDSFiled.problem('2026-27', 'Q2', '2099-01-01', '')"), "a date after today is refused")
         # cancelled: nothing kept
         pg.fill(box + ' input[aria-label="Token number"]', "123456789012345")
+        # the refusal's toast can sit over the button (clean-up batch 1 moved the page up a row): let it go first
+        pg.evaluate("() => { if (typeof toastHide === 'function') toastHide(); }"); pg.wait_for_timeout(300)
         pg.click(box + ' [data-mark-filed]'); pg.wait_for_timeout(400)
         ok(pg.is_visible("#confirmBox [data-cbx=yes]") and "Mark 26Q, Q1 2025-26 filed?" in pg.inner_text("#confirmBox"), "Mark filed asks the person to confirm first")
         pg.click("#confirmBox [data-cbx=no]"); pg.wait_for_timeout(300)
