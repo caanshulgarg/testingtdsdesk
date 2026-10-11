@@ -82,7 +82,8 @@ type standTally struct {
 	// 2.2.0: the Voucher collections of the date-form probe and source C: svIgnored, SVFROMDATE/SVTODATE are ignored
 	// (Tally's current period: every entry); filterDates, a TDL filter on $Date with $$Date literals is applied
 	svIgnored, filterDates bool
-	cnMode                 string // how the change numbers are given (the company check above)
+	cnMode                 string  // how the change numbers are given (the company check above)
+	nat                    []*tNat // 2.4.3: the natures of payment (FinComTdsNatures)
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -91,6 +92,15 @@ type tLed struct {
 	state                                string // LEDSTATENAME (round 11)
 	dtype                                string // TDSDEDUCTEETYPE (2.3.1): the party's deductee type, a ledger master field
 	mid, alter                           int64
+	// 2.4.3: the TDS settings, written when the request asks for them as a real Tally writes them
+	nature, special string // TDSRATENAME; the special rate ("" : TDSDEDUCTEEISSPECIALRATE No)
+	ldcXML          string // the LOWERDEDUCTION.LIST elements as Tally writes them
+}
+
+// a nature of payment of the stand-in Tally (2.4.3: FinComTdsNatures)
+type tNat struct {
+	guid, name, cats string // cats: the CATEGORYDETAILS.LIST elements as Tally writes them
+	mid, alter       int64
 }
 
 var reMidRange = regexp.MustCompile(`\$MasterID &gt; (\d+)(?: AND \$MasterID &lt;= (\d+))?`)
@@ -361,6 +371,35 @@ func newStandTally(t *testing.T) *standTally {
 						o.Reset()
 						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + standField("TDSDEDUCTEETYPE", "String", esc(l.dtype)) + "</LEDGER>")
 					}
+					if strings.Contains(body, "TDSRATENAME") { // 2.4.3: asked for: as TallyPrime 7.1 writes them (run 38155837948)
+						x := ""
+						if l.nature != "" {
+							x += standField("TDSRATENAME", "String", esc(l.nature))
+						}
+						if l.special != "" {
+							x += standField("TDSDEDUCTEEISSPECIALRATE", "Logical", "Yes") + standField("TDSDEDUCTEESPECIALRATE", "Number", " "+l.special)
+						} else {
+							x += standField("TDSDEDUCTEEISSPECIALRATE", "Logical", "No")
+						}
+						x += l.ldcXML
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + x + "</LEDGER>")
+					}
+				}
+			}
+		case "FinComTdsNatures": // 2.4.3: the natures with a MasterID in (after, upto]
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			for _, n := range f.nat {
+				if n.mid > after && (upto < 0 || n.mid <= upto) {
+					fmt.Fprintf(&o, `<TDSRATE NAME="%s" RESERVEDNAME="">%s%s%s%s</TDSRATE>`, esc(n.name), standField("GUID", "String", n.guid),
+						standField("MASTERID", "Number", fmt.Sprintf(" %d", n.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", n.alter)), n.cats)
 				}
 			}
 		case "FinComGroups":

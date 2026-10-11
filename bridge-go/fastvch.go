@@ -86,6 +86,39 @@ var liveKeepGST242 = []string{
 	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNISREVCHARGEAPPL",
 }
 
+// 2.4.3 (the owner's approval of 11-Oct-2026, (a): "keeping the challan fields that are already in FinComVoucherObject's
+// answer"; the decision line "allowed for 2.4.3 by the owner's decision of 2026-10-11" in docs/tally-allowlist.md): the
+// fields of Tally's whole-voucher answer that carry a TDS payment's challan, measured on real TallyPrime 7.1 (tally-versions
+// mode tdsch, run 38155837948; testdata/tdsfields243): the Stat Payment's duty and period; the challan's BSR code, number
+// and date, the cheque's number and date, the bank and branch (on the payment, and per nature on its SUMMARYALLOCS.LIST,
+// where Tally's Challan Reconciliation writes them); the nature and section; on each ledger line of the payment whether it
+// pays tax, interest or a late fee (TYPEOFTAXPAYMENT) and its nature; per nature the period, the return (FORMTYPE), the
+// deductee's status and the amount paid. The link from a payment to the deductions it pays is TAXOBJECTALLOCATIONS, kept
+// whole since 2.4.0. Kept by the strip only: NOT written into the FETCHLIST (the request's bytes and shape ce0e72f74e72
+// stay the ones measured). Stored values only; nothing else added
+var liveKeepTDS243 = []string{
+	"STATPAYMENTTYPE", "TAXPAYPERIODFROMDATE", "TAXPAYPERIODTODATE",
+	"TAXCHALLANBSRCODE", "TAXBANKCHALLANNUMBER", "TAXCHALLANDATE", "TAXCHEQUENUMBER", "TAXCHEQUEDATE", "TAXBANKNAME", "TAXBANKBRANCHNAME",
+	"TDSNATUREOFPAYMENT", "TDSSECTIONNO",
+	"ALLLEDGERENTRIES.TYPEOFTAXPAYMENT", "ALLLEDGERENTRIES.STATNATURENAME",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.NAME", "ALLLEDGERENTRIES.SUMMARYALLOCS.FROMDATE", "ALLLEDGERENTRIES.SUMMARYALLOCS.TODATE",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TDSNATUREOFPAYMENT", "ALLLEDGERENTRIES.SUMMARYALLOCS.TDSSECTIONNO",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TDSDEDNSTATUS", "ALLLEDGERENTRIES.SUMMARYALLOCS.TDSRESIDENTIALSTATUS",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.FORMTYPE", "ALLLEDGERENTRIES.SUMMARYALLOCS.PAIDAMOUNT",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TAXCHALLANBSRCODE", "ALLLEDGERENTRIES.SUMMARYALLOCS.TAXBANKCHALLANNUMBER",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TAXCHALLANDATE", "ALLLEDGERENTRIES.SUMMARYALLOCS.TAXCHEQUENUMBER",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TAXCHEQUEDATE", "ALLLEDGERENTRIES.SUMMARYALLOCS.TAXBANKNAME",
+	"ALLLEDGERENTRIES.SUMMARYALLOCS.TAXBANKBRANCHNAME",
+}
+
+var fastKeepTDS243Set = func() map[string]bool {
+	m := map[string]bool{}
+	for _, f := range liveKeepTDS243 {
+		m[f] = true
+	}
+	return m
+}()
+
 func fastApprovedPaths() map[string]bool {
 	m := map[string]bool{}
 	for _, f := range liveFetchFields() {
@@ -95,6 +128,9 @@ func fastApprovedPaths() map[string]bool {
 		m[f] = true
 	}
 	for _, f := range liveKeepGST242 {
+		m[f] = true
+	}
+	for _, f := range liveKeepTDS243 {
 		m[f] = true
 	}
 	return m
@@ -500,6 +536,11 @@ func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]
 		return any
 	}
 	if !fastPathOK(ok, p) {
+		return false
+	}
+	// 2.4.3: a challan field Tally leaves blank (every entry that is not a TDS payment carries them empty) is not kept, so
+	// every other entry strips exactly as in 2.4.2
+	if fastKeepTDS243Set[p] && strings.TrimSpace(e.text) == "" {
 		return false
 	}
 	b.WriteString("<" + name + ">" + e.text + "</" + name + ">")

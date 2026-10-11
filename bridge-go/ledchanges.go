@@ -256,7 +256,7 @@ func ledSend(company, guid string, rows []ledRow, why string, after, upto int64)
 		n := minI(500, len(rows))
 		led := []any{}
 		for _, r := range rows[:n] {
-			led = append(led, []any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype})
+			led = append(led, append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...)) // 2.4.3: the TDS master fields
 		}
 		body := M{"kind": "ledger_changes", "company": company, "company_guid": guid, "ledgers": led, "why": why}
 		if why == "counter" {

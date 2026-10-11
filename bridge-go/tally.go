@@ -326,6 +326,7 @@ var requestClass = map[string]string{
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
 	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
+	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }

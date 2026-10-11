@@ -245,14 +245,14 @@ func TestFast234StripDropsEverythingElse(t *testing.T) {
 	if got := fastStripVoucher(both); got != "" {
 		t.Fatalf("both lists: %s", got)
 	}
-	// the approved paths are exactly today's fetch (2.4.2: and the GST type fields, liveKeepGST242; release-240: and the TDS list and its sub-list whole, the owner's
+	// the approved paths are exactly today's fetch (2.4.2: and the GST type fields, liveKeepGST242; 2.4.3: and the TDS challan fields, liveKeepTDS243; release-240: and the TDS list and its sub-list whole, the owner's
 	// decision of 07-Oct-2026, next-tds: kept by the strip, not in the FETCHLIST)
 	var ps []string
 	for p := range fastApprovedPaths() {
 		ps = append(ps, p)
 	}
 	sort.Strings(ps)
-	if len(ps) != 61+2+len(liveKeepGST242) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
+	if len(ps) != 61+2+len(liveKeepGST242)+len(liveKeepTDS243) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
 		t.Fatalf("%d approved paths: %v", len(ps), ps)
 	}
 }

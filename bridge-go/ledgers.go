@@ -50,7 +50,14 @@ const (
 	grpListID = "FinComGroups"
 	// stored fields only: nothing here is worked out by Tally. 2.3.1: TDSDEDUCTEETYPE, the party's deductee type (a ledger
 	// master field; the owner asked for it with the TDS details, which Tally keeps on the entry without it)
-	ledFetch = "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE"
+	// 2.4.3 (the owner's approval of 11-Oct-2026, (b)): a TDS duty ledger's nature of payment (TDSRATENAME); a party's
+	// special rate (TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPECIALRATE) and its lower-deduction certificates (LOWERDEDUCTION.LIST:
+	// the nature, and per certificate LOWERDEDUCTIONDETAILS.LIST: from, to, section, certificate number, rate, limit). Stored
+	// master fields only, named one by one (ledFetch242 is 2.4.2's list, byte for byte)
+	ledFetch242 = "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE"
+	ledFetch    = ledFetch242 + ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPECIALRATE, LOWERDEDUCTION.NATUREOFPAYMENT, " +
+		"LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.FROMDATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.TODATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.SECTIONNO, " +
+		"LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.CERTIFICATENO, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.TDSITRATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.LOWERDEDUCTIONLIMIT"
 	grpFetch = "GUID, MASTERID, ALTERID, NAME, PARENT"
 )
 
@@ -73,13 +80,18 @@ type ledRow struct {
 	name, parent, open, gstin, pan string
 	state                          string // LEDSTATENAME (round 11): index 7 in the list held and the read file, 8 in the outbox (7 is the opening-changed mark)
 	dtype                          string // TDSDEDUCTEETYPE (2.3.1): after the state in each (absent in a 2.3.0 file: "")
+	// 2.4.3, after the deductee type in each (absent in a 2.4.2 file: ""): the nature of payment (TDSRATENAME), the special
+	// rate ("" when the party has none) and the lower-deduction certificates as JSON text ([[nature, from, to, section,
+	// certificate, rate, limit]], "" when none), so a row compares whole
+	nature, special, ldc string
 }
 
 func (r ledRow) arr() []any {
 	return []any{r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan}
 }
 func ledFromArr(g string, a []any) ledRow {
-	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), str(at(a, 7)), str(at(a, 8))}
+	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), str(at(a, 7)), str(at(a, 8)),
+		str(at(a, 9)), str(at(a, 10)), str(at(a, 11))}
 }
 func digits(s string) int64 { return toI64(re(`\D`).ReplaceAllString(s, "")) }
 
@@ -119,7 +131,8 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 			}
 		}
 		r := ledRow{g, digits(nt(l, "MASTERID")), digits(nt(l, "ALTERID")), n, re(`^\W*Primary$`).ReplaceAllString(nt(l, "PARENT"), ""), open, gstin,
-			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER"))), strings.TrimSpace(nt(l, "LEDSTATENAME")), strings.TrimSpace(nt(l, "TDSDEDUCTEETYPE"))}
+			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER"))), strings.TrimSpace(nt(l, "LEDSTATENAME")), strings.TrimSpace(nt(l, "TDSDEDUCTEETYPE")),
+			strings.TrimSpace(nt(l, "TDSRATENAME")), ledSpecial(l), ledLDC(l)}
 		if r.mid > top {
 			top = r.mid
 		}
@@ -158,7 +171,7 @@ func loadLedList(dir string) map[string]ledRow {
 func saveLedList(dir string, m map[string]ledRow) {
 	o := M{}
 	for g, r := range m {
-		o[g] = append(r.arr(), r.state, r.dtype) // the state too (round 11 review: without it every ledger with a state read as changed); 2.3.1: the deductee type
+		o[g] = append(r.arr(), r.state, r.dtype, r.nature, r.special, r.ldc) // the state too (round 11 review: without it every ledger with a state read as changed); 2.3.1: the deductee type; 2.4.3: the TDS master fields
 	}
 	_ = saveFile(ledListFile(dir), jsonText(o))
 }
@@ -191,7 +204,7 @@ func appendLedRead(dir string, rows []ledRow) {
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		b.WriteString(jsonText(append(append([]any{r.guid}, r.arr()...), r.state, r.dtype)) + "\n")
+		b.WriteString(jsonText(append(append([]any{r.guid}, r.arr()...), r.state, r.dtype, r.nature, r.special, r.ldc)) + "\n")
 	}
 	_ = appendText(ledReadFile(dir), b.String())
 }
@@ -245,7 +258,7 @@ func diffLedgers(held, read map[string]ledRow) ledDiff {
 // A round that completes while an earlier one waits replaces its round, seen and count; the rows add up, less any of
 // a ledger the new round no longer lists (nothing to tell the cloud of it). Every complete round is saved, changed
 // rows or not: the cloud works deletions out from seen
-func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen []string) {
+func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen []string, natures []any) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}
@@ -268,7 +281,7 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen [
 	}
 	for _, r := range d.rows {
 		oc := d.openChg[r.guid] || truthy(at(arr(rows[r.guid]), 7))
-		rows[r.guid] = append(r.arr(), oc, r.state, r.dtype)
+		rows[r.guid] = append(r.arr(), oc, r.state, r.dtype, r.nature, r.special, r.ldc)
 	}
 	for _, x := range d.renamed {
 		from := x.from
@@ -294,6 +307,9 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen [
 			gl = append(gl, []any{g[0], g[1]})
 		}
 		o["groups"] = gl
+	}
+	if natures != nil {
+		o["natures"] = natures // 2.4.3: the round's natures of payment (none when the round gave them up: the last sent stay)
 	}
 	_ = saveFile(ledOutFile(dir), jsonText(o))
 }
@@ -333,6 +349,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		_ = saveFile(filepath.Join(dir, "group-list.json"), jsonText(gl))
 		ls["groups"], ls["reqs"] = true, toInt(ls["reqs"])+1
 		save()
+	}
+	// 2.4.3: the natures of payment (few; never holding the ledger list: tdsnatures.go)
+	if ok, err := k.natureList(company, port, st, ls, inBudget, save); !ok {
+		return false, err
 	}
 	for !truthy(ls["done"]) {
 		if !inBudget() || keepHold() != "" {
@@ -465,7 +485,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the held list: what Tally listed (and the skipped ledgers)
 	saveLedList(dir, read)
 	delete(st, "ledGone") // the second-look bookkeeping of 2.1.4: the cloud holds many gone at once now
-	mergeLedOut(dir, d, groups, round, seen)
+	mergeLedOut(dir, d, groups, round, seen, natOfRound(ls))
 	_ = os.Remove(ledReadFile(dir))
 	writeLog(fmt.Sprintf("Keeping %s: the ledger list read (%d ledgers, %d groups, %d request(s)): %d new, %d changed, %d renamed, %d gone",
 		company, len(read), len(groups), toInt(ls["reqs"]), d.added, len(d.rows)-d.added, len(d.renamed), len(d.gone)))
@@ -533,9 +553,15 @@ func pushLedgerList(company, dir string) error {
 			if truthy(at(a, 7)) {
 				oc = 1
 			}
-			// [guid, MasterID, AlterID, name, parent, opening, GSTIN, PAN, openingChanged, state, deductee type] (round 11: the
-			// state; 2.3.1: the party's deductee type, TDSDEDUCTEETYPE, last)
-			led = append(led, []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc, str(at(a, 8)), str(at(a, 9))})
+			// [guid, MasterID, AlterID, name, parent, opening, GSTIN, PAN, openingChanged, state, deductee type, nature of payment,
+			// special rate, lower-deduction certificates] (round 11: the state; 2.3.1: the party's deductee type, TDSDEDUCTEETYPE;
+			// 2.4.3: TDSRATENAME, the special rate and the certificates, ledTDSCols)
+			row := []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc, str(at(a, 8)), str(at(a, 9))}
+			if len(a) >= 13 {
+				// read by 2.4.3 (a row a 2.4.2 round left in the outbox has none: sent without them, FinCom leaves its own)
+				row = append(row, ledTDSCols(str(at(a, 10)), str(at(a, 11)), str(at(a, 12)))...)
+			}
+			led = append(led, row)
 		}
 		body := M{"kind": "ledger_list", "company": company, "ledgers": led, "last": last,
 			"round": str(o["round"]), "complete": true, "rowsRead": toInt(o["rowsRead"]), "seen": toAny(sb)}
@@ -548,6 +574,9 @@ func pushLedgerList(company, dir string) error {
 			body["renamed"] = rl
 			if o["groups"] != nil {
 				body["groups"] = o["groups"]
+			}
+			if o["natures"] != nil {
+				body["natures"] = o["natures"] // 2.4.3: [[guid, MasterID, AlterID, name, [[from, section, rate, other, no-PAN rate, no-PAN other, threshold, single bill]]]]
 			}
 			if sk := arr(o["skipped"]); len(sk) > 0 {
 				body["skipped"] = sk // the ledgers that hang Tally: [MasterID, name, why]
@@ -569,7 +598,7 @@ func pushLedgerList(company, dir string) error {
 		}
 		gs, seen = gs[n:], seen[m:]
 		if first {
-			o["renamed"], o["groups"], o["skipped"], ren = M{}, nil, nil, M{}
+			o["renamed"], o["groups"], o["skipped"], o["natures"], ren = M{}, nil, nil, nil, M{}
 			first = false
 		}
 		o["rows"], o["seen"] = rows, toAny(seen)

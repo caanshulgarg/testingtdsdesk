@@ -140,8 +140,8 @@ func TestLedgerListCarriesState(t *testing.T) {
 	}
 	for i, want := range map[int]string{0: "", 1: "Delhi", 2: ""} {
 		a := byGUID[f.led[i].guid]
-		if len(a) != 11 || str(at(a, 9)) != want { // 2.3.1: the deductee type after the state (deductee231_test.go)
-			t.Fatalf("the row of %s: %v (want 11 columns, state %q)", f.led[i].name, a, want)
+		if len(a) != 14 || str(at(a, 9)) != want { // 2.3.1: the deductee type after the state (deductee231_test.go); 2.4.3: the TDS settings
+			t.Fatalf("the row of %s: %v (want 14 columns, state %q)", f.led[i].name, a, want)
 		}
 	}
 }

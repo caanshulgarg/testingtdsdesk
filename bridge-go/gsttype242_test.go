@@ -42,7 +42,7 @@ func TestGST242KeptFieldsExactly(t *testing.T) {
 		}
 	}
 	// the approved paths: today's 61 named fields, the two TDS lists whole, and these
-	if n := len(ok); n != 61+2+len(gst242Want) {
+	if n := len(ok); n != 61+2+len(gst242Want)+len(tds243Want) {
 		t.Errorf("%d approved paths", n)
 	}
 }
