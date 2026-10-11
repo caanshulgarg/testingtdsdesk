@@ -2,6 +2,23 @@
 
 Test data only: a made-up company ("FinCom Spike Co") created in a throwaway TallyPrime 7.1 on GitHub's test computer. No client's books and no live FinCom were used.
 
+## Round 44 part B (11-Oct-2026): bridge 2.4.2 sends each entry's GST type
+
+The same test company, read again on a real TallyPrime 7.1 by FinCom Bridge 2.4.2 (built from next-gsttype; tally-versions
+run 38103142466, the captures in tests/fixtures/tdsgst-e2e/real71): each entry the bridge sends carries its GST type as
+Tally stores it (registration type, country, reverse charge, nature, taxability, goods or services, the 17(5) blocked
+credit), FinCom's cloud copy stores it (migration 72) and the GST returns read it. The motor car's blocked credit was set
+in the ledger's own GST details, as the ledger screen sets it; Tally then keeps the mark on the purchase line.
+
+| Way the entries reached FinCom | PASS / FAIL |
+|---|---|
+| Day Book only | 466 / 1 (Cloud copy (bridge) 138 / 0) |
+| Bridge only (no Day Book uploaded) | 313 / 1 (GSTR-1 87 / 0, GSTR-3B 40 / 0) |
+| Both | 346 / 1 |
+
+The one FAIL each way is the Form 140 correction statement (a feature FinCom does not have; the corrected regular
+statement's figures are right). known-fails.json lists only it and the fixes already on arc-ui.
+
 ## What was done
 
 1. 39 entries were made in TallyPrime 7.1 (sales of every GST kind, credit and debit notes, purchases with reverse charge, exempt and blocked credit, an advance, TDS journals for 194C/H/I/Q/A/J, 195 and 192, TCS sales). Then, as after filing, one invoice, one credit note and one TDS entry were altered, one invoice deleted and a PAN corrected.
