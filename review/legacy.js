@@ -4921,6 +4921,8 @@ const Books = {
       hsn: Array.from(new Set((s.match(/<GSTHSNNAME>([^<]*)<\/GSTHSNNAME>/g) || []).map(x => x.replace(/<[^>]*>/g, "").trim()).filter(Boolean))),
       by: this.one(s, "ENTEREDBY"), upd: this.one(s, "UPDATEDDATETIME").slice(0, 8),
       cancel: this.one(s, "ISCANCELLED") === "Yes", opt: this.one(s, "ISOPTIONAL") === "Yes",
+      // round 44: Tally's AlterID, so the later of the Day Book's and the bridge's versions of an entry is the one kept (BookSrc)
+      alt: /\d/.test(this.one(s, "ALTERID")) ? Math.round(num(this.one(s, "ALTERID"))) : null,
       ent: []
     };
     if (v.cmp) meta.gstins.add(v.cmp);
@@ -7469,7 +7471,7 @@ const TDS = {
         const recd = r2(L.tcs.length === 1 && L.party ? L.party - tcsAll : (t.rate ? t.amount / (t.rate / 100) : L.total));
         out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: v.party, pan: TDS.panOf(v.party),
           section: t.section || "206C", code: TCS27EQ.codeOf(t.ledger, t.section), ledger: t.ledger, paid: recd, tds: r2(t.amount),
-          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
+          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
       });
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
@@ -7491,7 +7493,7 @@ const TDS = {
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
           party: v.party, pan: TDS.panOf(v.party), section: t.section, ledger: t.ledger,
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
-          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
+          voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
           // section (TDSRate, src/js/66)
           pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
@@ -7511,7 +7513,7 @@ const TDS = {
       if (!L.tdsPaid.length) return;
       const tax = r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
       if (!tax) return;
-      out.push({vid: v.id, date: v.date, tax, sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr});
+      out.push({vid: v.id, date: v.date, tax, sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
@@ -8001,7 +8003,7 @@ const GSTR = {
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
         kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
-        rate, total: L.total, note, type: v.type});
+        rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.concat(this.fromSales(ym)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
@@ -8057,7 +8059,7 @@ const GSTR = {
         taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
         cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
         blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : "", narr: v.narr || "", taxOnly});
+        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out;
   },
@@ -23286,16 +23288,26 @@ const TCloud = {
     list.forEach(x => { (byMonth[x.day.slice(0, 6)] = byMonth[x.day.slice(0, 6)] || []).push(x); });
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
-    if (!todo.length && !ledNew) return true;
+    // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
+    let copy = null;
+    try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
+    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    if (!todo.length && !ledNew && !(copy && (copy.changes || !same))) return true;
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
     const say = t => { f.busy = b.busy = t; render(); };
-    say("Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…");
+    say(todo.length ? "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…" : "Bringing in the entries the bridge sent…");
     let changed = false;
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
+      const fromBridge = BookSrc.stash(b);
       if (ledNew){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
+        // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
+        // the bridge sent; a cloud without them is read as before
+        let led;
+        try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+        catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy";
+        BookSrc.ledgersInto(b, led, bk.ledgersAt);
         await this.groupsInto(b, bk.book);
       }
       // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
@@ -23313,6 +23325,8 @@ const TCloud = {
         const m = TallyRead.months(ym + "01", to).find(z => z.ym === ym) || {from: ym + "01", to: ym + "31"};
         TallyRead.merge(b, res, m.from < from ? from : m.from, m.to);
       }
+      BookSrc.restore(b, fromBridge);
+      if (copy) await this.copyInto(b, bk, copy);
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
@@ -23322,6 +23336,48 @@ const TCloud = {
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     f.busy = b.busy = ""; render();
     return changed ? "new" : true;
+  },
+  // ---------- round 44: the entries the bridge sent by itself, from the cloud copy (tally_vouchers / tally_lines / tally_bills,
+  // read as Look up and the ledger checks read them). Every entry's head is read when the client is opened (force) or the
+  // book changed; in between, only the entries the bridge's lines brought since the last look (tally_recorder_lines'
+  // applied_at, the cloud's own clock). Lines and bills are read only for entries new to the books or later than held.
+  async copyHeads(b, bk, full){
+    const meta = b.meta = b.meta || {}, c = meta.copy && meta.copy.book === bk.book ? meta.copy : null;
+    const B = "&book_id=eq." + encodeURIComponent(bk.book);
+    const read = async (extra) => {
+      try { return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS + B + extra + "&order=guid.asc"); }
+      catch (e){ if (!/irn|42703/i.test(String((e && e.message) || e))) throw e; return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS_OLD + B + extra + "&order=guid.asc"); }
+    };
+    let seen = c ? c.seen || "" : "", heads;
+    // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)
+    let last = [];
+    try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
+    const newest = (last[0] || {}).applied_at || seen;
+    if (full || !c) heads = await read("");
+    else {
+      if (!newest || newest === seen) return {heads: [], seen, changes: false};
+      const ls = await this.restPages("tally_recorder_lines?select=object_guid&state=eq.applied&object_guid=not.is.null" + B + "&applied_at=gt." + encodeURIComponent(seen) + "&order=id.asc");
+      const g = Array.from(new Set(ls.map(x => String(x.object_guid))));
+      heads = [];
+      for (let i = 0; i < g.length; i += 40) heads = heads.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")"));
+    }
+    // changes: a deleted entry held here, a new entry, a later version (a client opened afresh: all of them)
+    const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
+    const changes = heads.some(h => h && h.guid && (h.deleted_at ? by.has(h.guid) : BookSrc.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)));
+    return {heads, seen: newest, changes};
+  },
+  async copyInto(b, bk, copy){
+    const B = "&book_id=eq." + encodeURIComponent(bk.book), need = BookSrc.need(b, copy.heads);
+    let lines = [], bills = [];
+    for (let i = 0; i < need.length; i += 40){
+      const g = "&guid=in.(" + need.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
+      lines = lines.concat(await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc"));
+      try { bills = bills.concat(await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc")); } catch (e){}
+    }
+    const n = BookSrc.apply(b, copy.heads, lines, bills);
+    const meta = b.meta = b.meta || {};
+    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    return n;
   },
   // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
   // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
@@ -31915,5 +31971,147 @@ const TDSDrift = {
     if (f){ S.books.tdsFiled = Object.assign({}, S.books.tdsFiled); S.books.tdsFiled[k] = Object.assign({}, f, {corrected: (f.corrected || []).concat([new Date().toISOString()])}); }
     try { auditEvent("tds_correction_filed", {form, fy, q, changes: d.rows.length}, S.coId); } catch (e){}
     saveBooks(); render(); return true;
+  }
+};
+/* ================================================================== */
+/* The books from both sources: the Day Book and the bridge           */
+/* ================================================================== */
+// Round 44 (the owner's decision of 11-Oct-2026): TDS, TCS, GSTR-1, GSTR-3B, the amendments and the challans read one
+// set of entries made from both ways an entry reaches FinCom:
+//   - the Day Book the CA uploads (on this computer, or the day files the cloud keeps from an upload: Books.importDayBook);
+//   - the entries the bridge sends by itself, kept in FinCom's cloud copy (tally_vouchers / tally_lines / tally_bills,
+//     written by tally-ingest; read here as Look up and the ledger checks already read them, no new database function).
+// One entry is one Tally GUID. The later version wins by Tally's AlterID; the same version that came both ways is counted
+// once (the Day Book's, which carries more of the entry). An entry the cloud copy marks deleted in Tally leaves the
+// books (kept in b.gone, as a Day Book read again keeps it). Cancelled and optional entries keep their marks, so every
+// return leaves them out exactly as before. Each entry says where it came from: v.src "bridge", else the Day Book.
+const BookSrc = {
+  // the fields of the cloud copy's entry read here (deleted_at: migration 32; gstin/pos: 6; ref/cmp_gstin: 11; irn: 57)
+  HEADS: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date",
+  HEADS_OLD: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin",
+  // what the bridge's entry does not carry yet (bridge 2.4.2, part B of round 44): kept from the Day Book's version of
+  // the same entry when the bridge brings a later one, so an altered SEZ, export or reverse-charge entry stays so
+  CARRY: ["regType", "country", "rcm", "taxability", "nature", "supply", "ineligibleFlag"],
+  words(v){ return v && v.src === "bridge" ? "Bridge" : "Day Book"; },
+  d8(x){ return String(x || "").replace(/-/g, "").slice(0, 8); },
+  alt(x){ const n = Number(x); return isFinite(n) ? n : 0; },
+  // true when the cloud copy's version (AlterID a) is to be taken over the one held (have): a new entry, or a later
+  // version. A Day Book kept from before its AlterIDs were read (have.alt not known) stays until it is read again
+  wins(a, have){
+    if (!have) return true;
+    if (have.alt == null || have.alt === "") return false;
+    return this.alt(a) > this.alt(have.alt);
+  },
+  index(list){ const m = new Map(); (list || []).forEach((v, i) => { if (v && v.id) m.set(v.id, i); }); return m; },
+  // the copy's rows whose lines must be read: entries not in the books, or a later version than the one held
+  need(b, heads){
+    const by = this.index(b.vouchers), list = b.vouchers || [];
+    return (heads || []).filter(h => h && h.guid && !h.deleted_at && this.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)).map(h => h.guid);
+  },
+  // the cloud copy's rows as the entries Books.importDayBook makes (the same names, signs and amounts to the paisa)
+  fromCopy(heads, lines, bills){
+    const L = {}, B = {};
+    (lines || []).forEach(l => { if (l && l.guid) (L[l.guid] = L[l.guid] || []).push(l); });
+    (bills || []).forEach(x => { if (x && x.guid) (B[x.guid] = B[x.guid] || []).push(x); });
+    const out = [];
+    (heads || []).forEach(h => {
+      if (!h || !h.guid || h.deleted_at) return;
+      const v = {id: String(h.guid), date: this.d8(h.day), type: h.vtype || "", no: h.vno || "", ref: h.ref || "", refDate: this.d8(h.ref_date), irn: h.irn || "", irnDate: this.d8(h.irn_ack_date),
+        party: h.party || "", gstin: String(h.gstin || "").toUpperCase(), pos: h.pos || "", cmp: String(h.cmp_gstin || "").toUpperCase(), narr: String(h.narration || "").slice(0, 120),
+        regType: "", country: "", rcm: false, taxability: "", nature: "", supply: "", ineligibleFlag: false, hsn: [], by: "", upd: "",
+        cancel: h.cancelled === true || h.cancelled === "true", opt: h.optional === true || h.optional === "true", ent: [], alt: this.alt(h.alter_id), src: "bridge"};
+      const hs = new Set();
+      (L[h.guid] || []).forEach(l => {
+        if (!l.ledger) return;
+        const x = {l: l.ledger, a: Math.round(Number(l.amount || 0) * 100) / 100, r: null};
+        if (l.hsn){ x.h = l.hsn; hs.add(l.hsn); }
+        if (l.rate != null && l.rate !== "") x.gr = Number(l.rate);
+        v.ent.push(x);
+      });
+      // bill-wise details on the first line of their ledger: [ref name, New Ref / Agst Ref / Advance / On Account, amount, credit days]
+      (B[h.guid] || []).forEach(x => {
+        const e = v.ent.find(z => z.l === x.ledger); if (!e || !x.type) return;
+        const one = [x.name || "", x.type, Math.round(Number(x.amount || 0) * 100) / 100];
+        if (x.credit_days != null && x.credit_days !== "") one.push(Number(x.credit_days));
+        (e.b = e.b || []).push(one);
+      });
+      v.hsn = Array.from(hs);
+      // as the Day Book: a cancelled entry has no lines and is kept for the documents issued (GSTR-1 table 13)
+      if (v.ent.length || (v.cancel && v.no)) out.push(v);
+    });
+    return out;
+  },
+  // one entry into the books by the rule above; true when the books changed
+  put(b, v, by){
+    by = by || this.index(b.vouchers);
+    const i = by.has(v.id) ? by.get(v.id) : -1, have = i >= 0 ? b.vouchers[i] : null;
+    if (!this.wins(v.alt, have)) return false;
+    // (also from a bridge version that carried them before: the Day Book's GST kind stays through later alterations)
+    if (have){
+      const kept = this.CARRY.filter(k => have[k] && !v[k]);
+      if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = have[k]; }); v.carried = kept; }
+    }
+    if (i >= 0) b.vouchers[i] = v; else { by.set(v.id, b.vouchers.length); b.vouchers.push(v); }
+    if (b.gone && b.gone[v.id] && !b.gone[v.id].back) b.gone[v.id].back = new Date().toISOString().slice(0, 10);
+    return true;
+  },
+  // the entries the cloud copy marks deleted in Tally leave the books (kept in b.gone, as a Day Book read again does);
+  // a later version held (an AlterID above the deleted one's) stays
+  drop(b, heads){
+    const dead = new Map(); (heads || []).forEach(h => { if (h && h.guid && h.deleted_at) dead.set(String(h.guid), this.alt(h.alter_id)); });
+    if (!dead.size) return 0;
+    const today = new Date().toISOString().slice(0, 10), who = typeof whoAmI === "function" ? whoAmI() : "";
+    let n = 0;
+    b.vouchers = (b.vouchers || []).filter(v => {
+      if (!v || !dead.has(v.id) || (v.alt != null && v.alt !== "" && this.alt(v.alt) > dead.get(v.id))) return true;
+      b.gone = b.gone || {};
+      if (!b.gone[v.id] || b.gone[v.id].back) b.gone[v.id] = {v, at: today, by: who, src: "bridge"};
+      n++; return false;
+    });
+    return n;
+  },
+  // the cloud copy's rows into the books: deleted entries out, new and later ones in; how many changed
+  apply(b, heads, lines, bills){
+    b.vouchers = b.vouchers || [];
+    let n = this.drop(b, heads);
+    const by = this.index(b.vouchers);
+    this.fromCopy(heads, lines, bills).forEach(v => { if (this.put(b, v, by)) n++; });
+    if (n) b.vouchers.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    return n;
+  },
+  // before the Day Book's months are read again (TallyRead.merge puts in exactly what the files hold), the bridge's
+  // entries are taken out, so they are not taken for deleted; then put back by the same rule
+  stash(b){
+    const keep = (b.vouchers || []).filter(v => v && v.src === "bridge");
+    if (keep.length) b.vouchers = b.vouchers.filter(v => !(v && v.src === "bridge"));
+    return keep;
+  },
+  restore(b, keep){
+    let n = 0;
+    b.vouchers = b.vouchers || [];
+    const by = this.index(b.vouchers);
+    (keep || []).forEach(v => { if (this.put(b, v, by)) n++; });
+    if (n) b.vouchers.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    return n;
+  },
+  // each ledger's PAN and GSTIN as the cloud's ledger list has them (sent by the bridge with Tally's masters): taken where
+  // the books have none, or where the list is newer than the ledger masters read with the books (a PAN corrected in Tally)
+  ledgersInto(b, rows, at){
+    const newer = !b.ledInfoAt || (at && String(at) > String(b.ledInfoAt));
+    let n = 0;
+    (rows || []).forEach(l => {
+      if (!l || !l.name) return;
+      const nm = typeof ledClean === "function" ? ledClean(l.name) : l.name, pan = String(l.pan || "").toUpperCase().trim(), g = String(l.gstin || "").toUpperCase().trim();
+      if (pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(pan)){ b.pans = b.pans || {}; if (!b.pans[nm] || (newer && b.pans[nm] !== pan)){ b.pans[nm] = pan; n++; } }
+      if (g && g.length === 15){ b.gstins = b.gstins || {}; if (!b.gstins[nm] || (newer && b.gstins[nm] !== g)){ b.gstins[nm] = g; n++; } }
+    });
+    if (n) b.panIndex = null;
+    return n;
+  },
+  // how many entries came each way (said on the TDS and GST pages)
+  counts(b){
+    const c = {bridge: 0, daybook: 0};
+    ((b && b.vouchers) || []).forEach(v => { if (v && v.src === "bridge") c.bridge++; else c.daybook++; });
+    return c;
   }
 };
