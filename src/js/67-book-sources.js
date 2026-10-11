@@ -82,8 +82,13 @@ const BookSrc = {
     const t = (x) => String(x == null ? "" : x).trim(), yes = (x) => x === true || x === "true";
     const vals = {regType: t(h.gst_reg_type), country: t(h.gst_country), rcm: yes(h.gst_rcm), taxability: t(h.gst_taxability), nature: t(h.gst_nature), supply: t(h.gst_supply),
       ineligibleFlag: yes(h.gst_ineligible)};
-    if (h.gst_alter_id == null || h.gst_alter_id === "" || this.alt(h.gst_alter_id) !== this.alt(h.alter_id)) return {gstStale: vals};
-    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstRead: !!(vals.nature || vals.taxability)});
+    // review round 2 M2: an entry whose GST lines disagree is not placed by one line's kind: its nature and taxability are
+    // not taken (the returns place it as before 2.4.2, by its ledgers and tax), and it says so (gstMixed)
+    if (yes(h.gst_mixed)){ vals.nature = ""; vals.taxability = ""; }
+    if (h.gst_alter_id == null || h.gst_alter_id === "" || this.alt(h.gst_alter_id) !== this.alt(h.alter_id)) return {gstStale: Object.assign(vals, {at: this.alt(h.gst_alter_id)})};
+    // review round 2 M3: Tally's own type stops the Day Book's being carried only when it names the nature (TallyPrime
+    // 3.0-6.2 give an item a taxability and no nature, 7.1 neither)
+    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstRead: !!vals.nature});
   },
   // one entry into the books by the rule above; true when the books changed
   put(b, v, by){
@@ -91,10 +96,12 @@ const BookSrc = {
     const i = by.has(v.id) ? by.get(v.id) : -1, have = i >= 0 ? b.vouchers[i] : null;
     if (!this.wins(v.alt, have)) return false;
     // (also from a bridge version that carried them before: the Day Book's GST kind stays through later alterations)
-    if (have && !v.gstRead){
+    // review round 2 N2: of the two older kinds (the version held, the type read at an older version) the newer is carried
+    const staleNewer = have && v.gstStale && (have.alt == null || have.alt === "" || v.gstStale.at > this.alt(have.alt));
+    if (have && !v.gstRead && !staleNewer){
       const kept = this.CARRY.filter(k => have[k] && !v[k]);
       if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = have[k]; }); v.carried = kept; }
-    } else if (!have && v.gstStale){
+    } else if ((!have || staleNewer) && v.gstStale){
       const st = v.gstStale, kept = this.CARRY.filter(k => st[k] && !v[k]);
       if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = st[k]; }); v.carried = kept; }
     }
