@@ -55,7 +55,10 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 
 /* ---------- a client's status tabs, at the top of the page (were a second row of the header) ---------- */
 #app > .react-host > .sbar-band, #app .sbar-band { position: sticky; top: var(--head-h, 0px); z-index: 3; margin: 0 -4px 12px; padding: 14px 4px 4px; background: var(--background); }
-.sbar-band > nav.sbar { display: flex; margin: 0; }
+/* (the same look as when they were in the header: arc-clean.css's #cobar nav.sbar[aria-label="Status"] rules) */
+.sbar-band > nav.sbar[aria-label="Status"] { display: block; width: 100%; min-width: 0; max-width: 100%; margin: 0; padding: 0; border: 0; }
+.sbar-band > nav.sbar[aria-label="Status"] [role="tablist"] { margin: 0; border-bottom: 0; max-width: 100%; }
+.sbar-band > nav.sbar[aria-label="Status"] > div { display: block; min-width: 0; }
 @media (max-width: 600px) { .sbar-band { position: static; } }
 
 /* ---------- the sidebar: the date line at its foot on every page ---------- */
