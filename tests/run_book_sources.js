@@ -182,6 +182,51 @@ const taxable = (ym) => Math.round(sales(ym).reduce((a, r) => a + r.taxable, 0) 
   x.BookSrc.ledgersInto(b, [{name: "Lessor", pan: "ABCPS1111F"}], "2026-10-09T00:00:00Z");
   ok(x.TDS.rows()[0].pan === "ABCPS9999F", "12. an older list does not undo the masters' PAN");
 
+  // ---- 13. bridge 2.4.2 (round 44 part B, migration 72): the entry's GST type in the cloud copy (gst_* columns) is the
+  // entry's, as the Day Book's: an SEZ supply and an export the bridge alone sent reach 3.1(b) and GSTR-1's SEZ / export
+  // tables, a reverse-charge purchase is RCM, a blocked credit is blocked; a 2.4.2 version's type replaces the Day Book's
+  // (nothing carried), an older bridge's version (columns null) still keeps the Day Book's; the reader asks the columns and
+  // a cloud without them (before 72) is read as before
+  const GT = (o) => Object.assign({gst_reg_type: "Regular", gst_country: "India", gst_rcm: false, gst_nature: "Sales Taxable", gst_taxability: "Taxable", gst_supply: "Goods", gst_ineligible: false}, o);
+  const T3 = {tally_vouchers: [
+      H("b-sez", "2026-05-20", 3, "Sales", "S/20", "Gamma", GT({gstin: "29AABCG3333C1Z1", pos: "Karnataka", gst_nature: "Sales to SEZ - Taxable"})),
+      H("b-exp", "2026-05-21", 4, "Sales", "S/21", "Euro", GT({gst_reg_type: "Unregistered", gst_country: "Germany", gst_nature: "Exports - LUT/Bond", gst_taxability: "Exempt"})),
+      H("b-rcm", "2026-05-22", 5, "Purchase", "P/22", "Mu", GT({gst_reg_type: "Unregistered/Consumer", gst_rcm: "true", gst_nature: "Purchase From Unregistered Dealer - Taxable", gst_supply: "Services"})),
+      H("b-blk", "2026-05-23", 6, "Purchase", "P/23", "Nu", GT({gstin: "07AABCN9999K1ZJ", gst_nature: "Purchase Taxable", gst_ineligible: "true"}))],
+    tally_lines: [Ln("b-sez", "Gamma", -11800), Ln("b-sez", "Sales", 10000, {hsn: "8471", rate: "18"}), Ln("b-sez", "Output IGST", 1800),
+      Ln("b-exp", "Euro", -20000), Ln("b-exp", "Sales", 20000, {hsn: "8471", rate: "18"}),
+      Ln("b-rcm", "Legal Fees", -50000, {hsn: "998211", rate: "18"}), Ln("b-rcm", "Mu", 50000),
+      Ln("b-blk", "Motor Car", -500000, {hsn: "8703", rate: "28"}), Ln("b-blk", "Nu", 500000)], tally_bills: [], tally_recorder_lines: []};
+  b = books([]); const st3 = restStub(T3); ctx.Cloud = {api: st3.api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(st3.asked.some(q => /^tally_vouchers\?select=[^&]*gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible/.test(q)), "13. the cloud copy's GST type columns are read");
+  const vb = (id) => b.vouchers.find(v => v.id === id) || {};
+  ok(vb("b-sez").nature === "Sales to SEZ - Taxable" && vb("b-sez").regType === "Regular", "13. the SEZ supply carries Tally's nature: " + vb("b-sez").nature);
+  ok(vb("b-exp").country === "Germany" && vb("b-exp").nature === "Exports - LUT/Bond" && vb("b-exp").taxability === "Exempt", "13. the export carries the buyer's country and nature: " + vb("b-exp").country + " / " + vb("b-exp").nature);
+  ok(vb("b-rcm").rcm === true && vb("b-rcm").supply === "Services", "13. the advocate's bill is reverse charge (services)");
+  ok(vb("b-blk").ineligibleFlag === true && vb("b-sez").ineligibleFlag === false, "13. the motor car's credit is blocked (17(5)); the SEZ sale's is not");
+  const out = sales("202605");
+  const sez = out.find(r => r.no === "S/20"), exp = out.find(r => r.no === "S/21");
+  ok(sez && sez.cls === "sez" && exp && exp.cls === "export", "13. GSTR-1: the bridge's SEZ supply is SEZ and its export an export (" + (sez && sez.cls) + ", " + (exp && exp.cls) + ")");
+  // a later 2.4.2 version replaces the Day Book's type (an SEZ sale altered to a regular one): nothing carried
+  b = books([V("b-sez", "Sales", "20260520", "S/20", "Gamma", [["Gamma", -11800], ["Sales", 10000, G], ["Output IGST", 1800]], {gstin: "29AABCG3333C1Z1", alt: 2, regType: "Regular", nature: "Sales to SEZ - Taxable", rcm: true})]);
+  const T4 = {tally_vouchers: [H("b-sez", "2026-05-20", 3, "Sales", "S/20", "Gamma", GT({gstin: "29AABCG3333C1Z1"}))], tally_lines: T3.tally_lines.filter(l => l.guid === "b-sez"), tally_bills: [], tally_recorder_lines: []};
+  ctx.Cloud = {api: restStub(T4).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(vb("b-sez").nature === "Sales Taxable" && vb("b-sez").rcm === false && !vb("b-sez").carried, "13. a 2.4.2 version's GST type replaces the Day Book's, nothing carried: " + vb("b-sez").nature + " " + JSON.stringify(vb("b-sez").carried));
+  // an older bridge's version (columns null: the cloud has no type for it) keeps the Day Book's
+  b = books([V("b-sez", "Sales", "20260520", "S/20", "Gamma", [["Gamma", -11800], ["Sales", 10000, G], ["Output IGST", 1800]], {gstin: "29AABCG3333C1Z1", alt: 2, regType: "Regular", nature: "Sales to SEZ - Taxable"})]);
+  const T5 = {tally_vouchers: [H("b-sez", "2026-05-20", 3, "Sales", "S/20", "Gamma", {gstin: "29AABCG3333C1Z1", gst_reg_type: null, gst_country: null, gst_rcm: null, gst_nature: null, gst_taxability: null, gst_supply: null, gst_ineligible: null})],
+    tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []};
+  ctx.Cloud = {api: restStub(T5).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(vb("b-sez").nature === "Sales to SEZ - Taxable" && (vb("b-sez").carried || []).includes("nature"), "13. a version from a bridge before 2.4.2 (no type in the cloud) keeps the Day Book's: " + vb("b-sez").nature);
+  // a cloud without migration 72's columns is read as before
+  const T6 = {tally_vouchers: [H("b-old", "2026-05-24", 2, "Sales", "S/24", "Beta")], tally_lines: [Ln("b-old", "Beta", -118), Ln("b-old", "Sales", 100, G), Ln("b-old", "Output IGST", 18)], tally_bills: [], tally_recorder_lines: []};
+  b = books([]); ctx.Cloud = {api: restStub(T6).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(b.vouchers.length === 1 && b.vouchers[0].no === "S/24" && b.vouchers[0].nature === "", "13. a cloud copy without migration 72's columns is read as before");
+
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e && e.stack || e); process.exit(1); });
