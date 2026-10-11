@@ -1,6 +1,6 @@
 // The page: the sidebar, the top bar, the client switcher and the main part (Main.jsx), and any React screen placed
 // inside an old piece of HTML (<div data-react>). Each part is guarded: one that fails to draw does not take the others down.
-import { useLayoutEffect, useSyncExternalStore } from "react";
+import { Suspense, useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { subscribe, snapshot, islands } from "./store.js";
 import Guard from "./Guard.jsx";
@@ -43,7 +43,7 @@ export default function App() {
       <WhyNotes />
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
-        return Screen ? createPortal(<Guard name={name} v={v}><Screen {...props} /></Guard>, host, key) : null;
+        return Screen ? createPortal(<Guard name={name} v={v}><Suspense fallback={null}><Screen {...props} /></Suspense></Guard>, host, key) : null;
       })}
     </>
   );

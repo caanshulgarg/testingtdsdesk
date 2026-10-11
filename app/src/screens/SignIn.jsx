@@ -59,6 +59,8 @@ function SetPassword() {
 
 export default function SignIn() {
   const st = Cloud.st;
+  // whether new firms may sign up (the "Create an account" line): asked when this page shows (stability batch 2)
+  useEffect(() => { if (typeof loadSignupInfo === "function") loadSignupInfo(); }, []);
   if (S.setPassword) return <SetPassword />;
   if (Cloud.on() && st.mfa) return <TwoStep />;
   if (S.signUpOpen) return <SignUp />;
