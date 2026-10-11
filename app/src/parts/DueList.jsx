@@ -22,7 +22,7 @@ export default function DueAll() {
   const rows = pick(f), count = (k) => pick(k).length;
   return <section className="dash-card" data-due-list="" style={{ marginTop: 16 }}>
     <div className="rp-title"><h3>Returns and payments due</h3>
-      <span className="note">Every client’s GST and TDS returns and TDS deposits, from {fmtDate(DueList.addDays(DueList.today(), -DueList.BACK))} to {fmtDate(DueList.addDays(DueList.today(), DueList.AHEAD))}, by due date. Click one to open that return.</span></div>
+      <span className="note">Every client’s GST and TDS returns and TDS deposits due up to {fmtDate(DueList.addDays(DueList.today(), DueList.AHEAD))}: all not yet filed, and those filed since {fmtDate(DueList.addDays(DueList.today(), -DueList.BACK))}, by due date. Click one to open that return.</span></div>
     <div className="gf-chips" style={{ margin: "8px 0" }} role="group" aria-label="Show">
       {CHIPS.map(([k, l]) => <button key={k} data-due-chip={k} className={"gf-chip" + (f === k ? " on" : "") + (k === "overdue" && count(k) ? " warn" : "")} aria-pressed={f === k} onClick={() => setF(k)}>{l} <b>{count(k)}</b></button>)}
       <span style={{ width: 12 }} />
