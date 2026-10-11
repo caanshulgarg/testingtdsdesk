@@ -59,7 +59,7 @@ $lq = Join-Path $env:BRIDGE_DIST 'ledreq'
 $need = 'ledlist-chunk.xml', 'ledlist-tail.xml', 'ledlist-chunk-242.xml', 'ledbyname.xml', 'natures-chunk.xml', 'natures-tail.xml'
 $miss = @($need | Where-Object { -not (Test-Path (Join-Path $lq $_)) })
 if ($miss.Count) { foreach ($c in $M1, $M2, $M3, $M4, $M5) { MRes $c 'HARNESS' "the ref's requests are not in bridge-dist\ledreq: $($miss -join ', ')" }; return }
-$T = @{}; foreach ($n in $need) { $RQ[$n] = (Get-Content (Join-Path $lq $n) -Raw).Trim() }
+$RQ = @{}; foreach ($n in $need) { $RQ[$n] = (Get-Content (Join-Path $lq $n) -Raw).Trim() }
 Info "tdsm: the ref's requests from $lq ($(Get-Content (Join-Path $lq 'SOURCE.txt') -TotalCount 1 -ErrorAction SilentlyContinue))"
 function Req([string]$tpl, [int64]$a, [int64]$u) { $tpl.Replace('@@CO@@', (LE $co1)).Replace('111111', "$a").Replace('222222', "$u") }
 function ByName([string]$name) { $RQ['ledbyname.xml'].Replace('@@CO@@', (LE $co1)).Replace('@@NAME@@', (LE $name)) }
