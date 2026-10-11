@@ -43,7 +43,7 @@ with sync_playwright() as p:
     print("   nav:", nav.replace("\n", " | "))
     ok("CMP-08" in nav and "GSTR-4" in nav and "Turnover and tax" in t and "ITC follow-up" not in nav and "GSTR-3B" not in nav, "composition: CMP-08 and GSTR-4 instead of GSTR-1 and 3B; no ITC follow-up")
     pg.screenshot(path=OUT + "/comp-cmp08.png", full_page=False)
-    pg.click('nav[aria-label="GST"] button[data-part="gstr4"]'); pg.wait_for_timeout(4000)
+    pg.evaluate("gstPartGo('gstr4')"); pg.wait_for_timeout(4000)
     ok("Table 4: purchases" in pg.inner_text("#app") and "Table 5" in pg.inner_text("#app"), "GSTR-4 for the year")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

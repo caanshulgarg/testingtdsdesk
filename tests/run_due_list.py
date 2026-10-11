@@ -1,4 +1,5 @@
-"""python3 run_due_list.py - one due list across all clients (TDS/GST round 2, item 1), on the firm's Today page:
+"""python3 run_due_list.py - one due list across all clients (TDS/GST round 2, item 1), on the firm's Compliance page
+  (round 46, 11-Oct-2026: moved from Today, which keeps one line with the overdue count and "Open Compliance →"):
 
   every GST and TDS return and TDS deposit of every client, due, overdue or filed, sorted by due date, from the same code
   as each client's TDS and GST pages (DueList, src/js/68-due-list.js), with one click into the client's return.
@@ -106,12 +107,17 @@ try:
         x = find(it3 or [], what="GSTR-3B", per="Q1 2026-27")
         ok(len(x) == 1 and x[0]["status"] == "overdue", "ZZ Quarter: Q1 2026-27's 3B, not filed, overdue (%s)" % x)
 
-        # ---- the Today page
+        # ---- the Compliance page (round 46: the list moved there from Today, which keeps one line)
         pg.evaluate("navHome('today')"); pg.wait_for_timeout(1500)
+        ok(pg.locator("#app [data-due-list]").count() == 0 and pg.locator("#app [data-due-line]").count() == 1 and "overdue" in pg.inner_text("#app [data-due-line]"),
+           "Today: no list, one line with the overdue count (%s)" % (pg.inner_text("#app [data-due-line]") if pg.locator("#app [data-due-line]").count() else ""))
+        pg.click("#app [data-open-compliance]"); pg.wait_for_timeout(1500)
+        ok(pg.evaluate("S.homeTab") == "compliance" and pg.evaluate("location.hash") == "#/compliance", "Open Compliance → the Compliance page, #/compliance")
         box = "#app [data-due-list]"
-        ok(pg.locator(box).count() == 1 and "Returns and payments due" in pg.inner_text(box), "Today shows 'Returns and payments due'")
+        ok(pg.locator(box).count() == 1, "Compliance shows the list")
         dues = pg.evaluate("Array.from(document.querySelectorAll('#app [data-due-list] tr[data-due]')).map(t => t.getAttribute('data-status'))")
-        ok(dues and "filed" not in dues and "overdue" in dues and "due" in dues, "opened on 'To do': overdue and due, nothing filed (%d rows)" % len(dues))
+        ok(dues and set(dues) == {"overdue"}, "opened on 'Overdue': overdue only (%d rows)" % len(dues))
+        pg.click('#app [data-due-chip="all"]'); pg.wait_for_timeout(300)
         t = pg.inner_text(box)
         ok("ZZ Second" in t and "ZZ Quarter" in t and "ZZ TDSGST" in t, "every client with books is in the list")
         ok("Not in the list: ZZ Blank" in t, "the client with no books here is named once, with what to do")
@@ -124,20 +130,26 @@ try:
         ok(st and set(st) == {"filed"}, "'Filed or paid' shows only filed returns and paid deposits")
         r140 = '#app [data-due="%s|tds|26Q|Q1 2026-27"]' % c1
         ok(pg.locator(r140).count() == 1 and "Filed 05-Aug-2026, 5 days late" in pg.inner_text(r140), "Form 140 Q1: 'Filed 05-Aug-2026, 5 days late'")
-        pg.click('#app [data-due-chip="overdue"]'); pg.click('#app [data-due-tax="GST"]'); pg.wait_for_timeout(300)
+        pg.click('#app [data-due-chip="month"]'); pg.wait_for_timeout(300)
+        st = pg.evaluate("Array.from(document.querySelectorAll('#app [data-due-list] tr[data-due]')).map(t => [t.getAttribute('data-status'), t.getAttribute('data-due')])")
+        ok(st and all(x[0] == "due" for x in st) and any(x[1].endswith("|Sep-2026") for x in st), "'Due this month': due, not overdue or filed (%d rows)" % len(st))
+        pg.click('#app [data-due-chip="overdue"]'); pg.select_option('#app [data-due-tax-pick]', "GST"); pg.wait_for_timeout(300)
         kinds = pg.evaluate("Array.from(document.querySelectorAll('#app [data-due-list] tr[data-due]')).map(t => t.getAttribute('data-due').split('|')[1])")
         ok(kinds and set(kinds) <= {"gst", "gstpay"}, "GST alone: only GST rows")
         # one click into the client's return
-        pg.click('#app [data-due-tax="both"]'); pg.click('#app [data-due-chip="todo"]'); pg.wait_for_timeout(300)
+        pg.select_option('#app [data-due-client]', ids["a"]); pg.wait_for_timeout(300)
+        cl = pg.evaluate("Array.from(document.querySelectorAll('#app [data-due-list] tr[data-due]')).map(t => t.getAttribute('data-due').split('|')[0])")
+        ok(all(x == ids["a"] for x in cl), "the client filter: one client's rows only")
+        pg.select_option('#app [data-due-tax-pick]', ""); pg.select_option('#app [data-due-client]', ""); pg.click('#app [data-due-chip="all"]'); pg.wait_for_timeout(300)
         pg.click('#app [data-due="%s|gst|GSTR-3B|Sep-2026"] [data-due-open]' % ids["a"]); pg.wait_for_timeout(1500)
         s = pg.evaluate("({co: S.coId, tab: S.tab, bt: S.booksTab, part: S.gstPart, ym: S.gstYm, reg: S.gstReg, view: S.gstView})")
         ok(s["co"] == ids["a"] and s["tab"] == "books" and s["bt"] == "gst" and s["part"] == "vault" and s["ym"] == "202609" and s["reg"] == "27", "a client without a day book: its GST row opens Returns filed for that GSTIN and month (%s)" % s)
-        pg.evaluate("navHome('today')"); pg.wait_for_timeout(1500)
+        pg.evaluate("navHome('compliance')"); pg.wait_for_timeout(1500); pg.click('#app [data-due-chip="all"]'); pg.wait_for_timeout(300)
         pg.click('#app [data-due="%s|gst|GSTR-3B|Sep-2026"] [data-due-open] >> nth=0' % c1); pg.wait_for_timeout(1800)
         s = pg.evaluate("({co: S.coId, tab: S.tab, bt: S.booksTab, part: S.gstPart, ym: S.gstYm, reg: S.gstReg, view: S.gstView})")
         ok(s["co"] == c1 and s["bt"] == "gst" and s["part"] == "r3b" and s["ym"] == "202609" and s["view"] == "return", "a client with books: the row opens its GSTR-3B for Sep-2026 (%s)" % s)
         ok("GSTR-3B" in (pg.text_content("#app [data-return-title]") or ""), "the GSTR-3B page is shown")
-        pg.evaluate("navHome('today')"); pg.wait_for_timeout(1200)
+        pg.evaluate("navHome('compliance')"); pg.wait_for_timeout(1200); pg.click('#app [data-due-chip="all"]'); pg.wait_for_timeout(300)
         pg.click('#app [data-due="%s|tds|26Q|Q2 2026-27"] [data-due-open]' % c1); pg.wait_for_timeout(1800)
         s = pg.evaluate("({co: S.coId, bt: S.booksTab, view: S.tdsView, fy: S.tdsFy, q: S.tdsQ, form: S.tdsForm, tab: S.tdsTab})")
         ok(s["co"] == c1 and s["bt"] == "tds" and s["view"] == "return" and s["fy"] == "2026-27" and s["q"] == "Q2" and s["form"] == "26Q" and s["tab"] == "file", "a TDS row opens the return's File tab (%s)" % s)
@@ -147,7 +159,7 @@ try:
         it = pg.evaluate("() => DueList.forClient(CO(), S.books).filter(x => x.kind === 'tds' && x.form === '26Q' && x.per === 'Q2 2026-27').map(x => x.status)")
         ok(it == ["filed"], "marked filed on its page: the list shows it filed (%s)" % it)
         # phone width: the list stays inside the page
-        pg.set_viewport_size({"width": 390, "height": 844}); pg.evaluate("navHome('today')"); pg.wait_for_timeout(1200)
+        pg.set_viewport_size({"width": 390, "height": 844}); pg.evaluate("navHome('compliance')"); pg.wait_for_timeout(1200)
         w = pg.evaluate("document.documentElement.scrollWidth")
         ok(w <= 392, "phone: no sideways scroll of the page (%s px)" % w)
         br.close()

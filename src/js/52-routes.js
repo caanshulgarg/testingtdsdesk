@@ -5,7 +5,7 @@
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -16,7 +16,7 @@ const Route = {
       // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
       if (S.homeTab !== "tally") S.tallyOld = false;
       else if (S.tallyOld) return "#/tally/bridge-1.15";
-      return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
+      return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
     if (S.step === "collect") return c + "upload";
@@ -38,7 +38,8 @@ const Route = {
   },
   // the TDS and GST pages keep their year, quarter or month, form or return and tab in the address (09-Oct-2026), so Back
   // and Refresh come back to the same return: #/c/<client>/books/tds/2026-27/Q1/26Q/challans, …/books/tds/2026-27 (the
-  // year's grid), …/books/tds/2026-27/certs, …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
+  // year's grid), …/books/tds/2026-27/challans/Q2, …/books/tds/2026-27/26as, …/traces, …/checks/<rates|limits|tieout|corr>
+  // (round 46; the old …/certs opens checks/rates, a return's old …/summary its entries), …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
   booksMore(){
     const t = booksTab(), e = (x) => encodeURIComponent(x || "");
     if (t === "tds"){
@@ -47,7 +48,9 @@ const Route = {
       if (v === "notices") return "/notices";
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
-      if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      // round 46 (TDS & GST makeover): the TDS tabs Challans and Checks have their own addresses; the old …/certs is Checks
+      if (v === "certs" || v === "checks") return "/" + e(S.tdsFy) + "/checks/" + e(v === "certs" ? "rates" : (S.tdsCheck || "rates"));
+      if (v === "challans") return "/" + e(S.tdsFy) + "/challans" + (S.tdsQ ? "/" + e(S.tdsQ) : "");
       if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
       if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
@@ -65,7 +68,9 @@ const Route = {
       if (p[0] === "notices"){ S.tdsView = "notices"; return; }
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
-      if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (p[1] === "certs"){ S.tdsView = "checks"; S.tdsCheck = "rates"; return; }
+      if (p[1] === "checks"){ S.tdsView = "checks"; S.tdsCheck = ["rates", "limits", "tieout", "corr"].includes(p[2]) ? p[2] : "rates"; return; }
+      if (p[1] === "challans"){ S.tdsView = "challans"; S.tdsQ = /^Q[1-4]$/.test(p[2] || "") ? p[2] : ""; return; }
       if (p[1] === "26as"){ S.tdsView = "recon"; return; }
       if (p[1] === "traces"){ S.tdsView = "traces"; return; }
       if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
@@ -128,7 +133,7 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
-      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
+      else if (["clients", "today", "compliance", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;
     } finally {

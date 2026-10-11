@@ -20,7 +20,7 @@ with sync_playwright() as p:
     ok("GSTR-9 for 2025-26" in t and "Supplies made to registered persons (B2B)" in t and "17. HSN summary of outward supplies" in t, "GSTR-9 renders, parts II to VI")
     ok("6J:" not in t, "no 6J difference: credit notes from suppliers reduce credit in 3B as in 6B")
     pg.screenshot(path=OUT + "/gst9.png", full_page=False)
-    pg.click('nav[aria-label="GST"] button[data-part="g9c"]'); pg.wait_for_timeout(2500)
+    pg.evaluate("gstPartGo('g9c')"); pg.wait_for_timeout(2500)
     t = pg.inner_text("#app")
     ok("GSTR-9C for 2025-26" in t and "5Q" in t and "12F" in t, "GSTR-9C renders")
     pg.fill('input[aria-label="adj.5B"]', "100000"); pg.press('input[aria-label="adj.5B"]', "Tab"); pg.wait_for_timeout(2500)
@@ -32,7 +32,7 @@ with sync_playwright() as p:
     rp = pop.value; rp.wait_for_timeout(700); ok("GSTR-9C" in rp.inner_text("body") and "Unbilled revenue of March" in rp.inner_text("body"), "9C as PDF, with the reasons"); rp.close()
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
     pg.click('.dash-card button:text-is("Excel")'); pg.wait_for_timeout(3000)
-    pg.click('nav[aria-label="GST"] button[data-part="g9"]'); pg.wait_for_timeout(2500); pg.click('.dash-card button:text-is("Excel")'); pg.wait_for_timeout(4000)
+    pg.evaluate("gstPartGo('g9')"); pg.wait_for_timeout(2500); pg.click('.dash-card button:text-is("Excel")'); pg.wait_for_timeout(4000)
     ok(len([n for n in pg.evaluate("window.__saved") if "GSTR-9" in n]) == 2, "9 and 9C as Excel: " + ", ".join(pg.evaluate("window.__saved")))
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

@@ -1,0 +1,165 @@
+"""python3 run_tdsgst_layout.py - the TDS & GST makeover (round 46, 11-Oct-2026; the owner: "TDS 26AS and TDS return are
+different things, should be in different tabs; page looks very heavy; GST and TDS return status inside the client list is
+illogical"), used as a person would, on the fixture books (tests/fixtures/books, and the same a year on):
+
+  - the firm's Compliance page (#/compliance, in the sidebar) lists the returns and payments due; Today keeps one line;
+    the Clients list shows no return figures or status;
+  - a client's TDS: Returns · Challans · 26AS & AIS · TRACES files · Checks (Rates and certificates · Limits · Tie-out ·
+    Corrections), each its own address; Every year and the year's downloads under More;
+  - a return: the summary card (the figures, the status, one main button, More) on top, Entries · Deductees · Challans ·
+    Errors to fix · Files below;
+  - GST: Returns · 2B & ITC · Supplier health · Checks, every part reachable;
+  - old addresses go to the new places (…/certs → Checks, a return's …/summary → its entries);
+  - the sidebar's TDS & GST opens the returns, not From Tally; the ledgers-to-confirm banner once, on Returns;
+  - Reports' and MIS's compliance links open the Compliance page;
+  - a phone's width: no sideways scroll, the tabs on one line.
+Layout only: the figures and files are run_tdsgst_ui.py's. Runs on the React build (app/dist-test) or TDSDESK_SITE."""
+import os, sys, json, threading, functools, http.server
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+from books_data import CACHE
+from tdsgst_snapshot import LOAD, CHALLANS
+from playwright.sync_api import sync_playwright
+SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
+PORT = int(os.environ.get("LAYOUT_PORT") or 8337)
+fails, errors = [], []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w)
+    if not c: fails.append(w)
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
+books = json.load(open(CACHE))
+
+try:
+    with sync_playwright() as p:
+        br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
+        E, W = pg.evaluate, pg.wait_for_timeout
+        pg.goto("http://localhost:%d/" % PORT); W(2500); pg.click('button[data-act="useOffline"]'); W(2000)
+        E("window.__dueToday = '2026-10-11'")
+        E(LOAD, books); W(1000); E("S.books = window.__bk; render();"); W(500); E(CHALLANS); W(300)
+        cid = E("S.coId")
+        E("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-08-05', token: '123456789012345'}}; return saveBooks(); }")
+        def hash_go(h, wait=1200):
+            E("(h) => { location.hash = h; }", h); W(wait)
+        vis = lambda sel: E("(s) => [...document.querySelectorAll(s)].filter(e => e.offsetParent !== null).length", sel)
+        text = lambda sel="#app": pg.inner_text(sel)
+
+        print("1. firm: Compliance, Today, Clients")
+        E("navHome('today')"); W(1500)
+        ok(pg.locator('#side button:has-text("Compliance")').count() == 1, "the firm's sidebar has Compliance")
+        ok(pg.locator("#app [data-due-list]").count() == 0 and pg.locator("#app [data-due-line]").count() == 1, "Today: one line, no list")
+        pg.click('#side button:has-text("Compliance")'); W(1500)
+        ok(E("location.hash") == "#/compliance" and "Compliance" in text("#cobar"), "the sidebar opens #/compliance, titled Compliance")
+        rows = pg.locator("#app [data-due-list] tr[data-due]").count()
+        ok(rows > 0 and pg.locator("#app [data-due-sum]").count() == 1, "Compliance lists the returns and payments due, the answer first (%d rows)" % rows)
+        views = E("[...document.querySelectorAll('#app [data-due-chip]')].map(b => b.dataset.dueChip)")
+        ok(views == ["overdue", "month", "filed", "all"], "views: Overdue · Due this month · Filed · All (%s)" % views)
+        ok(pg.locator("#app [data-due-tax-pick]").count() == 1 and pg.locator("#app [data-due-client]").count() == 1, "filters: GST/TDS and client")
+        right = E("(() => { const td = document.querySelector('#app [data-due-list] tbody td.n'); return td ? getComputedStyle(td).textAlign : ''; })()")
+        ok(right in ("right", "end"), "amounts right-aligned (%s)" % right)
+        hash_go("#/today", 1200); hash_go("#/compliance", 1500)
+        ok(E("S.homeTab") == "compliance", "the address #/compliance opens it directly")
+        E("navHome('clients')"); W(800)
+        heads = E("[...document.querySelectorAll('#app table thead th')].map(t => t.innerText.trim()).filter(Boolean)")
+        ok(heads and not any(h.startswith(("TDS", "GSTR", "GST return", "Due", "Overdue", "Return", "Filed")) for h in heads), "the Clients list: no return figures or status (%s)" % heads)
+
+        print("2. the client's TDS: the tabs")
+        E("(c) => { S.booksTab = 'import'; S.booksLast = ''; return openCompany(c); }", cid); W(600)
+        E("() => { S.books = window.__bk; render(); }"); W(300)
+        pg.click('#side button:has-text("TDS & GST")'); W(800)
+        ok(E("booksTab()") == "tds" and E("S.tdsView") in ("year", "years"), "the sidebar's TDS & GST opens TDS Returns, not From Tally (%s)" % E("booksTab()"))
+        books_tabs = E("[...document.querySelectorAll('#app nav[aria-label=Books] button')].map(b => b.textContent.replace(/\\s*[\\d✓].*$/, '').trim())")
+        ok(books_tabs[:2] == ["TDS", "GST"] and "From Tally" in books_tabs and "Tie-out" in books_tabs, "TDS and GST first; From Tally, ledgers and tie-out still there (%s)" % books_tabs)
+        hash_go("#/c/%s/books/tds/2026-27" % cid)
+        secs = E("[...document.querySelectorAll('#app nav[aria-label=TDS] button')].map(b => b.textContent)")
+        ok(secs == ["Returns", "Challans", "26AS & AIS", "TRACES files", "Checks"], "TDS tabs: %s" % secs)
+        ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1, "Returns: the year's grid of forms × quarters")
+        ok(pg.locator("#app [data-tieout]").count() == 0 and pg.locator("#app [data-limits]").count() == 0, "Returns carries no checks under the grid")
+        ok(pg.locator("#app [data-ledger-banner]").count() == 1, "the ledgers-to-confirm banner: on Returns")
+        pg.click("#app [data-tds-bar] details.more > summary"); W(200)
+        more = E("[...document.querySelectorAll('#app [data-tds-bar] .more-item')].map(b => b.textContent)")
+        ok("Every year" in more and "Download the whole year" in more and any(m.startswith("Download the year, Form 140") for m in more), "More: Every year and the year's downloads (%s)" % more)
+        pg.click("#app [data-tds-more='years']"); W(400)
+        ok(E("S.tdsView") == "years" and "Every year" in text(), "More › Every year")
+        want = {"challans": ("/books/tds/2026-27/challans/", "[data-year-challans]"), "recon": ("/books/tds/2026-27/26as", "[data-upload='as26']"),
+                "traces": ("/books/tds/2026-27/traces", "[data-upload='traces']"), "checks": ("/books/tds/2026-27/checks/rates", "[data-certs]")}
+        hash_go("#/c/%s/books/tds/2026-27" % cid)
+        for k, (h, sel) in want.items():
+            pg.click("#app [data-tds-sec='%s']" % k); W(600)
+            ok(h in E("location.hash") and pg.locator("#app " + sel).count() >= 1 and pg.locator("#app [data-ledger-banner]").count() == 0,
+               "TDS › %s: its own page and address (%s), no banner" % (k, E("location.hash").split("/books/")[-1]))
+        hash_go("#/c/%s/books/tds/2026-27/challans/Q1" % cid)
+        ok(E("[S.tdsView, S.tdsQ]") == ["challans", "Q1"] and pg.locator("#app #tdsChTable").count() == 1 and pg.locator("#app [data-challan-upload-bar]").count() == 1, "Challans: a quarter's challans, upload and list")
+        checks = {"rates": "[data-certs]", "limits": "[data-limits='2026-27']", "tieout": "[data-tieout='2026-27']", "corr": "[data-list-empty], [data-tds-corrections]"}
+        hash_go("#/c/%s/books/tds/2026-27/checks/rates" % cid)
+        for k, sel in checks.items():
+            pg.click("#app [data-tds-check='%s']" % k); W(400)
+            ok(E("location.hash").endswith("/checks/" + k) and pg.locator("#app " + sel).count() >= 1, "Checks › %s" % k)
+
+        print("3. a return")
+        hash_go("#/c/%s/books/tds/2026-27/Q1/26Q/summary" % cid)
+        ok(E("S.tdsTab") == "deductions" and E("location.hash").endswith("/Q1/26Q/deductions"), "the old …/summary opens the entries, and the address follows (%s)" % E("location.hash"))
+        card = "#app [data-return-card='26Q|Q1']"
+        ok(pg.locator(card).count() == 1 and "Form 140 (earlier 26Q) · Q1" in text(card + " [data-return-title]"), "the summary card, named Form 140 (earlier 26Q) · Q1")
+        ok("Filed 05-Aug-2026" in text(card + " [data-status-tag]"), "the card's status: Filed 05-Aug-2026")
+        ok(all(x in text(card) for x in ["TDS deducted", "Challans", "Not against a challan", "To look at"]), "the card's key figures")
+        tabs = E("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
+        ok(tabs == ["Entries", "Deductees", "Challans", "Errors to fix", "Files"], "tabs below: %s" % tabs)
+        hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
+        ok(vis("#app .btn.primary") == 1 and pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]").count() == 1, "a return not filed: one main button, on the card (%d)" % vis("#app .btn.primary"))
+        pg.click("#app [data-return-card='26Q|Q2'] [data-card-primary]"); W(400)
+        ok(E("S.tdsTab") == "file" and vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0, "Make the file → Files, whose download is then the one main button")
+        pg.click("#app [data-return-card] details.more > summary"); W(200)
+        ok(any("working" in x for x in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")), "the card's More: the working (Excel)")
+        for t in ["Entries", "Deductees", "Challans", "Errors to fix", "Files"]:
+            pg.click('#app nav[aria-label="Return"] button:has-text("%s")' % t); W(300)
+        ok(not errors, "every tab of the return draws")
+        pg.click("#app [data-return-card] .ret-back"); W(400)
+        ok(E("S.tdsView") == "year", "← the year, from the card")
+        hash_go("#/c/%s/books/tds/2026-27/Q1/24Q" % cid)
+        ok(pg.locator("#app [data-return-card='24Q|Q1']").count() == 1 and E("S.tdsTab") == "employees", "Form 138: its card, opened on Employees")
+        hash_go("#/c/%s/books/tds/2025-26/certs" % cid)
+        ok(E("[S.tdsView, S.tdsCheck]") == ["checks", "rates"] and E("location.hash").endswith("/books/tds/2025-26/checks/rates"), "the old …/certs opens Checks › Rates and certificates (%s)" % E("location.hash"))
+
+        print("4. GST")
+        hash_go("#/c/%s/books/gst/07/202603/year" % cid)
+        gsecs = E("[...document.querySelectorAll('#app nav[aria-label=\"GST sections\"] button')].map(b => b.textContent)")
+        ok(gsecs == ["Returns", "2B & ITC", "Supplier health", "Checks"], "GST tabs: %s" % gsecs)
+        ok(pg.locator("#app [data-gst-grid]").count() == 1 and pg.locator("#app [data-ledger-banner]").count() == 1, "Returns: the year's grid, and the banner once")
+        sec_parts = {"returns": ["r1", "r3b", "amend", "adv", "g9", "g9c", "vault"], "itc": ["r2b", "inreg", "follow", "rev"], "health": ["health"], "checks": ["filedcmp", "recon"]}
+        for sec, parts in sec_parts.items():
+            pg.click("#app [data-gst-sec='%s']" % sec); W(600)
+            shown = E("[...document.querySelectorAll('#app nav[aria-label=GST] [data-part]')].map(b => b.dataset.part)")
+            for part in parts:
+                if len(parts) > 1 or sec == "returns":
+                    pg.click("#app nav[aria-label=GST] [data-part='%s']" % part); W(500)
+                ok(E("S.gstPart") == part and E("S.gstView") == "return" and ("/" + part) in E("location.hash") and (sec == "returns") == (pg.locator("#app [data-ledger-banner]").count() == 1),
+                   "GST › %s › %s (%s)" % (sec, part, E("location.hash").split("/books/")[-1]))
+        hash_go("#/c/%s/books/gst/07/202603/r3b/summary" % cid)
+        ok(pg.locator("#app [data-return-card='r3b|202603'] [data-return-title]").count() == 1 and pg.locator("#app [data-return-card] [data-card-primary]").inner_text() == "Download GSTR-3B JSON",
+           "GSTR-3B: its summary card, one main button")
+        ok(vis("#app .btn.primary") == 1, "one main button on the page (%d)" % vis("#app .btn.primary"))
+        hash_go("#/c/%s/books/gst/07/202603/r2b" % cid)
+        ok(E("location.hash").endswith("/r2b") and E("(() => { const b = document.querySelector('#app [data-gst-sec=itc]'); return b && b.getAttribute('aria-selected'); })()") == "true", "an old 2B address opens 2B & ITC")
+
+        print("5. Reports and MIS link to Compliance")
+        E("() => RPT.open('due-all')"); W(1200)
+        ok(E("S.homeTab") == "compliance" and E("S.view") == "home", "Reports › Returns and payments due → Compliance")
+        E("(c) => openCompany(c)", cid); W(500); E("() => { S.books = window.__bk; render(); }"); W(300)
+        ok(E("RPT.LIST.some(r => r[0] === 'mis-comp' && r[2] === 'GST and TDS by month')"), "Reports keeps MIS's GST and TDS by month, named for what it is")
+
+        print("6. phone")
+        pg.set_viewport_size({"width": 390, "height": 844})
+        for h in ["#/compliance", "#/c/%s/books/tds/2026-27" % cid, "#/c/%s/books/tds/2026-27/Q1/26Q" % cid, "#/c/%s/books/gst/07/202603/year" % cid, "#/c/%s/books/tds/2025-26/26as" % cid]:
+            hash_go(h, 1300)
+            w = E("document.documentElement.scrollWidth")
+            hs = E("[...document.querySelectorAll('#app nav[aria-label=Books], #app nav[aria-label=TDS], #app nav[aria-label=\"GST sections\"]')].map(n => n.getBoundingClientRect().height)")
+            ok(w <= 392 and all(x <= 56 for x in hs), "phone %s: no sideways scroll (%d px), tabs on one line (%s)" % (h.split("/books/")[-1], w, hs))
+        br.close()
+except Exception as e:
+    import traceback; traceback.print_exc(); fails.append("crashed: %s" % e)
+ok(not errors, "no page errors (%s)" % errors[:3])
+srv.shutdown()
+print("\n%d failed" % len(fails) if fails else "\nall passed")
+sys.exit(1 if fails else 0)

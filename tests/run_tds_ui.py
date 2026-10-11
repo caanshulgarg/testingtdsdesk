@@ -37,7 +37,7 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/tds-year.png", full_page=True)
     ok(pg.evaluate("TDS.rows().filter(r => /^192/.test(r.section)).length") == 0 and pg.evaluate("TDS.salaryRows().length") == 13, "salary TDS (192B) kept out of 26Q: 13 entries moved to 24Q")
     ok("in the books under 192" in t, "year page shows salary TDS from the books under 24Q")
-    pg.click('.tds-crumbs button:has-text("TDS")'); pg.wait_for_timeout(400)
+    pg.evaluate("tdsNav('years')"); pg.wait_for_timeout(400)
     ok("Choose the financial year" in pg.inner_text("#app"), "breadcrumb TDS goes to the years list")
     pg.click('#app table.bk-table button.linkbtn:has-text("2025-26")'); pg.wait_for_timeout(400)
     pg.click("#app table.bk-table tr:has-text('Q1') td:nth-child(2) button.linkbtn"); pg.wait_for_timeout(800)
@@ -113,7 +113,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("Interest and late fee" in t and "Rate questions" in t and "By section" in t, "checks tab")
     # breadcrumb back to the year, then 24Q with a salary sheet
-    pg.click('.tds-crumbs button:has-text("2025-26")'); pg.wait_for_timeout(400)
+    pg.click('[data-return-card] .ret-back'); pg.wait_for_timeout(400)
     pg.set_input_files("#salaryIn", os.path.join(os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")), "salary.csv")); pg.wait_for_timeout(1500)
     pg.click("#app table.bk-table tr:has-text('Q4') td:nth-child(3) button.linkbtn >> nth=0"); pg.wait_for_timeout(600)
     t = pg.inner_text("#app")

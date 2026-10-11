@@ -1,36 +1,72 @@
-// Returns and payments due, across every client (TDS/GST round 2, item 1): on the firm's Today page. The list is
-// DueList (src/js/68-due-list.js): each client's GST and TDS returns and TDS deposits, due, overdue or filed, from the
-// same code as the client's own TDS and GST pages, sorted by due date. A row opens that client's return.
+// Returns and payments due, across every client (TDS/GST round 2, item 1), on the firm's Compliance page since the TDS &
+// GST makeover (round 46, 11-Oct-2026; the owner: "GST and TDS return status inside the client list is illogical"). The
+// list is DueList (src/js/68-due-list.js): each client's GST and TDS returns and TDS deposits, due, overdue or filed, from
+// the same code as the client's own TDS and GST pages, sorted by due date. A row opens that client's return.
+//   DueAll   the list, in three views (Overdue · Due this month · Filed, and All), with GST/TDS and client filters
+//   DueLine  the one line Today keeps: "3 returns overdue · Open Compliance →"
 import { useEffect, useState } from "react";
 import ListTable from "./ListTable.jsx";
 import Loading from "./Loading.jsx";
+import More from "./More.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
-const CHIPS = [["todo", "To do"], ["overdue", "Overdue"], ["due", "Due soon"], ["filed", "Filed or paid"], ["all", "All"]];
+const VIEWS = [["overdue", "Overdue"], ["month", "Due this month"], ["filed", "Filed"], ["all", "All"]];
 const tone = (x) => (x.status === "overdue" ? "bad" : x.status === "due" ? (x.left <= 7 ? "warn" : "no") : x.late ? "warn" : "ok");
+// the month of today (yyyy-mm), the list's own today (window.__dueToday in the tests)
+const thisMonth = () => String(DueList.today()).slice(0, 7);
+const inView = (x, k) => k === "all" || (k === "month" ? x.status === "due" && String(x.due).slice(0, 7) <= thisMonth() : x.status === k);
 
-export default function DueAll() {
-  const [res, setRes] = useState(null), [f, setF] = useState("todo"), [tax, setTax] = useState("");
+function useDue() {
+  const [res, setRes] = useState(null);
   const load = () => DueList.all().then(setRes, () => setRes({ items: [], missing: [], failed: true }));
   // drawn again when the open client's books change; the server's copy of each client's work is brought once a session
   const key = S.books ? DueList.keyOf(S.books) : "";
   useEffect(() => { load(); }, [key, Object.keys(S.companies || {}).length]);
   useEffect(() => { DueList.syncAll().then((did) => { if (did) load(); }, () => {}); }, []);
-  if (!res) return <section className="dash-card" data-due-list=""><h3>Returns and payments due</h3><Loading what="each client’s returns" rows={3} cols={5} /></section>;
-  const all = res.items.filter((x) => !tax || x.tax === tax);
-  const pick = (k) => all.filter((x) => k === "all" || (k === "todo" ? x.status !== "filed" : x.status === k));
-  const rows = pick(f), count = (k) => pick(k).length;
-  return <section className="dash-card" data-due-list="" style={{ marginTop: 16 }}>
-    <div className="rp-title"><h3>Returns and payments due</h3>
-      <span className="note">Every client’s GST and TDS returns and TDS deposits due up to {fmtDate(DueList.addDays(DueList.today(), DueList.AHEAD))}: all not yet filed, and those filed since {fmtDate(DueList.addDays(DueList.today(), -DueList.BACK))}, by due date. Click one to open that return.</span></div>
-    <div className="gf-chips" style={{ margin: "8px 0" }} role="group" aria-label="Show">
-      {CHIPS.map(([k, l]) => <button key={k} data-due-chip={k} className={"gf-chip" + (f === k ? " on" : "") + (k === "overdue" && count(k) ? " warn" : "")} aria-pressed={f === k} onClick={() => setF(k)}>{l} <b>{count(k)}</b></button>)}
-      <span style={{ width: 12 }} />
-      {[["", "GST and TDS"], ["GST", "GST"], ["TDS", "TDS"]].map(([k, l]) => <button key={k || "both"} data-due-tax={k || "both"} className={"gf-chip" + (tax === k ? " on" : "")} aria-pressed={tax === k} onClick={() => setTax(k)}>{l}</button>)}
+  return res;
+}
+
+export function DueLine() {
+  const res = useDue();
+  if (!res) return null;
+  const over = res.items.filter((x) => x.status === "overdue").length, month = res.items.filter((x) => inView(x, "month")).length;
+  return <div className="due-line" data-due-line="">
+    {over ? <span className="bad">{over} return{over === 1 ? "" : "s"} or payment{over === 1 ? "" : "s"} overdue</span> : <span>Nothing overdue</span>}
+    <span className="note" style={{ margin: 0 }}>{month} due this month</span>
+    <button className="linkbtn" style={{ marginLeft: "auto" }} data-open-compliance="" onClick={() => navHome("compliance")}>Open Compliance →</button>
+  </div>;
+}
+
+export default function DueAll() {
+  const res = useDue();
+  const [f, setF] = useState(""), [tax, setTax] = useState(""), [cid, setCid] = useState("");
+  if (!res) return <section data-due-list=""><Loading what="each client’s returns" rows={4} cols={5} /></section>;
+  const all = res.items.filter((x) => (!tax || x.tax === tax) && (!cid || x.cid === cid));
+  const pick = (k) => all.filter((x) => inView(x, k)), count = (k) => pick(k).length;
+  // opened on what needs doing first: the overdue, else what is due this month
+  const view = f || (count("overdue") ? "overdue" : "month");
+  const rows = pick(view), clients = Array.from(new Map(res.items.map((x) => [x.cid, x.client])).entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  const over = res.items.filter((x) => x.status === "overdue").length, month = res.items.filter((x) => inView(x, "month")).length;
+  return <section data-due-list="">
+    {/* the answer first */}
+    <p className="cmp-sum" data-due-sum=""><span className={over ? "bad" : ""}><b>{over}</b> overdue</span><span><b>{month}</b> due this month</span>
+      <span className="note" style={{ margin: 0 }}>across {clients.length} client{clients.length === 1 ? "" : "s"}</span></p>
+    <nav className="sbar" aria-label="Show" style={{ marginBottom: 14 }}>
+      {VIEWS.map(([k, l]) => <button key={k} data-due-chip={k} aria-selected={view === k} onClick={() => setF(k)}>{l} <span className="sbar-n">{count(k)}</span></button>)}
+    </nav>
+    <div className="cmp-filters">
+      <label className="rp-f">Tax<select aria-label="Tax" data-due-tax-pick="" value={tax} onChange={(e) => setTax(e.target.value)}>
+        <option value="">GST and TDS</option><option value="GST">GST</option><option value="TDS">TDS</option></select></label>
+      <label className="rp-f">Client<select aria-label="Client" data-due-client="" value={cid} onChange={(e) => setCid(e.target.value)}>
+        <option value="">Every client</option>{clients.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+      <span className="tg-right"><More label="How this list works">
+        <p>Every client’s GST and TDS returns and TDS deposits due up to {fmtDate(DueList.addDays(DueList.today(), DueList.AHEAD))}: all not yet filed, and those filed since {fmtDate(DueList.addDays(DueList.today(), -DueList.BACK))}, by due date.</p>
+        <p>GST is filed when the portal’s return status, a filed return’s PDF or a date typed on the GST page says so; TDS when marked filed on the return’s Files tab or under Settings › Closed periods; a deposit when every deduction of the month is against a challan.</p>
+      </More></span>
     </div>
     <ListTable name="dueList" rows={rows} rowKey={(x) => x.cid + "|" + x.kind + "|" + x.what + "|" + x.per + "|" + (x.gstin || "")} unit={["return or payment", "returns and payments"]}
-      rowProps={(x) => ({ "data-due": x.cid + "|" + x.kind + "|" + (x.form || x.what) + "|" + x.per, "data-status": x.status })}
-      empty={f === "todo" ? "Nothing due or overdue for any client." : "Nothing here."}
+      rowProps={(x) => ({ "data-due": x.cid + "|" + x.kind + "|" + (x.form || x.what) + "|" + x.per, "data-status": x.status, className: "rowlink", onClick: (e) => { if (!e.target.closest("button")) DueList.open(x); } })}
+      empty={view === "overdue" ? "Nothing overdue. Every return and payment due so far is filed or paid." : view === "month" ? "Nothing more due this month." : "Nothing here."}
       cols={[
         { k: "due", role: "date", label: "Due date", v: (x) => x.due, cell: (x) => fmtDate(x.due) },
         { k: "client", role: "party", label: "Client", v: (x) => x.client, cell: (x) => <><b>{x.client}</b>{x.gstin ? <div className="nr">{x.gstin}</div> : x.tan ? <div className="nr">TAN {x.tan}</div> : null}</> },
@@ -40,7 +76,6 @@ export default function DueAll() {
         { k: "amt", label: "TDS / late fee", cls: "n", v: (x) => x.unpaid || x.fee || x.tds || 0, cell: (x) => x.kind === "tdspay" ? <>{money(x.tds)}{x.unpaid ? <div className="nr bad">{money(x.unpaid)} not deposited</div> : null}</>
           : x.kind === "tds" ? <>{money(x.tds)}{x.fee ? <div className={"nr" + (x.status === "filed" ? "" : " bad")}>late fee {money(x.fee)}{x.status === "filed" ? "" : " if filed today"}</div> : null}</> : <span className="muted">—</span> },
       ]} />
-    {res.missing.length > 0 && <p className="note" data-due-missing="" style={{ marginTop: 8 }}>Not in the list: {res.missing.map((c) => c.name).join(", ")} — no books on this computer yet. Open {res.missing.length === 1 ? "the client" : "each"} once to include {res.missing.length === 1 ? "it" : "them"}.</p>}
-    <p className="note" style={{ marginTop: 6 }}>GST is filed when the portal’s return status, a filed return’s PDF or a date typed on the GST page says so; TDS when marked filed on the return’s File tab or under Settings › Closed periods; a deposit when every deduction of the month is against a challan.</p>
+    {res.missing.length > 0 && <p className="note" data-due-missing="" style={{ marginTop: 10 }}>Not in the list: {res.missing.map((c) => c.name).join(", ")} — no books on this computer yet. Open {res.missing.length === 1 ? "the client" : "each"} once to include {res.missing.length === 1 ? "it" : "them"}.</p>}
   </section>;
 }

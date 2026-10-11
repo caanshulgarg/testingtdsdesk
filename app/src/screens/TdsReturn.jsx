@@ -16,6 +16,7 @@ import ListTable from "../parts/ListTable.jsx";
 import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
 import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults, F16Link } from "./tds/Files.jsx";
+import More from "../parts/More.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -57,6 +58,45 @@ function Tabs({ tabs }) {
 const via = (tab) => { const s = (S.tdsSort || {})[tab] || {}; return { state: s.k ? { k: s.k, dir: s.d < 0 ? "desc" : "asc" } : null, by: (k) => tdsSortBy(tab, k) }; };
 const Tile = ({ label, value, sub, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{value}</b><small>{sub}</small></div>;
 const Toggle = ({ which, k, children }) => <button className="linkbtn" onClick={() => tdsToggle(which, k)}>{S[which] === k ? "▾ " : "▸ "}{children}</button>;
+
+// a return's summary card (the TDS & GST makeover, round 46): the way back to the year, the return's name and status, its
+// key figures, and one main button; rare actions and the long words under More. The status words are those of the year's
+// grid: filed (with its date), a correction needed, errors to fix, ready; a form of the 2025 Act not yet validated is a draft
+const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" }, Q_DUE_ON = { Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May" };
+function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, more = [], words }) {
+  const st = driftN ? ["bad", "Correction needed"] : filed ? ["ok", "Filed " + day(TDS.ymd(filed.on))] : errN ? ["bad", errN + " to fix"] : ["info", "Ready to file"];
+  return <section className="ret-card" data-return-card={form + "|" + q}>
+    <button className="linkbtn ret-back" onClick={() => tdsGo(fy)}>← {TDS.yearWord(fy)} {fy}</button>
+    <div className="ret-top">
+      <div>
+        <h2 data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
+        <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {Q_DUE_ON[q]}</p>
+      </div>
+      <div className="ret-acts">
+        {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft</span>}
+        {errN && !filed ? <button className="tag bad" style={{ cursor: "pointer", border: 0 }} data-status-tag="" onClick={() => tdsTabGo("checks")}>{st[1]}</button>
+          : <span className={"tag " + st[0]} data-status-tag="">{st[1]}</span>}
+        <More items={more} label="More">{words}</More>
+        {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
+      </div>
+    </div>
+    <div className="ret-figs">{figs.map((f) => <div key={f.label} className={"ret-fig" + (f.warn ? " warn" : "")}><span>{f.label}</span><b>{f.value}</b>{f.sub && <small>{f.sub}</small>}</div>)}</div>
+  </section>;
+}
+
+// the TDS page's Challans tab (round 46): a quarter's challans, as on its Form 140 / 26Q return (upload, the suggested
+// tagging, the list), without opening the return; the other forms' tagging is on their own return
+export function YearChallans({ fy, q }) {
+  const rows = TDS.rows().filter((r) => r.fy === fy && r.q === q), allRows = TDS.rows();
+  const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
+  const title = CO().name + " " + TDS.formName("26Q", fy) + " " + q + " " + fy;
+  return <div data-year-challans={fy + "|" + q}>
+    <Upload />
+    <Suggest fy={fy} q={q} form="26Q" />
+    <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
+    <p className="note" style={{ marginTop: 10 }}>Salary, non-resident and TCS challans are tagged on {TDS.formShort("24Q", fy)}, {TDS.formShort("27Q", fy)} and {TDS.formShort("27EQ", fy)}’s own returns.</p>
+  </div>;
+}
 
 /* ---------------------------------------------------------------- 26Q */
 
@@ -381,7 +421,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const issues = form === "26Q" ? Certs.issues(fy, q) : [], issueOf = {};
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
-  if (!["summary", "challans", "deductees", "deductions", "checks", "file"].includes(S.tdsTab)) S.tdsTab = "summary";
+  if (!["challans", "deductees", "deductions", "checks", "file"].includes(S.tdsTab)) S.tdsTab = "deductions";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
   // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
   // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
@@ -415,43 +455,40 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const common_ = { rows, issueOf, pass, common, chOpts, title };
   const errN = un.length + noPan + issues.length + other.length + int1A.length + (feeErr ? 1 : 0) + driftN;
   const unit = form === "27EQ" ? "collections" : "deductions";
+  const toLook = issues.length + noPan + other.length, notCh = r2(un.reduce((a, r) => a + r.tds, 0));
   return <>
-    <Tabs tabs={[["summary", "Summary"], ["challans", "Challans", ch.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["deductions", "Entries", rows.length],
-      ["checks", "Errors to fix", errN || checksN || null], ["file", "File"]]} />
-    {draft && S.tdsTab !== "file" && <p className="note" style={{ margin: "6px 0 10px" }} data-draft-line={TDS.formNo(form, fy)}>{fname} (earlier {form}) is a draft: not yet validated. See File.</p>}
-    {S.tdsTab === "summary" ? <>
-      <div className="dash-tiles">
-        <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
-        <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />
-        <Tile label="Not against a challan" value={money(un.reduce((a, r) => a + r.tds, 0))} sub={un.length + " " + unit} warn={un.length > 0} />
-        <Tile label="To look at" value={issues.length + noPan + other.length} sub={noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing")} warn={issues.length > 0 || noPan > 0 || other.length > 0} />
-      </div>
-      <BySection fy={fy} q={q} form={form} />
-      <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        {errN > 0 && <button className="btn small" onClick={() => tdsTabGo("checks")}>Errors to fix ({errN})</button>}
-        <button className="btn small primary" onClick={() => tdsTabGo("file")}>Make the file</button></div>
-    </>
-      : S.tdsTab === "challans" ? <>
+    <ReturnCard fy={fy} q={q} form={form} filed={filed} errN={errN} driftN={driftN} draft={draft}
+      primary={(filed && !driftN) || S.tdsTab === "file" ? null : ["Make the file", () => tdsTabGo("file")]}
+      more={[["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")]]}
+      figs={[
+        { label: form === "27EQ" ? "TCS collected" : "TDS deducted", value: money(tds), sub: rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees") },
+        { label: "Challans", value: money(chTax), sub: ch.length + " challan" + (ch.length === 1 ? "" : "s") },
+        { label: "Not against a challan", value: money(notCh), sub: un.length + " " + unit, warn: un.length > 0 },
+        { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
+      ]} />
+    <Tabs tabs={[["deductions", "Entries", rows.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["challans", "Challans", ch.length],
+      ["checks", "Errors to fix", errN || checksN || null], ["file", "Files"]]} />
+    {S.tdsTab === "challans" ? <>
         <Upload />
         <Suggest fy={fy} q={q} form={form} />
         <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} /></>
       : S.tdsTab === "deductees" ? <Deductees deductees={deductees} {...common_} />
-      : S.tdsTab === "deductions" ? <Deductions fy={fy} q={q} {...common_} />
+      : S.tdsTab === "deductions" ? <><Deductions fy={fy} q={q} {...common_} /><BySection fy={fy} q={q} form={form} /></>
       : S.tdsTab === "file" ? <>
         {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (earlier {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
         <FvuResult form={form} />
         <section className="dash-card" data-file={form}><h3>The file for {fname}, {q} {fy}</h3>
           {un.length > 0 && <p className="note bad">{un.length} {unit} not against a challan: <button className="linkbtn" onClick={() => tdsTabGo("challans")}>tag them to challans</button> first.</p>}
-          <ol className="note" style={{ margin: "0 0 10px 18px", padding: 0 }}><li>Download the working and check it.</li><li>Download the text file.</li><li>Check it with the FVU, then file it.</li></ol>
+          <p className="note" style={{ margin: "0 0 12px" }}>Check the working, download the text file, run it through the FVU, then file it.</p>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
-            <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
-            <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+            <button className="btn small primary" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
+            <button className="btn small" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
           </div></section>
         <MarkFiled fy={fy} q={q} form={form} /></>
       : <>
         {(un.length > 0 || noPan > 0) && <section className="dash-card" style={{ marginBottom: 12 }} data-fix=""><h3>To fix before the file</h3>
-          {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(un.reduce((a, r) => a + r.tds, 0))}</b></div>}
+          {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(notCh)}</b></div>}
           {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
         <Correction fy={fy} q={q} form={form} drift={drift} />
         <TracesDefaults jr={TRF.jrFor(fy, q, form)} />
@@ -487,8 +524,8 @@ function Employees({ fy, q, a1 }) {
 
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
-  const tabs = [["summary", "Summary"], ["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "File"]]);
-  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "summary";
+  const tabs = [["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "Files"]]);
+  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "employees";
   const fname = TDS.formName("24Q", fy);
   const top = <div className="revfilter">
     <button className="btn small primary" onClick={() => doAct("salaryPick")}>Bring in the salary sheet</button>
@@ -496,7 +533,10 @@ export function Return24({ b }) {
   </div>;
   if (!has) {
     const inB = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q);
-    return <>{top}
+    const filed0 = TDSFiled.get(fy, q, "24Q");
+    return <>
+      <ReturnCard fy={fy} q={q} form="24Q" filed={filed0} errN={0} driftN={0} draft={false} primary={["Bring in the salary sheet", () => doAct("salaryPick")]}
+        figs={[{ label: "Salary TDS in the books", value: money(inB.reduce((a, r) => a + num(r.tds), 0)), sub: inB.length + " deduction" + (inB.length === 1 ? "" : "s") + " under 192" }]} />
       {inB.length > 0 && <section className="dash-card" style={{ maxWidth: 760, marginBottom: 12 }}><h3>Salary TDS in the books</h3>
         <ListTable name="q24InBooks" rows={inB} rowKey={(r, i) => i} unit={["deduction", "deductions"]}
           cols={[
@@ -509,7 +549,7 @@ export function Return24({ b }) {
         <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
       {/* tds-challans: the 192 the books carry, tagged to their challans here too (no salary sheet needed for that) */}
       {inB.length > 0 && <div style={{ maxWidth: 1100 }}><Upload /><Suggest fy={fy} q={q} form="24Q" /></div>}
-      <section className="dash-card" style={{ maxWidth: 760 }}><h3>24Q needs the salary sheet</h3>
+      <section className="dash-card" style={{ maxWidth: 760 }} data-needs-sheet=""><h3>24Q needs the salary sheet</h3>
         <p className="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare — Excel or CSV — and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>
     </>;
   }
@@ -522,17 +562,16 @@ export function Return24({ b }) {
   const filed = TDSFiled.get(fy, q, "24Q"), filedOn = filed ? filed.on : "", int1A = TDS.interest(fy, q, "24Q"), fee = TDS.lateFee(fy, q, filedOn, "24Q");
   const late = int1A.length + (!filed && fee && fee.days > 0 ? 1 : 0);
   return <>
+    <ReturnCard fy={fy} q={q} form="24Q" filed={filed} errN={checks.length + late} driftN={0} draft={false}
+      primary={filed || S.tdsTab === "file" ? null : ["The file and the salary sheet", () => tdsTabGo("file")]}
+      more={[["Download the 24Q working (Excel)", () => doAct("q24Excel")], ["Bring in a new salary sheet", () => doAct("salaryPick")]]}
+      figs={[
+        { label: "Employees this quarter", value: a1.length, sub: money(a1.reduce((s, e) => s + e.paid, 0)) + " paid" },
+        { label: "TDS deducted", value: money(sheetTds), sub: q + " " + fy },
+        { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
+      ]} />
     <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length + late || null) : null])} />
-    {S.tdsTab === "summary" ? <>
-      <div className="dash-tiles" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-        <Tile label="Employees this quarter" value={a1.length} sub={money(a1.reduce((s, e) => s + e.paid, 0)) + " paid"} />
-        <Tile label="TDS deducted" value={money(sheetTds)} sub={q + " " + fy} />
-        <Tile label="Before filing" value={checks.length} sub={checks.length ? checks[0].what : "nothing to fix"} warn={checks.length > 0} />
-      </div>
-      <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        {checks.length > 0 && <button className="btn small" onClick={() => tdsTabGo("checks")}>Errors to fix ({checks.length})</button>}
-        <button className="btn small primary" onClick={() => tdsTabGo("file")}>The file and the salary sheet</button></div></>
-      : S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
+    {S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
         <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}</section>
         <MarkFiled fy={fy} q={q} form="24Q" /></>
       : S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />

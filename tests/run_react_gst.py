@@ -19,7 +19,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
     # the month with the most customers
     pg.evaluate("() => { const n = ym => new Set(Object.values(GSTR.one(ym, S.gstReg || '')).filter(Array.isArray).flat().map(r => r.gstin || r.party)).size; S.gstYm = GSTR.months().reduce((a, m) => n(m) > n(a) ? m : a); render(); }")
-    pg.click('nav[aria-label="GST"] button[data-part="r1"]'); pg.wait_for_timeout(500)
+    pg.evaluate("gstPartGo('r1')"); pg.wait_for_timeout(500)
     pg.click('nav[aria-label="Return"] button[data-sub="details"]'); pg.wait_for_timeout(400)   # 09-Oct-2026: the customers and HSN on GSTR-1's Details tab
     rows = lambda: pg.locator("#r1Table > tbody > tr").count()
     n0 = rows()
@@ -61,14 +61,14 @@ with sync_playwright() as p:
         ok(vis() == n, "Clear filters: all rows")
     pg.select_option('select[aria-label="Part"]', "B2B"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.r1F.part") == "B2B", "the part filter")
-    pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(500)
+    pg.evaluate("gstPartGo('r3b')"); pg.wait_for_timeout(500)
     pg.click('nav[aria-label="Return"] button[data-sub="details"]'); pg.wait_for_timeout(400)   # 09-Oct-2026: table 4 on GSTR-3B's Details tab
     before = pg.inner_text('tr:has-text("(C) Net ITC available")')
     inp = pg.locator('input[aria-label="rev2 IGST"]'); inp.fill("1000"); inp.press("Tab"); pg.wait_for_timeout(500)
     k = pg.evaluate("(S.gstReg || '') + '|' + S.gstYm")
     ok(pg.evaluate("S.books.gst3b[%s].rev2.igst" % json.dumps(k)) == 1000 and pg.inner_text('tr:has-text("(C) Net ITC available")') != before, "3B 4(B)(2): 1,000 typed is kept, and net ITC changes")
     # the input register: a chip filters, again clears; the find box keeps the cursor; the whole year
-    pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(600)
+    pg.evaluate("gstPartGo('inreg')"); pg.wait_for_timeout(600)
     # the one list table (round 2, K6): the count ("12 documents of 40") and the totals are in the foot
     reg = lambda: pg.inner_text("#app table.bk-table.fixed tfoot")
     all_ = reg()
@@ -81,7 +81,7 @@ with sync_playwright() as p:
     box.fill(""); pg.select_option('select[aria-label="Period"]', "year"); pg.wait_for_timeout(800)
     ok("Input register, the year" in pg.inner_text("#app"), "the whole year")
     pg.select_option('select[aria-label="Period"]', "month"); pg.wait_for_timeout(400)
-    pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(500)
+    pg.evaluate("gstPartGo('r3b')"); pg.wait_for_timeout(500)
     # 2B reconciliation, with a 2B made from these books (make2b.js): confirm, unlink, link by hand, a remark, filters
     pg.evaluate(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "make2b.js")).read()); pg.wait_for_timeout(800)
     nav = lambda l: pg.click('nav[aria-label="2B reconciliation"] button:has-text("%s")' % l)
@@ -130,7 +130,7 @@ with sync_playwright() as p:
         ok(len(pg.evaluate("ITCT.store(S.gstReg || '').sent[%s] || []" % json.dumps(k))) == 1 and "not yet" not in pg.locator('tr[data-key=%s]' % json.dumps(k)).inner_text(), "a letter copied is logged as written")
     else: ok(False, "no supplier to write to")
     # reversal: a capital good added, filled in, and removed
-    pg.click('nav[aria-label="GST"] button[data-part="rev"]'); pg.wait_for_timeout(500)
+    pg.evaluate("gstPartGo('rev')"); pg.wait_for_timeout(500)
     pg.click('button:text-is("Add a capital good")'); pg.wait_for_timeout(400)
     row = 'section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> '
     for k, v in [("name", "LED wall"), ("date", "2025-05-10"), ("igst", "180000")]:
@@ -163,10 +163,10 @@ with sync_playwright() as p:
     pg.locator('input[aria-label="This copy was not filed"]').first.click(); pg.wait_for_timeout(400)
     ok(pg.evaluate("Object.values(S.books.filed)[0].notFiled") is True, "a filed copy marked as not filed")
     # GSTR-9 and 9C: figures typed for the year, and the 9C PDF shows them
-    pg.click('nav[aria-label="GST"] button[data-part="g9"]'); pg.wait_for_timeout(800)
+    pg.evaluate("gstPartGo('g9')"); pg.wait_for_timeout(800)
     pg.fill('input[aria-label="15E igst"]', "5000"); pg.press('input[aria-label="15E igst"]', "Tab"); pg.wait_for_timeout(600)
     ok(pg.evaluate("GST9.typed(GST9.fyOf(S.gstYm), S.gstReg || '')['15E'].igst") == 5000, "GSTR-9: a figure not in the books is kept")
-    pg.click('nav[aria-label="GST"] button[data-part="g9c"]'); pg.wait_for_timeout(800)
+    pg.evaluate("gstPartGo('g9c')"); pg.wait_for_timeout(800)
     pg.fill('input[aria-label="adj.5B"]', "100000"); pg.press('input[aria-label="adj.5B"]', "Tab"); pg.wait_for_timeout(600)
     r = 'textarea[aria-label="6. Reasons for the unreconciled difference"]'
     pg.fill(r, "Unbilled revenue of March"); pg.press(r, "Tab"); pg.wait_for_timeout(600)

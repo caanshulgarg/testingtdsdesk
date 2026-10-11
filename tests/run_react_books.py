@@ -35,7 +35,8 @@ with sync_playwright() as p:
         .map(([date, name, pan, gross, tds]) => ({date, name, pan, code: "", gross, tds, exempt: 0, standard: 0, profTax: 0, chapter6: 0, surcharge: 0, cess: 0}));
       S.tdsView = null; booksTabGo("tds"); }""")
     pg.wait_for_timeout(600)
-    ok("2026-27: returns by quarter" in app() and pg.inner_text("#app .tds-crumbs").startswith("TDS"), "one year: TDS opens on it, with the way back above")
+    # round 46: TDS opens on its Returns tab (the year's grid); the TDS tabs above it
+    ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1 and pg.get_attribute('#app nav[aria-label="TDS"] [data-tds-sec="returns"]', "aria-selected") == "true", "one year: TDS opens on its Returns tab")
     # 09-Oct-2026 (app-tdsgst): the year is a grid of forms × quarters; 24Q in Q1 is its own cell
     # smart moves round 1 (the owner, 09-Oct-2026): the year opens on the quarter due now; every quarter is chosen for the grid
     due = pg.evaluate("Smart.tdsDue()")
@@ -43,16 +44,16 @@ with sync_playwright() as p:
     pg.evaluate("() => tdsPick('2026-27', '', '')"); pg.wait_for_timeout(400)
     q1 = pg.inner_text('#app [data-cell="24Q|Q1"]')
     ok("7,500" in q1 and "2 employees" in q1, "Q1 24Q: ₹7,500 from two employees" + " [" + q1.replace("\n", " ") + "]")
-    pg.click("#app .tds-crumbs button:has-text('TDS')"); pg.wait_for_timeout(400)
+    pg.click("#app [data-tds-bar] details.more > summary"); pg.click("#app [data-tds-more='years']"); pg.wait_for_timeout(400)
     ok("Every year" in app() and "2026-27" in app(), "TDS: the years")
     pg.click('#app table.bk-table button:has-text("Open")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year" and pg.evaluate("S.tdsFy") == "2026-27", "Open: the year")
     pg.click('#app [data-cell="24Q|Q2"]'); pg.wait_for_timeout(700)
-    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and any(x in pg.inner_text("#app .tds-crumbs") for x in ("Q2 · 24Q", "Q2 · Form 138", "Form 138 (earlier 24Q)")), "Q2 24Q: its return opens")
-    pg.click("#app .tds-crumbs button:has-text('2026-27')"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and "Form 138 (earlier 24Q) · Q2" in pg.inner_text("#app [data-return-title]"), "Q2 24Q: its return opens")
+    pg.click("#app [data-return-card] .ret-back"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
-    pg.click('#app button:has-text("Certificates and rate questions")'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("S.tdsView") == "certs" and "Certificates and rate questions" in pg.inner_text("#app .tds-crumbs"), "Certificates and rate questions")
+    pg.click('#app [data-tds-sec="checks"]'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("[S.tdsView, S.tdsCheck]") == ["checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "Checks: certificates and rate questions")
     for t in ["Tally ledgers", "GST"]:
         pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(500)
         ok(pg.get_attribute('#app nav[aria-label="Books"] button:has-text("%s")' % t, "aria-selected") == "true", "the %s tab opens" % t)

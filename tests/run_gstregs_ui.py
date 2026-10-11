@@ -89,7 +89,7 @@ with sync_playwright() as p:
     ok(pg.locator('nav[aria-label="GST"] button').all_inner_texts() == ["2B", "Returns filed"] and "No Tally day book here yet" in t, "without a day book: 2B and Returns filed, and why the rest needs the day book")
     ok(pg.locator("#twoBIn").count() + pg.locator("text=Fetch 2B from the portal").count() >= 1, "2B can be brought in or fetched")
     ok(pg.locator("select[aria-label=Month] option").count() > 0 and pg.locator("select[aria-label=GSTIN] option").count() == 3, "months of the year and the three GSTINs to choose from")
-    pg.click('nav[aria-label="GST"] button[data-part="vault"]'); pg.wait_for_timeout(1000)
+    pg.evaluate("gstPartGo('vault')"); pg.wait_for_timeout(1000)
     ok("Bring in" in pg.inner_text("#app") or "PDF" in pg.inner_text("#app"), "Returns filed opens")
     pg.screenshot(path=OUT + "/gstregs-gsttab.png", full_page=False)
     # 09-Oct-2026 (app-tdsgst): the GSTIN's line and its settings link are in the bar of year, month and GSTIN

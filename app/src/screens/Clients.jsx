@@ -64,7 +64,7 @@ export default function Clients() {
   const [q, setQ] = useState(S.homeQuery || "");
   const all = Object.values(S.companies), find = q.trim().toLowerCase();
   const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));
-  const used = all.reduce((a, c) => a + num((c.stats || {}).records || 1), 0) + Object.keys(S.inbox).length + 1, fy = fyOf(null);
+  const used = all.reduce((a, c) => a + num((c.stats || {}).records || 1), 0) + Object.keys(S.inbox).length + 1;
   return <>
     <div className="two">
       <DropZone mode="auto" label="Upload invoices for any client">
@@ -103,8 +103,7 @@ export default function Clients() {
           { k: "drafts", label: "To review", cls: "n", v: (c) => (c.stats || {}).drafts || 0, sum: true, fmt: String, cell: (c) => (c.stats || {}).drafts || "—" },
           { k: "check", label: "Need a check", cls: "n", v: (c) => (c.stats || {}).check || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.check ? <span className="tag warn">{st.check}</span> : "—"; } },
           { k: "waiting", label: "Waiting for Tally", cls: "n", v: (c) => (c.stats || {}).waiting || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"; } },
-          { k: "tds", label: "TDS " + fy, cls: "n", v: (c) => { const st = c.stats || {}; return st.fy === fy && st.tdsFy ? num(st.tdsFy) : 0; }, sum: true, fmt: money0,
-            cell: (c) => { const st = c.stats || {}; return st.fy === fy && st.tdsFy ? money0(st.tdsFy) : "—"; } },
+          // round 46: no return figures here (TDS of the year was one); returns and payments due are on the Compliance page
           { k: "free", label: "Read free", cls: "n", cell: (c) => <Free c={c} /> },
           { k: "ac", role: "act", cls: "n", cell: (c) => <button className="btn small" onClick={(e) => { e.stopPropagation(); openCompany(c.id); }}>Open</button> },
         ]} />

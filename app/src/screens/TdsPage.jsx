@@ -1,28 +1,36 @@
-// The TDS tab of a client's books, laid out as TDS software is (Computax, Winman; the owner's request of 09-Oct-2026):
-// a bar of year → quarter → form at the top; with no quarter or form chosen, the year's status grid of forms × quarters
-// (grey not started, blue ready, red errors, green filed), each cell opening that return; a return's pages are
-// TdsReturn.jsx. Was Crumbs, Years, Cell26, CellOther, Cell24, Year and Tds in Books.jsx (viewBooksTds, viewTdsYears and
-// viewTdsYearPage of src/js/18 before that).
+// A client's TDS, laid out as TDS software is (Computax, Winman; the owner's request of 09-Oct-2026) and, since the
+// TDS & GST makeover (round 46, 11-Oct-2026, the owner: "26AS and TDS return are different things, should be in different
+// tabs; page looks very heavy"), one page for each job, each its own tab and address:
+//   Returns       the bar of year → quarter → form; with no quarter or form chosen the year's status grid of forms ×
+//                 quarters (grey not started, blue ready, red errors, green filed), each cell opening that return; a
+//                 return's pages are TdsReturn.jsx (a summary card on top, its tabs below). Every year, Notices and the
+//                 year's downloads are under More.
+//   Challans      a quarter's challans: upload, the suggested tagging, the list (TdsReturn.jsx's YearChallans).
+//   26AS & AIS    tds/Files.jsx Recon26.          TRACES files   tds/Files.jsx TracesFiles.
+//   Checks        Rates and certificates (section 197 and the rate questions), Limits (thresholds, should have deducted),
+//                 Tie-out (the TDS payable in Tally), Corrections (filed returns changed since, TRACES defaults).
 //
 // From tax year 2026-27 the forms are those of the Income-tax Act, 2025, each shown with its old name as the Income Tax
 // Department's own PDFs do ("Form 140 (earlier 26Q)"): TDS.formShort / formLabel (src/js/09); the year is a "Tax Year"
 // (Protean's RPU 1.2). Earlier years keep the old names alone. Nothing here works out a figure: the amounts are
 // TDSYear.quarters() and the rows of TDS, as before; the counts in a cell are of those rows.
 //
-// State: S.tdsView (years | year | return | certs | notices | recon: 26AS and AIS | traces: TRACES files), S.tdsFy, S.tdsQ, S.tdsForm (the return open),
-// S.tdsPickForm (the form chosen in the bar while no quarter is), all kept in the address (Route.booksMore, src/js/52).
-import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
+// State: S.tdsView (years | year | return | notices: the Returns tab; challans; recon: 26AS and AIS; traces: TRACES
+// files; checks, with S.tdsCheck), S.tdsFy, S.tdsQ, S.tdsForm (the return open), S.tdsPickForm (the form chosen in the bar
+// while no quarter is), all kept in the address (Route.booksMore, src/js/52; the old …/certs opens Checks).
+import { Return26, Return24, CertsPage, YearChallans } from "./TdsReturn.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
+import More from "../parts/More.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
 import NotRead from "../parts/NotRead.jsx";
-import { TieOut, Limits } from "./tds/Smart.jsx";
-import { Recon26, TracesFiles } from "./tds/Files.jsx";
+import { TieOut, Limits, Correction } from "./tds/Smart.jsx";
+import { Recon26, TracesFiles, TracesDefaults } from "./tds/Files.jsx";
 import "../parts/returns.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 export const Q_MONTHS = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
-const Q_DUE = { Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May" };
+export const Q_DUE = { Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May" };
 const FORMS = ["24Q", "26Q", "27Q", "27EQ"];
 const day = (d) => fmtDate(tallyDate(d));
 
@@ -37,45 +45,57 @@ export function tdsBarYears(b, rows) {
   return Array.from(new Set(tdsYears(b, rows).concat([now, last]))).sort().reverse();
 }
 
-function Bar({ fys }) {
-  const fy = S.tdsFy, v = S.tdsView, q = v === "return" || v === "year" ? S.tdsQ || "" : "", form = v === "return" ? S.tdsForm || "26Q" : v === "year" ? S.tdsPickForm || "" : "";
-  return (
-    <div className="rp-bar" role="group" aria-label="Choose the return" data-tds-bar="">
-      <label className="rp-f">{TDS.yearWord(fy)}
-        <select aria-label="Year" value={fy} onChange={(ev) => { if (v === "recon" || v === "traces") { S.tdsFy = ev.target.value; render(); } else tdsPick(ev.target.value, q, form); }}>
-          {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></label>
-      <label className="rp-f">Quarter
-        <select aria-label="Quarter" value={q} onChange={(ev) => tdsPick(fy, ev.target.value, form)}>
-          <option value="">Every quarter</option>
-          {["Q1", "Q2", "Q3", "Q4"].map((x) => <option key={x} value={x}>{x} · {Q_MONTHS[x]}</option>)}</select></label>
-      <label className="rp-f">Form
-        <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
-          <option value="">Every form</option>
-          {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></label>
-      <span className="rp-links">
-        <button className="linkbtn" onClick={() => tdsNav("certs")} aria-current={v === "certs" || undefined}>Certificates and rate questions</button>
-        <button className="linkbtn" data-tds-link="recon" onClick={() => tdsNav("recon")} aria-current={v === "recon" || undefined}>26AS and AIS</button>
-        <button className="linkbtn" data-tds-link="traces" onClick={() => tdsNav("traces")} aria-current={v === "traces" || undefined}>TRACES files</button>
-        {AIH.enabled("notices") && <button className="linkbtn" onClick={() => tdsNav("notices")}>Notices</button>}
-        <button className="linkbtn" onClick={() => tdsNav("years")}>All years</button>
-        <HelpButton />
-      </span>
-    </div>
-  );
+// the TDS tabs, and which tab each view is in
+const SECS = [["returns", "Returns"], ["challans", "Challans"], ["recon", "26AS & AIS"], ["traces", "TRACES files"], ["checks", "Checks"]];
+export const tdsSecOf = (v) => (v === "recon" || v === "traces" || v === "challans" ? v : v === "checks" || v === "certs" ? "checks" : "returns");
+const CHECKS = [["rates", "Rates and certificates"], ["limits", "Limits"], ["tieout", "Tie-out"], ["corr", "Corrections"]];
+// the quarter a page opens on when none is chosen: the one due now in this year, else Q1
+const dueQ = (fy) => { try { const d = Smart.tdsDue(); return d && d.fy === fy && d.q ? d.q : "Q1"; } catch (e) { return "Q1"; } };
+function secGo(sec) {
+  if (sec === "returns") { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
+  else if (sec === "challans") { S.tdsView = "challans"; if (!S.tdsQ) S.tdsQ = dueQ(S.tdsFy); }
+  else if (sec === "checks") { S.tdsView = "checks"; if (!S.tdsCheck) S.tdsCheck = "rates"; }
+  else S.tdsView = sec;
+  render(); window.scrollTo(0, 0);
 }
 
-// where the page is, under the bar: year › quarter › form
-function Crumbs() {
-  const v = S.tdsView, fy = S.tdsFy;
+function Head() {
+  const sec = tdsSecOf(S.tdsView);
+  return <div className="tg-head">
+    <nav className="sbar" aria-label="TDS">{SECS.map(([k, l]) => <button key={k} data-tds-sec={k} data-tds-link={k === "recon" || k === "traces" ? k : undefined}
+      aria-selected={sec === k} onClick={() => secGo(k)}>{l}</button>)}</nav>
+    <div className="tg-tools"><HelpButton /></div>
+  </div>;
+}
+
+// the bar under the tabs: the year, and on Returns the quarter and form (year → quarter → form opens a return), on
+// Challans the quarter
+function Bar({ fys }) {
+  const fy = S.tdsFy, v = S.tdsView, sec = tdsSecOf(v);
+  const q = v === "return" || v === "year" || v === "challans" ? S.tdsQ || "" : "", form = v === "return" ? S.tdsForm || "26Q" : v === "year" ? S.tdsPickForm || "" : "";
+  const setFy = (x) => { if (sec === "returns") tdsPick(x, q, form); else { S.tdsFy = x; Smart.keep("tds", { fy: x, q: S.tdsQ || "" }); render(); } };
   return (
-    <div className="tds-crumbs" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "0 0 12px", fontSize: 15 }}>
-      <button className="linkbtn" onClick={() => tdsNav("years")}>TDS</button>
-      {fy && v !== "years" && v !== "notices" && <><span className="note">›</span><button className="linkbtn" onClick={() => tdsGo(fy)}>{TDS.yearWord(fy)} {fy}</button></>}
-      {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
-      {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
-      {v === "recon" && <><span className="note">›</span><b>26AS and AIS</b></>}
-      {v === "traces" && <><span className="note">›</span><b>TRACES files</b></>}
-      {v === "return" && <><span className="note">›</span><b data-return-title="">{S.tdsQ} ({Q_MONTHS[S.tdsQ]}) · {TDS.formLabel(S.tdsForm || "26Q", fy)}</b></>}
+    <div className="tg-bar" role="group" aria-label="Choose the return" data-tds-bar="">
+      <label className="rp-f">{TDS.yearWord(fy)}
+        <select aria-label="Year" value={fy} onChange={(ev) => setFy(ev.target.value)}>
+          {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></label>
+      {(sec === "returns" || sec === "challans") && <label className="rp-f">Quarter
+        <select aria-label="Quarter" value={q} onChange={(ev) => (sec === "challans" ? (S.tdsQ = ev.target.value || "Q1", render()) : tdsPick(fy, ev.target.value, form))}>
+          {sec === "returns" && <option value="">Every quarter</option>}
+          {["Q1", "Q2", "Q3", "Q4"].map((x) => <option key={x} value={x}>{x} · {Q_MONTHS[x]}</option>)}</select></label>}
+      {sec === "returns" && <label className="rp-f">Form
+        <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
+          <option value="">Every form</option>
+          {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></label>}
+      {sec === "returns" && v !== "return" && <span className="tg-right">
+        <More items={[
+          ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
+          AIH.enabled("notices") && ["Notices", () => tdsNav("notices"), { "data-tds-more": "notices" }],
+          ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
+          ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24")],
+          ["Download the whole year", () => doAct("yearExcelAll")],
+        ]} />
+      </span>}
     </div>
   );
 }
@@ -152,58 +172,82 @@ function cells(b, fy, x) {
   return out;
 }
 
-function Year({ b }) {
-  const fy = S.tdsFy, qs = TDSYear.quarters(fy);
+function Year() {
+  const fy = S.tdsFy, qs = TDSYear.quarters(fy), b = S.books;
   // back from a return: the bar shows the quarter, and every form
   if (S.tdsQ && S.tdsPickForm) S.tdsPickForm = "";
   const all = qs.map((x) => cells(b, fy, x));
   const yearTotal = { "26Q": money(qs.reduce((a, x) => a + x.tds, 0)), "24Q": money(qs.reduce((a, x) => a + x.salaryTds, 0)),
     "27Q": money(qs.reduce((a, x) => a + x.nr.tds, 0)), "27EQ": money(qs.reduce((a, x) => a + x.tcs.tds, 0)) };
   const forms = S.tdsPickForm ? [S.tdsPickForm] : FORMS, quarters = S.tdsQ ? [S.tdsQ] : ["Q1", "Q2", "Q3", "Q4"];
-  return <>
-    <section className="dash-card" data-tds-grid={fy}>
-      <div className="rp-title"><h3>{TDS.yearWord(fy)} {fy}: returns by quarter</h3>
-        <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, with the old form in brackets." : "Forms of the Income-tax Act, 1961."} Click a cell to open that return.</span></div>
-      <div className="bk-tablewrap"><table className="rp-grid gf-off">
-        {/* aria-label: the heading's name read out, and on a phone each card's label (src/js/53-phone.js), with the due date
-            apart from the months ("Q1 · Apr–Jun, due 31 Jul"; it read "Apr–Jundue 31 Jul" at 390px) */}
-        <thead><tr><th>Form</th>{quarters.map((q) => <th key={q} aria-label={q + " · " + Q_MONTHS[q] + ", due " + Q_DUE[q]}>{q} · {Q_MONTHS[q]}<small>due {Q_DUE[q]}</small></th>)}<th>Year</th></tr></thead>
-        <tbody>{forms.map((k) => <tr key={k} data-form={k}>
-          <th scope="row">{TDS.formShort(k, fy)}<small>{TDS.FORM_ABOUT[k]}</small></th>
-          {quarters.map((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; return <Cell key={q} fy={fy} q={q} form={k} {...c} />; })}
-          <td><b>{yearTotal[k]}</b>{k === "26Q" && <div className="nr">{qs.reduce((a, x) => a + x.deductions, 0)} deductions</div>}</td>
-        </tr>)}</tbody>
-      </table></div>
-      <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready</span>
-        <span style={{ "--k": "var(--bad)" }}>Errors to fix</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
-    </section>
-    <div className="revfilter" style={{ marginTop: 12, flexWrap: "wrap", rowGap: 6 }}>
-      <button className="btn small" onClick={() => doAct("yearExcel26")}>Download the year, {TDS.formName("26Q", fy)}</button>
-      <button className="btn small" onClick={() => doAct("yearExcel24")}>Download the year, {TDS.formName("24Q", fy)}</button>
-      <button className="btn small primary" onClick={() => doAct("yearExcelAll")}>Download the whole year</button>
-    </div>
-    <TieOut fy={fy} />
-    <Limits fy={fy} />
-  </>;
+  return <section className="dash-card" data-tds-grid={fy}>
+    <div className="rp-title"><h3>{TDS.yearWord(fy)} {fy}</h3>
+      <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, the old form in brackets." : "Forms of the Income-tax Act, 1961."} Open a return from its cell.</span></div>
+    <div className="bk-tablewrap"><table className="rp-grid gf-off">
+      {/* aria-label: the heading's name read out, and on a phone each card's label (src/js/53-phone.js), with the due date
+          apart from the months ("Q1 · Apr–Jun, due 31 Jul"; it read "Apr–Jundue 31 Jul" at 390px) */}
+      <thead><tr><th>Form</th>{quarters.map((q) => <th key={q} aria-label={q + " · " + Q_MONTHS[q] + ", due " + Q_DUE[q]}>{q} · {Q_MONTHS[q]}<small>due {Q_DUE[q]}</small></th>)}<th className="n">Year</th></tr></thead>
+      <tbody>{forms.map((k) => <tr key={k} data-form={k}>
+        <th scope="row">{TDS.formShort(k, fy)}<small>{TDS.FORM_ABOUT[k]}</small></th>
+        {quarters.map((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; return <Cell key={q} fy={fy} q={q} form={k} {...c} />; })}
+        <td className="n"><b>{yearTotal[k]}</b>{k === "26Q" && <div className="nr">{qs.reduce((a, x) => a + x.deductions, 0)} deductions</div>}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready</span>
+      <span style={{ "--k": "var(--bad)" }}>Errors to fix</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
+  </section>;
 }
 
 // the first day of a quarter of a year ("2026-27", "Q2" → 20260701), and of the year when no quarter is chosen
 function qStart(fy, q) { const y = num(String(fy).slice(0, 4)); return q === "Q2" ? y + "0701" : q === "Q3" ? y + "1001" : q === "Q4" ? (y + 1) + "0101" : y + "0401"; }
 
+const Calm = ({ children }) => <div className="tg-empty" data-list-empty="">{children}</div>;
+
+// Checks: rates and section 197 certificates, the TDS limits, the TDS payable tie-out, and corrections (a filed return
+// changed in Tally since, the TRACES justification report's defaults), each a page of its own
+function Checks() {
+  const fy = S.tdsFy;
+  if (!CHECKS.some(([k]) => k === S.tdsCheck)) S.tdsCheck = "rates";
+  const k = S.tdsCheck;
+  let body;
+  if (k === "rates") body = <CertsPage />;
+  else if (k === "limits") body = TDSWatch.tracker(fy).length ? <Limits fy={fy} /> : <Calm>No party has come near a TDS limit in {fy}.</Calm>;
+  else if (k === "tieout") body = TDSTie.quarters(fy).some((x) => x.deducted || x.challans || x.moved || x.paidBooks) ? <TieOut fy={fy} /> : <Calm>No TDS deducted or paid in {fy} to tie out with Tally.</Calm>;
+  else {
+    const list = [];
+    ["Q1", "Q2", "Q3", "Q4"].forEach((q) => FORMS.forEach((form) => {
+      const drift = form !== "24Q" && TDSFiled.get(fy, q, form) ? TDSDrift.check(fy, q, form) : null, jr = TRF.jrFor(fy, q, form);
+      if (drift && drift.rows.length) list.push(<Correction key={"c" + q + form} fy={fy} q={q} form={form} drift={drift} />);
+      if (jr) list.push(<TracesDefaults key={"j" + q + form} jr={jr} />);
+    }));
+    body = list.length ? <div data-tds-corrections={fy}>{list}</div> : <Calm>No correction needed in {fy}: no filed return has changed in Tally since, and no TRACES default has been brought in.
+      <div><button className="btn small" onClick={() => tdsNav("traces")}>Bring in a justification report</button></div></Calm>;
+  }
+  return <>
+    <nav className="sbar subnav" aria-label="Checks">{CHECKS.map(([id, l]) => <button key={id} data-tds-check={id} aria-selected={k === id}
+      onClick={() => { S.tdsCheck = id; render(); }}>{l}</button>)}</nav>
+    {body}
+  </>;
+}
+
 export default function Tds({ b }) {
   const rows = TDS.rows(), had = tdsYears(b, rows), fys = tdsBarYears(b, rows);
+  // the old Certificates page is Checks › Rates and certificates now (round 46)
+  if (S.tdsView === "certs") { S.tdsView = "checks"; S.tdsCheck = "rates"; }
   // smart moves round 1 (the owner's choice of 09-Oct-2026, "due now"): opened afresh, the page shows the year and the
   // quarter whose return is due now (Q2 of 2026-27 on 09-Oct-2026, due 31-Oct), or the person's last choice for this
   // client. The quarter's own tax year names its forms (Form 140 from 2026-27, 26Q before: TDS.formLabel)
   if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
-  if (["year", "return", "certs", "recon", "traces"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
+  if (["year", "return", "challans", "checks", "recon", "traces"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices"].includes(S.tdsView)) S.tdsView = "years";
-  const v = S.tdsView;
-  // a return's tab is settled before the way back is drawn: the guide beside it is for that tab
+  if (S.tdsView === "challans" && !S.tdsQ) S.tdsQ = dueQ(S.tdsFy);
+  const v = S.tdsView, sec = tdsSecOf(v);
+  // a return's tab is settled before the way back is drawn: the guide beside it is for that tab. A return opens on its
+  // entries (the summary is the card above the tabs since round 46; an old link to …/summary opens the entries)
   if (v === "return") {
-    const tabs = S.tdsForm === "24Q" ? ["summary", "employees", "challans", "checks", "file"].concat(S.tdsQ === "Q4" ? ["annex2"] : [])
-      : ["summary", "challans", "deductees", "deductions", "checks", "file"];
+    const tabs = S.tdsForm === "24Q" ? ["employees", "challans", "checks", "file"].concat(S.tdsQ === "Q4" ? ["annex2"] : [])
+      : ["deductions", "deductees", "challans", "checks", "file"];
     if (!tabs.includes(S.tdsTab)) S.tdsTab = tabs[0];
   }
   // the books in FinCom end before the quarter (or year) shown starts, and no TDS of it is here: one line, not an empty grid
@@ -212,24 +256,24 @@ export default function Tds({ b }) {
   const prevFy = end ? Smart.fyLabelOf(end) : "";
   const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
+  // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
+  const none = !had.length && (sec === "returns" || sec === "challans" || sec === "checks") && v !== "notices";
   return <>
-    <LedgerBanner b={b} which="tds" />
-    {!had.length && !["notices", "recon", "traces"].includes(v) ? <>
-      {notRead}
-      <div className="bk-none">TDS is worked out from the day book. Salary for 24Q can also be brought in on its own, from a salary sheet. The years appear here once either is in.</div>
-      <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button><button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button>
-        <button className="btn small" data-tds-link="recon" onClick={() => { S.tdsFy = S.tdsFy || fys[0]; tdsNav("recon"); }}>26AS and AIS</button><button className="btn small" data-tds-link="traces" onClick={() => { S.tdsFy = S.tdsFy || fys[0]; tdsNav("traces"); }}>TRACES files</button></div>
-    </> : <>
-      <Bar fys={fys} />
-      <Crumbs />
-      {v === "notices" ? <Notices b={b} kind="tds" />
-        : v === "years" ? <Years rows={rows} fys={had} />
-        : v === "certs" ? <CertsPage />
-        : v === "recon" ? <Recon26 />
-        : v === "traces" ? <TracesFiles />
-        : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
-        : notRead ? notRead
-        : <Year b={b} />}
-    </>}
+    {/* the ledgers still to confirm: said once, on Returns (round 46), not on every tab */}
+    {sec === "returns" && <LedgerBanner b={b} which="tds" />}
+    <Head />
+    {!none && fys.length > 0 && v !== "years" && v !== "notices" && <Bar fys={fys} />}
+    {none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
+      <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button>
+        <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div></Calm>
+      : v === "notices" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← Returns</button></p><Notices b={b} kind="tds" /></>
+      : v === "years" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p><Years rows={rows} fys={had} /></>
+      : v === "challans" ? <YearChallans fy={S.tdsFy} q={S.tdsQ} />
+      : v === "checks" ? <Checks />
+      : v === "recon" ? <Recon26 />
+      : v === "traces" ? <TracesFiles />
+      : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
+      : notRead ? notRead
+      : <Year />}
   </>;
 }

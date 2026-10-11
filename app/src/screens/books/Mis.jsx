@@ -305,6 +305,8 @@ function Budget({ r }) {
 function Compliance({ r }) {
   const C = r.comp;
   return <>
+    {/* round 46: due dates and filing status are the firm's Compliance page, not repeated here */}
+    <p className="note" data-mis-compliance-link="" style={{ margin: "0 0 12px" }}>What falls due, and what is filed, for this client and every other: <button className="linkbtn" onClick={() => navHome("compliance")}>Open Compliance →</button></p>
     <Card title="GST by month"><Table head={<><th>Month</th><th className="n">Output tax</th><th className="n">Less: credit</th><th className="n" title="reverse charge, paid in cash">Add: reverse charge</th><th className="n" title="credit brought in from the month before and not needed now (−), or credit this month left for the next (+)">Credit carried</th><th className="n">Worked out to pay</th><th className="n">Paid from the bank</th></>}>
       {C.gst.map((x) => <tr key={x.ym} data-gst-row={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.out)}</td><td className="n">{m(x.itc)}</td><td className="n" data-rcm="">{x.rcm ? m(x.rcm) : ""}</td><td className="n" data-carry="">{x.carry ? m(x.carry) : ""}</td><td className="n">{m(x.due)}</td><td className="n">{m(x.pay)}</td></tr>)}</Table>
       <p className="note">Output tax, credit and the amount to pay are FinCom's working from the books, not the 3B filed: output tax less credit, plus reverse charge (always paid in cash), plus or minus credit carried between months, is what is worked out to pay. Paid is what the books show paid from the bank to GST payable, the cash ledger or an output or reverse-charge tax ledger, in the month it was paid; the cash flow’s GST line uses the same rule.</p></Card>

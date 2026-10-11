@@ -54,7 +54,7 @@ const Help = {
     "tds:years": {t: "TDS \u2014 the years", what: "Every financial year in the books with its deductions, TDS, challans and what is still open.",
       steps: ["Click a year to open it.", "A red figure under \u201cNot against a challan\u201d or \u201cWithout PAN\u201d is work before the returns."], from: "Tally\u2019s TDS payable ledgers and the salary sheet.", watch: []},
     "tds:year": {t: "TDS \u2014 the year", what: "The year\u2019s four quarters with 26Q (other than salary) and 24Q (salary), and the due dates.",
-      steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
+      steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Lower-deduction certificates and rate questions are on the Checks tab; challans on Challans; 26AS and AIS, and the TRACES files, each on its own tab.", "Download the year\u2019s working from More."],
       from: "Tally vouchers with TDS; the salary sheet for 24Q.", watch: ["Due: Q1 31 July, Q2 31 October, Q3 31 January, Q4 31 May."]},
     "tds:recon": {t: "26AS and AIS", what: "The tax credit Form 26AS, AIS or TIS shows, against the TDS receivable in the books, deductor by deductor; and a deductee\u2019s 26AS against FinCom\u2019s returns.",
       steps: ["Download the client\u2019s 26AS from TRACES (View Tax Credit \u2192 Export as Text), or its AIS JSON, and upload it.", "Link a deductor to its party in the books where the names differ.", "Work the lines Only in 26AS (ask for the entry to be booked) and Only in the books (ask the deductor to file or correct its return)."],
@@ -100,7 +100,8 @@ const Help = {
     if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
     const t = typeof booksTab === "function" ? booksTab() : "";
     if (t === "gst") return "gst:" + (S.gstPart || "r1");
-    if (t === "tds"){ const v = S.tdsView || "years"; return v === "return" ? "tds:" + (S.tdsForm || "26Q") + ":" + (S.tdsTab || "") : "tds:" + v; }
+    // round 46: the Checks tab's guide is the one of the certificates and rates; the Challans tab's that of a return's challans
+    if (t === "tds"){ const v = S.tdsView || "years"; return v === "return" ? "tds:" + (S.tdsForm || "26Q") + ":" + (S.tdsTab || "") : v === "checks" ? "tds:certs" : v === "challans" ? "tds:26Q:challans" : "tds:" + v; }
     return "";
   },
   html(k){

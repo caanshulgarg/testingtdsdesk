@@ -100,8 +100,9 @@ function BooksPage() {
     </>;
   }
   const pending = n ? LedMaster.pending(b).length : 0;
-  const tabs = [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)],
-    ["gst", "GST", null], ["tieout", "Tie-out", null]];
+  // round 46: TDS and GST first (the returns, what the page is for); From Tally, the ledgers and the tie-out after them
+  const tabs = [["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null],
+    ["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tieout", "Tie-out", null]];
   let body;
   if (tab === "import") body = <FromTally b={b} />;
   else if (tab === "tieout") body = <Tieout b={b} />;

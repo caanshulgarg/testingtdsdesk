@@ -33,7 +33,7 @@ with sync_playwright() as p:
     # the fixture opens 3B on Nov-2025: a month with reverse charge paid in cash (Jan to Mar 2026) does not draw, FINDING 6
     # in EXPECTED.md, checked at the end
     if FIXTURE: pg.evaluate("S.gstYm = '202511'; render();"); pg.wait_for_timeout(800)
-    pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(2500); t = pg.inner_text("#app")
+    pg.evaluate("gstPartGo('r3b')"); pg.wait_for_timeout(2500); t = pg.inner_text("#app")
     ok("6.1 PAYMENT OF TAX" in t.upper() and "Credit carried to next month" in t, "3B shows payment of tax and credit carried")
     if FIXTURE:   # EXPECTED.md: no month of the Delhi registration has a negative cash payment
         neg = pg.evaluate("GSTR.months().filter(m => ['igst', 'cgst', 'sgst', 'cess'].some(h => GSTR.threeB(m, '07').pay.cash[h] < 0))")
@@ -56,9 +56,9 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/gst-settings.png", full_page=False)
     pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(500)   # review 18 (02-Oct-2026): saved with Save
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
-    if FIXTURE: pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(1500)   # March's 3B does not draw (FINDING 6): the register first
+    if FIXTURE: pg.evaluate("gstPartGo('inreg')"); pg.wait_for_timeout(1500)   # March's 3B does not draw (FINDING 6): the register first
     pg.select_option('select[aria-label=Month]', "202603"); pg.wait_for_timeout(1500)
-    pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
+    pg.evaluate("gstPartGo('inreg')"); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
     ok("Input register, Mar-2026" in t and "they agree." in t, "input register for the month ties to 3B table 4")
     if FIXTURE:   # EXPECTED.md: the advocate (IGST 7,200) and March's rent journal (CGST 1,800 + SGST 1,800): 10,800 = 3B table 4
         ir = pg.evaluate("(() => { const s = GSTR.inward('202603', '07'), t = GSTR.threeB('202603', '07'); return [s.reduce((a, r) => a + r.igst + r.cgst + r.sgst, 0), t.rcmIn ? t.rcmIn.igst + t.rcmIn.cgst + t.rcmIn.sgst : null, s.map(r => r.party).sort()]; })()")

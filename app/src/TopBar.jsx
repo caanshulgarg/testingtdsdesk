@@ -18,7 +18,7 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 
-const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Your Tally connection", rules: "Settings", help: "Help" };
+const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Your Tally connection", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1): each page is called what the sidebar calls it
 const BOOKS_TITLES = { reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };

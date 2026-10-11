@@ -5,13 +5,13 @@ import { useLayoutEffect, useState } from "react";
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
 // sidebar to its icons (remembered on this computer). On a phone it stays the bar along the bottom.
 import { ArrowLeftRight, BookOpen, ChartColumn, CircleHelp, Inbox, LayoutDashboard, Landmark, Mail, PanelLeftClose, PanelLeftOpen,
-  ReceiptText, Search, SlidersHorizontal, TrendingUp, Users, FileSearch } from "lucide-react";
+  ReceiptText, Search, SlidersHorizontal, TrendingUp, Users, FileSearch, CalendarCheck } from "lucide-react";
 
 const ICONS = { dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, setup: SlidersHorizontal,
-  txn: ArrowLeftRight, books: BookOpen, reports: ChartColumn, lookup: Search, audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users };
+  txn: ArrowLeftRight, books: BookOpen, reports: ChartColumn, lookup: Search, audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", setup: "slate", txn: "teal", books: "violet",
-  reports: "teal", lookup: "sky", audit: "rose", letters: "amber", help: "sky", clients: "indigo" };
+  reports: "teal", lookup: "sky", audit: "rose", letters: "amber", help: "sky", clients: "indigo", compliance: "rose" };
 
 function Item({ icon, label, on, count, onClick, title }) {
   const Icon = ICONS[icon] || LayoutDashboard;
@@ -61,6 +61,8 @@ export default function Side() {
           onClick={() => { S.firmMenu = false; S.tallyPanel = false; if (typeof backToClient === "function") backToClient(); else openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); }} />}
         <div className="side-firm-label">Firm</div>
         <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
+        {/* round 46: the returns and payments due across every client, a page of its own (was the foot of Today) */}
+        <Item icon="compliance" label="Compliance" on={S.homeTab === "compliance"} onClick={() => navHome("compliance")} title="Returns and payments due, every client" />
         <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />
         <Item icon="reports" label="Plan and credit" on={S.homeTab === "rules" && S.settingsTab === "plan"} onClick={() => goSettings("plan")} />
         <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => { S.tallyFocus = ""; navHome("tally"); }} />
@@ -78,7 +80,9 @@ export default function Side() {
           <Item icon="inbox" label="Inbox" on={inCo && S.tab === "clientInbox"} count={docqCount(open.id)} onClick={() => goClient("inbox")} />
           <Item icon="txn" label="Transactions" on={inCo && S.tab === "txn"} onClick={() => goClient("txn")} />
           <div className="side-label side-group">Books</div>
-          <Item icon="books" label="TDS & GST" on={!!bt && !BOOKS_OWN_PAGES.includes(bt)} onClick={() => goClient("books")} />
+          {/* round 46: opens the TDS or GST returns (the one last shown), never From Tally, which stays a tab of the page */}
+          <Item icon="books" label="TDS & GST" on={!!bt && !BOOKS_OWN_PAGES.includes(bt)}
+            onClick={() => goClient("books:" + (["tds", "gst"].includes(S.booksTab) ? S.booksTab : ["tds", "gst"].includes(S.booksLast) ? S.booksLast : "tds"))} />
           <Item icon="reports" label="Reports" on={bt === "reports"} onClick={() => goClient("books:reports")} />
           <Item icon="reports" label="MIS" on={bt === "mis"} onClick={() => goClient("books:mis")} title="Management reports from the books" />
           <Item icon="books" label="Accounts" on={bt === "fs"} onClick={() => goClient("books:fs")} title="Financial statements" />

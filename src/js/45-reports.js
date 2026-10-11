@@ -40,7 +40,9 @@ const RPT = {
     ["gst-follow", "gst", "ITC follow-up", "Credit waiting on suppliers, carried month to month", {gst: "follow"}],
     ["gst-vault", "gst", "Returns filed", "The portal’s copy of every return", {gst: "vault"}],
     ["gst-g9", "gst", "GSTR-9 and 9C", "The annual return and reconciliation", {gst: "g9"}],
-    ["mis-comp", "gst", "Compliance calendar", "GST and TDS by month, and what falls due", {mis: "comp"}],
+    // round 46: what falls due is the firm's Compliance page (every client's returns and payments); MIS keeps the figures by month
+    ["due-all", "gst", "Returns and payments due", "On the Compliance page: every client’s GST and TDS returns, due, overdue or filed", {home: "compliance"}],
+    ["mis-comp", "gst", "GST and TDS by month", "Tax worked out and paid, month by month (MIS)", {mis: "comp"}],
     ["tds-q", "tds", "TDS by quarter", "Challans, deductees and deductions for 26Q", {tds: "challans"}],
     ["tds-checks", "tds", "Interest, late fee and checks", "Short deduction, late deposit and rate questions", {tds: "checks"}],
     ["tds-ledgers", "tds", "TDS and GST ledgers", "The ledgers FinCom reads for tax, to confirm", {ledgers: "pending"}],
@@ -114,6 +116,9 @@ const RPT = {
     }
     if (to.act === "misPack"){ this.open("mis-summary"); setTimeout(() => { const bt = document.querySelector('[data-act="misPack"]'); if (bt) bt.click(); }, 50); return; }
     if (to.gst){ FC.go("gst", {gstPart: to.gst}); return; }
+    if (to.home){ navHome(to.home); return; }
+    // round 46: TDS's challans are a tab of their own (the quarter due now)
+    if (to.tds === "challans"){ FC.go("tds", {tdsView: "challans", tdsQ: ""}); return; }
     if (to.tds){ FC.go("tds", {tdsTab: to.tds}); return; }
     if (to.audit){
       if (to.audit === "find" && !(b.audit || {}).last && R && (b.vouchers || []).length){ try { Audit.run(R.from, R.to, "run from Reports"); saveBooks(); } catch (e){} }

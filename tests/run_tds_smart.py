@@ -29,8 +29,9 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 books = json.load(open(CACHE))
 
-def go(pg, fy, q="", form="", tab="", view=""):
-    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; if (a[4]) { S.tdsView = a[4]; } else if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab, view])
+# check: the page under TDS › Checks (round 46: the tie-out and the limits moved there from under the year's grid)
+def go(pg, fy, q="", form="", tab="", view="", check=""):
+    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsCheck = a[5]; if (a[4]) { S.tdsView = a[4]; } else if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab, view, check])
     pg.wait_for_timeout(400)
 def app(pg): return pg.inner_text("#app")
 def yes(pg):
@@ -94,7 +95,7 @@ try:
         pg.evaluate("() => { S.books.challans = S.books.challans.filter(c => c.id !== 'cB'); render(); }")
         x = pg.evaluate("TDSTie.quarter('2025-26', 'Q4')")
         ok(x["chGap"] == -10000 and any("make a challan" in w for w in pg.evaluate("TDSTie.why(TDSTie.quarter('2025-26', 'Q4'))")), "the February payment with no challan here: named (%s)" % x["chGap"])
-        go(pg, "2025-26"); t = pg.inner_text('#app [data-tieout="2025-26"]')
+        go(pg, "2025-26", view="checks", check="tieout"); t = pg.inner_text('#app [data-tieout="2025-26"]')
         ok("TDS payable in Tally" in t and "₹-500.00" in t and "2 quarters differ" in t, "the year's page: the tie-out, two quarters differ")
 
         # ---------------- T-S1: limits and missed TDS ----------------
@@ -109,7 +110,7 @@ try:
         ok(ash["due"] == 400 and ash["interest"] == round(400 * 0.01 * months, 2) and ash["disallow"] == 12000,
            "with an individual's PAN: ₹400 due at 1%%, interest 1%% x %d months = ₹%s, ₹12,000 at risk under 40(a)(ia) (%s)" % (months, ash["interest"], [ash["due"], ash["interest"], ash["disallow"]]))
         ok(not pg.evaluate("TDSWatch.missed('2025-26').some(x => x.party === 'Juniper Legal Associates' || x.party === 'Nightjar Sound & Light Co')"), "parties whose TDS covers their payments are not on the list")
-        go(pg, "2025-26"); t = pg.inner_text('#app [data-limits="2025-26"]')
+        go(pg, "2025-26", view="checks", check="limits"); t = pg.inner_text('#app [data-limits="2025-26"]')
         ok("Ashvattha Transport Co" in t and "Should have deducted" in t and "₹12,000.00" in t, "the year's page: the limits and 'Should have deducted' with the 40(a)(ia) amount")
 
         # ---------------- T-S2: a filed quarter changed in Tally ----------------

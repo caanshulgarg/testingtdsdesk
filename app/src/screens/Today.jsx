@@ -1,6 +1,6 @@
 // Today: what needs doing, across every client. Was viewToday() in src/js/18.
 import ListTable from "../parts/ListTable.jsx";
-import DueAll from "../parts/DueList.jsx";
+import { DueLine } from "../parts/DueList.jsx";
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -44,7 +44,8 @@ export default function Today() {
             { k: "look", label: "Need a look", cls: "n", v: (r) => r.look, sum: true, fmt: String, cell: (r) => cell(r, "look", "review") },
           ]} />
         <p className="note" style={{ marginTop: 8 }}>Counts cover clients opened on this computer; open a client to bring its figures up to date.</p>
-        <DueAll />
+        {/* round 46: the returns due are on the Compliance page; Today keeps one line */}
+        <DueLine />
       </>}
     </section>
   );
