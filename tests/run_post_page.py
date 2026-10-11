@@ -163,7 +163,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
     num = lambda t: int(([x for x in __import__("re").findall(r"\d+", t or "")] or ["-1"])[0])
     chip = E("(() => { const t = tallyStatus(CO()); return t.state + '|' + t.short; })()")
-    tab = E("(() => { const b = Array.from(document.querySelectorAll('nav.sbar button')).find(x => /Post to Tally/.test(x.textContent)); return b ? b.textContent : ''; })()")
+    tab = E("(() => { const b = Array.from(document.querySelectorAll('nav.sbar button')).find(x => /Ready to post/.test(x.textContent)); return b ? b.textContent : ''; })()")
     # three tabs (plan item 1b): with the Tally file needing attention, Errors opens by itself; the Post button is under To post
     ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors", "1b. something needs attention: the Errors tab opens by itself")
     pg.click('#app [data-post-tab="topost"]'); pg.wait_for_timeout(300)
@@ -171,7 +171,7 @@ with sync_playwright() as p:
     attn = E("(() => { const b = document.querySelector('nav.sbar [data-attn-n]'); return b ? b.textContent : ''; })()")
     tab = E("(() => { const b = document.querySelector('nav.sbar [data-step=post] [data-step-n]'); return b ? b.textContent : ''; })()")
     E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(600)
-    dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Post to Tally/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
+    dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Ready to post/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
     want = E("postCountFor(S.coId)")
     got = [num(chip.split("|")[1]), num(tab), num(page), num(dash)]
     # second pass of 02-Oct-2026: the count is "Ready to post"; the Tally file not confirmed (T/1) needs attention, a badge apart

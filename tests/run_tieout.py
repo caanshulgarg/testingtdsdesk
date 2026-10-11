@@ -78,7 +78,7 @@ with sync_playwright() as p:
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     row = lambda m: '#app [data-tieout-month="%s"]' % m
     cid = E(SETUP, ["owner", [], [], ""]); pg.wait_for_timeout(1200)
-    ok(pg.locator('#app nav[aria-label="Books"] button', has_text="Tie-out").count() == 1, "Books has a Tie-out tab beside From Tally, Tally ledgers, TDS, GST")
+    ok(pg.locator('#app nav[aria-label="Audit"] button', has_text="Tie-out with Tally").count() == 1 and pg.inner_text("#cobar .tbar-title h2") == "Audit", "the tie-out is Audit's tab, Tie-out with Tally (clean-up batch 1)")
     ok(E("booksTab()") == "tieout" and pg.locator("#app [data-tieout]").count() == 1, "the Tie-out tab opens (%s)" % E("booksTab()"))
     ok(pg.locator(row(APR)).count() == 1 and pg.locator(row(MAY)).count() == 1, "one row a month of the copy's period: Apr-2026 and May-2026")
     fc = lambda m, k: txt(row(m) + ' [data-tie-fincom="%s"]' % k)

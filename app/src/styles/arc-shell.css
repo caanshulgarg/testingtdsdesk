@@ -83,9 +83,11 @@ a { text-underline-offset: 2px; }
     background: var(--surface); color: var(--foreground); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; box-shadow: var(--shadow-floating); }
   .side-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; font-size: 15px; }
   .side-sheet .side-link { display: flex; flex-direction: row; width: 100%; min-height: 40px; padding: 0 10px; font-size: 14px; }
-  .side-sheet .side-sep { margin: 8px 6px; }
+  .side-sheet .side-sep { display: block; margin: 8px 6px; }
+  .side-sheet .side-label { display: block; padding: 10px 10px 4px; }
+  .side-sheet .side-client .side-label { display: none; }
   .side-sheet .side-client { padding: 0 0 4px; }
-  .side-sheet .side-co { width: 100%; }
+  .side-sheet .side-co { width: 100%; max-width: none; }
 }
 
 /* ---------- the header (Arc's page header) ---------- */

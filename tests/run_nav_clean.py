@@ -127,10 +127,11 @@ try:
         seen = []
         for go in ["navHome('today')", "navHome('clients')", "goClient('dash')"]:
             if go.startswith("goClient"): E("(c) => openCompany(c)", cid); W(600)
-            E(go); W(900); txt = pg.inner_text("#app")
+            # the count words: the tiles' and the tables' headings ("Waiting for Tally" stays a Tally link's state word)
+            E(go); W(900); txt = " | ".join(E("[...document.querySelectorAll('#app thead th, #app .metric > span, #app .dtile > span, #app .dtile > small')].map(e => e.innerText)"))
             seen += [w for w in OLD_WORDS if w in txt]
         E("() => { S.tab = 'invoices'; S.reviewTable = true; S.filter = 'draft'; S.step = null; render(); }"); W(1000)
-        txt = pg.inner_text("#app"); seen += [w for w in OLD_WORDS if w in txt]
+        txt = " | ".join(E("[...document.querySelectorAll('#app thead th, #app .tag')].map(e => e.innerText)")); seen += [w for w in OLD_WORDS if w in txt]
         ok(not seen, "none of the old count words on Today, Clients, Overview, the review table (%s)" % seen)
         # the review table's status words, in the built program (the fixture client has no bills to review)
         src = open(os.path.join(SITE, "assets", next(f for f in os.listdir(os.path.join(SITE, "assets")) if f.startswith("index") and f.endswith(".js")))).read() if os.path.isdir(os.path.join(SITE, "assets")) else ""

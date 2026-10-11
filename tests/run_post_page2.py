@@ -131,7 +131,7 @@ with sync_playwright() as p:
         attn = E("(document.querySelector('nav.sbar [data-step=post] [data-attn-n]') || {}).textContent || ''")
         btn = txt("#app [data-post-main]")
         E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(300)
-        dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Post to Tally/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
+        dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Ready to post/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
         E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(400)
         return chip, tab, attn, btn, dash
     chip, tab, attn, btn, dash = counts()

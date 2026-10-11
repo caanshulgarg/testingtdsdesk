@@ -22,7 +22,7 @@ UPLOADS = """() => [...document.querySelectorAll('#app button, #app .btn, #app [
   .map(b => { const r = b.getBoundingClientRect(); return {text: b.innerText.trim(), top: !!b.closest('#cobar'), data: b.getAttribute('data-upload'), right: Math.round(r.right), y: Math.round(r.top)}; })"""
 PAGES = [("Purchase · To review", "purchase-review", "bills", "Upload bills"), ("Purchase · upload", "purchase-upload", "bills", "Upload bills"),
          ("Purchase · In Tally", "purchase-in-tally", "bills", "Upload bills"), ("Bank", "bank", "bank", "Upload statement"),
-         ("Sales", "sales", "sales", "Upload invoices"), ("Day Book (From Tally)", "from-tally-daybook", "daybook", "Upload Tally data")]
+         ("Sales", "sales", "sales", "Upload invoices"), ("Day Book (From Tally)", "from-tally-daybook", "daybook", "Bring in from Tally")]
 OTHERS = ["dashboard", "transactions", "reports", "letters", "tds-gst", "client-inbox", "home-clients"]
 JS = dict(U.PAGES)
 with sync_playwright() as p:

@@ -50,7 +50,7 @@ with sync_playwright() as p:
     ok(st.startswith("Books from Tally: FY 2025-26 · entries up to 31-Mar-2026 · ") and re.search(r"· 33 days need a Day Book$", st), "1. one status line (%s)" % st)
     ok(pg.locator("#app [data-up-status]").count() == 1, "1. exactly one status line")
     heads = E("() => [...document.querySelectorAll('#app [data-upload-page] h3')].map(h => h.innerText.trim())")
-    ok(heads[:2] == ["Upload Tally data", "Days that need a Day Book"], "the parts in order: Upload Tally data, Days that need a Day Book (%s)" % heads)
+    ok(heads[:2] == ["Bring in from Tally", "Days that need a Day Book"], "the parts in order: Upload Tally data, Days that need a Day Book (%s)" % heads)
     ok(txt("#app details[data-howto] summary") == "How to export from Tally" and pg.locator("#app details[data-howto] li").count() == 3
        and not E("document.querySelector('#app details[data-howto]').open"), "How to export from Tally: folded, three steps")
     t = txt("#app")
@@ -63,7 +63,7 @@ with sync_playwright() as p:
 
     # ---------------------------------------------------------------- 2. one control, the progress line
     top = pg.locator("#cobar [data-upload]")
-    ok(top.count() == 1 and top.inner_text().strip() == "Upload Tally data" and top.get_attribute("data-upload") == "daybook", "the top bar's one Upload: Upload Tally data")
+    ok(top.count() == 1 and top.inner_text().strip() == "Bring in from Tally" and top.get_attribute("data-upload") == "daybook", "the top bar's one Upload: Upload Tally data")
     for sel in ["#cobar [data-upload]", "#app [data-up-drop]"]:
         E("() => { window.__clicked = ''; const el = document.getElementById('tallyIn'); el.click = () => { window.__clicked = 'tallyIn'; }; }")
         pg.click(sel); pg.wait_for_timeout(200)

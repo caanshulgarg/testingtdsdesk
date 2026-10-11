@@ -49,7 +49,7 @@ with sync_playwright() as p:
       const a = add("ZZ TEST VMS EVENTS", "07AADCV3366N1ZU", "VMS EVENTS PRIVATE LIMITED (2024-25)"), b = add("ZZ TEST OTHER", "09AAACZ1111A1Z5", "ZZ OTHER LTD");
       S.view = "home"; S.homeTab = "clients"; render(); return [a, b]; }""")
     pg.wait_for_timeout(800)
-    ok(pg.locator('button:text-is("Choose day book files")').count() == 1, "the clients list offers day books for several clients at once")
+    ok(pg.locator('button:text-is("Bring in from Tally")').count() == 1, "the clients list offers day books for several clients at once")
     pg.set_input_files("#multiBooksIn", [paths[n] for n in ["vms.xml", "other.xml", "stranger.xml", "vms-lookalike.xml"]])
     for i in range(40):
         pg.wait_for_timeout(250)

@@ -10,7 +10,7 @@ illogical"), used as a person would, on the fixture books (tests/fixtures/books,
     Errors to fix · Files below;
   - GST: Returns · 2B & ITC · Supplier health · Checks, every part reachable;
   - old addresses go to the new places (…/certs → Checks, a return's …/summary → its entries);
-  - the sidebar's TDS & GST opens the returns, not From Tally; the ledgers-to-confirm banner once, on Returns;
+  - the sidebar's TDS opens the returns, not From Tally (clean-up batch 1: TDS and GST each a sidebar item); the ledgers-to-confirm banner once, on Returns;
   - Reports' and MIS's compliance links open the Compliance page;
   - a phone's width: no sideways scroll, the tabs on one line.
 Layout only: the figures and files are run_tdsgst_ui.py's. Runs on the React build (app/dist-test) or TDSDESK_SITE."""
@@ -67,10 +67,11 @@ try:
         print("2. the client's TDS: the tabs")
         E("(c) => { S.booksTab = 'import'; S.booksLast = ''; return openCompany(c); }", cid); W(600)
         E("() => { S.books = window.__bk; render(); }"); W(300)
-        pg.click('#side button:has-text("TDS & GST")'); W(800)
-        ok(E("booksTab()") == "tds" and E("S.tdsView") in ("year", "years"), "the sidebar's TDS & GST opens TDS Returns, not From Tally (%s)" % E("booksTab()"))
-        books_tabs = E("[...document.querySelectorAll('#app nav[aria-label=Books] button')].map(b => b.textContent.replace(/\\s*[\\d✓].*$/, '').trim())")
-        ok(books_tabs[:2] == ["TDS", "GST"] and "From Tally" in books_tabs and "Tie-out" in books_tabs, "TDS and GST first; From Tally, ledgers and tie-out still there (%s)" % books_tabs)
+        # clean-up batch 1: TDS and GST each a sidebar item (Returns); From Tally (with Tally ledgers) and Audit (with the tie-out) their own
+        pg.click('#side button[data-side="TDS"]'); W(800)
+        ok(E("booksTab()") == "tds" and E("S.tdsView") in ("year", "years"), "the sidebar's TDS opens TDS Returns, not From Tally (%s)" % E("booksTab()"))
+        side = E("[...document.querySelectorAll('#side .side-link')].map(b => b.dataset.side)")
+        ok(all(w in side for w in ["TDS", "GST", "From Tally", "Audit"]) and side.index("From Tally") < side.index("TDS") < side.index("GST"), "TDS and GST in the sidebar; From Tally before them (%s)" % side)
         hash_go("#/c/%s/books/tds/2026-27" % cid)
         secs = E("[...document.querySelectorAll('#app nav[aria-label=TDS] button')].map(b => b.textContent)")
         ok(secs == ["Returns", "Challans", "26AS & AIS", "TRACES files", "Checks"], "TDS tabs: %s" % secs)

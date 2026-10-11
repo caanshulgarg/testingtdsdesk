@@ -34,7 +34,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     # ---------- getting started, and the question box
     ok("Getting Aarohi Textiles Pvt Ltd ready" in t, "the dashboard shows the getting-started list")
-    ok("Read the books from Tally" in t and "done" in t, "steps done and to do are counted")
+    ok("Bring in the books from Tally" in t and "done" in t, "steps done and to do are counted")
     ok(pg.locator("#dashAsk").count() == 1, "the dashboard has the question box")
     ok(pg.locator('#side .side-link:has-text("Reports")').count() == 1 and pg.locator('#side .side-link:has-text("Look up")').count() == 1 and pg.locator('#side .side-link:has-text("Letters")').count() == 1, "the side menu has Reports, Look up and Letters")
     # ---------- Reports

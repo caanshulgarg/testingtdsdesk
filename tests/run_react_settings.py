@@ -86,8 +86,8 @@ with sync_playwright() as p:
     pg.fill(".cbx #cbxName", "ZZ Zeta"); pg.click('.cbx button[data-cbx="yes"]'); pg.wait_for_timeout(300)
     ok(pg.locator(".cbx").count() == 1 and pg.evaluate("Object.keys(S.companies).length") == 1, "a wrong name does not remove it")
     pg.click('.cbx button[data-cbx="no"]'); pg.wait_for_timeout(300)
-    pg.click('button:has-text("Back to the work")'); pg.wait_for_timeout(400)
-    ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("Object.keys(S.companies).length") == 1, "Back to the work, and the client is still there")
+    pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("Object.keys(S.companies).length") == 1, "back to the work (the sidebar's Purchase), and the client is still there")
     # the Tally page: the bridge's key and following kept, a Tally chosen and back, a company linked to a client; the cloud's
     # company linked, a computer removed (asked first)
     pg.evaluate("""() => { Bridge.refresh = () => Promise.resolve(); window.startBridgePolling = () => {}; window.bridgeTick = () => {}; Bridge.setCfg({key: '', port: 0, follow: false});

@@ -17,19 +17,21 @@ with sync_playwright() as p:
       return openCompany(c.id).then(() => { S.tab = "books"; S.booksTab = "tds"; S.step = null; render(); }); }""")
     pg.wait_for_timeout(1500)
     app = lambda: pg.inner_text("#app")
-    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 5, "TDS & GST has five tabs, the fifth Tie-out (phase 2, H54; MIS, Accounts and Audit have their own pages)")
-    ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Read the books from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
+    # clean-up batch 1: TDS and GST are each a sidebar page (Returns); From Tally has its Tally ledgers tab, Audit its Tie-out
+    ok(pg.locator('#app nav[aria-label="Books"], #app nav[aria-label="From Tally"]').count() == 0 and pg.inner_text("#cobar .tbar-title h2") == "TDS", "TDS: a page of its own, titled TDS, no row of book tabs")
+    ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Bring in from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
        "no day book and no salary: the TDS tab says what to bring in, with a button for each")
+    pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(400)
     for t, say in [["Tally ledgers", "The Tally ledgers come from the client's books"]]:
-        pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(400)
+        pg.click('#app nav[aria-label="From Tally"] button:has-text("%s")' % t); pg.wait_for_timeout(400)
         ok(say in app() and "Salary for 24Q" not in app(), "%s, empty: its own message, not the TDS one" % t)
     for side, say in [["MIS", "MIS is worked out from the day book"], ["Accounts", "The accounts (balance sheet"], ["Audit", "The audit checks run over the day book"]]:
         pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(400)
-        ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Accounts": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="Books"]').count() == 0,
+        ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Accounts": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="From Tally"]').count() == 0,
            "%s: a page of its own in the sidebar, with its own empty message" % side)
     pg.evaluate("booksTabGo('tds')"); pg.wait_for_timeout(400)
-    pg.click('#app nav[aria-label="Books"] button:has-text("From Tally")'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("booksTab()") == "import" and pg.get_attribute('#app nav[aria-label="Books"] button:has-text("From Tally")', "aria-selected") == "true", "From Tally tab")
+    pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("booksTab()") == "import" and pg.get_attribute('#app nav[aria-label="From Tally"] button[data-books-tab="import"]', "aria-selected") == "true", "From Tally: its Books tab")
     # a salary sheet for 2026-27, two employees, two quarters
     pg.evaluate("""() => { S.books.salary = [["2026-05-31", "Asha Rao", "ABCPR1234K", 60000, 5000], ["2026-05-31", "Vikram Das", "ABCPD5678L", 45000, 2500], ["2026-08-31", "Asha Rao", "ABCPR1234K", 60000, 5000]]
         .map(([date, name, pan, gross, tds]) => ({date, name, pan, code: "", gross, tds, exempt: 0, standard: 0, profTax: 0, chapter6: 0, surcharge: 0, cess: 0}));
@@ -54,9 +56,11 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
     pg.click('#app [data-tds-sec="checks"]'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.tdsView, S.tdsCheck]") == ["checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "Checks: certificates and rate questions")
-    for t in ["Tally ledgers", "GST"]:
-        pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(500)
-        ok(pg.get_attribute('#app nav[aria-label="Books"] button:has-text("%s")' % t, "aria-selected") == "true", "the %s tab opens" % t)
+    pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(500)
+    pg.click('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")'); pg.wait_for_timeout(500)
+    ok(pg.get_attribute('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")', "aria-selected") == "true", "the Tally ledgers tab opens")
+    pg.click('#side button[data-side="GST"]'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("booksTab()") == "gst", "GST opens from the sidebar")
     for side, tab in [["MIS", "mis"], ["Accounts", "fs"], ["Audit", "audit"]]:
         pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(500)
         ok(pg.evaluate("booksTab()") == tab, "%s opens from the sidebar" % side)

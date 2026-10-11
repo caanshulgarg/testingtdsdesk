@@ -108,8 +108,9 @@ def main():
         pg.click(link + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(link + " [data-tally-link-page]"); pg.wait_for_timeout(1500)
         s = state()
         ok(s[0] == "#/tally" and s[1] == "home" and s[2] == cid, "1. the Tally page opens, the client is kept (%s)" % s)
-        back = "#app [data-back-client]"
-        ok(txt(back) == "\u2190 Back to Alpha Traders", "1. '\u2190 Back to Alpha Traders' on the Tally page (%r)" % txt(back))
+        # clean-up batch 1 (11-Oct-2026): the way back is the sidebar's client card, not a link on the page
+        back = '#side [data-side-client="back"]'
+        ok(pg.get_attribute(back, "aria-label") == "Back to Alpha Traders" and pg.locator("#app [data-back-client]").count() == 0, "1. the sidebar's client card: 'Back to Alpha Traders'; no Back link on the page (%r)" % pg.get_attribute(back, "aria-label"))
         ok(pg.locator('#app [data-tally-focus="%s"]' % cid).count() == 1 and pg.locator('#app [data-computer="%s"][data-focus]' % D1).count() == 1,
            "C. focused on the client's computer and company (%s)" % txt('#app [data-tally-focus]'))
         ok("GARG SHEKHAR" in txt('#app [data-tally-focus]') and "NWS144" in txt('#app [data-tally-focus]'), "C. the focus line names the company and the computer")
@@ -132,8 +133,8 @@ def main():
         # the sidebar's Tally (no focus) still has the Back link: the open client is kept
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); pg.wait_for_timeout(600)
         ok(pg.locator(back).count() == 1 and pg.locator('#app [data-tally-focus]').count() == 0, "1. the Tally page from the sidebar: Back link, no focus line")
-        sb = pg.locator('#side button[aria-label="\u2190 Back to Alpha Traders"]')
-        ok(sb.count() == 1, "1. the sidebar's first item on a firm page: '\u2190 Back to Alpha Traders'")
+        sb = pg.locator('#side button[aria-label="Back to Alpha Traders"]')
+        ok(sb.count() == 1, "1. the sidebar's client card on a firm page: 'Back to Alpha Traders'")
         sb.click(); pg.wait_for_timeout(1200)
         ok(state()[1] == "company" and state()[2] == cid, "1. the sidebar's Back opens the client (%s)" % state())
         E("() => navHome('tally')"); pg.wait_for_timeout(800)
@@ -148,7 +149,7 @@ def main():
         scene(DEVS, LINKED); E("() => navHome('tally')"); pg.wait_for_timeout(1200)
 
         # ---- 2. Your Tally connection: Needs you, cards, Details folded
-        ok(txt("#cobar h1, #cobar .title, #cobar") .find("Your Tally connection") >= 0, "A. the page is called 'Your Tally connection'")
+        ok(txt("#cobar .tbar-title h2").strip() == "Tally", "A. the page is called 'Tally', its sidebar word (clean-up batch 1)")
         needs = E("() => [...document.querySelectorAll('#app [data-needs-you] li')].map(li => [li.getAttribute('data-need'), li.innerText.replace(/\\s+/g, ' ').trim(), li.querySelectorAll('button, a.btn').length])")
         kinds = [n[0] for n in needs]
         ok(set(kinds) >= {"offline", "tally", "stopped"} and all(n[2] <= 1 for n in needs), "A. Needs you: offline, Tally not open, stopped; at most one button each (%s)" % needs)
@@ -291,7 +292,7 @@ def main():
         ph.evaluate(SETUP, [DEVS, STOPS, LINKED, "owner", []]); ph.evaluate("() => navHome('tally')"); ph.wait_for_timeout(1800)
         wide = ph.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
         ok(wide <= 1, "6. phone width: no sideways scroll (%d px)" % wide)
-        ok(ph.locator("#app [data-back-client]").count() == 1 and ph.locator("#app [data-needs-you]").count() == 1, "6. phone: Back link and Needs you")
+        ok(ph.locator("#app [data-back-client]").count() == 0 and ph.locator("#app [data-needs-you]").count() == 1, "6. phone: Needs you (the way back is in the menu's More)")
         if SHOTS: ph.screenshot(path=os.path.join(SHOTS, "phone-connection.png"), full_page=True)
         ph.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); ph.wait_for_timeout(600)
         wide = ph.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")

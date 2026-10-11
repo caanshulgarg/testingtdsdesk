@@ -129,7 +129,7 @@ with sync_playwright() as p:
     # 29. the firm's menu on the firm's pages
     pg.evaluate("() => navHome('clients')"); pg.wait_for_timeout(500)
     side = pg.inner_text("#side")
-    ok(all(w in side for w in ["Clients", "People", "Plan and credit", "Tally", "Settings"]) and "Purchase" not in side, "29. on the firm's pages the sidebar is the firm's menu")
+    ok(all(w in side for w in ["Today", "Compliance", "Clients", "Tally", "Settings"]) and "Purchase" not in side and "Plan and credit" not in side, "29. on the firm's pages the sidebar is the firm's menu (clean-up batch 1: People and Plan inside Settings)")
     # 21. sign-in: the lockout message, a link to set one's own password
     pg.evaluate("""() => { window.__f = window.fetch; window.fetch = async (u, o) => /functions\\/v1\\/signin/.test(String(u))
       ? new Response(JSON.stringify({ok: false, error: "Too many wrong passwords. Try again after 18:05, or ask the firm's owner to unlock you."}), {status: 423}) : window.__f(u, o); }""")

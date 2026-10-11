@@ -34,7 +34,7 @@ with sync_playwright() as p:
     name = sel.split("\n")[0].strip()
     ok(pg.evaluate("S.view") == "company" and name in pg.inner_text("#side .side-co"), "↓ then Enter opens the chosen client (" + name + "), named in the sidebar")
     ok(pg.evaluate("document.getElementById('modal').classList.contains('hidden')") and pg.locator("#modal .sw").count() == 0, "and the switcher closes")
-    ok("Dashboard" in top(), "the client opens on its dashboard, named in the top bar")
+    ok("Overview" in top(), "the client opens on its Overview (was Dashboard), named in the top bar")
     # Esc and a click outside close it
     pg.keyboard.press("Control+k"); pg.wait_for_timeout(300); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     ok(pg.locator("#modal .sw").count() == 0, "Ctrl+K opens it, Esc closes it")
@@ -52,8 +52,10 @@ with sync_playwright() as p:
     ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 8, "Client setup: its sections, listed on the left (%d)" % pg.locator('#app nav[aria-label="Client setup"] button').count())
     pg.click('#app nav[aria-label="Client setup"] button:has(span:text-is("GST"))'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "gstset", "a section in the list opens it" + " [" + pg.evaluate("S.tab") + "]")
-    pg.click('#cobar button:has-text("Back to the work")'); pg.wait_for_timeout(800)
-    ok(pg.evaluate("S.tab") == "invoices", "Back to the work")
+    # clean-up batch 1: no "Back to the work" in the header; the sidebar's Purchase is the way back
+    ok(pg.locator('#cobar button:has-text("Back to the work")').count() == 0, "no Back to the work (the sidebar covers it)")
+    pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.tab") == "invoices", "the sidebar's Purchase leaves Client setup")
     # the Tally panel and the firm menu
     pg.click("#cobar .tallychip"); pg.wait_for_timeout(400)
     ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally chip opens the Tally panel")
@@ -64,8 +66,10 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/react-frame-menu.png")
     pg.click('.firmmenu button:has-text("Settings")'); pg.wait_for_timeout(800)
     ok(pg.locator(".firmmenu").count() == 0 and pg.evaluate("S.view") == "home" and "Settings" in top(), "Settings from the firm menu")
-    ok(pg.locator('#side .side-link:has(span:text-is("People"))').count() == 1 and pg.locator('#side .side-link:has-text("Purchase")').count() == 0, "on the firm's pages the sidebar has the firm's menu, not the client's (review item 29)")
-    pg.click('#side .side-link:has(span:text-is("People"))'); pg.wait_for_timeout(500)
+    ok(pg.locator('#side .side-link:has(span:text-is("Today"))').count() == 1 and pg.locator('#side .side-link:has-text("Purchase")').count() == 0, "on the firm's pages the sidebar has the firm's menu, not the client's (review item 29)")
+    # clean-up batch 1: People is a section of Settings, opened from the firm menu
+    pg.click("#cobar .firmbtn"); pg.wait_for_timeout(400)
+    pg.click('.firmmenu button:has-text("People")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.homeTab, S.settingsTab]") == ["rules", "account"] and pg.evaluate("location.hash") == "#/settings/account", "People from the firm menu, with its own address")
     pg.click('#side .side-link:has(span:text-is("Clients"))'); pg.wait_for_timeout(800)
     ok("Clients" in top() and pg.evaluate("S.homeTab") == "clients", "Clients from the firm menu")

@@ -207,8 +207,8 @@ with sync_playwright() as p:
             pg.evaluate(dict(U.PAGES)[name]); pg.wait_for_timeout(400)
             pg.evaluate(js, [fb, cid]); pg.wait_for_timeout(900)
             pr = pg.evaluate(PRIMARY, "#app .btn.primary, #cobar .btn.primary")
-            prompt = pg.locator('#app button:has-text("Read the books from Tally")').count()
-            ok(len(pr) <= 1 and (not prompt or pr == ["Read the books from Tally"]), "%s, %s: one primary at most, the prompt to read the books being it when shown (%s)" % (name, state, pr))
+            prompt = pg.locator('#app button:has-text("Bring in from Tally")').count()
+            ok(len(pr) <= 1 and (not prompt or pr == ["Bring in from Tally"]), "%s, %s: one primary at most, the prompt to read the books being it when shown (%s)" % (name, state, pr))
             if state == "copy empty" and name in ("reports", "look-up"):
                 ok(prompt >= 1, "%s, copy empty: it asks to read the books from Tally" % name)
     pg.evaluate(FRESH, [fb, cid]); pg.wait_for_timeout(300)
