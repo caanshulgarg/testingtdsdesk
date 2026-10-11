@@ -6,7 +6,7 @@ that one change. The two data locations (next-241) move to 2.4.3.
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.2.exe |
-| Fingerprint | (filled in at the build) |
+| Fingerprint | SHA-256 `650bb9b5cdb33245bf6be62ac8bdc7fa6ad8e5f52dc7175620d00c34b33251d5` (FinComBridge-Setup-2.4.2.exe, built 11-Oct-2026 10:12 IST; compare with the .sha256 file next to the setup); program SHA-256 `d5ff69771f27970e616bc53e16efb2c43bf9fb125ed6b603578123b2db46e8e3` |
 | Replaces | 2.4.1 (kept on the computer, so the tray can roll back to it) |
 
 ## What is in 2.4.2
