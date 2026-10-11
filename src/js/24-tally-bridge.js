@@ -384,7 +384,7 @@ async function bridgeTick(first){
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");
-      toast("A newer FinCom Bridge is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Install FinCom Bridge from the Tally page and run it on the Tally computer.");
+      toast("A newer FinCom Bridge is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Install FinCom Bridge from the Tally page and run it on the Tally computer.", {background: true});
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -395,6 +395,7 @@ async function bridgeTick(first){
       const working = S.view === "company" && ((S.tab === "bank" && B() && (B().q || B().sel.size || bankRangeOn())) || S.selected || S.revQuery || S.drawerOpen || (S.revSel && S.revSel.size));
       if (clients.length === 1 && S.coId !== clients[0].id && !busyTyping && !working && !document.querySelector("#confirmBox[style*='flex']")){
         await openCompany(clients[0].id);
+        // (a toast although it happened by itself: the page itself changed, and this says why)
         toast((first ? "" : "Tally switched company. ") + "Showing " + clients[0].name + ", the company open in Tally.");
       }
     }

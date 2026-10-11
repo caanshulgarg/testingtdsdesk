@@ -452,10 +452,20 @@ function toastTone(s){
   if (/\b(saved|posted|booked|filed|added|created|loaded|uploaded|sent|matched|done|copied|downloaded)\b/i.test(s)) return "ok";
   return "";
 }
+// One message at a time, and only for something the person did (stability batch 3, the rule):
+//  - a new message replaces the one showing (one region, #toast); never two stacked;
+//  - something that happened by itself (a colleague's change synced in, Tally switched company, a newer bridge, the
+//    server not answering) is not a toast: toast(text, {background: true}) puts it in the quiet line at the foot of
+//    the sidebar (S.quiet, Side.jsx) for ten minutes, where it can be read without anything popping up;
+//  - a message that must stay until acted on (a newer FinCom: Reload) is {stay: true}: it stays, and comes back after
+//    any message that replaced it.
+let toastStay = null;
 function toastHide(){
   const t = document.getElementById("toast"); if (!t || t.classList.contains("hidden")) return;
+  if (toastStay && t.dataset.stay === "1") return;
   clearTimeout(toastTimer); t.classList.remove("in"); t.classList.add("out");
-  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = ""; }, 160);
+  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = "";
+    if (toastStay){ const s = toastStay; toastStay = null; toast(s.msg, s.o); } }, 160);
 }
 function toastWire(t){
   if (t._wired) return; t._wired = true;
@@ -514,6 +524,10 @@ function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$
 function toast(msg, o){
   const t = document.getElementById("toast"); if (!t) return;
   let s = msg == null ? "" : String(msg);
+  if (o && o.background){ S.quiet = {text: s, at: Date.now()}; if (typeof render === "function") try { render(); } catch (e){} return; }
+  if (o && o.stay) toastStay = {msg, o};
+  else if (toastStay && t.dataset.stay === "1") toastStay = Object.assign({}, toastStay);   // shown again after this one
+  t.dataset.stay = o && o.stay ? "1" : "";
   toastWire(t);
   const plain = toastTone(s) === "stop" || /error|fail|could not|cannot/i.test(s) ? plainMessage(s) : null;
   if (plain){
@@ -528,7 +542,7 @@ function toast(msg, o){
     const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
     acts.forEach(a => {
       const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = a.label; b.dataset.toastAct = a.label;
-      b.addEventListener("click", ev => { ev.stopPropagation(); toastHide(); try { a.run(); } catch (e){ console.error(e); } });
+      b.addEventListener("click", ev => { ev.stopPropagation(); if (t.dataset.stay === "1"){ toastStay = null; t.dataset.stay = ""; } toastHide(); try { a.run(); } catch (e){ console.error(e); } });
       box.appendChild(b);
     });
     t.appendChild(box);
@@ -536,8 +550,8 @@ function toast(msg, o){
   t.dataset.tone = plain ? "stop" : toastTone(s);
   clearTimeout(toastTimer);
   t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
-  // a message with buttons stays long enough to reach them
-  toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
+  // a message with buttons stays long enough to reach them; one that must stay, stays
+  if (!(o && o.stay)) toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
 }
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }

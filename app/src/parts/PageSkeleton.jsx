@@ -2,7 +2,8 @@
 // the program loads, so opening FinCom and then a client reads as one wait, not a row of different "Loading…" notes.
 // Shown after 300 ms (a quick open shows nothing in between), or at once when the frame's own shape was already showing.
 // What is being opened is said to a screen reader (role=status), not printed over the shape.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { FinComNav } from "../nav.js";
 import { bootShapeShown } from "../boot.js";
 
 let usedBoot = false;
@@ -10,6 +11,8 @@ export default function PageSkeleton({ what }) {
   // the first one after the frame of index.html takes over from its shape at once
   // (decided once for this showing: a redraw of the same wait does not start its 300 ms again)
   const [now] = useState(() => { const n = !usedBoot && bootShapeShown(); usedBoot = true; return n; });
+  // the thin bar under the top bar while the page waits (stability batch 3), not while the first open hands over
+  useEffect(() => { if (now) return undefined; FinComNav.start(); return () => FinComNav.done(); }, []);
   const row = <div className="boot-row"><i className="boot-bar"></i><i className="boot-bar"></i><i className="boot-bar"></i></div>;
   return <div className={"pg-skel" + (now ? " now" : "")} role="status" aria-busy="true" data-page-skeleton="">
     <span className="sr-only">{"Opening " + (what || "the page") + "…"}</span>

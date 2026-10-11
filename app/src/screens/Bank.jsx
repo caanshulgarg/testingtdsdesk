@@ -219,8 +219,8 @@ function MoreMenu({ tc }) {
 
 export default function Bank() {
   const b = B(), co = CO();
-  if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" />; }
-  if (b.loading) return <Loading what="bank statements" />;
+  if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" page="table" />; }
+  if (b.loading) return <Loading what="bank statements" page="table" />;
   setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();

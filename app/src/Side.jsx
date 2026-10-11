@@ -2,6 +2,7 @@
 // S, CO, docType, ... are the business logic's globals (legacy.js); goClient/navHome/toggleSetup are its navigation.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { FinComNav } from "./nav.js";
 // Arc UI (arc-ui, 09-Oct-2026): the sidebar in Arc's look (styles/arc-shell.css): a light surface, Lucide icons as
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
 // sidebar to its icons (remembered on this computer).
@@ -115,7 +116,8 @@ function ClientCard({ open, home, after }) {
 function Groups({ groups, after, phone }) {
   return groups.map(([g, items], i) => <div className="side-grp" key={i} data-group={g || undefined}>
     {g === "sep" ? <div className="side-sep" /> : g ? <div className="side-label side-group">{g}</div> : null}
-    {items.map((x) => <Item key={x.label} {...x} bar={phone ? false : x.bar} onClick={() => { if (after) after(); x.go(); }} />)}
+    {/* stability batch 3: the click is seen to be taken (the thin bar under the top bar if the page takes over 300 ms) */}
+    {items.map((x) => <Item key={x.label} {...x} bar={phone ? false : x.bar} onClick={() => { if (after) after(); FinComNav.go(x.go); }} />)}
   </div>);
 }
 
@@ -134,6 +136,19 @@ function MoreSheet({ groups, open, home, close }) {
       <Groups groups={groups.map(([g, items]) => [g, items.filter((x) => !x.bar)]).filter(([, items]) => items.length)} after={close} phone />
     </div>
   </div>, document.body);
+}
+
+// the quiet line: a background event of the last ten minutes, or where the work is kept and when it was last synced
+export function FootLine() {
+  const q = S.quiet && Date.now() - S.quiet.at < 600000 ? S.quiet : null;
+  if (q) return <span className="side-quiet" data-quiet-note="" title={q.text}>{q.text}</span>;
+  let t = "Saved on this computer";
+  if (typeof Cloud === "object" && Cloud.on()) {
+    const st = Cloud.st || {}, sv = (typeof Live === "object" && Live.sv) || {};
+    t = sv.state === "offline" || (typeof navigator === "object" && navigator.onLine === false) ? "No internet · work kept on this computer"
+      : st.lastSync ? "Synced " + fmtTime(st.lastSync) + " · saved on this computer" : "Saved on this computer · syncing";
+  } else t += " only";
+  return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }
 
 export default function Side() {
@@ -181,7 +196,10 @@ export default function Side() {
       <div className="side-grow" />
       {/* review of 01-Oct-2026: the date here was the build's, read as today's; now each says what it is */}
       {/* the build stamp moved to the About line in Settings (owner's spec K1, 04-Oct-2026) */}
-      <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span></div>
+      {/* stability batch 3: the foot of the sidebar, two lines in the same place on every page: where the work is kept
+          and when it was last synced, or something that happened by itself (a colleague's change, the server not
+          answering: toast(…, {background: true})), then today's date */}
+      <div className="side-ver" data-side-date=""><FootLine /><span>Today {fmtDate(new Date())}</span></div>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { flushSync } from "react-dom";
 import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens } from "./screens/lazy.js";
+import "./nav.js";
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path
 import { MotionConfig } from "motion/react";
 
