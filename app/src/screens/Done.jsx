@@ -1,7 +1,8 @@
 // Step 4 of a client, "Done": what has gone to Tally. Was viewDoneStep() (src/js/02) and viewPostLog() (src/js/18).
-// The post log is also shown in Settings → Posted to Tally and on the Tally home page, for all clients.
+// The post log (Everything sent to Tally) has one home, the Tally page; In Tally and Settings link to it.
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 
 const logWhat = (r) => (r.what === "bill" ? "purchase bill" : r.what === "bank" ? "bank entry" : r.what || "");
 const logState = (r) => (r.action === "removed" ? "Taken back" : !r.fromQueue ? "Sent" : r.already ? "Already in Tally" : r.verified ? "Confirmed in Tally" : "Sent, not confirmed");
@@ -47,22 +48,27 @@ export function PostLog() {
   );
 }
 
+// In Tally (Purchase): the purchase bills in Tally, and the last ones posted (clean-up batch 2: the bank lines are on
+// Bank → In Tally, and everything sent to Tally has one home, the Tally page, linked here)
 export function DoneStep() {
   const v = Object.values(D().entries);
   setTimeout(() => TallyProof.check(S.coId).catch(() => {}), 0);
   const posted = v.filter(billInTally).length, approved = v.filter((e) => e.status === "approved").length;
-  const bankHere = S.bank && S.bank.cid === S.coId;
+  const recent = v.filter(billInTally).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
   return (
-    <section className="poststep">
+    <section className="poststep" data-in-tally="">
       <div className="post-sum">
         <div className="pcard"><span>Bills posted</span><b>{posted}</b><small>{approved} approved in all</small></div>
-        <div className="pcard"><span>Bank lines in Tally</span><b>{bankHere ? tabCounts(S.bank.rows).done : "—"}</b><small>matched to a Tally voucher, open statement</small></div>
       </div>
       <div className="row" style={{ margin: "0 0 14px", gap: 10 }}>
         <button className="btn small" onClick={() => doAct("toBillsApproved")}>Approved bills</button>
-        <button className="btn small" onClick={() => doAct("toBankDone")}>Bank lines done</button>
       </div>
-      <PostLog />
+      <section className="pane" data-posted-lately="">
+        <h3 style={{ marginTop: 0 }}>Posted lately</h3>
+        {recent.length ? <ul className="dash-list">{recent.map((e) => <li key={e.id}><b>{e.x.vendorName || e.fileName || ""}</b> · {money(num(e.x.total))}<span className="note">{fmtDate(String(e.exportedAt).slice(0, 10))}</span></li>)}</ul>
+          : <p className="note" style={{ margin: 0 }}>Nothing posted yet.</p>}
+      </section>
+      <HomeLink id="sent" text={"Everything sent to Tally for " + (CO() || {}).name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} />
     </section>
   );
 }

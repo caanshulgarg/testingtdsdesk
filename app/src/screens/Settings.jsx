@@ -11,14 +11,14 @@ import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
-import { BridgeSettings, CloudBooks } from "./Tally.jsx";
+import { CloudBooks } from "./Tally.jsx";
+import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import TallyLink from "../parts/TallyLink.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import { BankSetup } from "../parts/BankSettings.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
-import { PostLog } from "./Done.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
 
@@ -62,7 +62,9 @@ function Layout({ label, groups, current, pick, children, scope, cid }) {
       <div className="setbody">
         <BackTo />
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
-        <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>
+        {/* clean-up batch 2: a section where each button acts at once has no Save bar ("Nothing to save here" beside a Save) */}
+        {!(SEC_STORES[current] || []).length && /^Nothing to save here/.test(SEC_EMPTY[current] || "") ? <div className="cfm-sec" data-confirm={scope + ":" + current} data-saves-at-once="">{children}</div>
+          : <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>}
       </div>
     </div>
   );
@@ -99,11 +101,11 @@ function firmGroups() {
         status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
-      { id: "bridge", label: "FinCom Bridge", about: "The small program that lets FinCom read from and post into TallyPrime on this computer: set it up and check it.",
+      { id: "bridge", label: "FinCom Bridge", about: "The small program that lets FinCom read from and post into TallyPrime: it is set up and checked on the Tally page.",
         status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
       { id: "tcloud", label: "Books in the cloud", about: "Computers that send Tally’s books to the firm account, and which Tally company is which client.",
         status: "Tally: " + tallyStatus(null).label },
-      { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when, for all clients.", status: (S.firm.postLog || []).length + " entries" },
+      { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },
     ] },
     { title: "GST", items: [
       { id: "gstapi", label: "GST API, all clients", about: "Every client's GST portal connection: until when, the returns fetched, the e-invoice user.",
@@ -120,6 +122,12 @@ function firmGroups() {
   ];
   if (sa) groups.push({ title: "Administrator", items: [{ id: "platform", label: "Platform", about: "All firms, credit, plans, prices and keys.", status: S.adminData ? (S.adminData.firms || []).length + " firms" : "" }] });
   return groups;
+}
+
+// the records kept on this computer (clean-up batch 2: it was a line on the Clients page), with the plan
+function RecordsUsed() {
+  const all = Object.values(S.companies || {}), used = all.reduce((a, c) => a + num((c.stats || {}).records || 1), 0) + Object.keys(S.inbox || {}).length + 1;
+  return <Card title="Records on this computer"><p className="note" data-records-used="" style={{ margin: 0 }}>{"About " + INR0.format(used) + " of " + INR0.format(DB_LIMIT) + " records used"}</p></Card>;
 }
 
 // Move on by itself (smart moves round 1): one switch for each kind of move, on unless turned off (Smart, src/js/64)
@@ -139,10 +147,11 @@ export function FirmSettings() {
   const body = {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
-    plan: () => <PlanCredit />,
-    bridge: () => <BridgeSettings />,
+    plan: () => <><PlanCredit /><RecordsUsed /></>,
+    // clean-up batch 2: one home each, the Tally page; here one line that leads there
+    bridge: () => <Card><HomeLink id="bridge" text="One place for this computer and the firm’s other computers." link="Open it on the Tally page" go={() => goTallyPage("computers", { bridgeDetails: true })} /></Card>,
     tcloud: () => <CloudBooks />,
-    postlog: () => <PostLog />,
+    postlog: () => <Card><HomeLink id="sent" text="One record for every client: what was sent, by whom and when." link="Open it on the Tally page" go={() => { goTallyPage("sent"); S.logAll = true; render(); }} /></Card>,
     gstapi: () => <GstApiAll />,
     rates: () => <Rates />,
     reading: () => <Reading />,

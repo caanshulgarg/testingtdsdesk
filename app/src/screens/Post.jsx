@@ -35,7 +35,7 @@ function StatusLine({ co }) {
     </div>
     {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
       <span>{p.msg ? <><b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(p.msg)} The bills are still waiting here.</> : p.text}</span>
-      {p.button && p.go && <button className="btn small primary" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
+      {p.button && p.go && <button className="btn small" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
     </div>}
   </>;
 }
@@ -97,7 +97,6 @@ function Ready({ co, bills, canPost, more }) {
       {n > 0 && why && <span className={"note" + (why.kind === "busy" ? "" : " bad")} data-post-why={why.kind}>{why.text}</span>}
       {more}
     </div>
-    <RemoteIdBox co={co} />
   </section>;
 }
 // round 14c (C3): why Post is blocked, in plain words beside the button (the gate's own words, postToProblem, not only a
@@ -161,7 +160,7 @@ function LedgerPick({ name, role }) {
     <select value={to} aria-label={"Tally ledger for " + name} onChange={(ev) => setTo(ev.target.value)}>
       <option value="">— Choose the Tally ledger —</option>{(S.bank.ledgers.list || []).map((l) => <option key={l.name}>{l.name}</option>)}
     </select>
-    <button className="btn small primary" onClick={() => billFixPick(name, role, to)}>Replace</button>
+    <button className="btn small" onClick={() => billFixPick(name, role, to)}>Replace</button>
     <button className="btn small" onClick={() => billFixLedger(role, name, null)}>Create in Tally</button>
   </>;
 }
@@ -266,11 +265,11 @@ function RowActs({ co, x, canPost }) {
   const bill = x.kind === "bill" && e;
   const localOnly = !job && bill;
   if (a && a.kind === "postAgain" && canPost) {
-    if (x.kind === "bank") out.push(<button key="b" className="btn small primary" data-open-bank="" onClick={() => txnGo("bank", x.id)}>Post again from Bank</button>);
-    else if (job && job.status === "failed") out.push(typeof postJobHeld === "function" && postJobHeld(job) ? <Wait key="w" /> : (typeof postRetryRefusal === "function" && postRetryRefusal(job)) ? null : <button key="r" className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(job)}>Post again</button>);
-    else if (bill && !e.exportedAt) out.push(held(e.id, co.id) ? <Wait key="w" /> : <button key="p" className="btn small primary" data-post-again="" data-retry-bill={localOnly && e.postCheckFailed ? "" : undefined} onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
+    if (x.kind === "bank") out.push(<button key="b" className="btn small" data-open-bank="" onClick={() => txnGo("bank", x.id)}>Post again from Bank</button>);
+    else if (job && job.status === "failed") out.push(typeof postJobHeld === "function" && postJobHeld(job) ? <Wait key="w" /> : (typeof postRetryRefusal === "function" && postRetryRefusal(job)) ? null : <button key="r" className="btn small" data-retry="" onClick={() => CloudJobs.retry(job)}>Post again</button>);
+    else if (bill && !e.exportedAt) out.push(held(e.id, co.id) ? <Wait key="w" /> : <button key="p" className="btn small" data-post-again="" data-retry-bill={localOnly && e.postCheckFailed ? "" : undefined} onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
     // marked as sent here once (a released entry, a Tally file): Tally is read live first, then posted (PostCheck.repost)
-    else if (bill && e.status === "approved") out.push(held(e.id, co.id) ? <Wait key="w" /> : <button key="p" className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>);
+    else if (bill && e.status === "approved") out.push(held(e.id, co.id) ? <Wait key="w" /> : <button key="p" className="btn small" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>);
   }
   if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast("Cancelled; nothing is sent to Tally."); } catch (err) { toast(String((err && err.message) || err)); } CloudJobs.load(true); }}>Cancel</button>);
   if (a && a.kind === "restore" && bill && e.status === "deleted") out.push(<button key="rs" className="btn small" data-restore="" onClick={() => billRestore(e.id)}>Restore the bill</button>);
@@ -289,11 +288,11 @@ function RowActs({ co, x, canPost }) {
     // the final review of 2.3.0 (M2): the member who asked, or an owner, withdraws a waiting check
     const me = (S.account && S.account.me && S.account.me.user_id) || "";
     if (bill && job && st.check && typeof st.check === "object" && st.check.id && settle && (owner || (me && st.check.asked_by === me))) out.push(<button key="wd" className="btn small" data-withdraw-check="" onClick={() => PostOwner.withdrawCheck(co.id, st.check)}>Withdraw the check</button>);
-    if (bill && !job && canPost && !held(e.id, co.id) && st.check === "notfound") out.push(<button key="pa" className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>It is not in Tally: post again</button>);
+    if (bill && !job && canPost && !held(e.id, co.id) && st.check === "notfound") out.push(<button key="pa" className="btn small" data-post-again="" onClick={() => PostCheck.repost(co, e)}>It is not in Tally: post again</button>);
     if (bill && !job && st.check !== "checking") out.push(<button key="cn" className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>);
     if (bill && job && !settle) out.push(<span key="o" className="note" data-owner-settles="">A member of the firm who may post settles this here.</span>);
     // a released id (the bridge or an owner said it is not in Tally): Post again is back
-    if (bill && job && x.ids && (!x.ids.live || x.ids.released_at) && !st.accepted && !st.checking && canPost && !e.exportedAt) out.push(<button key="pa2" className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
+    if (bill && job && x.ids && (!x.ids.live || x.ids.released_at) && !st.accepted && !st.checking && canPost && !e.exportedAt) out.push(<button key="pa2" className="btn small" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
   }
   if (a && a.kind === "correctId" && settle && (bill || job)) out.push(<button key="ci" className="btn small" data-correct-id="" onClick={() => PostOwner.correctId(co.id, e || { id: x.id, x: {} }, job, st.id && st.id.vch, st.id && st.id.typed)}>Correct the Tally id</button>);
   // a failed posting of the cloud whose Post again is refused (a deleted bill, an accepted entry), said on the row
@@ -505,6 +504,8 @@ export function PostStep() {
     {waiting.length > 1 && <button onClick={close(() => doAct("billBackAll"))}>Send all {waiting.length} bills back to review</button>}
     <button onClick={close(() => setSteps(!steps))}>{steps ? "Hide the import steps" : "How to import the file into Tally"}</button>
     <button className="danger" onClick={close(() => doAct("clearSent"))}>Clear sent invoices older than 90 days<small>They move to “Deleted”, where each can be restored; deductee year totals are kept</small></button>
+    {/* clean-up batch 2: the owner's REMOTEID test, a rare setting, under More (it was on the page under Post) */}
+    {typeof postOwner === "function" && postOwner() && <div className="bk-menu-sub" data-remoteid-more="" style={{ padding: "6px 10px", whiteSpace: "normal" }}><RemoteIdBox co={co} /></div>}
   </div></details>;
   return (
     <section className="poststep" data-post-page="">

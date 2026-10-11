@@ -67,6 +67,8 @@ with sync_playwright() as p:
     pg.evaluate("goClient('books'); S.booksTab = 'tds'; render();"); pg.wait_for_timeout(1500)
     tds_page = pg.locator('#app [data-tds-grid="2026-27"] tr[data-form="26Q"] td:last-child b').inner_text()
     pg.evaluate("goClient('dash');"); pg.wait_for_timeout(1000)
+    # clean-up batch 2: the TDS card is under the Overview's "More about this client"
+    pg.evaluate("document.querySelectorAll('#app [data-dash-more]').forEach(d => d.open = true)"); pg.wait_for_timeout(200)
     card = pg.locator('#app .dash-card[data-tone="violet"]')
     ct = card.inner_text()
     ok("2026-27" in card.locator("h3").inner_text(), "the Dashboard's TDS card says its year: " + card.locator("h3").inner_text())

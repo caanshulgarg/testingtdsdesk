@@ -169,7 +169,7 @@ export function PostReport({ rep }) {
   if (!rep) return null;
   // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
   if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
-    <Button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+    <Button className="btn small" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
   if (rep.checkNote) bits.push(rep.checkNote);

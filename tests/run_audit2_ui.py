@@ -41,11 +41,14 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("Clause 34(a)" in t and "Clause 44" in t and "Clause 22" in t, "the Form 3CD draft, clause by clause")
     pg.screenshot(path=OUT + "/audit-3cd.png", full_page=False)
+    # clean-up batch 2: the downloads are under Download
+    opendl = lambda: pg.evaluate("() => document.querySelectorAll('#app details.more').forEach(d => d.open = true)")
+    opendl()
     with ctx.expect_page() as pop:
         pg.click('button:text-is("Download the draft (PDF)")')
     rp = pop.value; rp.wait_for_timeout(700); ok("FORM 3CD" in rp.inner_text("body"), "draft as PDF"); rp.pdf(path=OUT + "/audit-3cd.pdf"); rp.close()
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
-    pg.click('section:has(.audit3cd) button:text-is("Excel")'); pg.wait_for_timeout(3000)
+    opendl(); pg.click('section:has(.audit3cd) button:text-is("Excel")'); pg.wait_for_timeout(3000)
     ok(any("3CD-working" in n for n in pg.evaluate("window.__saved")), "draft as Excel, a sheet per clause")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

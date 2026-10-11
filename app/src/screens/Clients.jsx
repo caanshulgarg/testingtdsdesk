@@ -1,10 +1,13 @@
-// Clients: upload bills for any client, add a client, and the list of clients. Was viewClients() and
-// addCompanyForm() in src/js/18.
+// Clients: the list of clients (find one, open it) and Add client. Was viewClients() and addCompanyForm() in src/js/18.
+// Clean-up batch 2 (11-Oct-2026, "one main button, one place for each thing"): the page has one job, the list, and one
+// main button, Add client. Uploading bills for any client, the reading check and the Day Books for several clients are
+// under the page's More, each opening its panel above the list; the records used are under Settings → Plan and credit.
 import { useState } from "react";
 import DropZone from "../parts/DropZone.jsx";
 import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import More from "../parts/More.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
@@ -62,37 +65,48 @@ function TallyLight({ cid }) {
     data-tally={t.state} data-tally-link-chip={k.state} data-tally-line-tip={l ? l.state : ""}>{MARK[k.level] + k.word}</span>;
 }
 
+// the panels under More, one at a time (S.clientsPanel); the Day Books panel stays while its files are being matched
+const PANELS = { upload: "Upload bills for any client", daybooks: "Day Books for several clients", reading: "Reading check" };
+function Panel({ id }) {
+  const close = <button className="linkbtn" data-clients-panel-close="" onClick={() => { S.clientsPanel = ""; if (id === "daybooks" && S.multiUp && !S.multiUp.busy) doAct("multiClose"); else render(); }}>Close</button>;
+  if (id === "upload") return <div className="pane" data-clients-panel="upload">
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>{PANELS.upload}</h3>{close}</div>
+    <DropZone mode="auto" label="Upload invoices for any client">
+      <strong>Upload invoices for any client</strong>
+      <div className="note">Drop any number of bills. Each is filed under the client whose GSTIN it is billed to; anything that does not match waits in Unsorted uploads. Files already uploaded are skipped.</div>
+    </DropZone>
+    <div style={{ marginTop: 8 }}><UploadOptions /></div>
+  </div>;
+  if (id === "reading") return <div className="pane" data-clients-panel="reading">
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>{PANELS.reading}</h3>{close}</div>
+    <ReadingCheck />
+  </div>;
+  return <div data-clients-panel="daybooks"><div className="row" style={{ justifyContent: "flex-end" }}>{close}</div><MultiUpload /></div>;
+}
+
 export default function Clients() {
   // the search box: typed at once, the list follows a moment later (as before)
   const [q, setQ] = useState(S.homeQuery || "");
   const all = Object.values(S.companies), find = q.trim().toLowerCase();
   const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));
-  const used = all.reduce((a, c) => a + num((c.stats || {}).records || 1), 0) + Object.keys(S.inbox).length + 1;
+  const panel = S.multiUp ? "daybooks" : PANELS[S.clientsPanel] ? S.clientsPanel : "";
+  const open = (id) => { S.clientsPanel = id; S.addingCo = false; render(); };
   return <>
-    <div className="two">
-      <DropZone mode="auto" label="Upload invoices for any client">
-        <strong>Upload invoices for any client</strong>
-        <div className="note">Drop any number of bills. Each is filed under the client whose GSTIN it is billed to; anything that does not match waits in Unsorted uploads. Files already uploaded are skipped.</div>
-      </DropZone>
-      <ReadingCheck />
-      <div className="pane" style={{ marginTop: 0 }}>
-        {S.addingCo ? <AddClient /> : <>
-          <h2>{all.length} client{all.length === 1 ? "" : "s"}</h2>
-          <p className="note" style={{ margin: "0 0 12px" }}>Open a client to upload, review and send its entries, like selecting a company in Tally.</p>
-          <button className="btn primary" onClick={() => doAct("addCo")}>Add client</button>
-        </>}
-      </div>
+    {/* the page's one row: find a client, More, and Add client (the one main button) */}
+    <div className="row clients-head" data-clients-head="" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap", margin: "0 0 12px" }}>
+      {all.length > 0 && <label className="f" style={{ minWidth: 260, flex: "1 1 260px", margin: 0 }}><span>Find a client</span>
+        <input type="text" value={q} placeholder="Name, GSTIN or Tally name" onChange={(e) => { setQ(e.target.value); S.homeQuery = e.target.value; }} />
+      </label>}
+      <span style={{ flex: all.length ? "0 0 auto" : "1 1 auto" }} />
+      <More label="More" data-clients-more="" items={[[PANELS.upload, () => open("upload"), { "data-clients-open": "upload" }], [PANELS.daybooks, () => open("daybooks"), { "data-clients-open": "daybooks" }],
+        [PANELS.reading, () => open("reading"), { "data-clients-open": "reading" }]]} />
+      {/* while the Day Books' files are matched, their "Bring them in" is the main button */}
+      {!S.addingCo && <button className={"btn small" + (S.multiUp ? "" : " primary")} data-add-client="" onClick={() => doAct("addCo")}>Add client</button>}
     </div>
-    <div style={{ marginTop: 8 }}><UploadOptions /></div>
+    {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
+    {panel && <Panel id={panel} />}
     <Jobs which="auto" />
-    <MultiUpload />
     {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p></div> : <>
-      <div className="row" style={{ margin: "18px 0 8px", justifyContent: "space-between" }}>
-        <label className="f" style={{ minWidth: 260 }}><span>Find a client</span>
-          <input type="text" value={q} placeholder="Name, GSTIN or Tally name" onChange={(e) => { setQ(e.target.value); S.homeQuery = e.target.value; }} />
-        </label>
-        <span className="note">About {INR0.format(used)} of {INR0.format(DB_LIMIT)} records used</span>
-      </div>
       {/* the one list table (spec K6): the client, its Tally sign (the status), then the counts; the foot adds them up */}
       <ListTable name="clients" className="data" rows={cos} rowKey={(c) => c.id} unit={["client", "clients"]} of={all.length}
         rowProps={(c) => ({ className: "rowlink", onClick: () => openCompany(c.id) })}

@@ -11,6 +11,7 @@ import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
+import More from "../../parts/More.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -52,8 +53,9 @@ function Head({ b, run }) {
       </Confirm>
     </details>
     {run && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-      <Act act="auditReport" className="btn small primary">Download the report (PDF)</Act><Act act="auditExcel">Excel with the annexures</Act>
-      <Act act="auditJe">Tally file of entries to pass ({Audit.jesToPass(run).length})</Act><Act act="auditFinal">Finalise this report</Act></div>}
+      {/* clean-up batch 2: Run now is the page's one main button; the downloads under one Download, Finalise plain */}
+      <More label="Download" align="start" data-audit-download="" items={[["Download the report (PDF)", () => doAct("auditReport"), { "data-audit-report": "" }], ["Excel with the annexures", () => doAct("auditExcel")],
+        ["Tally file of entries to pass (" + Audit.jesToPass(run).length + ")", () => doAct("auditJe")]]} /><Act act="auditFinal">Finalise this report</Act></div>}
     {fin && <div className="bk-alert" style={{ marginTop: 10 }}><b>The report for {d(run.from)} to {d(run.to)} is final</b>{", locked on " + fmtDate(fin.at.slice(0, 10)) + " (result code " + (fin.run.code || "") + "). Later runs track what gets put right, but the final report stays as it was. "}
       <Act act="auditFinalPdf" className="linkbtn">Download the final report</Act> · <Act act="auditUnlock" className="linkbtn">Unlock</Act></div>}
     {/* FinCom 2.4.1: the AI review of the ledgers (TDS section, blocked credit) is here, opened by "AI review of ledgers";
@@ -134,9 +136,11 @@ function Findings({ b }) {
     <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
       {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
-    <p className="note" style={{ margin: "10px 0" }}>{"Last run on " + fmtDateTime(run.at) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
-      <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}
-      {(run.errors || []).length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
+    {/* clean-up batch 2: the run in one line; its result code and notes under Details */}
+    <div className="note audit-runline" data-audit-runline="" style={{ margin: "10px 0" }}>{"Last run on " + fmtDateTime(run.at) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. "}
+      {(run.errors || []).length > 0 && <><span className="bad">Some checks could not run: {run.errors.join("; ")}</span>{" "}</>}
+      <details className="inline-more" style={{ display: "inline" }}><summary className="linkbtn" style={{ display: "inline", cursor: "pointer" }}>Details</summary>
+        <span>{" Result code "}<b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}</span></details></div>
     <div className="dash-tiles">
       <div className={"dtile" + (sev("high").length ? " warn" : "")}><span>Serious</span><b>{sev("high").length}</b><small>{m(sum(sev("high")))} involved</small></div>
       <div className="dtile"><span>To look at</span><b>{sev("medium").length}</b><small>{m(sum(sev("medium")))}</small></div>
@@ -180,7 +184,7 @@ function Related({ b }) {
 function Form3cd({ b }) {
   const run = (b.audit || {}).last;
   if (!run) return <div className="bk-none">Run the audit first (Findings → Run now); the draft is filled from it.</div>;
-  return <section className="dash-card"><div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}><Act act="audit3cdPdf" className="btn small primary">Download the draft (PDF)</Act><Act act="audit3cdExcel">Excel</Act></div>
+  return <section className="dash-card"><div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}><More label="Download" align="start" data-audit3cd-download="" items={[["Download the draft (PDF)", () => doAct("audit3cdPdf")], ["Excel", () => doAct("audit3cdExcel")]]} /></div>
     <div className="audit3cd"><Legacy html={Audit.form3cdHtml(Audit.form3cd(run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
 }
 

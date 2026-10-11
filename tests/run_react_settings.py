@@ -29,8 +29,9 @@ with sync_playwright() as p:
     ok("Not saved yet" in foot(), "review 18: the change is a draft until Save (%s)" % foot())
     save()
     ok("Saved ·" in foot() and "this computer" in foot(), "review 18: after Save, “Saved · <time> · this computer” (%s)" % foot())
-    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("FinCom Bridge", "Bridge address"), ("Books in the cloud", "Books in the cloud"),
-                        ("Sent to Tally", "Everything sent to Tally"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
+    # clean-up batch 2: FinCom Bridge and Sent to Tally have one home, the Tally page; their sections link there
+    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("FinCom Bridge", "Open it on the Tally page"), ("Books in the cloud", "Books in the cloud"),
+                        ("Sent to Tally", "Open it on the Tally page"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
         nav(label); pg.wait_for_timeout(350)
         ok(head() == label and text in pg.inner_text("#app .setbody") and pg.get_attribute('#app .setnav button[aria-current="page"]', "aria-current") == "page", "Settings → " + label)
     ok("Firm name" not in pg.inner_text("#app .setbody"), "the rates page no longer holds the firm's name")

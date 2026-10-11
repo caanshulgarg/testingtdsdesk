@@ -72,7 +72,7 @@ function Picker({ co, current = "", onDone }) {
 }
 
 // the one status line: the state's word, what it means, and at most one button
-function StatusLine({ co, k, where, b }) {
+function StatusLine({ co, k, where, b, plain = false }) {
   const l = k.line, x = k.company, pc = k.computer || "the office computer", owner = isOwner();
   const openTally = () => openTallyFor(co.id);
   let text = "", act = null;
@@ -82,7 +82,7 @@ function StatusLine({ co, k, where, b }) {
   else if (k.state === "reading") { const last = lastEntry(co, k);
     text = "Linked to " + x + " on " + pc + " · last entry " + (last ? tallyHm(last) : "not received yet");
     act = <Button className="btn small" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>{l && l.reading ? "Reading now…" : "Update now"}</Button>; }
-  else { const n = needLine(co, k.needs[0], k, where, b, owner, openTally); text = n.text; act = n.act; }
+  else { const n = needLine(co, k.needs[0], k, where, b, owner, openTally, plain); text = n.text; act = n.act; }
   return <div className="tlink-line" data-tally-link-status={k.state}>
     <span className={"tag " + k.level} data-tally-link-state="">{k.word}</span>
     <span className="tlink-say" data-tally-link-text="">{text}</span>
@@ -97,15 +97,16 @@ function lastEntry(co, k) {
   return [k.line && k.line.read, rec].filter(Boolean).sort().pop() || "";
 }
 // a need in words, with its one button
-function needLine(co, n, k, where, b, owner, openTally) {
+function needLine(co, n, k, where, b, owner, openTally, plain = false) {
+  const main = plain ? "btn small" : "btn small primary";   // on another page's line the page keeps its own main button
   const l = k.line || {};
   if (n.kind === "stopped") return { text: l.text,
-    act: owner && l.stop ? <Button className="btn small primary" data-read-resume-line="" onClick={() => TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer })}>Resume</Button>
+    act: owner && l.stop ? <Button className={main} data-read-resume-line="" onClick={() => TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer })}>Resume</Button>
       : <span className="note">An owner of the firm can resume it.</span> };
   if (n.kind === "daybook") { const books = b || (S.books && S.books.cid === co.id ? S.books : null), days = needDays(books || {}, co.id), nd = days.reduce((a, x) => a + x.days, 0);
     const text = nd ? (nd === 1 ? "1 day needs its Day Book" : nd + " days need their Day Book") + (n.n ? " (" + plural(n.n, "entry", "entries") + " waiting)" : "")
       : n.n ? plural(n.n, "entry needs", "entries need") + " that day’s Day Book" : "Some days were not received from Tally: upload their Day Book";
-    return { text, act: <Button className="btn small primary" data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</Button> }; }
+    return { text, act: <Button className={main} data-tally-need-upload="" onClick={() => where === "books" && days.length ? tallyPickFor(tallyDate(days[0].from), tallyDate(days[0].to)) : goClient("books:import")}>Upload</Button> }; }
   if (n.kind === "baseline") return { text: "The starting point of " + k.company + " is not recorded yet: " + plural(n.n, "entry waits", "entries wait"),
     act: <Button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</Button> };
   if (n.kind === "held") return { text: n.n === 1 ? "1 entry from Tally is held and needs a look" : n.n + " entries from Tally are held and need a look",
@@ -171,6 +172,18 @@ function linkHere(co, where) {
   if (!k || where !== "books" || !k.needs.some((n) => n.kind === "daybook")) return k;
   const needs = k.needs.filter((n) => n.kind !== "daybook"), state = needs.length ? "needs" : k.line && k.line.state === "open" ? "reading" : "waiting";
   return Object.assign({}, k, { needs, state, word: TALLY_LINK_WORDS[state], level: TALLY_LINK_LEVEL[state] });
+}
+
+// clean-up batch 2 (one home for each thing): the Link to Tally card lives in Client setup → Tally; From Tally and the
+// Overview show its status line (the state's word, what it means, its one button) and a link to the card
+export function goTallyLinkHome() { S.step = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
+export function TallyLinkLine({ co, where = "overview", b = null }) {
+  const k = co ? linkHere(co, where === "books" ? "books" : "setup") : null;
+  if (!co || !k) return null;
+  return <section className="tlink tlink-one" data-tally-link-line={k.state} data-tally-link={k.state} aria-label={"Link to Tally: " + k.word}>
+    <StatusLine co={co} k={k} where={where} b={b} plain />
+    <button className="linkbtn tlink-home" data-tally-link-home="" onClick={goTallyLinkHome}>{(k.state === "unlinked" ? "Link to Tally" : "Link to Tally in Client setup") + " \u2192"}</button>
+  </section>;
 }
 
 export default function TallyLink({ co, where = "setup", b = null }) {

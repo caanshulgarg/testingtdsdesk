@@ -154,7 +154,7 @@ function Status({ b }) {
     {again}
     {!live && !cloud && <div className="led-upload" data-led-upload="">
       <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then bring the file in here.</span>
-      <button className="btn small primary" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Bring in from Tally</button></div>}
+      <button className="btn small" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Bring in from Tally</button></div>}
   </div>;
 }
 

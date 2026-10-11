@@ -234,3 +234,24 @@ header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content);
 .today-co::before { content: attr(data-initials); display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 8px;
   background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #FFFFFF; font-size: 11px; font-weight: 700; }
 .today > .row h2 { font-size: 18px; font-weight: 600; }
+
+/* ---------- clean-up batch 2: one main button, one place for each thing ---------- */
+/* the one line where a thing used to be repeated, linking to its home */
+.home-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 12px 0 0; padding: 10px 14px; border: 1px dashed var(--border); border-radius: var(--radius-panel);
+  color: var(--text-secondary); background: var(--surface); }
+.setcard .home-link { margin: 0; border: 0; padding: 0; background: none; }
+.home-link .linkbtn { font-weight: 500; }
+/* the client's Tally link in one line (From Tally, Overview) */
+.tlink.tlink-one { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 14px; }
+.tlink.tlink-one .tlink-line { flex: 1 1 360px; }
+.tlink.tlink-one .tlink-home { flex: none; }
+/* Overview: the checklist folded to one line once done (or hidden), and "More about this client" */
+.onb-fold, .dash-more { margin: 0 0 14px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.onb-fold > summary, .dash-more > summary { cursor: pointer; color: var(--text-secondary); font-weight: 500; }
+.onb-fold[open] > summary, .dash-more[open] > summary { margin-bottom: 10px; }
+.onb-fold .onb-list { margin: 0 0 8px; }
+.dash-more { margin-top: 14px; }
+.dash-more .dash-cols { margin-top: 8px; }
+/* Clients: the page's one row (find, More, Add client) */
+.clients-head .more { align-self: flex-end; }
+@media (max-width: 640px) { .clients-head > label.f { flex-basis: 100%; } }

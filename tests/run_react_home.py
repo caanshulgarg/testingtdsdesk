@@ -15,8 +15,11 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
     pg.evaluate("S.view = 'home'; S.homeTab = 'clients'; render()"); pg.wait_for_timeout(500)
     app = lambda: pg.inner_text("#app")
-    ok("No clients yet" in app() and "0 clients" in app(), "Clients, empty: says so")
-    ok(pg.locator('#app [role=button][aria-label="Upload invoices for any client"]').count() == 1, "the upload box for any client")
+    ok("No clients yet" in app(), "Clients, empty: says so")
+    # clean-up batch 2: the upload for any client is under the Clients page's More
+    pg.click("#app [data-clients-more] > summary"); pg.wait_for_timeout(200); pg.click('#app [data-clients-open="upload"]'); pg.wait_for_timeout(400)
+    ok(pg.locator('#app [role=button][aria-label="Upload invoices for any client"]').count() == 1, "the upload box for any client (More)")
+    pg.click("#app [data-clients-panel-close]"); pg.wait_for_timeout(300)
     # add a client through the form
     pg.click('#app button:has-text("Add client")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("document.activeElement.id") == "ncName", "Add client: the name field has the cursor")

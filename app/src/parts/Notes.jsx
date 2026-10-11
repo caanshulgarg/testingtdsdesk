@@ -46,11 +46,17 @@ export function CatchUp({ text }) {
 }
 
 // a new client's first steps, until they are done or hidden
+// clean-up batch 2: once every step is done, or the card is hidden, it folds to one line that opens the steps again
 export function OnbCard({ co }) {
-  if (!co || co.onbHide) return null;
+  if (!co) return null;
   if (!S.books || S.books.cid !== co.id) { if (typeof openBooks === "function" && S.view === "company") setTimeout(() => { if (!S.books || S.books.cid !== co.id) openBooks(co.id); }, 0); }
   const st = ONB.steps(co), n = st.filter((s) => s.done).length;
-  if (n === st.length) return null;
+  if (n === st.length || co.onbHide) return <details className="onb-fold" data-onb-folded={n === st.length ? "done" : "hidden"}>
+    <summary>{n === st.length ? "✓ " + co.name + " is ready: all " + st.length + " steps done" : "Getting " + co.name + " ready: " + n + " of " + st.length + " done"}</summary>
+    <ol className="onb-list">{st.map((s) => <li key={s.id} className={s.done ? "done" : ""} data-onb-step={s.id}><span className="onb-n" aria-hidden="true">{s.done ? "✓" : ""}</span><div><b>{s.t}</b><span>{s.d}</span></div>
+      {!s.done && <Button className="btn small" onClick={() => onbStepGo(s)}>{s.btn[0]}</Button>}</li>)}</ol>
+    {co.onbHide && n < st.length && <button className="linkbtn" data-onb-show="" onClick={() => { co.onbHide = false; Store.saveCompany(co); render(); }}>Show the card again</button>}
+  </details>;
   return <section className="dash-card onb"><div className="onb-h"><div><h3>{"Getting " + co.name + " ready"}</h3><p className="note" style={{ margin: 0 }}>{n + " of " + st.length + " done"}</p></div><button className="linkbtn" onClick={() => onbHide()}>Hide this</button></div>
     <div className="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax={st.length} aria-valuenow={n}><i style={{ width: Math.round(n / st.length * 100) + "%" }}></i></div>
     {/* smart moves round 1 (10): the first step not done is the one primary button, "Next: …" */}

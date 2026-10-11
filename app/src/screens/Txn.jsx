@@ -6,6 +6,7 @@ import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import Loading from "../parts/Loading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
+import More from "../parts/More.jsx";
 
 const amt = (v) => (v ? money(r2(v)) : "—");
 const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"], ["dup", "Duplicates"], ["del", "Deleted"]];
@@ -41,8 +42,8 @@ export default function Txn() {
         onChange={(ev) => { S.txnQ = ev.target.value; FinComReact.redraw(); later("txnq", render, 250); }} />
       <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.filter(([v]) => tab === "bills" || (v !== "dup" && v !== "del")).map(([v, l]) => <option key={v} value={v}>{l + (v === "dup" || v === "del" ? " (" + all.filter((r) => r.e && r.e.status === (v === "dup" ? "duplicate" : "deleted")).length + ")" : "")}</option>)}</select>
       <span className="note">{rows.length} of {all.filter((r) => !(r.e && r.e.status === "deleted")).length}</span>
-      <button className="btn small primary" onClick={() => txnExcel()}>Excel</button>
-      <button className="btn small" onClick={() => txnCsv()}>CSV</button>
+      {/* clean-up batch 2: an export is never the page's main button; Excel and CSV under one Download */}
+      <More label="Download" data-txn-download="" items={[["Excel", () => txnExcel(), { "data-txn-excel": "" }], ["CSV", () => txnCsv(), { "data-txn-csv": "" }]]} />
       <details className="colpick"><summary className="btn small">Columns</summary>
         <div className="colpick-box">{TXN_COLS.map(([k, label]) => <label key={k} className="chk"><input type="checkbox" checked={txnColShown(k)} onChange={() => txnColToggle(k)} /> {label}</label>)}</div></details>
     </div>

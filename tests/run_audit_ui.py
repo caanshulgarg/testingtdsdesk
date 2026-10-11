@@ -49,12 +49,14 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/audit-open.png", full_page=False)
     # downloads
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => blob.text().then(t => window.__saved.push([n, t.slice(0, 400)])); }")
-    pg.click('button:has-text("Tally file of entries")'); pg.wait_for_timeout(700)
+    # clean-up batch 2: the downloads are under Download (Run now is the page's one main button)
+    pg.evaluate("() => document.querySelectorAll('#app [data-audit-download]').forEach(d => d.open = true)"); pg.click('button:has-text("Tally file of entries")'); pg.wait_for_timeout(700)
     sv = pg.evaluate("window.__saved")
     ok(sv and sv[0][0].endswith("audit-entries.xml") and "<VOUCHER VCHTYPE=\"Journal\"" in sv[0][1], "Tally file of entries to pass")
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
-    pg.click('button:text-is("Excel with the annexures")'); pg.wait_for_timeout(3000)
+    pg.evaluate("() => document.querySelectorAll('#app [data-audit-download]').forEach(d => d.open = true)"); pg.click('button:text-is("Excel with the annexures")'); pg.wait_for_timeout(3000)
     ok(any("-audit-" in n for n in pg.evaluate("window.__saved")), "Excel with annexures")
+    pg.evaluate("() => document.querySelectorAll('#app [data-audit-download]').forEach(d => d.open = true)"); 
     with ctx.expect_page() as pop:
         pg.click('button:text-is("Download the report (PDF)")')
     rep = pop.value; rep.wait_for_timeout(800)

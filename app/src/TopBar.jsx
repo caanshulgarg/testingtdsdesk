@@ -17,6 +17,7 @@ import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
+import { goTallyPage } from "./parts/HomeLink.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -53,10 +54,26 @@ export function uploadKind() {
   if (S.tab === "books" && bt === "import") return "daybook";
   return "";
 }
+// clean-up batch 2 ("one main button"): the page's own main action, when it shows one, so the top bar's Upload is plain:
+// To review's Approve, and Post to Tally's "Post N to Tally" (its To post tab, with bills ready)
+export function pageOwnsPrimary() {
+  const up = uploadKind();
+  if (up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft") return true;
+  if (up === "bills" && S.tab === "export") {
+    const co = CO(); if (!co) return false;
+    let ready = 0, errors = 0;
+    try { ready = ((typeof postBills === "function" && postBills(co.id)) || { ready: [] }).ready.length; } catch (e) { ready = 0; }
+    try { errors = typeof postTabCounts === "function" ? num(postTabCounts(co.id).errors) : 0; } catch (e) { errors = 0; }
+    const tab = (S.postTabs || {})[co.id] || (errors ? "errors" : "topost");
+    return tab === "topost" && ready > 0;
+  }
+  return false;
+}
 function MainAction() {
   const bt = S.tab === "books" ? booksTab() : "", up = uploadKind();
-  // one primary a page (spec K2): the review table's own Approve is its primary, so Upload is a plain button there
-  const own = up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft";
+  // one primary a page (spec K2): the review table's own Approve is its primary, so Upload is a plain button there;
+  // clean-up batch 2: so is Post to Tally's "Post N to Tally"
+  const own = pageOwnsPrimary();
   if (up) { const [label, title, go] = UPLOADS[up]; return <Button className={"btn small" + (own ? "" : " primary")} data-upload={up} title={title} onClick={go}>{label}</Button>; }
   if (bt === "letters") return <Button className="btn small" onClick={() => ltrMode("confirm")}>New confirmation</Button>;   // the letters' own Print is the page's primary
   // while the copy of the books is empty, "Read the books from Tally" on the page is its one primary (one primary in every state)
@@ -200,7 +217,7 @@ function TallyPanel({ open }) {
       </div>
       <div className="tp-foot">
         <Button className="btn small" onClick={() => doAct("tallyGuide")}>Connection guide</Button>
-        <Button className="btn small" onClick={() => navHome("tally")}>Everything sent to Tally</Button>
+        <Button className="btn small" data-panel-sent="" onClick={() => goTallyPage("sent")}>Everything sent to Tally</Button>
       </div></>}
     </DrawerContent>
   </Drawer>;

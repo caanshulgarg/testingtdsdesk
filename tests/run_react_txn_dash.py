@@ -21,15 +21,21 @@ with sync_playwright() as p:
     # clean-up batch 1: the Overview's counts in Today's words (To review, Ready to post)
     tile = lambda label: pg.locator('#app .dtile:has(> span:text-is("%s")) b' % label).inner_text()
     ok(tile("To review") == "1" and tile("Ready to post") == "1", "Overview: 1 bill to review, 1 ready to post")
-    ok("Alpha Consultants" in pg.inner_text("#app .dash-list"), "posted lately: the bill sent to Tally")
+    # clean-up batch 2: what was posted lately is on Purchase → In Tally; TDS, Bank and Sales under "More about this client"
+    pg.evaluate("goStep('done', 'bills')"); pg.wait_for_timeout(700)
+    ok("Alpha Consultants" in pg.inner_text("#app [data-posted-lately] .dash-list"), "posted lately (Purchase → In Tally): the bill sent to Tally")
+    pg.evaluate("goClient('dash')"); pg.wait_for_timeout(700)
+    pg.click("#app [data-dash-more] > summary"); pg.wait_for_timeout(300)
     # the TDS on bills approved here, of this year only (run_figures_agree.py has the books' figure beside it)
     tds = pg.evaluate("INR.format(r2(Object.values(D().entries).filter(e => e.status === 'approved' && e.snapshot && e.snapshot.fy === fyOf(null)).reduce((a, e) => a + num(e.snapshot.tds), 0)))")
     ok(tds in pg.inner_text('#app .dash-card[data-tone="violet"] .dash-row:has-text("On bills approved here")'), "TDS on bills approved here this year: " + tds)
     pg.click('#app .dtile:has(> span:text-is("To review"))'); pg.wait_for_timeout(600)
     ok(pg.evaluate("S.tab") == "invoices", "a tile opens its work")
     pg.evaluate("goClient('dash')"); pg.wait_for_timeout(500)
-    pg.fill("#dashAsk", "trial balance"); pg.keyboard.press("Enter"); pg.wait_for_timeout(800)
-    ok(pg.evaluate("S.tab") == "books" and pg.evaluate("S.booksTab") == "lookup", "the question box opens Look up")
+    # clean-up batch 2: the books are asked on Look up ("/" opens it); the Overview has no copy of the box
+    ok(pg.locator("#dashAsk").count() == 0, "the Overview has no question box of its own")
+    pg.keyboard.press("/"); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.tab") == "books" and pg.evaluate("S.booksTab") == "lookup", "'/' opens Look up")
     # Transactions
     pg.evaluate("goClient('txn')"); pg.wait_for_timeout(800)
     rows = lambda: pg.locator("#app table.txntbl tbody tr")
@@ -41,6 +47,7 @@ with sync_playwright() as p:
     pg.select_option('#app select[aria-label="Status"]', "ok"); pg.wait_for_timeout(400)
     ok(rows().count() == 1, "status In Tally: one")
     pg.select_option('#app select[aria-label="Status"]', ""); pg.wait_for_timeout(300)
+    pg.click("#app [data-txn-download] > summary"); pg.wait_for_timeout(200)   # clean-up batch 2: Excel and CSV under Download
     with pg.expect_download() as dl: pg.click('#app button:text-is("CSV")')
     ok(dl.value.suggested_filename.endswith(".csv"), "CSV download")
     pg.click('#app table.txntbl tr:has-text("Kappa Labs") button:has-text("Open")'); pg.wait_for_timeout(600)

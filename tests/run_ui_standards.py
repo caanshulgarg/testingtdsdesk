@@ -127,7 +127,7 @@ MORE = [
         ledgers: {list: [{name: 'ICICI Bank', group: 'Bank Accounts'}], importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: 'review', grouped: false, showSettings: false, q: '', limit: 100, pendingRule: null, busy: '',
         createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []}); render(); }"""),
     ("in-tally-log", """(cid) => { S.firm.postLog = [{at: '2026-10-04T08:35:00Z', co: cid, what: 'bill', ref: 'B/2209', party: 'LYALLPUR TRADERS', amount: 47200, tally: {vchType: 'Purchase', masterId: 81, company: 'Testing AAD'}, by: 'Anshul'},
-      {at: '2026-10-03T06:00:00Z', co: cid, what: 'bill', ref: 'A/17', party: 'ALPHA LTD', amount: 1180, tally: {vchType: 'Purchase', masterId: 80, company: 'Testing AAD'}, by: 'Anshul'}]; S.view = 'company'; goStep('done', 'bills'); }"""),
+      {at: '2026-10-03T06:00:00Z', co: cid, what: 'bill', ref: 'A/17', party: 'ALPHA LTD', amount: 1180, tally: {vchType: 'Purchase', masterId: 80, company: 'Testing AAD'}, by: 'Anshul'}]; S.coId = cid; S.tallyFocus = ''; S.tallyTab = 'sent'; S.logAll = false; navHome('tally'); }"""),   # clean-up batch 2: the post log's one home, the Tally page
     ("unsorted-inbox", """(cid) => { S.inbox = {u1: {id: 'u1', fileName: 'bill-a.pdf', createdAt: '2026-10-04T05:00:00Z', j: {vendorName: 'ZED TRADERS', buyerName: 'SOMEONE ELSE', totalAmount: 1180, invoiceNo: 'Z-1', invoiceDate: '2026-09-10'}, note: 'Billed to a GSTIN of no client'},
       u2: {id: 'u2', fileName: 'bill-b.pdf', createdAt: '2026-10-03T05:00:00Z', j: {vendorName: 'ALPHA LTD', buyerName: 'OTHER CO', totalAmount: 5900, invoiceNo: 'A-9', invoiceDate: '2026-09-11'}, note: 'Billed to a GSTIN of no client'}}; navHome('inbox'); }"""),
     ("transactions-sales", """(cid) => { goClient('txn'); txnTabGo('sales'); }"""),
@@ -240,7 +240,7 @@ with sync_playwright() as p:
        "one formatter for times, in IST whatever this computer's clock (a computer on New York time): %s" % f)
     q.evaluate(dict(MORE)["in-tally-log"], cid2); q.wait_for_timeout(1200)
     lt = q.inner_text("#app")
-    ok("04-Oct-2026 14:05 IST" in lt and "03-Oct-2026 11:30 IST" in lt, "In Tally: the time each entry was sent, in IST (New York computer)")
+    ok("04-Oct-2026 14:05 IST" in lt and "03-Oct-2026 11:30 IST" in lt, "Everything sent to Tally: the time each entry was sent, in IST (New York computer)")
     # ---- round 2: never a blank area while data loads (K7): a request held open, then "Loading…" or a skeleton ----
     HOLD = "() => { window.__held = new Promise(() => {}); }"
     cases = [
@@ -252,7 +252,7 @@ with sync_playwright() as p:
         ("books, reports", "(cid) => { window.__books = S.books; S.books = {cid, loading: true}; goClient('books:reports'); }", None),
         ("books, look up", "(cid) => { S.books = {cid, loading: true}; goClient('books:lookup'); }", None),
         ("GST settings", "(cid) => { S.books = {cid, loading: true}; goClient('books:gst'); }", "(cid) => { S.books = window.__books; render(); }"),
-        ("In Tally, the postings", "(cid) => { S.firm.postLog = []; window.__cjl = CloudJobs.load; CloudJobs.load = () => {}; CloudJobs.busy = true; goStep('done', 'bills'); }", "(cid) => { CloudJobs.load = window.__cjl; CloudJobs.busy = false; render(); }"),
+        ("Everything sent to Tally, the postings", "(cid) => { S.firm.postLog = []; window.__cjl = CloudJobs.load; CloudJobs.load = () => {}; CloudJobs.busy = true; S.coId = cid; S.tallyFocus = ''; S.tallyTab = 'sent'; S.logAll = false; navHome('tally'); }", "(cid) => { CloudJobs.load = window.__cjl; CloudJobs.busy = false; S.view = 'company'; render(); }"),
         ("help tickets", "(cid) => { window.__sup = [SUP.load, SUP.on]; SUP.load = () => __held; SUP.on = () => true; const s = SUP.st(); s.list = null; s.loading = false; s.tab = 'tickets'; s.open = null; s.newOpen = false; navHome('help'); }", "(cid) => { [SUP.load, SUP.on] = window.__sup; render(); }"),
     ]
     q.evaluate(HOLD)

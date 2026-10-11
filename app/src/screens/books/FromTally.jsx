@@ -14,7 +14,7 @@
 // removals, and the bridge's own update settings when this computer has one).
 import { useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
-import TallyLink from "../../parts/TallyLink.jsx";
+import { TallyLinkLine } from "../../parts/TallyLink.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -202,7 +202,8 @@ export default function FromTally({ b }) {
   const n = (b.vouchers || []).length, m = b.meta || {}, other = m.gstins ? notThisClient(m.gstins) : [];
   const days = needDays(b, S.coId);
   return <div className="up-page" data-upload-page="" style={{ maxWidth: 760 }}>
-    <div style={{ marginTop: 10 }}><TallyLink co={CO()} where="books" b={b} /></div>
+    {/* clean-up batch 2: the Link to Tally card's home is Client setup → Tally; here its one status line and a link */}
+    <div style={{ marginTop: 10 }}><TallyLinkLine co={CO()} where="books" b={b} /></div>
     <Status b={b} days={days} />
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     <Upload b={b} />

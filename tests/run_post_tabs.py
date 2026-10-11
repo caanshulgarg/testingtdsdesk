@@ -406,7 +406,9 @@ with sync_playwright() as p:
     # ---- round 14c (C7, owner item 4): "Send a FinCom reference id (REMOTEID) with each voucher (test)", owner only, off
     # by default, kept on the client; on, the voucher XML carries REMOTEID="<the entry's FinCom id>"; nothing else changes
     RB = '#app [data-remoteid-test] input[type="checkbox"]'
-    tab("topost")
+    # clean-up batch 2: the REMOTEID test is under Post to Tally's More
+    more = lambda: (E("() => { const d = document.querySelector('#app [data-more=post]'); if (d) d.open = true; }"), pg.wait_for_timeout(200))
+    tab("topost"); more()
     ok(pg.locator(RB).count() == 1 and not pg.is_checked(RB) and "Send a FinCom reference id (REMOTEID) with each voucher (test)" in txt("#app [data-remoteid-test]"),
        "C7. an owner sees the tick box, off by default (%s)" % txt("#app [data-remoteid-test]"))
     xml_off = E("voucherXml(D().entries['r2'], CO())")
@@ -442,7 +444,7 @@ with sync_playwright() as p:
     ok("This will add 1 test entry to GARG SHEKHAR & COMPANY. Continue?" in cb, "C7. postBillsToTally asks too when not asked before (%s)" % cb[:160])
     if cb: pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(600)
     ok(E("window.__pbDone") and not E("D().entries.r2.exportedAt") and not (E("S.billPost") or {}).get("busy"), "C7. Cancel there: nothing sent, not left busy")
-    E("() => { S.postRefused = null; render(); }"); tab("topost")
+    E("() => { S.postRefused = null; render(); }"); tab("topost"); more()
     pg.fill('#app [data-remoteid-fixed] input', ""); pg.wait_for_timeout(300)
     pg.click(RB); pg.wait_for_timeout(400)
     ok(not pg.is_checked(RB) and E("voucherXml(D().entries['r2'], CO())") == xml_off, "C7. off again: the XML as before")
