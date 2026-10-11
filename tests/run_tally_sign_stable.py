@@ -201,13 +201,13 @@ with sync_playwright() as p:
     pg.evaluate("(cid) => { const c = S.companies[cid]; c.postTo = 'TESTING AAD'; window.choiceState = () => 'confirmed'; TallySteady.reset(); }", cid)
     put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5)])
     pg.evaluate("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
-    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySign(S.companies[cid]).words]; }", cid)
-    ok(ps[0] == ps[2] == "Tally ready via NWS144 (anshul)" and not ps[1], "Post line: the sign's words, “Tally ready via NWS144 (anshul)”, no problem (%s)" % (ps,))
+    ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySign(S.companies[cid]).words, s.on]; }", cid)
+    ok(ps[0] == "Tally ready" and ps[3] == "NWS144 (anshul)" and ps[2] == "Tally ready on NWS144 (anshul)" and not ps[1], "Post line: the sign's state, “Tally ready”, on NWS144 (anshul), no problem (%s)" % (ps,))
     pl = pg.evaluate("() => { const e = document.querySelector('#app [data-post-line]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
-    ok("Tally ready via NWS144 (anshul)" in pl, "on the page: “%s”" % pl)
+    ok(pl.startswith("Posting into TESTING AAD on NWS144 (anshul) · Tally ready"), "on the page: “%s”" % pl)
     put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5, tallyState="closed", tally=False, open=[])]); tick(1)
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySignNow(S.companies[cid]).on, postThroughWords(S.companies[cid])]; }", cid)
-    ok(ps[0] == "Tally ready via NWS144 (anshul)" and not ps[1], "Tally just closed: the Post line does not flicker (%s)" % (ps[:2],))
+    ok(ps[0] == "Tally ready" and not ps[1], "Tally just closed: the Post line does not flicker (%s)" % (ps[:2],))
     ok(ps[2] is False and ps[3] == "", "…but the gate reads the real state: not ready, no “This will post through …” (%s)" % (ps[2:],))
     tick(61)
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, s.problem && s.problem.button, s.problem && s.problem.kind]; }", cid)
@@ -216,7 +216,7 @@ with sync_playwright() as p:
     ok("TallyPrime is closed on" in prob, "on the page: “%s”" % prob[:120])
     put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5)])
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text]; }", cid)
-    ok(ps[0] == "Tally ready via NWS144 (anshul)" and not ps[1], "open again: ready at once (%s)" % (ps,))
+    ok(ps[0] == "Tally ready" and not ps[1], "open again: ready at once (%s)" % (ps,))
     pg.evaluate("(cid) => { S.companies[cid].postTo = ''; S.view = 'company'; S.tab = 'dash'; S.step = null; render(); }", cid)
 
     # 10. a phone: the dot and a short word
@@ -227,6 +227,8 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 1366, "height": 768})
 
     # never "via", "through", "Reconnecting" in the top bar, whatever happened above
+    # the owner (11-Oct-2026): never "via" in the Tally wording
+    ok(pg.evaluate("(cid) => tallySign(S.companies[cid]).words", cid).find("via") < 0 and "via" not in pg.evaluate("(cid) => tallySignNow(S.companies[cid]).words", cid), "the firm's sign never says “via”")
     words = pg.evaluate("() => [...document.querySelectorAll('#cobar [data-tally-sign]')].map(b => b.innerText).join(' ')")
     ok(not re.search(r"via|through|econnecting", words), "the sign's words never say via / through / Reconnecting (%s)" % words)
     ok(not errors, "no page errors " + str(errors[:2]))

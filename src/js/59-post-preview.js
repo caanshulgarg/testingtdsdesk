@@ -372,11 +372,11 @@ function postStatusFor(co){
   const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
   const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
   // the steady sign (11-Oct-2026): the connection in the line is the firm's sign for this client (tallySign, src/js/49),
-  // in its words and as steady as the top bar ("Tally ready via NWS144 (anshul)"; not ready only once that held a
-  // minute). Only the words: posting itself checks the bridge and the cloud at the moment it posts (canPostTally, the
-  // posting's own checks), never this
+  // as steady as the top bar: "Posting into X on NWS144 (anshul) · Tally ready · read 15:34" (the owner: no "via"); not
+  // ready only once that held a minute. Only the words: posting itself checks the bridge and the cloud at the moment it
+  // posts (canPostTally, the posting's own checks), never this
   const sg = typeof tallySign === "function" ? tallySign(co) : null;
-  if (sg && sg.on){ out.where = sg.words; if (l){ out.read = l.read; out.reading = !!l.reading; } }
+  if (sg && sg.on){ out.where = "Tally ready"; out.on = sg.many ? sg.many.length + " computers" : sg.pc || ""; if (l){ out.read = l.read; out.reading = !!l.reading; } }
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now

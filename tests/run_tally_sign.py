@@ -1,6 +1,6 @@
 """python3 run_tally_sign.py - the firm's Tally sign, tallySign() (owner's spec H, 04-Oct-2026). Since the steady sign
 (11-Oct-2026) the top bar says THIS computer only (tallyHere, run_tally_sign_stable.py); tallySign's words are the Tally
-panel's "The firm's Tally computers" and the hover's second line, "connected" now "ready", "through" now "via":
+panel's "The firm's Tally computers" and the hover's second line, "connected" now "ready", "through" now "on <computer>":
   - round 3 (05-Oct-2026, part 2): the sign says WHICH computer: "Tally connected on this computer" only when the bridge
     here answers (127.0.0.1), "Tally connected through Office computer (NWS144)" (tally_devices' name, the beat's Windows
     name), "through 2 computers" (names on a click), "Tally not connected. Last seen on <computer> at <time IST>",
@@ -49,7 +49,7 @@ with sync_playwright() as p:
     # 1. connected
     s = pg.evaluate(setup, [cid, beat(), None]); pg.wait_for_timeout(300)
     st, txt, title = top()
-    ok(s["on"] is True and st == "on" and txt == "Tally ready via OFFICE-PC", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD, through which computer: “%s”" % txt)
+    ok(s["on"] is True and st == "on" and txt == "Tally ready on OFFICE-PC", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD, through which computer: “%s”" % txt)
     ok("OFFICE-PC" in title and "TESTING AAD" in title and IST.search(title), "hover: computer, company and the last contact in IST (%s)" % title[:140])
     pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
     d = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
@@ -82,7 +82,7 @@ with sync_playwright() as p:
     ok(s["on"] is False and s["code"] == "bridge", "no Tally computer at all: disconnected, the bridge is not running (%s)" % s.get("reason"))
     # only two states, whatever the old status said
     states = set(pg.evaluate("""(cid) => { const out = []; for (const b of [null, {at: new Date().toISOString(), every: 30, tallyState: 'busy', open: ['TESTING AAD']}]) { TLight.st.devs = b ? [{id: 'd1', name: 'OFFICE-PC', info: {beat: b}}] : []; TallySteady.reset(); out.push(tallySign(S.companies[cid]).words); } return out; }""", cid))
-    ok(all(x.startswith(("Tally ready via", "Tally ready on this computer", "Tally not connected", "Tally is open on")) for x in states), "only the two states, each naming the computer (%s)" % states)
+    ok(all(x.startswith(("Tally ready on", "Tally ready on this computer", "Tally not connected", "Tally is open on")) for x in states), "only the two states, each naming the computer (%s)" % states)
     # ---- round 3, part 2: which computer
     two = """(a) => { const [cid, devs, local] = a; TCloud.on = () => true; TLight.refresh = () => {}; TLight.st.at = Date.now(); TLight.st.devs = devs;
       TLight.st.cos = [{company: "TESTING AAD", client_id: cid, device_id: devs[0] ? devs[0].id : null}]; for (const k in BeatSeen) delete BeatSeen[k];
@@ -97,15 +97,15 @@ with sync_playwright() as p:
     # another device (the owner's Mac: no bridge here), connected through the office computer
     s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], None]); pg.wait_for_timeout(300)
     st, txt, title = top()
-    ok(txt == "Tally ready via NWS144", "another device: “Tally ready via NWS144” (%s)" % txt)
+    ok(txt == "Tally ready on NWS144", "another device: “Tally ready on NWS144” (%s)" % txt)
     # "this computer" is never guessed: a bridge set up here that does not answer
     s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], {"state": "down", "computer": "NWS144"}]); pg.wait_for_timeout(300)
     st, txt, title = top()
-    ok("this computer" not in txt and txt == "Tally ready via NWS144", "a bridge here that does not answer: still via NWS144, never “this computer” (%s)" % txt)
+    ok("this computer" not in txt and txt == "Tally ready on NWS144", "a bridge here that does not answer: still on NWS144, never “this computer” (%s)" % txt)
     # two computers
     s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144"), d("d2", "Accounts desk", "NWS210")], None]); pg.wait_for_timeout(300)
     st, txt, title = top()
-    ok(txt == "Tally ready via 2 computers", "two computers: “Tally ready via 2 computers” (%s)" % txt)
+    ok(txt == "Tally ready on 2 computers", "two computers: “Tally ready on 2 computers” (%s)" % txt)
     pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
     dd = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
     ok("Office computer (NWS144)" in dd and "Accounts desk (NWS210)" in dd and "TESTING AAD" in dd and IST.search(dd), "a click: both computers, the company and the last contact (%s)" % dd.replace("\n", " / ")[:200])

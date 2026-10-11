@@ -28,7 +28,7 @@ function StatusLine({ co }) {
   const s = postStatusFor(co), p = s.problem;
   return <>
     <div className="post-status" data-post-line="">
-      <span>{"Posting into "}<b>{s.company}</b></span>
+      <span>{"Posting into "}<b>{s.company}</b>{s.on ? <span data-post-on="">{" on " + s.on}</span> : null}</span>
       {s.where && <span data-post-where="">{"· " + s.where}</span>}
       {s.reading ? <span data-post-read="" data-reading="">{"· Reading now…"}</span> : s.read ? <span data-post-read="">{"· read " + tallyHm(s.read)}</span> : null}
       {s.where && <span>{"· "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update now</button></span>}
