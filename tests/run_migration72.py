@@ -10,8 +10,11 @@ built with staging's migrations in staging's order (as tests/run_e2e_tdsgst.py: 
      coll-all.xml.gz, the Day Book's form) read by parse.js: each entry's GST type stored (SEZ, export, nil-rated, exempt,
      reverse charge, the blocked credit).
   3. the recorder path (tally_ingest_entries, keep): the bridge 2.4.2 body of the same entry (obj-<id>-stripped.xml) stores
-     the same; a body from a bridge before 2.4.2 (no "gst") leaves the stored values as they are; an older body (lower
-     AlterID) never overwrites a newer entry's type.
+     the same, with gst_alter_id the entry's AlterID; a later body from a bridge before 2.4.2 (no "gst": also 2.4.2's
+     FinComVoucherByNumber answer, whose FETCH has none of the fields) leaves the values as they are but gst_alter_id below
+     the entry's AlterID (review H1: the app then knows they belong to an older version); an older body (lower AlterID)
+     never writes; the type is written only onto the version just stored (review L1: AlterID equal); gst_mixed when the
+     entry's GST lines disagree (review M2).
 RED: before the file exists it stops at the first check."""
 import os, re, sys, json, gzip, subprocess, difflib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -76,6 +79,7 @@ WANT = {"S03": ("Regular", "India", "false", "Sales to SEZ - Taxable", "Taxable"
         "P04": ("Regular", "India", "false", "Purchase Taxable", "Taxable", "Goods", "false"),
         "P04L": ("Regular", "India", "false", "Purchase Taxable", "Taxable", "Goods", "true")}
 COLS = "gst_reg_type, gst_country, gst_rcm::text, gst_nature, gst_taxability, gst_supply, gst_ineligible::text"
+def ga(guid): return db.one("select (gst_alter_id = alter_id)::text || '/' || coalesce(gst_mixed::text, 'null') from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(guid)))
 
 text = open(M72).read() if os.path.exists(M72) else ""
 ok(bool(text), "the migration file is there (%s)" % os.path.basename(M72))
@@ -87,8 +91,9 @@ ok(low.count("delete from") == 0, "0. no 'delete from' anywhere in the file (com
 ok(not re.search(r"\bdrop\b", low) and not re.search(r"\btruncate\b", low) and not re.search(r"\balter\s+table\s+\S+\s+(drop|rename)", low) and "create table" not in low,
    "0. add-only (no drop, no truncate, no rename, no new table)")
 cols = re.findall(r"alter table public\.tally_vouchers add column if not exists (\w+) (text|boolean);", low)
-ok([c for c, _ in cols] == ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible"] and len(re.findall(r"alter table", low)) == 7,
-   "0. seven columns added to tally_vouchers, nothing else altered (%s)" % cols)
+cols = re.findall(r"alter table public\.tally_vouchers add column if not exists (\w+) (text|boolean|bigint);", low)
+ok([c for c, _ in cols] == ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible", "gst_mixed", "gst_alter_id"] and len(re.findall(r"alter table", low)) == 9,
+   "0. nine columns added to tally_vouchers (the type, the mixed mark, the AlterID it was read at), nothing else altered (%s)" % cols)
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
 ok(FNS == ["tally_ingest_details", "tally_ingest_gsttype"], "0. two functions: tally_ingest_gsttype new, tally_ingest_details replaced (%s)" % FNS)
@@ -154,23 +159,36 @@ try:
         gs = {v["guid"] for v in vs}
         r = day(B, iso(d), vs, [l for l in COLL["lines"] if l[0] in gs]); ok(r.get("ok") is True, "the day %s stored (%d entries) %s" % (d, len(vs), "" if r.get("ok") else r))
     for i in IDS:
-        ok(gst(GID[i]) == WANT[i], "2. %s: %s" % (i, gst(GID[i])))
+        ok(gst(GID[i]) == WANT[i] and ga(GID[i]) == "true/false", "2. %s: %s, read at the entry's AlterID, not mixed (%s)" % (i, gst(GID[i]), ga(GID[i])))
     ok(gst(s01[0]["guid"]) == ("Regular", "India", "false", "Sales Taxable", "Taxable", "Goods", "false"), "2. S01 (stored before 72) has its type once read again: %s" % (gst(s01[0]["guid"]),))
 
     print("== 3. the recorder path: the bridge's bodies")
     db.sql("update tally_vouchers set gst_reg_type = null, gst_country = null, gst_rcm = null, gst_nature = null, gst_taxability = null, gst_supply = null, gst_ineligible = null where book_id = %s" % q(B))
     for i in IDS:
         r = entries(BODY[i]["vouchers"], BODY[i]["lines"]); ok(r.get("ok") is True and gst(GID[i]) == WANT[i], "3. %s from bridge 2.4.2's body: %s %s" % (i, gst(GID[i]), "" if r.get("ok") else r))
-    # a body from a bridge before 2.4.2: no gst key: the stored type kept
-    oldv = [{k: v for k, v in BODY["S03"]["vouchers"][0].items() if k != "gst"}]
-    r = entries(oldv, BODY["S03"]["lines"]); ok(r.get("ok") is True and gst(GID["S03"]) == WANT["S03"], "3. S03 again from a bridge before 2.4.2 (no gst): the stored type kept %s" % (gst(GID["S03"]),))
+    ok(ga(GID["S03"]) == "true/false", "3. S03's type read at its AlterID (%s)" % ga(GID["S03"]))
+    # a LATER version from a bridge before 2.4.2 (or 2.4.2's by-number answer): no gst key: the values kept, never blanked,
+    # but marked as an older version's (gst_alter_id below the entry's AlterID): review H1
+    oldv = [dict({k: v for k, v in BODY["S03"]["vouchers"][0].items() if k != "gst"}, alter=BODY["S03"]["vouchers"][0]["alter"] + 5)]
+    r = entries(oldv, BODY["S03"]["lines"]); ok(r.get("ok") is True and gst(GID["S03"]) == WANT["S03"] and ga(GID["S03"]) == "false/false",
+       "3. S03 altered, sent by a bridge before 2.4.2 (no gst): the stored type kept, marked an older version's (%s, %s)" % (gst(GID["S03"]), ga(GID["S03"])))
+    # 2.4.2 sends the next version: read at its AlterID again
+    newv = [dict(BODY["S03"]["vouchers"][0], alter=BODY["S03"]["vouchers"][0]["alter"] + 6)]
+    r = entries(newv, BODY["S03"]["lines"]); ok(r.get("ok") is True and ga(GID["S03"]) == "true/false", "3. the next version from 2.4.2: its type at its AlterID (%s)" % ga(GID["S03"]))
+    # review L1: the type is written only onto the version just stored (a gst at another AlterID than the row's: not written)
+    db.one("select tally_ingest_gsttype(%s, %s)::text" % (q(B), js([dict(BODY["S05"]["vouchers"][0], alter=BODY["S05"]["vouchers"][0]["alter"] + 99, gst=dict(BODY["S05"]["vouchers"][0]["gst"], country="Japan"))])))
+    ok(gst(GID["S05"]) == WANT["S05"], "3. a type sent for another AlterID than the row's is not written (L1) %s" % (gst(GID["S05"]),))
+    # review M2: an entry whose GST lines disagree (a taxable line and an exempt one) is marked mixed
+    mix = [dict(BODY["S10"]["vouchers"][0], gst=dict(BODY["S10"]["vouchers"][0]["gst"], mixed=True))]
+    r = entries(mix, BODY["S10"]["lines"]); ok(r.get("ok") is True and ga(GID["S10"]) == "true/true", "3. an entry with lines of two kinds is marked mixed (%s)" % ga(GID["S10"]))
     # an older body (lower AlterID) never overwrites a newer entry's type
     db.sql("update tally_vouchers set alter_id = alter_id + 100 where book_id = %s and guid = %s" % (q(B), q(GID["P04L"])))
     stale = [dict(BODY["P04"]["vouchers"][0], guid=GID["P04L"])]
     db.one("select tally_ingest_gsttype(%s, %s)::text" % (q(B), js(stale)))
     ok(gst(GID["P04L"]) == WANT["P04L"], "3. an older body of P04L (lower AlterID, not blocked) does not overwrite its type %s" % (gst(GID["P04L"]),))
     # bad values are not written
-    db.one("select tally_ingest_gsttype(%s, %s)::text" % (q(B), js([{"guid": GID["S05"], "alter": 10 ** 9, "gst": {"rcm": "maybe", "ineligible": False}}])))
+    s5a = int(db.one("select alter_id from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(GID["S05"]))))
+    db.one("select tally_ingest_gsttype(%s, %s)::text" % (q(B), js([{"guid": GID["S05"], "alter": s5a, "gst": {"rcm": "maybe", "ineligible": False}}])))
     ok(gst(GID["S05"]) == WANT["S05"], "3. a gst object with a value not true/false is not written %s" % (gst(GID["S05"]),))
 finally:
     db.stop()
