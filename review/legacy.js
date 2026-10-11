@@ -23344,9 +23344,14 @@ const TCloud = {
   async copyHeads(b, bk, full){
     const meta = b.meta = b.meta || {}, c = meta.copy && meta.copy.book === bk.book ? meta.copy : null;
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
+    // bridge 2.4.2: the GST type columns (migration 72) first; a cloud without them, then without the IRN, read as before
     const read = async (extra) => {
-      try { return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS + B + extra + "&order=guid.asc"); }
-      catch (e){ if (!/irn|42703/i.test(String((e && e.message) || e))) throw e; return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS_OLD + B + extra + "&order=guid.asc"); }
+      const cols = [BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+      for (let i = 0; ; i++){
+        try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
+        // review L2: only a missing column (42703, PGRST204, "does not exist") falls back; any other error is the error
+        catch (e){ if (i === cols.length - 1 || !(/42703|PGRST204|does not exist/i.test(String((e && e.message) || e) + " " + String((e && e.code) || "")))) throw e; }
+      }
     };
     let seen = c ? c.seen || "" : "", heads;
     // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)
@@ -31989,8 +31994,12 @@ const BookSrc = {
   // the fields of the cloud copy's entry read here (deleted_at: migration 32; gstin/pos: 6; ref/cmp_gstin: 11; irn: 57)
   HEADS: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date",
   HEADS_OLD: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin",
-  // what the bridge's entry does not carry yet (bridge 2.4.2, part B of round 44): kept from the Day Book's version of
-  // the same entry when the bridge brings a later one, so an altered SEZ, export or reverse-charge entry stays so
+  // bridge 2.4.2 (round 44 part B, migration 72): each entry's GST type as Tally stores it, read first; a cloud without the
+  // columns is read with HEADS, then HEADS_OLD
+  HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id",
+  // the GST kind a bridge before 2.4.2 does not send (its entry has no type in the cloud copy): kept from the Day Book's
+  // version of the same entry when such a bridge brings a later one, so an altered SEZ, export or reverse-charge entry
+  // stays so. A 2.4.2 entry's own type (gstOwn): only a blank nature and goods/services are carried (put, below)
   CARRY: ["regType", "country", "rcm", "taxability", "nature", "supply", "ineligibleFlag"],
   words(v){ return v && v.src === "bridge" ? "Bridge" : "Day Book"; },
   d8(x){ return String(x || "").replace(/-/g, "").slice(0, 8); },
@@ -32019,6 +32028,7 @@ const BookSrc = {
       const v = {id: String(h.guid), date: this.d8(h.day), type: h.vtype || "", no: h.vno || "", ref: h.ref || "", refDate: this.d8(h.ref_date), irn: h.irn || "", irnDate: this.d8(h.irn_ack_date),
         party: h.party || "", gstin: String(h.gstin || "").toUpperCase(), pos: h.pos || "", cmp: String(h.cmp_gstin || "").toUpperCase(), narr: String(h.narration || "").slice(0, 120),
         regType: "", country: "", rcm: false, taxability: "", nature: "", supply: "", ineligibleFlag: false, hsn: [], by: "", upd: "",
+        ...this.gstOf(h),
         cancel: h.cancelled === true || h.cancelled === "true", opt: h.optional === true || h.optional === "true", ent: [], alt: this.alt(h.alter_id), src: "bridge"};
       const hs = new Set();
       (L[h.guid] || []).forEach(l => {
@@ -32041,16 +32051,47 @@ const BookSrc = {
     });
     return out;
   },
+  // bridge 2.4.2: the cloud copy's GST type (migration 72's columns, null when the cloud has none for the entry) as the
+  // Day Book's fields of the same names; {} when there is none. Read at the entry's AlterID (gst_alter_id) it is Tally's
+  // own type for this version (gstOwn); read at an older version it is kept aside (gstStale, with that AlterID). What is
+  // carried onto the entry from the version held or the older type is decided in put (below). A mixed entry (its GST
+  // lines disagree, gstMixed) takes no single nature or taxability
+  gstOf(h){
+    if (!h || ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible"].every(k => h[k] == null)) return {};
+    const t = (x) => String(x == null ? "" : x).trim(), yes = (x) => x === true || x === "true";
+    const vals = {regType: t(h.gst_reg_type), country: t(h.gst_country), rcm: yes(h.gst_rcm), taxability: t(h.gst_taxability), nature: t(h.gst_nature), supply: t(h.gst_supply),
+      ineligibleFlag: yes(h.gst_ineligible)};
+    // review round 2 M2: an entry whose GST lines disagree is not placed by one line's kind: its nature and taxability are
+    // not taken (the returns place it as before 2.4.2, by its ledgers and tax), and it says so (gstMixed)
+    if (yes(h.gst_mixed)){ vals.nature = ""; vals.taxability = ""; }
+    if (h.gst_alter_id == null || h.gst_alter_id === "" || this.alt(h.gst_alter_id) !== this.alt(h.alter_id)) return {gstStale: Object.assign(vals, {at: this.alt(h.gst_alter_id), mixed: yes(h.gst_mixed)})};
+    return Object.assign(vals, {gstMixed: yes(h.gst_mixed), gstOwn: true});
+  },
   // one entry into the books by the rule above; true when the books changed
   put(b, v, by){
     by = by || this.index(b.vouchers);
     const i = by.has(v.id) ? by.get(v.id) : -1, have = i >= 0 ? b.vouchers[i] : null;
     if (!this.wins(v.alt, have)) return false;
     // (also from a bridge version that carried them before: the Day Book's GST kind stays through later alterations)
-    if (have){
-      const kept = this.CARRY.filter(k => have[k] && !v[k]);
-      if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = have[k]; }); v.carried = kept; }
+    // what is carried onto the entry (marked "carried"):
+    //  - Tally's own type (read at this version, gstOwn): only the nature and goods/services when Tally left them blank (its
+    //    items on 3.0-6.2 carry neither, review round 3 N3); its reverse charge, blocked credit, taxability, registration
+    //    type and country are Tally's answer for this version, never an older version's; nothing when the entry's lines
+    //    are of two kinds (N4)
+    //  - a type read at an older version (gstStale; a later version came from a bridge before 2.4.2 or by number): the
+    //    newer of it and the version held is carried (round 2 N2), and a nature still blank from the other (N5)
+    //  - no type in the cloud (a bridge before 2.4.2): the version held, as before
+    const fill = (from, keys) => { const k = from ? keys.filter(x => from[x] && !v[x]) : []; if (k.length){ v = Object.assign({}, v); k.forEach(x => { v[x] = from[x]; }); v.carried = (v.carried || []).concat(k); } };
+    if (v.gstOwn){
+      if (!v.gstMixed) fill(have, ["nature", "supply"]);
+    } else if (v.gstStale){
+      const st = v.gstStale, staleNewer = !have || st.at > this.alt(have.alt);
+      fill(staleNewer ? st : have, this.CARRY);
+      if (!(staleNewer ? st.mixed : false)) fill(staleNewer ? have : st, ["nature", "supply"]);
+    } else if (have){
+      fill(have, this.CARRY);
     }
+    if (v.gstStale !== undefined){ v = Object.assign({}, v); delete v.gstStale; }
     if (i >= 0) b.vouchers[i] = v; else { by.set(v.id, b.vouchers.length); b.vouchers.push(v); }
     if (b.gone && b.gone[v.id] && !b.gone[v.id].back) b.gone[v.id].back = new Date().toISOString().slice(0, 10);
     return true;
