@@ -26,7 +26,9 @@ function XRes($c, $st, $ev) { if (-not $xDone[$c]) { Result $c $st $ev; $xDone[$
 try {
   Say '---- gsttype: masters'
   $M = Get-Content (Join-Path $xdir 'masters.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-  foreach ($s in $M.steps) { $k = XCount (Imp 'All Masters' $s[1] "gsttype $($s[0])"); Info "gsttype masters $($s[0]): created $($k.c), altered $($k.a), errors $($k.e)$(if ($k.line) { "; Tally said: $($k.line)" })" }
+  # run 38101756323: no item invoice was taken after the voucher types were altered (numbering Manual): the voucher types
+  # are altered only after the item invoices are made
+  foreach ($s in $M.steps) { if ($s[0] -eq 'vchtypes') { $vchStep = $s; continue }; $k = XCount (Imp 'All Masters' $s[1] "gsttype $($s[0])"); Info "gsttype masters $($s[0]): created $($k.c), altered $($k.a), errors $($k.e)$(if ($k.line) { "; Tally said: $($k.line)" })" }
   # L: the ledger's own "ineligible for input credit", in its GST details (where the ledger screen keeps it)
   $car = '<LEDGER NAME="Motor Car Blocked" ACTION="Create"><NAME.LIST><NAME>Motor Car Blocked</NAME></NAME.LIST><PARENT>Fixed Assets</PARENT><GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY><AFFECTSSTOCK>No</AFFECTSSTOCK><GSTDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><CALCULATIONTYPE>On Value</CALCULATIONTYPE><HSNCODE>8703</HSNCODE><TAXABILITY>Taxable</TAXABILITY><GSTINELIGIBLEITC>Yes</GSTINELIGIBLEITC><SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS><STATEWISEDETAILS.LIST><STATENAME>&#4; Any</STATENAME><RATEDETAILS.LIST><GSTRATEDUTYHEAD>CGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>14</GSTRATE></RATEDETAILS.LIST><RATEDETAILS.LIST><GSTRATEDUTYHEAD>SGST/UTGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>14</GSTRATE></RATEDETAILS.LIST><RATEDETAILS.LIST><GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>28</GSTRATE></RATEDETAILS.LIST></STATEWISEDETAILS.LIST></GSTDETAILS.LIST></LEDGER>'
   $k = XCount (Imp 'All Masters' $car 'gsttype ledger Motor Car Blocked'); Info "gsttype ledger Motor Car Blocked (GSTDETAILS.LIST GSTINELIGIBLEITC Yes): created $($k.c), errors $($k.e) $($k.line)"
@@ -55,29 +57,32 @@ try {
   # first Tally takes is kept as I01 (nature given) and I02 (none given): A as push/data.ps1, B with the date as an
   # attribute and EFFECTIVEDATE, C under a voucher type of its own ("GST Item Sales", parent Sales, automatic numbering)
   $null = Imp 'All Masters' '<VOUCHERTYPE NAME="GST Item Sales" ACTION="Create"><NAME.LIST><NAME>GST Item Sales</NAME></NAME.LIST><PARENT>Sales</PARENT><NUMBERINGMETHOD>Automatic</NUMBERINGMETHOD><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AFFECTSSTOCK>Yes</AFFECTSSTOCK></VOUCHERTYPE>' 'gsttype voucher type GST Item Sales'
-  function XItem($id, [bool]$nat, $form) {
-    $ov = if ($nat) { '<GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNTYPEOFSUPPLY>Goods</GSTOVRDNTYPEOFSUPPLY><GSTOVRDNNATURE>Sales to SEZ - LUT/Bond</GSTOVRDNNATURE>' } else { '' }
+  function XItem($id, $party, $nature, $form) {
+    $ov = if ($nature) { '<GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNTYPEOFSUPPLY>Goods</GSTOVRDNTYPEOFSUPPLY><GSTOVRDNNATURE>' + $nature + '</GSTOVRDNNATURE>' } else { '' }
     $vt = if ($form -eq 'C') { 'GST Item Sales' } else { 'Sales' }
-    $open = if ($form -eq 'B') { '<VOUCHER DATE="20260503" VCHTYPE="' + $vt + '" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE><EFFECTIVEDATE>20260503</EFFECTIVEDATE>' } else { '<VOUCHER VCHTYPE="' + $vt + '" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE>' }
-    $no = if ($form -eq 'C') { '' } else { '<VOUCHERNUMBER>FC/26-27/' + $id + $form + '</VOUCHERNUMBER>' }
-    return $open + '<VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME>' + $no +
-      '<PARTYLEDGERNAME>Gamma SEZ Unit</PARTYLEDGERNAME><PARTYNAME>Gamma SEZ Unit</PARTYNAME><BASICBUYERNAME>Gamma SEZ Unit</BASICBUYERNAME>' +
-      '<PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>' + $id + ' item invoice, SEZ under LUT (form ' + $form + ')</NARRATION>' +
-      '<LEDGERENTRIES.LIST><LEDGERNAME>Gamma SEZ Unit</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-400.00</AMOUNT></LEDGERENTRIES.LIST>' +
+    $mode = if ($form -eq 'D') { '<VCHENTRYMODE>Item Invoice</VCHENTRYMODE>' } else { '' }
+    $pty = if ($party -eq 'Euro Imports GmbH') { '<GSTREGISTRATIONTYPE>Unregistered</GSTREGISTRATIONTYPE><COUNTRYOFRESIDENCE>Germany</COUNTRYOFRESIDENCE>' } else { '<PARTYGSTIN>29AABCG3333C1Z1</PARTYGSTIN><PLACEOFSUPPLY>Karnataka</PLACEOFSUPPLY><STATENAME>Karnataka</STATENAME><GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE><COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>' }
+    return '<VOUCHER VCHTYPE="' + $vt + '" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME><VOUCHERNUMBER>FC/26-27/' + $id + $form + '</VOUCHERNUMBER>' +
+      '<PARTYLEDGERNAME>' + $party + '</PARTYLEDGERNAME><PARTYNAME>' + $party + '</PARTYNAME><BASICBUYERNAME>' + $party + '</BASICBUYERNAME>' + $pty + $mode +
+      '<PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>' + $id + ' item invoice (form ' + $form + ')</NARRATION>' +
+      '<LEDGERENTRIES.LIST><LEDGERNAME>' + $party + '</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-400.00</AMOUNT></LEDGERENTRIES.LIST>' +
       '<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Laptop</STOCKITEMNAME>' + $ov + '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><RATE>200.00/Nos</RATE><AMOUNT>400.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY>' +
       '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales Items</LEDGERNAME>' + $ov + '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>400.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST></VOUCHER>'
   }
-  foreach ($iv in @(@('I01', $true), @('I02', $false))) {
+  # I01: to the SEZ party under LUT, the nature given on the item and its ledger line; I02: the same, no nature given (what
+  # Tally works out from the party and the item); I03: an export under LUT (the German buyer), the nature given
+  foreach ($iv in @(@('I01', 'Gamma SEZ Unit', 'Sales to SEZ - LUT/Bond'), @('I02', 'Gamma SEZ Unit', ''), @('I03', 'Euro Imports GmbH', 'Exports - LUT/Bond'))) {
     $got = ''
-    foreach ($form in 'A', 'B', 'C') {
-      $r = Imp 'Vouchers' (XItem $iv[0] $iv[1] $form) "gsttype $($iv[0]) form $form"; $k = XCount $r
-      Info ("gsttype {0} form {1}: created {2}, errors {3}; Tally said: {4}" -f $iv[0], $form, $k.c, $k.e, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Substring(0, [Math]::Min(400, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Length)))
+    foreach ($form in 'A', 'D', 'C') {
+      $r = Imp 'Vouchers' (XItem $iv[0] $iv[1] $iv[2] $form) "gsttype $($iv[0]) form $form"; $k = XCount $r
+      Info ("gsttype {0} form {1}: created {2}, errors {3}; Tally said: {4}" -f $iv[0], $form, $k.c, $k.e, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Substring(0, [Math]::Min(500, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Length)))
       if ($k.c -eq 1) { $got = $form; break }
     }
     if ($got) { $made += $iv[0] } else { $bad += "$($iv[0]) (no form taken)" }
   }
+  if ($vchStep) { $k = XCount (Imp 'All Masters' $vchStep[1] 'gsttype vchtypes'); Info "gsttype masters vchtypes (after the item invoices): created $($k.c), altered $($k.a), errors $($k.e)" }
   foreach ($v in $list) { $k = XCount (Imp 'Vouchers' $v.xml "gsttype $($v.id)"); if ($k.c -eq 1) { $made += $v.id } else { $bad += "$($v.id) (created $($k.c), errors $($k.e): $($k.line))" } }
-  XRes $TX1 $(if ($made.Count -eq $list.Count + 2) { 'PASS' } else { 'HARNESS' }) ("{0} of {1} entries made by XML; refused: {2}" -f $made.Count, ($list.Count + 2), $(if ($bad.Count) { $bad -join '; ' } else { 'none' }))
+  XRes $TX1 $(if ($made.Count -eq $list.Count + 3) { 'PASS' } else { 'HARNESS' }) ("{0} of {1} entries made by XML; refused: {2}" -f $made.Count, ($list.Count + 3), $(if ($bad.Count) { $bad -join '; ' } else { 'none' }))
 
   Say '---- gsttype: the entry request for each entry'
   $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>XgV</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="XgV" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, VOUCHERNUMBER, NARRATION</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 60
