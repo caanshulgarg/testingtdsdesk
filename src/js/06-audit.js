@@ -538,7 +538,8 @@ const Audit = {
     const r = this.defaultRange(b), run = this.run(r.from, r.to, "on its own (" + this.cfg(b).freq + ")");
     saveBooks();
     const hi = run.findings.filter(f => f.sev === "high").length;
-    toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.");
+    // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3)
+    toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true});
   },
   status(id){ const st = ((S.books.audit || {}).st || {})[id]; return st || {s: "open"}; },
   // the journal entries marked to pass, as a file Tally imports
