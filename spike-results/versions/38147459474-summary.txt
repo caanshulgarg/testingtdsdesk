@@ -1,0 +1,7 @@
+[7.1-tdsch] PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-11, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[7.1-tdsch] PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1534 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 9 ms, 'FinCom Spike Co' in it: True
+[7.1-tdsch] PASS h2 TDS deductions made (keys and XML): 7 deductions made: K1 keys (mid 2); X1 XML; X2 XML; X3 XML; X4 XML; X5 XML; X6 XML (Purchase)
+[7.1-tdsch] HARNESS h3 TDS payment by Stat Payment (keys) and by XML: Stat Payment by keys: keys: no payment saved (stat payment key '^f'); payment by XML: XML
+[7.1-tdsch] HARNESS h4 challan details on the payment (Challan Reconciliation keys, else XML): challan details: keys made no change; the XML payment PX1 carries the challan tags
+[7.1-tdsch] PASS h1 TDS masters made (natures with threshold, duty ledgers with nature, parties with deductee type, PAN, lower deduction): nature1 keys True; nature2 keys True; duty-keys keys True; ldc XML (lists probed by Tally's own export, filled by field name); threshold 30000 in the TDSRate export: True
+[7.1-tdsch] PASS h5 raw answers kept (FinComVoucherObject, FinComLedgers, Tally full exports): object answers (bytes / first ms): K1 73846/40ms, X1 66383/40ms, X2 66389/45ms, X3 66368/41ms, X4 66377/40ms, X5 66394/42ms, X6 66373/40ms, PX1 84238/41ms; FinComLedgers raw 57212 characters; masters 2268300; natures 5138
