@@ -96,5 +96,16 @@ const big = '<VOUCHER REMOTEID="g-5" VCHTYPE="Sales"><DATE>20260501</DATE><GUID>
   "<ALLINVENTORYENTRIES.LIST><ACCOUNTINGALLOCATIONS.LIST><LEDGERENTRIES.LIST>".repeat(20000) + "x".repeat(2000000) + "</VOUCHER>";
 const t0 = Date.now(); const gb = parseDay(big); const ms = Date.now() - t0;
 ok(ms < 3000, "M1: 20,000 unclosed line lists and 2 MB of text read in " + ms + " ms (" + gb.n + " entries)");
+// review round 2 N1: an item and the ledger line under it are one line for the kind, but the blocked-credit and reverse-charge
+// marks count only on a part that has its own taxability or nature (a purchase ledger without GST details under a GST item
+// carries Tally's default "Applicable": not blocked)
+const ip = (alloc) => '<VOUCHER REMOTEID="g-6" VCHTYPE="Purchase"><DATE>20260501</DATE><GUID>g-6</GUID><ISREVERSECHARGEAPPLICABLE>No</ISREVERSECHARGEAPPLICABLE>' +
+  '<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>X</STOCKITEMNAME><AMOUNT>-100.00</AMOUNT><GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNINELIGIBLEITC>&#4; Not Applicable</GSTOVRDNINELIGIBLEITC>' +
+  '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Purchase</LEDGERNAME><AMOUNT>-100.00</AMOUNT>' + alloc + '</ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Supplier</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>';
+const n1 = parseDay(ip('<GSTOVRDNINELIGIBLEITC>&#4; Applicable</GSTOVRDNINELIGIBLEITC>')).vouchers[0].gst;
+ok(n1.ineligible === false && n1.taxability === "Taxable", "N1: a GST item whose ledger line under it has no GST details but Tally's 'Applicable': not blocked (" + show(n1) + ")");
+const n1b = parseDay(ip('<GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNINELIGIBLEITC>&#4; Applicable</GSTOVRDNINELIGIBLEITC>')).vouchers[0].gst;
+ok(n1b.ineligible === true, "N1: the ledger line under the item with its own taxability and 'Applicable': blocked (" + show(n1b) + ")");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);
