@@ -20006,7 +20006,7 @@ const Help = {
     "tds:years": {t: "TDS \u2014 the years", what: "Every financial year in the books with its deductions, TDS, challans and what is still open.",
       steps: ["Click a year to open it.", "A red figure under \u201cNot against a challan\u201d or \u201cWithout PAN\u201d is work before the returns."], from: "Tally\u2019s TDS payable ledgers and the salary sheet.", watch: []},
     "tds:year": {t: "TDS \u2014 the year", what: "The year\u2019s four quarters with 26Q (other than salary) and 24Q (salary), and the due dates.",
-      steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
+      steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Lower-deduction certificates and rate questions are on the Checks tab; challans on Challans; 26AS and AIS, and the TRACES files, each on its own tab.", "Download the year\u2019s working from More."],
       from: "Tally vouchers with TDS; the salary sheet for 24Q.", watch: ["Due: Q1 31 July, Q2 31 October, Q3 31 January, Q4 31 May."]},
     "tds:recon": {t: "26AS and AIS", what: "The tax credit Form 26AS, AIS or TIS shows, against the TDS receivable in the books, deductor by deductor; and a deductee\u2019s 26AS against FinCom\u2019s returns.",
       steps: ["Download the client\u2019s 26AS from TRACES (View Tax Credit \u2192 Export as Text), or its AIS JSON, and upload it.", "Link a deductor to its party in the books where the names differ.", "Work the lines Only in 26AS (ask for the entry to be booked) and Only in the books (ask the deductor to file or correct its return)."],
@@ -20052,7 +20052,8 @@ const Help = {
     if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
     const t = typeof booksTab === "function" ? booksTab() : "";
     if (t === "gst") return "gst:" + (S.gstPart || "r1");
-    if (t === "tds"){ const v = S.tdsView || "years"; return v === "return" ? "tds:" + (S.tdsForm || "26Q") + ":" + (S.tdsTab || "") : "tds:" + v; }
+    // round 46: the Checks tab's guide is the one of the certificates and rates; the Challans tab's that of a return's challans
+    if (t === "tds"){ const v = S.tdsView || "years"; return v === "return" ? "tds:" + (S.tdsForm || "26Q") + ":" + (S.tdsTab || "") : v === "checks" ? "tds:certs" : v === "challans" ? "tds:26Q:challans" : "tds:" + v; }
     return "";
   },
   html(k){
@@ -22584,7 +22585,9 @@ const RPT = {
     ["gst-follow", "gst", "ITC follow-up", "Credit waiting on suppliers, carried month to month", {gst: "follow"}],
     ["gst-vault", "gst", "Returns filed", "The portal’s copy of every return", {gst: "vault"}],
     ["gst-g9", "gst", "GSTR-9 and 9C", "The annual return and reconciliation", {gst: "g9"}],
-    ["mis-comp", "gst", "Compliance calendar", "GST and TDS by month, and what falls due", {mis: "comp"}],
+    // round 46: what falls due is the firm's Compliance page (every client's returns and payments); MIS keeps the figures by month
+    ["due-all", "gst", "Returns and payments due", "On the Compliance page: every client’s GST and TDS returns, due, overdue or filed", {home: "compliance"}],
+    ["mis-comp", "gst", "GST and TDS by month", "Tax worked out and paid, month by month (MIS)", {mis: "comp"}],
     ["tds-q", "tds", "TDS by quarter", "Challans, deductees and deductions for 26Q", {tds: "challans"}],
     ["tds-checks", "tds", "Interest, late fee and checks", "Short deduction, late deposit and rate questions", {tds: "checks"}],
     ["tds-ledgers", "tds", "TDS and GST ledgers", "The ledgers FinCom reads for tax, to confirm", {ledgers: "pending"}],
@@ -22637,11 +22640,15 @@ const RPT = {
       v.ent.forEach(e => { if (Audit.isCash(e.l) || Audit.isBankL(e.l)){ if (e.a < 0) inM[m] = r2(inM[m] - e.a); else outM[m] = r2(outM[m] + e.a); } });
     });
     const H = k => (pl.heads[k] || {m: {}, t: 0});
-    months.forEach(m => { sales[m] = r2((H("rev").m[m] || 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
+    // sales are MIS's sales (MIS.sales: the Sales Accounts ledgers once the masters are read, else the sale entries), the
+    // figure MIS's "Sales" tile shows for the same dates. The profit and loss's "Revenue from operations" counted, without
+    // the ledgers' groups, only ledgers named "Sales...", and showed sales of nil beside MIS's 7,70,000 (audit of 11-Oct-2026)
+    const st = MIS.sales(R.from, R.to);
+    months.forEach(m => { sales[m] = r2(st.rows.reduce((a, x) => a + (x.m[m] || 0), 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
     let comp = null; try { comp = MIS.compliance(R.from, R.to); } catch (e){ comp = {gst: [], tds: [], audit: null}; }
     const cashBank = balTo ? r2(Object.keys(balTo).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((s, l) => s - balTo[l], 0)) : null;
     const au = (b.audit || {}).last, open = au ? au.findings.filter(f => Audit.status(f.id).s === "open") : [];
-    const d = {R, months, pl, bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
+    const d = {R, months, pl, salesTotal: st.total, groups: !!Audit.mastersIn(), bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
       tdsDeductees: new Set(TDS.rows().filter(r => r.date >= R.from && r.date <= R.to).map(r => r.pan || r.party)).size};
     this._d = {key, d};
     return d;
@@ -22658,6 +22665,9 @@ const RPT = {
     }
     if (to.act === "misPack"){ this.open("mis-summary"); setTimeout(() => { const bt = document.querySelector('[data-act="misPack"]'); if (bt) bt.click(); }, 50); return; }
     if (to.gst){ FC.go("gst", {gstPart: to.gst}); return; }
+    if (to.home){ navHome(to.home); return; }
+    // round 46: TDS's challans are a tab of their own (the quarter due now)
+    if (to.tds === "challans"){ FC.go("tds", {tdsView: "challans", tdsQ: ""}); return; }
     if (to.tds){ FC.go("tds", {tdsTab: to.tds}); return; }
     if (to.audit){
       if (to.audit === "find" && !(b.audit || {}).last && R && (b.vouchers || []).length){ try { Audit.run(R.from, R.to, "run from Reports"); saveBooks(); } catch (e){} }
@@ -25630,7 +25640,7 @@ async function aihNote(how, id){
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -25641,7 +25651,7 @@ const Route = {
       // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
       if (S.homeTab !== "tally") S.tallyOld = false;
       else if (S.tallyOld) return "#/tally/bridge-1.15";
-      return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
+      return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
     if (S.step === "collect") return c + "upload";
@@ -25663,7 +25673,8 @@ const Route = {
   },
   // the TDS and GST pages keep their year, quarter or month, form or return and tab in the address (09-Oct-2026), so Back
   // and Refresh come back to the same return: #/c/<client>/books/tds/2026-27/Q1/26Q/challans, …/books/tds/2026-27 (the
-  // year's grid), …/books/tds/2026-27/certs, …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
+  // year's grid), …/books/tds/2026-27/challans/Q2, …/books/tds/2026-27/26as, …/traces, …/checks/<rates|limits|tieout|corr>
+  // (round 46; the old …/certs opens checks/rates, a return's old …/summary its entries), …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
   booksMore(){
     const t = booksTab(), e = (x) => encodeURIComponent(x || "");
     if (t === "tds"){
@@ -25672,7 +25683,9 @@ const Route = {
       if (v === "notices") return "/notices";
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
-      if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      // round 46 (TDS & GST makeover): the TDS tabs Challans and Checks have their own addresses; the old …/certs is Checks
+      if (v === "certs" || v === "checks") return "/" + e(S.tdsFy) + "/checks/" + e(v === "certs" ? "rates" : (S.tdsCheck || "rates"));
+      if (v === "challans") return "/" + e(S.tdsFy) + "/challans" + (S.tdsQ ? "/" + e(S.tdsQ) : "");
       if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
       if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
@@ -25690,7 +25703,9 @@ const Route = {
       if (p[0] === "notices"){ S.tdsView = "notices"; return; }
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
-      if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (p[1] === "certs"){ S.tdsView = "checks"; S.tdsCheck = "rates"; return; }
+      if (p[1] === "checks"){ S.tdsView = "checks"; S.tdsCheck = ["rates", "limits", "tieout", "corr"].includes(p[2]) ? p[2] : "rates"; return; }
+      if (p[1] === "challans"){ S.tdsView = "challans"; S.tdsQ = /^Q[1-4]$/.test(p[2] || "") ? p[2] : ""; return; }
       if (p[1] === "26as"){ S.tdsView = "recon"; return; }
       if (p[1] === "traces"){ S.tdsView = "traces"; return; }
       if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
@@ -25753,7 +25768,7 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
-      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
+      else if (["clients", "today", "compliance", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;
     } finally {
