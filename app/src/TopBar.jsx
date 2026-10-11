@@ -160,15 +160,35 @@ export function TallyDetail({ s, link = null }) {
     {!s.on && <><dt>Why</dt><dd className="why">{s.reason}</dd><dt>What to do</dt><dd>{s.fix}</dd></>}
   </dl>;
 }
+// the top bar's sign (the owner, 11-Oct-2026): THIS computer only, a dot and a short word, steady (tallyHere, src/js/49):
+// green "Tally ready"; amber "Tally closed", "Tally busy", "Company not open", "Company not linked", "No internet"; red
+// "Bridge stopped"; grey "Tally not on this computer" (no bridge here: not an alarm). The hover card: the company, the
+// Windows user, when last confirmed, the next step as a button, and the firm's other computers in one quiet line
+export function HereCard({ h, link = null }) {
+  const pc = h.computer ? tallyPcShort(h.computer, h.user) : "";
+  return <div className="there" data-tally-here-card={h.code}>
+    <p className="there-head"><span className={"tsign-dot " + h.level} aria-hidden="true" /><b>{h.label}</b></p>
+    <dl className="tdetail" data-tally-detail="" data-tally-reason={h.level === "ok" ? "" : h.code}>
+      {pc && <><dt>Computer</dt><dd>{pc}</dd></>}
+      {h.company && <><dt>Company</dt><dd>{h.company}</dd></>}
+      {link && <><dt>Link</dt><dd data-tally-link-word={link.state}>{link.word}</dd></>}
+      {h.code !== "none" && <><dt>Last confirmed</dt><dd data-tally-confirmed="">{h.confirmed ? tallyIst(h.confirmed) : "\u2014"}</dd></>}
+    </dl>
+    {h.hint && <p className="note there-hint" data-tally-hint="">{h.hint}</p>}
+    {h.other && <p className="note there-other" data-tally-other="">{h.other}</p>}
+    {h.next.length > 0 && <div className="there-acts">{h.next.map((n, i) => <button key={n.act} type="button" data-tally-next={n.act}
+      className={"btn small" + (i === 0 && h.level !== "ok" && n.act !== "tallyCheck" ? " primary" : "")} onClick={(ev) => { ev.stopPropagation(); doAct(n.act); }}>{n.label}</button>)}</div>}
+  </div>;
+}
 function TallySign() {
-  // round 39: in a client, the hover also says its link in the four words of its Link to Tally card
-  const co = S.view === "company" ? CO() : null, s = tallySign(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
+  const co = S.view === "company" ? CO() : null, h = tallyHere(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
+  const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
   return <span className="tsign-wrap">
-    <button className={"tsign tallychip " + (s.on ? "on" : "off")} data-tally-sign={s.on ? "on" : "off"} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined} aria-haspopup="dialog"
-      title={tallySignWords(s) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
-      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{s.words}</span><span className="tsign-short">{s.short || s.computer}</span>
+    <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
+      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
+      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
     </button>
-    {!S.tallyPanel && <span className="tsign-pop" role="tooltip"><TallyDetail s={s} link={k} /></span>}
+    {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}
   </span>;
 }
 
@@ -206,11 +226,13 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
-        <TallyDetail s={tallySign(co)} link={co ? tallyLinkOf(co) : null} />
+        <HereCard h={tallyHere(co)} link={co ? tallyLinkOf(co) : null} />
+        <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
+        <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
-          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>
+          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>
           {co && <p className="note">{(Bridge.openFor(co) || {}).name ? Bridge.openFor(co).name + " is open in Tally." : (co.tallyName || co.name) + " is not open in Tally."}</p>}
           {!live && <p className="note">Open TallyPrime on the computer where the bridge runs, and keep the company open.</p>}
         </> : <p className="note">FinCom Bridge is not set up on this computer. Install FinCom Bridge from the Tally page on the computer where TallyPrime runs, then come back here.</p>}

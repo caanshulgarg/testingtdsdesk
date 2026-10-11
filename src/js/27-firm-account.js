@@ -1521,7 +1521,9 @@ function doAct(act, t){
       toast("Connecting to the bridge on this computer\u2026");
       Bridge.pair(a.data).then(j => {
         Bridge.lastOpenKey = null;
-        return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); render(); });
+        return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); if (typeof TallySteady === "object") TallySteady.now();
+          // came from the top bar's "Connect this computer": back to that page, where the sign is now green by itself
+          if (S.tallyConnectBack && S.returnTo && Bridge.up()){ S.tallyConnectBack = false; Smart.goBack(); } render(); });
       }, err => { Bridge.st.error = err.message; toast(err.message); render(); });
       });
       break;
@@ -1807,6 +1809,12 @@ function doAct(act, t){
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
+    // the top bar's sign, not ready (the steady sign, 11-Oct-2026): the next step for its state. Connect this computer:
+    // the Tally page's install and connect steps, back to this page once connected; Check again: ask now, answer at once
+    case "tallyConnect": Smart.setReturn(); S.tallyConnectBack = !!S.returnTo; S.tallyPanel = false; S.firmMenu = false; S.view = "home"; S.homeTab = "tally"; S.tallyTab = "computers";
+      S.tallyMore = Object.assign({}, S.tallyMore || {}, {page: true}); render(); window.scrollTo(0, 0);
+      setTimeout(() => { const e = document.querySelector("#app [data-connect-section]"); if (e && e.scrollIntoView) e.scrollIntoView({block: "start"}); }, 80); break;
+    case "tallyCheck": tallyCheckNow(); break;
     case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
     case "firmMenuClose": S.firmMenu = false; render(); break;
