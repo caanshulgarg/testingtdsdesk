@@ -279,6 +279,16 @@ try:
         tv = db.rows("select book_id::text as book_id, guid, day::text as day, alter_id::text as alter_id, vtype, vno, party, narration, cancelled::text as cancelled, optional::text as optional, deleted_at::text as deleted_at, gstin, pos, ref, ref_date::text as ref_date, cmp_gstin, irn, irn_ack_date::text as irn_ack_date from tally_vouchers where book_id = %s" % B)
         for r in tv:
             r["alter_id"] = int(r["alter_id"] or 0); r["cancelled"] = r["cancelled"] == "true"; r["optional"] = r["optional"] == "true"
+        # bridge 2.4.2 (migration 72): each entry's GST type as the REST read gives it (null: none in the cloud for the entry);
+        # a cloud without the columns gives none
+        try:
+            gt = {r["guid"]: r for r in db.rows("select guid, (gst_rcm is not null)::text as rd, gst_reg_type, gst_country, gst_rcm::text as gst_rcm, gst_nature, gst_taxability, gst_supply, gst_ineligible::text as gst_ineligible from tally_vouchers where book_id = %s" % B)}
+            for r in tv:
+                g = gt.get(r["guid"]) or {}
+                for k in ("gst_reg_type", "gst_country", "gst_nature", "gst_taxability", "gst_supply"): r[k] = (g.get(k) or "") if g.get("rd") == "true" else None
+                for k in ("gst_rcm", "gst_ineligible"): r[k] = (g.get(k) == "true") if g.get("rd") == "true" else None
+        except RuntimeError:
+            pass
         tl = db.rows("select book_id::text as book_id, guid, ledger, amount::text as amount, hsn, rate::text as rate from tally_lines where book_id = %s" % B)
         for r in tl: r["amount"] = float(r["amount"]); r["rate"] = float(r["rate"]) if r["rate"] not in (None, "") else None
         tb = db.rows("select book_id::text as book_id, guid, ledger, name, type, amount::text as amount, credit_days::text as credit_days from tally_bills where book_id = %s" % B)

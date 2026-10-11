@@ -1,24 +1,4 @@
 {
- "p1 S03: the SEZ supply (registration type or nature of the transaction) in the entry the bridge sends": {
-  "cause": "the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction, the reverse-charge and ineligible-credit marks and the taxability are not among them, so FinCom's cloud copy of the entry cannot tell this supply",
-  "fix": "NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)"
- },
- "p1 S05: the export (the buyer's country) in the entry the bridge sends": {
-  "cause": "the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction, the reverse-charge and ineligible-credit marks and the taxability are not among them, so FinCom's cloud copy of the entry cannot tell this supply",
-  "fix": "NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)"
- },
- "p1 P03: the reverse charge in the entry the bridge sends": {
-  "cause": "the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction, the reverse-charge and ineligible-credit marks and the taxability are not among them, so FinCom's cloud copy of the entry cannot tell this supply",
-  "fix": "NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)"
- },
- "p1 P04: the blocked credit in the entry the bridge sends": {
-  "cause": "TallyPrime 7.1 did not keep the blocked-credit mark on the imported entry (see 4(B)(1)), and the bridge's entry fields carry no such mark either",
-  "fix": "NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)"
- },
- "p1 S10: the nil-rated supply (taxability) in the entry the bridge sends": {
-  "cause": "the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction, the reverse-charge and ineligible-credit marks and the taxability are not among them, so FinCom's cloud copy of the entry cannot tell this supply",
-  "fix": "NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)"
- },
  "Form 140 Q1 (as filed): Tau Goods Supplier, amount paid or credited": {
   "cause": "194Q: FinCom reported the whole bill (55,00,000) as paid or credited and the rate as 0.01%; the law taxes only the part above 50 lakh (5,00,000) at 0.1%",
   "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
@@ -107,25 +87,9 @@
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
   "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
  },
- "May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
  "May 2026 4(C) net ITC: IGST": {
   "cause": "a debit note raised on a customer (it credits sales and output tax) was read as a purchase debit note, so it left 9B, table 13 and 3.1(a) and took input credit away",
   "fix": "FIXED on arc-ui (822a932e9, test tests/run_tdsgst_fixes.js); tax-accuracy gets it with arc-ui"
- },
- "May 2026 4(C) net ITC: CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "May 2026 4(C) net ITC: SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
  },
  "Jul 2026 GSTR-3B 3.1(a) outward taxable: taxable value": {
   "cause": "July's 3B did not carry the differences of the amendments reported in July's GSTR-1 (9A, 9C, 10)",
@@ -147,96 +111,8 @@
   "cause": "FinCom builds a fresh regular statement only; a correction statement (C1-C9 against the filed token) is not built (the same in the bridge-only run)",
   "fix": "NOT FIXED: feature not in FinCom (the corrected regular statement's figures are right)"
  },
- "[bridge only] May 2026 table 4A/6B (b2b): 3 inv_typ": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 4A/6B (b2b): 4 inv_typ": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 4A/6B (b2b): nothing else in the table": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 5 (b2cl): nothing else in the table": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 6A (exp): 5  in the table": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 6A (exp): 6  in the table": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 7 (b2cs): nothing else": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 8 (nil) INTRAB2B: nil / exempt / non-GST": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 table 8 (nil) INTRB2C: nil / exempt / non-GST": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 3.1(a) outward taxable: taxable value": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 3.1(a) outward taxable: IGST": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 3.1(b) zero-rated: taxable value": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 3.1(b) zero-rated: IGST": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 3.1(c) nil and exempt: taxable value": {
-  "cause": "bridge only (no Day Book uploaded): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction and the taxability are not among them, so an entry that came only through the bridge cannot be told an SEZ supply (S03, S04), an export (S05, S06) or a nil-rated / exempt supply (S10, S11): they are reported as regular supplies",
-  "fix": "NOT FIXED: part B of round 44 (bridge 2.4.2 sends each entry's GST type; owner approved 11-Oct-2026). With a Day Book uploaded these figures are right (the [both] run)"
- },
- "[bridge only] May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the bridge-only run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[bridge only] May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the bridge-only run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[bridge only] May 2026 4(C) net ITC: CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the bridge-only run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[bridge only] May 2026 4(C) net ITC: SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the bridge-only run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
  "[both] Form 140 Q1 correction: a correction statement for the filed quarter": {
   "cause": "FinCom builds a fresh regular statement only; a correction statement (C1-C9 against the filed token) is not built (the same in the both run)",
   "fix": "NOT FIXED: feature not in FinCom (the corrected regular statement's figures are right)"
- },
- "[both] May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the both run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[both] May 2026 4(B)(1) reversed, rules 38/42/43 and 17(5): SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the both run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[both] May 2026 4(C) net ITC: CGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the both run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
- },
- "[both] May 2026 4(C) net ITC: SGST": {
-  "cause": "TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js (the same in the both run)",
-  "fix": "NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)"
  }
 }
