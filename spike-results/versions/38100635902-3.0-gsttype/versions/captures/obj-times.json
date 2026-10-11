@@ -1,0 +1,194 @@
+[
+  {
+    "id": "S01",
+    "mid": "2",
+    "first": 9,
+    "best": 8,
+    "ok": true,
+    "bytes": 69994
+  },
+  {
+    "id": "S02",
+    "mid": "3",
+    "first": 9,
+    "best": 7,
+    "ok": true,
+    "bytes": 59508
+  },
+  {
+    "id": "S03",
+    "mid": "4",
+    "first": 7,
+    "best": 6,
+    "ok": true,
+    "bytes": 59483
+  },
+  {
+    "id": "S04",
+    "mid": "5",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 48966
+  },
+  {
+    "id": "S05",
+    "mid": "6",
+    "first": 7,
+    "best": 6,
+    "ok": true,
+    "bytes": 58996
+  },
+  {
+    "id": "S06",
+    "mid": "7",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 48478
+  },
+  {
+    "id": "S07",
+    "mid": "8",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 59175
+  },
+  {
+    "id": "S08",
+    "mid": "9",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 69658
+  },
+  {
+    "id": "S09",
+    "mid": "10",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 59153
+  },
+  {
+    "id": "S10",
+    "mid": "11",
+    "first": 6,
+    "best": 5,
+    "ok": true,
+    "bytes": 48967
+  },
+  {
+    "id": "S11",
+    "mid": "12",
+    "first": 5,
+    "best": 5,
+    "ok": true,
+    "bytes": 48628
+  },
+  {
+    "id": "S15",
+    "mid": "13",
+    "first": 7,
+    "best": 7,
+    "ok": true,
+    "bytes": 60387
+  },
+  {
+    "id": "CN1",
+    "mid": "14",
+    "first": 7,
+    "best": 7,
+    "ok": true,
+    "bytes": 70045
+  },
+  {
+    "id": "CN2",
+    "mid": "15",
+    "first": 6,
+    "best": 6,
+    "ok": true,
+    "bytes": 59229
+  },
+  {
+    "id": "DN1",
+    "mid": "16",
+    "first": 7,
+    "best": 6,
+    "ok": true,
+    "bytes": 59542
+  },
+  {
+    "id": "P01",
+    "mid": "17",
+    "first": 8,
+    "best": 7,
+    "ok": true,
+    "bytes": 70121
+  },
+  {
+    "id": "P02",
+    "mid": "18",
+    "first": 10,
+    "best": 8,
+    "ok": true,
+    "bytes": 59632
+  },
+  {
+    "id": "P03",
+    "mid": "19",
+    "first": 9,
+    "best": 8,
+    "ok": true,
+    "bytes": 91146
+  },
+  {
+    "id": "P04",
+    "mid": "20",
+    "first": 8,
+    "best": 7,
+    "ok": true,
+    "bytes": 70107
+  },
+  {
+    "id": "P05",
+    "mid": "21",
+    "first": 5,
+    "best": 5,
+    "ok": true,
+    "bytes": 48676
+  },
+  {
+    "id": "DN2",
+    "mid": "22",
+    "first": 10,
+    "best": 8,
+    "ok": true,
+    "bytes": 70093
+  },
+  {
+    "id": "P04L",
+    "mid": "23",
+    "first": 8,
+    "best": 8,
+    "ok": true,
+    "bytes": 70112
+  },
+  {
+    "id": "P04V1",
+    "mid": "24",
+    "first": 7,
+    "best": 7,
+    "ok": true,
+    "bytes": 70124
+  },
+  {
+    "id": "P04V2",
+    "mid": "25",
+    "first": 7,
+    "best": 7,
+    "ok": true,
+    "bytes": 70120
+  }
+]

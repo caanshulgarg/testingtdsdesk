@@ -1,0 +1,30 @@
+INFO TallyPrime 7.1, mode gsttype, runner GitHub Actions 1000007317, 2026-10-11T01:18:27
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-11, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-11, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1535 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO gsttype masters company: created 0, altered 1, errors 0
+INFO gsttype masters vchtypes: created 0, altered 7, errors 0
+INFO gsttype masters natures: created 8, altered 0, errors 0
+INFO gsttype masters ledgers: created 63, altered 0, errors 0
+INFO gsttype ledger Motor Car Blocked (GSTDETAILS.LIST GSTINELIGIBLEITC Yes): created 1, errors 0 
+INFO gsttype unit Nos and stock item Laptop: created 2, errors 0 
+HARNESS x1 the GST entries made in Tally: 24 of 26 entries made by XML; refused: I01 (created 0, errors 0: Voucher date is missing for: &apos;Sales&apos; voucher FC/26-27/I01.  Verify the data, resolve errors (if any) and retry Split.); I02 (created 0, errors 0: Voucher date is missing for: &apos;Sales&apos; voucher FC/26-27/I02.  Verify the data, resolve errors (if any) and retry Split.)
+INFO gsttype: the entry request of the ref (requests/entry-object.xml, SHA-256 075e2c9aa7f60bccdbd305695b3d8ae38f7a7c71401017ed58ef61be26114a1a, 3443 characters)
+PASS x2 the entry request answered for every entry (raw kept, timed): 24 entries asked one by one with the ref's FinComVoucherObject (MasterID put in): answered with the voucher 24; first ask median 12 ms, worst 19 ms (under 2,000 ms: True); per entry: S01 15ms, S02 15ms, S03 15ms, S04 10ms, S05 11ms, S06 10ms, S07 11ms, S08 11ms, S09 10ms, S10 10ms, S11 9ms, S15 12ms, CN1 16ms, CN2 10ms, DN1 12ms, P01 14ms, P02 13ms, P03 15ms, P04 13ms, P05 9ms, DN2 19ms, P04L 12ms, P04V1 14ms, P04V2 15ms; not answered: none
+PASS x3 the blocked credit as Tally keeps it: ledger Motor Car Blocked: GSTINELIGIBLEITC=Yes | P04: VCHGSTCLASS=&#4; Not Applicable, ISELIGIBLEFORITC=Yes, GSTOVRDNINELIGIBLEITC=&#4; Not Applicable, GSTOVRDNINELIGIBLEITC= | P04L: VCHGSTCLASS=&#4; Not Applicable, ISELIGIBLEFORITC=Yes, GSTOVRDNINELIGIBLEITC=&#4; Applicable, GSTOVRDNINELIGIBLEITC= | P04V1: VCHGSTCLASS=&#4; Not Applicable, ISELIGIBLEFORITC=Yes, GSTOVRDNINELIGIBLEITC=&#4; Not Applicable, GSTOVRDNINELIGIBLEITC= | P04V2: VCHGSTCLASS=&#4; Not Applicable, ISELIGIBLEFORITC=Yes, GSTOVRDNINELIGIBLEITC=&#4; Applicable, GSTOVRDNINELIGIBLEITC=
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 2 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
