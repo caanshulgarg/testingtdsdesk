@@ -22,6 +22,7 @@ docs/tdsgst-e2e-result.md is the owner's copy. A FAIL listed in known-fails.json
 does not fail the test; any other FAIL does. A listed figure that passes (its fix is in the build tested: the fixes are on
 arc-ui, the list is shared with tax-accuracy) is printed as a note.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno) and the app's test build (site-test/: python3 build.py)."""
+from html import unescape
 import os, re, sys, json, time, gzip, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, tempfile, csv
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
@@ -92,7 +93,7 @@ STAGING = ["migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "mig
            "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql", "migration-59-ledger-aliases.sql", "migration-60-recorder-lows.sql",
            "migration-68-alert-dismissals.sql", "migration-70-alert-dismissals-tighten.sql", "migration-61-privileges.sql",
            "migration-62-tds-rate-worked-out.sql", "migration-63-recorder-repeat.sql", "migration-64-pages-live.sql", "migration-65-selfchecks.sql", "migration-66-recorder-masters.sql",
-           "migration-67-recorder-renumbered.sql"]
+           "migration-67-recorder-renumbered.sql", "migration-72-gst-type.sql"]
 FILES = [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql") if f == "@34" else os.path.join(SQLDIR, f) for f in STAGING]
 FILES = [f for f in FILES if os.path.exists(f)]
 FIRM, OWNER, BOOK, CID = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "11111111-1111-1111-1111-111111111143", "tg"
@@ -304,11 +305,21 @@ try:
         for l in (x["body"].get("lines") or []) if x["kind"] == "recorder_lines" else []:
             if l.get("xml"): bodies[str(l.get("object_guid") or "")] = l["xml"]
     g1 = {v["id"]: v["guid"] for v in TV["p1"]}
-    for vid, tagname, what in (("S03", "GSTREGISTRATIONTYPE|GSTOVRDNNATURE", "the SEZ supply (registration type or nature of the transaction)"), ("S05", "COUNTRYOFRESIDENCE", "the export (the buyer's country)"),
-                               ("P03", "GSTOVRDNISREVCHARGEAPPL|ISREVERSECHARGEAPPLICABLE", "the reverse charge"), ("P04", "GSTOVRDNINELIGIBLEITC", "the blocked credit"), ("S10", "GSTOVRDNTAXABILITY", "the nil-rated supply (taxability)")):
-        xb = bodies.get(g1.get(vid, ""), "")
-        row("Cloud copy (bridge)", "p1 %s: %s in the entry the bridge sends" % (vid, what), True, bool(re.search(r"<(%s)>[^<]+<" % tagname, xb)) if xb else "(no body)",
-            "fields the bridge's entry request does not carry (bridge-go fastvch.go / liveFetchField)")
+    # bridge 2.4.2 (round 44 part B): the body carries Tally's value AND FinCom's cloud copy stores it (migration 72's columns,
+    # read by parse.js from the body); a cloud without 72 has no columns: the row says so
+    try: GT = {r["guid"]: r for r in db.rows("select guid, gst_reg_type, gst_country, gst_rcm::text as gst_rcm, gst_nature, gst_taxability, gst_ineligible::text as gst_ineligible from tally_vouchers where book_id = %s" % q(BOOK))}
+    except RuntimeError: GT = None
+    for vid, tag, val, col, cval, what in (("S03", "GSTOVRDNNATURE", r"Sales to SEZ", "gst_nature", r"^Sales to SEZ", "the SEZ supply (registration type or nature of the transaction)"),
+                                          ("S05", "COUNTRYOFRESIDENCE", r"Germany", "gst_country", r"^Germany$", "the export (the buyer's country)"),
+                                          ("P03", "ISREVERSECHARGEAPPLICABLE", r"Yes", "gst_rcm", r"^true$", "the reverse charge"),
+                                          ("P04", "GSTOVRDNINELIGIBLEITC", r"^\W*Applicable", "gst_ineligible", r"^true$", "the blocked credit"),
+                                          ("S10", "GSTOVRDNTAXABILITY", r"Nil Rated", "gst_taxability", r"^Nil Rated$", "the nil-rated supply (taxability)")):
+        g = g1.get(vid, ""); xb = bodies.get(g, "")
+        inbody = any(re.search(val, unescape(m)) for m in re.findall(r"<%s>([^<]*)<" % tag, xb))
+        stored = (GT or {}).get(g, {}).get(col) or ""
+        got = (inbody and bool(re.search(cval, stored))) if xb and GT is not None else ("(no body)" if not xb else "(no GST type columns: migration 72 not run)")
+        row("Cloud copy (bridge)", "p1 %s: %s in the entry the bridge sends" % (vid, what), True, got,
+            "Tally's %s in the bridge's body: %s; FinCom's cloud copy %s: %s" % (tag, inbody, col, stored or "-"))
     # ---------------------------------------------------------------- phase 2 of the bridge's requests
     replay(2)
     rl2 = [(i, answers[i]) for i in sorted(answers) if reqs[i]["kind"] == "recorder_lines" and i not in dict(rl)]
