@@ -159,7 +159,7 @@ try {
     '<ALLLEDGERENTRIES.LIST><LEDGERNAME>' + $DUTY + '</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-200.00</AMOUNT><TYPEOFTAXPAYMENT>Late Fee</TYPEOFTAXPAYMENT><STATNATURENAME>' + (LE $NAT2) + '</STATNATURENAME></ALLLEDGERENTRIES.LIST>' +
     '<ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10350.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   $k = XImp 'Vouchers' $px 'payment PM1 (XML)'
-  $e = @(Vouchers | Where-Object { $_.narr -like 'PM1 *' })[0]
+  $vsAll = Vouchers; $e = @($vsAll | Where-Object { $_.narr -like 'PM1 *' })[0]
   $tmplF = Join-Path $env:BRIDGE_DIST 'requests\entry-object.xml'
   if ($e -and (Test-Path $tmplF)) {
     $mid = TdsMid "$($e.mid)"
