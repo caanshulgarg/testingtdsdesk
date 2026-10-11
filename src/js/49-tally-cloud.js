@@ -1847,12 +1847,12 @@ function tallySignNow(co){
   if (good){
     const company = co ? good.open.find(same) : good.open.join(", ");
     // round 3 (05-Oct-2026): the sign says which computer: this one, the other one, or how many
-    // 11-Oct-2026: "ready", and the computer with its Windows user ("NWS144 (anshul)"); "via" for a computer that is not
-    // this one
+    // 11-Oct-2026: "ready", and the computer with its Windows user: "Tally ready on NWS144 (anshul)" (the owner: never
+    // "via" or "through")
     if (good.local) return out({on: true, code: "ok", local: true, computer: "this computer (" + good.computer + ")", pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on this computer", short: "This computer", through: [good.computer]});
-    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), pc: goods.map(x => x.pc).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally ready via " + goods.length + " computers",
+    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), pc: goods.map(x => x.pc).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally ready on " + goods.length + " computers",
       short: goods.length + " computers", through: goods.map(x => x.computer), many: goods.map(x => ({computer: x.computer, company: co ? x.open.find(same) : x.open.join(", "), at: tallyIst(x.at)}))});
-    return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready via " + good.pc, short: good.pc, through: [good.computer]});
+    return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on " + good.pc, short: good.pc, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
   const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];

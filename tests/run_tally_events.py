@@ -65,7 +65,7 @@ with sync_playwright() as p:
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     pline = lambda: line("#app [data-post-line]")
     # the steady sign (11-Oct-2026): the connection in the sign's words
-    ok(pline() == "Posting into ZZ TEST · Tally ready via NWS144 (anshul) · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
+    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Tally ready · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
     ok(pg.locator("#app [data-post-line] [data-update-now]").count() == 1, "Post page: in it, one button: Update now")
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
