@@ -31,6 +31,9 @@ def ok(c, w):
 HOLD = [0.0]
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
+    def end_headers(self):
+        # nothing kept by the browser between the opens: each open fetches legacy.js (held back or not) again
+        self.send_header("Cache-Control", "no-store"); super().end_headers()
     def do_GET(self):
         if HOLD[0] and re.search(r"/legacy[^/]*\.js", self.path): time.sleep(HOLD[0])
         return super().do_GET()
