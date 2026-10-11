@@ -332,9 +332,13 @@ const TCloud = {
   async copyHeads(b, bk, full){
     const meta = b.meta = b.meta || {}, c = meta.copy && meta.copy.book === bk.book ? meta.copy : null;
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
+    // bridge 2.4.2: the GST type columns (migration 72) first; a cloud without them, then without the IRN, read as before
     const read = async (extra) => {
-      try { return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS + B + extra + "&order=guid.asc"); }
-      catch (e){ if (!/irn|42703/i.test(String((e && e.message) || e))) throw e; return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS_OLD + B + extra + "&order=guid.asc"); }
+      const cols = [BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+      for (let i = 0; ; i++){
+        try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
+        catch (e){ if (i === cols.length - 1 || !/gst_|irn|42703/i.test(String((e && e.message) || e))) throw e; }
+      }
     };
     let seen = c ? c.seen || "" : "", heads;
     // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)

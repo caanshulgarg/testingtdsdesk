@@ -14,8 +14,12 @@ const BookSrc = {
   // the fields of the cloud copy's entry read here (deleted_at: migration 32; gstin/pos: 6; ref/cmp_gstin: 11; irn: 57)
   HEADS: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date",
   HEADS_OLD: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin",
-  // what the bridge's entry does not carry yet (bridge 2.4.2, part B of round 44): kept from the Day Book's version of
-  // the same entry when the bridge brings a later one, so an altered SEZ, export or reverse-charge entry stays so
+  // bridge 2.4.2 (round 44 part B, migration 72): each entry's GST type as Tally stores it, read first; a cloud without the
+  // columns is read with HEADS, then HEADS_OLD
+  HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible",
+  // the GST kind a bridge before 2.4.2 does not send (its entry has no type in the cloud copy): kept from the Day Book's
+  // version of the same entry when such a bridge brings a later one, so an altered SEZ, export or reverse-charge entry
+  // stays so. A 2.4.2 entry carries Tally's own type (gstRead): nothing is carried onto it
   CARRY: ["regType", "country", "rcm", "taxability", "nature", "supply", "ineligibleFlag"],
   words(v){ return v && v.src === "bridge" ? "Bridge" : "Day Book"; },
   d8(x){ return String(x || "").replace(/-/g, "").slice(0, 8); },
@@ -44,6 +48,7 @@ const BookSrc = {
       const v = {id: String(h.guid), date: this.d8(h.day), type: h.vtype || "", no: h.vno || "", ref: h.ref || "", refDate: this.d8(h.ref_date), irn: h.irn || "", irnDate: this.d8(h.irn_ack_date),
         party: h.party || "", gstin: String(h.gstin || "").toUpperCase(), pos: h.pos || "", cmp: String(h.cmp_gstin || "").toUpperCase(), narr: String(h.narration || "").slice(0, 120),
         regType: "", country: "", rcm: false, taxability: "", nature: "", supply: "", ineligibleFlag: false, hsn: [], by: "", upd: "",
+        ...this.gstOf(h),
         cancel: h.cancelled === true || h.cancelled === "true", opt: h.optional === true || h.optional === "true", ent: [], alt: this.alt(h.alter_id), src: "bridge"};
       const hs = new Set();
       (L[h.guid] || []).forEach(l => {
@@ -66,13 +71,21 @@ const BookSrc = {
     });
     return out;
   },
+  // bridge 2.4.2: the cloud copy's GST type (migration 72's columns, null when the cloud has none for the entry) as the
+  // Day Book's fields of the same names; {} when there is none
+  gstOf(h){
+    if (!h || ["gst_reg_type", "gst_country", "gst_rcm", "gst_nature", "gst_taxability", "gst_supply", "gst_ineligible"].every(k => h[k] == null)) return {};
+    const t = (x) => String(x == null ? "" : x).trim(), yes = (x) => x === true || x === "true";
+    return {regType: t(h.gst_reg_type), country: t(h.gst_country), rcm: yes(h.gst_rcm), taxability: t(h.gst_taxability), nature: t(h.gst_nature), supply: t(h.gst_supply),
+      ineligibleFlag: yes(h.gst_ineligible), gstRead: true};
+  },
   // one entry into the books by the rule above; true when the books changed
   put(b, v, by){
     by = by || this.index(b.vouchers);
     const i = by.has(v.id) ? by.get(v.id) : -1, have = i >= 0 ? b.vouchers[i] : null;
     if (!this.wins(v.alt, have)) return false;
     // (also from a bridge version that carried them before: the Day Book's GST kind stays through later alterations)
-    if (have){
+    if (have && !v.gstRead){
       const kept = this.CARRY.filter(k => have[k] && !v[k]);
       if (kept.length){ v = Object.assign({}, v); kept.forEach(k => { v[k] = have[k]; }); v.carried = kept; }
     }
