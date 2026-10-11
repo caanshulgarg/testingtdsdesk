@@ -257,7 +257,12 @@ try {
     }
     # run 38149336261 (7.1): after the tax type the box asks Period From, To, Deducted Till Date, Section, Nature of
     # Payment, Deductee Status, Residential Status (defaults kept) and Cash/Bank (mandatory: an empty one held the box)
-    for ($j = 1; $j -le 7; $j++) { $null = TK '{ENTER}' 1.2 "sp-field-$j" }
+    # run 38151519725 (screen tds-143): the cursor stayed on Period "To" 30-Nov-26: Educational mode takes only days 1, 2
+    # and 31, so To and Deducted Till Date are 2-11-2026 (the deductions are on 1 and 2 November)
+    $null = TK '{ENTER}' 1.2 'sp-from-kept'
+    $null = TK '2-11-2026{ENTER}' 1.5 'sp-to'
+    $null = TK '2-11-2026{ENTER}' 1.5 'sp-deducted-till'
+    for ($j = 1; $j -le 4; $j++) { $null = TK '{ENTER}' 1.2 "sp-field-$j" }
     $t = TdsScreen 'sp-at-bank'
     $null = TK ((SK 'HDFC Bank') + '{ENTER}') 2.5 'sp-bank'
     $t = TdsScreen 'sp-bank-check'
@@ -318,8 +323,8 @@ try {
   $chId = if ($ids['SP1']) { 'SP1' } else { 'PX1' }
   if ($ids[$chId]) {
     $tries = @(
-      @('A', @()),
-      @('B', @('%s')),
+      @('R', @('{SPACE}', '%r')),
+      @('S', @('{SPACE}', '%s')),
       @('C', @('{ENTER}')))
     foreach ($tr in $tries) {
       try {
