@@ -169,6 +169,22 @@ function gstType(s){
     mixed: gl.some((u) => kind(u) !== kind(lead))
   };
 }
+// ---- bridge 2.4.3 (the owner's approval of 11-Oct-2026, (a); migration 73). A TDS payment's challan as Tally keeps it, and
+// the link of each TDS line to the deduction it is or pays, read the same way from a Day Book export and from the bridge's
+// entry body (the fields its FinComVoucherObject answer keeps from 2.4.3 on; measured on real TallyPrime 7.1, tally-versions
+// mode tdsch, run 38155837948): on the payment the Stat Payment's duty and period, the challan's BSR code, number and date,
+// the cheque, the bank and branch, the nature and section; on each ledger line whether it pays tax, interest or a late fee
+// (TYPEOFTAXPAYMENT) and its nature; per nature (SUMMARYALLOCS.LIST, where Tally's Challan Reconciliation keeps the
+// challan) the period, the return, the deductee's status, the amount paid and the challan; and on every TDS line the
+// reference Tally links a deduction and its payment by (TAXOBJECTALLOCATIONS: TAXNAME, New Ref on the deduction, Agst Ref
+// on the payment). Stored values only, nothing worked out. null when the text carries none of them
+const TDSX_TAGS = ["STATPAYMENTTYPE", "TAXCHALLANBSRCODE", "TAXBANKCHALLANNUMBER", "TAXCHALLANDATE", "TYPEOFTAXPAYMENT", "STATNATURENAME", "SUMMARYALLOCS.LIST", "TAXNAME", "TAXPAYPERIODFROMDATE"];
+const tx = (q, tag, n) => one(q, tag).replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
+function tdsChallanOf(q){
+  const c = {bsr: tx(q, "TAXCHALLANBSRCODE", 7).replace(/\D/g, ""), no: tx(q, "TAXBANKCHALLANNUMBER", 20), date: d8(one(q, "TAXCHALLANDATE")),
+    chq: tx(q, "TAXCHEQUENUMBER", 40), chqDate: d8(one(q, "TAXCHEQUEDATE")), bank: tx(q, "TAXBANKNAME", 100), branch: tx(q, "TAXBANKBRANCHNAME", 100)};
+  return Object.values(c).some(Boolean) ? c : null;
+}
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
   const narrFull = one(s, "NARRATION");
@@ -210,6 +226,7 @@ function takeVoucher(s){
   }
   // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null, bill-wise details]
   const lines = [], meta = [], costs = [], banks = [], tds = [], dues = [], checks = [];
+  const tdsKinds = [], tdsPeriods = [], tdsRefs = [];     // bridge 2.4.3
   // part A: a ledger line's cost centres, bank details, TDS details and a due date given as a date
   const lineExtras = (e, n, ledger, la) => {
     const ccat = new Map();
@@ -252,6 +269,28 @@ function takeVoucher(s){
       // name (192 .. 196x, 206C.., the 2025 Act's 393); else blank, never guessed
       const own = blocks(e, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
       tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {}), ...(exempt ? {exempt: true} : {})});
+    });
+    // bridge 2.4.3: what the line pays (tax, interest, late fee) and its nature; each nature's period and challan; each TDS
+    // reference
+    if (e.indexOf("<TYPEOFTAXPAYMENT") >= 0 || e.indexOf("<STATNATURENAME") >= 0){
+      const own = cutOut(e, ["SUMMARYALLOCS.LIST", "TAXOBJECTALLOCATIONS.LIST"]), kind = tx(own, "TYPEOFTAXPAYMENT", 40), nature = tx(own, "STATNATURENAME", 200);
+      if ((kind || nature) && tdsKinds.length < 200) tdsKinds.push({n, ledger, kind, nature, amt: la});
+    }
+    blocks(e, "SUMMARYALLOCS.LIST").forEach((q) => {
+      if (tdsPeriods.length >= 200) return;
+      const p = {n, ledger, name: tx(q, "NAME", 60), from: d8(one(q, "FROMDATE")), to: d8(one(q, "TODATE")), nature: tx(q, "TDSNATUREOFPAYMENT", 200), section: tx(q, "TDSSECTIONNO", 20),
+        status: tx(q, "TDSDEDNSTATUS", 60), resident: tx(q, "TDSRESIDENTIALSTATUS", 40), form: tx(q, "FORMTYPE", 10), paid: one(q, "PAIDAMOUNT") ? r2(amt(one(q, "PAIDAMOUNT"))) : null};
+      const ch = tdsChallanOf(q); if (ch) p.challan = ch;
+      if (p.name || p.nature || p.section || p.paid != null || ch) tdsPeriods.push(p);
+    });
+    blocks(e, "TAXOBJECTALLOCATIONS.LIST").forEach((q) => {
+      const tt = one(q, "TAXTYPE"), ref = tx(q, "TAXNAME", 100);
+      if ((tt && !/TDS/i.test(tt)) || !ref || tdsRefs.length >= 200) return;
+      const subs = blocks(q, "SUBCATEGORYALLOCATION.LIST");
+      let tax = null, paid = null;
+      subs.forEach((x) => { if (one(x, "TAX")) tax = r2((tax || 0) + amt(one(x, "TAX"))); if (one(x, "PAIDAMOUNT")) paid = r2((paid || 0) + amt(one(x, "PAIDAMOUNT"))); });
+      tdsRefs.push({n, ledger, ref, type: tx(q, "REFTYPE", 20), nature: tx(q, "CATEGORY", 200), party: tx(q, "PARTYLEDGER", 300),
+        duty: (subs.map((x) => tx(x, "DUTYLEDGER", 300)).find(Boolean) || ""), tax, paid});
     });
     if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
       const cp = (q.match(/<BILLCREDITPERIOD(?:\s[^<>]*[^/<>])?\s*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
@@ -399,6 +438,13 @@ function takeVoucher(s){
   v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
   // bridge 2.4.2: the entry's GST type (null: none of its fields in the text)
   const gt = gstType(s); if (gt) v.gst = gt;
+  // bridge 2.4.3: the TDS payment's challan and the TDS references (none of their fields in the text: no "tdsx")
+  if (TDSX_TAGS.some((t) => s.indexOf("<" + t) >= 0)){
+    const head = cutOut(s, ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"]);
+    const x = {stat: tx(head, "STATPAYMENTTYPE", 20), from: d8(one(head, "TAXPAYPERIODFROMDATE")), to: d8(one(head, "TAXPAYPERIODTODATE")),
+      nature: tx(head, "TDSNATUREOFPAYMENT", 200), section: tx(head, "TDSSECTIONNO", 20), challan: tdsChallanOf(head), kinds: tdsKinds, periods: tdsPeriods, refs: tdsRefs};
+    if (x.stat || x.from || x.to || x.nature || x.section || x.challan || tdsKinds.length || tdsPeriods.length || tdsRefs.length) v.tdsx = x;
+  }
   // ---- part A, the owner's accuracy checks: lines totalling zero; item lines' taxable value plus tax against the ledger
   // lines for that invoice; bill-wise and cost centre allocations against their line. Each failure in plain words. The
   // owner's rule after review (06-Oct-2026): the recorder path holds an entry only when its lines do not total zero (the
@@ -466,4 +512,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, skipped, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType };
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType, tdsChallanOf };

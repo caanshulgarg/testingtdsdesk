@@ -86,6 +86,7 @@ var requestRebuild = map[string]func(x string) []string{
 	},
 	ledByNameID:         pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
 	grpListID:           pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
+	natListID:           pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),
 	"TDSDeskLedgers":    pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgersFullRequest(pinCo(x), a, u) }),
 	"TDSDeskGroups":     pinOne(func(x string) string { return groupsFullRequest(pinCo(x)) }),
 	"TDSDeskNames":      pinOne(func(x string) string { a, u := pinMasterRange(x); return namesRequest(pinCo(x), a, u) }),

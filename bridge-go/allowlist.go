@@ -36,12 +36,14 @@ var tallyAllowList = map[string]allowedReq{
 	"Day Book":           {purpose: "the day book of one company for one month at most (Update now, the nightly run, a FinCom read)"},
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
-	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too)"},
+	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates)"},
 	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
 	// one ledger an entry names that FinCom does not have (ledchanges.go)
-	ledChangesID:        {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only"},
-	ledByNameID:         {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only"},
-	grpListID:           {purpose: "the group list, stored master fields only"},
+	ledChangesID: {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only"},
+	ledByNameID:  {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only"},
+	grpListID:    {purpose: "the group list, stored master fields only"},
+	// 2.4.3 (the owner's approval of 11-Oct-2026, (b)): the natures of payment (tdsnatures.go)
+	natListID:           {purpose: "the TDS natures of payment (2.4.3): Tally's TDSRate masters, each one's section, rates and thresholds by the date they apply from, 5,000 MasterIDs a request at most, stored master fields only"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
 	"TDSDeskNames":      {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
@@ -177,6 +179,7 @@ func allowListSamples() map[string]string {
 		ledChangesID:         ledgerChangesRequest(c, 0, 200),
 		ledByNameID:          ledgerByNameRequest(c, "SAMPLE LEDGER"),
 		grpListID:            groupListRequest(c),
+		natListID:            natureChunkRequest(c, 0, 5000),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),

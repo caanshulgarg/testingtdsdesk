@@ -1039,7 +1039,7 @@ async function bookFor(firm: string, company: string) {
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
 const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
-  ...partA(v), ...(v.gst ? { gst: v.gst } : {}) }));   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it
+  ...partA(v), ...(v.gst ? { gst: v.gst } : {}), ...(v.tdsx ? { tdsx: v.tdsx } : {}) }));   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it; 2.4.3 (migration 73): the TDS challan and references, likewise
 // bridge 2.3.1 part A (migration 57): the rest of the entry, read by parse.js the same way on both paths (the days path and
 // the recorder's entry body): the e-invoice and e-way bill, the items, cost centres, bank and TDS details, due dates given
 // as dates, and the accuracy checks' plain words (none: []). Names cleaned as every other name. A voucher a parser without
@@ -1141,13 +1141,28 @@ const DTYPE = "tds_deductee_type";
 function deducteeType(l: any): string | null {
   return Array.isArray(l) && l.length > 10 ? String(l[10] ?? "").trim().slice(0, 100) : null;
 }
+// bridge 2.4.3 (migration 73): a ledger's TDS settings are the 12th, 13th and 14th columns of a ledger_list / ledger_changes
+// row: the nature of payment (TDSRATENAME), the special rate ("" : none) and the lower-deduction certificates ([[nature,
+// from, to, section, certificate, rate, limit]]). Absent (a row of 11 columns: a bridge before 2.4.3, or a row a 2.4.2
+// round left in its outbox): left as they are; sent blank: as Tally has them
+const TDSCOLS = "tds_nature, tds_special_rate, tds_ldc";
+function ledTds(l: any): { tds_nature: string; tds_special_rate: string; tds_ldc: string[][] } | null {
+  if (!Array.isArray(l) || l.length < 14) return null;
+  const ldc = (Array.isArray(l[13]) ? l[13] : []).slice(0, 50).filter((c: any) => Array.isArray(c))
+    .map((c: any) => [0, 1, 2, 3, 4, 5, 6].map((i) => String(c[i] ?? "").slice(0, i === 0 ? 200 : 60).trim()));
+  return { tds_nature: String(l[11] ?? "").trim().slice(0, 200), tds_special_rate: String(l[12] ?? "").trim().slice(0, 20), tds_ldc: ldc };
+}
 // the ledgers upserted; refused for want of 57's column (the cloud's update out before 57 ran, the column check cached):
-// the same rows again without it, and the check remembered as "not there"
+// the same rows again without it, and the check remembered as "not there"; likewise 73's columns
 async function upsertLedgers(rows: Record<string, unknown>[]) {
   let { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
+  if (error && rows.some((r) => "tds_nature" in r) && /tds_nature|tds_special_rate|tds_ldc/.test(String(error.message || ""))) {
+    colCache.set("tally_ledgers:" + TDSCOLS, { ok: false, at: Date.now() });
+    ({ error } = await db.from("tally_ledgers").upsert(rows.map(({ tds_nature: _a, tds_special_rate: _b, tds_ldc: _c, ...r }) => r), { onConflict: "book_id,name" }));
+  }
   if (error && rows.some((r) => DTYPE in r) && String(error.message || "").includes(DTYPE)) {
     colCache.set("tally_ledgers:" + DTYPE, { ok: false, at: Date.now() });
-    ({ error } = await db.from("tally_ledgers").upsert(rows.map(({ [DTYPE]: _drop, ...r }) => r), { onConflict: "book_id,name" }));
+    ({ error } = await db.from("tally_ledgers").upsert(rows.map(({ [DTYPE]: _drop, tds_nature: _a, tds_special_rate: _b, tds_ldc: _c, ...r }) => r), { onConflict: "book_id,name" }));
   }
   return error;
 }
@@ -1158,6 +1173,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const m40 = await hasCols("tally_ledgers", "state");            // migration 40: Tally's LEDSTATENAME (the bridge's 10th column)
   const m57 = await hasCols("tally_ledgers", DTYPE);              // migration 57: the party's deductee type (the 11th column, 2.3.1)
+  const m73 = await hasCols("tally_ledgers", TDSCOLS);            // migration 73: the TDS settings (the 12th to 14th columns, 2.4.3)
   const notes: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletedIgnored: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
@@ -1167,7 +1183,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim(), dtype: deducteeType(l) }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
@@ -1193,6 +1209,15 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     if (error) throw new Error(error.message);
   }
   out.groups = grpIn.length;
+  // 1b. bridge 2.4.3 (migration 73): the natures of payment, added or brought up to date by their Tally GUID (none removed)
+  if (Array.isArray(body.natures) && body.natures.length) {
+    const nat = body.natures.slice(0, 2000).filter((x: any) => Array.isArray(x)).map((x: any) => [s(x[0], 100).trim(), Math.max(0, Math.floor(Number(x[1]) || 0)), Math.max(0, Math.floor(Number(x[2]) || 0)),
+      cleanName(s(x[3], 200)), (Array.isArray(x[4]) ? x[4] : []).slice(0, 20).filter((c: any) => Array.isArray(c)).map((c: any) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => s(c[i], 30).trim()))]);
+    const { data, error } = await db.rpc("tally_ingest_natures", { p_book: book, p_natures: nat });
+    if (error && /tally_ingest_natures|could not find|does not exist|schema cache/i.test(String(error.message || ""))) notes.push("natures of payment not kept: migration 73 is not applied");
+    else if (error) throw new Error(error.message);
+    else (out as any).natures = Math.max(0, Math.floor(Number(data) || 0));
+  }
   const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
   if (eg) throw new Error(eg.message);
   // group names met whatever their capitals (Tally names the group "Cash-in-hand"; migration-33)
@@ -1263,6 +1288,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
     if (m40 && r.state) o.state = r.state;      // absent or empty: left as it is
     if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;   // 2.3.1: sent (blank too): as Tally has it; absent: left as it is
+    if (m73 && r.tds) Object.assign(o, r.tds);          // 2.4.3: likewise the TDS settings
     if (m32) { o.tally_guid = r.guid && (!owner.has(r.guid) || owner.get(r.guid) === r.name) ? r.guid : null; o.alter_id = r.alter; o.deleted_at = null; }
     return o;
   };
@@ -1338,6 +1364,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const m40 = await hasCols("tally_ledgers", "state");
   const m57 = await hasCols("tally_ledgers", DTYPE);
+  const m73 = await hasCols("tally_ledgers", TDSCOLS);
   const why = body.why === "wanted" ? "wanted" : "counter";
   const kept: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, updated: 0, kept };
@@ -1345,7 +1372,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 2000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim(), dtype: deducteeType(l) }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   if (!rows.length) return reply(200, out);
@@ -1366,6 +1393,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
       if (m40 && r.state) o.state = r.state;
       if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
+      if (m73 && r.tds) Object.assign(o, r.tds);
       if (m32) { o.tally_guid = r.guid || null; o.alter_id = r.alter; }
       fresh.push(o);
       continue;
@@ -1389,6 +1417,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
     if (m40 && r.state) o.state = r.state;
     if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
+    if (m73 && r.tds) Object.assign(o, r.tds);
     if (m32) { o.alter_id = r.alter; if (!have.tally_guid && r.guid && !byGuid.has(r.guid)) o.tally_guid = r.guid; }
     const was = have.open_sent ?? have.open, sent = was === null || was === undefined ? null : Math.round(Number(was) * 100) / 100;
     if (sent === null || sent !== r.open) opened.push({ ...o, open: r.open, open_sent: r.open });
