@@ -59,16 +59,16 @@ $lq = Join-Path $env:BRIDGE_DIST 'ledreq'
 $need = 'ledlist-chunk.xml', 'ledlist-tail.xml', 'ledlist-chunk-242.xml', 'ledbyname.xml', 'natures-chunk.xml', 'natures-tail.xml'
 $miss = @($need | Where-Object { -not (Test-Path (Join-Path $lq $_)) })
 if ($miss.Count) { foreach ($c in $M1, $M2, $M3, $M4, $M5) { MRes $c 'HARNESS' "the ref's requests are not in bridge-dist\ledreq: $($miss -join ', ')" }; return }
-$T = @{}; foreach ($n in $need) { $T[$n] = (Get-Content (Join-Path $lq $n) -Raw).Trim() }
+$T = @{}; foreach ($n in $need) { $RQ[$n] = (Get-Content (Join-Path $lq $n) -Raw).Trim() }
 Info "tdsm: the ref's requests from $lq ($(Get-Content (Join-Path $lq 'SOURCE.txt') -TotalCount 1 -ErrorAction SilentlyContinue))"
 function Req([string]$tpl, [int64]$a, [int64]$u) { $tpl.Replace('@@CO@@', (LE $co1)).Replace('111111', "$a").Replace('222222', "$u") }
-function ByName([string]$name) { $T['ledbyname.xml'].Replace('@@CO@@', (LE $co1)).Replace('@@NAME@@', (LE $name)) }
+function ByName([string]$name) { $RQ['ledbyname.xml'].Replace('@@CO@@', (LE $co1)).Replace('@@NAME@@', (LE $name)) }
 # the natures as the bridge reads them: MasterID chunks of 5,000 up to the highest master number, then the open end
 function NatRead {
   $bound = AltM; $after = [int64]0; $all = ''; $times = @(); $ok = $true
   while ($true) {
     $tail = ($after -ge $bound)
-    $r = TPost (Req $(if ($tail) { $T['natures-tail.xml'] } else { $T['natures-chunk.xml'] }) $after $(if ($tail) { 0 } else { $after + 5000 }))
+    $r = TPost (Req $(if ($tail) { $RQ['natures-tail.xml'] } else { $RQ['natures-chunk.xml'] }) $after $(if ($tail) { 0 } else { $after + 5000 }))
     $times += $r.ms; if (-not $r.ok) { $ok = $false; break }
     $all += $r.body
     if ($tail) { break }; $after += 5000
@@ -115,7 +115,7 @@ try {
   MRes $M1 $(if ($n1 -and $n2 -and $k.c -ge 4) { 'PASS' } else { 'HARNESS' }) ("natures by keys {0}/{1}; ledgers by XML: created {2}, errors {3}" -f $n1, $n2, $k.c, $k.e)
 
   Say '---- tdsm: the ledger requests'
-  $ch = TPost (Req $T['ledlist-tail.xml'] 0 0); XSave 'ledlist-243.xml' $ch.body
+  $ch = TPost (Req $RQ['ledlist-tail.xml'] 0 0); XSave 'ledlist-243.xml' $ch.body
   $bn = TPost (ByName $LDC); XSave 'ledbyname-ldc.xml' $bn.body
   $bd = TPost (ByName $DUTY); $bs = TPost (ByName $SPC)
   $blk = { param($t, $name) [regex]::Match($t, '(?s)<LEDGER NAME="' + [regex]::Escape((LE $name)) + '"[^>]*>.*?</LEDGER>').Value }
@@ -187,14 +187,14 @@ try {
     $bound = AltM; $after = [int64]0
     while ($true) {
       $tail = ($after -ge $bound); $u = if ($tail) { 0 } else { $after + 2000 }
-      $null = Timed $(if ($tail) { "from $($after + 1)" } else { "$($after + 1)-$u" }) $size 'FinComLedgers' (Req $(if ($tail) { $T['ledlist-tail.xml'] } else { $T['ledlist-chunk.xml'] }) $after $u)
-      if (-not $tail) { $null = Timed "$($after + 1)-$u" $size 'FinComLedgers 2.4.2' (Req $T['ledlist-chunk-242.xml'] $after $u) }
+      $null = Timed $(if ($tail) { "from $($after + 1)" } else { "$($after + 1)-$u" }) $size 'FinComLedgers' (Req $(if ($tail) { $RQ['ledlist-tail.xml'] } else { $RQ['ledlist-chunk.xml'] }) $after $u)
+      if (-not $tail) { $null = Timed "$($after + 1)-$u" $size 'FinComLedgers 2.4.2' (Req $RQ['ledlist-chunk-242.xml'] $after $u) }
       if ($tail) { break }; $after = $u
     }
     $after = [int64]0
     while ($true) {
       $tail = ($after -ge $bound)
-      $null = Timed $(if ($tail) { "from $($after + 1)" } else { "$($after + 1)-$($after + 5000)" }) $size 'FinComTdsNatures' (Req $(if ($tail) { $T['natures-tail.xml'] } else { $T['natures-chunk.xml'] }) $after $(if ($tail) { 0 } else { $after + 5000 }))
+      $null = Timed $(if ($tail) { "from $($after + 1)" } else { "$($after + 1)-$($after + 5000)" }) $size 'FinComTdsNatures' (Req $(if ($tail) { $RQ['natures-tail.xml'] } else { $RQ['natures-chunk.xml'] }) $after $(if ($tail) { 0 } else { $after + 5000 }))
       if ($tail) { break }; $after += 5000
     }
     foreach ($n in $LDC, $DUTY, 'TM Ledger 00007') { $null = Timed $n $size 'FinComLedgerByName' (ByName $n) }
