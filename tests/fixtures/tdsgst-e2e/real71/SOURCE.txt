@@ -1,3 +1,3 @@
-TallyPrime 7.1 (Rel.7.1_gold, tally.exe 1.1.7.1), FinCom Bridge 2.4.1 committed setup SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a
-GitHub Actions run 38072484999 (workflow tally-versions.yml, mode tdsgst, branch tally-versions a6396cb8b), 10-Oct-2026; results: spike-results/versions/38072484999-7.1-tdsgst on tally-versions
-Test company only (FinCom Spike Co); the Day Book export was the same for every month (Tally ignores the period), kept once a phase
+TallyPrime 7.1 (Rel.7.1_gold, tally.exe 1.1.7.1), FinCom Bridge 2.4.2 built from source at next-gsttype 135d37bc (the request and the strip of the release build; the gate's own tdsgst run on the committed setup replaces this)
+GitHub Actions run 38103142466 (workflow tally-versions.yml, mode tdsgst, branch tally-versions, from_source=yes), 11-Oct-2026; results: spike-results/versions/38103142466-7.1-tdsgst on tally-versions
+Test company only (FinCom Spike Co); the Day Book export was the same for every month (Tally ignores the period), kept once a phase; the motor car ledger's ineligible credit set in its GST details (Tally then keeps the blocked mark on the purchase line)
