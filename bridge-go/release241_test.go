@@ -14,19 +14,20 @@ import (
 // request shape changed) with 2.4.0's decision kept as history; the table and its hash unchanged (TestAllowListUnchanged);
 // the add-on unchanged from 2.4.0 (no dp= line); the notes and the test sheet
 func TestRelease241VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.1" {
+	if BridgeVersion != "2.4.2" { // 2.4.2 (release242_test.go): 2.4.1's decision kept as history
+
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range []string{
-		"allowed for 2.4.1 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed",
+		"as for 2.4.1: the owner's standing decision of 2026-10-06: no request on the list and no request shape changed",
 		"as for 2.4.0: the owner's decision of 2026-10-07"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0"} {
+	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0", "2.4.1"} {
 		if strings.Contains(al, "allowed for "+v+" by") {
 			t.Errorf("the %s line is still an exception line (release-check accepts one version only)", v)
 		}
@@ -94,7 +95,7 @@ func TestRelease241AllowListStep4(t *testing.T) {
 	if newest < lastDate {
 		t.Fatalf("the allow-list changed since %s (%s) but its newest 're-measured on' is %q", lastDate, lastHash, newest)
 	}
-	if !strings.Contains(al, "re-measured on "+newest) || !regexp.MustCompile(`re-measured on `+newest+`[^\n]*allowed for 2\.4\.1`).MatchString(al) {
-		t.Error("the dated line does not name 2.4.1")
+	if !strings.Contains(al, "re-measured on "+newest) || !regexp.MustCompile(`re-measured on `+newest+`[^\n]*allowed for `+regexp.QuoteMeta(BridgeVersion)).MatchString(al) {
+		t.Errorf("the dated line does not name %s", BridgeVersion)
 	}
 }

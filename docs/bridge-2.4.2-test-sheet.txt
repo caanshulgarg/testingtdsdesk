@@ -1,0 +1,45 @@
+FINCOM 2.4.2 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.2.exe
+Fingerprint: (filled in at the build; compare with the .sha256 file next to the setup)
+
+What 2.4.2 changes (the full notes: docs/bridge-2.4.2-notes.md):
+1. Each entry the bridge sends carries its GST type as Tally stores it: the party's registration type and country,
+   reverse charge, and per line the nature of the transaction (SEZ, export, with or without payment), the taxability
+   (taxable, nil-rated, exempt, non-GST), goods or services and the blocked-credit (17(5)) mark.
+2. The request to Tally is the same as in 2.4.1 (nothing more is asked of Tally; the bridge keeps more of the answer).
+3. FinCom's cloud stores the type with the entry (migration 72, run on staging before the tally-ingest of 2.4.2).
+The add-on is 2.4.1's. The two data locations (one company in two places) move to 2.4.3.
+
+Before you start: migration 72 has run on staging and the tally-ingest of 2.4.2 is deployed; you are signed in to FinCom as
+the owner; TallyPrime 7.1 is open on NWS144 with GARG SHEKHAR & COMPANY. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.4.2.exe and compare its fingerprint. The add-on is unchanged: nothing to reload.
+   You should see: the tray says FinCom Bridge 2.4.2; FinCom's Tally page shows version 2.4.2.
+
+CHECK 2 - A SALE TO AN SEZ UNIT
+   Make a Sales entry of Rs 1 to a party whose GST details say SEZ (or set the nature "Sales to SEZ - Taxable" on the
+   sales line), narration "TRIAL 242 sez".
+   You should see: the entry in FinCom's books within a few seconds; on the GST page the entry is an SEZ supply (table
+   6B), not a regular B2B invoice.
+
+CHECK 3 - A PURCHASE WITH BLOCKED CREDIT
+   On a ledger whose GST details say "Ineligible for input credit" (a motor car, food), make a Purchase of Rs 1,
+   narration "TRIAL 242 blocked".
+   You should see: on the GST page its tax is not in the eligible input credit (GSTR-3B 4(A)(5)) but shown as blocked.
+
+CHECK 4 - NOTHING SLOWER
+   Save an ordinary Journal of Rs 1, narration "TRIAL 242 speed".
+   You should see: it is in FinCom's books as fast as with 2.4.1 (a few seconds); the log shows the entry request
+   answered in well under 2 seconds.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.1)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.1). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.1 for your line. Entries 2.4.1 sends carry no
+   GST type; the ones 2.4.2 sent keep theirs. Automatic updates stay off on this computer until FinCom turns them on again.
