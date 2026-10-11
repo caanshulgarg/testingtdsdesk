@@ -147,8 +147,10 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			err = fmt.Errorf("Tally's answer to the natures of payment could not be read: %s", cut(flat(raw), 120))
 		}
 		if err != nil {
-			if gaveWay(err) {
-				return false, err // not sent (a posting, FinCom's stop): the round goes on later, as the ledgers' would
+			if gaveWay(err) || (!tallyNoAnswer(err) && probeHold(port) != nil) {
+				// not sent (a posting, FinCom's stop, Tally still busy with a request it did not answer): the round goes on
+				// later, as the ledgers' would
+				return false, err
 			}
 			// any other failure never holds the ledger list: it goes on without the natures this round. Tally not
 			// answering twice: not asked again until the bridge is updated

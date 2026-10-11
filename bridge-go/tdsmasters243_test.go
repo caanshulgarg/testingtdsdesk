@@ -282,22 +282,70 @@ func TestTDS243NaturesNeverHoldLedgers(t *testing.T) {
 		t.Fatalf("natures sent from a round that did not read them: %v", c.ledList)
 	}
 	c.mu.Unlock()
-	// Tally drops the natures request twice: counted, then not asked again for this version
+	// Tally drops the natures request twice: counted, then not asked again for this version (natureList itself: the
+	// round's other requests after a dropped one wait for Tally as any request does)
 	mode = "closed"
+	st2 := M{}
 	for i := 1; i <= 2; i++ {
+		probeMu.Lock()
+		delete(probes, f.port) // Tally answered its small check: requests go again
+		probeMu.Unlock()
+		ls := M{"bound": int64(10)}
 		n0 := f.n(natListID)
-		runNow(t, "now")
-		st = readKeepState(syncFolder(zz))
-		if f.n(natListID) == n0 {
-			t.Fatalf("round %d: the natures were not asked", i)
+		ok, err := newRun("now", fmt.Sprintf("n%d", i)).natureList(zz, f.port, st2, ls, func() bool { return true }, func() {})
+		if !ok || err != nil || f.n(natListID) != n0+1 || !truthy(ls["natSkip"]) || natOfRound(ls) != nil {
+			t.Fatalf("drop %d: %v %v asked %d, %v", i, ok, err, f.n(natListID)-n0, ls)
 		}
 	}
-	if str(st["natOffVer"]) != BridgeVersion {
-		t.Fatalf("not switched off after two: %v %v", st["natMiss"], st["natOffVer"])
+	if str(st2["natOffVer"]) != BridgeVersion {
+		t.Fatalf("not switched off after two: %v", st2)
 	}
+	// Tally still busy with the dropped request: the natures wait with the round (not given up, not counted)
+	ls0 := M{}
+	if ok, err := newRun("now", "n2b").natureList(zz, f.port, M{}, ls0, func() bool { return true }, func() {}); ok || err == nil || truthy(ls0["natDone"]) {
+		t.Fatalf("a busy Tally: %v %v %v", ok, err, ls0)
+	}
+	probeMu.Lock()
+	delete(probes, f.port)
+	probeMu.Unlock()
 	n0 := f.n(natListID)
-	runNow(t, "now")
-	if f.n(natListID) != n0 {
+	ls := M{}
+	if ok, err := newRun("now", "n3").natureList(zz, f.port, st2, ls, func() bool { return true }, func() {}); !ok || err != nil || f.n(natListID) != n0 || !truthy(ls["natSkip"]) {
 		t.Fatal("the natures were asked again in the same version")
+	}
+}
+
+// Tally's real answers to the 2.4.3 requests exactly as built, on TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (tally-versions mode
+// tdsm, run 38161708408; testdata/tdsfields243/tdsm-<release>/): the ledger list and the ledger by name carry the duty
+// ledger's nature, the special rate and every field of the certificate; the natures request, chunked, carries each nature's
+// section, rates and threshold
+func TestTDS243FiveReleases(t *testing.T) {
+	for _, rel := range []string{"3.0", "4.1", "5.1", "6.2", "7.1"} {
+		d := filepath.Join("testdata", "tdsfields243", "tdsm-"+rel)
+		for _, f := range []string{"ledlist-243.xml.gz", "ledbyname-ldc.xml.gz"} {
+			rows, _ := ledRowsOf(gz242(t, filepath.Join(d, f)))
+			by := map[string]ledRow{}
+			for _, r := range rows {
+				by[r.name] = r
+			}
+			l := by["FM LDC Party"]
+			if l.ldc != `[["FM Prof Fees 194J","20260401","20270331","197","LDC197CERT0001","1","500000.00"]]` {
+				t.Errorf("%s %s: the certificate %q", rel, f, l.ldc)
+			}
+			if f == "ledlist-243.xml.gz" && (by["FM TDS 194J"].nature != "FM Prof Fees 194J" || by["FM Special Party"].special != "1") {
+				t.Errorf("%s: nature %q, special %q", rel, by["FM TDS 194J"].nature, by["FM Special Party"].special)
+			}
+		}
+		nat, _ := natRowsOf(gz242(t, filepath.Join(d, "natures-243.xml.gz")))
+		want := map[string]string{"FM Contract 194C": `[["20260401","194C","1","2","20","20","30000.00",""]]`, "FM Prof Fees 194J": `[["20260401","194J","10","10","20","20","50000.00",""]]`}
+		if len(nat) != 2 {
+			t.Errorf("%s: %d natures", rel, len(nat))
+		}
+		for _, x := range nat {
+			a := arr(x)
+			if want[str(at(a, 3))] != jsonText(at(a, 4)) {
+				t.Errorf("%s: %v", rel, a)
+			}
+		}
 	}
 }

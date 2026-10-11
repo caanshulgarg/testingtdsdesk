@@ -51,7 +51,8 @@ for (const [how, x] of [["Tally's Day Book export", notExempt(DAYBOOK)], ["the c
   ok(J(v.checks || []) === "[]", how + ": no accuracy note (" + J(v.checks) + ")");
   // ---- 2. lines without TDS are unchanged: everything but the TDS details reads as with the TDS lists emptied
   const bare = parseDay(noTds(x)), bv = bare.vouchers[0] || {};
-  ok(J(bare.lines) === J(r.lines) && J({...bv, tds: null}) === J({...v, tds: null}) && J(bv.tds) === "[]",
+  // (bridge 2.4.3: the TDS block's reference, TAXNAME, is read into "tdsx" too: emptied with the block)
+  ok(J(bare.lines) === J(r.lines) && J(Object.fromEntries(Object.entries(bv).filter(([k]) => k !== "tds" && k !== "tdsx"))) === J(Object.fromEntries(Object.entries(v).filter(([k]) => k !== "tds" && k !== "tdsx"))) && J(bv.tds) === "[]",
     how + ": the ledger lines and every other detail read as without the TDS block");
 }
 // the Day Book and the collection agree (the proof's comparison)

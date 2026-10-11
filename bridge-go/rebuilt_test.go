@@ -826,7 +826,7 @@ func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
 				t.Errorf("a slice crosses a month: %s-%s", a, z)
 			}
 			slices = append(slices, a+"-"+z)
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID: // 2.1.4: the plain ledger and group lists too
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID, natListID: // 2.1.4: the plain ledger and group lists too; 2.4.3: the natures
 		default:
 			t.Errorf("Update now sent %q", id)
 		}
