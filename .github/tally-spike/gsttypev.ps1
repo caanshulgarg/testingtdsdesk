@@ -47,22 +47,37 @@ try {
     $x = $x -replace '(<LEDGERNAME>Motor Car</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-500000.00</AMOUNT>)', ('$1<GSTOVRDNINELIGIBLEITC>' + $vv[1] + '</GSTOVRDNINELIGIBLEITC>')
     $list += [pscustomobject]@{ id = $vv[0]; xml = $x }
   }
+  $made = @(); $bad = @()
   # the item invoices (as push/data.ps1 makes them, the form every release took): I01 to the SEZ party under LUT with the
   # nature given on the item and on its accounting allocation; I02 the same with no nature given (what Tally works out)
   $null = Imp 'All Masters' '<LEDGER NAME="Sales Items" ACTION="Create"><NAME.LIST><NAME>Sales Items</NAME></NAME.LIST><PARENT>Sales Accounts</PARENT><GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><AFFECTSSTOCK>Yes</AFFECTSSTOCK></LEDGER>' 'gsttype ledger Sales Items'
-  foreach ($iv in @(@('I01', $true), @('I02', $false))) {
-    $ov = if ($iv[1]) { '<GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNTYPEOFSUPPLY>Goods</GSTOVRDNTYPEOFSUPPLY><GSTOVRDNNATURE>Sales to SEZ - LUT/Bond</GSTOVRDNNATURE>' } else { '' }
-    $x = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>FC/26-27/' + $iv[0] + '</VOUCHERNUMBER>' +
-      '<PARTYLEDGERNAME>Gamma SEZ Unit</PARTYLEDGERNAME><PARTYNAME>Gamma SEZ Unit</PARTYNAME><BASICBUYERNAME>Gamma SEZ Unit</BASICBUYERNAME><PARTYGSTIN>29AABCG3333C1Z1</PARTYGSTIN><PLACEOFSUPPLY>Karnataka</PLACEOFSUPPLY><STATENAME>Karnataka</STATENAME>' +
-      '<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE><COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>' + $iv[0] + ' item invoice, SEZ under LUT</NARRATION>' +
+  # run 38100635902: 6.2 and 7.1 said "Voucher date is missing" for the invoice form on this company; three forms tried, the
+  # first Tally takes is kept as I01 (nature given) and I02 (none given): A as push/data.ps1, B with the date as an
+  # attribute and EFFECTIVEDATE, C under a voucher type of its own ("GST Item Sales", parent Sales, automatic numbering)
+  $null = Imp 'All Masters' '<VOUCHERTYPE NAME="GST Item Sales" ACTION="Create"><NAME.LIST><NAME>GST Item Sales</NAME></NAME.LIST><PARENT>Sales</PARENT><NUMBERINGMETHOD>Automatic</NUMBERINGMETHOD><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AFFECTSSTOCK>Yes</AFFECTSSTOCK></VOUCHERTYPE>' 'gsttype voucher type GST Item Sales'
+  function XItem($id, [bool]$nat, $form) {
+    $ov = if ($nat) { '<GSTOVRDNTAXABILITY>Taxable</GSTOVRDNTAXABILITY><GSTOVRDNTYPEOFSUPPLY>Goods</GSTOVRDNTYPEOFSUPPLY><GSTOVRDNNATURE>Sales to SEZ - LUT/Bond</GSTOVRDNNATURE>' } else { '' }
+    $vt = if ($form -eq 'C') { 'GST Item Sales' } else { 'Sales' }
+    $open = if ($form -eq 'B') { '<VOUCHER DATE="20260503" VCHTYPE="' + $vt + '" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE><EFFECTIVEDATE>20260503</EFFECTIVEDATE>' } else { '<VOUCHER VCHTYPE="' + $vt + '" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20260503</DATE>' }
+    $no = if ($form -eq 'C') { '' } else { '<VOUCHERNUMBER>FC/26-27/' + $id + $form + '</VOUCHERNUMBER>' }
+    return $open + '<VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME>' + $no +
+      '<PARTYLEDGERNAME>Gamma SEZ Unit</PARTYLEDGERNAME><PARTYNAME>Gamma SEZ Unit</PARTYNAME><BASICBUYERNAME>Gamma SEZ Unit</BASICBUYERNAME>' +
+      '<PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>' + $id + ' item invoice, SEZ under LUT (form ' + $form + ')</NARRATION>' +
       '<LEDGERENTRIES.LIST><LEDGERNAME>Gamma SEZ Unit</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-400.00</AMOUNT></LEDGERENTRIES.LIST>' +
-      '<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Laptop</STOCKITEMNAME><GSTHSNNAME>8471</GSTHSNNAME>' + $ov + '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><RATE>200.00/Nos</RATE><AMOUNT>400.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY>' +
+      '<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Laptop</STOCKITEMNAME>' + $ov + '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><RATE>200.00/Nos</RATE><AMOUNT>400.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY>' +
       '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales Items</LEDGERNAME>' + $ov + '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>400.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST></VOUCHER>'
-    $list += [pscustomobject]@{ id = $iv[0]; xml = $x }
   }
-  $made = @(); $bad = @()
+  foreach ($iv in @(@('I01', $true), @('I02', $false))) {
+    $got = ''
+    foreach ($form in 'A', 'B', 'C') {
+      $r = Imp 'Vouchers' (XItem $iv[0] $iv[1] $form) "gsttype $($iv[0]) form $form"; $k = XCount $r
+      Info ("gsttype {0} form {1}: created {2}, errors {3}; Tally said: {4}" -f $iv[0], $form, $k.c, $k.e, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Substring(0, [Math]::Min(400, (("$r" -replace '\s+', ' ') -replace '^.*?<RESPONSE>', '<RESPONSE>').Length)))
+      if ($k.c -eq 1) { $got = $form; break }
+    }
+    if ($got) { $made += $iv[0] } else { $bad += "$($iv[0]) (no form taken)" }
+  }
   foreach ($v in $list) { $k = XCount (Imp 'Vouchers' $v.xml "gsttype $($v.id)"); if ($k.c -eq 1) { $made += $v.id } else { $bad += "$($v.id) (created $($k.c), errors $($k.e): $($k.line))" } }
-  XRes $TX1 $(if ($made.Count -eq $list.Count) { 'PASS' } else { 'HARNESS' }) ("{0} of {1} entries made by XML; refused: {2}" -f $made.Count, $list.Count, $(if ($bad.Count) { $bad -join '; ' } else { 'none' }))
+  XRes $TX1 $(if ($made.Count -eq $list.Count + 2) { 'PASS' } else { 'HARNESS' }) ("{0} of {1} entries made by XML; refused: {2}" -f $made.Count, ($list.Count + 2), $(if ($bad.Count) { $bad -join '; ' } else { 'none' }))
 
   Say '---- gsttype: the entry request for each entry'
   $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>XgV</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="XgV" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, VOUCHERNUMBER, NARRATION</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 60
