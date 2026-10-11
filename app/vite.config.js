@@ -62,7 +62,7 @@ function legacy(mode) {
         const v = crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12);
         html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + v + '"');
         // stability batch 2: fetched from the start (it was found only when the page's end was read: 2.1 s on an office PC)
-        html = html.replace("<!--fincom-preload-->", '<link rel="preload" as="script" href="./legacy.js?v=' + v + '">');
+        html = html.replace("<!--fincom-preload-->", '<link rel="preload" as="script" fetchpriority="low" href="./legacy.js?v=' + v + '">');
       }
       // the frame drawn before the program loads (index.html, stability batch 1): its little script gets this build's
       // storage prefix (the test build keeps its own, tdsdesk-test:) and id, and is allowed by its hash, the one inline script
