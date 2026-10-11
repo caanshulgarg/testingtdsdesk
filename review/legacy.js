@@ -18388,7 +18388,9 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
+      // stability batch 1: until the firm's first sync after signing in, the page shows FinCom opening (Main.jsx, OpenLoader)
+      // rather than an empty list filling in; at most 15 s
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; S.signInOpening = Date.now(); setTimeout(render, 15000); toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
         // back where you left off (smart moves 7), once the firm's clients are known, if the page is still the one signed in on
         render(); const at = Smart.here();
         loadAccount(true).then(() => { render(); setTimeout(() => Smart.afterSignIn(at), 0); }); },
