@@ -247,3 +247,4 @@ run_book_sources.js                   120
 # clean-up batch 1, "Find your way": the sidebar tree, page titles, old addresses, count words, the phone bar
 run_nav_clean.py                      300  TDSDESK_SITE=../app/dist-test
 run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
+run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test

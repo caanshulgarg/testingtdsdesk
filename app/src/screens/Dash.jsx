@@ -3,6 +3,7 @@
 // to one line when done) and the four counts, each opening its page, with the client's Tally link in one line once the
 // checklist no longer shows it. The ask box is Look up's own (and "/" opens it); TDS, the bank statement and sales are
 // under "More about this client", folded; what was posted lately is on Purchase → In Tally.
+import HowPage from "../parts/HowPage.jsx";
 import { useEffect, useState } from "react";
 import { OnbCard } from "../parts/Notes.jsx";
 import { TallyLinkLine } from "../parts/TallyLink.jsx";
@@ -42,7 +43,7 @@ export default function Dash() {
   let tdsBooks = null;
   if (bk) { try { tdsBooks = TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { tdsBooks = null; } }
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
-  return (
+  return (<>
     <section className="dash" data-intro={intro ? "" : undefined}>
       <OnbCard co={co} />
       {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open) */}
@@ -51,7 +52,7 @@ export default function Dash() {
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
         <Tile tone="amber" Icon={ReceiptText} label="To review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
         <Tile tone="indigo" Icon={Send} label="Ready to post" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need you" : "")} go="post" />
-        <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
+        <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc ? bc.review : "—"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
       </div>
       <details className="dash-more" data-dash-more="">
         <summary>More about this client</summary>
@@ -76,5 +77,7 @@ export default function Dash() {
         </div>
       </details>
     </section>
-  );
+    {/* clean-up batch 3: what the page is for, folded, under it */}
+    <HowPage page="dash" />
+  </>);
 }

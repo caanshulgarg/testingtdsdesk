@@ -16,8 +16,8 @@ const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, C
 // something wrong with reading bills on this computer
 function ClientInbox() {
   const has = Cloud.on() && docqFor(S.coId).length;
-  return <>{has ? <DocqPanel cid={S.coId || ""} /> : <p className="note">Nothing is waiting for this client. Documents your office sends in automatically (through a drop key, see Settings) appear here.</p>}
-    <div className="row" style={{ marginTop: 10 }}><button className="btn small" onClick={() => navHome("inbox")}>Inbox for all clients</button></div></>;
+  // clean-up batch 3: empty, one sentence and one next step; the Inbox for all clients is Today's "To read", one click away
+  return has ? <DocqPanel cid={S.coId || ""} /> : <p className="note" data-inbox-empty="">Nothing is waiting for this client. <button className="linkbtn" onClick={() => goSettings("account")}>How to send documents in</button></p>;
 }
 
 function Screen() {

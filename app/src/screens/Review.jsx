@@ -30,7 +30,7 @@ function revCols(rows, sel, nSel) {
     { k: "no", role: "number", label: "Bill no.", filter: <ColFunnel t="rev" k="no" label="Bill no." />, v: ({ e }) => e.x.invoiceNo || "", cell: ({ e }) => e.x.invoiceNo || "—" },
     { k: "sup", role: "party", label: "Supplier", cls: "pt", filter: <ColFunnel t="rev" k="sup" label="Supplier" />, v: ({ e }) => e.x.vendorName || e.fileName || "",
       cell: ({ e }, p) => <>
-        <button className="linkbtn pn" onClick={() => revOpen(e.id)}>{e.x.vendorName || e.fileName || "—"}</button>
+        <button className="linkbtn pn" title={e.x.vendorName || e.fileName || undefined} onClick={() => revOpen(e.id)}>{e.x.vendorName || e.fileName || "—"}</button>
         <div className="nr">{e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN"}</div>
         <div className={"nr " + (p.ledOk ? "led-ok" : "led-bad")}>{p.led ? "→ " + p.led + (p.ledOk ? " ✓" : " · not in Tally") : "→ no ledger yet"}</div>
         {e.postFailedAt && e.postError && <div className="nr bad">Tally refused: <Msg text={e.postError} /></div>}
@@ -59,6 +59,15 @@ function revCols(rows, sel, nSel) {
   ];
 }
 
+// clean-up batch 3: the list fits the page at 1440; "This year vs limit" is under Columns (off until chosen; the bill
+// itself shows the limit too). S.revCols: {key: true | false}, for this visit
+const REV_OPTIONAL = [["look", "This year vs limit", false]];
+const revColShown = (k) => { const o = REV_OPTIONAL.find((x) => x[0] === k); const v = S.revCols && S.revCols[k]; return o ? (v == null ? o[2] : !!v) : true; };
+function RevColumns() {
+  return <details className="colpick" data-rev-cols=""><summary className="btn small">Columns</summary>
+    <div className="colpick-box">{REV_OPTIONAL.map(([k, label]) => <label key={k} className="chk"><input type="checkbox" checked={revColShown(k)} onChange={() => { S.revCols = Object.assign({}, S.revCols, { [k]: !revColShown(k) }); render(); }} /> {label}</label>)}</div></details>;
+}
+
 // To review, Duplicates and Deleted, with their counts: now in the one row of tabs at the top (TopBar.jsx; review of
 // 02-Oct-2026: two rows of tabs, both with "To review"); kept for any page that has no tab row of its own
 export function StatusFilters() {
@@ -84,20 +93,31 @@ export function ReviewTable() {
       </div>
       <UploadResult />
       <QueueDone />
-      {!rows.length && !all.length ? <div className="bk-none lt-empty" data-list-empty="">Nothing to review. Use <b>Upload bills</b> at the top right to add this client’s bills.</div> : <>
+      {!rows.length && !all.length ? <div className="bk-none lt-empty" data-list-empty="">Nothing to review yet. <button className="linkbtn" onClick={() => doAct("uploadHere")}>Upload bills</button></div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"
             onChange={(ev) => { S.revQuery = ev.target.value; render(); }} />
           {S.revQuery && !revColOn() && <span className="note">{rows.length} of {all.length} shown</span>}
+          <RevColumns />
         </div>
         <ChipBar t="rev" shown={rows.length} total={all.length + " bills"} />
         {/* the one list table (spec K6): column order, sorting, sticky header, the count and totals at the foot */}
-        <ListTable name="rev" className="bk-table revtbl" cols={revCols(rows, sel, nSel)} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
+        <ListTable name="rev" className="bk-table revtbl" cols={revCols(rows, sel, nSel).filter((c) => revColShown(c.k))} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
           rowProps={(r, p) => ({ className: [sel.has(r.e.id) && "picked", p.miss && "needs", S.drawerOpen && S.selected === r.e.id && "open"].filter(Boolean).join(" ") || undefined })}
           empty={<>No bill matches the filter. <button className="linkbtn" onClick={() => { S.revQuery = ""; colChipAll("rev"); }}>Clear the filters</button> to see all {all.length}.</>} />
       </>}
     </div>
   );
+}
+
+// clean-up batch 3: the bar is one row; why nothing can be approved, and why the Tally check waits, sit behind one (i)
+// (data-why: the disabled buttons' reasons are said here, so parts/WhyNotes.jsx adds no line of its own)
+function Why({ none, tally }) {
+  if (!none && !tally) return null;
+  return <details className="ab-why" data-why="" data-ab-why="">
+    <summary title={[none, tally && NO_TALLY].filter(Boolean).join(". ")}><i className="ab-i" aria-hidden="true">i</i><span className="ab-why-w">{none ? "Why nothing is ready" : "Why the check waits"}</span></summary>
+    <div className="ab-why-pop" role="note">{none && <div className="none-ready" data-none-ready="">{none}</div>}{tally && <div className="note">{NO_TALLY}.</div>}</div>
+  </details>;
 }
 
 function ReviewBar() {
@@ -108,7 +128,7 @@ function ReviewBar() {
   if (picked.length) return (
     <div className="actionbar bk-actionbar">
       <div className="ab-left"><b>{picked.length} selected</b> <span className="muted">· TDS {money(r2(picked.reduce((a, r) => a + num(r.c.tds), 0)))}</span> <button className="linkbtn" onClick={() => doAct("revNone")}>Clear</button>
-        {noneReady(picked) && <div className="none-ready" data-none-ready="">{noneReady(picked)}</div>}</div>
+        <Why none={noneReady(picked)} tally={!live} /></div>
       <div className="ab-right">
         <button className="btn" onClick={() => doAct("revTdsOn")}>Book TDS</button>
         <button className="btn" onClick={() => doAct("revTdsOff")}>Do not book TDS</button>
@@ -122,7 +142,7 @@ function ReviewBar() {
   return (
     <div className="actionbar bk-actionbar">
       <div className="ab-left"><span className="bk-stat"><b>{rows.length}</b> to review</span><span className="bk-stat"><b>{ready.length}</b> ready to approve</span>
-        {!ready.length && noneReady(rows) && <div className="none-ready" data-none-ready="">{noneReady(rows)}</div>}</div>
+        <Why none={!ready.length && noneReady(rows)} tally={!live} /></div>
       <div className="ab-right">
         <button className="btn" disabled={!live} title={!live ? NO_TALLY : undefined} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
         <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} onClick={() => doAct("revApproveAll")}>Approve all that are ready ({ready.length})</button>

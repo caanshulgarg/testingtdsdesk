@@ -112,14 +112,15 @@ with sync_playwright() as p:
     ok(pg.locator("#app .actionbar [data-cannot-approve]").count() == 0 and pg.locator(DR + "[data-date-not-found]").count() == 0 and not pg.locator('#app .actionbar button:has-text("Approve")').is_disabled(),
        "C1/C4. the date typed: the line and the note go, Approve is live")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
-    # C1. the bulk buttons: nothing ready says why, counted from the drafts' missing lists
+    # C1. the bulk buttons: nothing ready says why, counted from the drafts' missing lists (clean-up batch 3: behind the
+    # bar's (i), so its words are read whether or not it is open)
     pg.evaluate("""() => { window.__dates = {}; Object.values(D().entries).filter(e => e.status === "draft").forEach(e => { window.__dates[e.id] = e.x.invoiceDate; e.x.invoiceDate = ""; }); render(); }"""); pg.wait_for_timeout(500)
     nr = pg.locator("#app .actionbar [data-none-ready]")
-    ok("Approve all that are ready (0)" in bar() and nr.count() == 1 and nr.inner_text().startswith("No bill is ready: ") and "need an invoice date" in nr.inner_text(),
-       "C1. 'Approve all that are ready (0)': 'No bill is ready: 4 need an invoice date' (%s)" % (nr.inner_text() if nr.count() else "-"))
+    ok("Approve all that are ready (0)" in bar() and nr.count() == 1 and nr.text_content().startswith("No bill is ready: ") and "need an invoice date" in nr.text_content(),
+       "C1. 'Approve all that are ready (0)': 'No bill is ready: 4 need an invoice date' (%s)" % (nr.text_content() if nr.count() else "-"))
     pg.click('#app input[aria-label="Select Delta Missing"]'); pg.wait_for_timeout(400)
     nr = pg.locator("#app .actionbar [data-none-ready]")
-    ok("Approve 1" in bar() and nr.count() == 1 and "1 needs an invoice date" in nr.inner_text(), "C1. one ticked, not ready: 'No bill is ready: 1 needs an invoice date' (%s)" % (nr.inner_text() if nr.count() else "-"))
+    ok("Approve 1" in bar() and nr.count() == 1 and "1 needs an invoice date" in nr.text_content(), "C1. one ticked, not ready: 'No bill is ready: 1 needs an invoice date' (%s)" % (nr.text_content() if nr.count() else "-"))
     pg.click('#app .actionbar button:has-text("Clear")'); pg.wait_for_timeout(300)
     pg.evaluate("""(id) => { Object.entries(window.__dates).forEach(([k, d]) => { if (D().entries[k]) D().entries[k].x.invoiceDate = d; }); delete D().entries[id]; S.selected = null; S.drawerOpen = false; refreshStats(S.coId); render(); }""", did); pg.wait_for_timeout(500)
     # approve one from its row, delete one
