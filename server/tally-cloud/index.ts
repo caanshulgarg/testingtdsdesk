@@ -1039,7 +1039,7 @@ async function bookFor(firm: string, company: string) {
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
 const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
-  ...partA(v) }));
+  ...partA(v), ...(v.gst ? { gst: v.gst } : {}) }));   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it
 // bridge 2.3.1 part A (migration 57): the rest of the entry, read by parse.js the same way on both paths (the days path and
 // the recorder's entry body): the e-invoice and e-way bill, the items, cost centres, bank and TDS details, due dates given
 // as dates, and the accuracy checks' plain words (none: []). Names cleaned as every other name. A voucher a parser without

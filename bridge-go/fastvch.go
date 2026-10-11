@@ -63,12 +63,38 @@ func liveFetchWild() []string {
 	return o
 }
 
+// 2.4.2 (round 44 part B; the owner's approval of 11-Oct-2026: "the bridge sends each entry's GST type"; the decision line
+// "allowed for 2.4.2 by the owner's decision of 2026-10-11" in docs/tally-allowlist.md): the fields of Tally's
+// whole-voucher answer that carry an entry's GST type, measured on real TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1
+// (tally-versions mode gsttype, runs 38099393603 and 38100635902; the same tags on every release; an item's and the
+// ledger line's under it as every release writes them in push-design run 37741662830's item invoices, testdata/fast234kinds): the party's GST
+// registration type, the buyer's country and the entry's reverse-charge mark; on each ledger line (and on an item and the
+// ledger line under it) the nature of the transaction (SEZ with or without payment, exports with payment or under LUT /
+// bond, ...), the taxability (Taxable, Nil Rated, Exempt, Non-GST), goods or services, the ineligible (blocked, 17(5))
+// input credit mark (Tally writes it on the line, from the ledger's own GST details or the line's override) and the
+// line's reverse-charge override. Kept by the strip only: NOT written into the FETCHLIST (Tally sends the whole voucher
+// anyway; the request's bytes and shape ce0e72f74e72 stay the ones measured), so the request is unchanged; the place of
+// supply (PLACEOFSUPPLY) and the party GSTIN were already kept. Stored values only; nothing else added
+var liveKeepGST242 = []string{
+	"GSTREGISTRATIONTYPE", "COUNTRYOFRESIDENCE", "ISREVERSECHARGEAPPLICABLE",
+	"ALLLEDGERENTRIES.GSTOVRDNNATURE", "ALLLEDGERENTRIES.GSTOVRDNTAXABILITY", "ALLLEDGERENTRIES.GSTOVRDNTYPEOFSUPPLY",
+	"ALLLEDGERENTRIES.GSTOVRDNINELIGIBLEITC", "ALLLEDGERENTRIES.GSTOVRDNISREVCHARGEAPPL",
+	"ALLINVENTORYENTRIES.GSTOVRDNNATURE", "ALLINVENTORYENTRIES.GSTOVRDNTAXABILITY", "ALLINVENTORYENTRIES.GSTOVRDNTYPEOFSUPPLY",
+	"ALLINVENTORYENTRIES.GSTOVRDNINELIGIBLEITC", "ALLINVENTORYENTRIES.GSTOVRDNISREVCHARGEAPPL",
+	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNNATURE", "ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNTAXABILITY",
+	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNTYPEOFSUPPLY", "ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNINELIGIBLEITC",
+	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.GSTOVRDNISREVCHARGEAPPL",
+}
+
 func fastApprovedPaths() map[string]bool {
 	m := map[string]bool{}
 	for _, f := range liveFetchFields() {
 		m[f] = true
 	}
 	for _, f := range liveFetchWild() {
+		m[f] = true
+	}
+	for _, f := range liveKeepGST242 {
 		m[f] = true
 	}
 	return m

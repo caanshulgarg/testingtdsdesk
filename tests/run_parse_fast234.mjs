@@ -10,6 +10,9 @@ import { fileURLToPath } from "url";
 import { parseDay } from "../server/tally-cloud/parse.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "fast234");
+// bridge 2.4.2: the entry's GST type (parse.js's "gst", from the fields the strip keeps since 2.4.2) is in the object answer only:
+// the Voucher collection answer of today's request never fetched those fields (tests/run_parse_gsttype.mjs reads them)
+const gst242 = (k) => /\.gst(\.|$)/.test(k);
 let fails = 0, n = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 // every field of the reader's output, by path, as text (so a difference names the field)
@@ -44,7 +47,7 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
     const a = flat(ct.d, "", {}), b = flat(cf.d, "", {});
     const moved = JSON.stringify(today.lines) === JSON.stringify(fast.lines) ? "" : " (the same lines in another order: the lines under the items after the party and tax lines, as Tally's Day Book gives them)";
     const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
-    const diff = keys.filter((k) => a[k] !== b[k]);
+    const diff = keys.filter((k) => !gst242(k) && a[k] !== b[k]);
     n++;
     ok(today.n === 1 && diff.length === 0, rel + " " + tgt + ": " + keys.length + " fields of parse.js's output, all the same" + moved +
       (diff.length ? "; differ: " + diff.slice(0, 12).map((k) => k + " today " + a[k] + " fast " + b[k]).join(" | ") : ""));
@@ -52,7 +55,7 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
     // the lines in the same order
     const bn = parseDay(fs.readFileSync(f("bynumber-stripped"), "utf8"));
     const c = flat(bn, "", {}), t0 = flat(today, "", {});
-    const k2 = [...new Set([...Object.keys(t0), ...Object.keys(c)])].sort(), d2 = k2.filter((k) => t0[k] !== c[k]);
+    const k2 = [...new Set([...Object.keys(t0), ...Object.keys(c)])].sort(), d2 = k2.filter((k) => !gst242(k) && t0[k] !== c[k]);
     ok(bn.n === 1 && d2.length === 0, rel + " " + tgt + " by number (stripped): " + k2.length + " fields, all the same, in the same order" +
       (d2.length ? "; differ: " + d2.slice(0, 12).map((k) => k + " today " + t0[k] + " by number " + c[k]).join(" | ") : ""));
   }
