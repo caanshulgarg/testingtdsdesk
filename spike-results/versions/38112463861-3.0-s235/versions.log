@@ -1,0 +1,269 @@
+[05:01:51] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-11, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-11, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[05:02:24] ---- the stub cloud and the bridge
+[ledger Spike Income] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[renum journal] 27 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.2.exe SHA-256 650bb9b5cdb33245bf6be62ac8bdc7fa6ad8e5f52dc7175620d00c34b33251d5; bridge source: e2ca66d665a3fad1a75f7dfa7d566e2d94f78f68 Bridge 2.4.2 built (each entry's GST type): setup SHA-256 650bb9b5…51d5 (program d5ff6977…e8e3), release log row (2.4.1 superseded), notes and test sheet fingerprint and build time (11-Oct-2026 10:12 IST); 2.4.1 assets moved to bridge-go-old; not published
+[05:02:30] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 3460)
+  INFO s235: the runner's clock Sun 05:02 (UTC) is outside office hours: KeepOfficeFrom 0, KeepOfficeTo 24 set
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.2, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-11 05:02:40  FinCom Bridge 2.4.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-11 05:02:40  FinCom Bridge 2.4.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-11 05:02:40  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-11 05:02:40  Recorder: re-scan of the add-on's files for 2.4.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-11 05:02:40  Check:  - 
+  bridge log: 2026-10-11 05:02:40  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+  bridge log: 2026-10-11 05:02:40  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+  bridge log: 2026-10-11 05:02:43  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-11 05:02:43  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-11 05:02:43  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-11 05:02:44  Company FinCom Spike Co: its Tally GUID 36d8398a-7a12-430d-97e9-027042ee28dc is held from now on
+  bridge log: 2026-10-11 05:02:44  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-11 05:02:44  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=209
+  bridge log: 2026-10-11 05:02:44  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=209)
+  bridge log: 2026-10-11 05:02:44  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=2 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge log: 2026-10-11 05:02:44  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading
+  INFO add-on: recorder files after start: none
+[05:03:26] ---- s235: FinCom's read stop and the held lines, a real failure, the Tally-not-open notification
+  INFO s235: bridge processes: pid 8344: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 4484: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 8344 | pid 7808: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  INFO s235: proxy beside Tally: True; bridge config TallyHost '127.0.0.2', CloudBeatSec '5', KeepOfficeFrom '0', KeepOfficeTo '24'
+  INFO s235: the bridge's starting point recorded: True
+[05:03:26] ---- s235 prep: three receipts by keys
+[shot] tds-001-gw0 (1024x768)
+[05:03:33] [tds] screen tds-001-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Q Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 upr-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datace...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-002-prep-A-vouchers (1024x768)
+[05:03:37] [tds] screen tds-002-prep-A-vouchers : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Pa ment No. 1 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print upr-26 Wednesday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra F-5: Payment Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa M...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-003-prep-A-receipt (1024x768)
+[05:03:41] [tds] screen tds-003-prep-A-receipt : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x upr-26 Wednesday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode ...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-004-prep-A-datebox (1024x768)
+[05:03:45] [tds] screen tds-004-prep-A-datebox : TallyPrime MANAGE {1' EDU 5: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt x Fl: Help FinCom Spike Co Voucher Date 24-2026 o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:03 AM 10/11/2026
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-005-prep-A-dated (1024x768)
+[05:03:48] [tds] screen tds-005-prep-A-dated : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-006-prep-A-account (1024x768)
+[05:03:52] [tds] screen tds-006-prep-A-account : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 10.00 Dr Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 020...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-007-prep-A-particular (1024x768)
+[05:03:56] [tds] screen tds-007-prep-A-particular : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 10.00 Dr Particulars Spike Income CurBal: 10.00 Cr Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning l...
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-prep-A-amount (1024x768)
+[05:04:00] [tds] screen tds-008-prep-A-amount : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 710.00 Dr Particulars Spike Income CurBa1: 710.00 Cr Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount 700.00 700.00 D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt : Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 ...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] tds-009-prep-A-saved (1024x768)
+[05:04:06] [tds] screen tds-009-prep-A-saved : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obN...
+[s235 prep-A] Tally: (none); line after -1 s: (no line)
+  INFO s235 prep A (31-10-2026): Tally (none); line after -1 s (no line)
+[shot] tds-010-gw0 (1024x768)
+[05:05:02] [tds] screen tds-010-gw0 : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obN...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-011-gw1 (1024x768)
+[05:05:06] [tds] screen tds-011-gw1 : TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange A: Accept Search O: Import E: Export M: E-mail FinCom p: print x 310ct-26 Saturday Amount Quit o Yes or No D: Delete X: Cancel Vch x Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning lat...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-012-gw2 (1024x768)
+[05:05:10] [tds] screen tds-012-gw2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Q Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 31-Oct-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Dat...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-013-prep-D1-vouchers (1024x768)
+[05:05:14] [tds] screen tds-013-prep-D1-vouchers : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obN...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-014-prep-D1-receipt (1024x768)
+[05:05:18] [tds] screen tds-014-prep-D1-receipt : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 310ct-26 Saturday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obN...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-015-prep-D1-datebox (1024x768)
+[05:05:21] [tds] screen tds-015-prep-D1-datebox : TallyPrime MANAGE {1' EDU 5: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt x Fl: Help FinCom Spike Co Voucher Date 1-11-2026 o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:05 AM 10/11/2026
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-016-prep-D1-dated (1024x768)
+[05:05:25] [tds] screen tds-016-prep-D1-dated : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa M...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-017-prep-D1-account (1024x768)
+[05:05:29] [tds] screen tds-017-prep-D1-account : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Cash • Current balance: 710.00 Dr Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-018-prep-D1-particular (1024x768)
+[05:05:33] [tds] screen tds-018-prep-D1-particular : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Cash • Current balance: 710.00 Dr Particulars Spike Income CurBal: 710.00 Cr Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" n...
+[keys] '300{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-019-prep-D1-amount (1024x768)
+[05:05:37] [tds] screen tds-019-prep-D1-amount : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 2 : Account Cash • Current balance: 1,010.00 Dr Particulars Spike Income Y: Data CurBal: 1,010.00 Cr Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount 300.00 300.00 D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt : Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] tds-020-prep-D1-saved (1024x768)
+[05:05:43] [tds] screen tds-020-prep-D1-saved : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q ...
+[s235 prep-D1] Tally: (none); line after -1 s: (no line)
+  INFO s235 prep D1 (1-11-2026): Tally (none); line after -1 s (no line)
+[shot] tds-021-gw0 (1024x768)
+[05:06:39] [tds] screen tds-021-gw0 : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-022-gw1 (1024x768)
+[05:06:42] [tds] screen tds-022-gw1 : TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange A: Accept Search O: Import E: Export M: E-mail FinCom p: print x 1-Nov-26 Sunday Amount Quit o Yes or No D: Delete X: Cancel Vch x Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL1...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-023-gw2 (1024x768)
+[05:06:46] [tds] screen tds-023-gw2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Sunday, I-Nov-2026 I-Nov-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q Windows Server 2025 Datacen...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-024-prep-D2-vouchers (1024x768)
+[05:06:50] [tds] screen tds-024-prep-D2-vouchers : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q ...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-025-prep-D2-receipt (1024x768)
+[05:06:54] [tds] screen tds-025-prep-D2-receipt : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 1-Nov-26 Sunday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q ...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-026-prep-D2-datebox (1024x768)
+[05:06:57] [tds] screen tds-026-prep-D2-datebox : TallyPrime MANAGE {1' EDU 5: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt x Fl: Help FinCom Spike Co Voucher Date 2-11-2026 o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:06 AM 10/11/2026
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-027-prep-D2-dated (1024x768)
+[05:07:01] [tds] screen tds-027-prep-D2-dated : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-028-prep-D2-account (1024x768)
+[05:07:05] [tds] screen tds-028-prep-D2-account : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 1,010.00 Dr Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-029-prep-D2-particular (1024x768)
+[05:07:09] [tds] screen tds-029-prep-D2-particular : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 1,010.00 Dr Particulars Spike Income Y: Data CurBal: 1,010.00 Cr Narration: Unity Quit Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ni...
+[keys] '400{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-030-prep-D2-amount (1024x768)
+[05:07:13] [tds] screen tds-030-prep-D2-amount : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Cash • Current balance: 1,410.00 Dr Particulars Spike Income Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co CurBa1: 1,410.00 Cr Narration: Unity Quit p: print x 2-Nov-26 Monday Amount 400.00 400.00 D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt : Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 528...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] tds-031-prep-D2-saved (1024x768)
+[05:07:19] [tds] screen tds-031-prep-D2-saved : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa ...
+[s235 prep-D2] Tally: (none); line after -1 s: (no line)
+  INFO s235 prep D2 (2-11-2026): Tally (none); line after -1 s (no line)
+[shot] tds-032-gw0 (1024x768)
+[05:08:15] [tds] screen tds-032-gw0 : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-033-gw1 (1024x768)
+[05:08:18] [tds] screen tds-033-gw1 : TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange A: Accept Search O: Import E: Export M: E-mail FinCom p: print x 2-Nov-26 Monday Amount Quit o Yes or No D: Delete X: Cancel Vch x Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-034-gw2 (1024x768)
+[05:08:22] [tds] screen tds-034-gw2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Q Z: Exchange CURRENT OATE Monday, 2-Nov-2026 2-Nov-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacen...
+  bridge log: 2026-10-11 05:04:02  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line baa600ab…): asking Tally by MasterID
+  bridge log: 2026-10-11 05:04:02  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-11 05:04:02  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line baa600ab…): taken: Tally's GUID 36d8398a-7a12-430d-97e9-027042ee28dc-00000003, AlterID 3
+  bridge log: 2026-10-11 05:04:02  Renumbering: made Receipt 1 of 31-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-11 05:04:56  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-11 05:04:56  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 6 ledger(s) (0.2s); saved
+  bridge log: 2026-10-11 05:04:57  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-11 05:04:57  Keeping FinCom Spike Co: the ledger list read (6 ledgers, 28 groups, 3 request(s)): 6 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-11 05:04:57  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=3 ALTMSTID=209
+  bridge log: 2026-10-11 05:04:57  Nightly catch-up: done (11 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  bridge log: 2026-10-11 05:05:38  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line c363d585…): asking Tally by MasterID
+  bridge log: 2026-10-11 05:05:38  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-11 05:05:38  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line c363d585…): taken: Tally's GUID 36d8398a-7a12-430d-97e9-027042ee28dc-00000004, AlterID 4
+  bridge log: 2026-10-11 05:05:38  Renumbering: made Receipt 2 of 01-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-11 05:07:14  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 835c3ef7…): asking Tally by MasterID
+  bridge log: 2026-10-11 05:07:14  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-11 05:07:14  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 835c3ef7…): taken: Tally's GUID 36d8398a-7a12-430d-97e9-027042ee28dc-00000005, AlterID 5
+  bridge log: 2026-10-11 05:07:14  Renumbering: made Receipt 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+s235 stopped: prep: the keys did not make the three receipts (A False, D1 False, D2 False) at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\s235v.ps1: line 251
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flowv.ps1: line 306
+at <ScriptBlock>, D:\a\_temp\17e6216e-abba-4689-be1e-491adf5d77a2.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+######## HARNESS s1 stop: three lines held, nothing asked: the harness stopped: prep: the keys did not make the three receipts (A False, D1 False, D2 False)
+######## HARNESS s2 lift: bodies and the delete with its GUID: the harness stopped: prep: the keys did not make the three receipts (A False, D1 False, D2 False)
+[05:08:22] ---- s3 restart: the held delete keeps its GUID
+s3 stopped: prep did not make D2 at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\s235v.ps1: line 316
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flowv.ps1: line 306
+at <ScriptBlock>, D:\a\_temp\17e6216e-abba-4689-be1e-491adf5d77a2.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+######## HARNESS s3 restart: the held delete keeps its GUID: the harness stopped: prep did not make D2
+[05:08:22] ---- s4 a real failure still counts
+[shot] tds-035-gw0 (1024x768)
+[05:08:23] [tds] screen tds-035-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Q Z: Exchange CURRENT OATE Monday, 2-Nov-2026 2-Nov-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacen...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] tds-036-s4-create-vouchers (1024x768)
+[05:08:27] [tds] screen tds-036-s4-create-vouchers : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa ...
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[shot] tds-037-s4-create-receipt (1024x768)
+[05:08:31] [tds] screen tds-037-s4-create-receipt : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa ...
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] tds-038-s4-create-datebox (1024x768)
+[05:08:34] [tds] screen tds-038-s4-create-datebox : TallyPrime MANAGE {1' EDU 5: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt x Fl: Help FinCom Spike Co Voucher Date 3-11-2026 o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:08 AM 10/11/2026
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-039-s4-create-dated (1024x768)
+[05:08:38] [tds] screen tds-039-s4-create-dated : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x I-Dec-26 Tuesday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa...
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-040-s4-create-account (1024x768)
+[05:08:42] [tds] screen tds-040-s4-create-account : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Cash • Current balance: 1,410.00 Dr Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x I-Dec-26 Tuesday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5...
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-041-s4-create-particular (1024x768)
+[05:08:46] [tds] screen tds-041-s4-create-particular : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Cash • Current balance: 1,410.00 Dr Particulars Spike Income Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x I-Dec-26 Tuesday Amount CurBal: 1,410.00 Cr Narration: Unity Quit D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7...
+[keys] '600{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-042-s4-create-amount (1024x768)
+[05:08:50] [tds] screen tds-042-s4-create-amount : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t No. 4 : Account Cash • Current balance: 2,010.00 Dr Particulars Spike Income Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co CurBa1: 2,010.00 Cr Narration: Unity Quit p: print x I-Dec-26 Tuesday Amount 600.00 600.00 D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt : Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61...
+[keys] '^a' -> Tally 'TallyPrime:9000'
+resume Tally (pid 3960): 0
+[shot] tds-043-gw0 (1024x768)
+[05:09:21] [tds] screen tds-043-gw0 : x TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x I-Dec-26 Tuesday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-044-gw1 (1024x768)
+[05:09:25] [tds] screen tds-044-gw1 : TallyPrime MANAGE {1' EDU 5: Company Accounting Voucher Creation Recei t : Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange A: Accept Search O: Import E: Export M: E-mail FinCom p: print x I-Dec-26 Tuesday Amount Quit o Yes or No D: Delete X: Cancel Vch x Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-045-gw2 (1024x768)
+[05:09:29] [tds] screen tds-045-gw2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 I-Dec-26 Search O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit o to run on_id 937-0 61d2- 5282 02029 61d2- 5282 .337. 7-01" ning latio d5bL19 ng jo ce 5b605 02029 ' j obNa Mode Q Windows Server 2025 Datace...
+s4 stopped: the keys did not make the receipt of 1-12-2026 (new vouchers: 0; proxy control left unused: False) at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\s235v.ps1: line 368
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flowv.ps1: line 306
+at <ScriptBlock>, D:\a\_temp\17e6216e-abba-4689-be1e-491adf5d77a2.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+resume Tally (pid 3960): 0
+######## HARNESS s4 a real failure still counts: the harness stopped: the keys did not make the receipt of 1-12-2026 (new vouchers: 0; proxy control left unused: False)
+[05:09:29] ---- s5 Tally not open: one notification a day
+  INFO s235 s5: tray icon process(es): pid 7808 "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  INFO s235 s5: before: 'Notification shown: Tally not open' lines 0; tray status tallyOpen True, paused False, readStopped null; clock Sun 05:09
+resume Tally (pid 3960): 0
+[shot] v-s235-s5-toast (1024x768)
+  bridge log: 2026-10-11 05:08:51  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): asking Tally by MasterID
+  bridge log: 2026-10-11 05:08:53  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-11 05:08:53  Tally 9000 did not answer in time at 05:08:53 (FinComVoucherObject, try 1); trying again by itself at 05:09:08
+  bridge log: 2026-10-11 05:08:53  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped)
+  bridge log: 2026-10-11 05:08:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 05:13 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+  bridge log: 2026-10-11 05:09:11  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 18s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-11 05:12:32  Notification shown: Tally not open (tally:844aabf57972e6bf; not shown again for this problem)
+resume Tally (pid 3960): -1073741558
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-s235-s5-reopen-started (1024x768)
+[05:13:07] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 7900)
+[05:13:07] Tally started again (s5-reopen): pid 7264, port up True, proxy True
+resume Tally (pid 7264): 0
+  bridge log: 2026-10-11 05:12:49  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+  bridge log: 2026-10-11 05:12:49  Light check of FinCom Spike Co: skipped: Tally gave no change numbers for it
+  bridge log: 2026-10-11 05:13:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-11 05:13:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+  bridge log: 2026-10-11 05:13:53  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+[shot] v-s235-s5-end (1024x768)
+######## PASS s5 Tally not open: one notification a day: 1st close: the bridge saw Tally closed after 10 s; the notification after 180 s; notifications-cleared.json: {"tally:844aabf57972e6bf":{"kind":"tally","shown":"2026-10-11T05:12:32Z","dismissed":"2026-10-11T05:12:32Z","how":"closed"}}. Reopened (Tally up True, the bridge saw it open True), closed again 270 s: 'Notification shown: Tally not open' lines in all since the start of s5: 1; the file's tally entries: 1 ({"tally:844aabf57972e6bf":{"kind":"tally","shown":"2026-10-11T05:12:32Z","dismissed":"2026-10-11T05:12:32Z","how":"closed"}}). Log: 2026-10-11 05:12:32  Notification shown: Tally not open (tally:844aabf57972e6bf; not shown again for this problem)
+  INFO s235 end: ':resolved' ids sent more than once over the whole run: none; fresh Tallys started by the harness: 0
+  INFO s235: the bridge's held list: C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json
+== results
+INFO TallyPrime 3.0, mode s235, runner GitHub Actions 1000007451, 2026-10-11T05:01:51
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-11, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-11, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.2.exe SHA-256 650bb9b5cdb33245bf6be62ac8bdc7fa6ad8e5f52dc7175620d00c34b33251d5; bridge source: e2ca66d665a3fad1a75f7dfa7d566e2d94f78f68 Bridge 2.4.2 built (each entry's GST type): setup SHA-256 650bb9b5…51d5 (program d5ff6977…e8e3), release log row (2.4.1 superseded), notes and test sheet fingerprint and build time (11-Oct-2026 10:12 IST); 2.4.1 assets moved to bridge-go-old; not published
+INFO s235: the runner's clock Sun 05:02 (UTC) is outside office hours: KeepOfficeFrom 0, KeepOfficeTo 24 set
+INFO bridge on 127.0.0.1:9100, version 2.4.2, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO s235: bridge processes: pid 8344: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" | pid 4484: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 8344 | pid 7808: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+INFO s235: proxy beside Tally: True; bridge config TallyHost '127.0.0.2', CloudBeatSec '5', KeepOfficeFrom '0', KeepOfficeTo '24'
+INFO s235: the bridge's starting point recorded: True
+INFO s235 prep A (31-10-2026): Tally (none); line after -1 s (no line)
+INFO s235 prep D1 (1-11-2026): Tally (none); line after -1 s (no line)
+INFO s235 prep D2 (2-11-2026): Tally (none); line after -1 s (no line)
+HARNESS s1 stop: three lines held, nothing asked: the harness stopped: prep: the keys did not make the three receipts (A False, D1 False, D2 False)
+HARNESS s2 lift: bodies and the delete with its GUID: the harness stopped: prep: the keys did not make the three receipts (A False, D1 False, D2 False)
+HARNESS s3 restart: the held delete keeps its GUID: the harness stopped: prep did not make D2
+HARNESS s4 a real failure still counts: the harness stopped: the keys did not make the receipt of 1-12-2026 (new vouchers: 0; proxy control left unused: False)
+INFO s235 s5: tray icon process(es): pid 7808 "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+INFO s235 s5: before: 'Notification shown: Tally not open' lines 0; tray status tallyOpen True, paused False, readStopped null; clock Sun 05:09
+PASS s5 Tally not open: one notification a day: 1st close: the bridge saw Tally closed after 10 s; the notification after 180 s; notifications-cleared.json: {"tally:844aabf57972e6bf":{"kind":"tally","shown":"2026-10-11T05:12:32Z","dismissed":"2026-10-11T05:12:32Z","how":"closed"}}. Reopened (Tally up True, the bridge saw it open True), closed again 270 s: 'Notification shown: Tally not open' lines in all since the start of s5: 1; the file's tally entries: 1 ({"tally:844aabf57972e6bf":{"kind":"tally","shown":"2026-10-11T05:12:32Z","dismissed":"2026-10-11T05:12:32Z","how":"closed"}}). Log: 2026-10-11 05:12:32  Notification shown: Tally not open (tally:844aabf57972e6bf; not shown again for this problem)
+INFO s235 end: ':resolved' ids sent more than once over the whole run: none; fresh Tallys started by the harness: 0
+INFO s235: the bridge's held list: C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json

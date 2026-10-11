@@ -1,0 +1,5 @@
+2026-10-11 05:12:49  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-11 05:12:49  Light check of FinCom Spike Co: skipped: Tally gave no change numbers for it
+2026-10-11 05:13:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-11 05:13:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+2026-10-11 05:13:53  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)

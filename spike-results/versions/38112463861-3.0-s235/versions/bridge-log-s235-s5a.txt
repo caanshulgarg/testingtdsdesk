@@ -1,0 +1,7 @@
+2026-10-11 05:08:51  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): asking Tally by MasterID
+2026-10-11 05:08:53  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-11 05:08:53  Tally 9000 did not answer in time at 05:08:53 (FinComVoucherObject, try 1); trying again by itself at 05:09:08
+2026-10-11 05:08:53  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped)
+2026-10-11 05:08:53  Recorder: Receipt 4 of 01-Dec-2026 (MasterID 6, line 37ddc0f6…): held at once: waiting: Tally took longer than 2 s; FinCom asks once more at 05:13 (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)
+2026-10-11 05:09:11  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 18s after the stop; its answer is discarded and the next request goes now
+2026-10-11 05:12:32  Notification shown: Tally not open (tally:844aabf57972e6bf; not shown again for this problem)
