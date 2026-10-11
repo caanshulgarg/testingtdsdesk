@@ -976,6 +976,26 @@ try:
     ok(c == 200 and r.get("ok") is True and r.get("updated") == 1 and nd.get("gstin") == "29AAACN9999B1Z5" and nd.get("alter_id") == 84 and nd.get("tds_deductee_type") == "",
        "2.3.1 deductee type: a database without migration 57's column: the ledger kept current without it, nothing fails (%s; %s)" % (r, nd))
     FS.NO_COL.clear()
+    # bridge 2.4.3 (migration 73): the 12th to 14th columns, a ledger's nature of payment, special rate and lower-deduction
+    # certificates: stored when sent (blank clears), an 11-column row leaves them as they are; a database without 73's
+    # columns: the ledger kept current without them, nothing fails
+    LDC = [["FC Prof Fees 194J", "20260401", "20270331", "197", "LDC197CERT0001", "0", "500000.00"]]
+    c, r = lch([["lg-npd", 503, 85, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Company - Resident", "FC Prof Fees 194J", "1", LDC]], "counter", after=84, upto=85)
+    nd = led("New Party D") or {}
+    ok(c == 200 and nd.get("tds_nature") == "FC Prof Fees 194J" and nd.get("tds_special_rate") == "1" and nd.get("tds_ldc") == LDC,
+       "2.4.3: the nature of payment, special rate and certificate stored (%s)" % nd)
+    c, r = lch([["lg-npd", 503, 86, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Company - Resident"]], "counter", after=85, upto=86)
+    nd = led("New Party D") or {}
+    ok(c == 200 and nd.get("tds_nature") == "FC Prof Fees 194J" and nd.get("tds_ldc") == LDC and nd.get("alter_id") == 86, "2.4.3: an 11-column row (a bridge before 2.4.3) leaves them as they are (%s)" % nd)
+    c, r = lch([["lg-npd", 503, 87, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Company - Resident", "", "", []]], "counter", after=86, upto=87)
+    nd = led("New Party D") or {}
+    ok(c == 200 and nd.get("tds_nature") == "" and nd.get("tds_special_rate") == "" and nd.get("tds_ldc") == [], "2.4.3: removed in Tally: blank (%s)" % nd)
+    FS.NO_COL["tally_ledgers"] = {"tds_nature", "tds_special_rate", "tds_ldc"}
+    c, r = lch([["lg-npd", 503, 88, "New Party D", "Sundry Creditors", "0", "07AAACN9999B1Z5", "", 0, "", "Company - Resident", "N", "", []]], "counter", after=87, upto=88)
+    nd = led("New Party D") or {}
+    ok(c == 200 and r.get("ok") is True and nd.get("gstin") == "07AAACN9999B1Z5" and nd.get("alter_id") == 88 and nd.get("tds_nature") == "",
+       "2.4.3: a database without migration 73's columns: the ledger kept current without them, nothing fails (%s; %s)" % (r, nd))
+    FS.NO_COL.clear()
     # bridge 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): a ledger renamed in Tally and fetched for an unknown
     # name. The ledger fetched by name (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name: the
     # held entry is applied under FinCom's ledger (its lines mapped from the new name, never a second ledger), the new name
