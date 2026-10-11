@@ -323,8 +323,8 @@ try {
   $chId = if ($ids['SP1']) { 'SP1' } else { 'PX1' }
   if ($ids[$chId]) {
     $tries = @(
-      @('R', @('{SPACE}', '%r')),
-      @('S', @('{SPACE}', '%s')),
+      @('R', @(' ', '%r')),
+      @('S', @(' ', '%s')),
       @('C', @('{ENTER}')))
     foreach ($tr in $tries) {
       try {
