@@ -73,7 +73,7 @@ function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, mo
         <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {Q_DUE_ON[q]}</p>
       </div>
       <div className="ret-acts">
-        {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft</span>}
+        {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft, not yet validated</span>}
         {errN && !filed ? <button className="tag bad" style={{ cursor: "pointer", border: 0 }} data-status-tag="" onClick={() => tdsTabGo("checks")}>{st[1]}</button>
           : <span className={"tag " + st[0]} data-status-tag="">{st[1]}</span>}
         <More items={more} label="More">{words}</More>
