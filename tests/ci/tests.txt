@@ -233,3 +233,5 @@ run_gst_checks.py                     180  TDSDESK_SITE=../app/dist-test
 run_tds_smart.py                      180  TDSDESK_SITE=../app/dist-test
 # round 43: the TDS and GST end-to-end proof on a real TallyPrime 7.1 (test company; known FAILs in tests/fixtures/tdsgst-e2e/known-fails.json)
 run_e2e_tdsgst.py                     600
+# round 44: TDS and GST from both the Day Book and the bridge (the cloud copy): one entry per Tally GUID, the later AlterID
+run_book_sources.js                   120

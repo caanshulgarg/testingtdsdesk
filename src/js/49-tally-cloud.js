@@ -276,16 +276,26 @@ const TCloud = {
     list.forEach(x => { (byMonth[x.day.slice(0, 6)] = byMonth[x.day.slice(0, 6)] || []).push(x); });
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
-    if (!todo.length && !ledNew) return true;
+    // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
+    let copy = null;
+    try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
+    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    if (!todo.length && !ledNew && !(copy && (copy.changes || !same))) return true;
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
     const say = t => { f.busy = b.busy = t; render(); };
-    say("Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…");
+    say(todo.length ? "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…" : "Bringing in the entries the bridge sent…");
     let changed = false;
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
+      const fromBridge = BookSrc.stash(b);
       if (ledNew){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
+        // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
+        // the bridge sent; a cloud without them is read as before
+        let led;
+        try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+        catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy";
+        BookSrc.ledgersInto(b, led, bk.ledgersAt);
         await this.groupsInto(b, bk.book);
       }
       // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
@@ -303,6 +313,8 @@ const TCloud = {
         const m = TallyRead.months(ym + "01", to).find(z => z.ym === ym) || {from: ym + "01", to: ym + "31"};
         TallyRead.merge(b, res, m.from < from ? from : m.from, m.to);
       }
+      BookSrc.restore(b, fromBridge);
+      if (copy) await this.copyInto(b, bk, copy);
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
@@ -312,6 +324,48 @@ const TCloud = {
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     f.busy = b.busy = ""; render();
     return changed ? "new" : true;
+  },
+  // ---------- round 44: the entries the bridge sent by itself, from the cloud copy (tally_vouchers / tally_lines / tally_bills,
+  // read as Look up and the ledger checks read them). Every entry's head is read when the client is opened (force) or the
+  // book changed; in between, only the entries the bridge's lines brought since the last look (tally_recorder_lines'
+  // applied_at, the cloud's own clock). Lines and bills are read only for entries new to the books or later than held.
+  async copyHeads(b, bk, full){
+    const meta = b.meta = b.meta || {}, c = meta.copy && meta.copy.book === bk.book ? meta.copy : null;
+    const B = "&book_id=eq." + encodeURIComponent(bk.book);
+    const read = async (extra) => {
+      try { return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS + B + extra + "&order=guid.asc"); }
+      catch (e){ if (!/irn|42703/i.test(String((e && e.message) || e))) throw e; return await this.restPages("tally_vouchers?select=" + BookSrc.HEADS_OLD + B + extra + "&order=guid.asc"); }
+    };
+    let seen = c ? c.seen || "" : "", heads;
+    // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)
+    let last = [];
+    try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
+    const newest = (last[0] || {}).applied_at || seen;
+    if (full || !c) heads = await read("");
+    else {
+      if (!newest || newest === seen) return {heads: [], seen, changes: false};
+      const ls = await this.restPages("tally_recorder_lines?select=object_guid&state=eq.applied&object_guid=not.is.null" + B + "&applied_at=gt." + encodeURIComponent(seen) + "&order=id.asc");
+      const g = Array.from(new Set(ls.map(x => String(x.object_guid))));
+      heads = [];
+      for (let i = 0; i < g.length; i += 40) heads = heads.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")"));
+    }
+    // changes: a deleted entry held here, a new entry, a later version (a client opened afresh: all of them)
+    const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
+    const changes = heads.some(h => h && h.guid && (h.deleted_at ? by.has(h.guid) : BookSrc.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)));
+    return {heads, seen: newest, changes};
+  },
+  async copyInto(b, bk, copy){
+    const B = "&book_id=eq." + encodeURIComponent(bk.book), need = BookSrc.need(b, copy.heads);
+    let lines = [], bills = [];
+    for (let i = 0; i < need.length; i += 40){
+      const g = "&guid=in.(" + need.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
+      lines = lines.concat(await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc"));
+      try { bills = bills.concat(await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc")); } catch (e){}
+    }
+    const n = BookSrc.apply(b, copy.heads, lines, bills);
+    const meta = b.meta = b.meta || {};
+    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    return n;
   },
   // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
   // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are

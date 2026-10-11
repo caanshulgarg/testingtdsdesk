@@ -1,4 +1,5 @@
 import ListTable from "../../parts/ListTable.jsx";
+import SrcTag from "../../parts/SrcTag.jsx";
 // The input register: every document in Tally that takes input tax for the GSTIN, for the month or the whole year,
 // with what 2B says about each, and how it ties to GSTR-3B table 4. Was viewInputRegister (src/js/18). The rows are
 // inregRows() (src/js/18); the Excel is inregExcel().
@@ -59,7 +60,7 @@ function TieOut({ R }) {
 function inregCols(cess) {
   const sg = (r) => sgn(r);
   return [
-    { k: "date", role: "date", label: "Booked · voucher", w: 10, v: (r) => String(r.date || ""), cell: (r) => <>{day(r.date)}<div className="nr" title={r.type + " " + (r.voucher || "")}>{r.voucher || ""}</div></> },
+    { k: "date", role: "date", label: "Booked · voucher", w: 10, v: (r) => String(r.date || ""), cell: (r) => <>{day(r.date)}<div className="nr" title={r.type + " " + (r.voucher || "")}>{r.voucher || ""}</div><SrcTag r={r} /></> },
     { k: "no", role: "number", label: "Bill no. · date", w: 11, v: (r) => r.no || "", cell: (r) => <>{r.no || ""}{r.refDate && <div className="nr">{day(r.refDate)}</div>}</> },
     { k: "party", role: "party", label: "Supplier · GSTIN", w: 16, v: (r) => r.party || "", cell: (r) => <>{r.party || ""}<div className="nr">{r.gstin || "no GSTIN"}</div></> },
     { k: "val", role: "amount", label: "Value", cls: "n", w: 9, v: (r) => sg(r) * num(r.taxable), fmt: money, cell: (r) => <>{money(sg(r) * r.taxable)}{r.valueGuessed && <div className="nr">from the tax</div>}</> },

@@ -10,6 +10,7 @@
 // "393(1) Sl. 6(i) [old 194C]"; the section filter and the find box take either.
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
+import SrcTag, { srcWords } from "../parts/SrcTag.jsx";
 import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
 import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
@@ -246,9 +247,9 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
     <ListTable name="tdsDeductees" id="tdsDeTable" rows={list} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
       empty="No deductee matches these filters. Use Clear filters above to see all."
       after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
-          <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th></tr></thead>
+          <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th><th>From</th></tr></thead>
           <tbody>{p.rows.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td><Sec s={r.section} /></td><td className="n">{money(r.paid)}</td>
-            <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td></tr>)}</tbody>
+            <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table>}
       cols={[
         { k: "party", role: "party", label: "Deductee", v: (p) => p.party, cell: (p) => <><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</> },
@@ -290,6 +291,7 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
         { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => <Pan pan={r.pan} /> },
         { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => <Sec s={r.section} fy={fy} /> },
         { k: "rate", label: "Rate", cls: "n", v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} why /> },
+        { k: "src", label: "From", title: "Where the entry came from: the bridge, or the Day Book uploaded", v: (r) => srcWords(r), cell: (r) => <SrcTag r={r} /> },
       ]} />
   </>;
 }

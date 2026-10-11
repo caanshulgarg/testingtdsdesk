@@ -4,10 +4,15 @@
 // the day files the cloud keeps (read by Books.importDayBook as TCloud.load reads them) and the ledger masters (Books.importMasters,
 // as "From Tally -> ledger masters" reads them), with the CA's setup (setup.json: ledgers, certificate, challans) applied as
 // a person would. Called by run_e2e_tdsgst.py; prints nothing it compares itself (the comparison is the Python test's).
-//   in.json: {setup, phases: [{name, months: [{ym, files: [day file paths]}], masters, gstr1: [yyyymm], threeB: [yyyymm], fileGstr1: [yyyymm]}]}
-const fs = require("fs"), path = require("path"), {load, HTML} = require("./harness");
+//   in.json: {setup, phases: [{name, months: [{ym, files: [day file paths]}], masters, gstr1: [yyyymm], threeB: [yyyymm], fileGstr1: [yyyymm],
+//             copy: {book, tables: {tally_vouchers, tally_lines, tally_bills, tally_recorder_lines}, ledgers, groups, ledgersAt, full}}]}
+// Round 44: a phase with `copy` also brings in the entries the bridge sent, from FinCom's cloud copy, as TCloud.load does
+// (TCloud.copyHeads / copyInto, BookSrc: one entry per Tally GUID, the later AlterID): the app's own REST reads answered
+// from the database's rows (copy_rest_stub.js). Without `masters`, the ledgers' groups, PANs and GSTINs are the cloud's
+// ledger list (as TCloud.load reads it: TallyRead.balances' groups, BookSrc.ledgersInto). `months` may be empty (bridge only).
+const fs = require("fs"), path = require("path"), {load, HTML} = require("./harness"), {restStub} = require("./copy_rest_stub");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "TDS26Q", "TDS_FORMS",
-  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ"];
+  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ", "TallyRead", "BookSrc", "TCloud"];
 (async () => {
   const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), outPath = process.argv[3];
   const setup = JSON.parse(fs.readFileSync(inp.setup, "utf8"));
@@ -15,7 +20,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
   const {ctx, x} = load(HTML, avail);
   const cl = setup.client;
   ctx.S.companies = {[cl.id]: {id: cl.id, name: cl.name, tallyName: cl.tallyName, gstin: cl.gstin, pan: cl.pan, tan: cl.tan, choices: {}}};
-  ctx.S.coId = cl.id; ctx.CO = () => ctx.S.companies[cl.id]; ctx.D = () => ({parties: {}, entries: {}});
+  ctx.S.coId = cl.id; ctx.CO = () => ctx.S.companies[cl.id]; ctx.D = () => ({parties: {}, entries: {}}); ctx.whoAmI = () => "e2e";
   const out = {loaded: avail, phases: {}};
   let keep = {};          // what the person did and FinCom keeps between the phases: filed returns, certificates, challans, allocation, ledger choices
   for (const ph of inp.phases){
@@ -30,12 +35,36 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
     vouchers.sort((a, c) => String(a.date).localeCompare(String(c.date)));
     const dates = vouchers.map(v => v.date).sort();
     const b = {cid: cl.id, vouchers, meta: {from: dates[0], to: dates[dates.length - 1], gstins: Array.from(gst), bills: 1, cc: 1}, challans: [], alloc: {}, certs: []};
-    const ms = await x.Books.importMasters(new Blob([fs.readFileSync(ph.masters)], {type: "text/xml"}));
-    Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, states: ms.states});
-    b.map = x.Books.mapLedgers(b.vouchers, keep.map || {});
+    let ms = {pans: {}, gstins: {}, count: 0};
+    if (ph.masters){
+      ms = await x.Books.importMasters(new Blob([fs.readFileSync(ph.masters)], {type: "text/xml"}));
+      Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, states: ms.states, ledInfoAt: new Date().toISOString()});
+    }
     ctx.S.books = b;
-    R.books = {vouchers: vouchers.length, byMonth: days, gstins: b.meta.gstins, pans: ms.pans, ledgerGstins: ms.gstins, count: ms.count,
-      entries: vouchers.map(v => ({no: v.no, type: v.type, date: v.date, party: v.party, gstin: v.gstin, pos: v.pos, cmp: v.cmp, regType: v.regType, country: v.country, rcm: v.rcm,
+    // ---- round 44: the entries the bridge sent, from the cloud copy (TCloud.load's own reads and rule)
+    if (ph.copy){
+      const c = ph.copy;
+      if (!ph.masters){
+        // the cloud's ledger list as TCloud.load reads it (tally_ledgers name, parent, open: TallyRead.balances) and its groups
+        b.under = b.under || {}; b.groups = b.groups || {};
+        (c.ledgers || []).forEach(l => { if (l.name && l.parent) b.under[x.ledClean ? x.ledClean(l.name) : l.name] = x.ledClean ? x.ledClean(l.parent) : l.parent; });
+        (c.groups || []).forEach(g => { if (g.name) b.groups[g.name] = g.parent || ""; });
+      }
+      x.BookSrc.ledgersInto(b, c.ledgers || [], c.ledgersAt || "");
+      if (c.keepFrom && keep.vouchers){ b.vouchers = keep.vouchers.slice(); b.meta.copy = keep.copyMeta; b.gone = keep.gone; }
+      const st = restStub(c.tables); ctx.Cloud = {api: st.api};
+      const bk = {book: c.book};
+      const heads = await x.TCloud.copyHeads(b, bk, !!c.full);
+      R.copyRead = {full: !!c.full, heads: heads.heads.length, changes: heads.changes, asked: Array.from(new Set(st.asked.map(q => q.split("?")[0])))};
+      R.copyRead.changed = await x.TCloud.copyInto(b, bk, heads);
+      R.copyRead.asked = Array.from(new Set(st.asked.map(q => q.split("?")[0])));
+      const ds = b.vouchers.map(v => v.date).filter(Boolean).sort();
+      b.meta.from = ds[0] || b.meta.from; b.meta.to = ds[ds.length - 1] || b.meta.to;
+    }
+    b.map = x.Books.mapLedgers(b.vouchers, keep.map || {});
+    R.sources = x.BookSrc.counts(b);
+    R.books = {vouchers: b.vouchers.length, byMonth: days, gstins: b.meta.gstins, pans: ms.pans, ledgerGstins: ms.gstins, count: ms.count,
+      entries: b.vouchers.map(v => ({src: x.BookSrc.words(v), no: v.no, type: v.type, date: v.date, party: v.party, gstin: v.gstin, pos: v.pos, cmp: v.cmp, regType: v.regType, country: v.country, rcm: v.rcm,
         taxability: v.taxability, ineligible: v.ineligibleFlag, cancel: v.cancel, opt: v.opt, narr: v.narr, ent: v.ent.map(e => [e.l, e.a, e.h || "", e.gr == null ? null : e.gr])}))};
     // ---- the ledgers: FinCom's own proposal from Tally's masters and the day book, then the CA's choices applied
     x.LedMaster.refresh(b);
@@ -84,7 +113,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
     R.optional = (b.vouchers || []).filter(v => v.opt).map(v => v.no);
     // the returns filed now (May's GSTR-1, as downloaded and filed from here): what later amendments are measured against
     (ph.fileGstr1 || []).forEach(ym => { x.GSTAmend.keep(JSON.parse(JSON.stringify(R.gstr1[ym] || x.GSTR.toJson(ym, reg))), "downloaded"); });
-    keep = {filed: b.filed, alloc: b.alloc, map: b.map};
+    keep = {filed: b.filed, alloc: b.alloc, map: b.map, vouchers: b.vouchers, copyMeta: b.meta.copy, gone: b.gone};
   }
   fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
 })().catch(e => { console.error(e && e.stack || e); process.exit(1); });

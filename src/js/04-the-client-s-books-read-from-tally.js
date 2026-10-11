@@ -96,6 +96,8 @@ const Books = {
       hsn: Array.from(new Set((s.match(/<GSTHSNNAME>([^<]*)<\/GSTHSNNAME>/g) || []).map(x => x.replace(/<[^>]*>/g, "").trim()).filter(Boolean))),
       by: this.one(s, "ENTEREDBY"), upd: this.one(s, "UPDATEDDATETIME").slice(0, 8),
       cancel: this.one(s, "ISCANCELLED") === "Yes", opt: this.one(s, "ISOPTIONAL") === "Yes",
+      // round 44: Tally's AlterID, so the later of the Day Book's and the bridge's versions of an entry is the one kept (BookSrc)
+      alt: /\d/.test(this.one(s, "ALTERID")) ? Math.round(num(this.one(s, "ALTERID"))) : null,
       ent: []
     };
     if (v.cmp) meta.gstins.add(v.cmp);

@@ -6,6 +6,7 @@ import FilterBar from "../../parts/FilterBar.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
 import CustIms from "./CustIms.jsx";
+import SrcTag from "../../parts/SrcTag.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -45,9 +46,9 @@ function Customers({ rows }) {
           <td><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></td><td>{p.gstin || "—"}</td>
           <td className="n"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{p.n}</button></td><td className="n">{money(p.taxable)}</td><td className="n"><b>{money(p.tax)}</b></td>
         </tr>, open && <tr key={key + ":open:" + i}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" data-statement="" style={{ margin: 0 }}>
-          <thead><tr><th>Part</th><th className="dt">Date</th><th>Invoice</th><th>Place of supply</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
+          <thead><tr><th>Part</th><th className="dt">Date</th><th>Invoice</th><th>Place of supply</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th>From</th></tr></thead>
           <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td>{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
-            <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td></tr>)}</tbody>
+            <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table></td></tr>]; })}
         <tr><td><b>Total</b></td><td></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
           <td className="n"><b>{money(shown.reduce((a, r) => a + r.igst + r.cgst + r.sgst, 0))}</b></td></tr>

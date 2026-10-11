@@ -128,7 +128,7 @@ const TDS = {
         const recd = r2(L.tcs.length === 1 && L.party ? L.party - tcsAll : (t.rate ? t.amount / (t.rate / 100) : L.total));
         out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: v.party, pan: TDS.panOf(v.party),
           section: t.section || "206C", code: TCS27EQ.codeOf(t.ledger, t.section), ledger: t.ledger, paid: recd, tds: r2(t.amount),
-          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
+          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
       });
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
@@ -150,7 +150,7 @@ const TDS = {
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
           party: v.party, pan: TDS.panOf(v.party), section: t.section, ledger: t.ledger,
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
-          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
+          voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
           // section (TDSRate, src/js/66)
           pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
@@ -170,7 +170,7 @@ const TDS = {
       if (!L.tdsPaid.length) return;
       const tax = r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
       if (!tax) return;
-      out.push({vid: v.id, date: v.date, tax, sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr});
+      out.push({vid: v.id, date: v.date, tax, sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },

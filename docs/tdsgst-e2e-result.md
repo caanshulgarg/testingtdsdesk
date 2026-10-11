@@ -18,7 +18,7 @@ Test data only: a made-up company ("FinCom Spike Co") created in a throwaway Tal
 | GSTR-1 | 60 / 10 | 87 / 0 |
 | GSTR-3B | 29 / 11 | 36 / 4 |
 | Amendments | 62 / 6 | 67 / 1 |
-| Cloud copy (bridge) | 133 / 6 | 133 / 6 |
+| Cloud copy (bridge) | 133 / 6 | 133 / 5 (round 44: the entries the bridge sent now reach the returns) |
 | Ledger setup | 19 / 0 | 19 / 0 |
 
 **In plain words.** With the fixes on arc-ui, every TDS, TCS and GSTR-1 figure, and every amendment figure, came out right to
@@ -28,14 +28,36 @@ kind of an entry (SEZ, export, reverse charge, nil-rated), because the bridge do
 means changing the bridge or how entries reach the books, which this round was not allowed to do. The blocked-credit (17(5))
 figures could not be proved: TallyPrime 7.1 dropped the mark when the test entry was imported.
 
+## Round 44 (11-Oct-2026): the returns from the bridge too
+
+The owner decided (11-Oct-2026) that TDS and GST read the entries from both the uploaded Day Book and the bridge. FinCom now
+brings the entries the bridge sends (its cloud copy) into the books the TDS and GST pages read, with the Day Book's: one entry
+per Tally GUID, the later version by Tally's AlterID, an entry deleted in Tally left out, cancelled and optional entries left
+out of the returns as before, and never counted twice. Every entry in the TDS and GST lists says where it came from ("Bridge"
+or "Day Book"). The same test now works the returns out three ways:
+
+| Run | PASS | FAIL (all known) |
+|---|---|---|
+| Day Book only (as round 43) | 457 | 10 |
+| Bridge only (no Day Book uploaded; the cloud copy and the cloud's ledger list) | 287 | 19 |
+| Both (the Day Book and the cloud copy) | 342 | 5 |
+
+- **Bridge only**: every TDS and TCS figure (115), every amendment figure but the correction statement, and every GSTR-1 and
+  GSTR-3B figure of an ordinary supply come out right to the paisa from the bridge's entries alone. The 14 GST figures still
+  wrong are the SEZ supplies (S03, S04), the exports (S05, S06) and the nil-rated and exempt supplies (S10, S11): the bridge
+  2.4.1 does not send an entry's GST type, so they are reported as regular supplies. Part B (bridge 2.4.2 sends each entry's
+  GST type) fixes them. The two entries the test made in Tally before the bridge started recording reach FinCom by a Day Book.
+- **Both**: the same figures as the Day Book alone, to the paisa (GSTR-1 and GSTR-3B JSON identical, every TDS/TCS total), each
+  entry once; the five probe entries of October that only the bridge sent are in the books from the bridge.
+- The remaining known FAILs of every run: the blocked-credit (17(5)) mark that TallyPrime 7.1 dropped on import (4 figures),
+  the correction statement FinCom does not build (1), and, in the Day Book run, the cloud copy's GST-type fields (5, part B).
+
 ## What is still wrong after the fixes, and why
 
 - **NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)** (4 figures): the published bridge 2.4.1 sends each entry as Tally's FinComVoucherObject stripped to the approved fields; the party's registration type, the buyer's country, the nature of the transaction, the reverse-charge and ineligible-credit marks and the taxability are not among them, so FinCom's cloud copy of the entry cannot tell this supply
   - p1 S03: the SEZ supply (registration type or nature of the transaction) in the entry the bridge sends; p1 S05: the export (the buyer's country) in the entry the bridge sends; p1 P03: the reverse charge in the entry the bridge sends; p1 S10: the nil-rated supply (taxability) in the entry the bridge sends
 - **NOT FIXED: needs a change to the bridge's entry fields (the owner's decision; no bridge change in this round)** (1 figure): TallyPrime 7.1 did not keep the blocked-credit mark on the imported entry (see 4(B)(1)), and the bridge's entry fields carry no such mark either
   - p1 P04: the blocked credit in the entry the bridge sends
-- **NOT FIXED: design (the owner's decision); today the CA must upload the Day Book for the returns** (1 figure): the TDS and GST pages read only the day files the Day Book upload makes (TCloud.load: tally_days_list and Storage tally-days); the entries the bridge records go to tally_vouchers / tally_lines, which no TDS or GST figure reads
-  - the entries the bridge sent reach the books the TDS and GST pages read (day files), before any Day Book upload
 - **NOT FIXED: feature not in FinCom (the corrected regular statement's figures are right)** (1 figure): FinCom builds a fresh regular statement only; a correction statement (C1-C9 against the filed token) is not built
   - Form 140 Q1 correction: a correction statement for the filed quarter
 - **NOT A FINCOM FAULT: the harness cannot mark the credit blocked by XML in TallyPrime 7.1 (on the screen is not automated)** (4 figures): TallyPrime 7.1's XML import did not keep the blocked-credit mark (GSTOVRDNINELIGIBLEITC came back 'Not Applicable' on the entry and GSTINELIGIBLEITC 'No' on the ledger, runs 38066717288 and 38069479531), so the entry reached FinCom as eligible; FinCom's 17(5) reversal itself is covered by tests/run_block17.js
@@ -195,7 +217,6 @@ figures could not be proved: TallyPrime 7.1 dropped the mark when the test entry
 | Cloud copy (bridge) | p2 FC/26-27/017 Sales (S20): every ledger line's amount | as entered (4 lines) | as entered (4 lines) | PASS |  |
 | Cloud copy (bridge) | p2 FC/26-27/017 Sales (S20): party GSTIN | 07AABCA1111A1ZT | 07AABCA1111A1ZT | PASS |  |
 | Cloud copy (bridge) | p2 Sigma Landlord's PAN corrected in Tally -> FinCom's ledger list | ABCPS9999F | ABCPS9999F | PASS | the ledger list the bridge sends at Update now |
-| Cloud copy (bridge) | the entries the bridge sent reach the books the TDS and GST pages read (day files), before any Day Book upload | yes | no (0 day rows, 0 day files) | FAIL | the TDS and GST pages read only the day files the Day Book upload makes (TCloud.load: tally_days_list and Storage tally-; NOT FIXED: design (the owner's decisio |
 | Ledger setup | FinCom's proposal for the ledger Output CGST | ["gst", "CGST", "output"] | ["gst", "CGST", "output"] | PASS | from Tally's masters and the day book; the CA confirms it (Tally: tax type GST; name says CGST; name says output; used on 8 vouchers of 07; used 8 times) |
 | Ledger setup | FinCom's proposal for the ledger Output SGST | ["gst", "SGST", "output"] | ["gst", "SGST", "output"] | PASS | from Tally's masters and the day book; the CA confirms it (Tally: tax type GST; Tally: duty head State Tax; name says output; used on 8 vouchers of 07; used 8 t |
 | Ledger setup | FinCom's proposal for the ledger Output IGST | ["gst", "IGST", "output"] | ["gst", "IGST", "output"] | PASS | from Tally's masters and the day book; the CA confirms it (Tally: tax type GST; name says IGST; name says output; used on 8 vouchers of 07; used 8 times) |
