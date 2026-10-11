@@ -57,10 +57,15 @@ that one change. The two data locations (next-241) move to 2.4.3.
 4. **The cloud stores it (migration 72, add-only).** parse.js reads the type the same way from a Day Book export and from
    the bridge's entry body into each entry's "gst" (registration type, country, reverse charge, nature, taxability, goods or
    services, ineligible credit; an ineligible mark counts only on a line Tally gives a GST taxability or nature: a ledger
-   without GST details carries Tally's "Applicable" with neither). tally-ingest passes it on; migration 72 adds seven
-   columns to tally_vouchers (gst_reg_type, gst_country, gst_rcm, gst_nature, gst_taxability, gst_supply, gst_ineligible)
-   and tally_ingest_gsttype, called by 62's tally_ingest_details (one line added). A body from a bridge before 2.4.2
-   carries no "gst" and leaves the stored values as they are. Tests: run_parse_gsttype.mjs, run_migration72.py.
+   without GST details carries Tally's "Applicable" with neither). The nature, taxability and goods or services come
+   together from the entry's first GST line in the document's order (an item with the ledger line under it is one line);
+   an entry whose GST lines disagree is marked mixed. tally-ingest passes it on; migration 72 adds nine columns to
+   tally_vouchers (gst_reg_type, gst_country, gst_rcm, gst_nature, gst_taxability, gst_supply, gst_ineligible, gst_mixed,
+   gst_alter_id) and tally_ingest_gsttype, called by 62's tally_ingest_details (one line added); the type is written only
+   onto the version just stored, with the AlterID it was read at. A body without "gst" (a bridge before 2.4.2, or 2.4.2's
+   FinComVoucherByNumber answer, whose request is unchanged and fetches none of these fields) leaves the stored values as
+   they are, never blanked, and gst_alter_id below the entry's AlterID, so the app never takes them for the later
+   version's own. Tests: run_parse_gsttype.mjs, run_migration72.py.
 
 5. **The app** (arc-ui): the GST builders take the cloud copy's GST type for the entries the bridge sent, as they take it
    from an uploaded Day Book.

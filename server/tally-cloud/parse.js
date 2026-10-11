@@ -114,31 +114,49 @@ const GSTTYPE_TAGS = ["GSTREGISTRATIONTYPE", "COUNTRYOFRESIDENCE", "ISREVERSECHA
 // Tally's "\u0004 Not Applicable" (an override not set) is no value; its "\u0004 Applicable" / "Applicable" / "Yes" is set
 const gstNone = (t) => !String(t || "").replace(/[^A-Za-z ]/g, " ").trim() || /^not applicable$/i.test(String(t).replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim());
 const gstSet = (t) => { const w = String(t || "").replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim().toLowerCase(); return w === "yes" || w === "applicable"; };
-// the entry's lines, each once: its ledger lines (ALLLEDGERENTRIES, LEDGERENTRIES), each item without the ledger lines under
-// it, and those ledger lines (ACCOUNTINGALLOCATIONS)
+// the text of s without each <TAG ...>...</TAG> of the given tags (the outermost spans), in one linear pass (review M1 of
+// 2.4.2: a lazy regular expression over an opener never closed scanned to the end once for every opener); an opener never
+// closed takes the rest of the text with it
+function cutOut(s, tags){
+  if (!tags.some((t) => s.indexOf("<" + t) >= 0)) return s;
+  const re = new RegExp("<(/?)(" + tags.map(reEsc).join("|") + ")(?:\\s[^<>]*[^\\/<>])?\\s*>", "g");
+  let out = "", at = 0, depth = 0, m;
+  while ((m = re.exec(s))){
+    if (!m[1]){ if (depth === 0) out += s.slice(at, m.index); depth++; }
+    else if (depth > 0){ depth--; if (depth === 0) at = m.index + m[0].length; }
+  }
+  return depth > 0 ? out : out + s.slice(at);
+}
+// the entry's lines, each once, in the document's order (review M2 of 2.4.2): its ledger lines (ALLLEDGERENTRIES,
+// LEDGERENTRIES) and its items, each item with the ledger lines under it (ACCOUNTINGALLOCATIONS: one supply; the item's
+// own value first, else the ledger line's under it)
 function gstUnits(s){
   const u = [];
-  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((t) => blocks(s, t).forEach((b) => u.push(b)));
-  blocks(s, "ALLINVENTORYENTRIES.LIST").forEach((b) => u.push(b.replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^<>]*[^\/<>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "")));
-  return u;
+  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"].forEach((t) => { if (s.indexOf("<" + t) >= 0) after(s, t).forEach(({a, p}) => u.push({a, t: upTo(p, t)})); });
+  return u.sort((x, y) => x.a - y.a).map((x) => x.t);
 }
 function gstType(s){
   if (!GSTTYPE_TAGS.some((t) => s.indexOf("<" + t) >= 0)) return null;
   const clean = (t) => String(t || "").replace(/[\u0000-\u001f]/g, "").trim();
-  const head = s.replace(/<(ALLLEDGERENTRIES|LEDGERENTRIES|ALLINVENTORYENTRIES)\.LIST(?:\s[^<>]*[^\/<>])?\s*>[\s\S]*?<\/\1\.LIST\s*>/g, "");
-  const units = gstUnits(s);
+  // a tag's first value that is set (an item's own, else the ledger line's under it)
+  const val = (u, tag) => { const re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>", "g"); let m; while ((m = re.exec(u))){ const x = unesc(m[1]); if (!gstNone(x)) return clean(x); } return ""; };
+  const any = (u, tag) => { const re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>", "g"); let m; while ((m = re.exec(u))) if (gstSet(unesc(m[1]))) return true; return false; };
+  const head = cutOut(s, ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"]);
   // a line is a GST line when Tally gives it a taxability or a nature (a ledger without GST details carries Tally's
   // "Applicable" for the ineligible credit with neither: TallyPrime 7.1, a TDS journal's purchase ledger, run 38072484999)
-  const gstLine = (u) => !gstNone(one(u, "GSTOVRDNTAXABILITY")) || !gstNone(one(u, "GSTOVRDNNATURE"));
-  const first = (tag) => clean(units.map((u) => one(u, tag)).find((x) => !gstNone(x)) || "");
+  const gl = gstUnits(s).filter((u) => val(u, "GSTOVRDNTAXABILITY") || val(u, "GSTOVRDNNATURE"));
+  // review M2: the nature, the taxability and goods or services together, from the first GST line in the document's order;
+  // mixed when the GST lines disagree on the nature or the taxability
+  const lead = gl[0] || "", kind = (u) => (val(u, "GSTOVRDNNATURE") + "|" + val(u, "GSTOVRDNTAXABILITY")).toLowerCase();
   return {
-    reg: (gstNone(one(head, "GSTREGISTRATIONTYPE")) ? "" : clean(one(head, "GSTREGISTRATIONTYPE"))).slice(0, 60),
-    country: (gstNone(one(head, "COUNTRYOFRESIDENCE")) ? "" : clean(one(head, "COUNTRYOFRESIDENCE"))).slice(0, 60),
-    rcm: gstSet(one(head, "ISREVERSECHARGEAPPLICABLE")) || units.some((u) => gstLine(u) && gstSet(one(u, "GSTOVRDNISREVCHARGEAPPL"))),
-    nature: first("GSTOVRDNNATURE").slice(0, 100),
-    taxability: first("GSTOVRDNTAXABILITY").slice(0, 40),
-    supply: first("GSTOVRDNTYPEOFSUPPLY").slice(0, 20),
-    ineligible: units.some((u) => gstLine(u) && gstSet(one(u, "GSTOVRDNINELIGIBLEITC")))
+    reg: val(head, "GSTREGISTRATIONTYPE").slice(0, 60),
+    country: val(head, "COUNTRYOFRESIDENCE").slice(0, 60),
+    rcm: gstSet(one(head, "ISREVERSECHARGEAPPLICABLE")) || gl.some((u) => any(u, "GSTOVRDNISREVCHARGEAPPL")),
+    nature: val(lead, "GSTOVRDNNATURE").slice(0, 100),
+    taxability: val(lead, "GSTOVRDNTAXABILITY").slice(0, 40),
+    supply: val(lead, "GSTOVRDNTYPEOFSUPPLY").slice(0, 20),
+    ineligible: gl.some((u) => any(u, "GSTOVRDNINELIGIBLEITC")),
+    mixed: gl.some((u) => kind(u) !== kind(lead))
   };
 }
 function takeVoucher(s){

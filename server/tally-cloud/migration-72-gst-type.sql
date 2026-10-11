@@ -7,8 +7,8 @@
 -- request does not keep them) carries no "gst" key and its stored values are left as they are (never blanked).
 -- Runs AFTER 62 (staging: 57 .. 68 and 70 have run there; 62's tally_ingest_details is in force, prosrc md5
 -- 641618d1a6af1baf42a2ed5b1470df7e). ADD-ONLY: no table, column, row or function removed; no statement in this file removes
--- rows; safe to run twice; one transaction (lock_timeout 10 s). Seven columns added to tally_vouchers (null on every row
--- there is: not read yet); one function added, tally_ingest_gsttype(book, vouchers) (security definer, search_path =
+-- rows; safe to run twice; one transaction (lock_timeout 10 s). Nine columns added to tally_vouchers (null on every row
+-- there is: not read yet; review of 11-Oct-2026: gst_mixed (M2) and gst_alter_id (H1) with the seven); one function added, tally_ingest_gsttype(book, vouchers) (security definer, search_path =
 -- public, pg_temp, granted to nobody); one function replaced: tally_ingest_details (62's text, same arguments, security
 -- definer, granted to nobody), with ONE line added, marked "72", calling tally_ingest_gsttype. Nothing else is touched; no
 -- row is changed by running it. Tested on pg_stand only: tests/run_migration72.py. Deploy order: run this file BEFORE
@@ -26,10 +26,14 @@ alter table public.tally_vouchers add column if not exists gst_nature text;     
 alter table public.tally_vouchers add column if not exists gst_taxability text;     -- the taxability (GSTOVRDNTAXABILITY: Taxable, Nil Rated, Exempt, Non-GST)
 alter table public.tally_vouchers add column if not exists gst_supply text;         -- goods or services (GSTOVRDNTYPEOFSUPPLY)
 alter table public.tally_vouchers add column if not exists gst_ineligible boolean;  -- input credit ineligible (blocked, 17(5)): a line's GSTOVRDNINELIGIBLEITC Applicable
+alter table public.tally_vouchers add column if not exists gst_mixed boolean;      -- review M2: the entry's GST lines disagree on the nature or the taxability (the values above are the first GST line's)
+alter table public.tally_vouchers add column if not exists gst_alter_id bigint;    -- review H1: the AlterID the values above were read at; below alter_id: an older version's (a later body carried none)
 
 -- ---------------------------------------------------------------- the GST type of the entries just stored
 -- p_vouchers as the entry path got them (each with its guid and alter); only a voucher carrying a "gst" object is written,
--- and only onto the stored entry at that AlterID or below it (an older body never overwrites a newer entry's type)
+-- and only onto the entry stored at exactly that AlterID (review L1: the version just stored; an older or a newer row is
+-- left as it is), with gst_alter_id = that AlterID (review H1: a later version stored from a body without "gst" leaves
+-- gst_alter_id below the entry's alter_id, so a reader knows the values are an older version's)
 create or replace function public.tally_ingest_gsttype(p_book uuid, p_vouchers jsonb)
 returns void language plpgsql security definer set search_path = public, pg_temp as $function$
 begin
@@ -41,14 +45,17 @@ begin
          gst_nature = left(btrim(coalesce(d.g->>'nature', '')), 100),
          gst_taxability = left(btrim(coalesce(d.g->>'taxability', '')), 40),
          gst_supply = left(btrim(coalesce(d.g->>'supply', '')), 20),
-         gst_ineligible = coalesce((d.g->>'ineligible')::boolean, false)
+         gst_ineligible = coalesce((d.g->>'ineligible')::boolean, false),
+         gst_mixed = coalesce((d.g->>'mixed')::boolean, false),
+         gst_alter_id = d.alter_id
     from (select distinct on (y->>'guid') y->>'guid' as guid, coalesce(nullif(y->>'alter', '')::bigint, 0) as alter_id, y->'gst' as g
             from jsonb_array_elements(p_vouchers) y
            where jsonb_typeof(y) = 'object' and coalesce(y->>'guid', '') <> '' and jsonb_typeof(y->'gst') = 'object'
              and coalesce(y->'gst'->>'rcm', 'false') in ('true', 'false') and coalesce(y->'gst'->>'ineligible', 'false') in ('true', 'false')
+             and coalesce(y->'gst'->>'mixed', 'false') in ('true', 'false')
              and coalesce(y->>'alter', '0') ~ '^[0-9]{1,18}$'
            order by y->>'guid', coalesce(nullif(y->>'alter', '')::bigint, 0) desc) d
-   where v.book_id = p_book and v.guid = d.guid and coalesce(v.alter_id, 0) <= d.alter_id;
+   where v.book_id = p_book and v.guid = d.guid and coalesce(v.alter_id, 0) = d.alter_id;
 end $function$;
 revoke all on function public.tally_ingest_gsttype(uuid, jsonb) from public, anon, authenticated, service_role;
 
