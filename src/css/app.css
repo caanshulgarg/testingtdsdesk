@@ -508,6 +508,16 @@ th.n .colh{flex-direction:row-reverse}
 .tsign.on .tsign-dot{background:var(--st-done)}.tsign.off .tsign-dot{background:var(--st-failed)}
 .tsign-pop{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:330px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;box-shadow:0 12px 32px rgb(var(--shade) / .18);padding:10px 12px;font-size:13px;font-weight:400;color:var(--ink);white-space:normal}
 .tsign-wrap:hover .tsign-pop,.tsign-wrap:focus-within .tsign-pop{display:block}
+/* the steady sign (11-Oct-2026): quiet when all is well, a neutral pill with a coloured dot; amber and red say more */
+.tsign.on,.tsign.idle{color:var(--ink);border-color:var(--rule);background:var(--sheet)}
+.tsign.warn{color:var(--st-attention);border-color:var(--st-attention);background:var(--st-attention-soft)}
+.tsign.warn .tsign-dot,.there .tsign-dot.warn{background:var(--st-attention)}
+.tsign.idle .tsign-dot,.there .tsign-dot.idle{background:var(--st-waiting)}
+.there .tsign-dot.ok{background:var(--st-done)}.there .tsign-dot.bad{background:var(--st-failed)}
+.tsign-pop::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px}
+.there-head{display:flex;align-items:center;gap:7px;margin:0 0 6px}
+.there-hint{margin:6px 0 0}.there-other{margin:6px 0 0;color:var(--muted)}
+.there-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .tdetail{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px}
 .tdetail dt{color:var(--muted)}.tdetail dd{margin:0}
 .tdetail .why{color:var(--st-failed);font-weight:600}
