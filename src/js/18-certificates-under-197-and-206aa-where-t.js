@@ -594,7 +594,7 @@ function gstParts(b){
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
-      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["health", "Supplier health"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
   if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
   // request of 02-Oct-2026: the books invoice by invoice against the returns filed and 2B, for the year

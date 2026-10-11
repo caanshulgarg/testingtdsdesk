@@ -24,6 +24,7 @@ import TwoB from "./gst/TwoB.jsx";
 import { Amendments, Advances, Reversal } from "./gst/Workings.jsx";
 import { Gst9, Gst9c } from "./gst/Annual.jsx";
 import ItcFollow from "./gst/ItcFollow.jsx";
+import SupplierHealth from "./gst/SupplierHealth.jsx";
 import ReturnsFiled from "./gst/ReturnsFiled.jsx";
 import FiledCompare from "./gst/FiledCompare.jsx";
 import Recon from "./gst/Recon.jsx";
@@ -163,7 +164,7 @@ export default function Gst() {
   const subs = S.gstView === "return" && !noBooks ? SUBS[part] : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";
   const sub = subs ? S.gstSub : undefined;
-  const noDownload = ["r2b", "rev", "inreg", "follow", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
+  const noDownload = ["r2b", "rev", "inreg", "follow", "health", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
   const forWhat = ftype === "qrmp" ? " for the quarter" : " for the portal";
   const partName = (parts.find((x) => x[0] === part) || [, part])[1];
   return <>
@@ -196,7 +197,7 @@ export default function Gst() {
         {part === "r3b" && !noReturn && <button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button>}
       </div>
       <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p></section>}
-    {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
+    {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
   </>;
 }
