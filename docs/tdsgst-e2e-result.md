@@ -4,8 +4,8 @@ Test data only: a made-up company ("FinCom Spike Co") created in a throwaway Tal
 
 ## Round 44 part B (11-Oct-2026): bridge 2.4.2 sends each entry's GST type
 
-The same test company, read again on a real TallyPrime 7.1 by FinCom Bridge 2.4.2 (built from next-gsttype; tally-versions
-run 38103142466, the captures in tests/fixtures/tdsgst-e2e/real71): each entry the bridge sends carries its GST type as
+The same test company, read again on a real TallyPrime 7.1 by FinCom Bridge 2.4.2 (the committed setup 650bb9b5…51d5; tally-versions
+run 38112467834, the release gate's own run; the captures in tests/fixtures/tdsgst-e2e/real71): each entry the bridge sends carries its GST type as
 Tally stores it (registration type, country, reverse charge, nature, taxability, goods or services, the 17(5) blocked
 credit), FinCom's cloud copy stores it (migration 72) and the GST returns read it. The motor car's blocked credit was set
 in the ledger's own GST details, as the ledger screen sets it; Tally then keeps the mark on the purchase line.
