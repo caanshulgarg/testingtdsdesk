@@ -229,8 +229,13 @@ const taxable = (ym) => Math.round(sales(ym).reduce((a, r) => a + r.taxable, 0) 
   b = books([V("b-sez", "Sales", "20260520", "S/20", "Gamma", [["Gamma", -11800], ["Sales", 10000, G], ["Output IGST", 1800]], {gstin: "29AABCG3333C1Z1", alt: 2, regType: "Regular", nature: "Sales Taxable"})]);
   ctx.Cloud = {api: restStub({tally_vouchers: [stale()], tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []}).api};
   c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
-  ok(vb("b-sez").alt === 9 && vb("b-sez").nature === "Sales Taxable" && (vb("b-sez").carried || []).includes("nature") && !vb("b-sez").gstRead,
-    "13. H1: a type read at an older version is not the entry's own: the Day Book's carried, marked (" + vb("b-sez").nature + " " + JSON.stringify(vb("b-sez").carried) + ")");
+  ok(vb("b-sez").alt === 9 && vb("b-sez").nature === "Sales to SEZ - Taxable" && (vb("b-sez").carried || []).includes("nature") && !vb("b-sez").gstRead,
+    "13. H1/N2: a type read at an older version is not the entry's own; of the two older kinds the newer is carried (read at 3 over the Day Book's at 2), marked (" + vb("b-sez").nature + " " + JSON.stringify(vb("b-sez").carried) + ")");
+  // the Day Book's version newer than the stale type: the Day Book's carried
+  b = books([V("b-sez", "Sales", "20260520", "S/20", "Gamma", [["Gamma", -11800], ["Sales", 10000, G], ["Output IGST", 1800]], {gstin: "29AABCG3333C1Z1", alt: 5, regType: "Regular", nature: "Sales Taxable"})]);
+  ctx.Cloud = {api: restStub({tally_vouchers: [stale()], tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []}).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(vb("b-sez").nature === "Sales Taxable" && (vb("b-sez").carried || []).includes("nature"), "13. N2: the Day Book's version (AlterID 5) newer than the stale type (3): the Day Book's carried");
   b = books([]); ctx.Cloud = {api: restStub({tally_vouchers: [stale()], tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []}).api};
   c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
   ok(vb("b-sez").nature === "Sales to SEZ - Taxable" && (vb("b-sez").carried || []).includes("nature") && !vb("b-sez").gstRead && vb("b-sez").gstStale === undefined,
@@ -241,10 +246,18 @@ const taxable = (ym) => Math.round(sales(ym).reduce((a, r) => a + r.taxable, 0) 
   ctx.Cloud = {api: restStub({tally_vouchers: [H("b-sez", "2026-05-20", 3, "Sales", "S/20", "Gamma", GT({gstin: "29AABCG3333C1Z1", gst_nature: "", gst_taxability: "", gst_alter_id: 3, gst_mixed: false}))], tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []}).api};
   c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
   ok(vb("b-sez").nature === "Sales to SEZ - Taxable" && (vb("b-sez").carried || []).includes("nature"), "13. M3: a 2.4.2 entry Tally keeps with no nature or taxability: the Day Book's kind still carried");
+  b = books([V("b-sez", "Sales", "20260520", "S/20", "Gamma", [["Gamma", -11800], ["Sales", 10000, G], ["Output IGST", 1800]], {gstin: "29AABCG3333C1Z1", alt: 2, regType: "Regular", nature: "Sales to SEZ - Taxable"})]);
+  ctx.Cloud = {api: restStub({tally_vouchers: [H("b-sez", "2026-05-20", 3, "Sales", "S/20", "Gamma", GT({gstin: "29AABCG3333C1Z1", gst_nature: "", gst_taxability: "Taxable", gst_alter_id: 3, gst_mixed: false}))], tally_lines: T4.tally_lines, tally_bills: [], tally_recorder_lines: []}).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  ok(vb("b-sez").nature === "Sales to SEZ - Taxable" && (vb("b-sez").carried || []).includes("nature"), "13. M3: TallyPrime 3.0-6.2's item invoice (a taxability, no nature): the Day Book's nature still carried");
   // review M2: the mixed mark comes with the entry
   b = books([]); ctx.Cloud = {api: restStub({tally_vouchers: [H("b-mx", "2026-05-25", 4, "Sales", "S/25", "Beta", GT({gst_alter_id: 4, gst_mixed: true}))], tally_lines: [Ln("b-mx", "Beta", -200), Ln("b-mx", "Sales", 200)], tally_bills: [], tally_recorder_lines: []}).api};
   c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
-  ok(vb("b-mx").gstMixed === true, "13. M2: an entry whose GST lines disagree is marked mixed");
+  ok(vb("b-mx").gstMixed === true && vb("b-mx").taxability === "" && vb("b-mx").nature === "", "13. M2: an entry whose GST lines disagree is marked mixed and not placed by one line's kind (no taxability or nature taken)");
+  b = books([]); ctx.Cloud = {api: restStub({tally_vouchers: [H("b-mx", "2026-05-25", 4, "Sales", "S/25", "Beta", GT({gst_alter_id: 4, gst_mixed: true, gst_taxability: "Exempt", gst_nature: "Sales Exempt"}))], tally_lines: [Ln("b-mx", "Beta", -218), Ln("b-mx", "Sales", 200, G), Ln("b-mx", "Output IGST", 18)], tally_bills: [], tally_recorder_lines: []}).api};
+  c = await x.TCloud.copyHeads(b, bk, true); await x.TCloud.copyInto(b, bk, c);
+  const mxr = sales("202605").find(r => r.no === "S/25");
+  ok(mxr && mxr.cls !== "exempt" && mxr.kind !== "NIL", "13. M2: a mixed entry (first line exempt, a taxed line after) is not put in the NIL table: " + (mxr && mxr.cls + "/" + mxr.kind));
   // review L2: an error other than a missing column is not taken for an older cloud
   const deny = {api: async (q) => { if (/gst_/.test(q)) { const e = new Error("permission denied for column gst_nature (42501)"); e.code = "42501"; throw e; } return restStub({tally_vouchers: [H("b-d", "2026-05-24", 2, "Sales", "S/26", "Beta")], tally_lines: [], tally_bills: [], tally_recorder_lines: []}).api(q); }};
   b = books([]); ctx.Cloud = deny; let thrown = "";
