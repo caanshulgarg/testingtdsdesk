@@ -22,7 +22,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or ledlist (next-masterhook: the bridge''s FinComLedgers chunks and FinComLedgerChanges, request XML from the ref''s source, on about 2,000 / 5,000 / 20,000 ledgers; ledv.ps1; 3.0 and 7.1) or mhook (next-masterhook: Stock Item, Godown and Pay Head created / altered / deleted on the screen with the ref''s add-on and with no TDL, Tally''s stored master against what was typed; mhookv.ps1, ocrw.ps1) or dpath (2.4.1: the formula for the data folder the company was opened from, inside the add-on''s Form Accept / delete / cancel events, two data folders, and its save time; dpathv.ps1) or tdsgst (round 43, TallyPrime 7.1 only, test data: a throwaway company with GST and TDS, 39 entries by XML, the published bridge 2.4.1 reading them as in production with recorderSource both, the amendments after filing; Day Book, masters and every request the bridge sent kept for tests/run_e2e_tdsgst.py; tdsgstv.ps1, stubg.py) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or ledlist (next-masterhook: the bridge''s FinComLedgers chunks and FinComLedgerChanges, request XML from the ref''s source, on about 2,000 / 5,000 / 20,000 ledgers; ledv.ps1; 3.0 and 7.1) or mhook (next-masterhook: Stock Item, Godown and Pay Head created / altered / deleted on the screen with the ref''s add-on and with no TDL, Tally''s stored master against what was typed; mhookv.ps1, ocrw.ps1) or dpath (2.4.1: the formula for the data folder the company was opened from, inside the add-on''s Form Accept / delete / cancel events, two data folders, and its save time; dpathv.ps1) or tdsgst (round 43, TallyPrime 7.1 only, test data: a throwaway company with GST and TDS, 39 entries by XML, the published bridge 2.4.1 reading them as in production with recorderSource both, the amendments after filing; Day Book, masters and every request the bridge sent kept for tests/run_e2e_tdsgst.py; tdsgstv.ps1, stubg.py) or gsttype (2.4.2: what Tally stores for an entry's GST type: the round-43 GST entries, the blocked credit set three ways, an item invoice; each asked with the ref's FinComVoucherObject, raw answers and times kept; gsttypev.ps1, no bridge) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
         default: quick
       # 2.4.0's combined gate (the coordinator, 08-Oct-2026): mode gate240 = every mode below in one run, one job per mode and
       # release (s235, tds240, renum, bankb, selfck, mhook, ledlist, upg), on all five releases unless versions says; a comma
@@ -42,7 +42,7 @@ on:
       # 2.4.1's gate (09-Oct-2026): mode dsrc (one company in two data folders: dsrcv.ps1, stubds.py) and upg from the
       # published 2.4.0 (upg_from=2.4.0: its committed setup, SHA-256 00ab8042...16dc, and add-on from 3bf7b6d9)
       upg_from:
-        description: 'upg: the published release installed first (2.3.3, or 2.4.0 for 2.4.1''s gate)'
+        description: 'upg: the published release installed first (2.3.3, 2.4.0 for 2.4.1''s gate, 2.4.1 for 2.4.2''s gate)'
         default: '2.3.3'
 permissions:
   contents: write
@@ -65,7 +65,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -74,7 +74,7 @@ jobs:
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
             if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; tdsgst) vs="7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; tdsgst) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            case $x in hang2|mhook) t=220; c=190 ;; tdsgst) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype) t=130; c=105 ;; *) t=75; c=40 ;; esac
             for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
           done
           echo "matrix={\"include\":[${inc%,}]}" | tee -a "$GITHUB_OUTPUT"
@@ -153,7 +153,7 @@ jobs:
       # upg: the published 2.3.3 (commit 91faf7f3, setup SHA-256 8280206b...e5e5) and its add-on, the install the gate's
       # setup goes over
       - name: Bridge 2.3.3 (upg)
-        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from != '2.4.0'
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from != '2.4.0' && inputs.upg_from != '2.4.1'
         run: |
           git fetch -q --depth 1 origin 91faf7f3b04932e65624b8bff5072c7ffa62b8f9
           mkdir -p bridge-go/dist/old233
@@ -173,6 +173,17 @@ jobs:
           got=$(sha256sum bridge-go/dist/old240/FinComBridge-Setup-2.4.0.exe | awk '{print $1}')
           [ "$got" = 00ab8042dff1b1b508410632f832d20ee1169fcc71493f682af38a413ac416dc ] || { echo "::error::2.4.0 setup SHA-256 $got"; exit 1; }
           echo "2.4.0 setup SHA-256 $got"
+      # upg_from=2.4.1 (2.4.2's gate): the published 2.4.1 (committed at c89c58ff, setup SHA-256 79e95ba3...e06a) and its add-on
+      - name: Bridge 2.4.1 (upg from 2.4.1)
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from == '2.4.1'
+        run: |
+          git fetch -q --depth 1 origin c89c58ffa929d561d1de3d7bf3ca175dbc24af22
+          mkdir -p bridge-go/dist/old241
+          git show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.4.1.exe > bridge-go/dist/old241/FinComBridge-Setup-2.4.1.exe
+          git show FETCH_HEAD:bridge-go/addon/FinComRecorder.tdl > bridge-go/dist/old241/FinComRecorder.tdl
+          got=$(sha256sum bridge-go/dist/old241/FinComBridge-Setup-2.4.1.exe | awk '{print $1}')
+          [ "$got" = 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a ] || { echo "::error::2.4.1 setup SHA-256 $got"; exit 1; }
+          echo "2.4.1 setup SHA-256 $got"
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -257,7 +268,9 @@ jobs:
           if ($env:VMODE -eq 'tds240') { $want += @('t1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') }
           if ($env:VMODE -eq 'selfck') { $want += @('n1 nightly check: Tally''s changes compared, the missing fetched', 'n2 nightly check: the words recorded', 'n3 nightly check: once a night') }
           if ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.0') { $want += @('u1 2.4.1 installed over 2.4.0: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.0: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
+          elseif ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.1') { $want += @('u1 2.4.2 installed over 2.4.1: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.1: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
           elseif ($env:VMODE -eq 'upg') { $want += @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
+          if ($env:VMODE -eq 'gsttype') { $want += @('x1 the GST entries made in Tally', 'x2 the entry request answered for every entry (raw kept, timed)', 'x3 the blocked credit as Tally keeps it') }
           if ($env:VMODE -eq 'tdsgst') { $want += @('g1 masters and entries made in Tally', 'g2 the bridge sent every entry (phase 1)', 'g3 the amendments made in Tally and sent (phase 2)', 'g4 the Day Book and masters exported') }
           if ($env:VMODE -eq 'dsrc') { $want += @('d1 a save in folder 1 (the bridge''s own Tally): applied, its line with dp= of folder 1', 'd2 a save in folder 2 (one Tally, one folder at a time): never fetched, never applied; other_source with folder 2''s data id, no body', 'd2b a save in folder 2 with two Tallys at once: never fetched, never applied; other_source with folder 2''s data id, no body', 'd3 FinCom chooses folder 2: after a fresh starting point folder 2''s new saves applied, folder 1''s held', 'd4 the fallback by number: asked once, answered within 2 s, taken only when exactly one voucher matches') }
           if ($env:VMODE -eq 'full') { $want += @('c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') }

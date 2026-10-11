@@ -6,7 +6,7 @@
 #         test, A..F, its answers captured), c7 the Tally version string the bridge reads (the read test's "Tally program")
 # One line per check in versions\results.txt: PASS / FAIL / HARNESS (the harness, not the bridge or Tally) with the times.
 $ErrorActionPreference = 'Continue'
-$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg'); $dsrc = ($env:VMODE -eq 'dsrc'); $dpath = ($env:VMODE -eq 'dpath'); $tdsgst = ($env:VMODE -eq 'tdsgst')   # tdsgst: round 43, tdsgstv.ps1 (masters before the bridge, then the entries, the bridge's lines, the amendments; stubg.py as the cloud);  dpath: dpathv.ps1 after c2 (no bridge; the data folder formula for 2.4.1's add-on);  bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
+$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg'); $dsrc = ($env:VMODE -eq 'dsrc'); $dpath = ($env:VMODE -eq 'dpath'); $tdsgst = ($env:VMODE -eq 'tdsgst'); $gsttype = ($env:VMODE -eq 'gsttype')   # gsttype: 2.4.2, gsttypev.ps1 after c2 (no bridge; what Tally stores for an entry's GST type, as the entry request answers it); tdsgst: round 43, tdsgstv.ps1 (masters before the bridge, then the entries, the bridge's lines, the amendments; stubg.py as the cloud);  dpath: dpathv.ps1 after c2 (no bridge; the data folder formula for 2.4.1's add-on);  bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $rec = 'C:\ProgramData\FinCom\recorder'
 $co1 = 'FinCom Spike Co'
@@ -84,6 +84,7 @@ Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
 # 2.4.1's gate: UPG_FROM=2.4.0 installs the published 2.4.0 first (bridge-dist\old240) and its add-on
 $upgFrom = if ($env:UPG_FROM) { $env:UPG_FROM } else { '2.3.3' }; $upgOld = 'old' + ($upgFrom -replace '\.', '')
 $upgNames = if ($upgFrom -eq '2.3.3') { @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
+  elseif ($upgFrom -eq '2.4.1') { @('u1 2.4.2 installed over 2.4.1: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.1: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
   else { @("u1 2.4.1 installed over ${upgFrom}: the version and the settings carried", 'u2 the recorder state carried: nothing sent twice, nothing lost', "u3 held lines from ${upgFrom}: each asked once in all and ended", 'u4 a new save after the upgrade arrives with its body') }
 $tdl233 = "$fc\FinComRecorder233.tdl"
 if ($upg) { Copy-Item (Join-Path $env:BRIDGE_DIST "$upgOld\FinComRecorder.tdl") $tdl233 -Force -ErrorAction SilentlyContinue }
@@ -131,6 +132,10 @@ if ($bank) {
 }
 if ($big) {
   if ($c2ok) { . (Join-Path $PSScriptRoot 'bigv.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS big: not run (c2: Tally or the company not up)' -Encoding UTF8 }
+  Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
+}
+if ($gsttype) {
+  if ($c2ok) { . (Join-Path $PSScriptRoot 'gsttypev.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS gsttype: not run (c2: Tally or the company not up)' -Encoding UTF8 }
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
 }
 if ($dpath) {

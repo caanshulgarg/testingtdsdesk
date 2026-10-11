@@ -200,9 +200,9 @@ try {
     $all = @($all)
     $bad = @($all | Where-Object { $_.all -ne 1 -or $_.ended -lt 1 -or ($_.kind -eq 'real' -and $_.body -lt 1) -or ($_.held -and $_.new -ne 1) -or (-not $_.held -and $_.new -ne 0) })
     $byKind = ($all | Group-Object kind | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
-    URes $CU3 $(if ($all.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $all.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} seeded lines ({1}); held by {2} at the upgrade: {3}; asked again by 2.4.1 though {2} had ended them: {4}; each asked once in all and ended: {5}; not so: {6}; lost: {7}" -f `
+    URes $CU3 $(if ($all.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $all.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} seeded lines ({1}); held by {2} at the upgrade: {3}; asked again by the new bridge though {2} had ended them: {4}; each asked once in all and ended: {5}; not so: {6}; lost: {7}" -f `
         $all.Count, $byKind, $upgFrom, @($all | Where-Object held).Count, @($all | Where-Object { -not $_.held -and $_.new -gt 0 }).Count, ($all.Count - $bad.Count),
-        $(if ($bad.Count) { ($bad | Select-Object -First 8 | ForEach-Object { "$($_.id) ($($_.kind), mid $($_.mid), held at the upgrade $($_.held)) asks in all $($_.all), by 2.4.1 $($_.new), ended $($_.ended), body $($_.body)" }) -join '; ' } else { 'none' }), $(if ($lost.Count) { $lost -join ', ' } else { 'none' }))
+        $(if ($bad.Count) { ($bad | Select-Object -First 8 | ForEach-Object { "$($_.id) ($($_.kind), mid $($_.mid), held at the upgrade $($_.held)) asks in all $($_.all), by the new bridge $($_.new), ended $($_.ended), body $($_.body)" }) -join '; ' } else { 'none' }), $(if ($lost.Count) { $lost -join ', ' } else { 'none' }))
   }
   $byKind = ($res | Group-Object kind | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
   URes $CU3 $(if ($res.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $res.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} lines held at the upgrade ({1}); asked once by 2.4.0 and ended: {2}; not so: {3}; seeded lines neither held at the upgrade nor ended (lost): {4}; e.g. {5}" -f `
