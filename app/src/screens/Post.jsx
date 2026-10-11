@@ -441,7 +441,8 @@ function History({ co, canPost }) {
 // the three tabs: [id, label, count]
 const TABS = [["topost", "To post"], ["posted", "Posted"], ["errors", "Errors"]];
 function PostTabs({ now, counts, pick }) {
-  return <div className="post-tabs" role="tablist" data-post-tabs="">
+  // clean-up batch 3: inside Purchase's own tabs, a row of chips (a second level is never a second row of tabs)
+  return <div className="post-tabs chip-filter" role="tablist" data-post-tabs="">
     {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={now === id} data-post-tab={id} className={"post-tab" + (now === id ? " on" : "") + (id === "errors" && counts[id] ? " bad" : "")}
       onClick={() => pick(id)}>{label}{" "}<span className="sbar-n" data-tab-n="">{counts[id] || 0}</span></button>)}
   </div>;

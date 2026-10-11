@@ -7,6 +7,7 @@
 // Each section is one draft (review 18: parts/Confirm.jsx, src/js/60): what is typed or picked is checked as before
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
+import HowPage from "../parts/HowPage.jsx";
 import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
@@ -62,6 +63,7 @@ function Layout({ label, groups, current, pick, children, scope, cid }) {
       <div className="setbody">
         <BackTo />
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
+        {scope === "setup" && <HowPage page="setup" />}
         {/* clean-up batch 2: a section where each button acts at once has no Save bar ("Nothing to save here" beside a Save) */}
         {!(SEC_STORES[current] || []).length && /^Nothing to save here/.test(SEC_EMPTY[current] || "") ? <div className="cfm-sec" data-confirm={scope + ":" + current} data-saves-at-once="">{children}</div>
           : <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>}

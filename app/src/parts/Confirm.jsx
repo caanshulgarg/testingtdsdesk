@@ -35,7 +35,10 @@ export function SavedLine({ id, cid, dirty, empty }) {
 
 export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
   const dirty = Drafts.dirty(id), s = Drafts.secs[id], ready = !!(s && s.custom && s.custom.canSave && s.custom.canSave());
-  return <div className="cfm-foot" data-confirm-foot={id} aria-label={"Save " + (label || "")}>
+  // clean-up batch 3: the Save bar shows only when something changed (or a section with its own saving is ready); until
+  // then one quiet line says when it was last saved
+  if (!dirty && !ready) return <div className="cfm-foot cfm-clean" data-confirm-foot={id} aria-label={"Save " + (label || "")}>{(Drafts.savedRec(id, cid) || empty) && <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />}</div>;
+  return <div className="cfm-foot cfm-dirty" data-confirm-foot={id} aria-label={"Save " + (label || "")}>
     <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />
     <span className="cfm-btns">
       {dirty && <Button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</Button>}

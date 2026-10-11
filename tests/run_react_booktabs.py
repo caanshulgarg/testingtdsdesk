@@ -115,7 +115,7 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(400)
     pg.click("#misFc tbody tr:first-child button.linkbtn"); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.misWeek") == 0 and pg.locator("#misFc th:text-is('Why this date')").count() == 1, "a week of the forecast opens")
-    pg.click('nav[aria-label="MIS"] button:text-is("Budget")'); pg.wait_for_timeout(400)
+    pg.click('nav[aria-label="MIS"] [data-tabs-more] > summary'); pg.click('nav[aria-label="MIS"] button:text-is("Budget")')   # clean-up batch 3: under More; pg.wait_for_timeout(400)
     box = pg.locator('input[aria-label="Budget Revenue from operations Apr-2025"]')
     box.fill("250000"); box.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.books.budget['2025'].rev['202504']") == 250000, "a budget month is kept")

@@ -1,0 +1,184 @@
+/* Clean-up batch 3, "Polish" (11-Oct-2026, owner-approved). Styles only: the pages' figures, words and data are as they
+   were. Loaded last (styles/index.css), so these win over the earlier steps where they meet.
+
+   1. One tab style everywhere: Arc's underlined tabs (a page's parts, under its header); the chosen one in the brand
+      with a line under it, its count in the brand too. At most six show; the rest are under "More" at the row's end
+      (parts/PageTabs.jsx). A second level is never a second row of tabs: it is a row of chips inside the content
+      (.chip-filter: Audit's areas, Post to Tally's To post / Posted / Errors). On a phone the tabs stay on one line and
+      scroll sideways.
+   2. One content width: every page uses the whole width beside the sidebar, with the same 32 px (16 px on a phone).
+   3. Tables: a name that is too long ends in "…" (the whole name on hover), so it never runs into the next column.
+   4. One banner a page: the line saying how fresh the books are is a plain line (it was a blue box on Reports, Look up
+      and Letters).
+   5. Purchase's bar at the foot: inside the content area (it starts after the sidebar), one row, and on a phone one
+      short row above the bottom bar.
+   6. Save bars show only when something changed; otherwise one quiet line says when it was last saved.
+   7. "How this page works": one folded line.
+   Motion: only colour fades, and none when the computer asks for less motion. */
+
+/* ---------- 1. tabs ---------- */
+:is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav):not([aria-label="Status"]), nav.sbar[aria-label="Status"] [role="tablist"], .bk-tabs, .lk-kinds) {
+  display: flex; flex-wrap: nowrap; align-items: stretch; gap: 2px; width: 100%; max-width: 100%; min-width: 0; margin: 10px 0 12px; padding: 0;
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; }
+:is(#app, #cobar) :is(nav.sbar, .bk-tabs, .lk-kinds, [role="tablist"])::-webkit-scrollbar { display: none; }
+#cobar nav.sbar[aria-label="Status"] { display: block; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; }
+#cobar nav.sbar[aria-label="Status"] [role="tablist"] { margin: 6px 0 0; border-bottom: 0; }
+/* the Arc Tabs' root around the Status row: no frame of its own */
+#cobar nav.sbar[aria-label="Status"] > div { display: block; min-width: 0; }
+:is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav) > button, nav.sbar [role="tablist"] > button[role="tab"], .bk-tabs > button, .lk-kinds > button, nav.sbar > details.more > summary) {
+  position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-width: 0; min-height: 40px; margin: 0 0 -1px; padding: 0 12px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; outline: 0; background: transparent; box-shadow: none; color: var(--text-secondary);
+  font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+:is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav) > button, nav.sbar [role="tablist"] > button[role="tab"], .bk-tabs > button, .lk-kinds > button, nav.sbar > details.more > summary):hover {
+  color: var(--foreground); background: transparent; }
+:is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav) > button[aria-selected="true"], nav.sbar [role="tablist"] > button[role="tab"][aria-selected="true"], .bk-tabs > button[aria-selected="true"], .lk-kinds > button[aria-selected="true"], nav.sbar > details.more[data-on] > summary) {
+  color: var(--accent); border-bottom-color: var(--accent); background: transparent; box-shadow: none; outline: 0; font-weight: 600; }
+:is(#app, #cobar) :is(nav.sbar, .bk-tabs) button :is(.sbar-n, .cnt) { display: inline-block; min-width: 20px; margin: 0; padding: 0 6px; border-radius: 999px; text-align: center;
+  font-size: 12px; font-weight: 600; line-height: 18px; background: color-mix(in oklab, var(--tone-slate) 16%, var(--surface)); color: var(--foreground); }
+:is(#app, #cobar) :is(nav.sbar, .bk-tabs) button[aria-selected="true"] :is(.sbar-n, .cnt) { background: var(--accent); color: var(--accent-foreground); }
+:is(#app, #cobar) nav.sbar .sbar-n.attn, :is(#app, #cobar) nav.sbar button[aria-selected="true"] .sbar-n.attn { background: var(--warn-soft); color: var(--warn); }
+/* the row's More: a tab whose menu holds the rest; it is chosen while one of those is */
+:is(#app, #cobar) nav.sbar > details.more { position: static; display: flex; flex: 0 0 auto; }
+:is(#app, #cobar) nav.sbar > details.more > summary .more-caret { font-size: 10px; color: inherit; }
+:is(#app, #cobar) nav.sbar > details.more > .more-pop { position: absolute; right: auto; top: auto; margin-top: 42px; }
+:is(#app, #cobar) nav.sbar > details.more .more-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+/* the menu must not be cut by the row's sideways scroll: the row only scrolls on a phone */
+@media (min-width: 601px) { :is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav):not([aria-label="Status"]), .bk-tabs, .lk-kinds):has(> details.more) { overflow: visible; } }
+/* Bank's row keeps its switch and search beside the tabs */
+#app .bk-bar > .bk-tabs { width: auto; flex: 1 1 auto; margin: 0; }
+/* a second level: a row of chips inside the content, never a second row of tabs */
+.chip-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+#app .post-tabs.chip-filter { margin: 10px 0 12px; border: 0; }
+.chip-filter > button, #app .post-tabs.chip-filter > .post-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin: 0; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+.chip-filter > button:hover, #app .post-tabs.chip-filter > .post-tab:hover { color: var(--foreground); border-color: var(--border-strong); }
+.chip-filter > button[aria-selected="true"], .chip-filter > button[aria-pressed="true"], #app .post-tabs.chip-filter > .post-tab.on {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); background: var(--accent-subtle); color: var(--accent); font-weight: 600; }
+.chip-filter .sbar-n { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 17px; text-align: center;
+  background: color-mix(in oklab, var(--tone-slate) 16%, var(--surface)); color: var(--foreground); }
+.chip-filter > button[aria-pressed="true"] .sbar-n, #app .post-tabs.chip-filter > .post-tab.on .sbar-n { background: var(--accent); color: var(--accent-foreground); }
+#app .post-tabs.chip-filter > .post-tab.bad .sbar-n { background: var(--bad-soft); color: var(--bad); }
+/* Audit's findings: the areas and the status in one row */
+.audit-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 12px 0 4px; }
+.audit-filters .revfilter { margin: 0; }
+/* on a phone: one line, scrolled sideways */
+@media (max-width: 600px) {
+  :is(#app, #cobar) :is(nav.sbar:not([aria-label="Return"]):not(.subnav):not([aria-label="Status"]), nav.sbar[aria-label="Status"] [role="tablist"], .bk-tabs, .lk-kinds) { flex-wrap: nowrap !important; overflow-x: auto; }
+  :is(#app, #cobar) nav.sbar > details.more > .more-pop { position: fixed; left: 16px; right: 16px; max-width: none; margin-top: 42px; }
+  #app .bk-bar > .bk-tabs { flex-basis: 100%; }
+  .chip-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .chip-filter > button, #app .post-tabs.chip-filter > .post-tab { flex: 0 0 auto; white-space: nowrap; }
+}
+
+/* ---------- 2. one content width ---------- */
+/* (the pages that had a width of their own: From Tally 760 px, Today 1100, the Overview and Post to Tally 1180, the upload
+   page 880, the Tally ledgers 1100) */
+#app :is(.up-page[data-upload-page], .today, .dash, .poststep, .collect, .ledpage) { max-width: none; }
+/* forms stay readable inside their full-width card */
+#app .form-cap { max-width: 720px; }
+
+/* ---------- 3. tables: names end in "…" rather than run into the next column ---------- */
+/* Purchase's list fits the page at 1440: the supplier, the payment type and the limit kept to their width */
+#app .revtbl td.pt { max-width: 230px; }
+#app .revtbl .src { max-width: 170px; white-space: normal; }
+#app table.lt.revtbl td { padding-left: 8px; padding-right: 8px; }
+#app table.lt.revtbl .lt-sort { padding-left: 8px; padding-right: 8px; }
+#app table.lt.revtbl td.ac { white-space: nowrap; }
+#app .revtbl td.pt .pn { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
+#app .revtbl td.pt .nr { max-width: 100%; }
+#app table td.n, #app table th.n { text-align: right; }
+#app .bk-table td.n, #app table.lt td.n { font-variant-numeric: tabular-nums; }
+
+/* ---------- 4. the books' freshness: a plain line, not a box ---------- */
+#app .lk-fresh { margin: 0 0 10px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+#app .lk-fresh .note { flex: 1 1 auto; }
+
+/* ---------- 5. Purchase's bar: inside the content area, one row ---------- */
+@media (min-width: 901px) {
+  body:has(.side:not(.hidden):not(.side-folded)) .actionbar { left: 236px; }
+  body:has(.side.side-folded:not(.hidden)) .actionbar { left: 64px; }
+  .actionbar { padding: 8px 32px; flex-wrap: nowrap; }
+  .actionbar .ab-left, .actionbar .ab-right { flex-wrap: nowrap; }
+  .actionbar .ab-left { flex: 1 1 auto; min-width: 0; }
+}
+.bk-actionbar .ab-why { position: relative; display: inline-flex; }
+.bk-actionbar .ab-why > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--bad); font-size: 13px; white-space: nowrap; }
+.bk-actionbar .ab-why > summary::-webkit-details-marker { display: none; }
+.bk-actionbar .ab-why > summary .ab-i { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; font-weight: 700; font-style: normal; }
+.bk-actionbar .ab-why > .ab-why-pop { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 50; width: min(440px, calc(100vw - 32px)); padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised, var(--surface)); box-shadow: var(--shadow-floating); color: var(--foreground); font-size: 13px; white-space: normal; }
+.bk-actionbar .ab-why-pop > * + * { margin-top: 6px; }
+.bk-actionbar .ab-why-pop .none-ready { color: var(--bad); }
+@media (max-width: 600px) {
+  .actionbar { flex-wrap: nowrap; gap: 8px; padding: 6px 12px; }
+  .actionbar .ab-left { flex: 0 0 auto; max-width: 45%; min-width: 0; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
+  /* the main button first, in sight; the others a swipe away */
+  .actionbar .ab-right { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .actionbar .ab-right > .primary, .actionbar .ab-right > .approve-wrap { order: -1; margin-left: auto; }
+  .actionbar .ab-right:not(:has(> .primary, > .approve-wrap)) > :first-child { margin-left: auto; }
+  .actionbar .ab-right::-webkit-scrollbar { display: none; }
+  .actionbar .ab-right .btn { flex: 0 0 auto; white-space: nowrap; }
+  .bk-actionbar .bk-stat { margin-right: 4px; font-size: 13px; }
+  .bk-actionbar .bk-stat + .bk-stat { display: none; }
+  .bk-actionbar .ab-why > summary .ab-why-w { display: none; }
+  .bk-actionbar .ab-why > .ab-why-pop { position: fixed; left: 12px; right: 12px; bottom: 120px; width: auto; }
+  body:has(.side:not(.hidden)):has(.actionbar) .mainwrap { padding-bottom: 120px; }
+  /* just over the bottom bar (64 px high), never on it */
+  body:has(.side:not(.hidden)) .actionbar { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  body.is-test:has(.side:not(.hidden)) .actionbar { bottom: calc(83px + env(safe-area-inset-bottom)); }   /* the test build's strip is 19 px under the bottom bar */
+}
+
+/* ---------- 6. Save bars only when something changed ---------- */
+.cfm-foot.cfm-clean { position: static; margin: 10px 0 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.cfm-foot.cfm-dirty { position: sticky; bottom: 0; box-shadow: 0 -6px 18px rgb(var(--shade) / .08); border: 1px solid var(--border); background: var(--surface); }
+
+/* ---------- 7. "How this page works", folded ---------- */
+.howto { margin: 0 0 12px; color: var(--text-secondary); font-size: 13.5px; }
+.howto > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; color: var(--text-muted); font-weight: 500; }
+.howto > summary::-webkit-details-marker { display: none; }
+.howto > summary::before { content: "?"; display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: 50%; font-size: 11px; font-weight: 700; }
+.howto > summary:hover { color: var(--foreground); }
+.howto[open] > div { max-width: 720px; margin-top: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.howto[open] > div p { margin: 0; }
+.howto[open] > div p + p { margin-top: 6px; }
+
+/* ---------- Reports: a plain list of the reports, by area ---------- */
+.rpt-index { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.rpt-group { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.rpt-group > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 6px; }
+.rpt-group > header h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.rpt-heads { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; padding: 0; list-style: none; color: var(--text-secondary); font-size: 13px; }
+.rpt-heads b { color: var(--foreground); font-variant-numeric: tabular-nums; font-weight: 600; }
+.rpt-list { margin: 0; padding: 0; list-style: none; }
+.rpt-list > li + li { border-top: 1px solid var(--border-subtle, var(--border)); }
+.rpt-row, .rpt-list .rpt-link { display: flex; flex-direction: row; width: 100%; border-radius: 0; align-items: baseline; gap: 4px 12px; padding: 9px 2px; border: 0; background: transparent; color: var(--foreground); font: inherit; text-align: left; cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard); }
+.rpt-row b { flex: 0 0 auto; font-size: 14px; font-weight: 500; }
+.rpt-row span { flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: 13px; }
+.rpt-row::after { content: "›"; flex: none; color: var(--text-muted); }
+.rpt-row:hover b, .rpt-row:focus-visible b { color: var(--accent); }
+.rpt-charts { margin: 0 0 12px; }
+.rpt-charts > summary { cursor: pointer; color: var(--text-secondary); font-weight: 500; }
+.rpt-charts[open] > summary { margin-bottom: 10px; }
+@media (max-width: 900px) { .rpt-index { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .rpt-row { flex-wrap: wrap; } .rpt-row span { flex-basis: 100%; order: 3; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#app, #cobar) :is(nav.sbar, .bk-tabs, .lk-kinds) button, .chip-filter > button, .rpt-row, .post-tab { transition: none !important; }
+}
+
+/* ---------- Audit: its five figures in one row ---------- */
+@media (min-width: 901px) { #app .dash-tiles.audit-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.cfm-foot.cfm-clean:empty { display: none; }
+
+/* ---------- one banner a page: with the page's alert line (the most important, its fix beside it) shown, the other
+   notices on the page are plain lines in the page, not boxes of their own (the rest are in the bell) ---------- */
+#app:has(.alert-line) :is(.bk-alert, .bk-warn):not(.alert-line) { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-secondary); }
+#app:has(.alert-line) :is(.bk-alert, .bk-warn).bad:not(.alert-line) { color: var(--bad); }
+#app:has(.alert-line) .bk-alert.not-read b { color: var(--foreground); }
+/* its two-word headings may take two lines rather than widen the list */
+#app table.lt.revtbl thead th, #app table.lt.revtbl thead th .lt-sort, #app table.lt.revtbl thead th .colh { white-space: normal; }
+#app .revfilter .colpick { margin-left: auto; }

@@ -102,8 +102,10 @@ function Settings() {
 
 export default function Letters({ b }) {
   const x = LTR.st(), have = (b.vouchers || []).length > 0;
-  const head = <section className="dash-card"><div className="rpt-top-row"><div><h3>Confirmations and reminders</h3><p className="note" style={{ margin: 0 }}>Letters are printed or saved as PDF, or opened in your own email or WhatsApp to send. Nothing is sent from FinCom.</p></div></div>
-    <div className="lk-kinds" role="tablist" aria-label="Letters">{[["confirm", "Balance confirmations"], ["remind", "Dues reminders"], ["settings", "Letter settings"]].map(([k, l]) => <button key={k} role="tab" aria-selected={x.mode === k} onClick={() => ltrMode(k)}>{l}</button>)}</div></section>;
+  // clean-up batch 3: the page's tabs in the one style, first; then its one line (the card around them is gone)
+  const head = <>
+    <div className="lk-kinds" role="tablist" aria-label="Letters">{[["confirm", "Balance confirmations"], ["remind", "Dues reminders"], ["settings", "Letter settings"]].map(([k, l]) => <button key={k} role="tab" aria-selected={x.mode === k} onClick={() => ltrMode(k)}>{l}</button>)}</div>
+    <p className="note" data-letters-line="" style={{ margin: "0 0 10px" }}>Letters are printed or saved as PDF, or opened in your own email or WhatsApp to send. Nothing is sent from FinCom.</p></>;
   if (!have && x.mode !== "settings") return <>{head}<NoBooks what="Letters" /></>;
   return <>{head}
     {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}

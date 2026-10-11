@@ -8,6 +8,7 @@
 //
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
 // The column filters' chips are parts/ChipBar.jsx.
+import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef } from "react";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
@@ -239,9 +240,11 @@ export default function Bank() {
       {top}
       <div className="bk-empty" id="bankDrop" tabIndex={0} role="button" onClick={() => bankAct("bankPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); bankAct("bankPick"); } }}>
         <div className="bk-empty-ic">⤒</div><h2>No bank statement yet</h2>
-        <p className="note">Drop a statement here, or use <b>Upload statement</b> at the top right. Excel or CSV from net banking works best; e-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
+        <p className="note">Drop a statement here, or click to choose one: Excel or CSV from net banking works best, and PDFs and photos are read too.</p>
       </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><RestoreMenu /></div>
+      {/* clean-up batch 3: one next step (the drop zone); the bank's settings and a restore are under More */}
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><More label="More" data-bank-empty-more="" items={[["Bank settings", () => bankAct("bankSettings")],
+        trashOf(B()).length ? ["Restore a deleted statement", () => bankAct("bankRestoreStmt")] : null]} /></div>
     </div>
     {b.showSettings && <BankSettings />}
   </>;

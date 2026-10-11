@@ -1,5 +1,6 @@
-// The Reports tab of a client's books: every report in one place, by area, each area opening with a few figures and a
-// small chart for the year. Was RPT.view and RPT.areaDash (src/js/45); the figures are RPT.data, a report opens with
+// The Reports tab of a client's books: every report in one place, by area, as a plain list (clean-up batch 3,
+// 11-Oct-2026): each area its reports, one line each with what it shows, and at most two headline figures; the area's
+// other figures and its chart are under "Figures and charts", folded. Was RPT.view and RPT.areaDash (src/js/45); the figures are RPT.data, a report opens with
 // RPT.open. The line saying how fresh the books are is parts/FreshBar.jsx.
 //
 // State: S.rptQ (the search), S.rptFy (the year).
@@ -10,13 +11,14 @@ import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 
-const m = (v) => INR.format(r2(v || 0));   // two decimals everywhere (spec K5)
+// two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
+const m = (v) => money(r2(v || 0));
 const pct = (a, c) => c ? (Math.round(a / c * 1000) / 10) + "%" : "—";
 
 // a figure that opens its report
 const T = ({ l, v, sub, rid, cls }) => <button className={"dtile" + (cls ? " " + cls : "")} onClick={rid ? () => RPT.open(rid) : undefined}><span>{l}</span><b>{v}</b>{sub ? <small>{sub}</small> : null}</button>;
 const Tiles = ({ children }) => <div className="dash-tiles">{children}</div>;
-const Link = ({ r }) => <button className="rpt-link" onClick={() => RPT.open(r[0])}><b>{r[2]}</b><span>{r[3]}</span></button>;
+const Link = ({ r }) => <button className="rpt-link rpt-row" onClick={() => RPT.open(r[0])}><b>{r[2]}</b><span>{r[3]}</span></button>;
 
 function AreaDash({ id, d }) {
   const mon = d.months.map((x) => FC.shortMonth(x));
@@ -85,26 +87,55 @@ function AreaDash({ id, d }) {
   return null;
 }
 
+// at most two headline figures an area, the same figures its tiles show (AreaDash); none before the books are in
+function heads(id, d) {
+  if (!d) return [];
+  if (id === "overview") return [["Sales", m(d.salesTotal)], ["Profit before tax", d.groups ? m(d.pl.pbt.t) : "—"]];
+  if (id === "parties") {
+    const owed = (A) => A.sum.owe != null ? A.sum.owe : Math.max(0, A.sum.tally != null ? A.sum.tally : A.sum.open);
+    return [["Owed to you", m(owed(d.recv))], ["You owe", m(owed(d.pay))]];
+  }
+  if (id === "cash") {
+    const ti = Object.values(d.inM).reduce((s, x) => s + x, 0), to = Object.values(d.outM).reduce((s, x) => s + x, 0);
+    return [["Received", m(ti)], ["Paid out", m(to)]];
+  }
+  if (id === "gst") { const g = d.comp.gst || [], s = (k) => g.reduce((a, x) => a + num(x[k]), 0); return [["Tax on sales", m(s("out"))], ["Worked out to pay", m(s("due"))]]; }
+  if (id === "tds") { const t = d.comp.tds || []; return [["Deducted", m(t.reduce((a, x) => a + x.ded, 0))], ["Paid", m(t.reduce((a, x) => a + x.dep, 0))]]; }
+  if (id === "audit") {
+    if (!d.au || Audit.stale(d.au)) return [];
+    return [["Serious, still open", String(d.open.filter((f) => f.sev === "high").length)], ["All open", String(d.open.length)]];
+  }
+  return [];
+}
+
 export default function Reports({ b }) {
   const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
   // when the bridge is live, the books are brought up to date on opening (as before, after each drawing)
   useEffect(() => { if (LK.live()) setTimeout(() => LK.autoFresh(), 0); });
   const d = have ? RPT.data() : null, R = have ? RPT.range() : null;
   const head = <>
-    <section className="dash-card rpt-head"><div className="rpt-top-row"><div><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + " in one place. Click a figure or a report to open it."}</p></div>
+    {(have || LK.live()) && <FreshBar b={b} />}
+    <div className="rpt-top-row rpt-find"><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + ", by area. Click one to open it."}</p>
       <input type="search" id="rptQ" data-fk="rptQ" value={S.rptQ || ""} placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report" onChange={(ev) => setAndShow("rptQ", ev.target.value, true)} />
-      {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div></section>
+      {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div>
     {have && R && R.notRead && <NotRead end={R.end} what={"Reports " + FC.fyLabel(R.fy)} read={FC.fyLabel(R.fy)} show={RPT.fys()[0] ? FC.fyLabel(RPT.fys()[0]) : ""} onShow={() => RPT.pickFy(RPT.fys()[0])} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
-    {(have || LK.live()) && <FreshBar b={b} />}
     {!have && <NoBooks what="Reports" />}
   </>;
   if (q) {
     const hits = RPT.LIST.filter((r) => (r[2] + " " + r[3] + " " + RPT.AREAS.find((a) => a.id === r[1]).title).toLowerCase().includes(q));
-    return <>{head}<section className="dash-card" style={{ marginTop: 12 }}><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3><div className="rpt-links">
-      {hits.length ? hits.map((r) => <Link key={r[0]} r={r} />) : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</div></section></>;
+    return <>{head}<section className="rpt-group" style={{ marginTop: 12 }}><header><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3></header>
+      {hits.length ? <ul className="rpt-list">{hits.map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul> : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</section></>;
   }
-  return <>{head}<div className="rpt-grid">{RPT.AREAS.map((a) =>
-    <section key={a.id} className={"dash-card rpt-area rpt-" + a.id}><div className="rpt-ah"><i className={"rpt-dot " + a.ic} aria-hidden="true"></i><h3>{a.title}</h3>{d && <span className="note">{FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "")}</span>}</div>
-      {d && <AreaDash id={a.id} d={d} />}<div className="rpt-links">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <Link key={r[0]} r={r} />)}</div></section>)}</div></>;
+  const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
+  return <>{head}
+    <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a) => { const h = heads(a.id, d);
+      return <section key={a.id} className={"rpt-group rpt-" + a.id} data-rpt-group={a.id}><header><h3>{a.title}</h3>{yr && <span className="note">{yr}</span>}</header>
+        {h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}
+        <ul className="rpt-list">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul></section>; })}</div>
+    {/* the areas' figures and charts, as they were, folded */}
+    {d && <details className="rpt-charts" data-rpt-charts="" style={{ marginTop: 14 }}><summary>Figures and charts</summary>
+      <div className="rpt-grid">{RPT.AREAS.map((a) => <section key={a.id} className={"dash-card rpt-area rpt-" + a.id}><div className="rpt-ah"><i className={"rpt-dot " + a.ic} aria-hidden="true"></i><h3>{a.title}</h3><span className="note">{yr}</span></div>
+        <AreaDash id={a.id} d={d} /></section>)}</div></details>}
+  </>;
 }
