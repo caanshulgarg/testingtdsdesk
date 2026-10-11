@@ -135,27 +135,37 @@ function gstUnits(s){
   ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"].forEach((t) => { if (s.indexOf("<" + t) >= 0) after(s, t).forEach(({a, p}) => u.push({a, t: upTo(p, t)})); });
   return u.sort((x, y) => x.a - y.a).map((x) => x.t);
 }
+// each part of the entry judged on its own (review round 2 N1): every ledger line, each item without the ledger lines
+// under it, and each of those ledger lines
+function gstParts(s){
+  const u = [];
+  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((t) => { if (s.indexOf("<" + t) >= 0) after(s, t).forEach(({p}) => u.push(upTo(p, t))); });
+  if (s.indexOf("<ALLINVENTORYENTRIES.LIST") >= 0) after(s, "ALLINVENTORYENTRIES.LIST").forEach(({p}) => u.push(cutOut(upTo(p, "ALLINVENTORYENTRIES.LIST"), ["ACCOUNTINGALLOCATIONS.LIST"])));
+  return u;
+}
 function gstType(s){
   if (!GSTTYPE_TAGS.some((t) => s.indexOf("<" + t) >= 0)) return null;
   const clean = (t) => String(t || "").replace(/[\u0000-\u001f]/g, "").trim();
   // a tag's first value that is set (an item's own, else the ledger line's under it)
   const val = (u, tag) => { const re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>", "g"); let m; while ((m = re.exec(u))){ const x = unesc(m[1]); if (!gstNone(x)) return clean(x); } return ""; };
-  const any = (u, tag) => { const re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>", "g"); let m; while ((m = re.exec(u))) if (gstSet(unesc(m[1]))) return true; return false; };
   const head = cutOut(s, ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"]);
   // a line is a GST line when Tally gives it a taxability or a nature (a ledger without GST details carries Tally's
   // "Applicable" for the ineligible credit with neither: TallyPrime 7.1, a TDS journal's purchase ledger, run 38072484999)
   const gl = gstUnits(s).filter((u) => val(u, "GSTOVRDNTAXABILITY") || val(u, "GSTOVRDNNATURE"));
   // review M2: the nature, the taxability and goods or services together, from the first GST line in the document's order;
   // mixed when the GST lines disagree on the nature or the taxability
+  const parts = gstParts(s).filter((u) => val(u, "GSTOVRDNTAXABILITY") || val(u, "GSTOVRDNNATURE"));
   const lead = gl[0] || "", kind = (u) => (val(u, "GSTOVRDNNATURE") + "|" + val(u, "GSTOVRDNTAXABILITY")).toLowerCase();
   return {
     reg: val(head, "GSTREGISTRATIONTYPE").slice(0, 60),
     country: val(head, "COUNTRYOFRESIDENCE").slice(0, 60),
-    rcm: gstSet(one(head, "ISREVERSECHARGEAPPLICABLE")) || gl.some((u) => any(u, "GSTOVRDNISREVCHARGEAPPL")),
+    // the blocked-credit and reverse-charge marks: each part on its own GST details (round 2 N1: a ledger line without GST
+    // details under a GST item carries Tally's default "Applicable"; it does not count)
+    rcm: gstSet(one(head, "ISREVERSECHARGEAPPLICABLE")) || parts.some((u) => gstSet(one(u, "GSTOVRDNISREVCHARGEAPPL"))),
     nature: val(lead, "GSTOVRDNNATURE").slice(0, 100),
     taxability: val(lead, "GSTOVRDNTAXABILITY").slice(0, 40),
     supply: val(lead, "GSTOVRDNTYPEOFSUPPLY").slice(0, 20),
-    ineligible: gl.some((u) => any(u, "GSTOVRDNINELIGIBLEITC")),
+    ineligible: parts.some((u) => gstSet(one(u, "GSTOVRDNINELIGIBLEITC"))),
     mixed: gl.some((u) => kind(u) !== kind(lead))
   };
 }
