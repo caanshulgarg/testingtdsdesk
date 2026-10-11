@@ -292,11 +292,17 @@ const TCloud = {
         // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
         // the bridge sent; a cloud without them is read as before
         let led;
-        try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
-        catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+        // bridge 2.4.3 (migration 73): with each ledger's TDS settings (nature of payment, special rate, certificates) first
+        try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin,tds_nature,tds_special_rate,tds_ldc&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+        catch (e0){
+          if (!/tds_|42703|PGRST204|does not exist/i.test(String((e0 && e0.message) || e0))) throw e0;
+          try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+          catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+        }
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy";
         BookSrc.ledgersInto(b, led, bk.ledgersAt);
         await this.groupsInto(b, bk.book);
+        await this.naturesInto(b, bk.book);
       }
       // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
       // many at once over one connection)
@@ -317,6 +323,7 @@ const TCloud = {
       if (copy) await this.copyInto(b, bk, copy);
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
+      try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
       meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
       TallyRead.after(b, "after changes came from the cloud copy");
@@ -334,7 +341,7 @@ const TCloud = {
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
     // bridge 2.4.2: the GST type columns (migration 72) first; a cloud without them, then without the IRN, read as before
     const read = async (extra) => {
-      const cols = [BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+      const cols = [BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
       for (let i = 0; ; i++){
         try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
         // review L2: only a missing column (42703, PGRST204, "does not exist") falls back; any other error is the error
@@ -358,6 +365,16 @@ const TCloud = {
     const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
     const changes = heads.some(h => h && h.guid && (h.deleted_at ? by.has(h.guid) : BookSrc.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)));
     return {heads, seen: newest, changes};
+  },
+  // bridge 2.4.3 (migration 73): the natures of payment Tally keeps (their section, rates and thresholds by date); a cloud
+  // without the table leaves what is held
+  async naturesInto(b, book){
+    let rows;
+    try { rows = await this.restAll("tally_tds_natures?select=name,guid,categories&book_id=eq." + encodeURIComponent(book) + "&order=name.asc"); } catch (e){ return 0; }
+    const o = {};
+    (rows || []).forEach(r => { if (r && r.name) o[String(r.name).trim()] = {guid: r.guid, cats: Array.isArray(r.categories) ? r.categories : []}; });
+    b.tdsNat = o;
+    return Object.keys(o).length;
   },
   async copyInto(b, bk, copy){
     const B = "&book_id=eq." + encodeURIComponent(bk.book), need = BookSrc.need(b, copy.heads);

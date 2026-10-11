@@ -81,7 +81,10 @@ const LedMaster = {
       p.what = /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
       if (tt) why.push("Tally: tax type " + info.taxType);
       const sec = Books.secIn(up);
-      if (sec){ p.section = sec; why.push("section " + sec + " in the name"); }
+      // bridge 2.4.3: the section of the nature of payment Tally keeps on the ledger, before the one in its name
+      const natSec = typeof TDSTally === "object" && TDSTally.natureOf(name) ? TDSTally.sectionOf(TDSTally.natureOf(name)) : "";
+      if (natSec){ p.section = natSec; why.push("Tally: nature of payment " + TDSTally.natureOf(name) + " (section " + natSec + ")"); }
+      else if (sec){ p.section = sec; why.push("section " + sec + " in the name"); }
       else if (/\b(393|389|394|392)\b/.test(up)){
         // a ledger named under the Income-tax Act, 2025: the section it replaces, from what it is for
         const NAT = [[/SALARY|PERQUISITE\s*.*SALARY/, "192"], [/NON\s*RESIDENT|\b394\b/, "195"], [/PERQUISITE|BENEFIT/, "194R"], [/CONTRACT/, "194C"], [/PROF|TECH|FEES/, "194J"],

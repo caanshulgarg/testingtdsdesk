@@ -26,6 +26,18 @@ const Empty = ({ children }) => <div className="bk-none">{children}</div>;
 // a section: from 2026-27 the new provision with the old section beside it and the table entry under it; before, as it was
 export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy); return x.ref ? <span className="rp-sec" data-sec={x.old}>{x.ref} [old {x.old}]<small>{x.label}</small></span> : <>{s}</>; };
 const secText = (s, fy = S.tdsFy) => TDS.secNew(s, fy).text;
+// bridge 2.4.3: a challan or certificate made from what Tally keeps, and where Tally and FinCom differ (TDSTally, src/js/72)
+const FromTally = ({ on }) => (on ? <span className="tag" data-from-tally="" title="Made from the details Tally keeps">From Tally</span> : null);
+function TallyDiffs({ kind }) {
+  const tags = kind === "challan" ? TDSTally.disagreements() : [], cs = TDSTally.conflicts(kind);
+  if (!tags.length && !cs.length) return null;
+  return <section className="dash-card" style={{ marginBottom: 12 }} data-tally-diffs={kind}><h3>Tally and FinCom differ</h3>
+    <p className="note">Nothing here was changed: FinCom keeps what a person entered. Decide each, then change it in FinCom or in Tally.</p>
+    <ul className="note">
+      {tags.map((d) => <li key={"t" + d.row}>{d.party} ({day(d.date)}): {d.why ? d.why : <>Tally pays it with challan {d.tallyLabel}; FinCom has it on {d.fincomLabel}</>}</li>)}
+      {cs.map((c, i) => <li key={"c" + i}>{c.label}: {c.what} is {String(c.fincom)} in FinCom, {String(c.tally)} in Tally</li>)}
+    </ul></section>;
+}
 
 // the bar above a return's table: find, choices, how many shown, print, Excel
 function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] }) {
@@ -146,6 +158,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
   const pays = TDS.paymentsFromBooks().filter((p) => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q)
     .filter((p) => !allCh.some((c) => TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - p.tax) < 1));
   return <>
+    <TallyDiffs kind="challan" />
     {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books</h3>
       <p className="note">TDS payment vouchers in Tally for this quarter, proposed as challans. Give each its CIN (or BSR code and serial) to confirm it. Uploaded challans of the same date and amount are matched to them on their own.</p>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="">
@@ -161,12 +174,12 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
       tail={<NewChallan />} prep={(c) => ({ mine: allRows.filter((r) => r.challan === c.id), l: left(c) })}
       after={(c, p) => S.chOpen === c.id && (p.mine.length ? <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
-          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td><Sec s={r.section} fy={fy} /></td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
+          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td><Sec s={r.section} fy={fy} /></td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)} <FromTally on={((S.books || {}).allocFrom || {})[r.id] === "tally"} /></td></tr>)}</tbody>
         </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>)}
       cols={[
         { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (c, p, i) => i + 1 },
         { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
-        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> },
+        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <><Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> <FromTally on={c.from === "tally"} /></> },
         { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
         { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
         { k: "state", role: "status", label: "Use", v: (c, p) => chState(c, use), cell: (c) => { const w = chState(c, use); return <span className={"tag " + (/more than/.test(w) ? "bad" : /Not used|Part/.test(w) ? "warn" : "ok")}>{w}</span>; } },
@@ -625,12 +638,13 @@ function NewCert() {
 export function CertsPage() {
   const list = Certs.all(), iss = Certs.issues(S.tdsFy || "", "");
   return <>
+    <TallyDiffs kind="certificate" />
     <section className="dash-card" style={{ marginBottom: 12 }} data-certs=""><h3>Certificates under section 197</h3>
       <p className="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate, up to the certificate's amount and until its last day; then the usual rate applies again. Matched by PAN where both have one.</p>
       {list.length ? <ListTable name="tdsCerts" rows={list} rowKey={(c) => c.id} unit={["certificate", "certificates"]} tail={<NewCert />}
         cols={[
           { k: "from", role: "date", label: "From", v: (c) => c.from || "", cell: (c) => (c.from ? fmtDate(c.from) : "") },
-          { k: "no", role: "number", label: "Certificate no.", v: (c) => c.certNo || "", cell: (c) => c.certNo || "" },
+          { k: "no", role: "number", label: "Certificate no.", v: (c) => c.certNo || "", cell: (c) => <>{c.certNo || ""} <FromTally on={c.src === "tally"} /></> },
           { k: "party", role: "party", label: "Deductee", v: (c) => c.party, cell: (c) => c.party },
           { k: "pan", label: "PAN", v: (c) => c.pan || "", cell: (c) => c.pan || "" },
           { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => c.section || "any" },

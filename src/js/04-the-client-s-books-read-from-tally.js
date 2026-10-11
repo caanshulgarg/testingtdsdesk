@@ -206,7 +206,7 @@ const Books = {
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
       const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
-      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), rate: num(this.one(piece, "RATEOFTAXCALCULATION")) || undefined, gstin: gst, pan,
+      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSRATENAME") || this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), rate: num(this.one(piece, "RATEOFTAXCALCULATION")) || undefined, gstin: gst, pan,
         ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM"),
         msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : "", regType: (lastReg && lastReg.type) || (regs.length ? regs[regs.length - 1].type : "") || this.one(piece, "GSTREGISTRATIONTYPE"),
         panFrom: pan ? "Tally" : panG ? "GSTIN" : "", email: this.one(piece, "EMAIL"), phone: this.one(piece, "LEDGERMOBILE") || this.one(piece, "LEDGERPHONE"), gstinHistory: regs.filter(x => x.gstin).length > 1 ? regs.filter(x => x.gstin).map(x => x.from + ":" + x.gstin) : undefined};

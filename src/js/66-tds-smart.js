@@ -281,7 +281,10 @@ const TDSWatch = {
     });
     const rows = TDS.allRows().filter(r => r.fy === fy), today = TDSFiled.todayIst(), out = [];
     Object.values(agg).forEach(x => {
-      const R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
+      let R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
+      // bridge 2.4.3: the thresholds of the nature of payment Tally keeps on these ledgers (its TDSRate master), as Tally has them
+      const TT = typeof TDSTally === "object" ? TDSTally.threshold(Array.from(x.ledgers), start) : null;
+      if (TT) R = Object.assign({}, R, TT.limit ? {limit: TT.limit} : {}, TT.single ? {single: TT.single} : {}, {fromTally: TT.nature});
       const sec = TDS.sec(R.old), mine = rows.filter(r => r.party === x.party && TDS.sec(r.section) === sec);
       const tds = r2(mine.reduce((a, r) => a + r.tds, 0));
       // the base the deductions cover: their amount paid, or worked back from the TDS at the usual rate when Tally's entry has none
@@ -306,7 +309,7 @@ const TDSWatch = {
       const limitWords = R.basis === "single_or_annual" ? "₹" + INR.format(R.single) + " a bill or ₹" + INR.format(R.limit) + " a year" : R.basis === "monthly" ? "₹" + INR.format(R.limit) + " a month"
         : R.basis === "always" ? "any amount" : R.basis === "single" ? "₹" + INR.format(R.single) + " a payment" : "₹" + INR.format(R.limit) + " a year";
       const used = R.basis === "monthly" ? Math.max.apply(null, Object.values(x.months)) / R.limit : R.basis === "single_or_annual" ? Math.max(x.credited / R.limit, x.max / R.single) : R.limit ? x.credited / R.limit : 1;
-      out.push({party: x.party, rule: x.rule, section: R.old, label: R.label, ledgers: Array.from(x.ledgers), credited: x.credited, limitWords, used: r2(used * 100), over, tds, covered, base, pan, rate,
+      out.push({party: x.party, rule: x.rule, section: R.old, label: R.label, ledgers: Array.from(x.ledgers), credited: x.credited, limitWords: limitWords + (R.fromTally ? " (Tally: " + R.fromTally + ")" : ""), limitFrom: R.fromTally || "", used: r2(used * 100), over, tds, covered, base, pan, rate,
         uncovered, due: r2(uncovered * rate / 100), interest: r2(interest), disallow: r2(uncovered * 0.3), credits: x.credits});
     });
     return out.sort((a, c) => c.used - a.used);

@@ -17,6 +17,11 @@ const BookSrc = {
   // bridge 2.4.2 (round 44 part B, migration 72): each entry's GST type as Tally stores it, read first; a cloud without the
   // columns is read with HEADS, then HEADS_OLD
   HEADS_GST: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id",
+  // bridge 2.4.3 (migration 73): a TDS payment's challan and the TDS references as Tally keeps them (TDSTally, src/js/72),
+  // read first; a cloud without the columns is read with HEADS_GST and the rest
+  HEADS_TDS: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id,tds_tally,tds_tally_alter_id",
+  // 2.4.3: the TDS details of the version read (tds_tally at the entry's own AlterID); null otherwise
+  tdsxOf(h){ return h && h.tds_tally && typeof h.tds_tally === "object" && h.tds_tally_alter_id != null && h.tds_tally_alter_id !== "" && this.alt(h.tds_tally_alter_id) === this.alt(h.alter_id) ? h.tds_tally : null; },
   // the GST kind a bridge before 2.4.2 does not send (its entry has no type in the cloud copy): kept from the Day Book's
   // version of the same entry when such a bridge brings a later one, so an altered SEZ, export or reverse-charge entry
   // stays so. A 2.4.2 entry's own type (gstOwn): only a blank nature and goods/services are carried (put, below)
@@ -50,6 +55,7 @@ const BookSrc = {
         regType: "", country: "", rcm: false, taxability: "", nature: "", supply: "", ineligibleFlag: false, hsn: [], by: "", upd: "",
         ...this.gstOf(h),
         cancel: h.cancelled === true || h.cancelled === "true", opt: h.optional === true || h.optional === "true", ent: [], alt: this.alt(h.alter_id), src: "bridge"};
+      const tx = this.tdsxOf(h); if (tx) v.tdsx = tx;
       const hs = new Set();
       (L[h.guid] || []).forEach(l => {
         if (!l.ledger) return;
@@ -137,6 +143,8 @@ const BookSrc = {
     let n = this.drop(b, heads);
     const by = this.index(b.vouchers);
     this.fromCopy(heads, lines, bills).forEach(v => { if (this.put(b, v, by)) n++; });
+    // 2.4.3: the TDS details of an entry held at the same version (a Day Book's, read the same way by the cloud) are added to it
+    (heads || []).forEach(h => { const tx = this.tdsxOf(h); if (!tx || !h || !by.has(h.guid)) return; const v = b.vouchers[by.get(h.guid)]; if (v && !v.tdsx && this.alt(v.alt) === this.alt(h.alter_id)){ v.tdsx = tx; n++; } });
     if (n) b.vouchers.sort((a, c) => String(a.date).localeCompare(String(c.date)));
     return n;
   },
@@ -165,6 +173,12 @@ const BookSrc = {
       const nm = typeof ledClean === "function" ? ledClean(l.name) : l.name, pan = String(l.pan || "").toUpperCase().trim(), g = String(l.gstin || "").toUpperCase().trim();
       if (pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(pan)){ b.pans = b.pans || {}; if (!b.pans[nm] || (newer && b.pans[nm] !== pan)){ b.pans[nm] = pan; n++; } }
       if (g && g.length === 15){ b.gstins = b.gstins || {}; if (!b.gstins[nm] || (newer && b.gstins[nm] !== g)){ b.gstins[nm] = g; n++; } }
+      // bridge 2.4.3 (migration 73): the TDS settings Tally keeps on the ledger (null: not read yet, left as held)
+      if (l.tds_nature != null || l.tds_ldc != null || l.tds_special_rate != null){
+        b.ledTds = b.ledTds || {};
+        const t = {nature: String(l.tds_nature || "").trim(), special: String(l.tds_special_rate || "").trim(), ldc: Array.isArray(l.tds_ldc) ? l.tds_ldc : []};
+        if (JSON.stringify(b.ledTds[nm]) !== JSON.stringify(t)){ b.ledTds[nm] = t; n++; }
+      }
     });
     if (n) b.panIndex = null;
     return n;
