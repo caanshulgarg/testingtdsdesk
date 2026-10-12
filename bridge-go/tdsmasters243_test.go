@@ -25,7 +25,7 @@ var ledFetch243Added = ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPEC
 // pinned to their builders, nothing computed
 func TestTDS243Requests(t *testing.T) {
 	if ledFetch242 != "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE" ||
-		ledFetch != ledFetch242+ledFetch243Added {
+		ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added { // 2.4.4: the pay-head fields after (payroll244_test.go)
 		t.Fatalf("the ledger fields: %s", ledFetch)
 	}
 	for _, x := range []string{ledgerChangesRequest("SAMPLE CO", 5, 205), ledgerByNameRequest("SAMPLE CO", "Supplier B"), ledgerChunkRequest("SAMPLE CO", 0, 2000)} {
@@ -184,10 +184,10 @@ func TestTDS243RoundSendsMastersAndNatures(t *testing.T) {
 		a := arr(x)
 		byGUID[str(at(a, 0))] = a
 	}
-	if a := byGUID[f.led[0].guid]; len(a) != 14 || str(a[11]) != "FC Contract 194C" || str(a[12]) != "" || len(arr(a[13])) != 0 {
+	if a := byGUID[f.led[0].guid]; len(a) != 18 || str(a[11]) != "FC Contract 194C" || str(a[12]) != "" || len(arr(a[13])) != 0 {
 		t.Fatalf("the duty ledger's row: %v", a)
 	}
-	if a := byGUID[f.led[1].guid]; len(a) != 14 || str(a[11]) != "" || str(a[12]) != "1" || jsonText(a[13]) != `[["FC Prof Fees 194J","20260401","20270331","197","LDC1","1","500000.00"]]` {
+	if a := byGUID[f.led[1].guid]; len(a) != 18 || str(a[11]) != "" || str(a[12]) != "1" || jsonText(a[13]) != `[["FC Prof Fees 194J","20260401","20270331","197","LDC1","1","500000.00"]]` {
 		t.Fatalf("the party's row: %v", a)
 	}
 	// a list held by 2.4.2 (no TDS settings): only the two ledgers with one read as changed
@@ -230,7 +230,7 @@ func TestTDS243OutboxRowFrom242(t *testing.T) {
 	}
 	for _, x := range arr(c.ledList[0]["ledgers"]) {
 		a := arr(x)
-		if (str(a[0]) == "g1" && len(a) != 11) || (str(a[0]) == "g2" && (len(a) != 14 || str(a[11]) != "N1")) {
+		if (str(a[0]) == "g1" && len(a) != 11) || (str(a[0]) == "g2" && (len(a) != 18 || str(a[11]) != "N1")) {
 			t.Fatalf("row %v", a)
 		}
 	}

@@ -227,6 +227,7 @@ function takeVoucher(s){
   // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null, bill-wise details]
   const lines = [], meta = [], costs = [], banks = [], tds = [], dues = [], checks = [];
   const tdsKinds = [], tdsPeriods = [], tdsRefs = [];     // bridge 2.4.3
+  const salpay = [];     // bridge 2.4.4: the salary paid to each employee (a salary payment's bank allocations)
   // part A: a ledger line's cost centres, bank details, TDS details and a due date given as a date
   const lineExtras = (e, n, ledger, la) => {
     const ccat = new Map();
@@ -243,6 +244,10 @@ function takeVoucher(s){
     blocks(e, "BANKALLOCATIONS.LIST").forEach((q) => {
       const b = {n, ledger, type: one(q, "TRANSACTIONTYPE").slice(0, 60), no: (one(q, "INSTRUMENTNUMBER") || one(q, "UNIQUEREFERENCENUMBER")).slice(0, 60), date: d8(one(q, "INSTRUMENTDATE")), bdate: d8(one(q, "BANKERSDATE"))};
       if (b.type || b.no || b.date || b.bdate) banks.push(b);
+      // bridge 2.4.4 (the owner's decision of 12-Oct-2026, item 3): the employee a salary payment pays and the amount;
+      // never the account number, IFSC or the name in favour (the bridge does not keep them; not read here either)
+      const emp = one(q, "BANKEMPLOYEENAME");
+      if (emp) salpay.push({n, ledger, employee: emp.slice(0, 200), amt: r2(amt(one(q, "AMOUNT"))), date: d8(one(q, "DATE")) || d8(one(q, "INSTRUMENTDATE"))});
     });
     blocks(e, "TAXOBJECTALLOCATIONS.LIST").forEach((q) => {
       const tt = one(q, "TAXTYPE");
@@ -399,7 +404,22 @@ function takeVoucher(s){
     });
     // names met by their key (namesKey), as FinCom does (Books.takeVoucher)
     const have = new Set(lines.map(l => namesKey(l[1]))); let tot = 0;
-    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(n))) lines.push([id, n, a, "", null, []]); });
+    const lineOf = new Map();
+    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(n))) { lineOf.set(n, lines.length); lines.push([id, n, a, "", null, []]); } });
+    // bridge 2.4.4 (the owner's decision of 12-Oct-2026: "fix the Day Book path so per-employee pay-head amounts are kept,
+    // not only totals"): each employee's amount per pay head, as the cost-centre allocations the bridge's entry body carries
+    // (the employee as the pay head's cost centre, in the payroll's cost category), for the pay heads written as lines here
+    blocks(s, "CATEGORYENTRY.LIST").forEach((ce) => {
+      const cat = (one(ce, "CATEGORY") || "Primary Cost Category").slice(0, 200);
+      blocks(ce, "EMPLOYEEENTRIES.LIST").forEach((ee) => {
+        const emp = one(ee, "EMPLOYEENAME"); if (!emp) return;
+        blocks(ee, "PAYHEADALLOCATIONS.LIST").forEach((q) => {
+          const n = one(q, "PAYHEADNAME"), a = r2(amt(one(q, "AMOUNT")));
+          if (!n || !lineOf.has(n) || Math.abs(a) < 0.005) return;
+          costs.push({n: lineOf.get(n), ledger: n, cat, centre: emp.slice(0, 200), amt: a});
+        });
+      });
+    });
     const party = one(s, "PARTYLEDGERNAME");
     if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
   }
@@ -436,6 +456,9 @@ function takeVoucher(s){
     });
   }
   v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
+  // bridge 2.4.4: an entry with bank details carries its salary-payment rows (none: an empty list, so an entry altered to pay
+  // no employee clears the ones stored); one without bank details carries no "salpay" (the cloud keeps what it has)
+  if (banks.length || salpay.length) v.salpay = salpay;
   // bridge 2.4.2: the entry's GST type (null: none of its fields in the text)
   const gt = gstType(s); if (gt) v.gst = gt;
   // bridge 2.4.3: the TDS payment's challan and the TDS references (none of their fields in the text: no "tdsx")
@@ -444,7 +467,8 @@ function takeVoucher(s){
     const x = {stat: tx(head, "STATPAYMENTTYPE", 20), from: d8(one(head, "TAXPAYPERIODFROMDATE")), to: d8(one(head, "TAXPAYPERIODTODATE")),
       nature: tx(head, "TDSNATUREOFPAYMENT", 200), section: tx(head, "TDSSECTIONNO", 20), challan: tdsChallanOf(head), kinds: tdsKinds, periods: tdsPeriods, refs: tdsRefs};
     // (review 243 L2) another duty's stat payment (GST) is no TDS payment: no tdsx unless it carries TDS references
-    const otherDuty = x.stat && !/^(TDS|TCS)\b/i.test(x.stat) && !tdsRefs.length;
+    // bridge 2.4.4: salary TDS is paid as Tally's Stat Payment of "Income Tax" (section 192): a TDS payment, its challan for 24Q
+    const otherDuty = x.stat && !/^(TDS|TCS|Income\s*Tax)\b/i.test(x.stat) && !tdsRefs.length;
     if (!otherDuty && (x.stat || x.from || x.to || x.nature || x.section || x.challan || tdsKinds.length || tdsPeriods.length || tdsRefs.length)) v.tdsx = x;
   }
   // ---- part A, the owner's accuracy checks: lines totalling zero; item lines' taxable value plus tax against the ledger

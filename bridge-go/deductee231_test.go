@@ -40,10 +40,10 @@ func TestDeductee231LedgerChangesCarryType(t *testing.T) {
 		t.Fatalf("sent %d: %v", n, err)
 	}
 	rows := led231Rows(c.ledChanges[0])
-	if r := rows["Supplier B"]; len(r) != 14 || str(r[10]) != "Company - Resident" || str(r[9]) != "" {
+	if r := rows["Supplier B"]; len(r) != 18 || str(r[10]) != "Company - Resident" || str(r[9]) != "" {
 		t.Fatalf("Supplier B's row: %v", r)
 	}
-	if r := rows["Customer A"]; len(r) != 14 || str(r[10]) != "" {
+	if r := rows["Customer A"]; len(r) != 18 || str(r[10]) != "" {
 		t.Fatalf("Customer A's row: %v", r)
 	}
 	// by name (an entry names a ledger FinCom does not have)
@@ -91,8 +91,8 @@ func TestDeductee231LedgerListCarriesType(t *testing.T) {
 	c.mu.Unlock()
 	for i, want := range map[int]string{0: "", 1: "Company - Resident", 2: ""} {
 		a := byGUID[f.led[i].guid]
-		if len(a) != 14 || str(at(a, 10)) != want { // 2.4.3: three columns more (tdsmasters243_test.go)
-			t.Fatalf("the row of %s: %v (want 14 columns, deductee type %q)", f.led[i].name, a, want)
+		if len(a) != 18 || str(at(a, 10)) != want { // 2.4.3: three columns more (tdsmasters243_test.go); 2.4.4: four more (payroll244_test.go)
+			t.Fatalf("the row of %s: %v (want 18 columns, deductee type %q)", f.led[i].name, a, want)
 		}
 	}
 	// the list held here keeps the type: an unchanged ledger is not changed

@@ -13,7 +13,8 @@ const TD = path.join(HERE, "..", "bridge-go", "testdata", "fast234");
 // bridge 2.4.2: the entry's GST type (parse.js's "gst", from the fields the strip keeps since 2.4.2) is in the object answer only:
 // the Voucher collection answer of today's request never fetched those fields (tests/run_parse_gsttype.mjs reads them)
 // bridge 2.4.3: likewise the TDS challan and references (parse.js's "tdsx", tests/run_parse_tdsfields.mjs)
-const gst242 = (k) => /\.gst(\.|$)/.test(k) || /\.tdsx(\.|$)/.test(k);
+// bridge 2.4.4: likewise the salary paid per employee (parse.js's "salpay": only the fast body keeps BANKEMPLOYEENAME; tests/run_parse_payroll.mjs)
+const gst242 = (k) => /\.gst(\.|$)/.test(k) || /\.tdsx(\.|$)/.test(k) || /\.salpay(\.|$|\[)/.test(k);
 let fails = 0, n = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 // every field of the reader's output, by path, as text (so a difference names the field)

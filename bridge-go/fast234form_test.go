@@ -252,7 +252,7 @@ func TestFast234StripDropsEverythingElse(t *testing.T) {
 		ps = append(ps, p)
 	}
 	sort.Strings(ps)
-	if len(ps) != 61+2+len(liveKeepGST242)+len(liveKeepTDS243) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
+	if len(ps) != 61+2+len(liveKeepGST242)+len(liveKeepTDS243)+len(liveKeepPay244) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
 		t.Fatalf("%d approved paths: %v", len(ps), ps)
 	}
 }
@@ -272,7 +272,7 @@ func testFetchOf(request string) string {
 // --- 2.3.4: the version, the allow-list's decision line naming FinComVoucherObject with the owner's words of 08-Oct-2026,
 // the notes and the test sheet
 func TestFast234VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.3" {
+	if BridgeVersion != "2.4.4" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

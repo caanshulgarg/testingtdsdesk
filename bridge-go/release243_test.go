@@ -13,13 +13,13 @@ import (
 // line for 2.4.3; the add-on unchanged from 2.4.2 (the data locations moved to 2.4.4); migration 73 add-only; the notes
 // and the test sheet
 func TestRelease243VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.3" {
+	if BridgeVersion != "2.4.4" { // 2.4.4 (release244_test.go): 2.4.3's decision kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	want := []string{
-		"allowed for 2.4.3 by the owner's decision of 2026-10-11",
+		"as for 2.4.3: the owner's decision of 2026-10-11",
 		"FinComVoucherObject", "the request itself is unchanged byte for byte", "shape ce0e72f74e72",
 		"FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName", natListID,
 		"TDSRATENAME", "TDSDEDUCTEEISSPECIALRATE", "TDSDEDUCTEESPECIALRATE", "LOWERDEDUCTION.NATUREOFPAYMENT",
@@ -34,15 +34,13 @@ func TestRelease243VersionAndDecisionLine(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	for _, id := range []string{ledListID, ledChangesID, ledByNameID, natListID} {
+	// (2.4.4 changed the ledger requests' shapes and the table: release244_test.go)
+	for _, id := range []string{natListID} {
 		if !strings.Contains(line, shapeOf(allowListSamples()[id])) {
 			t.Errorf("the decision line does not give %s's shape %s", id, shapeOf(allowListSamples()[id]))
 		}
 	}
-	if !strings.Contains(al, "Table hash (SHA-256): "+allowListHash(allowListRows())) {
-		t.Error("the table hash in the doc is not the table's")
-	}
-	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9][^\n]*allowed for 2\.4\.3`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9] and 2026-10-12 for 2\.4\.3[^\n]*2\.4\.3 allowed by`).MatchString(al) {
 		t.Error("no dated re-measured line for 2.4.3")
 	}
 	tdl := readText(filepath.Join("addon", "FinComRecorder.tdl"))

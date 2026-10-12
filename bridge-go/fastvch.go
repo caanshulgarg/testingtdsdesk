@@ -111,6 +111,17 @@ var liveKeepTDS243 = []string{
 	"ALLLEDGERENTRIES.SUMMARYALLOCS.TAXBANKBRANCHNAME",
 }
 
+// 2.4.4 (the owner's decision of 12-Oct-2026, item 3: "kept list only, no request change"): the salary paid to each
+// employee, from a salary payment's bank allocations (Tally writes one a employee, BANKALLOCATIONS.LIST under the bank's
+// ledger line): the employee's name and the amount paid. Kept by the strip only, and only in a bank allocation that names
+// an employee (BANKEMPLOYEENAME filled), so every other entry strips exactly as in 2.4.3. Never ACCOUNTNUMBER, IFSCODE or
+// PAYMENTFAVOURING (bank details: fastNeverPay244)
+var liveKeepPay244 = []string{"ALLLEDGERENTRIES.BANKALLOCATIONS.BANKEMPLOYEENAME", "ALLLEDGERENTRIES.BANKALLOCATIONS.AMOUNT"}
+
+// never kept, whatever list approves (the owner's decision of 12-Oct-2026, items 3 and 5)
+var fastNeverPay244 = map[string]bool{"ALLLEDGERENTRIES.BANKALLOCATIONS.ACCOUNTNUMBER": true, "ALLLEDGERENTRIES.BANKALLOCATIONS.IFSCODE": true,
+	"ALLLEDGERENTRIES.BANKALLOCATIONS.PAYMENTFAVOURING": true}
+
 var fastKeepTDS243Set = func() map[string]bool {
 	m := map[string]bool{}
 	for _, f := range liveKeepTDS243 {
@@ -133,11 +144,17 @@ func fastApprovedPaths() map[string]bool {
 	for _, f := range liveKeepTDS243 {
 		m[f] = true
 	}
+	for _, f := range liveKeepPay244 {
+		m[f] = true
+	}
 	return m
 }
 
 // a field's path is approved: named, or directly in a list approved whole ("LIST.*")
 func fastPathOK(ok map[string]bool, p string) bool {
+	if fastNeverPay244[p] {
+		return false
+	}
 	if ok[p] {
 		return true
 	}
@@ -525,8 +542,13 @@ func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]
 	if e.hasKids || strings.HasSuffix(name, ".LIST") {
 		var kb strings.Builder
 		any := false
+		// 2.4.4: a bank allocation's employee and amount only where it names an employee (a salary payment)
+		ok2 := ok
+		if p == "ALLLEDGERENTRIES.BANKALLOCATIONS" && !fastNamesEmployee(e) {
+			ok2 = fastOKNoPay(ok)
+		}
 		for _, k := range e.kids {
-			if fastEmit(&kb, k, k.name, p, ok) {
+			if fastEmit(&kb, k, k.name, p, ok2) {
 				any = true
 			}
 		}
@@ -545,6 +567,28 @@ func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]
 	}
 	b.WriteString("<" + name + ">" + e.text + "</" + name + ">")
 	return true
+}
+
+// a bank allocation that names an employee (BANKEMPLOYEENAME filled)
+func fastNamesEmployee(e *fastEl) bool {
+	for _, k := range e.kids {
+		if k.name == "BANKEMPLOYEENAME" && !k.hasKids && strings.TrimSpace(k.text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// the approved paths without 2.4.4's salary-payment fields (a bank allocation that names no employee)
+func fastOKNoPay(ok map[string]bool) map[string]bool {
+	m := make(map[string]bool, len(ok))
+	for k, v := range ok {
+		m[k] = v
+	}
+	for _, f := range liveKeepPay244 {
+		delete(m, f)
+	}
+	return m
 }
 
 // the fields a stripped voucher holds, as fetch paths (ALLLEDGERENTRIES.BILLALLOCATIONS.NAME)

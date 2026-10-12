@@ -111,6 +111,14 @@ func retryTake(id string) (try bool, err error) {
 	return true, nil
 }
 
+// 2.4.4: a stop or a request not answered is still on the schedule (the payroll's employees are read only when it is clear,
+// so they are never the try and never stand before an entry)
+func retryPending() bool {
+	retryMu.Lock()
+	defer retryMu.Unlock()
+	return retryN > 0
+}
+
 // a background request that is not the try, at the moment it would be sent: why it waits (nil: it goes)
 func retryWaiting() error {
 	retryMu.Lock()

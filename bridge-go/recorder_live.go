@@ -2035,6 +2035,7 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 		// next-fastfetch (the owner, 08-Oct-2026): Tally sends the whole voucher; only the approved fields are kept, here,
 		// before anything is logged, stored or sent. 2.3.4 review L2: one whose lines cannot be kept whole is held
 		c := cleanXML(m)
+		payrollLearn(company, c) // 2.4.4: a type carrying employees' pay heads is a payroll type (its entries may take 3 s)
 		v, why := fastStripWhy(c)
 		if why == "" && v == "" {
 			why = "an answer FinCom cannot read" // 2.3.4 (re-review L5): never taken as "no such voucher"
@@ -2247,7 +2248,12 @@ byDay:
 				liveDecide(c, "asking Tally by MasterID")
 			}
 			reached = false
-			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
+			// 2.4.4 (the owner's decision of 12-Oct-2026, item 4): a payroll voucher's entry request may take Tally up to 3 s
+			etc := tc
+			if len(part) == 1 {
+				etc = entryTC(tc, company, part[0].vchType)
+			}
+			got, err := fetchVouchersByMasterIn(etc, company, port, d, mids, left())
 			if errors.Is(err, errSlowCompany) {
 				rest := append(append([]*change{}, part...), cs...)
 				for _, d2 := range dates[di+1:] {

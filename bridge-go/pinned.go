@@ -84,9 +84,16 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return []string{ledgerChangesRequest(pinCo(x), toI64(m[1]), toI64(m[2]))}
 	},
-	ledByNameID:         pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
-	grpListID:           pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
-	natListID:           pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),
+	ledByNameID: pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
+	grpListID:   pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
+	natListID:   pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),
+	empListID: pinOne(func(x string) string {
+		a, u := pinMasterRange(x)
+		if u > 0 && u-a > 2000 {
+			return "" // 2.4.4: 2,000 MasterIDs a request at most (the owner's decision of 12-Oct-2026)
+		}
+		return employeeChunkRequest(pinCo(x), a, u)
+	}),
 	"TDSDeskLedgers":    pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgersFullRequest(pinCo(x), a, u) }),
 	"TDSDeskGroups":     pinOne(func(x string) string { return groupsFullRequest(pinCo(x)) }),
 	"TDSDeskNames":      pinOne(func(x string) string { a, u := pinMasterRange(x); return namesRequest(pinCo(x), a, u) }),

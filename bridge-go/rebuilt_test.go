@@ -84,6 +84,18 @@ type standTally struct {
 	svIgnored, filterDates bool
 	cnMode                 string  // how the change numbers are given (the company check above)
 	nat                    []*tNat // 2.4.3: the natures of payment (FinComTdsNatures)
+	emp                    []*tEmp // 2.4.4: the cost centres (FinComEmployees), payroll's and others
+}
+
+// 2.4.4: a ledger's pay-head fields as the stand-in Tally writes them (nil: none)
+var payFieldsOf func(name string) string
+
+// a cost centre of the stand-in Tally (2.4.4: FinComEmployees); its fields as TallyPrime 7.1 writes them (run 38253610530)
+type tEmp struct {
+	guid, name, parent, category, pan, joined, left, desig string
+	payroll, group                                         bool
+	extra                                                  string // fields a request did not ask for (a real Tally writes LANGUAGENAME.LIST)
+	mid, alter                                             int64
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -386,6 +398,29 @@ func newStandTally(t *testing.T) *standTally {
 						o.Reset()
 						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + x + "</LEDGER>")
 					}
+					if strings.Contains(body, "PAYTYPE") && payFieldsOf != nil { // 2.4.4: the pay-head fields, as 7.1 writes them
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + payFieldsOf(l.name) + "</LEDGER>")
+					}
+				}
+			}
+		case "FinComEmployees": // 2.4.4: the cost centres with a MasterID in (after, upto], the fields as 7.1 writes them
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			yn := map[bool]string{true: "Yes", false: "No"}
+			for _, e := range f.emp {
+				if e.mid > after && (upto < 0 || e.mid <= upto) {
+					fmt.Fprintf(&o, `<COSTCENTRE NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s%s%s%s%s<LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>%s</NAME></NAME.LIST></LANGUAGENAME.LIST></COSTCENTRE>`,
+						esc(e.name), standField("DATEOFJOIN", "Date", e.joined), standField("DEACTIVATIONDATE", "Date", e.left), standField("GUID", "String", e.guid),
+						standField("PARENT", "String", esc(e.parent)), standField("CATEGORY", "String", esc(e.category)), standField("DESIGNATION", "String", esc(e.desig)),
+						standField("PANNUMBER", "String", e.pan), standField("FORPAYROLL", "Logical", yn[e.payroll]), standField("ISEMPLOYEEGROUP", "Logical", yn[e.group]),
+						standField("ALTERID", "Number", fmt.Sprintf(" %d", e.alter)), standField("MASTERID", "Number", fmt.Sprintf(" %d", e.mid)), e.extra, esc(e.name))
 				}
 			}
 		case "FinComTdsNatures": // 2.4.3: the natures with a MasterID in (after, upto]
@@ -593,6 +628,9 @@ type standCloud struct {
 	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
 	ledChanges []M
 	ledChReply func(b M) (int, M)
+	// 2.4.4: every "employees" body, and how it is answered (nil: 200 {ok})
+	empPosts []M
+	empReply func(b M) (int, M)
 	// the nightly self-check (selfcheck.go): every selfcheck body, and how it is answered (nil: compare finds nothing
 	// missing, record answers ok)
 	selfchecks []M
@@ -685,6 +723,17 @@ func newStandCloud(t *testing.T) *standCloud {
 				return
 			}
 			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
+		case "employees":
+			c.empPosts = append(c.empPosts, o)
+			if c.empReply != nil {
+				code, ans := c.empReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["employees"] = len(arr(o["employees"]))
 		case "selfcheck":
 			c.selfchecks = append(c.selfchecks, o)
 			if c.scReply != nil {

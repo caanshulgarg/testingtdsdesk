@@ -55,9 +55,13 @@ const (
 	// the nature, and per certificate LOWERDEDUCTIONDETAILS.LIST: from, to, section, certificate number, rate, limit). Stored
 	// master fields only, named one by one (ledFetch242 is 2.4.2's list, byte for byte)
 	ledFetch242 = "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE"
-	ledFetch    = ledFetch242 + ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPECIALRATE, LOWERDEDUCTION.NATUREOFPAYMENT, " +
+	ledFetch243 = ledFetch242 + ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPECIALRATE, LOWERDEDUCTION.NATUREOFPAYMENT, " +
 		"LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.FROMDATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.TODATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.SECTIONNO, " +
 		"LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.CERTIFICATENO, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.TDSITRATE, LOWERDEDUCTION.LOWERDEDUCTIONDETAILS.LOWERDEDUCTIONLIMIT"
+	// 2.4.4 (the owner's decision of 12-Oct-2026, item 2): a pay head's type (earning, deduction, employer's contribution),
+	// its statutory type (PF, ESI, professional tax, income tax), its income-tax component (Basic, HRA, ...) and whether
+	// the ledger is a pay head. Stored master fields, named one by one (ledFetch243 is 2.4.3's list, byte for byte)
+	ledFetch = ledFetch243 + ", PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL"
 	grpFetch = "GUID, MASTERID, ALTERID, NAME, PARENT"
 )
 
@@ -84,6 +88,9 @@ type ledRow struct {
 	// rate ("" when the party has none) and the lower-deduction certificates as JSON text ([[nature, from, to, section,
 	// certificate, rate, limit]], "" when none), so a row compares whole
 	nature, special, ldc string
+	// 2.4.4, after the certificates in each (absent in a 2.4.3 file: ""): PAYTYPE, PAYSTATTYPE ("Not Applicable" as ""),
+	// ITCOMPONENT and FORPAYROLL ("Yes" or ""), so a ledger that is not a pay head compares as before
+	payType, payStat, itComp, forPay string
 }
 
 func (r ledRow) arr() []any {
@@ -91,9 +98,12 @@ func (r ledRow) arr() []any {
 }
 func ledFromArr(g string, a []any) ledRow {
 	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), str(at(a, 7)), str(at(a, 8)),
-		str(at(a, 9)), str(at(a, 10)), str(at(a, 11))}
+		str(at(a, 9)), str(at(a, 10)), str(at(a, 11)), str(at(a, 12)), str(at(a, 13)), str(at(a, 14)), str(at(a, 15))}
 }
-func digits(s string) int64 { return toI64(re(`\D`).ReplaceAllString(s, "")) }
+
+// the pay-head fields after the certificates (the held list, the read file, the outbox)
+func (r ledRow) payArr() []any { return []any{r.payType, r.payStat, r.itComp, r.forPay} }
+func digits(s string) int64    { return toI64(re(`\D`).ReplaceAllString(s, "")) }
 
 // one chunk of the ledger list: the ledgers whose MasterID is in (after, upto] (upto 0: no upper end), and the
 // highest MasterID among them
@@ -132,7 +142,8 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 		}
 		r := ledRow{g, digits(nt(l, "MASTERID")), digits(nt(l, "ALTERID")), n, re(`^\W*Primary$`).ReplaceAllString(nt(l, "PARENT"), ""), open, gstin,
 			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER"))), strings.TrimSpace(nt(l, "LEDSTATENAME")), strings.TrimSpace(nt(l, "TDSDEDUCTEETYPE")),
-			strings.TrimSpace(nt(l, "TDSRATENAME")), ledSpecial(l), ledLDC(l)}
+			strings.TrimSpace(nt(l, "TDSRATENAME")), ledSpecial(l), ledLDC(l),
+			payField(nt(l, "PAYTYPE")), payField(nt(l, "PAYSTATTYPE")), payField(nt(l, "ITCOMPONENT")), payYes(nt(l, "FORPAYROLL"))}
 		if r.mid > top {
 			top = r.mid
 		}
@@ -171,7 +182,7 @@ func loadLedList(dir string) map[string]ledRow {
 func saveLedList(dir string, m map[string]ledRow) {
 	o := M{}
 	for g, r := range m {
-		o[g] = append(r.arr(), r.state, r.dtype, r.nature, r.special, r.ldc) // the state too (round 11 review: without it every ledger with a state read as changed); 2.3.1: the deductee type; 2.4.3: the TDS master fields
+		o[g] = append(append(r.arr(), r.state, r.dtype, r.nature, r.special, r.ldc), r.payArr()...) // the state too (round 11 review: without it every ledger with a state read as changed); 2.3.1: the deductee type; 2.4.3: the TDS master fields; 2.4.4: the pay-head fields
 	}
 	_ = saveFile(ledListFile(dir), jsonText(o))
 }
@@ -204,7 +215,7 @@ func appendLedRead(dir string, rows []ledRow) {
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		b.WriteString(jsonText(append(append([]any{r.guid}, r.arr()...), r.state, r.dtype, r.nature, r.special, r.ldc)) + "\n")
+		b.WriteString(jsonText(append(append(append([]any{r.guid}, r.arr()...), r.state, r.dtype, r.nature, r.special, r.ldc), r.payArr()...)) + "\n")
 	}
 	_ = appendText(ledReadFile(dir), b.String())
 }
@@ -281,7 +292,7 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen [
 	}
 	for _, r := range d.rows {
 		oc := d.openChg[r.guid] || truthy(at(arr(rows[r.guid]), 7))
-		rows[r.guid] = append(r.arr(), oc, r.state, r.dtype, r.nature, r.special, r.ldc)
+		rows[r.guid] = append(append(r.arr(), oc, r.state, r.dtype, r.nature, r.special, r.ldc), r.payArr()...) // 2.4.4: the pay-head fields at 13-16
 	}
 	for _, x := range d.renamed {
 		from := x.from
@@ -560,6 +571,11 @@ func pushLedgerList(company, dir string) error {
 			if len(a) >= 13 {
 				// read by 2.4.3 (a row a 2.4.2 round left in the outbox has none: sent without them, FinCom leaves its own)
 				row = append(row, ledTDSCols(str(at(a, 10)), str(at(a, 11)), str(at(a, 12)))...)
+				if len(a) >= 17 {
+					// 2.4.4: the pay-head fields, the 15th to 18th columns (a row a 2.4.3 round left in the outbox has none:
+					// sent without them, FinCom leaves its own)
+					row = append(row, str(at(a, 13)), str(at(a, 14)), str(at(a, 15)), str(at(a, 16)))
+				}
 			}
 			led = append(led, row)
 		}
