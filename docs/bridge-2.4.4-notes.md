@@ -33,10 +33,15 @@ other personal field read or kept. The two data locations (next-241) are not in 
 3. **The salary payment's employee and amount (no request change, (3)).** FinComVoucherObject's answer is unchanged; the
    strip keeps two more fields: ALLLEDGERENTRIES.BANKALLOCATIONS.BANKEMPLOYEENAME and its AMOUNT, from a salary payment.
    ACCOUNTNUMBER, IFSCODE and PAYMENTFAVOURING are never kept (a test refuses them on the kept list), and a bank allocation
-   that names no employee keeps exactly what 2.4.3 kept.
+   that names no employee keeps exactly what 2.4.3 kept. The Day Book path keeps Tally's entry whole (the day files, sent to
+   the cloud's tally-days bucket): from 2.4.4 these three elements are taken out of every entry before a day file is written
+   and again before a day is sent (a day file an older bridge wrote), and tally-ingest takes them out of a day before it
+   keeps it, whatever bridge sent it (review 244 H1).
 
 4. **A payroll voucher's entry request may take 3 s ((4)).** Only FinComVoucherObject, only for an entry whose voucher
-   type is a payroll type (Tally's "Payroll", or a type the bridge saw carrying employee pay heads). Every other request
+   type is a payroll type (Tally's "Payroll", or a type of the company's own the bridge saw as a pay slip with employees'
+   pay heads; never one of Tally's own types such as Payment or Journal). A payroll type of the company's own gets the 3 s
+   only after the bridge has read one entry of it in full (an entry too big for 2 s before that is held as today). Every other request
    keeps the 2-second rule; one request in flight stays the rule. A payroll entry answered within 3 s does not mark the
    company slow.
 
@@ -68,7 +73,11 @@ other personal field read or kept. The two data locations (next-241) are not in 
    that month, made from Tally's Stat Payment of Income Tax as in 2.4.3); 24Q Annexure II (the year: salary by component,
    regime, deductions, tax); Form 16 Part B; the 24Q text file from the existing return file builder. The new Act's form
    layout could not be checked here: the file is built to the current 24Q layout, named _DRAFT and marked "check before
-   filing"; run it through the FVU first. Figures to the paisa. Tests: tests/fixtures/payroll-e2e (a test company with
+   filing"; run it through the FVU first. Figures to the paisa. Each month's salary and TDS count by the payroll entry's
+   date (the credit, when the TDS is deducted) in Annexure I, Annexure II and Form 16 alike. Without a PAN the tax stays the
+   tax on the income; the TDS due is at least 20% of the income where there is tax (section 206AA). The employer's NPS
+   contribution typed in FinCom is salary under 17(1) and deducted under 80CCD(2) within 14% (new) or 10% (old) of basic
+   and DA. The salary tax is worked out for 2025-26 and 2026-27 only; another year is said, not worked out. Tests: tests/fixtures/payroll-e2e (a test company with
    answers worked out apart), run_e2e_payroll.py, run_payroll_ui.py.
 
 What the owner's staff do in Tally: the test sheet's "What your staff do in Tally".

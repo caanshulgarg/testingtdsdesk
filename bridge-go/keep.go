@@ -270,7 +270,7 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 		if by[d] == nil {
 			by[d] = &strings.Builder{}
 		}
-		by[d].WriteString("<TALLYMESSAGE>" + m + "</TALLYMESSAGE>")
+		by[d].WriteString("<TALLYMESSAGE>" + dropBankDetails(m) + "</TALLYMESSAGE>") // 2.4.4: never the bank details
 	}
 	days := filepath.Join(dir, "days")
 	_ = os.MkdirAll(days, 0o755)

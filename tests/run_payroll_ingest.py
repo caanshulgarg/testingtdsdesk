@@ -9,7 +9,8 @@
      them; a database without 74's columns: the ledger kept current without them;
   3. kind "days" (the Day Book path): Tally's full export of a salary payment and a payroll (TallyPrime 7.1, run 38253610530)
      reaches tally_ingest_day with each employee's salary paid ("salpay": employee, amount, date; never the account, IFSC
-     or the name in favour) and each employee's amount per pay head ("costs").
+     or the name in favour) and each employee's amount per pay head ("costs"); the day kept in the tally-days bucket without
+     the bank details (review 244 H1), whatever bridge sent them.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, gzip, base64, hashlib, subprocess, threading, urllib.request, urllib.error, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -103,6 +104,10 @@ try:
     sp = [(x.get("employee"), x.get("amt"), x.get("date")) for x in v1.get("salpay", [])]
     ok(c1 == 200 and sp == [("FC Emp One", 75000, "20261202"), ("FC Emp Two", 45500, "20261202"), ("FC Emp Three", 17219, "20261202")], "the salary paid to each employee reaches the database (%s %s)" % (c1, sp))
     ok(not any(k in json.dumps(v1.get("salpay")) for k in ("50100123456781", "HDFC0001001", "ACCOUNT", "IFSC", "FAVOURING")), "never the account, IFSC or the name in favour")
+    kept = [gzip.decompress(b).decode("utf8") for k, b in FS.FILES.items() if "tally-days" in k and k.endswith("20261202.xml.gz")]
+    sent = gzip.open(os.path.join(TD, "full-SAL-PAY-NOV.xml.gz")).read().decode("utf8")
+    ok("<ACCOUNTNUMBER" in sent and len(kept) == 1 and "<BANKEMPLOYEENAME" in kept[0] and not any(w in kept[0] for w in ("<ACCOUNTNUMBER", "<IFSCODE", "<PAYMENTFAVOURING", "50100123456781", "HDFC0001001")),
+       "the day kept in the bucket: the employee and amount, never the account, IFSC or the name in favour, though the day sent had them (review 244 H1; %d kept)" % len(kept))
     v2 = (g2[0]["p_vouchers"] if g2 else [{}])[0]
     cs = sorted((x.get("centre"), x.get("ledger"), x.get("amt")) for x in v2.get("costs", []))
     ok(c2 == 200 and len(cs) == 17 and ("FC Emp One", "FC Basic", -50000) in cs and ("FC Emp Two", "FC Income Tax", 2500) in cs, "each employee's amount per pay head reaches the database from the Day Book (%d)" % len(cs))

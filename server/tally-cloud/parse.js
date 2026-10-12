@@ -538,4 +538,13 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, skipped, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType, tdsChallanOf };
+// 2.4.4 (the owner's decision of 12-Oct-2026, items 3 and 5; review 244 H1): a salary payment's bank details per employee
+// (ACCOUNTNUMBER, IFSCODE, PAYMENTFAVOURING, in BANKALLOCATIONS or PAYMENTDETAILS) are taken out of a day's text before it is
+// kept: never in the tally-days bucket, whatever bridge sent the day
+function dropBankDetails(x) {
+  if (!/ACCOUNTNUMBER|IFSCODE|PAYMENTFAVOURING/.test(x)) return x;
+  for (const t of ["ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING"]) x = x.replace(new RegExp("<" + t + "(?:\\s[^>]*)?/>|<" + t + "(?:\\s[^>]*)?>[\\s\\S]*?</" + t + "\\s*>", "g"), "");
+  return x;
+}
+
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType, tdsChallanOf, dropBankDetails };

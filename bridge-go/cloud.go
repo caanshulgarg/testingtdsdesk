@@ -344,7 +344,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		size := 0
 		for i < len(q) && len(batch) < 31 {
 			d := q[i]
-			t := readText(filepath.Join(dir, "days", d+".xml"))
+			t := dropBankDetails(readText(filepath.Join(dir, "days", d+".xml"))) // 2.4.4: a day file an older bridge wrote
 			var one M
 			var n int
 			// packed here (gzip); a day the cloud could not open that way is sent again as plain text

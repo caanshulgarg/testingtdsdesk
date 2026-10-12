@@ -12,6 +12,8 @@ What 2.4.4 changes (the full notes: docs/bridge-2.4.4-notes.md):
    Annexure II in Q4, and the text file, marked "check before filing" (run it through the FVU first).
 3. The bridge asks Tally for the employees only when masters change, and the ledger list asks four pay-head fields. A
    payroll entry may take up to 3 seconds; everything else keeps 2 seconds. One request at a time.
+   A payroll voucher type of your own (not Tally's "Payroll") gets the 3 seconds after its first entry was read.
+   Bank account numbers, IFSC and the name in favour are taken out of every entry the bridge keeps or sends.
 4. FinCom's cloud stores these (migration 74, run on staging before the tally-ingest of 2.4.4).
 The add-on is 2.4.3's.
 
