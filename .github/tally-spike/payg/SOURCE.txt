@@ -1,0 +1,1 @@
+Copied from tests/fixtures/payroll-e2e at app-payroll 125f94129 (made by make.mjs from setup.json; test data only)
