@@ -41,8 +41,10 @@ other personal field read or kept. The two data locations (next-241) are not in 
    on 2.4.4's first cloud round (bank-clean-244.txt marks the folder), their month files put together again, and those days
    sent again so the cloud's copy is replaced (R2-L1). A Day Book uploaded in FinCom is cleaned the same way as it is cut
    into days (the cut entry a piece carries to the next, and the days the browser hands over the old way, too), and the
-   uploaded file is removed from the tally-uploads bucket whenever its job ends: done, stopped for good, or refused for its
-   size (R2-M2, R3-M1, R3-L1). Not cleaned by 2.4.4 (for the owner): uploaded files and tally-days objects stored before
+   uploaded file is removed from the tally-uploads bucket when its job ends: done, stopped for good, or refused for its
+   size (R2-M2, R3-M1, R3-L1). Two narrow cases left for the next release (review 244 round 4, Low): an upload abandoned
+   before FinCom is told it finished is not removed (R4-L2), and a 4 MB piece's end that falls inside one employee's bank
+   allocation carries that allocation's text in the queue's archived message (R4-L1). Not cleaned by 2.4.4 (for the owner): uploaded files and tally-days objects stored before
    2.4.4 for days no bridge sends again, and the tally_work queue's archive of earlier hand-overs.
 
 4. **A payroll voucher's entry request may take 3 s ((4)).** Only FinComVoucherObject, only for an entry whose voucher
