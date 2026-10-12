@@ -31,7 +31,7 @@ $M1 = 'm1 TDS masters made (natures with rates and threshold, duty ledger with n
 $M2 = 'm2 the ledger requests give the nature, the special rate and the certificate'
 $M3 = 'm3 FinComTdsNatures, chunked, finds every nature with its section, rates and threshold'
 $M4 = 'm4 the challan fields in FinComVoucherObject''s answer'
-$M5 = 'm5 times on ZZ BIG TEST''s masters and at 20,000 ledgers (natures and by-name under 2 s, Tally responding)'
+$M5 = 'm5 times on ZZ BIG TEST''s masters and at 20,000 ledgers (every 2.4.3 request under 2 s, Tally responding)'
 $mDone = @{}
 function MRes($c, $st, $ev) { if (-not $mDone[$c]) { Result $c $st $ev; $mDone[$c] = $true } }
 function XSave($name, $text) { [IO.File]::WriteAllText((Join-Path $cap $name), "$text", [Text.UTF8Encoding]::new($false)) }
@@ -56,7 +56,7 @@ function AltM {
 }
 # the ref's requests
 $lq = Join-Path $env:BRIDGE_DIST 'ledreq'
-$need = 'ledlist-chunk.xml', 'ledlist-tail.xml', 'ledlist-chunk-242.xml', 'ledbyname.xml', 'natures-chunk.xml', 'natures-tail.xml'
+$need = 'ledlist-chunk.xml', 'ledlist-tail.xml', 'ledlist-chunk-242.xml', 'ledchanges.xml', 'ledbyname.xml', 'natures-chunk.xml', 'natures-tail.xml'
 $miss = @($need | Where-Object { -not (Test-Path (Join-Path $lq $_)) })
 if ($miss.Count) { foreach ($c in $M1, $M2, $M3, $M4, $M5) { MRes $c 'HARNESS' "the ref's requests are not in bridge-dist\ledreq: $($miss -join ', ')" }; return }
 $RQ = @{}; foreach ($n in $need) { $RQ[$n] = (Get-Content (Join-Path $lq $n) -Raw).Trim() }
@@ -198,6 +198,9 @@ try {
       if ($tail) { break }; $after += 5000
     }
     foreach ($n in $LDC, $DUTY, 'TM Ledger 00007') { $null = Timed $n $size 'FinComLedgerByName' (ByName $n) }
+    # FinComLedgerChanges (the same fields), every window of 200 AlterIDs up to the company's highest
+    $after = [int64]0
+    while ($after -lt $bound) { $null = Timed "$($after + 1)-$($after + 200)" $size 'FinComLedgerChanges' (Req $RQ['ledchanges.xml'] $after ($after + 200)); $after += 200 }
   }
   # ZZ BIG TEST's masters (its generator, run by the build: bridge-dist\big\big-masters.xml)
   $bigF = Join-Path $env:BRIDGE_DIST 'big\big-masters.xml'
@@ -227,10 +230,10 @@ try {
   $rows | Export-Csv (Join-Path $out 'tdsm-times.csv') -NoTypeInformation
   $by = $rows | Group-Object { "$($_.size)|$($_.req)" }
   foreach ($g in $by) { $s = @($g.Group | Sort-Object ms); Add-Content -Path $resultsFile -Value ("MEASURE {0}: {1} request(s), worst {2} ms, median {3} ms, worst light {4} ms" -f ($g.Name -replace '\|', ' '), $s.Count, $s[-1].ms, $s[[int][math]::Floor(($s.Count - 1) / 2)].ms, (@($g.Group | Sort-Object light))[-1].light) -Encoding UTF8 }
-  $over = @($rows | Where-Object { $_.req -in 'FinComTdsNatures', 'FinComLedgerByName' -and $_.ms -ge 2000 })
+  $over = @($rows | Where-Object { $_.req -in 'FinComTdsNatures', 'FinComLedgerByName', 'FinComLedgerChanges', 'FinComLedgers' -and $_.ms -ge 2000 })
   $nr2 = @($rows | Where-Object { -not $_.responding })
   $w = { param($req) $x = @($rows | Where-Object { $_.req -eq $req } | Sort-Object ms); if ($x.Count) { $x[-1].ms } else { -1 } }
-  MRes $M5 $(if ($fails -or $over.Count -or $nr2.Count) { 'FAIL' } else { 'PASS' }) ("worst FinComTdsNatures {0} ms, FinComLedgerByName {1} ms, FinComLedgers (2.4.3) {2} ms, the same chunk with 2.4.2's fields {3} ms; failed {4}, not responding {5}, natures or by-name over 2 s {6}" -f (& $w 'FinComTdsNatures'), (& $w 'FinComLedgerByName'), (& $w 'FinComLedgers'), (& $w 'FinComLedgers 2.4.2'), $fails, $nr2.Count, $over.Count)
+  MRes $M5 $(if ($fails -or $over.Count -or $nr2.Count) { 'FAIL' } else { 'PASS' }) ("worst FinComTdsNatures {0} ms, FinComLedgerByName {1} ms, FinComLedgers (2.4.3) {2} ms, the same chunk with 2.4.2's fields {3} ms, FinComLedgerChanges {7} ms; failed {4}, not responding {5}, a 2.4.3 request over 2 s {6}" -f (& $w 'FinComTdsNatures'), (& $w 'FinComLedgerByName'), (& $w 'FinComLedgers'), (& $w 'FinComLedgers 2.4.2'), $fails, $nr2.Count, $over.Count, (& $w 'FinComLedgerChanges'))
 } catch {
   Write-Host "tdsm stopped: $_ $($_.ScriptStackTrace)"
   foreach ($c in $M1, $M2, $M3, $M4, $M5) { MRes $c 'HARNESS' "the harness stopped: $_" }
