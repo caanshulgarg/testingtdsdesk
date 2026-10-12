@@ -1,0 +1,143 @@
+company ISPAYROLLON, ISCOSTCENTRESON: created 0, altered 1, errors 0
+company ISPAYROLLON=Yes: created 0, altered 1, errors 0
+company ISPAYROLLSTATON=Yes: created 0, altered 1, errors 0
+company CMPPFCODE=DLCPM0012345000: created 0, altered 1, errors 0
+company CMPPFACCOUNTGROUPCODE=DLCPM0012345000: created 0, altered 1, errors 0
+company CMPPFSECURITYCODE=DLCPM0012345000: created 0, altered 1, errors 0
+company CMPESICODE=31000123450000999: created 0, altered 1, errors 0
+company CMPFAXNUMBER=DLCPM0012345000: created 0, altered 1, errors 0
+company CMPCOMPTAXSLNO=PTREG0012345: created 0, altered 1, errors 0
+company CMPPROFTAXENROLNO=PTREG0012345: created 0, altered 1, errors 0
+company CMPPROFTAXREGNNO=PTREG0012345: created 0, altered 1, errors 0
+attendance type FC Present (Attendance / Leave with Pay): created 1, altered 0, errors 0
+attendance type FC Absent (Leave without Pay): created 1, altered 0, errors 0
+attendance type FC Overtime Hrs (Attendance / Leave with Pay): created 1, altered 0, errors 0
+salary payable, PF payable, bank: created 3, altered 0, errors 0
+pay head FC Basic with its statutory type: created 1, altered 0, errors 0
+pay head FC Basic ITCOMPONENT=Basic Salary: created 0, altered 1, errors 0
+pay head FC HRA with its statutory type: created 1, altered 0, errors 0
+pay head FC HRA ITCOMPONENT=House Rent Allowance: created 0, altered 1, errors 0
+pay head FC Special Allowance with its statutory type: created 1, altered 0, errors 0
+pay head FC Special Allowance ITCOMPONENT=Special Allowance: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Special Allowance&apos; does not exist!
+pay head FC Special Allowance ITCOMPONENT=Others: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Others&apos; does not exist!
+pay head FC Special Allowance ITCOMPONENT=Other Allowances: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Other Allowances&apos; does not exist!
+pay head FC Special Allowance ITCOMPONENT=Taxable Allowance: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Taxable Allowance&apos; does not exist!
+pay head FC PF Employee with its statutory type: created 1, altered 0, errors 0
+pay head FC PF Employee PAYSTATTYPE alter: created 0, altered 1, errors 0
+pay head FC PF Employer with its statutory type: created 1, altered 0, errors 0
+pay head FC PF Employer PAYSTATTYPE alter: created 0, altered 1, errors 0
+pay head FC ESI Employee with its statutory type: created 1, altered 0, errors 0
+pay head FC ESI Employee PAYSTATTYPE alter: created 0, altered 1, errors 0
+pay head FC Professional Tax with its statutory type: created 1, altered 0, errors 0
+pay head FC Professional Tax PAYSTATTYPE alter: created 0, altered 1, errors 0
+pay head FC Income Tax with its statutory type: created 1, altered 0, errors 0
+pay head FC Income Tax PAYSTATTYPE alter: created 0, altered 1, errors 0
+employee group FC Staff Office: created 1, altered 0, errors 0
+employee group FC Staff Factory: created 1, altered 0, errors 0
+employee FC Emp One (minimal): created 1, altered 0, errors 0
+employee FC Emp Two (minimal): created 1, altered 0, errors 0
+employee FC Emp Three (minimal): created 1, altered 0, errors 0
+employee 1 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+employee 1 DATEOFBIRTH=19900101: created 0, altered 1, errors 0
+employee 1 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 1 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+employee 1 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 1 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 1 PFJOININGDATE=20250401: created 0, altered 1, errors 0
+employee 1 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+employee 1 MOBILENUMBER=9810000001: created 0, altered 1, errors 0
+employee 1 IFSCODE=HDFC0001001: created 0, altered 1, errors 0
+employee 1 FUNCTION=Finance: created 0, altered 1, errors 0
+employee 1 LOCATION=Delhi: created 0, altered 1, errors 0
+employee 1 DESIGNATION=Accounts Manager: created 0, altered 1, errors 0
+employee 1 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+employee 1 PANNUMBER=ABCPE1001A: created 0, altered 1, errors 0
+employee 1 ESINUMBER=3100123451: created 0, altered 1, errors 0
+employee 1 GENDER=Male: created 0, altered 1, errors 0
+employee 1 BLOODGROUP=O+: created 0, altered 1, errors 0
+employee 1 FATHERNAME=Relative of employee 1: created 0, altered 1, errors 0
+employee 1 CONTACTNUMBERS=9810000001: created 0, altered 1, errors 0
+employee 1 EMAILID=emp1@example.com: created 0, altered 1, errors 0
+employee 1 BANKACCOUNTNUMBER=50100123456781: created 0, altered 1, errors 0
+employee 1 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+employee 1 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+employee 1 SPOUSENAME=Relative of employee 1: created 0, altered 1, errors 0
+employee 1 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+employee 1 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+employee 1 AADHARNUMBER=999900001001: created 0, altered 1, errors 0
+employee 1 UANNUMBER=100200300401: created 0, altered 1, errors 0
+employee 1 address: created 0, altered 1, errors 0
+employee 2 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+employee 2 DATEOFBIRTH=19850201: created 0, altered 1, errors 0
+employee 2 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 2 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+employee 2 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 2 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 2 PFJOININGDATE=20250501: created 0, altered 1, errors 0
+employee 2 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+employee 2 MOBILENUMBER=9810000002: created 0, altered 1, errors 0
+employee 2 IFSCODE=HDFC0001002: created 0, altered 1, errors 0
+employee 2 FUNCTION=Finance: created 0, altered 1, errors 0
+employee 2 LOCATION=Delhi: created 0, altered 1, errors 0
+employee 2 DESIGNATION=Accountant: created 0, altered 1, errors 0
+employee 2 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+employee 2 PANNUMBER=ABCPE1002B: created 0, altered 1, errors 0
+employee 2 ESINUMBER=3100123452: created 0, altered 1, errors 0
+employee 2 GENDER=Female: created 0, altered 1, errors 0
+employee 2 BLOODGROUP=O+: created 0, altered 1, errors 0
+employee 2 FATHERNAME=Relative of employee 2: created 0, altered 1, errors 0
+employee 2 CONTACTNUMBERS=9810000002: created 0, altered 1, errors 0
+employee 2 EMAILID=emp2@example.com: created 0, altered 1, errors 0
+employee 2 BANKACCOUNTNUMBER=50100123456782: created 0, altered 1, errors 0
+employee 2 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+employee 2 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+employee 2 SPOUSENAME=Relative of employee 2: created 0, altered 1, errors 0
+employee 2 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+employee 2 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+employee 2 AADHARNUMBER=999900001002: created 0, altered 1, errors 0
+employee 2 UANNUMBER=100200300402: created 0, altered 1, errors 0
+employee 3 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+employee 3 DATEOFBIRTH=19980731: created 0, altered 1, errors 0
+employee 3 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 3 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+employee 3 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 3 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+employee 3 PFJOININGDATE=20260601: created 0, altered 1, errors 0
+employee 3 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+employee 3 MOBILENUMBER=9810000003: created 0, altered 1, errors 0
+employee 3 IFSCODE=HDFC0001003: created 0, altered 1, errors 0
+employee 3 FUNCTION=Production: created 0, altered 1, errors 0
+employee 3 LOCATION=Gurugram: created 0, altered 1, errors 0
+employee 3 DESIGNATION=Machine Operator: created 0, altered 1, errors 0
+employee 3 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+employee 3 PANNUMBER=ABCPE1003C: created 0, altered 1, errors 0
+employee 3 ESINUMBER=3100123453: created 0, altered 1, errors 0
+employee 3 GENDER=Male: created 0, altered 1, errors 0
+employee 3 BLOODGROUP=O+: created 0, altered 1, errors 0
+employee 3 FATHERNAME=Relative of employee 3: created 0, altered 1, errors 0
+employee 3 CONTACTNUMBERS=9810000003: created 0, altered 1, errors 0
+employee 3 EMAILID=emp3@example.com: created 0, altered 1, errors 0
+employee 3 BANKACCOUNTNUMBER=50100123456783: created 0, altered 1, errors 0
+employee 3 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+employee 3 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+employee 3 SPOUSENAME=Relative of employee 3: created 0, altered 1, errors 0
+employee 3 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+employee 3 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+employee 3 AADHARNUMBER=999900001003: created 0, altered 1, errors 0
+employee 3 UANNUMBER=100200300403: created 0, altered 1, errors 0
+attendance ATT-NOV (form 1): created 0, altered 0, errors 0
+attendance ATT-NOV (form 2): created 0, altered 0, errors 0
+attendance ATT-DEC (form 1): created 0, altered 0, errors 0
+attendance ATT-DEC (form 2): created 0, altered 0, errors 0
+payroll PR-NOV (PaySlip form): created 1, altered 0, errors 0
+payroll PR-DEC (PaySlip form): created 1, altered 0, errors 0
+payroll PF-NOV (PaySlip form): created 1, altered 0, errors 0
+salary payment SAL-PAY-NOV (bank details per employee): created 1, altered 0, errors 0
+TDS on salary TDS-SAL-NOV (Income Tax stat payment tags): created 1, altered 0, errors 0
+group FC Bulk Staff: created 1, altered 0, errors 0
+500 employees, batch 1: created 100, altered 0, errors 0
+500 employees, batch 2: created 100, altered 0, errors 0
+500 employees, batch 3: created 100, altered 0, errors 0
+500 employees, batch 4: created 100, altered 0, errors 0
+500 employees, batch 5: created 100, altered 0, errors 0
+payroll PR-BULK-500 (PaySlip form): created 1, altered 0, errors 0
