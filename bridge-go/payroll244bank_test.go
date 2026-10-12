@@ -154,3 +154,29 @@ func TestPayrollOldDayFilesCleanedOnce(t *testing.T) {
 		t.Fatalf("the day was not sent: %v", err)
 	}
 }
+
+// review 244 R3-L2: a cloud that is off on the first round does not lose the days to send again; the disk is cleaned at once
+func TestPayrollOldDayFilesCloudOffFirst(t *testing.T) {
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg())
+	raw := gz242(t, filepath.Join("testdata", "payroll244", "7.1", "full-SAL-PAY-NOV.xml.gz"))
+	m := reVchBlock.FindString(raw)
+	d := tagDate(m, "DATE")
+	dir := syncFolder(zz)
+	_ = os.MkdirAll(filepath.Join(dir, "days"), 0o755)
+	_ = saveFile(filepath.Join(dir, "days", d+".xml"), "<TALLYMESSAGE>"+m+"</TALLYMESSAGE>")
+	url := cfgS("CloudUrl")
+	setCfg("CloudUrl", "")
+	if n := bankCleanOnce(dir); n != 1 || len(bankLeft244(readText(filepath.Join(dir, "days", d+".xml")))) > 0 {
+		t.Fatalf("the disk not cleaned with the cloud off: %d", n)
+	}
+	if exists(filepath.Join(dir, "bank-clean-244.txt")) || len(cloudQueue(dir)) != 0 {
+		t.Fatal("marked done (or queued) while the cloud is off")
+	}
+	setCfg("CloudUrl", url)
+	bankCleanOnce(dir)
+	if q := cloudQueue(dir); len(q) != 1 || q[0] != d || !exists(filepath.Join(dir, "bank-clean-244.txt")) {
+		t.Fatalf("the day not queued once the cloud is on: %v", q)
+	}
+}

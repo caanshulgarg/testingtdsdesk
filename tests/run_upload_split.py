@@ -408,6 +408,22 @@ try:
     ok(any("<BANKEMPLOYEENAME" in t for t in qd) and not any(w in t for t in qd for w in bankW) and not any(w in qall for w in bankW[3:]),
        "E the day queued keeps the employee and amount, never the account, IFSC, name in favour or the employee's bank (nor any piece's message)")
     ok("tally-uploads/" + str(pathD) not in FS.FILES and "tally-uploads/" + str(pathD) in FS.REMOVED, "E the uploaded file is removed once its last piece is queued")
+    # review 244 R3-L1: the salary payment cut by a piece's end (its first part carried in the next piece's message, which
+    # the queue's archive keeps): no bank details in any message
+    pad = " " * (PIECE_B - 20000)
+    dataE2 = ("<ENVELOPE><BODY><DATA>" + pad + "<TALLYMESSAGE>" + vD + "</TALLYMESSAGE></DATA></BODY></ENVELOPE>").encode("utf8")
+    c, r, c2, r2, jobE2, pathE2 = upload("e2.xml", dataE2, ("20261201", "20261231"))
+    ok(work_until_done(jobE2) and jrow(jobE2).get("status") == "done", "E2 a salary payment across a piece's end: done (%s)" % jrow(jobE2).get("status"))
+    msgs = [x["message"] for x in FS.QUEUE if (x["message"] or {}).get("job") == jobE2]
+    carried = [m for m in msgs if isinstance(m.get("upload"), dict) and "<VOUCHER" in str(m["upload"].get("tail", ""))]
+    qe2 = [gzip.decompress(base64.b64decode(d["gz"])).decode("utf8") for m in msgs if isinstance(m.get("days"), list) for d in m["days"]]
+    ok(carried and not any(w in json.dumps(msgs) for w in bankW[3:]) and any("<BANKEMPLOYEENAME" in t for t in qe2) and not any(w in t for t in qe2 for w in bankW),
+       "E2 the cut voucher carried into the next piece and the day queued: no account, IFSC or bank in any message (%d carried)" % len(carried))
+    # review 244 R3-M1: a stored file of another size is not read and not kept
+    c, r = call({"kind": "upload_new", "client": CID, "name": "e3.xml", "size": len(dataD) + 5, "from": "20261201", "to": "20261231"})
+    FS.FILES["tally-uploads/" + str(r.get("path"))] = dataD
+    c3, r3 = call({"kind": "upload_done", "client": CID, "job": r.get("job"), "path": r.get("path")})
+    ok(c3 == 409 and "tally-uploads/" + str(r.get("path")) not in FS.FILES, "E3 a stored file of another size: refused (409) and not kept (%s)" % c3)
     print("\n  piece times (the split's own work per piece, ms):")
     for tag, pt in pieces_ms:
         if pt: print("    %-45s %3d pieces  max %6.0f ms  mean %6.0f ms  largest piece %.2f MB" % (tag, len(pt), max(ms for _, ms in pt), sum(ms for _, ms in pt) / len(pt), max(b for b, _ in pt) / 1048576))

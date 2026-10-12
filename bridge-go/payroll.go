@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -510,12 +511,14 @@ func dropBankDetails(x string) string {
 	return x
 }
 
-// review 244 R2-L1: the day files an earlier bridge kept may hold employees' bank details. Once per company folder (the
-// mark bank-clean-244.txt), on the first cloud round of 2.4.4: each such day file is written again without them, its
-// month's file put together again, and those days queued for FinCom, whose copy (the tally-days bucket) is then replaced
-// by the clean day through the existing upsert. Entries, GUIDs and counts are unchanged
+// review 244 R2-L1, R3-L2: the day files an earlier bridge kept may hold employees' bank details. Once per company folder,
+// from 2.4.4's first cloud round: each such day file is written again without them (bank-clean-244-disk.txt marks the
+// folder done; a file that could not be written is tried again at the next round), its month's file put together again,
+// and those days queued for FinCom, whose copy (the tally-days bucket) is then replaced by the clean day through the
+// existing upsert. The days to send again wait in bank-clean-244-days.txt until they are queued (a cloud that is off now
+// does not lose them); bank-clean-244.txt marks it all done. Entries, GUIDs and counts are unchanged
 func bankCleanOnce(dir string) int {
-	mark := filepath.Join(dir, "bank-clean-244.txt")
+	mark, diskMark, pf := filepath.Join(dir, "bank-clean-244.txt"), filepath.Join(dir, "bank-clean-244-disk.txt"), filepath.Join(dir, "bank-clean-244-days.txt")
 	if exists(mark) || !exists(filepath.Join(dir, "days")) {
 		return 0
 	}
@@ -523,37 +526,65 @@ func bankCleanOnce(dir string) int {
 		return 0
 	}
 	defer keepMu.Unlock()
+	co := ""
+	if st := readKeepState(dir); st != nil {
+		co = str(st["company"])
+	}
 	var days []string
-	months := map[string]bool{}
-	for _, f := range dayFiles(dir, "") {
-		t := readText(f)
-		c := dropBankDetails(t)
-		if c == t {
-			continue
-		}
-		if err := saveFile(f, c); err != nil {
-			writeLog("Payroll: " + f + " could not be written: " + err.Error())
-			return 0 // tried again at the next round
-		}
-		d := strings.TrimSuffix(filepath.Base(f), ".xml")
-		days = append(days, d)
-		if len(d) == 8 {
-			months[d[:6]] = true
+	for _, l := range strings.Split(readText(pf), "\n") {
+		if l = strings.TrimSpace(l); len(l) == 8 && onlyDigits(l) == l && !contains(days, l) {
+			days = append(days, l)
 		}
 	}
-	for ym := range months {
-		if exists(filepath.Join(dir, "daybook-"+ym+".xml")) {
-			writeKeepMonthFile(dir, ym)
+	n := 0
+	if !exists(diskMark) {
+		months := map[string]bool{}
+		failed := false
+		for _, f := range dayFiles(dir, "") {
+			t := readText(f)
+			c := dropBankDetails(t)
+			if c == t {
+				continue
+			}
+			if err := saveFile(f, c); err != nil {
+				writeLog("Payroll: " + f + " could not be written: " + err.Error() + "; tried again at the next round")
+				failed = true
+				continue
+			}
+			d := strings.TrimSuffix(filepath.Base(f), ".xml")
+			n++
+			if len(d) == 8 {
+				months[d[:6]] = true
+				if !contains(days, d) {
+					days = append(days, d)
+				}
+			}
+		}
+		for ym := range months {
+			if exists(filepath.Join(dir, "daybook-"+ym+".xml")) {
+				writeKeepMonthFile(dir, ym)
+			}
+		}
+		if n > 0 {
+			writeLog(fmt.Sprintf("Payroll: %d day file(s) of %s kept by an earlier bridge held employees' bank details: taken out here", n, co))
+		}
+		if len(days) > 0 {
+			_ = saveFile(pf, strings.Join(days, "\n"))
+		}
+		if !failed {
+			_ = saveFile(diskMark, nowS())
 		}
 	}
 	if len(days) > 0 {
-		addCloudDays(dir, days)
-		co := ""
-		if st := readKeepState(dir); st != nil {
-			co = str(st["company"])
+		if !cloudOn() {
+			return n // queued when the cloud is on
 		}
-		writeLog(fmt.Sprintf("Payroll: %d day file(s) of %s kept by an earlier bridge held employees' bank details: taken out here, and those days sent to FinCom again so its copy is clean too", len(days), co))
+		addCloudDays(dir, days)
+		writeLog(fmt.Sprintf("Payroll: %d day(s) of %s sent to FinCom again so its copy is without the bank details too", len(days), co))
+		_ = os.Remove(pf)
 	}
-	_ = saveFile(mark, nowS())
-	return len(days)
+	if exists(diskMark) {
+		_ = saveFile(mark, nowS())
+	}
+	return n
 }
