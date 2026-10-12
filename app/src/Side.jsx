@@ -209,7 +209,7 @@ export default function Side() {
       {/* stability batch 3: the foot of the sidebar, two lines in the same place on every page: where the work is kept
           and when it was last synced, or something that happened by itself (a colleague's change, the server not
           answering: toast(…, {background: true})), then today's date */}
-      <div className="side-ver" data-side-date=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" onClick={yourData}>Your data</button></span></div>
+      <div className="side-ver" data-side-date=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" aria-label="Your data: where your work is kept and who can see it" onClick={yourData}>Your data</button></span></div>
     </div>
   );
 }
