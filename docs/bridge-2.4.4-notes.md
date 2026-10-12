@@ -8,7 +8,7 @@ other personal field read or kept. The two data locations (next-241) are not in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.4.exe |
-| Fingerprint | (filled at build) |
+| Fingerprint | SHA-256 `ea07363ca089ecbb17fa56f02185c32ddf66eec233189c4e768a0ded327f227d` (FinComBridge-Setup-2.4.4.exe, built 13-Oct-2026 00:02 IST; compare with the .sha256 file next to the setup); program SHA-256 `9a510ca4e408999d90465fb291d4d72637a97621a619372c5cc81ce090aaefa7` |
 | Replaces | 2.4.3 (kept on the computer, so the tray can roll back to it) |
 | Published | (filled at publishing) |
 
