@@ -259,7 +259,9 @@ const TDS = {
       const fit = ch.find(c => this.qOf(c.date) === r.q && this.fyOf(c.date) === r.fy &&
         (!c.section || c.section === r.section) && /^206C/.test(String(c.section || "")) === /^206C/.test(String(r.section || "")) &&
         r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
-      if (fit){ b.alloc[r.id] = fit.id; use[fit.id] = r2((use[fit.id] || 0) + r.tds); n++; }
+      // a tag made here is the person's (bridge 2.4.3, review 243 T2): Tally's mark goes, but a deduction a person took off
+      // Tally's challan keeps "off", so untagging it again still keeps it off
+      if (fit){ b.alloc[r.id] = fit.id; if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id]; use[fit.id] = r2((use[fit.id] || 0) + r.tds); n++; }
     });
     return n;
   },

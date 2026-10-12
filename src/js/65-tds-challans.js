@@ -149,7 +149,7 @@ const TDSCH = {
   untag(ids){
     const b = S.books; let n = 0;
     // a deduction a person takes off the challan Tally linked it to stays off ("off": the sync lists it, never tags it back)
-    (ids || []).forEach(id => { if (b && b.alloc && b.alloc[id]){ delete b.alloc[id]; n++; if (b.allocFrom && b.allocFrom[id] === "tally") b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id]; } });
+    (ids || []).forEach(id => { if (b && b.alloc && b.alloc[id]){ delete b.alloc[id]; n++; if (b.allocFrom && (b.allocFrom[id] === "tally" || b.allocFrom[id] === "off")) b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id]; } });   // (review 243 T2) an "off" kept
     if (n) saveBooks();
     return {ok: true, n};
   },

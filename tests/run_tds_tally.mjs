@@ -21,7 +21,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const { load, HTML } = require("./harness");
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "tdsfields243", "7.1");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
-  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH", "challanFromBooks"];
+  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH", "challanFromBooks", "BOOKS_KEYS"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const { ctx, x } = load(HTML, NAMES.filter((n) => { try { load(HTML, [n]); return true; } catch (e) { return false; } }));
 ctx.S.companies = { t: { id: "t", name: "FinCom Spike Co", choices: {} } }; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t"; let uidN = 0; ctx.uid = (p) => (p || "id") + ++uidN; ctx.D = () => ({parties: {}, entries: {}}); if (typeof ctx.money !== "function") ctx.money = (a) => "Rs " + a; ctx.toast = () => {}; ctx.render = () => {};
@@ -286,5 +286,23 @@ x.TDSCH.untag([k1row]); x.TDSCH.tag([k1row], s2ch.id);
 ok(b.alloc[k1row] === s2ch.id && b.allocFrom[k1row] !== "tally", "S2. a person's retag is not marked From Tally (" + b.allocFrom[k1row] + ")");
 // S2: a challan made by hand from a payment before 2.4.3 (from "tally", a uid id) is not shown as From Tally
 ok(x.TDSTally.made({ id: "ch5", from: "tally" }) === false && x.TDSTally.made({ id: "tally:v:k", from: "tally", madeBy: "tally-sync" }) === true, "S2. only the sync's challans are From Tally");
+
+// ==== review 243 (round 5): T1, T2
+// T1: the person's untag survives a reload (only what saveBooks keeps), and is not tagged back
+const reload = (b0) => { const keep = { cid: b0.cid }; x.BOOKS_KEYS.forEach((k) => { if (b0[k] !== undefined) keep[k] = JSON.parse(JSON.stringify(b0[k])); }); const b1 = Object.assign({}, keep); b1.vouchers = b0.vouchers; b1.tdsNat = b0.tdsNat; b1.ledTds = b0.ledTds; b1.map = b0.map; ctx.S.books = b1; return b1; };
+b = books(); upload(); x.TDSTally.sync(b);
+x.TDSCH.untag([k1row]);
+b = reload(b); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && r.disagree.some((d) => d.row === k1row && /by hand/.test(d.why || "")), "T1. the untag kept over a reload: not tagged back, listed (" + J([b.alloc[k1row], (b.allocFrom || {})[k1row], r.tagged]) + ")");
+// T1: the From Tally mark of a tag survives a reload, so an untag after the reload is still kept
+b = books(); upload(); x.TDSTally.sync(b);
+b = reload(b); x.TDSCH.untag([k1row]); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && (b.allocFrom || {})[k1row] === "off", "T1. untag after a reload: still kept off (" + J([b.alloc[k1row], (b.allocFrom || {})[k1row]]) + ")");
+// T2: the auto-tag of an "off" row: a later untag keeps it off
+b = books(); upload(); x.TDSTally.sync(b);
+x.TDSCH.untag([k1row]); x.TDS.autoAllocate();
+const t2 = b.alloc[k1row];
+x.TDSCH.untag([k1row]); r = x.TDSTally.sync(b);
+ok(t2 && (b.allocFrom || {})[k1row] === "off" && !b.alloc[k1row], "T2. auto-tagged, then untagged again: still off, not tagged back (" + J([t2, (b.allocFrom || {})[k1row], b.alloc[k1row]]) + ")");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);
