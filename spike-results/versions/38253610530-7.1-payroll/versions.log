@@ -1,0 +1,273 @@
+[13:19:38] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-12, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-12, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1525 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+[13:20:12] ---- payroll: the company
+  INFO payroll: company object fields: 704
+  INFO payroll: company payroll-like fields before: INCOMETAXNUMBER|String| ; PFPYMTPERIOD|String| ; ESIPYMTPERIOD|String| ; CMPPFCODE|String| ; CMPPFACCOUNTGROUPCODE|String| ; CMPPFSECURITYCODE|String| ; CMPESICODE|String| ; CMPESIBRANCHOFFICE|String| ; CMPESIWORKINGDAYS|String| ; CMPFAXNUMBER|String| ; CMPCOMPTAXSLNO|String| ; CMPTAXISSUEDPERSON|String| ; CMPTAXISSUEDDESIGNATION|String| ; CMPPROFTAXENROLNO|String| ; CMPPROFTAXREGNNO|String| ; CMPTAXAUTHPERSON|String| ; CMPTAXAUTHDESIGNATION|String| ; ISPAYROLLON|Logical|No ; ISPAYROLLSTATON|Logical|No ; STATUTORYVERSION|Number|0 ; PFPYMTDUEDATE|Number|0 ; ESIPYMTDUEDATE|Number|0 ; CMPTAXAMOUNTTOLERENCE|Number|0 ; CMPESIELIGIBLEAMOUNT|Amount|
+[company ISPAYROLLON, ISCOSTCENTRESON] 18 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll company ISPAYROLLON, ISCOSTCENTRESON: created 0, altered 1, errors 0
+[payroll] company ISPAYROLLON=Yes: created 0, altered 1, errors 0
+[payroll] company ISPAYROLLSTATON=Yes: created 0, altered 1, errors 0
+[payroll] company CMPPFCODE=DLCPM0012345000: created 0, altered 1, errors 0
+[payroll] company CMPPFACCOUNTGROUPCODE=DLCPM0012345000: created 0, altered 1, errors 0
+[payroll] company CMPPFSECURITYCODE=DLCPM0012345000: created 0, altered 1, errors 0
+[payroll] company CMPESICODE=31000123450000999: created 0, altered 1, errors 0
+[payroll] company CMPFAXNUMBER=DLCPM0012345000: created 0, altered 1, errors 0
+[payroll] company CMPCOMPTAXSLNO=PTREG0012345: created 0, altered 1, errors 0
+[payroll] company CMPPROFTAXENROLNO=PTREG0012345: created 0, altered 1, errors 0
+[payroll] company CMPPROFTAXREGNNO=PTREG0012345: created 0, altered 1, errors 0
+  INFO payroll: company payroll-like fields after: CMPPFCODE|String|DLCPM0012345000 ; CMPPFACCOUNTGROUPCODE|String|DLCPM0012345000 ; CMPPFSECURITYCODE|String|DLCPM0012345000 ; CMPESICODE|String|31000123450000999 ; CMPFAXNUMBER|String|DLCPM0012345000 ; CMPCOMPTAXSLNO|String|PTREG0012345 ; CMPPROFTAXENROLNO|String|PTREG0012345 ; CMPPROFTAXREGNNO|String|PTREG0012345 ; ISPAYROLLON|Logical|Yes ; ISPAYROLLSTATON|Logical|Yes ; STATUTORYVERSION|Number|0 ; PFPYMTDUEDATE|Number|0 ; ESIPYMTDUEDATE|Number|0 ; CMPTAXAMOUNTTOLERENCE|Number|0
+######## PASS y1 payroll and statutory payroll on (company switches read back): ISPAYROLLON Yes: True; switches and numbers now set: CMPPFCODE=DLCPM0012345000, CMPPFACCOUNTGROUPCODE=DLCPM0012345000, CMPPFSECURITYCODE=DLCPM0012345000, CMPESICODE=31000123450000999, CMPFAXNUMBER=DLCPM0012345000, CMPCOMPTAXSLNO=PTREG0012345, CMPPROFTAXENROLNO=PTREG0012345, CMPPROFTAXREGNNO=PTREG0012345, ISPAYROLLON=Yes, ISPAYROLLSTATON=Yes, STATUTORYVERSION=0, PFPYMTDUEDATE=0, ESIPYMTDUEDATE=0, CMPTAXAMOUNTTOLERENCE=0
+[13:20:13] ---- payroll: attendance types
+[attendance type FC Present (Attendance / Leave with Pay)] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance type FC Present (Attendance / Leave with Pay): created 1, altered 0, errors 0
+[attendance type FC Absent (Leave without Pay)] 11 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance type FC Absent (Leave without Pay): created 1, altered 0, errors 0
+[attendance type FC Overtime Hrs (Attendance / Leave with Pay)] 10 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance type FC Overtime Hrs (Attendance / Leave with Pay): created 1, altered 0, errors 0
+  INFO payroll: attendance type FC Present, filled fields: GUID|String|bfec5f89-b32b-4e27-997d-61327b6f137c-000000d1 ; PARENT|String|Primary ; BASEUNITS|String|Not Applicable ; ATTENDANCEPRODUCTIONTYPE|String|Attendance / Leave with Pay ; ATTENDANCEPERIOD|String|Days ; CANDELETE|Logical|Yes ; ALTERID|Number|224 ; MASTERID|Number|209 ; UPDATEDDATETIME|DateTime|000000000 ; LANGUAGENAME.LIST/FC Present/NAME||FC Present ; LANGUAGENAME.LIST/LANGUAGEID|Number|1033
+[13:20:13] ---- payroll: ledgers and pay heads
+[salary payable, PF payable, bank] 24 ms: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll salary payable, PF payable, bank: created 3, altered 0, errors 0
+[pay head FC Basic with its statutory type] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC Basic with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC Basic ITCOMPONENT=Basic Salary: created 0, altered 1, errors 0
+[pay head FC HRA with its statutory type] 17 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC HRA with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC HRA ITCOMPONENT=House Rent Allowance: created 0, altered 1, errors 0
+[pay head FC Special Allowance with its statutory type] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC Special Allowance with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC Special Allowance ITCOMPONENT=Special Allowance: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Special Allowance&apos; does not exist!
+[payroll] pay head FC Special Allowance ITCOMPONENT=Others: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Others&apos; does not exist!
+[payroll] pay head FC Special Allowance ITCOMPONENT=Other Allowances: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Other Allowances&apos; does not exist!
+[payroll] pay head FC Special Allowance ITCOMPONENT=Taxable Allowance: created 0, altered 0, errors 1; Tally said: IncomeTaxClassification &apos;Taxable Allowance&apos; does not exist!
+[pay head FC PF Employee with its statutory type] 20 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC PF Employee with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC PF Employee PAYSTATTYPE alter: created 0, altered 1, errors 0
+[pay head FC PF Employer with its statutory type] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC PF Employer with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC PF Employer PAYSTATTYPE alter: created 0, altered 1, errors 0
+[pay head FC ESI Employee with its statutory type] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC ESI Employee with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC ESI Employee PAYSTATTYPE alter: created 0, altered 1, errors 0
+[pay head FC Professional Tax with its statutory type] 19 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC Professional Tax with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC Professional Tax PAYSTATTYPE alter: created 0, altered 1, errors 0
+[pay head FC Income Tax with its statutory type] 18 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll pay head FC Income Tax with its statutory type: created 1, altered 0, errors 0
+[payroll] pay head FC Income Tax PAYSTATTYPE alter: created 0, altered 1, errors 0
+  INFO payroll: pay head 'FC Basic' filled fields: PARENT|String|Indirect Expenses ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Earnings for Employees ; PAYSLIPNAME|String|FC Basic ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Not Applicable ; ITCOMPONENT|String|Basic Salary ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes
+  INFO payroll: pay head 'FC HRA' filled fields: PARENT|String|Indirect Expenses ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Earnings for Employees ; PAYSLIPNAME|String|FC HRA ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Not Applicable ; ITCOMPONENT|String|House Rent Allowance ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes
+  INFO payroll: pay head 'FC Special Allowance' filled fields: PARENT|String|Indirect Expenses ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Earnings for Employees ; PAYSLIPNAME|String|FC Special Allowance ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Not Applicable ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes
+  INFO payroll: pay head 'FC PF Employee' filled fields: PARENT|String|Current Liabilities ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Employees' Statutory Deductions ; PAYSLIPNAME|String|FC PF Employee ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|PF Account (A/c No. 1) ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes ; LANGUAGENAME.LIST/FC PF Employee/NAME||FC PF Employee
+  INFO payroll: pay head 'FC PF Employer' filled fields: PARENT|String|Indirect Expenses ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Employer's Statutory Contributions ; PAYSLIPNAME|String|FC PF Employer ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|PF Account (A/c No. 1) ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes ; LANGUAGENAME.LIST/FC PF Employer/NAME||FC PF Employer
+  INFO payroll: pay head 'FC ESI Employee' filled fields: PARENT|String|Current Liabilities ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Employees' Statutory Deductions ; PAYSLIPNAME|String|FC ESI Employee ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Employee State Insurance ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes ; LANGUAGENAME.LIST/FC ESI Employee/NAME||FC ESI Employee
+  INFO payroll: pay head 'FC Professional Tax' filled fields: PARENT|String|Current Liabilities ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Employees' Statutory Deductions ; PAYSLIPNAME|String|FC Professional Tax ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Professional Tax ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes ; LANGUAGENAME.LIST/FC Professional Tax/NAME||FC Professional Tax
+  INFO payroll: pay head 'FC Income Tax' filled fields: PARENT|String|Current Liabilities ; TAXTYPE|String|Others ; TAXCLASSIFICATIONNAME|String|Not Applicable ; PAYTYPE|String|Employees' Statutory Deductions ; PAYSLIPNAME|String|FC Income Tax ; CALCULATIONTYPE|String|As User Defined Value ; PAYSTATTYPE|String|Income Tax ; FORPAYROLL|Logical|Yes ; SHOWINPAYSLIP|Logical|Yes ; LANGUAGENAME.LIST/FC Income Tax/NAME||FC Income Tax
+[13:20:14] ---- payroll: employee groups and employees
+[employee group FC Staff Office] 16 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee group FC Staff Office: created 1, altered 0, errors 0
+[employee group FC Staff Factory] 17 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee group FC Staff Factory: created 1, altered 0, errors 0
+[employee FC Emp One (minimal)] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee FC Emp One (minimal): created 1, altered 0, errors 0
+[employee FC Emp Two (minimal)] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee FC Emp Two (minimal): created 1, altered 0, errors 0
+[employee FC Emp Three (minimal)] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee FC Emp Three (minimal): created 1, altered 0, errors 0
+  INFO payroll: employee object fields: 79 (2 lists)
+[payroll] employee 1 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+[payroll] employee 1 DATEOFBIRTH=19900101: created 0, altered 1, errors 0
+[payroll] employee 1 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 1 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 1 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 1 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 1 PFJOININGDATE=20250401: created 0, altered 1, errors 0
+[payroll] employee 1 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+[payroll] employee 1 MOBILENUMBER=9810000001: created 0, altered 1, errors 0
+[payroll] employee 1 IFSCODE=HDFC0001001: created 0, altered 1, errors 0
+[payroll] employee 1 FUNCTION=Finance: created 0, altered 1, errors 0
+[payroll] employee 1 LOCATION=Delhi: created 0, altered 1, errors 0
+[payroll] employee 1 DESIGNATION=Accounts Manager: created 0, altered 1, errors 0
+[payroll] employee 1 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+[payroll] employee 1 PANNUMBER=ABCPE1001A: created 0, altered 1, errors 0
+[payroll] employee 1 ESINUMBER=3100123451: created 0, altered 1, errors 0
+[payroll] employee 1 GENDER=Male: created 0, altered 1, errors 0
+[payroll] employee 1 BLOODGROUP=O+: created 0, altered 1, errors 0
+[payroll] employee 1 FATHERNAME=Relative of employee 1: created 0, altered 1, errors 0
+[payroll] employee 1 CONTACTNUMBERS=9810000001: created 0, altered 1, errors 0
+[payroll] employee 1 EMAILID=emp1@example.com: created 0, altered 1, errors 0
+[payroll] employee 1 BANKACCOUNTNUMBER=50100123456781: created 0, altered 1, errors 0
+[payroll] employee 1 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+[payroll] employee 1 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+[payroll] employee 1 SPOUSENAME=Relative of employee 1: created 0, altered 1, errors 0
+[payroll] employee 1 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+[payroll] employee 1 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001001: created 0, altered 1, errors 0
+[payroll] employee 1 AADHARNUMBER=999900001001: created 0, altered 1, errors 0
+[payroll] employee 1 UANNUMBER=100200300401: created 0, altered 1, errors 0
+[employee 1 address] 17 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll employee 1 address: created 0, altered 1, errors 0
+[payroll] employee 2 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+[payroll] employee 2 DATEOFBIRTH=19850201: created 0, altered 1, errors 0
+[payroll] employee 2 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 2 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 2 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 2 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 2 PFJOININGDATE=20250501: created 0, altered 1, errors 0
+[payroll] employee 2 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+[payroll] employee 2 MOBILENUMBER=9810000002: created 0, altered 1, errors 0
+[payroll] employee 2 IFSCODE=HDFC0001002: created 0, altered 1, errors 0
+[payroll] employee 2 FUNCTION=Finance: created 0, altered 1, errors 0
+[payroll] employee 2 LOCATION=Delhi: created 0, altered 1, errors 0
+[payroll] employee 2 DESIGNATION=Accountant: created 0, altered 1, errors 0
+[payroll] employee 2 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+[payroll] employee 2 PANNUMBER=ABCPE1002B: created 0, altered 1, errors 0
+[payroll] employee 2 ESINUMBER=3100123452: created 0, altered 1, errors 0
+[payroll] employee 2 GENDER=Female: created 0, altered 1, errors 0
+[payroll] employee 2 BLOODGROUP=O+: created 0, altered 1, errors 0
+[payroll] employee 2 FATHERNAME=Relative of employee 2: created 0, altered 1, errors 0
+[payroll] employee 2 CONTACTNUMBERS=9810000002: created 0, altered 1, errors 0
+[payroll] employee 2 EMAILID=emp2@example.com: created 0, altered 1, errors 0
+[payroll] employee 2 BANKACCOUNTNUMBER=50100123456782: created 0, altered 1, errors 0
+[payroll] employee 2 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+[payroll] employee 2 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+[payroll] employee 2 SPOUSENAME=Relative of employee 2: created 0, altered 1, errors 0
+[payroll] employee 2 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+[payroll] employee 2 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001002: created 0, altered 1, errors 0
+[payroll] employee 2 AADHARNUMBER=999900001002: created 0, altered 1, errors 0
+[payroll] employee 2 UANNUMBER=100200300402: created 0, altered 1, errors 0
+[payroll] employee 3 ACTIVEFROM=20260401: created 0, altered 1, errors 0
+[payroll] employee 3 DATEOFBIRTH=19980731: created 0, altered 1, errors 0
+[payroll] employee 3 VISAEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 3 CONTRACTSTARTDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 3 CONTRACTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 3 PASSPORTEXPIRYDATE=20300131: created 0, altered 1, errors 0
+[payroll] employee 3 PFJOININGDATE=20260601: created 0, altered 1, errors 0
+[payroll] employee 3 PFRELIEVINGDATE=20260401: created 0, altered 1, errors 0
+[payroll] employee 3 MOBILENUMBER=9810000003: created 0, altered 1, errors 0
+[payroll] employee 3 IFSCODE=HDFC0001003: created 0, altered 1, errors 0
+[payroll] employee 3 FUNCTION=Production: created 0, altered 1, errors 0
+[payroll] employee 3 LOCATION=Gurugram: created 0, altered 1, errors 0
+[payroll] employee 3 DESIGNATION=Machine Operator: created 0, altered 1, errors 0
+[payroll] employee 3 PFACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+[payroll] employee 3 PANNUMBER=ABCPE1003C: created 0, altered 1, errors 0
+[payroll] employee 3 ESINUMBER=3100123453: created 0, altered 1, errors 0
+[payroll] employee 3 GENDER=Male: created 0, altered 1, errors 0
+[payroll] employee 3 BLOODGROUP=O+: created 0, altered 1, errors 0
+[payroll] employee 3 FATHERNAME=Relative of employee 3: created 0, altered 1, errors 0
+[payroll] employee 3 CONTACTNUMBERS=9810000003: created 0, altered 1, errors 0
+[payroll] employee 3 EMAILID=emp3@example.com: created 0, altered 1, errors 0
+[payroll] employee 3 BANKACCOUNTNUMBER=50100123456783: created 0, altered 1, errors 0
+[payroll] employee 3 BANKBRANCH=Connaught Place: created 0, altered 1, errors 0
+[payroll] employee 3 COUNTRYOFISSUE=India: created 0, altered 1, errors 0
+[payroll] employee 3 SPOUSENAME=Relative of employee 3: created 0, altered 1, errors 0
+[payroll] employee 3 FPFACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+[payroll] employee 3 PRACCOUNTNUMBER=DL/CPM/0012345/000/0001003: created 0, altered 1, errors 0
+[payroll] employee 3 AADHARNUMBER=999900001003: created 0, altered 1, errors 0
+[payroll] employee 3 UANNUMBER=100200300403: created 0, altered 1, errors 0
+  INFO payroll: employee fields altered without error: AADHARNUMBER, ACTIVEFROM, BANKACCOUNTNUMBER, BANKBRANCH, BLOODGROUP, CONTACTNUMBERS, CONTRACTEXPIRYDATE, CONTRACTSTARTDATE, COUNTRYOFISSUE, DATEOFBIRTH, DESIGNATION, EMAILID, ESINUMBER, FATHERNAME, FPFACCOUNTNUMBER, FUNCTION, GENDER, IFSCODE, LOCATION, MOBILENUMBER, PANNUMBER, PASSPORTEXPIRYDATE, PFACCOUNTNUMBER, PFJOININGDATE, PFRELIEVINGDATE, PRACCOUNTNUMBER, SPOUSENAME, UANNUMBER, VISAEXPIRYDATE
+  INFO payroll: employee fields refused: 
+  INFO payroll: employee lists probed: 
+  INFO payroll: employee lists and their fields: 
+  INFO payroll: employee 1 (FC Emp One) filled fields: ACTIVEFROM|Date|20260401 ; DATEOFBIRTH|Date|19900101 ; DATEOFJOIN|Date|20250401 ; VISAEXPIRYDATE|Date|20300131 ; CONTRACTSTARTDATE|Date|20300131 ; CONTRACTEXPIRYDATE|Date|20300131 ; PASSPORTEXPIRYDATE|Date|20300131 ; PFJOININGDATE|Date|20250401 ; PFRELIEVINGDATE|Date|20260401 ; GUID|String|bfec5f89-b32b-4e27-997d-61327b6f137c-000000e1 ; PARENT|String|FC Staff Office ; CATEGORY|String|Primary Cost Category ; MOBILENUMBER|String|9810000001 ; IFSCODE|String|HDFC0001001 ; FUNCTION|String|Finance ; LOCATION|String|Delhi ; DESIGNATION|String|Accounts Manager ; PFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001001 ; PANNUMBER|String|ABCPE1001A ; ESINUMBER|String|3100123451 ; GENDER|String|Male ; BLOODGROUP|String|O+ ; FATHERNAME|String|Relative of employee 1 ; CONTACTNUMBERS|String|9810000001 ; EMAILID|String|emp1@example.com ; BANKACCOUNTNUMBER|String|50100123456781 ; BANKBRANCH|String|Connaught Place ; COUNTRYOFISSUE|String|India ; SPOUSENAME|String|Relative of employee 1 ; FPFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001001 ; PRACCOUNTNUMBER|String|DL/CPM/0012345/000/0001001 ; AADHARNUMBER|String|999900001001 ; UANNUMBER|String|100200300401 ; CANDELETE|Logical|Yes ; FORPAYROLL|Logical|Yes ; SORTPOSITION|Number|1000 ; ALTERID|Number|279 ; MASTERID|Number|225 ; UPDATEDDATETIME|DateTime|000000000 ; LANGUAGENAME.LIST/FC Emp One/NAME||FC Emp One ; LANGUAGENAME.LIST/LANGUAGEID|Number|1033
+  INFO payroll: employee 2 (FC Emp Two) filled fields: ACTIVEFROM|Date|20260401 ; DATEOFBIRTH|Date|19850201 ; DATEOFJOIN|Date|20250402 ; VISAEXPIRYDATE|Date|20300131 ; CONTRACTSTARTDATE|Date|20300131 ; CONTRACTEXPIRYDATE|Date|20300131 ; PASSPORTEXPIRYDATE|Date|20300131 ; PFJOININGDATE|Date|20250501 ; PFRELIEVINGDATE|Date|20260401 ; GUID|String|bfec5f89-b32b-4e27-997d-61327b6f137c-000000e2 ; PARENT|String|FC Staff Office ; CATEGORY|String|Primary Cost Category ; MOBILENUMBER|String|9810000002 ; IFSCODE|String|HDFC0001002 ; FUNCTION|String|Finance ; LOCATION|String|Delhi ; DESIGNATION|String|Accountant ; PFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001002 ; PANNUMBER|String|ABCPE1002B ; ESINUMBER|String|3100123452 ; GENDER|String|Female ; BLOODGROUP|String|O+ ; FATHERNAME|String|Relative of employee 2 ; CONTACTNUMBERS|String|9810000002 ; EMAILID|String|emp2@example.com ; BANKACCOUNTNUMBER|String|50100123456782 ; BANKBRANCH|String|Connaught Place ; COUNTRYOFISSUE|String|India ; SPOUSENAME|String|Relative of employee 2 ; FPFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001002 ; PRACCOUNTNUMBER|String|DL/CPM/0012345/000/0001002 ; AADHARNUMBER|String|999900001002 ; UANNUMBER|String|100200300402 ; CANDELETE|Logical|Yes ; FORPAYROLL|Logical|Yes ; SORTPOSITION|Number|1000 ; ALTERID|Number|308 ; MASTERID|Number|226 ; UPDATEDDATETIME|DateTime|000000000 ; LANGUAGENAME.LIST/FC Emp Two/NAME||FC Emp Two ; LANGUAGENAME.LIST/LANGUAGEID|Number|1033
+  INFO payroll: employee 3 (FC Emp Three) filled fields: ACTIVEFROM|Date|20260401 ; DATEOFBIRTH|Date|19980731 ; DATEOFJOIN|Date|20250501 ; VISAEXPIRYDATE|Date|20300131 ; CONTRACTSTARTDATE|Date|20300131 ; CONTRACTEXPIRYDATE|Date|20300131 ; PASSPORTEXPIRYDATE|Date|20300131 ; PFJOININGDATE|Date|20260601 ; PFRELIEVINGDATE|Date|20260401 ; GUID|String|bfec5f89-b32b-4e27-997d-61327b6f137c-000000e3 ; PARENT|String|FC Staff Factory ; CATEGORY|String|Primary Cost Category ; MOBILENUMBER|String|9810000003 ; IFSCODE|String|HDFC0001003 ; FUNCTION|String|Production ; LOCATION|String|Gurugram ; DESIGNATION|String|Machine Operator ; PFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001003 ; PANNUMBER|String|ABCPE1003C ; ESINUMBER|String|3100123453 ; GENDER|String|Male ; BLOODGROUP|String|O+ ; FATHERNAME|String|Relative of employee 3 ; CONTACTNUMBERS|String|9810000003 ; EMAILID|String|emp3@example.com ; BANKACCOUNTNUMBER|String|50100123456783 ; BANKBRANCH|String|Connaught Place ; COUNTRYOFISSUE|String|India ; SPOUSENAME|String|Relative of employee 3 ; FPFACCOUNTNUMBER|String|DL/CPM/0012345/000/0001003 ; PRACCOUNTNUMBER|String|DL/CPM/0012345/000/0001003 ; AADHARNUMBER|String|999900001003 ; UANNUMBER|String|100200300403 ; CANDELETE|Logical|Yes ; FORPAYROLL|Logical|Yes ; SORTPOSITION|Number|1000 ; ALTERID|Number|337 ; MASTERID|Number|227 ; UPDATEDDATETIME|DateTime|000000000 ; LANGUAGENAME.LIST/FC Emp Three/NAME||FC Emp Three ; LANGUAGENAME.LIST/LANGUAGEID|Number|1033
+  INFO payroll: employee group 'FC Staff Office' filled fields: GUID|String|bfec5f89-b32b-4e27-997d-61327b6f137c-000000df ; PARENT|String|Primary ; CATEGORY|String|Primary Cost Category ; FORPAYROLL|Logical|Yes ; ISEMPLOYEEGROUP|Logical|Yes ; SORTPOSITION|Number|1000 ; ALTERID|Number|245 ; MASTERID|Number|223 ; UPDATEDDATETIME|DateTime|000000000 ; LANGUAGENAME.LIST/FC Staff Office/NAME||FC Staff Office ; LANGUAGENAME.LIST/LANGUAGEID|Number|1033
+######## PASS y2 payroll masters by XML (attendance types, groups, 3 employees with details, pay heads): attendance: att FC Present True, att FC Absent True, att FC Overtime Hrs True; pay heads: FC Basic=PAYTYPE|String|Earnings for Employees,PAYSTATTYPE|String|Not Applicable,ITCOMPONENT|String|Basic Salary; FC HRA=PAYTYPE|String|Earnings for Employees,PAYSTATTYPE|String|Not Applicable,ITCOMPONENT|String|House Rent Allowance; FC Special Allowance=PAYTYPE|String|Earnings for Employees,PAYSTATTYPE|String|Not Applicable; FC PF Employee=PAYTYPE|String|Employees' Statutory Deductions,PAYSTATTYPE|String|PF Account (A/c No. 1); FC PF Employer=PAYTYPE|String|Employer's Statutory Contributions,PAYSTATTYPE|String|PF Account (A/c No. 1); FC ESI Employee=PAYTYPE|String|Employees' Statutory Deductions,PAYSTATTYPE|String|Employee State Insurance; FC Professional Tax=PAYTYPE|String|Employees' Statutory Deductions,PAYSTATTYPE|String|Professional Tax; FC Income Tax=PAYTYPE|String|Employees' Statutory Deductions,PAYSTATTYPE|String|Income Tax; employee 1 filled fields 41; refused fields 0
+[13:20:15] ---- payroll: entries
+  voucher mid=1 aid=1 Journal/1/20260401 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000001 cancelled=False
+[attendance ATT-NOV (form 1)] 27 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance ATT-NOV (form 1): created 0, altered 0, errors 0
+[attendance ATT-NOV (form 2)] 15 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance ATT-NOV (form 2): created 0, altered 0, errors 0
+[attendance ATT-DEC (form 1)] 16 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance ATT-DEC (form 1): created 0, altered 0, errors 0
+[attendance ATT-DEC (form 2)] 15 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO payroll attendance ATT-DEC (form 2): created 0, altered 0, errors 0
+[payroll PR-NOV (PaySlip form)] 27 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll payroll PR-NOV (PaySlip form): created 1, altered 0, errors 0
+[payroll PR-DEC (PaySlip form)] 21 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>3</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll payroll PR-DEC (PaySlip form): created 1, altered 0, errors 0
+[payroll PF-NOV (PaySlip form)] 20 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>4</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll payroll PF-NOV (PaySlip form): created 1, altered 0, errors 0
+[salary payment SAL-PAY-NOV (bank details per employee)] 25 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>5</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll salary payment SAL-PAY-NOV (bank details per employee): created 1, altered 0, errors 0
+[TDS on salary TDS-SAL-NOV (Income Tax stat payment tags)] 22 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll TDS on salary TDS-SAL-NOV (Income Tax stat payment tags): created 1, altered 0, errors 0
+  voucher mid=1 aid=1 Journal/1/20260401 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000001 cancelled=False
+  voucher mid=2 aid=2 Payroll/1/20261101 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000002 cancelled=False
+  voucher mid=4 aid=4 Payroll/3/20261101 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000004 cancelled=False
+  voucher mid=3 aid=3 Payroll/2/20261201 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000003 cancelled=False
+  voucher mid=5 aid=5 Payment/1/20261202 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000005 cancelled=False
+  voucher mid=6 aid=6 Payment/2/20261202 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000006 cancelled=False
+  INFO payroll: entries made: ATT-NOV refused (mid ); ATT-DEC refused (mid ); PR-NOV XML PaySlip form (mid 2); PR-DEC XML PaySlip form (mid 3); PF-NOV XML PaySlip form (mid 4); SAL-PAY-NOV XML with bank details per employee (mid 5); TDS-SAL-NOV XML with stat payment tags (mid 6)
+######## PASS y3 payroll entries by XML (attendance, payroll x2 months, employer PF, salary payment, TDS on salary): ATT-NOV refused; ATT-DEC refused; PR-NOV XML PaySlip form; PR-DEC XML PaySlip form; PF-NOV XML PaySlip form; SAL-PAY-NOV XML with bank details per employee; TDS-SAL-NOV XML with stat payment tags
+[13:20:16] ---- payroll: the raw answers
+  INFO payroll: the entry request of the ref (requests/entry-object.xml, SHA-256 075e2c9aa7f60bccdbd305695b3d8ae38f7a7c71401017ed58ef61be26114a1a)
+  INFO payroll: PR-NOV as FinComVoucherObject answers it: 
+  INFO payroll: PR-DEC as FinComVoucherObject answers it: 
+  INFO payroll: PF-NOV as FinComVoucherObject answers it: 
+  INFO payroll: SAL-PAY-NOV as FinComVoucherObject answers it: 
+  INFO payroll: TDS-SAL-NOV as FinComVoucherObject answers it: 
+[day book Nov] 27 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="bfec5f89-b32b-4e27-997d-61327b6f137c-00000001" VCHKEY="bfec5f89-b32b-4e27-997d-61327b6f137c-0000b420:00000008" VCHTYPE="Journal" ACTION="Create" OBJVIEW="Accounting Voucher View"><OLDAUDITENTRYIDS.LIST TYPE="Number"><OLDAUDITENTRYIDS>-1</OLDAUDITENTRYIDS></OLDAUDITENTRYIDS.LIST><VATREGISTRATIONDAT...
+[masters] 121 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><CURRENCY NAME="?" RESERVEDNAME=""><ACTIVEFROM/><ACTIVETO/><GUID>bfec5f89-b32b-4e27-997d-61327b6f137c-0000001d</GUID><MAILINGNAME>INR</MAILINGNAME><NARRATION/><ENTEREDBY/><ALTEREDBY/><TYPEOFUPDATEACTIVITY/><OBJECTUPDATEACTION/><REQUESTORRULE/><ORIGINALNAME>?</ORIGINALNAME><ISOCURRENCYCODE/><EXPANDEDSYMBOL>INR</EXPAN...
+[FinComLedgers] 9 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>11</COMPANY><GROUP>0</GROUP><LEDGER>45</LEDGER><COSTCATEGORY>15</COSTCATEGORY><COSTCENTRE>133</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>16</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>3</ATTENDANCETYP...
+  INFO payroll: pay head 'FC Basic' in FinComLedgers' answer: <LEDGER NAME="FC Basic" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000d7</GUID> <PARENT TYPE="String">Indirect Expenses</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 231</ALTERID> <MASTERID TYPE="Number"> 215</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANCE TYPE="A
+  INFO payroll: pay head 'FC HRA' in FinComLedgers' answer: <LEDGER NAME="FC HRA" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000d8</GUID> <PARENT TYPE="String">Indirect Expenses</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 233</ALTERID> <MASTERID TYPE="Number"> 216</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANCE TYPE="Amo
+  INFO payroll: pay head 'FC Special Allowance' in FinComLedgers' answer: <LEDGER NAME="FC Special Allowance" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000d9</GUID> <PARENT TYPE="String">Indirect Expenses</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 234</ALTERID> <MASTERID TYPE="Number"> 217</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBAL
+  INFO payroll: pay head 'FC PF Employee' in FinComLedgers' answer: <LEDGER NAME="FC PF Employee" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000da</GUID> <PARENT TYPE="String">Current Liabilities</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 236</ALTERID> <MASTERID TYPE="Number"> 218</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANCE
+  INFO payroll: pay head 'FC PF Employer' in FinComLedgers' answer: <LEDGER NAME="FC PF Employer" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000db</GUID> <PARENT TYPE="String">Indirect Expenses</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 238</ALTERID> <MASTERID TYPE="Number"> 219</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANCE T
+  INFO payroll: pay head 'FC ESI Employee' in FinComLedgers' answer: <LEDGER NAME="FC ESI Employee" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000dc</GUID> <PARENT TYPE="String">Current Liabilities</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 240</ALTERID> <MASTERID TYPE="Number"> 220</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANC
+  INFO payroll: pay head 'FC Professional Tax' in FinComLedgers' answer: <LEDGER NAME="FC Professional Tax" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000dd</GUID> <PARENT TYPE="String">Current Liabilities</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 242</ALTERID> <MASTERID TYPE="Number"> 221</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBA
+  INFO payroll: pay head 'FC Income Tax' in FinComLedgers' answer: <LEDGER NAME="FC Income Tax" RESERVEDNAME=""> <GUID TYPE="String">bfec5f89-b32b-4e27-997d-61327b6f137c-000000de</GUID> <PARENT TYPE="String">Current Liabilities</PARENT> <TDSDEDUCTEEISSPECIALRATE TYPE="Logical">No</TDSDEDUCTEEISSPECIALRATE> <ALTERID TYPE="Number"> 244</ALTERID> <MASTERID TYPE="Number"> 222</MASTERID> <TDSDEDUCTEESPECIALRATE TYPE="Number">0</TDSDEDUCTEESPECIALRATE> <OPENINGBALANCE 
+######## PASS y4 raw answers kept (object exports, FinComVoucherObject, full entries, List of Accounts, FinComLedgers): object answers: PR-NOV 98322 chars 20 ms, PR-DEC 98322 chars 18 ms, PF-NOV 51941 chars 11 ms, SAL-PAY-NOV 72092 chars 11 ms, TDS-SAL-NOV 53539 chars 11 ms; masters 944106 characters; FinComLedgers 14498; Day Book 46923
+[13:20:16] ---- payroll: 500 employees and the candidate requests
+[group FC Bulk Staff] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll group FC Bulk Staff: created 1, altered 0, errors 0
+[500 employees, batch 1] 457 ms: <RESPONSE><CREATED>100</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll 500 employees, batch 1: created 100, altered 0, errors 0
+[500 employees, batch 2] 480 ms: <RESPONSE><CREATED>100</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll 500 employees, batch 2: created 100, altered 0, errors 0
+[500 employees, batch 3] 462 ms: <RESPONSE><CREATED>100</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll 500 employees, batch 3: created 100, altered 0, errors 0
+[500 employees, batch 4] 467 ms: <RESPONSE><CREATED>100</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll 500 employees, batch 4: created 100, altered 0, errors 0
+[500 employees, batch 5] 494 ms: <RESPONSE><CREATED>100</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll 500 employees, batch 5: created 100, altered 0, errors 0
+[payroll PR-BULK-500 (PaySlip form)] 323 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>7</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO payroll payroll PR-BULK-500 (PaySlip form): created 1, altered 0, errors 0
+  INFO payroll: the 500-employee payroll: XML PaySlip form, 1 s to import
+  voucher mid=1 aid=1 Journal/1/20260401 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000001 cancelled=False
+  voucher mid=7 aid=7 Payroll/4/20261031 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000007 cancelled=False
+  voucher mid=2 aid=2 Payroll/1/20261101 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000002 cancelled=False
+  voucher mid=4 aid=4 Payroll/3/20261101 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000004 cancelled=False
+  voucher mid=3 aid=3 Payroll/2/20261201 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000003 cancelled=False
+  voucher mid=5 aid=5 Payment/1/20261202 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000005 cancelled=False
+  voucher mid=6 aid=6 Payment/2/20261202 guid=bfec5f89-b32b-4e27-997d-61327b6f137c-00000006 cancelled=False
+  INFO payroll: the 500-employee payroll's MasterID: '7'
+  INFO payroll: cost centres in Tally: 506 (MasterIDs 223..728, AlterIDs 245..838); 500 made: 500
+  INFO payroll: the candidate employee FETCH (39 fields, 0 lists): GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, DATEOFJOIN, ACTIVEFROM, DATEOFBIRTH, VISAEXPIRYDATE, CONTRACTSTARTDATE, CONTRACTEXPIRYDATE, PASSPORTEXPIRYDATE, PFJOININGDATE, PFRELIEVINGDATE, MOBILENUMBER, IFSCODE, FUNCTION, LOCATION, DESIGNATION, PFACCOUNTNUMBER, PANNUMBER, ESINUMBER, GENDER, BLOODGROUP, FATHERNAME, CONTACTNUMBERS, EMAILID, BANKACCOUNTNUMBER, BANKBRANCH, COUNTRYOFISSUE, SPOUSENAME, FPFACCOUNTNUMBER, PRACCOUNTNUMBER, AADHARNUMBER, UANNUMBER, CANDELETE
+  INFO payroll time C1 FinComEmployees named fields, MasterID > 0 (all cost centres): median 135 ms, worst 146 ms, 1280129 characters (runs 146/126/138/135/130 ms)
+  INFO payroll time P1 FinComEmployees, the proposed 12 fields, MasterID chunk (all): median 40 ms, worst 43 ms, 450938 characters (runs 39/40/40/43/40 ms)
+  INFO payroll time P2 FinComEmployeeChanges, the proposed 12 fields, 200 AlterIDs: median 19 ms, worst 22 ms, 179309 characters (runs 22/19/18/19/22 ms)
+  INFO payroll time P3 FinComLedgers (the ref) with PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL: median 7 ms, worst 9 ms, 17533 characters (runs 9/7/7/7/7 ms)
+  INFO payroll time C1b FinComEmployees FETCH * (every stored field, the upper bound): median 173 ms, worst 180 ms, 1717703 characters (runs 172/173/180 ms)
+  INFO payroll time C1c FinComEmployees named fields, payroll only ($ForPayroll): median 133 ms, worst 138 ms, 1280129 characters (runs 115/133/125/136/138 ms)
+  INFO payroll time C1d FinComEmployees named fields, half the MasterIDs: median 67 ms, worst 78 ms, 641309 characters (runs 61/58/78/70/67 ms)
+  INFO payroll time C2 FinComEmployeeChanges named fields, a window of 200 AlterIDs: median 53 ms, worst 63 ms, 508509 characters (runs 52/63/56/50/53 ms)
+  INFO payroll time C3 one employee by name, named fields: median 4 ms, worst 5 ms, 4044 characters (runs 5/4/4/4/4 ms)
+  INFO payroll time C4 FinComLedgers (the ref) with the pay-head fields added: median 9 ms, worst 11 ms, 20165 characters (runs 11/8/8/9/9 ms)
+  INFO payroll time C4ref FinComLedgers as the ref sends it: median 7 ms, worst 9 ms, 14501 characters (runs 9/8/7/7/7 ms)
+  INFO payroll time C5 FinComAttendanceTypes: median 3 ms, worst 4 ms, 3654 characters (runs 3/3/3/3/4 ms)
+  INFO payroll time C6 FinComVoucherObject (the ref) on the 500-employee payroll: median 2065 ms, worst 2126 ms, 11756206 characters (runs 2126/2042/2059/2115/2065 ms)
+  INFO payroll time C6b FinComVoucherObject (the ref) on the 3-employee payroll: median 16 ms, worst 19 ms, 98325 characters (runs 19/16/16/17/16 ms)
+  INFO payroll: Tally answering after the timings: company list 2/2/2 ms
+######## PASS y5 500 employees: candidate requests timed (one at a time, 5 each): 500 employees made; requests at 2 s or more: C6 FinComVoucherObject (the ref) on the 500-employee payroll; C1 FinComEmployees named fields, MasterID > 0 (all cost centres) = median 135 ms, worst 146 ms, 1280129 characters, runs 146/126/138/135/130; P1 FinComEmployees, the proposed 12 fields, MasterID chunk (all) = median 40 ms, worst 43 ms, 450938 characters, runs 39/40/40/43/40; P2 FinComEmployeeChanges, the proposed 12 fields, 200 AlterIDs = median 19 ms, worst 22 ms, 179309 characters, runs 22/19/18/19/22; P3 FinComLedgers (the ref) with PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL = median 7 ms, worst 9 ms, 17533 characters, runs 9/7/7/7/7; C1b FinComEmployees FETCH * (every stored field, the upper bound) = median 173 ms, worst 180 ms, 1717703 characters, runs 172/173/180; C1c FinComEmployees named fields, payroll only ($ForPayroll) = median 133 ms, worst 138 ms, 1280129 characters, runs 115/133/125/136/138; C1d FinComEmployees named fields, half the MasterIDs = median 67 ms, worst 78 ms, 641309 characters, runs 61/58/78/70/67; C2 FinComEmployeeChanges named fields, a window of 200 AlterIDs = median 53 ms, worst 63 ms, 508509 characters, runs 52/63/56/50/53; C3 one employee by name, named fields = median 4 ms, worst 5 ms, 4044 characters, runs 5/4/4/4/4; C4 FinComLedgers (the ref) with the pay-head fields added = median 9 ms, worst 11 ms, 20165 characters, runs 11/8/8/9/9; C4ref FinComLedgers as the ref sends it = median 7 ms, worst 9 ms, 14501 characters, runs 9/8/7/7/7; C5 FinComAttendanceTypes = median 3 ms, worst 4 ms, 3654 characters, runs 3/3/3/3/4; C6 FinComVoucherObject (the ref) on the 500-employee payroll = median 2065 ms, worst 2126 ms, 11756206 characters, runs 2126/2042/2059/2115/2065; C6b FinComVoucherObject (the ref) on the 3-employee payroll = median 16 ms, worst 19 ms, 98325 characters, runs 19/16/16/17/16
