@@ -283,7 +283,7 @@ const TDSWatch = {
     Object.values(agg).forEach(x => {
       let R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
       // bridge 2.4.3: the thresholds of the nature of payment Tally keeps on these ledgers (its TDSRate master), as Tally has them
-      const TT = typeof TDSTally === "object" ? TDSTally.threshold(Array.from(x.ledgers), start) : null;
+      const TT = typeof TDSTally === "object" ? TDSTally.threshold(Array.from(x.ledgers), start, R) : null;   // only the same section, a year's or a bill's limit, and only where stricter (review 243 H4)
       if (TT) R = Object.assign({}, R, TT.limit ? {limit: TT.limit} : {}, TT.single ? {single: TT.single} : {}, {fromTally: TT.nature});
       const sec = TDS.sec(R.old), mine = rows.filter(r => r.party === x.party && TDS.sec(r.section) === sec);
       const tds = r2(mine.reduce((a, r) => a + r.tds, 0));
