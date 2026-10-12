@@ -1,0 +1,32 @@
+INFO TallyPrime 7.1, mode payg, runner GitHub Actions 1000008249, 2026-10-12T15:50:32
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-12, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-12, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1538 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 9 ms, 'FinCom Spike Co' in it: True
+INFO payg masters: created 18, altered 1, errors 0
+INFO payg: cost centres in Tally: PE Delhi Branch, PE Office Staff, PE Asha Rao, PE Bimal Das, PE Chitra Iyer, PE Dev Malhotra, PE Esha Kapoor, PE Farid Khan, PE Gita Sharma
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.4.exe SHA-256 79bcdf51839a0878333f14e99f4ffc75908a9da66602161ea8a7c01e05eecbe9; bridge source: d816ff702b6514bef74d63708c90d53cb5c65935 2.4.4: the allow-list's times from real TallyPrime 3.0-7.1 (tally-versions paym, run 38263695475: FinComEmployees 0.17 s, FinComLedgers 0.28, FinComLedgerChanges 0.24, FinComLedgerByName 0.038, a 500-employee payroll entry 2.2 s under its 3 s); the 2.4.4 notes and test sheet; migration 74 in the order; the 18-column ledger row in the deductee test and the 2.4.2 outbox row kept at 14
+INFO bridge on 127.0.0.1:9100, version 2.4.4, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO payg: Update now: asked
+PASS w1 the payroll company made in Tally (masters and the 36 entries): masters: created 18, errors 0; employees and the other cost centre in Tally: True; entries made by XML: 36 of 36 (in Tally: 36); refused: none
+PASS w2 FinComEmployees: only payroll rows reach FinCom, nothing personal: 8 rows sent (PE Office Staff, PE Asha Rao, PE Bimal Das, PE Chitra Iyer, PE Dev Malhotra, PE Esha Kapoor, PE Farid Khan, PE Gita Sharma); missing: none; not payroll's yet sent: none; columns per row: 11; the group marked: 1; a PAN as typed: 1; bank account, IFSC or Aadhaar-like number in what the bridge sent or logged: none; the log: 2026-10-12 15:51:21  Employees of FinCom Spike Co: Tally's master counter 232: 2 request(s), 8 payroll row(s) kept (1 other cost centre(s) not kept) | 2026-10-12 15:51:21  Employees of FinCom Spike Co: the payroll list (8) sent to FinCom
+PASS w3 the ledger list carries the pay-head fields: 15 ledger rows sent; pay heads (PAYTYPE / PAYSTATTYPE / ITCOMPONENT / FORPAYROLL): PE Basic: ok; PE HRA: ok; PE Special Allowance: ok; PE PF Employee: ok; PE Professional Tax: ok; PE Income Tax: ok; PE PF Employer: ok; PE Salary Payable not for payroll: True
+FAIL w4 every entry reaches FinCom; a salary payment keeps the employee and amount, never the bank details: 36 of 36 entries reached the stub with Tally's entry in 10.3 min (not: none); payrolls with each employee's pay heads: 0 of 12; salary payments naming the employee on the bank line: 12 (of 12 payments with a bank line); an entry keeping ACCOUNTNUMBER, IFSCODE or PAYMENTFAVOURING: none; those tags anywhere in what the bridge sent: False
+PASS w5 the payroll entry within 3 s, every other request within 2 s, Tally responding: the bridge's entry fetches stopped or over the limit: none; the payroll type learnt or known: Tally's own Payroll type; the ref's FinComVoucherObject on the 12 payroll entries: 40.8/30.3/31.2/44.2/41/39.7/42/37.8/42.2/28.2/81.5/35.8 ms (worst 81.5 ms), Tally responding after each: True
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 2 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1

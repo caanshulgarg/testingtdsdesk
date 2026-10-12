@@ -1,0 +1,192 @@
+2026-10-12 15:51:17  FinCom Bridge 2.4.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-12 15:51:17  FinCom Bridge 2.4.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-12 15:51:17  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-12 15:51:17  Recorder: re-scan of the add-on's files for 2.4.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-12 15:51:17  Check:  - 
+2026-10-12 15:51:20  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-12 15:51:20  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-12 15:51:20  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-12 15:51:20  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-12 15:51:21  Company FinCom Spike Co: its Tally GUID 2f19092c-1586-4759-ab59-7553d0a79cec is held from now on
+2026-10-12 15:51:21  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=232 (reading is prospective only: the bridge follows what changes after this)
+2026-10-12 15:51:21  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=232
+2026-10-12 15:51:21  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=232)
+2026-10-12 15:51:21  Employees of FinCom Spike Co: Tally's master counter 232: 2 request(s), 8 payroll row(s) kept (1 other cost centre(s) not kept)
+2026-10-12 15:51:21  Employees of FinCom Spike Co: the payroll list (8) sent to FinCom
+2026-10-12 15:52:34  Update from Tally asked for now
+2026-10-12 15:52:34  Update from Tally: asked for now
+2026-10-12 15:52:34  Update from Tally: waiting, Tally has just opened; letting it finish loading
+2026-10-12 15:53:39  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-12 15:53:39  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+2026-10-12 15:53:40  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+2026-10-12 15:53:40  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 15 ledger(s) (0.2s); saved
+2026-10-12 15:53:40  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-12 15:53:41  Keeping FinCom Spike Co: the ledger list read (15 ledgers, 28 groups, 5 request(s)): 15 new, 0 changed, 0 renamed, 0 gone
+2026-10-12 15:53:41  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=38 ALTMSTID=232
+2026-10-12 15:53:41  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+2026-10-12 15:53:41  Update from Tally: done (7 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+2026-10-12 16:01:51  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=38, ALTMSTID=232
+2026-10-12 16:01:51  Recorder (Tally's change list) for FinCom Spike Co: 36 change(s) found
+2026-10-12 16:01:51  Recorder: An entry of 01-Apr-2026 (MasterID 3, line 9d4cfde4…): asking Tally by MasterID
+2026-10-12 16:01:51  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-12 16:01:51  Recorder: Payroll 1 of 01-Apr-2026 (MasterID 3, line 9d4cfde4…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000003, AlterID 3
+2026-10-12 16:01:51  Recorder: An entry of 02-Apr-2026 (MasterID 4, line d0977e53…): asking Tally by MasterID
+2026-10-12 16:01:52  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+2026-10-12 16:01:52  Recorder: Payment 1 of 02-Apr-2026 (MasterID 4, line d0977e53…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000004, AlterID 4
+2026-10-12 16:01:52  Recorder: An entry of 02-May-2026 (MasterID 5, line 24bdf7b1…): asking Tally by MasterID
+2026-10-12 16:01:52  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+2026-10-12 16:01:52  Recorder: Payment 2 of 02-May-2026 (MasterID 5, line 24bdf7b1…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000005, AlterID 5
+2026-10-12 16:01:52  Recorder: An entry of 02-May-2026 (MasterID 7, line 73182d36…): asking Tally by MasterID
+2026-10-12 16:01:52  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+2026-10-12 16:01:52  Recorder: Payment 3 of 02-May-2026 (MasterID 7, line 73182d36…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000007, AlterID 7
+2026-10-12 16:01:52  Recorder: An entry of 01-May-2026 (MasterID 6, line 7517bdbc…): asking Tally by MasterID
+2026-10-12 16:01:53  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+2026-10-12 16:01:53  Recorder: Payroll 2 of 01-May-2026 (MasterID 6, line 7517bdbc…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000006, AlterID 6
+2026-10-12 16:01:53  Recorder: An entry of 02-Jun-2026 (MasterID 8, line 166521f7…): asking Tally by MasterID
+2026-10-12 16:01:53  Recorder: Payment 4 of 02-Jun-2026 (MasterID 8, line 166521f7…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000008, AlterID 8
+2026-10-12 16:01:53  Recorder: An entry of 02-Jun-2026 (MasterID 10, line 4fd12eea…): asking Tally by MasterID
+2026-10-12 16:01:53  Recorder: Payment 5 of 02-Jun-2026 (MasterID 10, line 4fd12eea…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000a, AlterID 10
+2026-10-12 16:01:53  Recorder: An entry of 01-Jun-2026 (MasterID 9, line 50e508e0…): asking Tally by MasterID
+2026-10-12 16:01:54  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+2026-10-12 16:01:54  Recorder: Payroll 3 of 01-Jun-2026 (MasterID 9, line 50e508e0…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000009, AlterID 9
+2026-10-12 16:01:54  Recorder: An entry of 02-Jul-2026 (MasterID 11, line 6445af09…): asking Tally by MasterID
+2026-10-12 16:01:54  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+2026-10-12 16:01:54  Recorder: Payment 6 of 02-Jul-2026 (MasterID 11, line 6445af09…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000b, AlterID 11
+2026-10-12 16:01:54  Recorder: An entry of 02-Jul-2026 (MasterID 13, line 9b0fc562…): asking Tally by MasterID
+2026-10-12 16:01:54  Recorder: Payment 7 of 02-Jul-2026 (MasterID 13, line 9b0fc562…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000d, AlterID 13
+2026-10-12 16:01:54  Recorder: An entry of 01-Jul-2026 (MasterID 12, line bf1d0ed9…): asking Tally by MasterID
+2026-10-12 16:01:55  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+2026-10-12 16:01:55  Recorder: Payroll 4 of 01-Jul-2026 (MasterID 12, line bf1d0ed9…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000c, AlterID 12
+2026-10-12 16:01:55  Recorder: An entry of 02-Aug-2026 (MasterID 14, line a349d9f8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Aug-2026 (MasterID 16, line fe5b4d35…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Aug-2026 (MasterID 15, line dceb25c7…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Sep-2026 (MasterID 17, line bab6bb40…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Sep-2026 (MasterID 19, line 95cc9b0b…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Sep-2026 (MasterID 18, line 09aa00d4…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Oct-2026 (MasterID 20, line e9e9bb9f…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Oct-2026 (MasterID 22, line a850a00f…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Oct-2026 (MasterID 21, line 8379fa49…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Nov-2026 (MasterID 23, line 6f49996d…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Nov-2026 (MasterID 25, line 70c3f709…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Nov-2026 (MasterID 24, line 36ef1c4d…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Dec-2026 (MasterID 26, line 90902ec6…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Dec-2026 (MasterID 28, line 4a791ec6…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Dec-2026 (MasterID 27, line de773340…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Jan-2027 (MasterID 29, line 5e0dbd89…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Jan-2027 (MasterID 31, line 53e407a8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Jan-2027 (MasterID 30, line 6864bf8a…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Feb-2027 (MasterID 32, line 49bcb9cf…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Feb-2027 (MasterID 34, line d8060dc2…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Feb-2027 (MasterID 33, line d595b34a…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Mar-2027 (MasterID 35, line df83f12e…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 02-Mar-2027 (MasterID 37, line f3b3cd51…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 01-Mar-2027 (MasterID 36, line 4f34bd9e…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:01:55  Recorder: An entry of 31-Mar-2027 (MasterID 38, line 57c5fe0c…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:02 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-12 16:02:20  Recorder: FinCom asks again for 20 held line(s) of this bridge: 20 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-12 16:02:21  Recorder: An entry of 01-Sep-2026 (MasterID 18, line 09aa00d4…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:21  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+2026-10-12 16:02:21  Recorder: Payroll 6 of 01-Sep-2026 (MasterID 18, line 09aa00d4…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000012, AlterID 18
+2026-10-12 16:02:21  Recorder:   of 20260901 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000012 and body
+2026-10-12 16:02:21  Recorder: held lines: 20 from FinCom, 1 asked, 1 resolved, 19 still held (20 in the list)
+2026-10-12 16:02:21  Recorder: An entry of 01-Nov-2026 (MasterID 24, line 36ef1c4d…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:21  Recorder: Payroll 8 of 01-Nov-2026 (MasterID 24, line 36ef1c4d…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000018, AlterID 24
+2026-10-12 16:02:21  Recorder:   of 20261101 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000018 and body
+2026-10-12 16:02:21  Recorder: held lines: 19 from FinCom, 1 asked, 1 resolved, 18 still held (19 in the list)
+2026-10-12 16:02:21  Recorder: An entry of 02-Feb-2027 (MasterID 32, line 49bcb9cf…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:22  Recorder: Payment 20 of 02-Feb-2027 (MasterID 32, line 49bcb9cf…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000020, AlterID 32
+2026-10-12 16:02:22  Recorder:   of 20270202 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000020 and body
+2026-10-12 16:02:22  Recorder: held lines: 18 from FinCom, 1 asked, 1 resolved, 17 still held (18 in the list)
+2026-10-12 16:02:22  Recorder: An entry of 02-Dec-2026 (MasterID 28, line 4a791ec6…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:22  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+2026-10-12 16:02:22  Recorder: Payment 17 of 02-Dec-2026 (MasterID 28, line 4a791ec6…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001c, AlterID 28
+2026-10-12 16:02:22  Recorder:   of 20261202 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001c and body
+2026-10-12 16:02:22  Recorder: held lines: 17 from FinCom, 1 asked, 1 resolved, 16 still held (17 in the list)
+2026-10-12 16:02:22  Recorder: An entry of 02-Jan-2027 (MasterID 31, line 53e407a8…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:22  Recorder: Payment 19 of 02-Jan-2027 (MasterID 31, line 53e407a8…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001f, AlterID 31
+2026-10-12 16:02:22  Recorder:   of 20270102 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001f and body
+2026-10-12 16:02:22  Recorder: held lines: 16 from FinCom, 1 asked, 1 resolved, 15 still held (16 in the list)
+2026-10-12 16:02:22  Recorder: An entry of 02-Jan-2027 (MasterID 29, line 5e0dbd89…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:23  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-12 16:02:23  Recorder: Payment 18 of 02-Jan-2027 (MasterID 29, line 5e0dbd89…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001d, AlterID 29
+2026-10-12 16:02:23  Recorder:   of 20270102 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001d and body
+2026-10-12 16:02:23  Recorder: held lines: 15 from FinCom, 1 asked, 1 resolved, 14 still held (15 in the list)
+2026-10-12 16:02:23  Recorder: An entry of 01-Jan-2027 (MasterID 30, line 6864bf8a…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:23  Recorder: Payroll 10 of 01-Jan-2027 (MasterID 30, line 6864bf8a…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001e, AlterID 30
+2026-10-12 16:02:23  Recorder:   of 20270101 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001e and body
+2026-10-12 16:02:23  Recorder: held lines: 14 from FinCom, 1 asked, 1 resolved, 13 still held (14 in the list)
+2026-10-12 16:02:23  Recorder: An entry of 02-Nov-2026 (MasterID 23, line 6f49996d…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:23  Recorder: Payment 14 of 02-Nov-2026 (MasterID 23, line 6f49996d…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000017, AlterID 23
+2026-10-12 16:02:23  Recorder:   of 20261102 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000017 and body
+2026-10-12 16:02:23  Recorder: held lines: 13 from FinCom, 1 asked, 1 resolved, 12 still held (13 in the list)
+2026-10-12 16:02:23  Recorder: An entry of 02-Nov-2026 (MasterID 25, line 70c3f709…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:24  Recorder: Payment 15 of 02-Nov-2026 (MasterID 25, line 70c3f709…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000019, AlterID 25
+2026-10-12 16:02:24  Recorder:   of 20261102 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000019 and body
+2026-10-12 16:02:24  Recorder: held lines: 12 from FinCom, 1 asked, 1 resolved, 11 still held (12 in the list)
+2026-10-12 16:02:24  Recorder: An entry of 01-Oct-2026 (MasterID 21, line 8379fa49…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:24  Recorder: Payroll 7 of 01-Oct-2026 (MasterID 21, line 8379fa49…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000015, AlterID 21
+2026-10-12 16:02:24  Recorder:   of 20261001 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000015 and body
+2026-10-12 16:02:24  Recorder: held lines: 11 from FinCom, 1 asked, 1 resolved, 10 still held (11 in the list)
+2026-10-12 16:02:24  Recorder: An entry of 02-Dec-2026 (MasterID 26, line 90902ec6…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:25  Recorder: Payment 16 of 02-Dec-2026 (MasterID 26, line 90902ec6…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001a, AlterID 26
+2026-10-12 16:02:25  Recorder:   of 20261202 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001a and body
+2026-10-12 16:02:25  Recorder: held lines: 10 from FinCom, 1 asked, 1 resolved, 9 still held (10 in the list)
+2026-10-12 16:02:25  Recorder: An entry of 02-Sep-2026 (MasterID 19, line 95cc9b0b…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:25  Recorder: Payment 11 of 02-Sep-2026 (MasterID 19, line 95cc9b0b…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000013, AlterID 19
+2026-10-12 16:02:25  Recorder:   of 20260902 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000013 and body
+2026-10-12 16:02:25  Recorder: held lines: 9 from FinCom, 1 asked, 1 resolved, 8 still held (9 in the list)
+2026-10-12 16:02:25  Recorder: An entry of 02-Aug-2026 (MasterID 14, line a349d9f8…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:25  Recorder: Payment 8 of 02-Aug-2026 (MasterID 14, line a349d9f8…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000e, AlterID 14
+2026-10-12 16:02:25  Recorder:   of 20260802 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000e and body
+2026-10-12 16:02:25  Recorder: held lines: 8 from FinCom, 1 asked, 1 resolved, 7 still held (8 in the list)
+2026-10-12 16:02:25  Recorder: An entry of 02-Oct-2026 (MasterID 22, line a850a00f…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:26  Recorder: Payment 13 of 02-Oct-2026 (MasterID 22, line a850a00f…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000016, AlterID 22
+2026-10-12 16:02:26  Recorder:   of 20261002 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000016 and body
+2026-10-12 16:02:26  Recorder: held lines: 7 from FinCom, 1 asked, 1 resolved, 6 still held (7 in the list)
+2026-10-12 16:02:26  Recorder: An entry of 02-Sep-2026 (MasterID 17, line bab6bb40…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:26  Recorder: Payment 10 of 02-Sep-2026 (MasterID 17, line bab6bb40…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000011, AlterID 17
+2026-10-12 16:02:26  Recorder:   of 20260902 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000011 and body
+2026-10-12 16:02:26  Recorder: held lines: 6 from FinCom, 1 asked, 1 resolved, 5 still held (6 in the list)
+2026-10-12 16:02:26  Recorder: An entry of 01-Feb-2027 (MasterID 33, line d595b34a…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:26  Recorder: Payroll 11 of 01-Feb-2027 (MasterID 33, line d595b34a…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000021, AlterID 33
+2026-10-12 16:02:26  Recorder:   of 20270201 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000021 and body
+2026-10-12 16:02:26  Recorder: held lines: 5 from FinCom, 1 asked, 1 resolved, 4 still held (5 in the list)
+2026-10-12 16:02:26  Recorder: An entry of 01-Aug-2026 (MasterID 15, line dceb25c7…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:27  Recorder: Payroll 5 of 01-Aug-2026 (MasterID 15, line dceb25c7…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000f, AlterID 15
+2026-10-12 16:02:27  Recorder:   of 20260801 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000000f and body
+2026-10-12 16:02:27  Recorder: held lines: 4 from FinCom, 1 asked, 1 resolved, 3 still held (4 in the list)
+2026-10-12 16:02:27  Recorder: An entry of 01-Dec-2026 (MasterID 27, line de773340…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:27  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+2026-10-12 16:02:27  Recorder: Payroll 9 of 01-Dec-2026 (MasterID 27, line de773340…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001b, AlterID 27
+2026-10-12 16:02:27  Recorder:   of 20261201 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-0000001b and body
+2026-10-12 16:02:27  Recorder: held lines: 3 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-12 16:02:27  Recorder: An entry of 02-Oct-2026 (MasterID 20, line e9e9bb9f…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:27  Recorder: Payment 12 of 02-Oct-2026 (MasterID 20, line e9e9bb9f…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000014, AlterID 20
+2026-10-12 16:02:27  Recorder:   of 20261002 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000014 and body
+2026-10-12 16:02:27  Recorder: held lines: 2 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-12 16:02:27  Recorder: An entry of 02-Aug-2026 (MasterID 16, line fe5b4d35…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:28  Recorder: Payment 9 of 02-Aug-2026 (MasterID 16, line fe5b4d35…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000010, AlterID 16
+2026-10-12 16:02:28  Recorder:   of 20260802 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000010 and body
+2026-10-12 16:02:28  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-12 16:02:50  Recorder: FinCom asks again for 5 held line(s) of this bridge: 5 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-12 16:02:51  Recorder: An entry of 01-Mar-2027 (MasterID 36, line 4f34bd9e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:51  Recorder: Payroll 12 of 01-Mar-2027 (MasterID 36, line 4f34bd9e…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000024, AlterID 36
+2026-10-12 16:02:51  Recorder:   of 20270301 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000024 and body
+2026-10-12 16:02:51  Recorder: held lines: 5 from FinCom, 1 asked, 1 resolved, 4 still held (5 in the list)
+2026-10-12 16:02:51  Recorder: An entry of 31-Mar-2027 (MasterID 38, line 57c5fe0c…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:51  Recorder: Payment 24 of 31-Mar-2027 (MasterID 38, line 57c5fe0c…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000026, AlterID 38
+2026-10-12 16:02:51  Recorder:   of 20270331 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000026 and body
+2026-10-12 16:02:51  Recorder: held lines: 4 from FinCom, 1 asked, 1 resolved, 3 still held (4 in the list)
+2026-10-12 16:02:51  Recorder: An entry of 02-Feb-2027 (MasterID 34, line d8060dc2…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:52  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-12 16:02:52  Recorder: Payment 21 of 02-Feb-2027 (MasterID 34, line d8060dc2…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000022, AlterID 34
+2026-10-12 16:02:52  Recorder:   of 20270202 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000022 and body
+2026-10-12 16:02:52  Recorder: held lines: 3 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-12 16:02:52  Recorder: An entry of 02-Mar-2027 (MasterID 35, line df83f12e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:52  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+2026-10-12 16:02:52  Recorder: Payment 22 of 02-Mar-2027 (MasterID 35, line df83f12e…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000023, AlterID 35
+2026-10-12 16:02:52  Recorder:   of 20270302 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000023 and body
+2026-10-12 16:02:52  Recorder: held lines: 2 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-12 16:02:52  Recorder: An entry of 02-Mar-2027 (MasterID 37, line f3b3cd51…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 16:02:52  Recorder: Payment 23 of 02-Mar-2027 (MasterID 37, line f3b3cd51…): taken: Tally's GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000025, AlterID 37
+2026-10-12 16:02:52  Recorder:   of 20270302 in FinCom Spike Co resolved: sent as altered with its GUID 2f19092c-1586-4759-ab59-7553d0a79cec-00000025 and body
+2026-10-12 16:02:52  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
