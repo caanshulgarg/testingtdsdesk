@@ -105,7 +105,9 @@ The two data locations (next-241) move to 2.4.4.
      Tally's, only for the rule's own section, never on a monthly limit (rent), only where stricter than FinCom's, and
      for 194C's bill-or-year rule only when Tally fills both figures (Tally 7.1 keeps 194C's bill figure alone in the
      year's field).
-   - The books' TDS payment list gives the tax alone where Tally marks interest and fee lines.
+   - The books' TDS payment list gives the tax alone where Tally marks interest and fee lines, and shows the interest and
+     fee beside it; "Make it a challan" carries them onto the challan. A challan made that way is the person's (never
+     changed or removed by the sync; Tally's link tags to it); a payment a challan already names is not proposed again.
 
    Tests: run_tds_tally.mjs (with the review's cases); run_e2e_tdsgst.py part E (13 PASS: Tally's real 7.1 entries and
    masters through the cloud function, migration 73 and the app).
