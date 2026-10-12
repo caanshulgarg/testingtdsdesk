@@ -420,7 +420,7 @@ try {
   PayEntry 'PR-BULK-500' '20261031' $bulkRows $PAY $bulkE
   Info "payroll: the 500-employee payroll: $($made['PR-BULK-500']), $([int]$sw.Elapsed.TotalSeconds) s to import"
   $vs2 = Vouchers
-  $bulkMid = "$(@($vs2 | Where-Object { $_.vno -eq 'PR-BULK-500' })[0].mid)"
+  $bulkMid = "$(@($vs2 | Where-Object { $_.vno -eq 'PR-BULK-500' -or $_.narr -like 'PR-BULK-500 *' })[0].mid)"; Info "payroll: the 500-employee payroll's MasterID: '$bulkMid'"
   $allCc = Coll 'FcCc' 'CostCentre' 'NAME, MASTERID, ALTERID' '' '' 120
   $ccMids = @([regex]::Matches("$allCc", '<MASTERID[^>]*>\s*(\d+)\s*<') | ForEach-Object { [int64]$_.Groups[1].Value } | Sort-Object)
   $ccAlts = @([regex]::Matches("$allCc", '<ALTERID[^>]*>\s*(\d+)\s*<') | ForEach-Object { [int64]$_.Groups[1].Value } | Sort-Object)
@@ -436,6 +436,11 @@ try {
   $empFetch = (@($empNamed) + $empLists) -join ', '
   Info "payroll: the candidate employee FETCH ($(@($empNamed).Count) fields, $($empLists.Count) lists): $empFetch"
   $r1 = TimeIt 'C1 FinComEmployees named fields, MasterID > 0 (all cost centres)' (FcReq 'FinComEmployees' 'CostCentre' $empFetch '$MasterID > 0')
+  # the proposed request (payrollfields: the fields 24Q / Form 16 need that Tally holds, and the employee group mark)
+  $propFetch = 'GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, PANNUMBER, DATEOFJOIN, DEACTIVATIONDATE, DESIGNATION'
+  $null = TimeIt 'P1 FinComEmployees, the proposed 12 fields, MasterID chunk (all)' (FcReq 'FinComEmployees' 'CostCentre' $propFetch '$MasterID > 0')
+  if ($ccAlts.Count) { $a1 = [math]::Max(0, $ccAlts[-1] - 200); $null = TimeIt 'P2 FinComEmployeeChanges, the proposed 12 fields, 200 AlterIDs' (FcReq 'FinComEmployeeChanges' 'CostCentre' $propFetch ('$AlterID > ' + $a1 + ' AND $AlterID <= ' + $ccAlts[-1])) }
+  $null = TimeIt 'P3 FinComLedgers (the ref) with PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL' ($lr.Replace("<FETCH>$([regex]::Match($lr, '<FETCH>([^<]*)</FETCH>').Groups[1].Value)</FETCH>", "<FETCH>$([regex]::Match($lr, '<FETCH>([^<]*)</FETCH>').Groups[1].Value), PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL</FETCH>"))
   $r1b = TimeIt 'C1b FinComEmployees FETCH * (every stored field, the upper bound)' (FcReq 'FinComEmployees' 'CostCentre' '*' '$MasterID > 0') 3 120
   $r1c = TimeIt 'C1c FinComEmployees named fields, payroll only ($ForPayroll)' (FcReq 'FinComEmployees' 'CostCentre' $empFetch '$MasterID > 0 AND $ForPayroll')
   if ($ccMids.Count) { $mid = $ccMids[[int][math]::Floor($ccMids.Count / 2)]; $null = TimeIt 'C1d FinComEmployees named fields, half the MasterIDs' (FcReq 'FinComEmployees' 'CostCentre' $empFetch ('$MasterID > 0 AND $MasterID <= ' + $mid)) }
