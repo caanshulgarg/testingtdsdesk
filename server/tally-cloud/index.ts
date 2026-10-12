@@ -2598,7 +2598,15 @@ async function work(budgetMs: number) {
       const why = String((e as Error)?.message || e).slice(0, 300);
       fail("work", why); console.error("tally-ingest work", x.msg_id, x.read_ct, why);
       const fatal = e instanceof Fatal;
-      if (fatal || x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why); }
+      if (fatal || x.read_ct >= TRIES) {
+        await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why);
+        // 2.4.4 (review 244 R2-M2): an upload whose piece failed for good is not read again: its file (it may hold employees'
+        // bank details) is not kept either; the job's own path only
+        if (x.message?.upload && x.message?.job && x.message?.firm) {
+          const { error: rmErr } = await db.storage.from(UPLOAD_BUCKET).remove([String(x.message.firm) + "/" + String(x.message.job) + ".xml"]);
+          if (rmErr) console.error("tally-ingest upload file not removed", x.message.job, rmErr.message);
+        }
+      }
     }
   }
   return n;

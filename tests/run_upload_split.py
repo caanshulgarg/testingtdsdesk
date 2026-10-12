@@ -325,6 +325,7 @@ try:
     work_until_done(jm4, 60); FS.IGNORE_RANGE[0] = False
     ok(jrow(jm4).get("status") == "failed" and "byte range" in (jrow(jm4).get("message") or "") and all(n < len(big) // 2 for k_, n in FS.SENT[n_s:]),
        "M4. its pieces: never the whole object, the job stopped at once with words (%s: %s; %s)" % (jrow(jm4).get("status"), jrow(jm4).get("message"), [n for _, n in FS.SENT[n_s:]][:6]))
+    ok("tally-uploads/" + str(path) not in FS.FILES, "2.4.4 (review 244 R2-M2): the file of an upload stopped for good is not kept")
     # M5: one entry longer than the carried tail's cap: the job stops with words, no memory growth
     ok(start_fn(PIECE_B, TALLY_UPLOAD_MAX_TAIL="200000") is not None, "the cloud function again, the carried tail capped at 200,000 characters")
     tb = make_book(2 * 1024 * 1024, seed=25, tag="g"); k_ = tb.index("<NARRATION>", len(tb) // 2) + len("<NARRATION>")
@@ -342,6 +343,7 @@ try:
     rpc("tally_work_send", {"p_msg": {"job": jl2, "firm": FIRM, "book": BOOK, "upload": {"path": FIRM + "/other.xml", "size": len(small), "from": 0, "range": {"from": "20260401", "to": "20270331"}}}})
     work_until_done(jl2, 30)
     ok(jrow(jl2).get("status") == "failed" and not [x for x in FS.RANGES[n_r:] if x[0].endswith("/other.xml")], "L2. a piece whose path is not '<firm>/<job>.xml': not read, the job stopped with words (%s)" % jrow(jl2).get("message"))
+    ok("tally-uploads/%s/other.xml" % FIRM in FS.FILES, "L2. the other file is not removed either (only the job's own path ever is)")
     # L3: the job's book, not the client's company linked now
     c, r = call({"kind": "upload_new", "client": CID, "name": "l3.xml", "size": len(small), "from": "20260401", "to": "20270331"})
     jl3 = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = small
