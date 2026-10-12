@@ -14,7 +14,7 @@ import (
 // request shape changed) with 2.4.0's decision kept as history; the table and its hash unchanged (TestAllowListUnchanged);
 // the add-on unchanged from 2.4.0 (no dp= line); the notes and the test sheet
 func TestRelease241VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.2" { // 2.4.2 (release242_test.go): 2.4.1's decision kept as history
+	if BridgeVersion != "2.4.3" { // 2.4.3 (release243_test.go): 2.4.1's decision kept as history
 
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
@@ -27,14 +27,12 @@ func TestRelease241VersionAndDecisionLine(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0", "2.4.1"} {
+	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0", "2.4.1", "2.4.2"} {
 		if strings.Contains(al, "allowed for "+v+" by") {
 			t.Errorf("the %s line is still an exception line (release-check accepts one version only)", v)
 		}
 	}
-	if !strings.Contains(al, "Table hash (SHA-256): 9637918f31adcc340317881fb83853fe63297c78ed7d36531473a98c0547473c") {
-		t.Error("the table hash changed")
-	}
+	// (2.4.3 changed the table: release243_test.go checks its hash)
 	if shapeOf(allowListSamples()[vchObjectID]) != "ce0e72f74e72" || shapeOf(allowListSamples()[vchByNumberID]) != "2167477221dc" {
 		t.Errorf("the entry requests' shapes: object %s, by number %s", shapeOf(allowListSamples()[vchObjectID]), shapeOf(allowListSamples()[vchByNumberID]))
 	}

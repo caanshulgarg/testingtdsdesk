@@ -13,13 +13,13 @@ import (
 // hash unchanged (TestAllowListUnchanged); the add-on unchanged from 2.4.1 (the data locations moved to 2.4.3); migration
 // 72 add-only; the notes and the test sheet
 func TestRelease242VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.2" {
+	if BridgeVersion != "2.4.3" { // 2.4.3 (release243_test.go): 2.4.2's decision kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range append([]string{
-		"allowed for 2.4.2 by the owner's decision of 2026-10-11",
+		"as for 2.4.2: the owner's decision of 2026-10-11",
 		"FinComVoucherObject",
 		"the request itself is unchanged byte for byte",
 		"shape ce0e72f74e72",
@@ -30,15 +30,13 @@ func TestRelease242VersionAndDecisionLine(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !strings.Contains(al, "Table hash (SHA-256): 9637918f31adcc340317881fb83853fe63297c78ed7d36531473a98c0547473c") {
-		t.Error("the table hash changed")
-	}
-	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9][^\n]*allowed for 2\.4\.2`).MatchString(al) {
+	// (2.4.3 changed the table: release243_test.go)
+	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9] for 2\.4\.2[^\n]*2\.4\.2 allowed by`).MatchString(al) {
 		t.Error("no dated re-measured line for 2.4.2")
 	}
 	tdl := readText(filepath.Join("addon", "FinComRecorder.tdl"))
 	if strings.Contains(tdl, "|dp=") || strings.Contains(tdl, "vDP") {
-		t.Error("the add-on writes the data folder (the data locations are 2.4.3's)")
+		t.Error("the add-on writes the data folder (the data locations are 2.4.4's)")
 	}
 	notes := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.2-notes.md"))), " ")
 	for _, w := range append([]string{"2.4.2", "GST type", "FinComVoucherObject", "unchanged", "migration 72", "2.4.3", "No AI in the bridge",

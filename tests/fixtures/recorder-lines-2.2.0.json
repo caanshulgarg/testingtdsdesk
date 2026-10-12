@@ -5,7 +5,7 @@
     "mode": "main",
     "runMode": "service",
     "user": "owner",
-    "version": "2.4.2"
+    "version": "2.4.3"
   },
   "company": "ZZ TEST",
   "company_guid": "co-guid-1",
@@ -112,8 +112,8 @@
       "vch_date": "",
       "vch_no": "",
       "vch_type": "",
-      "xml": "<LEDGER NAME=\"Landlord B\" RESERVEDNAME=\"\"><GUID>led-1</GUID><MASTERID> 1</MASTERID><ALTERID> 1</ALTERID><PARENT>Sundry Creditors</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE><PARTYGSTIN></PARTYGSTIN><INCOMETAXNUMBER></INCOMETAXNUMBER><LEDSTATENAME></LEDSTATENAME></LEDGER>"
+      "xml": "<LEDGER NAME=\"Landlord B\" RESERVEDNAME=\"\"><GUID>led-1</GUID><MASTERID> 1</MASTERID><ALTERID> 1</ALTERID><PARENT>Sundry Creditors</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE><PARTYGSTIN></PARTYGSTIN><INCOMETAXNUMBER></INCOMETAXNUMBER><LEDSTATENAME></LEDSTATENAME><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE></LEDGER>"
     }
   ],
-  "version": "2.4.2"
+  "version": "2.4.3"
 }

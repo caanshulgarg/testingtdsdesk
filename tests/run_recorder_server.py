@@ -990,6 +990,10 @@ try:
     c, r = lch([["lg-npd", 503, 87, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Company - Resident", "", "", []]], "counter", after=86, upto=87)
     nd = led("New Party D") or {}
     ok(c == 200 and nd.get("tds_nature") == "" and nd.get("tds_special_rate") == "" and nd.get("tds_ldc") == [], "2.4.3: removed in Tally: blank (%s)" % nd)
+    # (review 243 L3) a certificate's dates in Tally's other form ("1-Apr-2026") stored as yyyymmdd; a date not read: blank
+    c, r = lch([["lg-npd", 503, 87, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Company - Resident", "", "", [["FC Prof Fees 194J", "1-Apr-2026", "31-Mar-27", "197", "LDC2", "1", "100"], ["X", "April", "20270331", "197", "LDC3", "1", "100"]]]], "counter", after=86, upto=87)
+    nd = led("New Party D") or {}
+    ok(c == 200 and [x[1:3] for x in (nd.get("tds_ldc") or [])] == [["20260401", "20270331"], ["", "20270331"]], "2.4.3: a certificate's dates as yyyymmdd (%s)" % nd.get("tds_ldc"))
     FS.NO_COL["tally_ledgers"] = {"tds_nature", "tds_special_rate", "tds_ldc"}
     c, r = lch([["lg-npd", 503, 88, "New Party D", "Sundry Creditors", "0", "07AAACN9999B1Z5", "", 0, "", "Company - Resident", "N", "", []]], "counter", after=87, upto=88)
     nd = led("New Party D") or {}
