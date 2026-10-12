@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- FinCom's status page (reliability item 5), at staging.fincom.live/status/. A plain page: it reads status.json next to
+     it (written by the uptime watch, .github/workflows/uptime.yml, when a state changes or once an hour) and nothing else:
+     no database, no script or font from elsewhere, so it shows whatever else is down. Arc's look and FinCom's colours
+     (app/src/styles/arc-tokens.css), light and dark, phone width. Its source is status/index.html on the reliability
+     branch; app/publish-ops.sh puts it on main. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Whether FinCom, its cloud and its Tally connection service are working, and their last 30 days.">
+<title>FinCom status</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9v14M11 9h11M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --paper: #F8FAFC; --sheet: #FFFFFF; --sheet-2: #F1F5F9; --ink: #0F172A; --muted: #475569; --rule: #E2E8F0;
+  --brand: #4338CA; --brand-tint: #EEF2FF; --ok: #059669; --ok-soft: #DCFCE7; --ok-ink: #065F46;
+  --bad: #E11D48; --bad-soft: #FFE4E6; --bad-ink: #9F1239; --warn-soft: #FEF3C7; --warn-ink: #92400E; --none: #E2E8F0;
+  --shadow: 0 6px 18px rgb(15 23 42 / .06), 0 1px 3px rgb(15 23 42 / .05);
+  --sans: "Inter", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --display: "Geist", "Geist Variable", var(--sans);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0B1120; --sheet: #111827; --sheet-2: #1F2937; --ink: #E5E7EB; --muted: #94A3B8; --rule: #1F2937;
+    --brand: #818CF8; --brand-tint: #1E1B4B; --ok: #34D399; --ok-soft: #052E1F; --ok-ink: #A7F3D0;
+    --bad: #FB7185; --bad-soft: #3B0A18; --bad-ink: #FECDD3; --warn-soft: #3A2A05; --warn-ink: #FDE68A; --none: #263244;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0B1120; --sheet: #111827; --sheet-2: #1F2937; --ink: #E5E7EB; --muted: #94A3B8; --rule: #1F2937;
+  --brand: #818CF8; --brand-tint: #1E1B4B; --ok: #34D399; --ok-soft: #052E1F; --ok-ink: #A7F3D0;
+  --bad: #FB7185; --bad-soft: #3B0A18; --bad-ink: #FECDD3; --warn-soft: #3A2A05; --warn-ink: #FDE68A; --none: #263244;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--sans); }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.logo { width: 32px; height: 32px; border-radius: 8px; flex: 0 0 auto; }
+h1 { margin: 0; font: 600 22px/1.25 var(--display); letter-spacing: -.01em; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.overall { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 12px; font-weight: 600; margin-bottom: 16px; }
+.overall.good { background: var(--ok-soft); color: var(--ok-ink); }
+.overall.bad { background: var(--bad-soft); color: var(--bad-ink); }
+.overall.unknown { background: var(--sheet-2); color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; background: currentColor; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow); }
+.svc { padding: 16px; }
+.svc + .svc { border-top: 1px solid var(--rule); }
+.row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.name { font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.pill.good { background: var(--ok-soft); color: var(--ok-ink); }
+.pill.bad { background: var(--bad-soft); color: var(--bad-ink); }
+.note { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.bars { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; margin-top: 12px; height: 28px; }
+.bar { border-radius: 3px; background: var(--ok); min-width: 0; }
+.bar.part { background: linear-gradient(to top, var(--bad) 0 var(--down), var(--ok) var(--down) 100%); }
+.bar.down { background: var(--bad); }
+.bar.nodata { background: var(--none); }
+.legend { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 6px; gap: 8px; }
+.foot { margin-top: 16px; color: var(--muted); font-size: 13px; }
+.stale { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--warn-ink); font-size: 13px; }
+a { color: var(--brand); }
+@media (max-width: 480px) { main { padding: 20px 16px 36px; } .bars { gap: 2px; height: 24px; } h1 { font-size: 19px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1F6F5C"/><path d="M11 9v14M11 9h11M11 16h8" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/></svg>
+    <div><h1>FinCom status</h1><p class="sub">Is FinCom working? Checked every 5 minutes.</p></div>
+  </header>
+  <div id="overall" class="overall unknown" data-overall="" role="status"><span class="dot"></span><span>Reading the status…</span></div>
+  <section id="list" class="card" aria-label="Services"></section>
+  <div id="stale"></div>
+  <p class="foot" id="foot"></p>
+  <p class="foot"><a href="../review/">Open FinCom</a></p>
+</main>
+<script>
+(function () {
+  "use strict";
+  var DAY = 864e5, IST = 330 * 6e4, ORDER = ["app", "cloud", "bridge"];
+  var NAMES = { app: "FinCom app", cloud: "Cloud (database)", bridge: "Tally connection service" };
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function el(tag, attrs, text) { var e = document.createElement(tag); for (var k in attrs || {}) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+  // a time in India's time, whatever this computer's: 12-Oct-2026, 9:32 AM IST
+  function ist(ms) {
+    var d = new Date(ms + IST), h = d.getUTCHours(), m = d.getUTCMinutes();
+    return pad(d.getUTCDate()) + "-" + MON[d.getUTCMonth()] + "-" + d.getUTCFullYear() + ", " + ((h % 12) || 12) + ":" + pad(m) + " " + (h < 12 ? "AM" : "PM") + " IST";
+  }
+  function dayName(ms) { var d = new Date(ms + IST); return pad(d.getUTCDate()) + "-" + MON[d.getUTCMonth()] + "-" + d.getUTCFullYear(); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function dur(min) { min = Math.round(min); var h = Math.floor(min / 60), m = min % 60; return (h ? h + " h " : "") + (m || !h ? m + " min" : "").trim(); }
+  // a share as a percentage with two decimals; never "100.00" when there was time down
+  function pct(x) { var r = (Math.round(x * 10000) / 100).toFixed(2); return r === "100.00" && x < 1 ? "99.99" : r; }
+  // the time down of a service in [a, b), from its incidents (an open one runs to now)
+  function down(incs, a, b, now) {
+    var t = 0;
+    incs.forEach(function (i) { var s = Date.parse(i.start), e = i.end ? Date.parse(i.end) : now; s = Math.max(s, a); e = Math.min(e, b); if (e > s) t += e - s; });
+    return t;
+  }
+  function draw(st) {
+    var now = Date.now(), checked = Date.parse(st.checked), since = Date.parse(st.watch_since || st.checked);
+    var todayStart = Math.floor((now + IST) / DAY) * DAY - IST;
+    var list = document.getElementById("list"); list.textContent = "";
+    var bad = [];
+    ORDER.forEach(function (k) {
+      var s = (st.services || {})[k] || { ok: false, note: "not checked" };
+      var incs = (st.incidents || []).filter(function (i) { return i.service === k; });
+      if (!s.ok) bad.push(NAMES[k]);
+      var box = el("div", { "class": "svc", "data-service": k });
+      var row = el("div", { "class": "row" });
+      row.appendChild(el("span", { "class": "name", "data-name": "" }, NAMES[k]));
+      var pill = el("span", { "class": "pill " + (s.ok ? "good" : "bad"), "data-state": "" }); pill.appendChild(el("span", { "class": "dot", "aria-hidden": "true" })); pill.appendChild(document.createTextNode(s.ok ? "All good" : "Problem"));
+      row.appendChild(pill); box.appendChild(row);
+      if (!s.ok && s.note) box.appendChild(el("p", { "class": "note" }, s.note.charAt(0).toUpperCase() + s.note.slice(1) + (s.since ? " (since " + ist(Date.parse(s.since)) + ")" : "") + "."));
+      // the last 30 days, India's days, oldest first: the part of each day the watch was running
+      var bars = el("div", { "class": "bars", role: "img" }), watched = 0, downAll = 0;
+      for (var n = 29; n >= 0; n--) {
+        var a = todayStart - n * DAY, b = Math.min(a + DAY, now), from = Math.max(a, since);
+        var bar = el("span", { "class": "bar", "data-day": dayName(a) });
+        if (from >= b) { bar.className = "bar nodata"; bar.setAttribute("data-up", ""); bar.title = dayName(a) + ": no data (the watch had not begun)"; }
+        else {
+          var span = b - from, dn = down(incs, from, b, now), up = 1 - dn / span;
+          watched += span; downAll += dn;
+          bar.setAttribute("data-up", pct(up));
+          bar.title = dayName(a) + ": " + pct(up) + "% up" + (dn ? " (down " + dur(dn / 6e4) + ")" : "");
+          if (dn) { bar.className = up < 0.02 ? "bar down" : "bar part"; bar.style.setProperty("--down", Math.max(8, Math.round((1 - up) * 100)) + "%"); }
+        }
+        bars.appendChild(bar);
+      }
+      var total = watched ? pct(1 - downAll / watched) + "%" : "no data yet";
+      bars.setAttribute("aria-label", NAMES[k] + ", last 30 days: " + total + " uptime");
+      box.appendChild(bars);
+      var lg = el("div", { "class": "legend" }); lg.appendChild(el("span", null, "30 days ago"));
+      lg.appendChild(el("span", { "data-uptime": "" }, total + (watched ? " uptime" : ""))); lg.appendChild(el("span", null, "Today"));
+      box.appendChild(lg); list.appendChild(box);
+    });
+    var ov = document.getElementById("overall");
+    ov.className = "overall " + (bad.length ? "bad" : "good");
+    ov.lastChild.textContent = bad.length ? "A problem with " + bad.join(" and ") + ". We are on it." : "All systems working";
+    var foot = document.getElementById("foot"); foot.textContent = "";
+    foot.appendChild(document.createTextNode("Last check: "));
+    foot.appendChild(el("span", { "data-last-check": "" }, ist(checked)));
+    foot.appendChild(document.createTextNode(". Checked every " + (st.every_minutes || 5) + " minutes; this page is updated at once when something changes, and at least every hour."));
+    var stale = document.getElementById("stale"); stale.textContent = "";
+    if (now - checked > 2 * 36e5) stale.appendChild(el("div", { "class": "stale", "data-stale": "" }, "The last check was " + dur((now - checked) / 6e4).replace(/ \d+ min$/, "") + " ago: the watch may be paused, so what is shown may be out of date."));
+  }
+  function fail() {
+    var ov = document.getElementById("overall"); ov.className = "overall unknown";
+    ov.lastChild.textContent = "The status could not be read just now. Try again in a minute.";
+  }
+  function load() {
+    var x = new XMLHttpRequest();
+    x.open("GET", "status.json?t=" + Date.now());
+    x.onload = function () { try { if (x.status !== 200) throw 0; draw(JSON.parse(x.responseText)); } catch (e) { fail(); } };
+    x.onerror = fail; x.send();
+  }
+  load(); setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>

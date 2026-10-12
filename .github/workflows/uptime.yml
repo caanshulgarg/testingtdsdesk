@@ -1,0 +1,75 @@
+# The uptime watch (reliability item 3). Every 5 minutes (GitHub's smallest interval; GitHub may run a scheduled run a
+# few minutes late when it is busy) it checks, with .github/scripts/uptime_check.py:
+#   - staging.fincom.live/review/ answers 200 and holds the FinCom marker;
+#   - the staging database's health endpoint answers (with its public publishable key, as the app has it: not a secret);
+#   - the bridge's latest.json SHA-256 matches its published setup (once an hour the setup itself is downloaded and hashed).
+# A failed check fails the run: GitHub emails the person who last changed this file's schedule (Settings ->
+# Notifications -> Actions: "Send notifications for failed workflows only"). On the 2nd failure in a row it also opens
+# (or updates) one issue labelled "site-down", and closes it when the checks pass again.
+# status/status.json (what staging.fincom.live/status/ shows) is committed to main, under status/ only, when a state
+# changes or once an hour. Scheduled workflows run only from the default branch: this file must be on main.
+name: Uptime watch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          sparse-checkout: |
+            status
+            .github/scripts
+      - name: Check
+        id: check
+        env:
+          SITE_URL: https://staging.fincom.live
+          SUPABASE_URL: https://qbocskaiewaxqcvaunzc.supabase.co
+          # the staging database's PUBLIC publishable key (the app's own, in build.py and on the site): not a secret
+          SUPABASE_KEY: sb_publishable_Q--gLdP6P-hU3gJDMHuKEA_fLTMJAxd
+          STATUS_FILE: status/status.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/uptime_check.py
+      - name: Save the status (status/ only)
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUMMARY: ${{ steps.check.outputs.summary }}
+        run: |
+          git config user.name "FinCom uptime watch"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add status/status.json
+          git diff --cached --quiet && exit 0
+          outside=$(git diff --cached --name-only | grep -v '^status/' || true)
+          [ -z "$outside" ] || { echo "::error::files outside status/ would change: $outside"; exit 1; }
+          git commit -qm "Status: $SUMMARY"
+          for i in 1 2 3 4; do
+            git push -q origin HEAD:main && break
+            [ "$i" = 4 ] && { echo "::warning::status not pushed (main kept moving)"; exit 0; }
+            sleep $((i * 5)); git pull -q --rebase origin main
+          done
+          # a push made with this workflow's token may not start a Pages build by itself: ask for one
+          curl -sS -o /dev/null -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages/builds" || true
+      - name: Fail the run when a check failed (GitHub emails the owner)
+        if: steps.check.outputs.ok != 'true'
+        run: |
+          echo "::error::${{ steps.check.outputs.summary }} (see the Check step; staging.fincom.live/status/)"
+          exit 1
