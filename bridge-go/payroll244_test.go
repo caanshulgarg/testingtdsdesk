@@ -14,6 +14,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -311,6 +312,29 @@ func TestPay244PayrollStripReal(t *testing.T) {
 		t.Fatalf("the 500-employee payroll: %q, %d allocations", why, strings.Count(s, "<COSTCENTREALLOCATIONS.LIST>"))
 	}
 	t.Logf("the 500-employee payroll stripped in %v to %d bytes", time.Since(t0), len(s))
+}
+
+// the stripped bodies as bridge 2.4.4 sends them (golden: tests/run_parse_payroll.mjs reads them as FinCom's cloud does)
+func TestPay244StrippedGolden(t *testing.T) {
+	for _, id := range []string{"PR-NOV", "PR-DEC", "SAL-PAY-NOV", "TDS-SAL-NOV", "PF-NOV"} {
+		f := filepath.Join("testdata", "payroll244", "7.1", "obj-"+id+".xml.gz")
+		vs := reVchBlock.FindAllString(gz242(t, f), -1)
+		if len(vs) != 1 {
+			t.Fatalf("%s: %d vouchers", id, len(vs))
+		}
+		s := fastStripVoucher(cleanXML(vs[0]))
+		if s == "" {
+			t.Fatalf("%s held", id)
+		}
+		out := strings.TrimSuffix(f, ".xml.gz") + "-stripped.xml"
+		if os.Getenv("PAY244_GOLDEN") != "" {
+			if err := os.WriteFile(out, []byte(s), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		} else if readText(out) != s {
+			t.Errorf("%s: not what the strip makes now (PAY244_GOLDEN=1 rewrites it)", out)
+		}
+	}
 }
 
 // --- 4. the payroll voucher's 3 s, every other request 2 s

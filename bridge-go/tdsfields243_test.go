@@ -43,7 +43,7 @@ func TestTDS243KeptFieldsExactly(t *testing.T) {
 		}
 	}
 	// the approved paths: today's 61 named fields, the two TDS lists whole, 2.4.2's GST type and these
-	if n := len(ok); n != 61+2+len(gst242Want)+len(tds243Want) {
+	if n := len(ok); n != 61+2+len(gst242Want)+len(tds243Want)+len(liveKeepPay244) {
 		t.Errorf("%d approved paths", n)
 	}
 }

@@ -14,7 +14,7 @@ import (
 // request shape changed) with 2.4.0's decision kept as history; the table and its hash unchanged (TestAllowListUnchanged);
 // the add-on unchanged from 2.4.0 (no dp= line); the notes and the test sheet
 func TestRelease241VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.3" { // 2.4.3 (release243_test.go): 2.4.1's decision kept as history
+	if BridgeVersion != "2.4.4" { // 2.4.4 (release244_test.go): 2.4.1's decision kept as history
 
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
@@ -27,7 +27,7 @@ func TestRelease241VersionAndDecisionLine(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0", "2.4.1", "2.4.2"} {
+	for _, v := range []string{"2.3.4", "2.3.5", "2.4.0", "2.4.1", "2.4.2", "2.4.3"} {
 		if strings.Contains(al, "allowed for "+v+" by") {
 			t.Errorf("the %s line is still an exception line (release-check accepts one version only)", v)
 		}

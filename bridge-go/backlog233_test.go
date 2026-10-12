@@ -352,7 +352,9 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 	}
 	f.mu.Lock()
 	for _, id := range f.reqs[reqs0:] {
-		if id != vchObjectID && id != vchByNumberID && id != "FinComCompany" && id != "FinComCompanyNumbers" && id != "TDSDeskCompanies" {
+		// 2.4.4: the payroll's employees, read once at the first light check while Tally answered in time (never the schedule's
+		// try, never counted for the mark: payroll.go)
+		if id != vchObjectID && id != vchByNumberID && id != "FinComCompany" && id != "FinComCompanyNumbers" && id != "TDSDeskCompanies" && id != empListID {
 			f.mu.Unlock()
 			t.Fatalf("a request other than the entry, the small check and the company list: %s", id)
 		}
@@ -443,7 +445,7 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.3" {
+	if BridgeVersion != "2.4.4" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
@@ -559,7 +561,9 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 	for _, m := range backlog233Asked(f) {
 		perFirst[m]++
 	}
-	retryClock(time.Now(), 360)
+	// 2.4.4 (found at the 2.4.4 build, 12-Oct-2026): 6 minutes on from the stand's own clock (nwsBridge: 05-Oct-2026 07:15
+	// IST), not from the machine's: from 12-Oct-2026 the machine's clock put the old lines past the bridge's 7-day look-back
+	retryClock(time.Date(2026, 10, 5, 7, 15, 0, 0, liveZone), 360)
 	t.Cleanup(func() { nowFn = time.Now })
 	for start3 := time.Now(); time.Since(start3) < 40*time.Second; {
 		retryDue()

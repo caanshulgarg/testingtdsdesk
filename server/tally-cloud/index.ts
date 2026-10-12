@@ -1039,7 +1039,8 @@ async function bookFor(firm: string, company: string) {
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
 const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
-  ...partA(v), ...(v.gst ? { gst: v.gst } : {}), ...(v.tdsx ? { tdsx: v.tdsx } : {}) }));   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it; 2.4.3 (migration 73): the TDS challan and references, likewise
+  ...partA(v), ...(v.gst ? { gst: v.gst } : {}), ...(v.tdsx ? { tdsx: v.tdsx } : {}),   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it; 2.4.3 (migration 73): the TDS challan and references, likewise
+  ...(Array.isArray(v.salpay) ? { salpay: v.salpay.slice(0, 5000).map((x: any) => ({ n: x.n, ledger: cleanName(String(x.ledger || "")), employee: cleanName(String(x.employee || "")), amt: x.amt, date: x.date })) } : {}) }));   // 2.4.4 (migration 74): the salary paid to each employee, only from an entry with bank details
 // bridge 2.3.1 part A (migration 57): the rest of the entry, read by parse.js the same way on both paths (the days path and
 // the recorder's entry body): the e-invoice and e-way bill, the items, cost centres, bank and TDS details, due dates given
 // as dates, and the accuracy checks' plain words (none: []). Names cleaned as every other name. A voucher a parser without
@@ -1152,10 +1153,24 @@ function ledTds(l: any): { tds_nature: string; tds_special_rate: string; tds_ldc
     .map((c: any) => [0, 1, 2, 3, 4, 5, 6].map((i) => { const v = String(c[i] ?? "").slice(0, i === 0 ? 200 : 60).trim(); return (i === 1 || i === 2) ? d8(v) : v; }));   // (review 243 L3) from, to as yyyymmdd
   return { tds_nature: String(l[11] ?? "").trim().slice(0, 200), tds_special_rate: String(l[12] ?? "").trim().slice(0, 20), tds_ldc: ldc };
 }
+// bridge 2.4.4 (migration 74): a pay head's PAYTYPE, PAYSTATTYPE, ITCOMPONENT and FORPAYROLL are the 15th to 18th columns of a
+// ledger_list / ledger_changes row ("Not Applicable" sent as ""; FORPAYROLL "Yes" or ""). Absent (a row of 14 columns: a
+// bridge before 2.4.4, or a row a 2.4.3 round left in its outbox): left as they are; sent blank: as Tally has them
+const PAYCOLS = "pay_type, pay_stat_type, it_component, for_payroll";
+function ledPay(l: any): { pay_type: string; pay_stat_type: string; it_component: string; for_payroll: boolean } | null {
+  if (!Array.isArray(l) || l.length < 18) return null;
+  const t = (v: unknown) => String(v ?? "").replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 100);
+  return { pay_type: t(l[14]), pay_stat_type: t(l[15]).replace(/^not applicable$/i, ""), it_component: t(l[16]), for_payroll: /^yes$/i.test(t(l[17])) };
+}
 // the ledgers upserted; refused for want of 57's column (the cloud's update out before 57 ran, the column check cached):
 // the same rows again without it, and the check remembered as "not there"; likewise 73's columns
 async function upsertLedgers(rows: Record<string, unknown>[]) {
   let { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
+  if (error && rows.some((r) => "pay_type" in r) && /pay_type|pay_stat_type|it_component|for_payroll/.test(String(error.message || ""))) {
+    colCache.set("tally_ledgers:" + PAYCOLS, { ok: false, at: Date.now() });
+    rows = rows.map(({ pay_type: _a, pay_stat_type: _b, it_component: _c, for_payroll: _d, ...r }) => r);
+    ({ error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" }));
+  }
   if (error && rows.some((r) => "tds_nature" in r) && /tds_nature|tds_special_rate|tds_ldc/.test(String(error.message || ""))) {
     colCache.set("tally_ledgers:" + TDSCOLS, { ok: false, at: Date.now() });
     ({ error } = await db.from("tally_ledgers").upsert(rows.map(({ tds_nature: _a, tds_special_rate: _b, tds_ldc: _c, ...r }) => r), { onConflict: "book_id,name" }));
@@ -1174,6 +1189,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const m40 = await hasCols("tally_ledgers", "state");            // migration 40: Tally's LEDSTATENAME (the bridge's 10th column)
   const m57 = await hasCols("tally_ledgers", DTYPE);              // migration 57: the party's deductee type (the 11th column, 2.3.1)
   const m73 = await hasCols("tally_ledgers", TDSCOLS);            // migration 73: the TDS settings (the 12th to 14th columns, 2.4.3)
+  const m74 = await hasCols("tally_ledgers", PAYCOLS);            // migration 74: the pay-head fields (the 15th to 18th columns, 2.4.4)
   const notes: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletedIgnored: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
@@ -1183,7 +1199,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l) }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l), pay: ledPay(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
@@ -1289,6 +1305,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     if (m40 && r.state) o.state = r.state;      // absent or empty: left as it is
     if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;   // 2.3.1: sent (blank too): as Tally has it; absent: left as it is
     if (m73 && r.tds) Object.assign(o, r.tds);          // 2.4.3: likewise the TDS settings
+    if (m74 && r.pay) Object.assign(o, r.pay);          // 2.4.4: likewise the pay-head fields
     if (m32) { o.tally_guid = r.guid && (!owner.has(r.guid) || owner.get(r.guid) === r.name) ? r.guid : null; o.alter_id = r.alter; o.deleted_at = null; }
     return o;
   };
@@ -1345,6 +1362,28 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
   return reply(200, out);
 }
+// Bridge 2.4.4 (the owner's decisions of 12-Oct-2026; migration 74): {kind:"employees", company, company_guid, employees:
+// [[guid, MasterID, AlterID, name, group, category, employee group 1/0, PAN, joined yyyymmdd, left yyyymmdd, designation]],
+// complete: true, upto} -> {ok, employees}: the payroll's employees (FinComEmployees: payroll rows only; the bridge drops every
+// other cost centre), added or brought up to date by their Tally GUID; a complete list marks the employees it no longer names
+// gone (never removed). Without migration 74: {ok: false} (the bridge sends it again later). Only these eleven columns are
+// read: anything else in a row is ignored
+async function applyEmployees(book: string, body: any) {
+  const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
+  const rows = (Array.isArray(body.employees) ? body.employees : []).slice(0, 50000).filter((x: any) => Array.isArray(x))
+    .map((x: any) => [s(x[0], 100).trim(), Math.max(0, Math.floor(Number(x[1]) || 0)), Math.max(0, Math.floor(Number(x[2]) || 0)), cleanName(s(x[3], 200)), cleanName(s(x[4], 200)),
+      s(x[5], 200).trim(), Number(x[6]) === 1 ? 1 : 0, s(x[7], 10).trim().toUpperCase(), d8(s(x[8], 20)), d8(s(x[9], 20)), s(x[10], 100).trim()])
+    .filter((x: any[]) => x[0] && x[3]);
+  const complete = body.complete === true;
+  const { data, error } = await db.rpc("tally_ingest_employees", { p_book: book, p_rows: rows, p_complete: complete });
+  if (error && (["PGRST202", "42883"].includes(String(error.code || "")) || /could not find the function public\.tally_ingest_employees/i.test(String(error.message || "")))) {
+    console.log("tally-ingest employees: migration 74 is not applied", book);
+    return reply(200, { ok: false, error: "the employees are not kept yet: migration 74 is not applied" });
+  }
+  if (error) throw new Error(error.message);
+  console.log("tally-ingest employees", book, JSON.stringify({ rows: rows.length, written: data, complete }));
+  return reply(200, { ok: true, employees: Math.max(0, Math.floor(Number(data) || 0)) });
+}
 // Bridge 2.3.1, part B (the owner's scope of 06-Oct-2026, masters): {kind:"ledger_changes", company, company_guid, ledgers:
 // [[guid, masterId, alterId, name, group, opening, gstin, pan, openingChanged, state, deducteeType]] (the ledger list's row shape, at most
 // 2000), why: "counter" (the ledgers created or altered since Tally's master counter last moved; after, upto: the AlterID
@@ -1365,6 +1404,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const m40 = await hasCols("tally_ledgers", "state");
   const m57 = await hasCols("tally_ledgers", DTYPE);
   const m73 = await hasCols("tally_ledgers", TDSCOLS);
+  const m74 = await hasCols("tally_ledgers", PAYCOLS);
   const why = body.why === "wanted" ? "wanted" : "counter";
   const kept: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, updated: 0, kept };
@@ -1372,7 +1412,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 2000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l) }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim(), dtype: deducteeType(l), tds: ledTds(l), pay: ledPay(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   if (!rows.length) return reply(200, out);
@@ -1394,6 +1434,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       if (m40 && r.state) o.state = r.state;
       if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
       if (m73 && r.tds) Object.assign(o, r.tds);
+      if (m74 && r.pay) Object.assign(o, r.pay);
       if (m32) { o.tally_guid = r.guid || null; o.alter_id = r.alter; }
       fresh.push(o);
       continue;
@@ -1418,6 +1459,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     if (m40 && r.state) o.state = r.state;
     if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
     if (m73 && r.tds) Object.assign(o, r.tds);
+    if (m74 && r.pay) Object.assign(o, r.pay);
     if (m32) { o.alter_id = r.alter; if (!have.tally_guid && r.guid && !byGuid.has(r.guid)) o.tally_guid = r.guid; }
     const was = have.open_sent ?? have.open, sent = was === null || was === undefined ? null : Math.round(Number(was) * 100) / 100;
     if (sent === null || sent !== r.open) opened.push({ ...o, open: r.open, open_sent: r.open });
@@ -3270,6 +3312,13 @@ Deno.serve(sentry.wrap(async (req) => {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return await applyLedgerChanges(firm, book, body);
+      }
+      case "employees": {
+        // bridge 2.4.4 (migration 74): the payroll's employees, read again when Tally's master counter moved; the whole list
+        if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return await applyEmployees(book, body);
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));

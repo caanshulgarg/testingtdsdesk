@@ -27,7 +27,8 @@ const TD = path.join(HERE, "..", "bridge-go", "testdata", "fast234kinds");
 // bridge 2.4.2: the entry's GST type (parse.js's "gst", from the fields the strip keeps since 2.4.2) is in the object answer only:
 // the Voucher collection answer of today's request never fetched those fields (tests/run_parse_gsttype.mjs reads them)
 // bridge 2.4.3: likewise the TDS challan and references (parse.js's "tdsx", tests/run_parse_tdsfields.mjs)
-const gst242 = (k) => /\.gst(\.|$)/.test(k) || /\.tdsx(\.|$)/.test(k);
+// bridge 2.4.4: likewise the salary paid per employee (parse.js's "salpay": only the fast body keeps BANKEMPLOYEENAME; tests/run_parse_payroll.mjs)
+const gst242 = (k) => /\.gst(\.|$)/.test(k) || /\.tdsx(\.|$)/.test(k) || /\.salpay(\.|$|\[)/.test(k);
 let fails = 0, n = 0, onAcc = 0, tdsMore = 0, held = 0, costMore = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const flat = (o, p, out) => { if (o === null || typeof o !== "object") { out[p] = JSON.stringify(o); return out; } if (Array.isArray(o)) { out[p + ".length"] = String(o.length); o.forEach((x, i) => flat(x, p + "[" + i + "]", out)); return out; } for (const k of Object.keys(o).sort()) flat(o[k], p ? p + "." + k : k, out); return out; };

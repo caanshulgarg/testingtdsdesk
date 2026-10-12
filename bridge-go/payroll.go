@@ -255,6 +255,9 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 	if postingGoing() {
 		return 0, nil // a posting goes first
 	}
+	if retryPending() {
+		return 0, nil // Tally has not answered in time lately: the entries come first, the employees after (never the schedule's try)
+	}
 	port, why := ledOwnPort(company, guid, preferred)
 	if why != "" {
 		liveSayOnce("emp|"+key+"|"+why, "Employees of "+company+": not asked: "+why)
@@ -303,6 +306,9 @@ func empReadOn(company string, port int, rd *empRead) (bool, int, error) {
 	for reqs < empMaxReqs() {
 		if postingGoing() {
 			return false, reqs, errBackoff
+		}
+		if retryPending() {
+			return false, reqs, nil // a stop meanwhile: the rest at a later check
 		}
 		tail := rd.after >= rd.bound
 		upto := rd.after + int64(empChunk())
