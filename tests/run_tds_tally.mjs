@@ -304,5 +304,12 @@ x.TDSCH.untag([k1row]); x.TDS.autoAllocate();
 const t2 = b.alloc[k1row];
 x.TDSCH.untag([k1row]); r = x.TDSTally.sync(b);
 ok(t2 && (b.allocFrom || {})[k1row] === "off" && !b.alloc[k1row], "T2. auto-tagged, then untagged again: still off, not tagged back (" + J([t2, (b.allocFrom || {})[k1row], b.alloc[k1row]]) + ")");
+
+// ==== review 243 (round 6): U1 untag, tag by hand elsewhere, untag again: still off, not tagged back
+b = books(); upload(); x.TDSTally.sync(b);
+x.TDSCH.add([{ bsr: "0240020", serial: "00991", date: "20261216", tax: 5000, interest: 0, section: "194C" }]);
+const u1 = b.challans.find((c) => c.serial === "00991");
+x.TDSCH.untag([k1row]); x.TDSCH.tag([k1row], u1.id); x.TDSCH.untag([k1row]); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && (b.allocFrom || {})[k1row] === "off" && r.tagged === 0, "U1. untag, tag elsewhere, untag: still off, not tagged back (" + J([b.alloc[k1row], (b.allocFrom || {})[k1row], r.tagged]) + ")");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

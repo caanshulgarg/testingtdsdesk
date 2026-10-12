@@ -142,7 +142,7 @@ const TDSCH = {
     if (add > left) return {ok: false, over: (add - left) / 100, why: "That is " + money((add - left) / 100) + " more than is left on challan " + this.label(c) + " (" + money(left / 100) + ")."};
     b.alloc = b.alloc || {};
     // bridge 2.4.3 (review 243 S1, S2): a tag made here is the person's (the sync marks its own "tally" after)
-    rows.forEach(r => { b.alloc[r.id] = chId; if (b.allocFrom) delete b.allocFrom[r.id]; });
+    rows.forEach(r => { b.alloc[r.id] = chId; if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id]; });   // a person's "off" kept (review 243 U1)
     saveBooks();
     return {ok: true, n: rows.length};
   },
