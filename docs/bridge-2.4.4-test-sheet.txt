@@ -1,7 +1,7 @@
 FINCOM 2.4.4 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.4.exe
-Fingerprint: (filled at build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 ea07363ca089ecbb17fa56f02185c32ddf66eec233189c4e768a0ded327f227d (FinComBridge-Setup-2.4.4.exe, built 13-Oct-2026 00:02 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.4 changes (the full notes: docs/bridge-2.4.4-notes.md):
 1. Payroll from Tally: the employees (name, PAN, group, designation, date of joining and leaving), the pay heads, each
