@@ -58,19 +58,20 @@ The two data locations (next-241) move to 2.4.4.
    TDSRATENAME" needs (a nature's name need not carry its section) and the date says which of a nature's rows applies.
 
 4. **Measured on real TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1** (tally-versions mode tdsm, the requests exactly as next-tdsfields
-   builds them; run 38164963591 on GitHub runners, not NWS144; checks m1 to m5 PASS on every release; the worst of each, in ms):
+   builds them; runs 38164963591 (11-Oct) and 38187902681 (12-Oct, with FinComLedgerChanges) on GitHub runners, not NWS144;
+   checks m1 to m5 PASS on every release in both; the worst of each over both runs, in ms):
 
-   | TallyPrime | FinComTdsNatures | FinComLedgerByName | FinComLedgers chunk, 20,000 ledgers (2.4.3 / 2.4.2's fields) | ZZ BIG TEST: FinComLedgers / natures |
-   |---|---|---|---|---|
-   | 3.0 | 2.6 | 26.3 | 212.4 / 162.0 | 100.4 / 2.3 |
-   | 4.1 | 5.6 | 36.6 | 280.1 / 247.0 | 114.5 / 2.8 |
-   | 5.1 | 2.1 | 20.1 | 247.9 / 154.2 | 67.0 / 2.1 |
-   | 6.2 | 3.8 | 33.0 | 237.1 / 181.4 | 120.7 / 3.0 |
-   | 7.1 | 3.8 | 27.9 | 166.4 / 123.0 | 72.2 / 3.2 |
+   | TallyPrime | FinComTdsNatures | FinComLedgerByName | FinComLedgers chunk, 20,000 ledgers (2.4.3 / 2.4.2's fields) | FinComLedgerChanges (200 AlterIDs) | ZZ BIG TEST: FinComLedgers / natures |
+   |---|---|---|---|---|---|
+   | 3.0 | 2.6 | 26.3 | 212.4 / 162.0 | 188.8 | 100.4 / 2.3 |
+   | 4.1 | 5.6 | 36.6 | 280.1 / 247.0 | 182.6 | 114.5 / 2.8 |
+   | 5.1 | 3.3 | 36.1 | 315.9 / 229.9 | 246.7 | 114.8 / 2.9 |
+   | 6.2 | 4.2 | 35.6 | 298.0 / 214.9 | 222.2 | 126.7 / 4.2 |
+   | 7.1 | 4.2 | 44.8 | 306.9 / 228.7 | 267.9 | 167.5 / 3.7 |
 
    Every field came back as made on all five (m1 ledgers, m2 certificates, m3 natures); m4: the challan fields in
-   FinComVoucherObject's answer on all five (8-26 ms, the request unchanged); m5: Tally responding after every request.
-   Well under the 2-second rule; earlier run 38161708408 (m1-m3) agrees.
+   FinComVoucherObject's answer on all five (8-81 ms, the request unchanged); m5: Tally responding after every request,
+   no request failed. Well under the 2-second rule; the four rows' worst cases are in the allow-list table.
 
 5. **The cloud stores them (migration 73, add-only).** parse.js reads the challan, the per-line kinds, the per-nature detail
    and the TDS references into each voucher's "tdsx", the same way from a Day Book export and from the bridge's body
