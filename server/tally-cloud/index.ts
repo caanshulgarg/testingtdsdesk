@@ -2537,7 +2537,9 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   // the text after the last whole voucher: from a voucher's start (cut at the range end), else its last characters
   const k = text.slice(lastEnd).search(/<VOUCHER\b/);
   const tailStart = k >= 0 ? lastEnd + k : Math.max(lastEnd, text.length - 16);
-  const tail = text.slice(tailStart), tailAt = tailStart < tailLen ? tailAt0 : from;
+  // 2.4.4 (review 244 R3-L1): the cut voucher carried in the next piece's message (kept in the queue's archive) without the
+  // bank details; a tag cut at the range end is whole again when the voucher is re-joined, and cleaned then
+  const tail = dropBankDetails(text.slice(tailStart)), tailAt = tailStart < tailLen ? tailAt0 : from;
   // the days complete now: every day before the latest met (a Day Book is in date order); at the end, all
   const emit = late ? (isLast ? [...only].sort() : []) : Object.keys(pend).filter((d) => isLast || d < top).sort();
   const files: { day: string; vs: string[] }[] = emit.map((d) => ({ day: d, vs: pend[d] || [] }));
@@ -2576,7 +2578,12 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const at = (late ? "late:" : "main:") + from, nextAt = next ? ((next.pass === "late" ? "late:" : "main:") + next.from) : "end";
   const { data: adv, error: advErr } = await timed(db.rpc("tally_upload_advance", { p_job: job, p_at: at, p_next: nextAt, p_msgs: msgs, p_late: lt.length }));
   if (advErr) throw dbFail("upload piece " + job, advErr, "The upload's next part could not be queued just now; it is tried again.");
-  if ((adv as any)?.moved === false) { console.log("tally-ingest upload piece", job, at, "ran again: its work was queued already (" + (adv as any)?.at + ")"); return; }
+  if ((adv as any)?.moved === false) {
+    console.log("tally-ingest upload piece", job, at, "ran again: its work was queued already (" + (adv as any)?.at + ")");
+    // 2.4.4 (review 244 R3-M1): the last piece killed after its advance and before the file's removal: removed now
+    if ((adv as any)?.at === "end") { const { error: rmErr } = await timed(db.storage.from(UPLOAD_BUCKET).remove([path])); if (rmErr) console.error("tally-ingest upload file not removed", job, rmErr.message); }
+    return;
+  }
   await timed(jobStep(job, 0, []));
   // 2.4.4 (review 244 R2-M2): the uploaded Day Book itself (it may hold employees' bank details) is not kept once every piece
   // of it is queued: its days are cut, cleaned and queued; nothing reads the file after the last piece
@@ -2598,7 +2605,15 @@ async function work(budgetMs: number) {
       const why = String((e as Error)?.message || e).slice(0, 300);
       fail("work", why); console.error("tally-ingest work", x.msg_id, x.read_ct, why);
       const fatal = e instanceof Fatal;
-      if (fatal || x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why); }
+      if (fatal || x.read_ct >= TRIES) {
+        await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why);
+        // 2.4.4 (review 244 R2-M2): an upload whose piece failed for good is not read again: its file (it may hold employees'
+        // bank details) is not kept either; the job's own path only
+        if (x.message?.upload && x.message?.job && x.message?.firm) {
+          const { error: rmErr } = await db.storage.from(UPLOAD_BUCKET).remove([String(x.message.firm) + "/" + String(x.message.job) + ".xml"]);
+          if (rmErr) console.error("tally-ingest upload file not removed", x.message.job, rmErr.message);
+        }
+      }
     }
   }
   return n;
@@ -2614,7 +2629,15 @@ async function queueJob(firm: string, client: string, book: string, user: string
   if (body.kind === "stage_days") {
     const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, kind, status").eq("id", String(body.job || "")).maybeSingle();
     if (!j || j.firm_id !== firm || j.client_id !== client || j.kind !== "daybook") return reply(404, { ok: false, error: "No such job for this client." });
-    const days = (Array.isArray(body.days) ? body.days : []).filter((d: any) => isDay(d?.day) && typeof d?.gz === "string").slice(0, 62).map((d: any) => ({ day: d.day, gz: d.gz }));
+    const days0 = (Array.isArray(body.days) ? body.days : []).filter((d: any) => isDay(d?.day) && typeof d?.gz === "string").slice(0, 62).map((d: any) => ({ day: d.day, gz: d.gz }));
+    // 2.4.4 (review 244 R3-L1): a day the browser hands over is queued (and archived) without employees' bank details
+    const days: { day: string; gz: string }[] = [];
+    for (const d of days0) {
+      try {
+        const z = await gunzip(b64bytes(d.gz), MAX_DAY), clean = dropBankDetails(z.text);
+        days.push(clean === z.text ? d : { day: d.day, gz: bytesB64(await gzipBytes(new TextEncoder().encode(clean))) });
+      } catch (_) { days.push(d); }    // not a day it can open: queued as before, refused where it is read
+    }
     if (days.length) { const { error } = await db.rpc("tally_work_send", { p_msg: { job: j.id, firm, book, days } }); if (error) throw new Error(error.message); }
     if (body.last) {
       const { data: cur } = await db.from("tally_jobs").select("done, total").eq("id", j.id).single();
@@ -2650,7 +2673,12 @@ async function queueJob(firm: string, client: string, book: string, user: string
     if (j.sealed) return reply(200, { ok: true, job: j.id, already: true });
     const head = await storageRange(up.path, 0, 0);
     if (!head || !head.size) return reply(404, { ok: false, error: "The Day Book is not in FinCom's storage yet: finish the upload first." });
-    if (Number(up.size) && head.size !== Number(up.size)) return reply(409, { ok: false, error: "The stored file is " + head.size + " bytes, not the " + up.size + " the upload began with: upload it again." });
+    if (Number(up.size) && head.size !== Number(up.size)) {
+      // 2.4.4 (review 244 R3-M1): that file is not read; it is not kept either (it may hold employees' bank details)
+      const { error: rmErr } = await db.storage.from(UPLOAD_BUCKET).remove([up.path]);
+      if (rmErr) console.error("tally-ingest upload file not removed", j.id, rmErr.message);
+      return reply(409, { ok: false, error: "The stored file is " + head.size + " bytes, not the " + up.size + " the upload began with: upload it again." });
+    }
     // review M2: one conditional update (where not sealed, returning): only the call that sealed it queues the split. Review
     // M3: the job's cursor starts at the first piece ('main:0'). Review L3: the job's own book, never the company linked now
     const { data: won, error: se } = await db.from("tally_jobs").update({ sealed: true, status: "running", updated_at: new Date().toISOString(), upload: { ...up, at: "main:0" } })
