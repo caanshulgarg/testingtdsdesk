@@ -65,7 +65,11 @@ const TDSTally = {
   split(v){
     const x = v && v.tdsx, k = (x && x.kinds) || [];
     if (!k.length || !this.isTds(x)) return null;
-    const L = Books.lines(v), duty = new Set(L.tdsPaid.map(t => t.ledger)), paid = r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
+    const L = Books.lines(v), duty = new Set(L.tdsPaid.map(t => t.ledger));
+    let paid = r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
+    // bridge 2.4.4: salary TDS (Stat Payment of Income Tax) is paid from the Income Tax pay head, which the books do not read
+    // as a TDS ledger: what it pays is the lines Tally marks with a kind of payment
+    if (!(paid > 0) && /^income\s*tax/i.test(String(x.stat || ""))){ paid = r2(k.reduce((a, z) => a + Math.abs(num(z.amt)), 0)); k.forEach(z => duty.add(z.ledger)); }
     const o = {tax: 0, interest: 0, fee: 0, others: 0};
     let out = 0;
     k.forEach(z => {
@@ -89,7 +93,14 @@ const TDSTally = {
     (b.vouchers || []).forEach(v => {
       const x = v.tdsx;
       if (!x || v.cancel || v.opt || !this.isTds(x)) return;
-      const sp = this.split(v), tdsPaid = Books.lines(v).tdsPaid.reduce((a, t) => a + t.amount, 0);
+      const sp = this.split(v);
+      let tdsPaid = Books.lines(v).tdsPaid.reduce((a, t) => a + t.amount, 0);
+      // bridge 2.4.4: salary TDS (Stat Payment of Income Tax) is paid from the Income Tax pay head, which the books do not
+      // read as a TDS ledger: its tax is the lines Tally marks Tax (TYPEOFTAXPAYMENT), else the pay head's (Payroll, src/js/73)
+      if (!(tdsPaid > 0) && /^income\s*tax/i.test(String(x.stat || ""))){
+        tdsPaid = r2((x.kinds || []).filter(z => this.kindOf(z.kind) === "tax").reduce((a, z) => a + Math.abs(num(z.amt)), 0));
+        if (!(tdsPaid > 0) && typeof Payroll === "object") tdsPaid = r2((v.ent || []).filter(e => Payroll.isTds(e.l)).reduce((a, e) => a + Math.abs(num(e.a)), 0));
+      }
       const list = [];
       if (x.challan && x.challan.bsr) list.push({ch: x.challan, nature: x.nature, section: x.section, paid: null});
       (x.periods || []).forEach(p => { if (p.challan && p.challan.bsr) list.push({ch: p.challan, nature: p.nature, section: p.section, paid: p.paid}); });

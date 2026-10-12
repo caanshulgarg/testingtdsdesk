@@ -74,7 +74,7 @@ try:
         ok(all(w in side for w in ["TDS", "GST", "From Tally", "Audit"]) and side.index("From Tally") < side.index("TDS") < side.index("GST"), "TDS and GST in the sidebar; From Tally before them (%s)" % side)
         hash_go("#/c/%s/books/tds/2026-27" % cid)
         secs = E("[...document.querySelectorAll('#app nav[aria-label=TDS] button')].map(b => b.textContent)")
-        ok(secs == ["Returns", "Challans", "26AS & AIS", "TRACES files", "Checks"], "TDS tabs: %s" % secs)
+        ok(secs == ["Returns", "Salary", "Challans", "26AS & AIS", "TRACES files", "Checks"], "TDS tabs: %s" % secs)
         ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1, "Returns: the year's grid of forms × quarters")
         ok(pg.locator("#app [data-tieout]").count() == 0 and pg.locator("#app [data-limits]").count() == 0, "Returns carries no checks under the grid")
         ok(pg.locator("#app [data-ledger-banner]").count() == 1, "the ledgers-to-confirm banner: on Returns")

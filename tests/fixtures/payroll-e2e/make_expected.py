@@ -61,7 +61,7 @@ for p in S["payrolls"]:
         pay_date = [s for s in S["salaryPayments"] if s["date"][:6] == ym][0]["date"]
         c = chal[ym] if tds > 0 else None
         out["annex1"].setdefault(q_of(pay_date), []).append({"employee": r["employee"], "date": pay_date, "paid": str(P(paid)), "tds": str(P(tds)),
-            "challan": [c["bsr"], c["challan"], c["challanDate"]] if c else None})
+            "challan": [c["bsr"], c["challan"].zfill(5), c["challanDate"]] if c else None})   # the challan serial as the return carries it: five digits
 for q in out["annex1"]: out["annex1"][q].sort(key=lambda x: (x["date"], x["employee"]))
 # Annexure II / Form 16 Part B
 for e in S["employees"]:

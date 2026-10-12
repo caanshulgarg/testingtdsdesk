@@ -1,0 +1,7579 @@
+{
+"book": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"tables": {
+"tally_cost_allocs": [
+{
+"alter_id": "101",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "101",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "101",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "101",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "101",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "101",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "101",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "101",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "101",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "101",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "101",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "101",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "101",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "101",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-04-01",
+"gone_at": null,
+"guid": "pe-guid-0001",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "104",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "104",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "104",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "104",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "104",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "104",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "104",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "104",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "104",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "104",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "104",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "104",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "104",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "104",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-05-01",
+"gone_at": null,
+"guid": "pe-guid-0004",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "107",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "107",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "107",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "107",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "107",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "107",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "107",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "107",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "107",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "107",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "107",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "107",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "107",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "107",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-06-01",
+"gone_at": null,
+"guid": "pe-guid-0007",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "110",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "110",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "110",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "110",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "110",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "110",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-07-01",
+"gone_at": null,
+"guid": "pe-guid-0010",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "113",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "113",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "113",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "113",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "113",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "113",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-08-01",
+"gone_at": null,
+"guid": "pe-guid-0013",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "116",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "116",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "116",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "116",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "116",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "116",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-09-01",
+"gone_at": null,
+"guid": "pe-guid-0016",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "119",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "119",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "119",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "119",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "119",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "119",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-10-01",
+"gone_at": null,
+"guid": "pe-guid-0019",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "122",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "122",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "122",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "122",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "122",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "122",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-11-01",
+"gone_at": null,
+"guid": "pe-guid-0022",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-8000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "7000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Farid Khan",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "125",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "125",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "125",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "125",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "125",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "125",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2026-12-01",
+"gone_at": null,
+"guid": "pe-guid-0025",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "128",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "128",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "128",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "128",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "128",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "128",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "128",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "128",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "128",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "128",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "128",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "128",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "128",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "128",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-01-01",
+"gone_at": null,
+"guid": "pe-guid-0028",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "131",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "131",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "131",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "131",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "131",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "131",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "131",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "131",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "131",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "131",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "131",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "131",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "131",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "131",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-02-01",
+"gone_at": null,
+"guid": "pe-guid-0031",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "134",
+"amount": "-50000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "134",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Asha Rao",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "-100000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "134",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "23500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Bimal Das",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "134",
+"amount": "-60000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-30000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "134",
+"amount": "-10000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "5000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Chitra Iyer",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "134",
+"amount": "-70000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-20000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "4000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Dev Malhotra",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "134",
+"amount": "-40000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-16000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "134",
+"amount": "-24000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "1500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Esha Kapoor",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Income Tax"
+},
+{
+"alter_id": "134",
+"amount": "-300000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Basic"
+},
+{
+"alter_id": "134",
+"amount": "-120000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE HRA"
+},
+{
+"alter_id": "134",
+"amount": "-180000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Special Allowance"
+},
+{
+"alter_id": "134",
+"amount": "1800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE PF Employee"
+},
+{
+"alter_id": "134",
+"amount": "200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Professional Tax"
+},
+{
+"alter_id": "134",
+"amount": "165000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"centre": "PE Gita Sharma",
+"day": "2027-03-01",
+"gone_at": null,
+"guid": "pe-guid-0034",
+"ledger": "PE Income Tax"
+}
+],
+"tally_employees": [
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Accountant",
+"gone_at": null,
+"guid": "pe-emp-0",
+"is_group": false,
+"joined": "2024-04-01",
+"left_on": null,
+"name": "PE Asha Rao",
+"pan": "ABCPR1001A",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Manager",
+"gone_at": null,
+"guid": "pe-emp-1",
+"is_group": false,
+"joined": "2023-06-01",
+"left_on": null,
+"name": "PE Bimal Das",
+"pan": "ABCPD1002B",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Senior Accountant",
+"gone_at": null,
+"guid": "pe-emp-2",
+"is_group": false,
+"joined": "2022-01-01",
+"left_on": null,
+"name": "PE Chitra Iyer",
+"pan": "ABCPI1003C",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Consultant",
+"gone_at": null,
+"guid": "pe-emp-3",
+"is_group": false,
+"joined": "2020-04-01",
+"left_on": null,
+"name": "PE Dev Malhotra",
+"pan": "ABCPM1004D",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Analyst",
+"gone_at": null,
+"guid": "pe-emp-4",
+"is_group": false,
+"joined": "2026-07-01",
+"left_on": null,
+"name": "PE Esha Kapoor",
+"pan": "ABCPK1005E",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Driver",
+"gone_at": null,
+"guid": "pe-emp-5",
+"is_group": false,
+"joined": "2025-01-01",
+"left_on": "2026-12-31",
+"name": "PE Farid Khan",
+"pan": "",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "Director",
+"gone_at": null,
+"guid": "pe-emp-6",
+"is_group": false,
+"joined": "2019-04-01",
+"left_on": null,
+"name": "PE Gita Sharma",
+"pan": "ABCPS1007G",
+"parent": "PE Office Staff"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"category": "Primary Cost Category",
+"designation": "",
+"gone_at": null,
+"guid": "pe-grp",
+"is_group": true,
+"joined": null,
+"left_on": null,
+"name": "PE Office Staff",
+"pan": "",
+"parent": ""
+}
+],
+"tally_ledgers": [
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "Basic Salary",
+"name": "PE Basic",
+"pay_stat_type": "",
+"pay_type": "Earnings for Employees"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "House Rent Allowance",
+"name": "PE HRA",
+"pay_stat_type": "",
+"pay_type": "Earnings for Employees"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "",
+"name": "PE Income Tax",
+"pay_stat_type": "Income Tax",
+"pay_type": "Employees' Statutory Deductions"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "",
+"name": "PE PF Employee",
+"pay_stat_type": "PF Account (A/c No. 1)",
+"pay_type": "Employees' Statutory Deductions"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "",
+"name": "PE PF Employer",
+"pay_stat_type": "PF Account (A/c No. 1)",
+"pay_type": "Employer's Statutory Contributions"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "",
+"name": "PE Professional Tax",
+"pay_stat_type": "Professional Tax",
+"pay_type": "Employees' Statutory Deductions"
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": false,
+"it_component": "",
+"name": "PE Salary Bank",
+"pay_stat_type": "",
+"pay_type": ""
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": false,
+"it_component": "",
+"name": "PE Salary Payable",
+"pay_stat_type": "",
+"pay_type": ""
+},
+{
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"for_payroll": true,
+"it_component": "",
+"name": "PE Special Allowance",
+"pay_stat_type": "",
+"pay_type": "Earnings for Employees"
+}
+],
+"tally_lines": [
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-600000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-218000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-307000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0001",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0002",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0002",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-600000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-218000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-307000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0004",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0003",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0003",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0005",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0005",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-600000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-218000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-307000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0007",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0006",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0006",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0008",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "908500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0008",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0010",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0009",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "204500",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0009",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0011",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0011",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0013",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0012",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0012",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0014",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0014",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0016",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0015",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0015",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0017",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0017",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0019",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0018",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0018",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0020",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0020",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0022",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0021",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0021",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0023",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0023",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-640000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-234000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-331000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "12600",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1400",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0025",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0024",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0024",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0026",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "985000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0026",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-620000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-226000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-324000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0028",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0027",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "206000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0027",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0029",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0029",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-620000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-226000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-324000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0031",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0030",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0030",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0032",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0032",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "-620000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE Basic",
+"rate": ""
+},
+{
+"amount": "-226000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE HRA",
+"rate": ""
+},
+{
+"amount": "-324000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE Special Allowance",
+"rate": ""
+},
+{
+"amount": "10800",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE PF Employee",
+"rate": ""
+},
+{
+"amount": "1200",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE Professional Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0034",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "-199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0033",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0033",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0035",
+"hsn": "",
+"ledger": "PE Salary Payable",
+"rate": ""
+},
+{
+"amount": "959000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0035",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+},
+{
+"amount": "-199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0036",
+"hsn": "",
+"ledger": "PE Income Tax",
+"rate": ""
+},
+{
+"amount": "199000",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"guid": "pe-guid-0036",
+"hsn": "",
+"ledger": "PE Salary Bank",
+"rate": ""
+}
+],
+"tally_salary_pays": [
+{
+"alter_id": "102",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "102",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "102",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "102",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "102",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "102",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-04-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0002",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-04-02"
+},
+{
+"alter_id": "105",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "105",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "105",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "105",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "105",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "105",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-05-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0005",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-05-02"
+},
+{
+"alter_id": "108",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "108",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "108",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "108",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "108",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "108",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-06-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0008",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-06-02"
+},
+{
+"alter_id": "111",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "111",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-07-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0011",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-07-02"
+},
+{
+"alter_id": "114",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "114",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-08-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0014",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-08-02"
+},
+{
+"alter_id": "117",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "117",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-09-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0017",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-09-02"
+},
+{
+"alter_id": "120",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "120",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-10-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0020",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-10-02"
+},
+{
+"alter_id": "123",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "123",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-11-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0023",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-11-02"
+},
+{
+"alter_id": "126",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "26000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Farid Khan",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "126",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2026-12-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0026",
+"ledger": "PE Salary Bank",
+"paid_on": "2026-12-02"
+},
+{
+"alter_id": "129",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "129",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "129",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "129",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "129",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "129",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-01-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0029",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-01-02"
+},
+{
+"alter_id": "132",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "132",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "132",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "132",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "132",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "132",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-02-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0032",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-02-02"
+},
+{
+"alter_id": "135",
+"amount": "98000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Asha Rao",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+},
+{
+"alter_id": "135",
+"amount": "174500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Bimal Das",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+},
+{
+"alter_id": "135",
+"amount": "93000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Chitra Iyer",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+},
+{
+"alter_id": "135",
+"amount": "84000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Dev Malhotra",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+},
+{
+"alter_id": "135",
+"amount": "76500.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Esha Kapoor",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+},
+{
+"alter_id": "135",
+"amount": "433000.00",
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"day": "2027-03-02",
+"employee": "PE Gita Sharma",
+"gone_at": null,
+"guid": "pe-guid-0035",
+"ledger": "PE Salary Bank",
+"paid_on": "2027-03-02"
+}
+],
+"tally_vouchers": [
+{
+"alter_id": 101,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-04-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0001",
+"narration": "PE-PAY-202604 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202604",
+"vtype": "Payroll"
+},
+{
+"alter_id": 102,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-04-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0002",
+"narration": "PE-SAL-202604 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202604",
+"vtype": "Payment"
+},
+{
+"alter_id": 103,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-05-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0003",
+"narration": "PE-TDS-202604 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20260502",
+"no": "1001"
+},
+"from": "20260401",
+"kinds": [
+{
+"amt": -204500,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 103,
+"vno": "PE-TDS-202604",
+"vtype": "Payment"
+},
+{
+"alter_id": 104,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-05-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0004",
+"narration": "PE-PAY-202605 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202605",
+"vtype": "Payroll"
+},
+{
+"alter_id": 105,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-05-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0005",
+"narration": "PE-SAL-202605 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202605",
+"vtype": "Payment"
+},
+{
+"alter_id": 106,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-06-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0006",
+"narration": "PE-TDS-202605 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20260602",
+"no": "1002"
+},
+"from": "20260501",
+"kinds": [
+{
+"amt": -204500,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 106,
+"vno": "PE-TDS-202605",
+"vtype": "Payment"
+},
+{
+"alter_id": 107,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-06-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0007",
+"narration": "PE-PAY-202606 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202606",
+"vtype": "Payroll"
+},
+{
+"alter_id": 108,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-06-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0008",
+"narration": "PE-SAL-202606 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202606",
+"vtype": "Payment"
+},
+{
+"alter_id": 109,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-07-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0009",
+"narration": "PE-TDS-202606 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20260702",
+"no": "1003"
+},
+"from": "20260601",
+"kinds": [
+{
+"amt": -204500,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 109,
+"vno": "PE-TDS-202606",
+"vtype": "Payment"
+},
+{
+"alter_id": 110,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-07-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0010",
+"narration": "PE-PAY-202607 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202607",
+"vtype": "Payroll"
+},
+{
+"alter_id": 111,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-07-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0011",
+"narration": "PE-SAL-202607 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202607",
+"vtype": "Payment"
+},
+{
+"alter_id": 112,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-08-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0012",
+"narration": "PE-TDS-202607 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20260802",
+"no": "1004"
+},
+"from": "20260701",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 112,
+"vno": "PE-TDS-202607",
+"vtype": "Payment"
+},
+{
+"alter_id": 113,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-08-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0013",
+"narration": "PE-PAY-202608 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202608",
+"vtype": "Payroll"
+},
+{
+"alter_id": 114,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-08-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0014",
+"narration": "PE-SAL-202608 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202608",
+"vtype": "Payment"
+},
+{
+"alter_id": 115,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-09-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0015",
+"narration": "PE-TDS-202608 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20260902",
+"no": "1005"
+},
+"from": "20260801",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 115,
+"vno": "PE-TDS-202608",
+"vtype": "Payment"
+},
+{
+"alter_id": 116,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-09-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0016",
+"narration": "PE-PAY-202609 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202609",
+"vtype": "Payroll"
+},
+{
+"alter_id": 117,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-09-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0017",
+"narration": "PE-SAL-202609 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202609",
+"vtype": "Payment"
+},
+{
+"alter_id": 118,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-10-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0018",
+"narration": "PE-TDS-202609 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20261002",
+"no": "1006"
+},
+"from": "20260901",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 118,
+"vno": "PE-TDS-202609",
+"vtype": "Payment"
+},
+{
+"alter_id": 119,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-10-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0019",
+"narration": "PE-PAY-202610 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202610",
+"vtype": "Payroll"
+},
+{
+"alter_id": 120,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-10-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0020",
+"narration": "PE-SAL-202610 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202610",
+"vtype": "Payment"
+},
+{
+"alter_id": 121,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-11-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0021",
+"narration": "PE-TDS-202610 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20261102",
+"no": "1007"
+},
+"from": "20261001",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 121,
+"vno": "PE-TDS-202610",
+"vtype": "Payment"
+},
+{
+"alter_id": 122,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-11-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0022",
+"narration": "PE-PAY-202611 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202611",
+"vtype": "Payroll"
+},
+{
+"alter_id": 123,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-11-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0023",
+"narration": "PE-SAL-202611 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202611",
+"vtype": "Payment"
+},
+{
+"alter_id": 124,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-12-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0024",
+"narration": "PE-TDS-202611 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20261202",
+"no": "1008"
+},
+"from": "20261101",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 124,
+"vno": "PE-TDS-202611",
+"vtype": "Payment"
+},
+{
+"alter_id": 125,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-12-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0025",
+"narration": "PE-PAY-202612 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202612",
+"vtype": "Payroll"
+},
+{
+"alter_id": 126,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2026-12-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0026",
+"narration": "PE-SAL-202612 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202612",
+"vtype": "Payment"
+},
+{
+"alter_id": 127,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-01-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0027",
+"narration": "PE-TDS-202612 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20270102",
+"no": "1009"
+},
+"from": "20261201",
+"kinds": [
+{
+"amt": -206000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 127,
+"vno": "PE-TDS-202612",
+"vtype": "Payment"
+},
+{
+"alter_id": 128,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-01-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0028",
+"narration": "PE-PAY-202701 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202701",
+"vtype": "Payroll"
+},
+{
+"alter_id": 129,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-01-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0029",
+"narration": "PE-SAL-202701 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202701",
+"vtype": "Payment"
+},
+{
+"alter_id": 130,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-02-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0030",
+"narration": "PE-TDS-202701 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20270202",
+"no": "1010"
+},
+"from": "20270101",
+"kinds": [
+{
+"amt": -199000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 130,
+"vno": "PE-TDS-202701",
+"vtype": "Payment"
+},
+{
+"alter_id": 131,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-02-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0031",
+"narration": "PE-PAY-202702 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202702",
+"vtype": "Payroll"
+},
+{
+"alter_id": 132,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-02-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0032",
+"narration": "PE-SAL-202702 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202702",
+"vtype": "Payment"
+},
+{
+"alter_id": 133,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-03-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0033",
+"narration": "PE-TDS-202702 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20270302",
+"no": "1011"
+},
+"from": "20270201",
+"kinds": [
+{
+"amt": -199000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 133,
+"vno": "PE-TDS-202702",
+"vtype": "Payment"
+},
+{
+"alter_id": 134,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-03-01",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0034",
+"narration": "PE-PAY-202703 payroll (payroll e2e test data)",
+"optional": false,
+"party": "PE Salary Payable",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-PAY-202703",
+"vtype": "Payroll"
+},
+{
+"alter_id": 135,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-03-02",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0035",
+"narration": "PE-SAL-202703 salary paid (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": null,
+"tds_tally_alter_id": "",
+"vno": "PE-SAL-202703",
+"vtype": "Payment"
+},
+{
+"alter_id": 136,
+"book_id": "f79e4bc3-871d-4482-874d-0000000e2e44",
+"cancelled": false,
+"cmp_gstin": "",
+"day": "2027-03-31",
+"deleted_at": null,
+"gstin": "",
+"guid": "pe-guid-0036",
+"narration": "PE-TDS-202703 TDS on salary (payroll e2e test data)",
+"optional": false,
+"party": "",
+"pos": "",
+"ref": "",
+"ref_date": "",
+"tds_tally": {
+"challan": {
+"bank": "HDFC Bank Ltd",
+"branch": "",
+"bsr": "0510308",
+"chq": "",
+"chqDate": "",
+"date": "20270331",
+"no": "1012"
+},
+"from": "20270301",
+"kinds": [
+{
+"amt": -199000,
+"kind": "Tax",
+"ledger": "PE Income Tax",
+"n": 0,
+"nature": ""
+}
+],
+"nature": "",
+"periods": [],
+"refs": [],
+"section": "192",
+"stat": "Income Tax",
+"to": ""
+},
+"tds_tally_alter_id": 136,
+"vno": "PE-TDS-202703",
+"vtype": "Payment"
+}
+]
+}
+}

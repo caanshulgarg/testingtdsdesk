@@ -213,6 +213,8 @@ run_parse_tdsfields.mjs               120
 run_migration74.py                    120
 run_parse_payroll.mjs                 120
 run_payroll_ingest.py                 120
+run_e2e_payroll.py                    120
+run_payroll_ui.py                     180  TDSDESK_SITE=../app/dist-test
 run_recorder_masters_server.py        180
 run_ledger_delete_guid.py             120
 run_tds_rate_words.py                 120  TDSDESK_SITE=../app/dist-test
