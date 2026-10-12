@@ -43,7 +43,7 @@ export default function App() {
       <WhyNotes />
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
-        return Screen ? createPortal(<Guard name={name} v={v}><Suspense fallback={null}><Screen {...props} /></Suspense></Guard>, host, key) : null;
+        return Screen ? createPortal(<Guard name={name} wall="panel" v={v}><Suspense fallback={null}><Screen {...props} /></Suspense></Guard>, host, key) : null;
       })}
     </>
   );

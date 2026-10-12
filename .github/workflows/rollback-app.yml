@@ -1,0 +1,61 @@
+# Roll the app on staging.fincom.live back to an earlier publish (reliability item 1). By hand only: GitHub -> Actions ->
+# "Roll back the app" -> Run workflow. It runs .github/scripts/rollback-app.sh on main: the app's files of review/ go
+# back to the publish before the one on the site (or "steps" publishes back), the bridge's files (bridge-go, latest.json,
+# the setups) never change, and the run's log says what went back. The site shows it in about a minute.
+name: Roll back the app
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "How many publishes back (1 = the one before the build on the site now)"
+        required: true
+        default: "1"
+      to:
+        description: "Or: the publish commit to go to (leave empty to use steps)"
+        required: false
+        default: ""
+      dry:
+        description: "Only show what would go back (push nothing)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+# one rollback at a time (the uptime watch's status/ commits touch status/ only, and retry when main moved)
+concurrency:
+  group: main-site
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          filter: blob:none
+      - name: Roll back
+        # shell: bash runs with pipefail, so a refusal fails the run through the tee
+        shell: bash
+        env:
+          STEPS: ${{ inputs.steps }}
+          TO: ${{ inputs.to }}
+          DRY_RUN: ${{ inputs.dry }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "FinCom rollback"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ "$DRY_RUN" = true ] && export DRY=1
+          if [ -n "$TO" ]; then bash .github/scripts/rollback-app.sh --to "$TO" | tee rollback.txt
+          else bash .github/scripts/rollback-app.sh --steps "$STEPS" | tee rollback.txt; fi
+          { echo '```'; cat rollback.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # a push made with this workflow's token may not start a Pages build by itself: ask for one
+          if [ "$DRY_RUN" != true ]; then
+            curl -sS -o /dev/null -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages/builds" || true
+          fi

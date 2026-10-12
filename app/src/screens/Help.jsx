@@ -8,6 +8,7 @@
 // files, rtext, rfiles, rint, dstat, dpri, dfirm, dq, busy).
 import Loading from "../parts/Loading.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import StatusLink, { statusLinkOn } from "../parts/StatusLink.jsx";
 
 const Pill = ({ kind, v }) => {
   const lab = kind === "st" ? (SUP.ST[v] || v) : kind === "pri" ? ((SUP.PRI.find((p) => p[0] === v) || [, v])[1]) : kind === "sla" ? ({ track: "on track", risk: "at risk", late: "late", met: "met" })[v] : v;
@@ -187,7 +188,7 @@ export default function Help() {
   else if (s.list === null) { if (!s.loading) { s.loading = true; SUP.load(true).then(() => { s.loading = false; render(); }); } body = <Loading what="tickets" />; }
   else body = s.tab === "desk" ? <Desk /> : <Mine />;
   const tabs = [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : []);
-  return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>
+  return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.{statusLinkOn() && <> Is FinCom working? See <StatusLink />.</>}</p></div>
     {SUP.on() && <Sup a="new" className="btn primary">+ New ticket</Sup>}</div>
     <nav className="sbar" aria-label="Help">{tabs.map(([id, l, c]) => <button key={id} aria-selected={s.tab === id} onClick={() => supTab(id)}>{l}{c ? <> <span className="sbar-n">{c}</span></> : null}</button>)}</nav>
     {body}</div>;

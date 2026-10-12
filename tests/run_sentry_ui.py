@@ -6,6 +6,10 @@ address carries ids in its hash; a fetch and a click carry them too. Sentry's in
 every envelope the page would send is caught and must carry none of the made-up data, no replay or feedback item, only
 the allowed fields, environment "staging", the page's NAME only. Then: on any other host than staging (no force), or with
 the browser's switch off, nothing at all is sent. A failure here fails CI (tests/ci/tests.txt).
+Reliability item 2 (12-Oct-2026): the speed of real use. With the sample forced to every page open, the page load's
+Web Vitals (LCP, FCP, CLS, TTFB) come as one transaction and a slow click's INP as one span, each tagged with the release,
+named "fincom-app", carrying none of the made-up data, no address with ids, no element's words; no request of the page
+carries a trace header. With the sample at 0, errors still go and no speed sample does.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sentry_ui.py"""
 import os, re, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -31,9 +35,14 @@ ALLOWED = {"event_id", "timestamp", "platform", "level", "release", "environment
 BILLS = [("ALPHA TRADERS", "AAAPA1234A", "AB/101", "2026-09-10", 125000), ("Zeta Supplies Ltd", "ABCPK7777Q", "ZC/77", "2026-09-11", 2500.5),
          ("Kappa Labs", "ABCPK7777Q", "INV-2026-0042", "2026-09-12", 118000)]
 
-def page(br, force=True, off=False):
+TX_ALLOWED = {"type", "event_id", "timestamp", "start_timestamp", "platform", "release", "environment", "transaction", "transaction_info", "contexts", "measurements", "spans", "tags", "user", "request", "sdk"}
+SPAN_ALLOWED = {"description", "op", "span_id", "parent_span_id", "segment_id", "trace_id", "start_timestamp", "timestamp", "exclusive_time", "is_segment", "origin", "status", "data", "measurements"}
+traced = []
+def page(br, force=True, off=False, perf=1):
     ctx = br.new_context(viewport={"width": 1400, "height": 950})
     if force: ctx.add_init_script("window.__fincomSentryForce = true;")
+    # the test's sample: every page open (1) or none (0); the app's own is PERF_SAMPLE_RATE (src/sentry.js)
+    if perf is not None: ctx.add_init_script("window.__fincomPerfRate = %s;" % perf)
     if off: ctx.add_init_script("try { localStorage.setItem('fincom.sentry', 'off'); } catch (e) {}")
     got, other = [], []
     def ingest(route):
@@ -46,6 +55,8 @@ def page(br, force=True, off=False):
     ctx.route(re.compile(r"^https?://[^/]*sentry\.io/.*"), lambda r: (other.append(r.request.url), r.abort()))
     ctx.route(INGEST + "/**", ingest)
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    # no request of the page may carry Sentry's trace headers (the cloud would see them; CORS would refuse them)
+    pg.on("request", lambda r: traced.append(r.url) if ("sentry-trace" in r.headers or "baggage" in r.headers) and "sentry.io" not in r.url else None)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
     return ctx, pg, got, other
 
@@ -96,6 +107,14 @@ with sync_playwright() as p:
     E("() => { S.view = 'home'; S.homeTab = 'tally'; render(); }"); pg.wait_for_timeout(1500)
     E(FORCE, [texts, "tally"]); pg.wait_for_timeout(600)
     E("(t) => window.__fincomReport(new Error(t), 'TallyHome')", texts[8])
+    # a slow click (its handler busy for 150 ms) on a button with business data in its words and label: its INP is sent
+    # when the page is hidden, as one span
+    E("""() => { const b = document.createElement('button'); b.id = 'slowClick'; b.textContent = 'Post ALPHA TRADERS ₹1,25,000.00 AB/101';
+      b.setAttribute('aria-label', 'Post Zeta Supplies Ltd 09AANFG3202D1ZR'); b.className = 'cmufksrrqjub2g'; b.style.cssText = 'position:fixed;top:40%;left:45%;z-index:99999';
+      b.addEventListener('click', () => { const t = performance.now(); while (performance.now() - t < 150) {} }); document.body.appendChild(b); }""")
+    pg.click("#slowClick"); pg.wait_for_timeout(400); pg.click("#slowClick"); pg.wait_for_timeout(600)
+    E("""() => { Object.defineProperty(document, 'visibilityState', {value: 'hidden', configurable: true}); Object.defineProperty(document, 'hidden', {value: true, configurable: true});
+      document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('pagehide')); }""")
     pg.wait_for_timeout(3000)
     ctx.close()
 
@@ -103,6 +122,7 @@ with sync_playwright() as p:
     ok(len(got) >= 8, "the forced errors were reported (%d envelopes)" % len(got))
     ok(not other, "nothing went to any other Sentry address or to the cloud (%s)" % other[:3])
     types, events, bad_fields, all_text = set(), [], set(), ""
+    txs, spans = [], []
     for g in got:
         all_text += g["url"] + "\n" + g["body"] + "\n"
         lines = [l for l in g["body"].split("\n") if l.strip()]
@@ -114,10 +134,25 @@ with sync_playwright() as p:
                 except Exception: payload = None
                 if ih.get("type") == "event" and isinstance(payload, dict):
                     events.append(payload); bad_fields |= set(payload) - ALLOWED
+                if ih.get("type") == "transaction" and isinstance(payload, dict): txs.append(payload)
+                if ih.get("type") == "span" and isinstance(payload, dict): spans.append(payload)
                 i += 1
     lk = leaks(all_text)
     ok(not lk, "no made-up business data in any envelope" + ("" if not lk else ": " + ", ".join(lk) + "\n" + all_text[:3000]))
-    ok(types <= {"event"}, "only event items: no replay, feedback, attachment, session or client report (%s)" % sorted(t or "" for t in types))
+    ok(types <= {"event", "transaction", "span"}, "only event, transaction and span items: no replay, feedback, attachment, session, profile or client report (%s)" % sorted(t or "" for t in types))
+    # ---- the speed of real use (reliability item 2)
+    ok(len(txs) >= 1, "the page load's speed was sent as a transaction (%d)" % len(txs))
+    ok(all(set(t) <= TX_ALLOWED for t in txs), "only the allowed fields in a speed sample (%s)" % sorted(set().union(*[set(t) - TX_ALLOWED for t in txs]) if txs else []))
+    ok(txs and all(t.get("transaction") == "fincom-app" and t.get("environment") == "staging" and re.match(r"^fincom-app-[0-9a-z-]+$", t.get("release", "")) for t in txs), "each speed sample: fincom-app, staging, tagged with the release")
+    vit = set().union(*[set(t.get("measurements", {})) for t in txs]) if txs else set()
+    ok({"fcp", "ttfb"} <= vit and vit <= {"lcp", "fcp", "cls", "ttfb", "ttfb.requestTime", "inp"}, "Web Vitals in the page load's sample (%s)" % sorted(vit))
+    ok(all(isinstance(m.get("value"), (int, float)) for t in txs for m in t.get("measurements", {}).values()), "each a number")
+    ok(all(t.get("spans") == [] for t in txs), "no span inside a page load's sample (no request, script or mark with its address)")
+    ok(len(spans) >= 1 and all(set(x) <= SPAN_ALLOWED for x in spans), "the slow click's INP was sent as one span, with the allowed fields only (%d)" % len(spans))
+    ok(spans and all(x.get("description") == "interaction" and (x.get("data") or {}).get("transaction") == "fincom-app" and re.match(r"^fincom-app-", (x.get("data") or {}).get("release", "")) for x in spans), "the INP span: 'interaction' on fincom-app, with the release")
+    ok(any("inp" in (x.get("measurements") or {}) for x in spans), "INP measured (%s)" % [((x.get("measurements") or {}).get("inp") or {}).get("value") for x in spans])
+    ok(not re.search(r"slowClick|aria-label|cmufksrrqjub2g|button\.", all_text), "no element's id, class, label or words in any sample")
+    ok(not traced, "no request of the page carried a trace header (%s)" % traced[:3])
     ok(not bad_fields, "only the allowed fields in an event (%s)" % sorted(bad_fields))
     ok(events and all(e.get("environment") == "staging" for e in events), "environment 'staging' on every event")
     ok(all(re.match(r"^fincom-app-[0-9a-z-]+$", e.get("release", "")) for e in events), "a release on every event (%s)" % sorted(set(e.get("release") for e in events)))
@@ -141,6 +176,13 @@ with sync_playwright() as p:
     ok(any("Cannot" in json.dumps(e) or "Error" in json.dumps(e) for e in events), "the error's type is kept")
 
     # ---- staging only: the same page on this host without the test's force sends nothing; nor with the browser's switch off
+    # ---- the sample at 0: an error still goes, no speed sample does
+    ctx, pg, got3, _ = page(br, perf=0)
+    pg.wait_for_function("typeof window.__fincomReport === 'function'", timeout=10000)
+    pg.evaluate("() => { setTimeout(() => { throw new Error('boom'); }, 0); }"); pg.wait_for_timeout(3500)
+    t3 = [json.loads(l).get("type") for g in got3 for l in g["body"].split("\n")[1:] if l.strip().startswith('{"type"')]
+    ok("event" in t3 and "transaction" not in t3 and "span" not in t3, "sample at 0: the error is reported, no speed sample (%s)" % t3)
+    ctx.close()
     for force, off, what in ((False, False, "another host than staging.fincom.live (no force)"), (True, True, "the browser's switch off (localStorage fincom.sentry = off)")):
         ctx, pg, got2, other2 = page(br, force=force, off=off)
         pg.evaluate("() => { setTimeout(() => { throw new Error('ALPHA TRADERS 09AANFG3202D1ZR'); }, 0); Promise.reject(new Error('x')); }"); pg.wait_for_timeout(2000)

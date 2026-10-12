@@ -231,3 +231,70 @@ export function scrubEvent(e) {
     version: typeof sdk.version === "string" && /^[0-9][0-9A-Za-z.+-]{0,30}$/.test(sdk.version) ? sdk.version : "0", settings: { infer_ip: "never" } };
   return o;
 }
+
+// ---- speed samples (reliability item 2, approved 12-Oct-2026): the app's page loads (a transaction) and its slowest
+// interaction (INP, a span of its own), on a sample of page opens. Rebuilt from the allowed fields only, as an error is:
+// the Web Vitals as numbers, the release, "staging", the page's NAME, ids made by Sentry; never a span's words (requests,
+// scripts), an element's text, label or path, an address with ids, an email.
+export const SPEED_NAME = "fincom-app";
+const VITALS = ["lcp", "fcp", "cls", "ttfb", "ttfb.requestTime", "inp"];
+const UNITS = ["millisecond", "second", "", "none", "ratio"];
+const HEX = (n) => new RegExp("^[0-9a-f]{" + n + "}$");
+const SPAN_OP = /^(pageload|navigation|ui\.interaction\.(click|press|hover|drag))$/;
+function measurements(m, keep) {
+  const o = {};
+  if (m && typeof m === "object") for (const k of keep) {
+    const v = m[k];
+    if (v && typeof v.value === "number" && isFinite(v.value)) o[k] = { value: v.value, unit: UNITS.includes(v.unit) ? v.unit : "millisecond" };
+  }
+  return o;
+}
+function traceCtx(t) {
+  if (!t || typeof t !== "object" || !HEX(32).test(t.trace_id) || !HEX(16).test(t.span_id)) return null;
+  const o = { trace_id: t.trace_id, span_id: t.span_id, op: SPAN_OP.test(t.op) ? t.op : "other" };
+  if (typeof t.origin === "string" && /^[a-z][a-z0-9_.]{0,60}$/.test(t.origin)) o.origin = t.origin;
+  if (typeof t.status === "string" && /^[a-z_]{1,30}$/.test(t.status)) o.status = t.status;
+  return o;
+}
+// a page load's transaction; null for anything else
+export function scrubTransaction(e) {
+  if (!e || typeof e !== "object" || e.type !== "transaction") return null;
+  const trace = traceCtx(e.contexts && e.contexts.trace);
+  if (!trace) return null;
+  // the shared parts as an error has them (release, tags, user, request, browser), then the speed fields
+  const base = scrubEvent({ ...e, type: "event", exception: undefined, message: undefined, breadcrumbs: undefined }) || {};
+  const o = { type: "transaction" };
+  for (const k of ["event_id", "timestamp", "platform", "release", "environment", "tags", "user", "request", "sdk"]) if (base[k] !== undefined) o[k] = base[k];
+  if (typeof e.start_timestamp === "number") o.start_timestamp = e.start_timestamp;
+  o.transaction = SPEED_NAME; o.transaction_info = { source: "custom" };
+  o.contexts = { trace, ...(base.contexts || {}) };
+  o.measurements = measurements(e.measurements, VITALS);
+  o.spans = [];
+  return o;
+}
+// a span sent on its own (the INP of an interaction), or a page load's child span: always an object (Sentry sends the
+// raw span when it gets none back), with no words but fixed ones
+const SPAN_DATA = {
+  "sentry.op": (v) => (SPAN_OP.test(v) ? v : undefined),
+  "sentry.origin": (v) => (typeof v === "string" && /^[a-z][a-z0-9_.]{0,60}$/.test(v) ? v : undefined),
+  "sentry.exclusive_time": (v) => (typeof v === "number" && isFinite(v) ? v : undefined),
+  "sentry.pageload.span_id": (v) => (HEX(16).test(v) ? v : undefined),
+  release: (v) => (typeof v === "string" && RELEASE.test(v) ? v : undefined),
+  "user_agent.original": (v) => (typeof v === "string" && /^[A-Za-z0-9 ._()\/;:,+-]{1,300}$/.test(v) ? v : undefined),
+};
+export function scrubSpan(s) {
+  const x = s && typeof s === "object" ? s : {};
+  const o = { description: "interaction", op: SPAN_OP.test(x.op) ? x.op : "other" };
+  for (const k of ["span_id", "parent_span_id", "segment_id"]) if (HEX(16).test(x[k])) o[k] = x[k];
+  if (HEX(32).test(x.trace_id)) o.trace_id = x.trace_id;
+  for (const k of ["start_timestamp", "timestamp", "exclusive_time"]) if (typeof x[k] === "number" && isFinite(x[k])) o[k] = x[k];
+  if (typeof x.is_segment === "boolean") o.is_segment = x.is_segment;
+  if (typeof x.origin === "string" && /^[a-z][a-z0-9_.]{0,60}$/.test(x.origin)) o.origin = x.origin;
+  if (typeof x.status === "string" && /^[a-z_]{1,30}$/.test(x.status)) o.status = x.status;
+  const data = { environment: SENTRY_ENVIRONMENT, transaction: SPEED_NAME };
+  for (const [k, ok] of Object.entries(SPAN_DATA)) { const v = x.data && x.data[k]; if (v !== undefined) { const c = ok(v); if (c !== undefined) data[k] = c; } }
+  o.data = data;
+  const m = measurements(x.measurements, ["inp"]);
+  if (Object.keys(m).length) o.measurements = m;
+  return o;
+}

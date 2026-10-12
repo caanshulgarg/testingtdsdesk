@@ -25,6 +25,10 @@ if git diff --cached --quiet; then echo "Preview already up to date."; else
   outside=$(git diff --name-only origin/main HEAD | grep -v "^$folder/" || true)
   if [ -n "$outside" ]; then echo "Files outside $folder/ would change: stopped."; echo "$outside"
   elif [ -n "$DRY" ]; then echo "DRY: nothing pushed."
-  else git push -q origin HEAD:main; echo "Published; staging.fincom.live/$folder/ shows it in about a minute."; fi
+  else
+    # the uptime watch commits status/ to main now and then (.github/workflows/uptime.yml): if main moved meanwhile, this
+    # publish goes on top of it, as long as only <folder>/ is then still this commit's change
+    git push -q origin HEAD:main 2>/dev/null || { git pull -q --rebase origin main && [ -z "$(git diff --name-only HEAD~1 HEAD | grep -v "^$folder/")" ] && git push -q origin HEAD:main; }
+    echo "Published; staging.fincom.live/$folder/ shows it in about a minute."; fi
 fi
 cd - >/dev/null; git worktree remove --force "$tmp"

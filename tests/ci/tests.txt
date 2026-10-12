@@ -250,3 +250,9 @@ run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
 run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test
 # stability (11-Oct-2026, the owner: "as stable and strong as Claude, anthropic.com, Microsoft"): the frame before the program, the FinCom loader's rules, one loading state, no layout shift on any page, the top bar's fixed places
 run_stability.py                      300  TDSDESK_SITE=../app/dist-test
+# reliability (12-Oct-2026, the owner's "Ok" to items 1-5): the app's one-click rollback (and publish-ops.sh), the uptime watch,
+# crash walls around each screen and panel, the status page and its links (the real-user speed is in run_sentry_*)
+run_rollback_app.py                   120
+run_uptime_watch.py                   120
+run_crash_walls.py                    180  TDSDESK_SITE=../app/dist-test
+run_status_page.py                    120  TDSDESK_SITE=../app/dist-test

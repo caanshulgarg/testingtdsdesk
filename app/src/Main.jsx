@@ -66,9 +66,10 @@ export default function Main({ v }) {
     {/* a client's status tabs, the first thing on the page (were a second row of the header: stability batch 1) */}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
-    {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
-    <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
-    {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
+    {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile; a screen that fails to draw
+        shows the crash wall in its place only (reliability item 4: the sidebar and the top bar are outside it) */}
+    <Guard name="this screen" wall="screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
+    {drawerEntry() && <Guard name="the bill drawer" wall="panel" v={v}><Drawer /></Guard>}
     <Guard name="the bar" v={v} quiet><Suspense fallback={null}><Bar /></Suspense></Guard>
     <Legacy html={colPopHtml()} />
   </>;

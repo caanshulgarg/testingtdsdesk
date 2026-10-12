@@ -133,9 +133,62 @@ const appSrc = fs.readFileSync(path.join(ROOT, "app", "src", "sentry.js"), "utf8
 const cloudSrc = fs.readFileSync(path.join(ROOT, "server", "_shared", "sentry.ts"), "utf8");
 ok(/from "\.\.\/\.\.\/server\/_shared\/sentry-scrub\.js"/.test(appSrc) && /beforeSend: *\(?e/.test(appSrc) && /beforeBreadcrumb:/.test(appSrc), "the app's Sentry takes beforeSend and beforeBreadcrumb from the shared scrubber");
 ok(/from "\.\/sentry-scrub\.js"/.test(cloudSrc) && /scrubEvent\(/.test(cloudSrc), "tally-ingest's reports go through the shared scrubber");
-ok(/sendDefaultPii: false/.test(appSrc) && !/replayIntegration|feedbackIntegration|Replay|Feedback|captureFeedback|httpClientIntegration|browserTracingIntegration|contextLinesIntegration|extraErrorDataIntegration|captureConsoleIntegration/.test(appSrc) && /defaultIntegrations: false/.test(appSrc),
-  "app: sendDefaultPii false; no replay, feedback, tracing, HTTP-client or extra-data integration; no default integrations");
+ok(/sendDefaultPii: false/.test(appSrc) && !/replayIntegration|feedbackIntegration|Replay|Feedback|captureFeedback|httpClientIntegration|contextLinesIntegration|extraErrorDataIntegration|captureConsoleIntegration/.test(appSrc) && /defaultIntegrations: false/.test(appSrc),
+  "app: sendDefaultPii false; no replay, feedback, HTTP-client or extra-data integration; no default integrations");
+// reliability item 2: the speed of real use (Web Vitals) on a sample of page opens; no request is traced or carries a header
+const rate = (appSrc.match(/PERF_SAMPLE_RATE = ([0-9.]+)/) || [])[1];
+ok(rate && +rate >= 0.1 && +rate <= 0.2 && /tracesSampleRate:/.test(appSrc), "app: page speed sampled at 10-20% of page opens (" + rate + ")");
+ok(/browserTracingIntegration\(\{[^}]*traceFetch: false/.test(appSrc) && /traceXHR: false/.test(appSrc) && /tracePropagationTargets: \[\]/.test(appSrc) && /enableInp: true/.test(appSrc),
+  "app: page-load speed and INP only; no fetch/XHR spans, no trace headers on any request");
+ok(/beforeSendTransaction: *\(?t/.test(appSrc) && /scrubTransaction\(/.test(appSrc) && /beforeSendSpan: *\(?s/.test(appSrc) && /scrubSpan\(/.test(appSrc), "app: every speed sample goes through the shared scrubber (scrubTransaction, scrubSpan)");
 ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test(appSrc) && /history: false/.test(appSrc), "app: no XHR/fetch/click/history breadcrumbs");
+
+
+// ---- 5. speed samples (reliability item 2): a page load's transaction and an interaction's INP span, rebuilt from the
+// allowed fields only: Web Vitals as numbers, the release, the page's name; never an address with ids, a span's words,
+// an element's text or label, a resource's address
+const TX_ALLOWED = ["type", "event_id", "timestamp", "start_timestamp", "platform", "release", "environment", "transaction", "transaction_info", "contexts", "measurements", "spans", "tags", "user", "request", "sdk"];
+const tx = {
+  type: "transaction", event_id: "0123456789abcdef0123456789abcdef", timestamp: T + 3, start_timestamp: T, platform: "javascript", release: "fincom-app-abc1234", environment: "production",
+  transaction: "/review/?client=cmufksrrqjub2g", transaction_info: { source: "url" }, server_name: "PRIYA-LAPTOP",
+  contexts: { trace: { trace_id: "0123456789abcdef0123456789abcdef", span_id: "0123456789abcdef", op: "pageload", origin: "auto.pageload.browser", status: "ok",
+    data: { "url.full": "https://staging.fincom.live/review/?client=cmufksrrqjub2g#gstin=09AANFG3202D1ZR", "lcp.element": "div.party > b.ALPHA TRADERS", "lcp.url": "https://x/Alpha_Traders_Invoice_AB-101.pdf", "cls.source.1": "td[title='Zeta Supplies Ltd']" } },
+    browser: { name: "Chrome", version: "140.0.0.0" }, culture: { locale: "en-IN" }, state: { party: "ALPHA TRADERS" } },
+  measurements: { lcp: { value: 1834.2, unit: "millisecond" }, fcp: { value: 900, unit: "millisecond" }, cls: { value: 0.02, unit: "" }, ttfb: { value: 120.5, unit: "millisecond" },
+    "ttfb.requestTime": { value: 80, unit: "millisecond" }, inp: { value: 96, unit: "millisecond" }, "ALPHA TRADERS": { value: 1 }, "mark.cmufksrrqjub2g": { value: 2 }, fp: { value: "1,25,000.00" } },
+  spans: [{ description: "GET https://qbocskaiewaxqcvaunzc.supabase.co/rest/v1/bills?gstin=eq.09AANFG3202D1ZR", op: "http.client" }, { description: "https://staging.fincom.live/review/assets/index.js", op: "resource.script" }],
+  tags: { route: "client/invoices", client: "ALPHA TRADERS" }, user: { id: "0123456789abcdef0123456789abcdef", email: "priya.sharma@alphatraders.in" },
+  request: { url: "https://staging.fincom.live/review/?client=cmufksrrqjub2g", headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0.0.0", Referer: "https://staging.fincom.live/review/?client=cmufksrrqjub2g" } },
+  sdk: { name: "sentry.javascript.browser", version: "10.75.1" }, extra: { party: "ALPHA TRADERS" }, breadcrumbs: [{ message: "ALPHA TRADERS" }],
+};
+const tout = S.scrubTransaction(JSON.parse(JSON.stringify(tx)));
+ok(tout && tout.type === "transaction", "a page load's speed sample comes out");
+ok(!leaks(tout).length && !/cmufksrrqjub2g|supabase|Alpha_Traders|\?|#/.test(JSON.stringify(tout.contexts) + tout.transaction + JSON.stringify(tout.request || {})), "no business data, no address with ids, in a speed sample" + (leaks(tout).length ? ": " + leaks(tout) : ""));
+ok(Object.keys(tout).every((k) => TX_ALLOWED.includes(k)), "only the allowed fields in a speed sample (" + Object.keys(tout).filter((k) => !TX_ALLOWED.includes(k)) + ")");
+ok(tout.transaction === "fincom-app" && tout.environment === "staging" && tout.release === "fincom-app-abc1234", "named fincom-app, environment staging, tagged with the release");
+ok(JSON.stringify(Object.keys(tout.measurements).sort()) === JSON.stringify(["cls", "fcp", "inp", "lcp", "ttfb", "ttfb.requestTime"]) && tout.measurements.lcp.value === 1834.2 && tout.measurements.lcp.unit === "millisecond" && tout.measurements.cls.value === 0.02,
+  "Web Vitals kept as numbers (LCP, FCP, CLS, TTFB, INP); other measurements dropped (" + Object.keys(tout.measurements) + ")");
+ok(Array.isArray(tout.spans) && tout.spans.length === 0, "no span of a page load is sent (requests, scripts, marks: addresses and words)");
+ok(JSON.stringify(Object.keys(tout.contexts.trace).sort()) === JSON.stringify(["op", "origin", "span_id", "status", "trace_id"]) && tout.contexts.trace.op === "pageload", "the trace context: ids and op only, none of its data");
+ok(tout.tags.route === "client/invoices" && !("client" in tout.tags) && JSON.stringify(tout.user) === '{"id":"0123456789abcdef0123456789abcdef"}', "tags: the page's name; user: the install id only");
+ok(S.scrubTransaction({ ...tx, type: "event" }) === null && S.scrubTransaction(null) === null && S.scrubTransaction({ ...tx, contexts: {} }) === null, "only a transaction with its trace context comes out");
+const sp = {
+  span_id: "0123456789abcdef", trace_id: "0123456789abcdef0123456789abcdef", parent_span_id: "fedcba9876543210", segment_id: "0123456789abcdef", is_segment: true,
+  start_timestamp: T, timestamp: T + 0.2, op: "ui.interaction.click", origin: "auto.http.browser.inp", status: "ok", exclusive_time: 96,
+  description: "body > div#app > button.btn[aria-label=\"Post ALPHA TRADERS ₹1,25,000.00\"]", profile_id: "x",
+  data: { "sentry.op": "ui.interaction.click", "sentry.origin": "auto.http.browser.inp", "sentry.exclusive_time": 96, release: "fincom-app-abc1234", environment: "production", transaction: "/review/?client=cmufksrrqjub2g",
+    user: "priya.sharma@alphatraders.in", "user_agent.original": "Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0.0.0", "client.address": "{{auto}}", replay_id: "abc", "url.full": "https://staging.fincom.live/review/?client=cmufksrrqjub2g",
+    "sentry.pageload.span_id": "0123456789abcdef", "lcp.element": "ALPHA TRADERS" },
+  measurements: { inp: { value: 96, unit: "millisecond" }, "ALPHA TRADERS": { value: 1 } },
+};
+const sout = S.scrubSpan(JSON.parse(JSON.stringify(sp)));
+ok(sout && sout.span_id === sp.span_id && sout.trace_id === sp.trace_id && sout.op === "ui.interaction.click", "an interaction's INP span comes out, its ids and op kept");
+ok(!leaks(sout).length && !/cmufksrrqjub2g|button|aria|priya|\{\{auto\}\}/.test(JSON.stringify(sout)), "no business data, element, label, address or email in an INP span" + (leaks(sout).length ? ": " + leaks(sout) : "") + " " + JSON.stringify(sout).slice(0, 600));
+ok(sout.description === "interaction" && sout.data.transaction === "fincom-app" && sout.data.environment === "staging" && sout.data.release === "fincom-app-abc1234" && !("user" in sout.data),
+  "described as 'interaction' on fincom-app, environment staging, with the release");
+ok(sout.measurements && sout.measurements.inp && sout.measurements.inp.value === 96 && Object.keys(sout.measurements).join() === "inp", "INP kept as a number; other measurements dropped");
+ok(S.scrubSpan({ ...sp, op: "http.client" }).description === "interaction" && S.scrubSpan({ ...sp, op: "GET ALPHA TRADERS" }).op === "other", "a span's op only from its known shape");
+ok(S.scrubSpan(null) && typeof S.scrubSpan(null) === "object", "scrubSpan always returns an object (Sentry keeps the raw span when it gets none)");
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -63,7 +63,7 @@ Party, ledger, company or client names; amounts; GSTINs, PANs; narrations; bill 
 field values; uploaded files or their names; request or response bodies; addresses' query strings or hashes; a person's
 email, name or IP address; the computer's name (`server_name` is dropped); folders on a disk; log lines; extra data or
 other contexts; fingerprints; modules; screenshots, view hierarchies or attachments; session replays; user feedback;
-performance traces; sessions; client reports. The app's Sentry has no default integrations: only global error handlers,
+traces of requests (the only speed data is below); sessions; client reports. The app's Sentry has no default integrations: only global error handlers,
 linked errors, dedupe, browser API error wrapping, and breadcrumbs with **console only** (no clicks or typing, no XHR or
 fetch, no history). `sendDefaultPii` is false everywhere.
 
@@ -74,6 +74,30 @@ the bridge itself; never a log line, and no request to Tally is changed or added
 
 Floods are cut: cloud, the same error at most once a minute and at most 30 reports a minute per instance; bridge, the
 same panic at most once an hour and at most 30 an hour.
+
+## The speed of real use (Web Vitals), from 12-Oct-2026 (reliability item 2)
+
+The app (test build, staging only, the same switches as above) also sends how fast FinCom is for the people using it,
+on **15% of page opens** (`PERF_SAMPLE_RATE` in app/src/sentry.js; Sentry is still loaded when the computer is idle, and
+the browser's own timings of the page load are read then):
+
+| Item | What is in it |
+|---|---|
+| a `transaction` per sampled page open | named `fincom-app`; `measurements`: LCP, FCP, CLS, TTFB (and TTFB's request time), as numbers; `contexts.trace`: Sentry's random ids and `op: pageload` only; `release`, `environment: staging`, `tags.route` (the page's NAME), `user.id` (the random install id), `request` (address without query or hash, User-Agent); `spans` always empty |
+| a `span` per sampled page open with a slow interaction | INP: `description: "interaction"`, `op: ui.interaction.click` (or press, hover, drag), `measurements.inp` as a number, and in `data` only the release, `staging`, `fincom-app`, the User-Agent and Sentry's ids |
+
+Rebuilt by `scrubTransaction` and `scrubSpan` in server/_shared/sentry-scrub.js (the allow-list, as for errors). Never:
+a request's address (fetch and XHR are not traced, and no request gets Sentry's `sentry-trace` / `baggage` headers:
+`tracePropagationTargets: []`), a script's or image's address, an element's text, label, id, class or path (the INP
+span's element is replaced by "interaction"), long tasks, navigation spans. tests/run_sentry_ui.py checks all of it on
+the built app with made-up business data on the page; tests/run_sentry_scrub.mjs checks the scrubber.
+
+**How to read it.** sentry.io → organisation **garg-shekhar-company** → project **fincom-app-staging**:
+- *Insights → Frontend → Web Vitals*: the score and LCP, INP, CLS, FCP, TTFB (p75), with "fincom-app" as the page; filter
+  by release (`fincom-app-<commit>`) to compare two publishes.
+- *Explore → Traces*, `transaction:fincom-app`: each sample; group by `release` or `browser.name`.
+- Good is LCP under 2.5 s, INP under 200 ms, CLS under 0.1 (Google's thresholds, which Sentry colours).
+With 15% of opens the numbers settle after a day or two of normal use.
 
 ## How to turn it off
 
