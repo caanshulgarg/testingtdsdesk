@@ -1,0 +1,288 @@
+[00:39:53] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-12, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-12, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 16 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+  INFO tdsm: the ref's requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\ledreq (Written by a go test at dc9807d7c0716cd5682a67358b7daf6ea1446b21 (the gate's ref): ledgerChunkRequest, groupListRequest, ledgerChangesRequest, ledgerByNameRequest, natureChunkRequest)
+[00:40:26] ---- tdsm: masters
+[company TDS on, TAN] 11 ms: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO tdsm company TDS on, TAN: created 0, altered 1, errors 0
+[shot] tds-001-gw0 (1024x768)
+[00:40:35] [tds] screen tds-001-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Q u...
+[keys] 'c' -> Tally 'TallyPrime:9000'
+[shot] tds-002-create-TDSNatureofPayments (1024x768)
+[00:40:39] [tds] screen tds-002-create-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros 46. Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour...
+[keys] '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' -> Tally 'TallyPrime:9000'
+[keys] 'TDS Nature of Payments' -> Tally 'TallyPrime:9000'
+[shot] tds-003-typed-TDSNatureofPayments (1024x768)
+[00:40:44] [tds] screen tds-003-typed-TDSNatureofPayments : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation TDS Nature of Pa ments List of Masters Statutory Masters TDS Nature of Payments O: Import Change Company Show More E: Export M: E-mail p: pnnt x Fl: Help nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad : '2.3 ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 "jo Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 12:40 AM 10/12/2026
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-004-form-TDSNatureofPayments (1024x768)
+[00:40:48] [tds] screen tds-004-form-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x Fl: Help F2: period Company FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 2610...
+[keys] 'FM Contract 194C{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-005-nat-name (1024x768)
+[00:40:52] [tds] screen tds-005-nat-name : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Data...
+[keys] '194C{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-006-nat-section (1024x768)
+[00:40:55] [tds] screen tds-006-nat-section : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025...
+[keys] '94C{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-007-nat-paycode (1024x768)
+[00:40:58] [tds] screen tds-007-nat-paycode : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 94C 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server ...
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-nat-remit (1024x768)
+[00:41:01] [tds] screen tds-008-nat-remit : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 94C 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server ...
+[keys] '1{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-009-nat-rate-ind (1024x768)
+[00:41:04] [tds] screen tds-009-nat-rate-ind : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co Fl: Help F2: period Company FM Contract 194C 194C 94C Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Accept Q Search p: Delete More Details Helper Configure Windows Server 2025 Datacenter Buil...
+[keys] '2{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-010-nat-rate-oth (1024x768)
+[00:41:07] [tds] screen tds-010-nat-rate-oth : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit 194C 94C 1% 2% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacente...
+[shot] tds-011-nat-before-thr1 (1024x768)
+[00:41:08] [tds] screen tds-011-nat-before-thr1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co FM Contract 194C Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit 194C 94C 1% 2% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacente...
+[keys] '30000{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-012-nat-thr1 (1024x768)
+[00:41:11] [tds] screen tds-012-nat-thr1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Contract 194C 194C 94C 1% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 2% 30,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour ...
+[shot] tds-013-nat-before-thr2 (1024x768)
+[00:41:11] [tds] screen tds-013-nat-before-thr2 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Contract 194C 194C 94C 1% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 2% 30,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour ...
+[shot] tds-014-nat-accept-q (1024x768)
+[00:41:12] [tds] screen tds-014-nat-accept-q : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Contract 194C 194C 94C 1% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 2% 30,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-015-nat-yes (1024x768)
+[00:41:16] [tds] screen tds-015-nat-yes : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x Fl: Help F2: period Company FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 2610...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-016-nat-esc1 (1024x768)
+[00:41:20] [tds] screen tds-016-nat-esc1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Q: Quit Z: Exchange 0% 0% A: Accept Q Search O: Import E: Export M: E-mail FinCom p: print x Fl: Help F2: period F3: Company Quit o Yes or No FIO : Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete l: More Details H: Helper F 12: Configure Windows ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-017-nat-esc2 (1024x768)
+[00:41:24] [tds] screen tds-017-nat-esc2 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age...
+[shot] tds-018-gw0 (1024x768)
+[00:41:25] [tds] screen tds-018-gw0 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-019-gw1 (1024x768)
+[00:41:28] [tds] screen tds-019-gw1 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Q u...
+[shot] tds-020-gw0 (1024x768)
+[00:41:29] [tds] screen tds-020-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Q u...
+[keys] 'c' -> Tally 'TallyPrime:9000'
+[shot] tds-021-create-TDSNatureofPayments (1024x768)
+[00:41:33] [tds] screen tds-021-create-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age...
+[keys] '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' -> Tally 'TallyPrime:9000'
+[keys] 'TDS Nature of Payments' -> Tally 'TallyPrime:9000'
+[shot] tds-022-typed-TDSNatureofPayments (1024x768)
+[00:41:38] [tds] screen tds-022-typed-TDSNatureofPayments : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation TDS Nature of Pa ments List of Masters Statutory Masters TDS Nature of Payments O: Import Change Company Show More E: Export M: E-mail p: pnnt x Fl: Help nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad : '2.3 ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 "jo Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 12:41 AM 10/12/2026
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-023-form-TDSNatureofPayments (1024x768)
+[00:41:42] [tds] screen tds-023-form-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x Fl: Help F2: period Company FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 2610...
+[keys] 'FM Prof Fees 194J{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-024-nat-name (1024x768)
+[00:41:47] [tds] screen tds-024-nat-name : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Prof Fees 194J Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Dat...
+[keys] '194J{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-025-nat-section (1024x768)
+[00:41:50] [tds] screen tds-025-nat-section : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Prof Fees 194J Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194J 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 202...
+[keys] '94J{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-026-nat-paycode (1024x768)
+[00:41:53] [tds] screen tds-026-nat-paycode : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Prof Fees 194J Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194J 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 202...
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-027-nat-remit (1024x768)
+[00:41:56] [tds] screen tds-027-nat-remit : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FM Prof Fees 194J Fl: Help F2: period Company Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194J 0% 0% Accept Q Search FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 202...
+[keys] '10{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-028-nat-rate-ind (1024x768)
+[00:41:59] [tds] screen tds-028-nat-rate-ind : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Accept Q Search p: Delete More Details Helper Configure Windows Server 2025 Datacenter Bui...
+[keys] '10{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-029-nat-rate-oth (1024x768)
+[00:42:01] [tds] screen tds-029-nat-rate-oth : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Accept Q Search p: Delete More Details Helper Configure Windows Server 2025 Datacenter Bui...
+[shot] tds-030-nat-before-thr1 (1024x768)
+[00:42:02] [tds] screen tds-030-nat-before-thr1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Accept Q Search p: Delete More Details Helper Configure Windows Server 2025 Datacenter Bui...
+[keys] '50000{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-031-nat-thr1 (1024x768)
+[00:42:05] [tds] screen tds-031-nat-thr1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 50,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" ...
+[shot] tds-032-nat-before-thr2 (1024x768)
+[00:42:06] [tds] screen tds-032-nat-before-thr2 : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 50,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" ...
+[shot] tds-033-nat-accept-q (1024x768)
+[00:42:07] [tds] screen tds-033-nat-accept-q : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation Fl: Help F2: period F3: Company Rate for individuals/HUF With PAN FM Prof Fees 194J 194J 10% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit 50,000.00 A: Accept Q Search Accept Q Yes or No p: Delete FIO : Other Masters l: More Details H: Helper F 12: Configure 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-034-nat-yes (1024x768)
+[00:42:11] [tds] screen tds-034-nat-yes : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x Fl: Help F2: period Company FIO: Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 2610...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-035-nat-esc1 (1024x768)
+[00:42:14] [tds] screen tds-035-nat-esc1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Q: Quit Z: Exchange 0% 0% A: Accept Q Search O: Import E: Export M: E-mail FinCom p: print x Fl: Help F2: period F3: Company Quit o Yes or No FIO : Other Masters 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 p: Delete l: More Details H: Helper F 12: Configure Windows ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-036-nat-esc2 (1024x768)
+[00:42:17] [tds] screen tds-036-nat-esc2 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age...
+[shot] tds-037-gw0 (1024x768)
+[00:42:18] [tds] screen tds-037-gw0 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details TDS Details PAN/CIN Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-038-gw1 (1024x768)
+[00:42:22] [tds] screen tds-038-gw1 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 nt to latio IdlUa 2ed1b 4e7ad Hub" , ' : "987 2ed1b ue7ad ion_i 4ac1— isten orreI 0821, unnin "sour age" , ' : "987 Q u...
+[the duty ledger, an expense, the certificate party, the special-rate party, the bank] 19 ms: <RESPONSE><CREATED>5</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO tdsm the duty ledger, an expense, the certificate party, the special-rate party, the bank: created 5, altered 0, errors 0
+######## PASS m1 TDS masters made (natures with rates and threshold, duty ledger with nature, certificate, special rate): natures by keys True/True; ledgers by XML: created 5, errors 0
+[00:42:22] ---- tdsm: the ledger requests
+######## PASS m2 the ledger requests give the nature, the special rate and the certificate: FinComLedgers: nature 'FM Prof Fees 194J' True; special Yes/1 True; certificate NATUREOFPAYMENT=FM Prof Fees 194J FROMDATE=20260401 TODATE=20270331 SECTIONNO=197 CERTIFICATENO=LDC197CERT0001 TDSITRATE=1 LOWERDEDUCTIONLIMIT=500000.00 True | FinComLedgerByName: nature 'FM Prof Fees 194J' True; special Yes/1 True; certificate NATUREOFPAYMENT=FM Prof Fees 194J FROMDATE=20260401 TODATE=20270331 SECTIONNO=197 CERTIFICATENO=LDC197CERT0001 TDSITRATE=1 LOWERDEDUCTIONLIMIT=500000.00 True
+[00:42:22] ---- tdsm: the natures
+  INFO tdsm: natures: the bridge's chunks 2 (2.6 ms, 2.1 ms), found 2; Tally's TDSRate lists 2; missed by the chunks: 
+######## PASS m3 FinComTdsNatures, chunked, finds every nature with its section, rates and threshold: chunks 2, 2 natures of Tally's 2, none missed: True; 'FM Contract 194C': section=194C rate=1 other=2 nopan=20 threshold=30000.00 single= from=20260401; 'FM Prof Fees 194J': section=194J rate=10 other=10 nopan=20 threshold=50000.00 single= from=20260401; thresholds typed 30000/50000, read 30000.00/50000.00
+[00:42:22] ---- tdsm: a TDS payment with its challan (XML)
+[payment PM1 (XML)] 25 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO tdsm payment PM1 (XML): created 1, altered 0, errors 0
+  voucher mid=1 aid=1 Journal/1/20260401 guid=a000a1b8-149e-4942-a2df-31f3fce396aa-00000001 cancelled=False
+  voucher mid=2 aid=2 Payment/1/20261202 guid=a000a1b8-149e-4942-a2df-31f3fce396aa-00000002 cancelled=False
+######## PASS m4 the challan fields in FinComVoucherObject's answer: PM1 MasterID 2, 9.6 ms, 68219 bytes: STATPAYMENTTYPE=TDS TAXPAYPERIODFROMDATE=20261101 TAXPAYPERIODTODATE= TAXCHALLANBSRCODE=0510308 TAXBANKCHALLANNUMBER=54321 TAXCHALLANDATE=20261231 TAXCHEQUENUMBER=778899 TAXCHEQUEDATE=20261201 TAXBANKNAME=HDFC Bank Ltd TAXBANKBRANCHNAME=Connaught Place TDSNATUREOFPAYMENT=FM Prof Fees 194J TDSSECTIONNO=194J; lines Tax,Interest,Late Fee
+[00:42:22] ---- tdsm: times
+  INFO tdsm: ZZ BIG TEST's masters imported in 2635.1 ms: <CREATED>1114</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[tdsm] ZZ BIG TEST masters FinComLedgers 1-2000: 95.5 ms, 1033561 bytes; light 2.6 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgers 2.4.2 1-2000: 68.1 ms, 806599 bytes; light 2.4 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgers from 2001: 5.5 ms, 1500 bytes; light 1.7 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComTdsNatures 1-5000: 2.2 ms, 3677 bytes; light 1.8 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComTdsNatures from 5001: 1.9 ms, 1505 bytes; light 1.7 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerByName FM LDC Party: 5.4 ms, 2927 bytes; light 1.8 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerByName FM TDS 194J: 4.8 ms, 2367 bytes; light 1.9 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerByName TM Ledger 00007: 5 ms, 1500 bytes; light 1.8 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 1-200: 11.9 ms, 2335 bytes; light 1.8 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 201-400: 21.8 ms, 168883 bytes; light 2.1 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 401-600: 24.9 ms, 187830 bytes; light 2.4 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 601-800: 24.9 ms, 187880 bytes; light 2.3 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 801-1000: 24.1 ms, 188057 bytes; light 2.6 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 1001-1200: 26.4 ms, 188572 bytes; light 2.1 ms, responding True
+[tdsm] ZZ BIG TEST masters FinComLedgerChanges 1201-1400: 18.9 ms, 119016 bytes; light 2.1 ms, responding True
+  INFO tdsm: 18885 ledgers added (one in ten with a certificate) to the 1115 there were
+[tdsm] 20,000 ledgers FinComLedgers 1-2000: 175.5 ms, 1658672 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 1-2000: 132.6 ms, 1263141 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2001-4000: 181.1 ms, 1859871 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 2001-4000: 136.8 ms, 1358303 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 4001-6000: 181.6 ms, 1859903 bytes; light 2.9 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 4001-6000: 142.2 ms, 1358303 bytes; light 3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 6001-8000: 174.9 ms, 1859903 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 6001-8000: 132.6 ms, 1358303 bytes; light 2.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 8001-10000: 178.1 ms, 1859909 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 8001-10000: 130.2 ms, 1358309 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 10001-12000: 187.1 ms, 1863971 bytes; light 3.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 10001-12000: 133.2 ms, 1362303 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 12001-14000: 173.7 ms, 1864103 bytes; light 4.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 12001-14000: 132.1 ms, 1362303 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 14001-16000: 171.2 ms, 1864103 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 14001-16000: 131.7 ms, 1362303 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 16001-18000: 170.9 ms, 1864103 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 16001-18000: 131.5 ms, 1362303 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 18001-20000: 172.6 ms, 1864103 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 18001-20000: 130.1 ms, 1362303 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 20001-22000: 38.4 ms, 198828 bytes; light 2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers 2.4.2 20001-22000: 33 ms, 145733 bytes; light 2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgers from 22001: 21.7 ms, 1501 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures 1-5000: 2.1 ms, 3678 bytes; light 1.6 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures 5001-10000: 1.6 ms, 1506 bytes; light 1.5 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures 10001-15000: 1.6 ms, 1506 bytes; light 1.5 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures 15001-20000: 1.6 ms, 1506 bytes; light 1.5 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures 20001-25000: 1.6 ms, 1506 bytes; light 1.5 ms, responding True
+[tdsm] 20,000 ledgers FinComTdsNatures from 25001: 1.5 ms, 1506 bytes; light 1.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerByName FM LDC Party: 24.2 ms, 2928 bytes; light 2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerByName FM TDS 194J: 23.4 ms, 2368 bytes; light 1.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerByName TM Ledger 00007: 23.1 ms, 2377 bytes; light 1.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1-200: 146.8 ms, 2336 bytes; light 2.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 201-400: 154.8 ms, 168884 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 401-600: 153.5 ms, 187831 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 601-800: 159.4 ms, 187881 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 801-1000: 154.8 ms, 188058 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1001-1200: 159.3 ms, 188573 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1201-1400: 160.9 ms, 182623 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1401-1600: 160.2 ms, 187320 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1601-1800: 161.3 ms, 187323 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 1801-2000: 160.4 ms, 187323 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 2001-2200: 164.9 ms, 187323 bytes; light 2.9 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 2201-2400: 162 ms, 187330 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 2401-2600: 161.8 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 2601-2800: 162.5 ms, 187343 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 2801-3000: 161.9 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 3001-3200: 164.5 ms, 187343 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 3201-3400: 162.3 ms, 187343 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 3401-3600: 165.3 ms, 187343 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 3601-3800: 165.1 ms, 187343 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 3801-4000: 164.8 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 4001-4200: 163.3 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 4201-4400: 166.1 ms, 187343 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 4401-4600: 161.5 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 4601-4800: 162.4 ms, 187343 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 4801-5000: 163.2 ms, 187343 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 5001-5200: 161.3 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 5201-5400: 161.1 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 5401-5600: 164.3 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 5601-5800: 164 ms, 187343 bytes; light 3.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 5801-6000: 167.4 ms, 187343 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 6001-6200: 163.6 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 6201-6400: 167 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 6401-6600: 165.2 ms, 187343 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 6601-6800: 167.1 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 6801-7000: 164.6 ms, 187343 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 7001-7200: 166.6 ms, 187343 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 7201-7400: 166.2 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 7401-7600: 165.2 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 7601-7800: 163.3 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 7801-8000: 166.5 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 8001-8200: 168.1 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 8201-8400: 166.5 ms, 187343 bytes; light 2.9 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 8401-8600: 167 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 8601-8800: 167.9 ms, 187343 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 8801-9000: 163.6 ms, 187343 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 9001-9200: 165.7 ms, 187343 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 9201-9400: 172.3 ms, 187343 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 9401-9600: 169.4 ms, 187343 bytes; light 3.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 9601-9800: 170.4 ms, 187343 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 9801-10000: 171.9 ms, 187344 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 10001-10200: 169.7 ms, 187740 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 10201-10400: 167.5 ms, 187743 bytes; light 2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 10401-10600: 173.2 ms, 187743 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 10601-10800: 168.6 ms, 187743 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 10801-11000: 169 ms, 187743 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 11001-11200: 170 ms, 187743 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 11201-11400: 170.1 ms, 187750 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 11401-11600: 171.2 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 11601-11800: 169.7 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 11801-12000: 188.8 ms, 187763 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 12001-12200: 176.9 ms, 187763 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 12201-12400: 169.8 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 12401-12600: 166.8 ms, 187763 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 12601-12800: 168.8 ms, 187763 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 12801-13000: 170.3 ms, 187763 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 13001-13200: 170.8 ms, 187763 bytes; light 3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 13201-13400: 176.9 ms, 187763 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 13401-13600: 174.5 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 13601-13800: 176.4 ms, 187763 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 13801-14000: 177.7 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 14001-14200: 179.5 ms, 187763 bytes; light 2.9 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 14201-14400: 177.4 ms, 187763 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 14401-14600: 179.5 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 14601-14800: 173.2 ms, 187763 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 14801-15000: 173.2 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 15001-15200: 174.4 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 15201-15400: 172.4 ms, 187763 bytes; light 2.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 15401-15600: 170.9 ms, 187763 bytes; light 2.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 15601-15800: 177.9 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 15801-16000: 170.3 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 16001-16200: 178.2 ms, 187763 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 16201-16400: 169 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 16401-16600: 170.7 ms, 187763 bytes; light 2.7 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 16601-16800: 171.9 ms, 187763 bytes; light 2.9 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 16801-17000: 172.5 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 17001-17200: 170.8 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 17201-17400: 169.5 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 17401-17600: 166.8 ms, 187763 bytes; light 3.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 17601-17800: 167.6 ms, 187763 bytes; light 2.2 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 17801-18000: 167.6 ms, 187763 bytes; light 2.8 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 18001-18200: 170.4 ms, 187763 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 18201-18400: 171.1 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 18401-18600: 170.3 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 18601-18800: 168.4 ms, 187763 bytes; light 2.1 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 18801-19000: 168.2 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 19001-19200: 167.3 ms, 187763 bytes; light 3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 19201-19400: 167.9 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 19401-19600: 171.8 ms, 187763 bytes; light 2.6 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 19601-19800: 167.3 ms, 187763 bytes; light 2.5 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 19801-20000: 170.4 ms, 187763 bytes; light 2.4 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 20001-20200: 167.6 ms, 187763 bytes; light 2.3 ms, responding True
+[tdsm] 20,000 ledgers FinComLedgerChanges 20201-20400: 157.2 ms, 16625 bytes; light 2.4 ms, responding True
+######## PASS m5 times on ZZ BIG TEST's masters and at 20,000 ledgers (every 2.4.3 request under 2 s, Tally responding): worst FinComTdsNatures 2.2 ms, FinComLedgerByName 24.2 ms, FinComLedgers (2.4.3) 187.1 ms, the same chunk with 2.4.2's fields 142.2 ms, FinComLedgerChanges 188.8 ms; failed 0, not responding 0, a 2.4.3 request over 2 s 0

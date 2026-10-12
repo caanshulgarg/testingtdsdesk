@@ -1,0 +1,43 @@
+INFO TallyPrime 5.1, mode tdsm, runner GitHub Actions 1000007867, 2026-10-12T00:39:58
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-12, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-12, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO tdsm: the ref's requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\ledreq (Written by a go test at dc9807d7c0716cd5682a67358b7daf6ea1446b21 (the gate's ref): ledgerChunkRequest, groupListRequest, ledgerChangesRequest, ledgerByNameRequest, natureChunkRequest)
+INFO tdsm company TDS on, TAN: created 0, altered 1, errors 0
+INFO tdsm the duty ledger, an expense, the certificate party, the special-rate party, the bank: created 5, altered 0, errors 0
+PASS m1 TDS masters made (natures with rates and threshold, duty ledger with nature, certificate, special rate): natures by keys True/True; ledgers by XML: created 5, errors 0
+PASS m2 the ledger requests give the nature, the special rate and the certificate: FinComLedgers: nature 'FM Prof Fees 194J' True; special Yes/1 True; certificate NATUREOFPAYMENT=FM Prof Fees 194J FROMDATE=20260401 TODATE=20270331 SECTIONNO=197 CERTIFICATENO=LDC197CERT0001 TDSITRATE=1 LOWERDEDUCTIONLIMIT=500000.00 True | FinComLedgerByName: nature 'FM Prof Fees 194J' True; special Yes/1 True; certificate NATUREOFPAYMENT=FM Prof Fees 194J FROMDATE=20260401 TODATE=20270331 SECTIONNO=197 CERTIFICATENO=LDC197CERT0001 TDSITRATE=1 LOWERDEDUCTIONLIMIT=500000.00 True
+INFO tdsm: natures: the bridge's chunks 2 (3 ms, 2.4 ms), found 2; Tally's TDSRate lists 2; missed by the chunks: 
+PASS m3 FinComTdsNatures, chunked, finds every nature with its section, rates and threshold: chunks 2, 2 natures of Tally's 2, none missed: True; 'FM Contract 194C': section=194C rate=1 other=2 nopan=20 threshold=30000.00 single= from=20260401; 'FM Prof Fees 194J': section=194J rate=10 other=10 nopan=20 threshold=50000.00 single= from=20260401; thresholds typed 30000/50000, read 30000.00/50000.00
+INFO tdsm payment PM1 (XML): created 1, altered 0, errors 0
+PASS m4 the challan fields in FinComVoucherObject's answer: PM1 MasterID 2, 11.1 ms, 72285 bytes: STATPAYMENTTYPE=TDS TAXPAYPERIODFROMDATE=20261101 TAXPAYPERIODTODATE= TAXCHALLANBSRCODE=0510308 TAXBANKCHALLANNUMBER=54321 TAXCHALLANDATE=20261231 TAXCHEQUENUMBER=778899 TAXCHEQUEDATE=20261201 TAXBANKNAME=HDFC Bank Ltd TAXBANKBRANCHNAME=Connaught Place TDSNATUREOFPAYMENT=FM Prof Fees 194J TDSSECTIONNO=194J; lines Tax,Interest,Late Fee
+INFO tdsm: ZZ BIG TEST's masters imported in 3150.7 ms: <CREATED>1114</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO tdsm: 18885 ledgers added (one in ten with a certificate) to the 1115 there were
+MEASURE 20,000 ledgers FinComLedgerByName: 3 request(s), worst 36.1 ms, median 33.6 ms, worst light 3.3 ms
+MEASURE 20,000 ledgers FinComLedgerChanges: 102 request(s), worst 246.7 ms, median 192.3 ms, worst light 4.4 ms
+MEASURE 20,000 ledgers FinComLedgers: 12 request(s), worst 315.9 ms, median 228.1 ms, worst light 6.3 ms
+MEASURE 20,000 ledgers FinComLedgers 2.4.2: 11 request(s), worst 229.9 ms, median 170.5 ms, worst light 4 ms
+MEASURE 20,000 ledgers FinComTdsNatures: 6 request(s), worst 3.3 ms, median 2.6 ms, worst light 2.8 ms
+MEASURE ZZ BIG TEST masters FinComLedgerByName: 3 request(s), worst 6.4 ms, median 6.1 ms, worst light 2.3 ms
+MEASURE ZZ BIG TEST masters FinComLedgerChanges: 7 request(s), worst 29.9 ms, median 27.1 ms, worst light 3.6 ms
+MEASURE ZZ BIG TEST masters FinComLedgers: 2 request(s), worst 114.8 ms, median 6.4 ms, worst light 3 ms
+MEASURE ZZ BIG TEST masters FinComLedgers 2.4.2: 1 request(s), worst 83.5 ms, median 83.5 ms, worst light 2.9 ms
+MEASURE ZZ BIG TEST masters FinComTdsNatures: 2 request(s), worst 2.9 ms, median 2.7 ms, worst light 2.3 ms
+PASS m5 times on ZZ BIG TEST's masters and at 20,000 ledgers (every 2.4.3 request under 2 s, Tally responding): worst FinComTdsNatures 3.3 ms, FinComLedgerByName 36.1 ms, FinComLedgers (2.4.3) 315.9 ms, the same chunk with 2.4.2's fields 229.9 ms, FinComLedgerChanges 246.7 ms; failed 0, not responding 0, a 2.4.3 request over 2 s 0
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 1 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1
