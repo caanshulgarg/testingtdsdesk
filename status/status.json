@@ -1,0 +1,28 @@
+{
+ "checked": "2026-10-12T07:03:37Z",
+ "every_minutes": 5,
+ "watch_since": "2026-10-12T07:03:37Z",
+ "site": "https://staging.fincom.live",
+ "services": {
+  "app": {
+   "name": "FinCom app",
+   "ok": true,
+   "note": "",
+   "since": "2026-10-12T07:03:37Z"
+  },
+  "cloud": {
+   "name": "Cloud (database)",
+   "ok": true,
+   "note": "",
+   "since": "2026-10-12T07:03:37Z"
+  },
+  "bridge": {
+   "name": "Tally connection service",
+   "ok": true,
+   "note": "",
+   "since": "2026-10-12T07:03:37Z"
+  }
+ },
+ "incidents": [],
+ "fail_streak": 0
+}
