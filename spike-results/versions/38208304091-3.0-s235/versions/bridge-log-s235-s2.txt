@@ -1,0 +1,21 @@
+2026-10-12 06:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-12 06:16:09  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+2026-10-12 06:16:10  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+2026-10-12 06:16:10  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line d8bd732a…): taken: Tally's GUID b452f801-d327-423a-9f6a-946441d8a84e-00000003, AlterID 7
+2026-10-12 06:16:10  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID b452f801-d327-423a-9f6a-946441d8a84e-00000003 and body
+2026-10-12 06:16:10  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+2026-10-12 06:16:10  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line 1fa203ab…): taken: Tally's GUID b452f801-d327-423a-9f6a-946441d8a84e-00000006, AlterID 6
+2026-10-12 06:16:10  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID b452f801-d327-423a-9f6a-946441d8a84e-00000006 and body
+2026-10-12 06:16:10  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 8dbdc6cd…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-12 06:16:11  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-12 06:16:11  Recorder: entry fetch of FinCom Spike Co: answered in 3 ms
+2026-10-12 06:16:11  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-12 06:16:11  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 8dbdc6cd…): proven in this Tally now: the delete goes as 8dbdc6cd689cd0c5f3ad275628e6edc2:resolved
+2026-10-12 06:16:11  Recorder: held lines: 0 from FinCom, 3 asked, 3 resolved, 0 still held (3 in the list)
+2026-10-12 06:16:11  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: b452f801-d327-423a-9f6a-946441d8a84e-00000004; the GUID its MasterID makes agrees
+2026-10-12 06:16:11  Renumbering: made Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
