@@ -119,7 +119,7 @@ export function YearChallans({ fy, q }) {
 function PayRow({ p }) {
   const [bsr, setBsr] = useState(""), [ser, setSer] = useState(""), bw = TDSCH.billCount(p.vid), cin = !!TDSCH.cin(bsr);
   return <tr>
-    <td>{day(p.date)}</td><td className="n">{money(p.tax)}</td><td>{p.sections.join(", ")}</td><td>{p.voucher}{bw > 0 && <div className="nr">{bw} deduction{bw === 1 ? "" : "s"} paid bill-wise in Tally</div>}</td>
+    <td>{day(p.date)}</td><td className="n">{money(p.tax)}{!num(p.tax) && <div className="nr">interest or fee only</div>}</td><td className="n">{money(num(p.interest) + num(p.fee) + num(p.others))}</td><td>{p.sections.join(", ")}</td><td>{p.voucher}{bw > 0 && <div className="nr">{bw} deduction{bw === 1 ? "" : "s"} paid bill-wise in Tally</div>}</td>
     <td><input type="text" value={bsr} placeholder="0240020 or the CIN" aria-label="BSR code or CIN" style={{ width: 170 }} onChange={(ev) => setBsr(ev.target.value)} /></td>
     <td><input type="text" value={cin ? TDSCH.cin(bsr).serial : ser} disabled={cin} placeholder="00979" aria-label="Challan serial" style={{ width: 90 }} onChange={(ev) => setSer(ev.target.value)} /></td>
     <td className="ac"><button className="btn small" onClick={() => challanFromBooks(p.vid, bsr, ser)}>Make it a challan</button></td>
@@ -157,13 +157,13 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
     return true;
   }), (c, k) => k === "state" ? chState(c, use) : k === "int" ? num(c.interest) : k === "date" ? TDS.ymd(c.date) : k === "tax" ? num(c.tax) : k === "left" ? num(c.tax) - (use[c.id] || 0) : k === "used" ? (use[c.id] || 0) : String(c[k] || ""));
   const pays = TDS.paymentsFromBooks().filter((p) => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q)
-    .filter((p) => !allCh.some((c) => TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - p.tax) < 1));
+    .filter((p) => TDSTally.notChallan(p, allCh));
   return <>
     <TallyDiffs kind="challan" />
     {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books</h3>
       <p className="note">TDS payment vouchers in Tally for this quarter, proposed as challans. Give each its CIN (or BSR code and serial) to confirm it. Uploaded challans of the same date and amount are matched to them on their own.</p>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="">
-        <thead><tr><th>Date</th><th className="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code or CIN</th><th>Serial</th><th className="ac"></th></tr></thead>
+        <thead><tr><th>Date</th><th className="n">Tax</th><th className="n">Interest and fee</th><th>Sections</th><th>Voucher</th><th>BSR code or CIN</th><th>Serial</th><th className="ac"></th></tr></thead>
         <tbody>{pays.map((p) => <PayRow key={p.vid} p={p} />)}</tbody>
       </table></div></section>}
     <FilterBar tab="challans" placeholder="Find a BSR code or serial" table="tdsChTable" title={title + " challans"} excel="tdsExcel" count={shown.length + " of " + ch.length + " challans"}

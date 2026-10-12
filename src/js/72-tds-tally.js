@@ -123,6 +123,16 @@ const TDSTally = {
     });
     return out;
   },
+  // a challan this sync made (and only such a one is changed or removed by it); a challan a person made from a Tally
+  // payment ("Make it a challan", before 2.4.3 also marked from "tally") is a person's (review 243 R1)
+  made(c){ return !!c && (c.madeBy === "tally-sync" || String(c.id || "").indexOf("tally:") === 0); },
+  // a TDS payment in the books not yet a challan: no challan names it, and none without a payment has its date and tax
+  // (review 243 R3)
+  notChallan(p, challans){
+    const cs = challans || [];
+    if (cs.some(c => c.fromVoucher === p.vid)) return false;
+    return !cs.some(c => !c.fromVoucher && TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - num(p.tax)) < 1);
+  },
   keyOf(c){ return c.bsr + "|" + TDS.ymd(c.date) + "|" + String(c.serial || "").padStart(5, "0"); },
   // the links Tally keeps: [{row: the deduction's row id, vid: the paying voucher, ref}] where exactly one deduction carries
   // the payment's reference for that party and duty ledger (Tally's reference names are unique only per party and duty,
@@ -207,7 +217,7 @@ const TDSTally = {
     // when nothing is tagged to it; kept with its tags otherwise, the difference shown (never a second one made then)
     const held = new Set();
     b.challans = b.challans.filter(c => {
-      if (c.from !== "tally" || (now[c.fromVoucher] && now[c.fromVoucher].has(this.keyOf(c)))) return true;
+      if (!this.made(c) || (now[c.fromVoucher] && now[c.fromVoucher].has(this.keyOf(c)))) return true;
       // (review 243 N5) only one nobody changed in FinCom leaves; one a person corrected stays, shown like a tagged one
       const was = c.tallyWas || {}, touched = FIELDS.some(k => (k in was) && val(was, k) !== val(c, k));
       if (!tagged.has(c.id) && !touched){ res.removed++; return false; }
@@ -223,7 +233,7 @@ const TDSTally = {
       if (t.bad){ res.bad.push(t); return; }
       const have = byKey[t.key];
       const fields = {tax: t.tax, interest: t.interest || 0, fee: t.fee || 0, others: t.others || 0, section: t.section || ""};
-      if (have && have.from === "tally"){
+      if (have && this.made(have)){
         // Tally's new figure goes in only where nobody changed the challan in FinCom (it still equals what Tally gave
         // last), and a tax is never lowered below what is tagged to it; anything else shown
         const was = have.tallyWas || {};
@@ -246,13 +256,13 @@ const TDSTally = {
         return;
       }
       if (held.has(t.vid)) return;   // its earlier challan from Tally is kept with its tags: the difference is listed above
-      const other = (byVid[t.vid] || []).find(c => c.from !== "tally");
+      const other = (byVid[t.vid] || []).find(c => !this.made(c));
       if (other){
         // the payment is already a challan FinCom has under other details: not made twice; the difference shown
         res.conflicts.push({kind: "challan", challan: other.id, what: "details", fincom: TDSCH.label(other), tally: t.bsr + "/" + t.date + "/" + t.serial, label: TDSCH.label(other)});
         return;
       }
-      const c = {id: "tally:" + t.vid + ":" + t.key, from: "tally", fromVoucher: t.vid, bsr: t.bsr, serial: t.serial, date: t.date, tax: t.tax, interest: t.interest || 0, section: t.section, minorHead: t.minorHead || "200"};
+      const c = {id: "tally:" + t.vid + ":" + t.key, from: "tally", madeBy: "tally-sync", fromVoucher: t.vid, bsr: t.bsr, serial: t.serial, date: t.date, tax: t.tax, interest: t.interest || 0, section: t.section, minorHead: t.minorHead || "200"};
       if (t.fee) c.fee = t.fee;
       if (t.others) c.others = t.others;
       if (t.chq) c.cheque = t.chq;

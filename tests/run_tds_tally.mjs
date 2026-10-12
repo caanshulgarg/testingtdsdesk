@@ -21,10 +21,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const { load, HTML } = require("./harness");
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "tdsfields243", "7.1");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
-  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH"];
+  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH", "challanFromBooks"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const { ctx, x } = load(HTML, NAMES.filter((n) => { try { load(HTML, [n]); return true; } catch (e) { return false; } }));
-ctx.S.companies = { t: { id: "t", name: "FinCom Spike Co", choices: {} } }; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t"; let uidN = 0; ctx.uid = (p) => (p || "id") + ++uidN; ctx.D = () => ({parties: {}, entries: {}}); if (typeof ctx.money !== "function") ctx.money = (a) => "Rs " + a;
+ctx.S.companies = { t: { id: "t", name: "FinCom Spike Co", choices: {} } }; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t"; let uidN = 0; ctx.uid = (p) => (p || "id") + ++uidN; ctx.D = () => ({parties: {}, entries: {}}); if (typeof ctx.money !== "function") ctx.money = (a) => "Rs " + a; ctx.toast = () => {}; ctx.render = () => {};
 const J = (o) => JSON.stringify(o); const num = (v) => Number(v) || 0;
 // the cloud copy's rows, as tally-ingest stores them (parse.js on the bridge's bodies)
 const heads = [], lines = [];
@@ -238,5 +238,35 @@ b = books(); x.TDSTally.sync(b);
 b.certs.find((c) => c.certNo === "LDC197CERT0001").rate = 2;
 b.ledTds["FC LDC Party"].ldc = []; r = x.TDSTally.sync(b);
 ok(b.certs.some((c) => c.certNo === "LDC197CERT0001" && c.rate === 2) && r.conflicts.some((c) => c.kind === "certificate" && /no longer/.test(String(c.tally))), "N5. a corrected certificate Tally dropped stays, listed (" + J(r.conflicts) + ")");
+
+// ==== review 243 (round 3): R1, R2, R3
+// R1: a challan a person makes from a Tally payment ("Make it a challan") is never taken for one the sync made: two syncs
+// later it is still there, and Tally's link tags to it
+b = books();
+ok(x.challanFromBooks(G.SP1, "0240020", "00979") === true, "R1. SP1 made a challan by hand from the books");
+let hand = b.challans.find((c) => c.fromVoucher === G.SP1);
+r = x.TDSTally.sync(b); r = x.TDSTally.sync(b);
+hand = b.challans.find((c) => c.fromVoucher === G.SP1);
+ok(hand && hand.serial === "00979" && b.alloc[k1row] === hand.id && b.allocFrom[k1row] === "tally" && !r.conflicts.length, "R1. the hand-made challan stays, K1 tagged to it from Tally's link (" + J([hand, b.alloc[k1row], r.removed, r.conflicts]) + ")");
+ok(hand && hand.from !== "tally", "R1. a hand-made challan is not marked From Tally (" + (hand && hand.from) + ")");
+// R1: a hand-made challan whose details Tally also gives (same key): the person's figures kept, a difference listed
+b = books(); vOf(b, "PX1").tdsx.challan = null;
+x.challanFromBooks(G.PX1, "0510308", "54321");
+let hp = b.challans.find((c) => c.fromVoucher === G.PX1); hp.date = "20261231"; hp.tax = 9999;
+vOf(b, "PX1").tdsx.challan = { bsr: "0510308", no: "54321", date: "20261231", chq: "", chqDate: "", bank: "", branch: "" };
+r = x.TDSTally.sync(b);
+hp = b.challans.filter((c) => c.fromVoucher === G.PX1);
+ok(hp.length === 1 && hp[0].tax === 9999 && r.conflicts.some((c) => c.what === "tax" && c.tally === 10000), "R1. Tally's details on a hand-made challan: the person's tax kept, the difference listed (" + J([hp.map((c) => c.tax), r.conflicts]) + ")");
+// R2: making a challan from a marked payment carries its interest and fee
+b = books(); vOf(b, "PX1").tdsx.challan = null;
+const pp = x.TDS.paymentsFromBooks().find((p) => p.vid === G.PX1);
+x.challanFromBooks(G.PX1, "0510308", "54321");
+const r2c = b.challans.find((c) => c.fromVoucher === G.PX1);
+ok(pp && pp.interest === 150 && r2c && r2c.tax === 10000 && r2c.interest === 150 && r2c.fee === 200, "R2. the challan made from PX1 by hand: tax 10000, interest 150, fee 200 (" + J(r2c) + ")");
+// R3: a payment a challan already names (fromVoucher) is not proposed again, whatever its date
+b = books(); x.TDSTally.sync(b);
+const props = x.TDS.paymentsFromBooks().filter((p) => x.TDSTally.notChallan(p, b.challans));
+ok(!props.some((p) => p.vid === G.PX1), "R3. PX1, already a challan From Tally dated 31-Dec, is not proposed again (" + J(props.map((p) => p.vid)) + ")");
+ok(props.some((p) => p.vid === G.SP1), "R3. SP1, no challan yet, is proposed");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

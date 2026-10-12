@@ -1105,8 +1105,12 @@ function challanFromBooks(vid, bsr, ser){
   const k = TDSCH.cin(bsr);
   if (!k && (!String(bsr || "").trim() || !String(ser || "").trim())){ toast("Fill the BSR code and the challan serial number, or the 20-digit CIN, first."); return false; }
   const secs = (p.sections || []).filter(Boolean);
-  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: 0, fromVoucher: p.vid,
-    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "tally"}].map(c => { if (k) c.cin = k.cin; return c; }));
+  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: num(p.interest), fromVoucher: p.vid,
+    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "books"}].map(c => {
+      if (k) c.cin = k.cin;
+      if (num(p.fee)) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
+      if (num(p.others)) c.others = num(p.others);
+      return c; }));
   saveBooks(); toast("Challan added from the books."); render(); return true;
 }
 function certAdd(c){
