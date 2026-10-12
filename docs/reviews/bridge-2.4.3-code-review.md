@@ -5,10 +5,10 @@ fresh agent session for each round, read only, no access used beyond the reposit
 the app together, then re-reviewed each round of fixes. The rounds' own notes, word for word:
 docs/reviews/review-243-round1.md to review-243-round6.md.
 
-Range: bd80c0cbe3f5c7e4ba6ec90040772f4d9ffa28d5..9f656e88f5b122e7ab28ccd14f0d3fc72c58bc6b
+Range: bd80c0cbe3f5c7e4ba6ec90040772f4d9ffa28d5..f793ffc36d86516933654d4995d09a500a029d1c
 
 (next-tdsfields: bridge-go/, server/tally-cloud/parse.js, index.ts, migration-73-tds-fields.sql, tests, docs; since
-9f656e88f only docs/ changed. The app part, branch app-tdsfields from arc-ui, is reviewed in the same rounds: from
+9f656e88f (the last head reviewed, round 6) only docs/ changed and the beat fixture tests/fixtures/beat-2.1.10.json, which the go test writes, took the new allow-list table hash (f793ffc36; no code). The app part, branch app-tdsfields from arc-ui, is reviewed in the same rounds: from
 f4b15d9c5 to e0f3a4be0 and, after its merge of arc-ui 8c7da8f21, the diff against arc-ui; round 6's Low U1 fixed after it
 in 16e3b2ccb.)
 
