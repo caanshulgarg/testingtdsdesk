@@ -82,17 +82,32 @@ The two data locations (next-241) move to 2.4.4.
    functions tally_ingest_tdstally and tally_ingest_natures, and 72's tally_ingest_details with one line added. Tests:
    run_migration73.py, run_recorder_server.py (2.4.3 rows), run_migration_order.py.
 
-6. **The app (arc-ui, src/js/72-tds-tally.js, small UI marks).** On loading the cloud copy (TDSTally.sync): a challan is made
-   from each TDS payment Tally gives a BSR code, number and date for, marked **From Tally**, its tax, interest and late fee
-   split by TYPEOFTAXPAYMENT (the FVU's challan record carries the interest and the fee); the deductions Tally links to a
-   payment are tagged to that payment's challan (From Tally); a deduction FinCom already tags elsewhere is never moved: the
-   difference is listed on the Challans tab ("Tally and FinCom differ"); a challan a person entered for the same payment is
-   kept, a difference listed. A TDS ledger's section comes from its nature's section in Tally before the one in its name (a
-   person's own choice stays). Tally's lower-deduction certificates fill FinCom's certificate list (From Tally); one FinCom
-   has under the same number is kept as entered, differences listed; one Tally no longer keeps leaves (only Tally's). The
-   limits tracker uses the thresholds of the nature Tally keeps on the expense ledgers, said as Tally's. The books' TDS
-   payment list gives the tax alone where Tally marks interest and fee lines. The ledger masters read with a Day Book take
-   TDSRATENAME as the nature too. Tests: run_tds_tally.mjs; run_e2e_tdsgst.py part E (13 PASS: Tally's real 7.1 entries and
+6. **The app (arc-ui, src/js/72-tds-tally.js, small UI marks).** On loading the cloud copy (TDSTally.sync):
+   - **Challans.** A challan is made from each TDS payment Tally gives a BSR code, number and date for, marked **From
+     Tally**. Its tax, interest and late fee are split by TYPEOFTAXPAYMENT (the FVU's challan record carries the interest
+     and the fee): the interest, fee and others are the lines Tally marks so, the tax the rest of the TDS paid (a payment
+     of interest alone is a challan of tax 0). A payment with several challans takes each its own paid amount, the
+     interest and fee by nature; where Tally's entry does not tell a challan's amounts it is not made and is listed for a
+     person. When Tally corrects a challan's details, an untouched, untagged challan follows; one with tags, or one a
+     person corrected, stays and the difference is listed (never a second challan). A person's correction of a challan
+     from Tally stays (Tally's last figures kept beside it); its tax is never lowered below what is tagged to it.
+   - **Tags.** The deduction Tally links to a payment (the same reference, for the same party and duty ledger) is tagged
+     to that payment's challan (From Tally) only where exactly one deduction and one payment carry it, the payment not
+     dated before the deduction nor in a year after the next; anything else is listed ("Tally and FinCom differ"). A
+     deduction FinCom already tags elsewhere is never moved. A challan a person entered for the same payment is kept, a
+     difference listed.
+   - **Sections.** A TDS ledger's section comes from its nature's section in Tally before the one in its name (a
+     person's own choice stays). The ledger masters read with a Day Book take TDSRATENAME as the nature too.
+   - **Certificates.** Tally's lower-deduction certificates fill FinCom's certificate list (From Tally); one FinCom has
+     under the same number is kept as entered, differences listed; a person's correction of one from Tally stays; one
+     Tally no longer keeps leaves (only Tally's, untouched).
+   - **Thresholds.** The limits tracker uses the thresholds of the nature Tally keeps on the expense ledgers, said as
+     Tally's, only for the rule's own section, never on a monthly limit (rent), only where stricter than FinCom's, and
+     for 194C's bill-or-year rule only when Tally fills both figures (Tally 7.1 keeps 194C's bill figure alone in the
+     year's field).
+   - The books' TDS payment list gives the tax alone where Tally marks interest and fee lines.
+
+   Tests: run_tds_tally.mjs (with the review's cases); run_e2e_tdsgst.py part E (13 PASS: Tally's real 7.1 entries and
    masters through the cloud function, migration 73 and the app).
 
 What the owner's staff do in Tally: the test sheet's "What your staff do in Tally" (Stat Payment, then Challan
