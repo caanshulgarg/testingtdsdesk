@@ -294,7 +294,8 @@ export function scrubSpan(s) {
   const data = { environment: SENTRY_ENVIRONMENT, transaction: SPEED_NAME };
   for (const [k, ok] of Object.entries(SPAN_DATA)) { const v = x.data && x.data[k]; if (v !== undefined) { const c = ok(v); if (c !== undefined) data[k] = c; } }
   o.data = data;
-  const m = measurements(x.measurements, ["inp"]);
+  // a page load's root span passes here too, before beforeSendTransaction (its Web Vitals must stay); INP for an interaction
+  const m = measurements(x.measurements, x.op === "pageload" ? VITALS : ["inp"]);
   if (Object.keys(m).length) o.measurements = m;
   return o;
 }

@@ -12,9 +12,15 @@ const loaders = [];
 // line, a moment of the site being republished); when that fails too, the screen's crash wall offers Reload FinCom
 const RETRY_MS = 700;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// the browser keeps a failed module's answer for its address, so the second try asks for the same file at a new address
+// (the browser's message names it: Chrome, Edge, Firefox); without it, the same import again
+function again(load, e) {
+  const m = String((e && e.message) || "").match(/(https?:\/\/\S+?\.js)\b/);
+  return wait(RETRY_MS).then(() => (m ? import(/* @vite-ignore */ m[1] + "?retry=" + Date.now()) : load()));
+}
 export function lazyModule(load) {
   let mod = null, failed = null, p = null;
-  const get = () => p || (p = load().catch(() => wait(RETRY_MS).then(load)).then((m) => {
+  const get = () => p || (p = load().catch((e) => again(load, e)).then((m) => {
     mod = m; failed = null;
     // drawn again in full (the old screens' finishing touches too: the tables' funnels, the guide), as any change is
     try { if (window.S && S.firm && typeof window.render === "function") window.render(); } catch (e) { /* the next drawing shows it */ }

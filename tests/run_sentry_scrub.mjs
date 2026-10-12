@@ -188,6 +188,8 @@ ok(sout.description === "interaction" && sout.data.transaction === "fincom-app" 
   "described as 'interaction' on fincom-app, environment staging, with the release");
 ok(sout.measurements && sout.measurements.inp && sout.measurements.inp.value === 96 && Object.keys(sout.measurements).join() === "inp", "INP kept as a number; other measurements dropped");
 ok(S.scrubSpan({ ...sp, op: "http.client" }).description === "interaction" && S.scrubSpan({ ...sp, op: "GET ALPHA TRADERS" }).op === "other", "a span's op only from its known shape");
+ok(JSON.stringify(Object.keys(S.scrubSpan({ ...sp, op: "pageload", measurements: tx.measurements }).measurements).sort()) === JSON.stringify(["cls", "fcp", "inp", "lcp", "ttfb", "ttfb.requestTime"]),
+  "a page load's root span (scrubbed as a span before the transaction is) keeps its Web Vitals");
 ok(S.scrubSpan(null) && typeof S.scrubSpan(null) === "object", "scrubSpan always returns an object (Sentry keeps the raw span when it gets none)");
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
