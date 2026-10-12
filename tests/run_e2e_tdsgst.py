@@ -679,7 +679,7 @@ try:
             row("TDS from Tally", "E7. Tally's certificate in FinCom's list (party, PAN, section, rate, limit, from, to)", ["tally", "FC LDC Party", "AAACL0005E", "194J", 0, 500000, "20260401", "20270331"],
                 [c1_.get("src"), c1_.get("party"), c1_.get("pan"), c1_.get("section"), c1_.get("rate"), c1_.get("limit"), c1_.get("from"), c1_.get("to")])
             w_ = next((y for y in A["watch"] if y["party"] == "FC Party Company"), {})
-            row("TDS from Tally", "E8. the limits tracker on Tally's threshold of the nature of payment", "FC Contract 194C", w_.get("limitFrom"), w_.get("limitWords", ""))
+            row("TDS from Tally", "E8. the limits tracker: Tally 7.1's 194C nature keeps one figure (30,000, its bill field blank): FinCom's own limits kept (review 243 N3)", "", w_.get("limitFrom") or "", w_.get("limitWords", ""))
             row("TDS from Tally", "E9. nothing to decide between Tally and FinCom here (no differing tag or certificate)", 0, len(A["disagree"]) + len(A["conflicts"]), json.dumps(A["disagree"] + A["conflicts"])[:300])
 
     # ================================================================ the table

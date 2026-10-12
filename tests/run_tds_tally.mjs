@@ -25,7 +25,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const { ctx, x } = load(HTML, NAMES.filter((n) => { try { load(HTML, [n]); return true; } catch (e) { return false; } }));
 ctx.S.companies = { t: { id: "t", name: "FinCom Spike Co", choices: {} } }; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t"; let uidN = 0; ctx.uid = (p) => (p || "id") + ++uidN; ctx.D = () => ({parties: {}, entries: {}}); if (typeof ctx.money !== "function") ctx.money = (a) => "Rs " + a;
-const J = (o) => JSON.stringify(o);
+const J = (o) => JSON.stringify(o); const num = (v) => Number(v) || 0;
 // the cloud copy's rows, as tally-ingest stores them (parse.js on the bridge's bodies)
 const heads = [], lines = [];
 for (const id of ["K1", "SP1", "PX1"]) {
@@ -37,7 +37,7 @@ const G = Object.fromEntries(heads.map((h) => [h.id, h.guid]));
 const NAT = { "FC Contract 194C": { cats: [["20260401", "194C", "1", "2", "20", "20", "30000.00", ""]] }, "FC Prof Fees 194J": { cats: [["20260401", "194J", "10", "10", "20", "20", "30000.00", ""]] } };
 function books(extra) {
   const b = Object.assign({ cid: "t", vouchers: [], meta: { from: "20261101", to: "20261231" }, under: { "FC Party Company": "Sundry Creditors", "FC LDC Party": "Sundry Creditors", "HDFC Bank": "Bank Accounts", "FC Contract Exp": "Indirect Expenses" },
-    groups: { "Sundry Creditors": "Primary", "Bank Accounts": "Primary", "Indirect Expenses": "Primary" }, challans: [], alloc: {}, certs: [], pans: { "FC Party Company": "AAACF0001A", "FC LDC Party": "AAACL0005E" }, tdsNat: NAT,
+    groups: { "Sundry Creditors": "Primary", "Bank Accounts": "Primary", "Indirect Expenses": "Primary" }, challans: [], alloc: {}, certs: [], pans: { "FC Party Company": "AAACF0001A", "FC LDC Party": "AAACL0005E" }, tdsNat: JSON.parse(JSON.stringify(NAT)),
     ledTds: { "FC TDS 194C Keys": { nature: "FC Contract 194C", special: "", ldc: [] }, "FC TDS 194J XML": { nature: "FC Prof Fees 194J", special: "", ldc: [] }, "FC Contract Exp": { nature: "FC Contract 194C", special: "", ldc: [] },
       "FC LDC Party": { nature: "FC Prof Fees 194J", special: "1", ldc: [["FC Prof Fees 194J", "20260401", "20270331", "197", "LDC197CERT0001", "0", "500000.00"]] } } }, extra || {});
   ctx.S.books = b;
@@ -101,12 +101,18 @@ x.TDSTally.sync(b);
 ok(!b.certs.some((c) => c.src === "tally"), "4. a certificate Tally no longer keeps leaves (only Tally's)");
 // ---- 5. the threshold of Tally's nature in the limits tracker (194C: FinCom's rule 30,000 a bill or 1,00,000 a year)
 const tv = (id, d, amt) => ({ id, type: "Journal", date: d, no: id, party: "FC Party Company", narr: "", ent: [{ l: "FC Contract Exp", a: -amt }, { l: "FC Party Company", a: amt }], hsn: [] });
+// (review 243 N3) Tally 7.1's real 194C nature: EXEMPTIONLIMIT 30,000 and SINGLEBILLVALUE blank: the bill's figure in Tally's
+// one filled field, never read as a year's limit: 50,000 in the year, no bill over 30,000: not over
 b = books();
 b.vouchers = [tv("w1", "20260601", 25000), tv("w2", "20260701", 25000)];
 b.map = x.Books.mapLedgers(b.vouchers, {});
 ctx.S.books = b;
 const w = x.TDSWatch.year("2026-27").find((y) => y.party === "FC Party Company");
-ok(w && w.over === true && /Tally: FC Contract 194C/.test(w.limitWords) && w.limitFrom === "FC Contract 194C", "5. Tally's yearly threshold of 30,000: 50,000 is over (" + J(w && [w.over, w.limitWords]) + ")");
+ok(w && w.over === false && !w.limitFrom, "5. N3: Tally's lone 30,000 on 194C is not a year's limit: 50,000 not over, FinCom's limits (" + J(w && [w.over, w.limitWords, w.limitFrom]) + ")");
+// both filled in Tally (a year's 40,000, a bill's 20,000), stricter than FinCom's: used
+b.tdsNat = Object.assign({}, NAT, { "FC Contract 194C": { cats: [["20260401", "194C", "1", "2", "20", "20", "40000.00", "20000.00"]] } }); ctx.S.books = b;
+const w1 = x.TDSWatch.year("2026-27").find((y) => y.party === "FC Party Company");
+ok(w1 && w1.over === true && /Tally: FC Contract 194C/.test(w1.limitWords) && w1.limitFrom === "FC Contract 194C", "5. Tally's year 40,000 and bill 20,000: a bill of 25,000 is over (" + J(w1 && [w1.over, w1.limitWords]) + ")");
 b.ledTds = {}; ctx.S.books = b;
 const w2 = x.TDSWatch.year("2026-27").find((y) => y.party === "FC Party Company");
 ok(w2 && w2.over === false, "5. without Tally's nature: FinCom's own limits (50,000 under 1,00,000 a year and no bill over 30,000)");
@@ -172,7 +178,13 @@ ok(!b.challans.some((c) => c.from === "tally" && (c.serial === "54398" || !num(c
 // H4: Tally's thresholds only for the same section, never on a monthly limit, and never above FinCom's
 const RD = (id) => ctx.RULE_DEFAULTS ? ctx.RULE_DEFAULTS.find((z) => z.id === id) : x.RULE_DEFAULTS.find((z) => z.id === id);
 b = books();
-ok(x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("contractor")) && x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("contractor")).limit === 30000, "H4. 194C's nature on a 194C rule: Tally's 30,000 used");
+ok(x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("contractor")) === null, "H4/N3. 194C's nature with only EXEMPTIONLIMIT (bill blank): not used on 194C's bill-or-year rule");
+b.tdsNat = Object.assign({}, NAT, { "FC Contract 194C": { cats: [["20260401", "194C", "1", "2", "20", "20", "40000.00", "20000.00"]] } });
+const th2 = x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("contractor"));
+ok(th2 && th2.limit === 40000 && th2.single === 20000, "H4. 194C's nature with both filled, stricter: used (" + J(th2) + ")");
+b.tdsNat = NAT;
+const thJ = x.TDSTally.threshold(["FC TDS 194J XML"], "20260601", RD("professional"));
+ok(thJ && thJ.limit === 30000 && !thJ.single, "H4. 194J's nature on a year's rule: Tally's lower 30,000 used (" + J(thJ) + ")");
 ok(x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("professional")) === null, "H4. a 194C nature on a 194J rule: not used");
 b.ledTds["FC Contract Exp"].nature = "FC Rent 194I"; b.tdsNat["FC Rent 194I"] = { cats: [["20260401", "194-I", "10", "10", "20", "20", "240000.00", ""]] };
 ok(x.TDSTally.threshold(["FC Contract Exp"], "20260601", RD("rent_building")) === null, "H4. a monthly limit: Tally's yearly figure not used");
@@ -189,5 +201,42 @@ ok(b.certs.find((c) => c.certNo === "LDC197CERT0001").rate === 2 && r.conflicts.
 b = books(); const other2 = Object.assign({}, b); ctx.S.books = other2;
 r = x.TDSTally.sync(b);
 ok(!b.challans.length && r.skipped, "L6. the company changed during the load: sync does nothing (" + J(r) + ")");
+
+// ==== review 243 (round 2): N1, N2, N4, N5
+// N1: a payment of interest alone (Tally marks its only line Interest): a challan of tax 0 and interest 150, never tax 150
+b = books(); px1 = vOf(b, "PX1");
+px1.tdsx.kinds = [{ n: 0, ledger: "FC TDS 194J XML", kind: "Interest", nature: "FC Prof Fees 194J", amt: -150 }];
+px1.ent = px1.ent.filter((e) => e.l !== "FC TDS 194J XML" || Math.abs(e.a) === 150).map((e) => e.l === "FC TDS 194J XML" ? e : Object.assign({}, e, { a: Math.sign(e.a) * 150 }));
+r = x.TDSTally.sync(b);
+const n1 = b.challans.find((c) => c.fromVoucher === G.PX1), p1 = x.TDS.paymentsFromBooks().find((p) => p.vid === G.PX1);
+ok(n1 && num(n1.tax) === 0 && n1.interest === 150 && p1 && p1.tax === 0 && p1.interest === 150, "N1. interest alone: challan tax 0, interest 150; the payment's tax 0 (" + J([n1 && [n1.tax, n1.interest], p1]) + ")");
+// N2: one deduction reached by two payments: none tagged, listed; tagged counts rows
+b = books(); b.vouchers.push(clone(vOf(b, "SP1"), "SP2")); b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b;
+x.TDSCH.add([{ bsr: "0240020", serial: "00979", date: "20261201", tax: 2000, interest: 0, section: "194C", minorHead: "200" }, { bsr: "0240020", serial: "00981", date: "20261202", tax: 2000, interest: 0, section: "194C", minorHead: "200" }]);
+b.challans.forEach((c) => { if (c.serial === "00981") c.fromVoucher = "SP2"; });
+r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && r.tagged === 0 && r.disagree.some((d) => d.row === k1row && /2 payments/.test(d.why || "")), "N2. one deduction paid by two payments in Tally: not tagged, listed (" + J([b.alloc[k1row], r.tagged, r.disagree]) + ")");
+// N2: a payment dated before the deduction: not tagged, listed
+b = books(); vOf(b, "SP1").date = "20261001"; upload(); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && r.disagree.some((d) => d.row === k1row && /before/.test(d.why || "")), "N2. a payment dated before its deduction: not tagged, listed (" + J(r.disagree) + ")");
+// N2: a payment more than a year after (another year's reference of the same name): not tagged, listed
+b = books(); vOf(b, "SP1").date = "20280415"; upload(); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && r.disagree.some((d) => d.row === k1row && /year/.test(d.why || "")), "N2. a payment two years on: not tagged, listed (" + J(r.disagree) + ")");
+// N4: a challan Tally keeps that FinCom could not make is shown (TDSTally.bad())
+b = books(); px1 = vOf(b, "PX1"); ch0 = px1.tdsx.challan; px1.tdsx.challan = Object.assign({}, ch0, { no: "54398" });
+px1.tdsx.periods = [{ n: 0, ledger: "FC TDS 194J XML", nature: "FC Prof Fees 194J", section: "194J", paid: -6000, challan: ch0 }];
+x.TDSTally.sync(b);
+ok(x.TDSTally.bad().some((z) => /54398/.test(z.bad)), "N4. the challan not made is in TDSTally.bad() for the page (" + J(x.TDSTally.bad()) + ")");
+// N5: a challan from Tally a person corrected is kept when Tally changes it (untagged), the difference shown
+b = books(); x.TDSTally.sync(b);
+pc = b.challans.find((c) => c.fromVoucher === G.PX1); pc.interest = 175;
+vOf(b, "PX1").tdsx.challan.no = "54322"; r = x.TDSTally.sync(b);
+pxs = b.challans.filter((c) => c.fromVoucher === G.PX1);
+ok(pxs.length === 1 && pxs[0].serial === "54321" && pxs[0].interest === 175 && r.conflicts.some((c) => c.what === "details" && /54322/.test(c.tally)), "N5. a corrected challan from Tally is kept, the new details listed, no second one (" + J([pxs.map((c) => [c.serial, c.interest]), r.conflicts]) + ")");
+// N5: a certificate from Tally a person corrected stays when Tally drops it, listed
+b = books(); x.TDSTally.sync(b);
+b.certs.find((c) => c.certNo === "LDC197CERT0001").rate = 2;
+b.ledTds["FC LDC Party"].ldc = []; r = x.TDSTally.sync(b);
+ok(b.certs.some((c) => c.certNo === "LDC197CERT0001" && c.rate === 2) && r.conflicts.some((c) => c.kind === "certificate" && /no longer/.test(String(c.tally))), "N5. a corrected certificate Tally dropped stays, listed (" + J(r.conflicts) + ")");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

@@ -171,7 +171,7 @@ const TDS = {
       // bridge 2.4.3: where Tally marks what each line pays (TYPEOFTAXPAYMENT), the tax alone; interest and fee apart
       const sp = typeof TDSTally === "object" ? TDSTally.split(v) : null;
       const tax = sp ? sp.tax : r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
-      if (!tax) return;
+      if (!tax && !(sp && (sp.interest || sp.fee || sp.others))) return;   // (review 243 N1) a payment of interest or fee alone is listed, its tax 0
       out.push({vid: v.id, date: v.date, tax, ...(sp ? {interest: sp.interest, fee: sp.fee, fromTally: true} : {}), sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));

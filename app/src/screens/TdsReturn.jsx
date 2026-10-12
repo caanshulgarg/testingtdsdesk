@@ -29,13 +29,14 @@ const secText = (s, fy = S.tdsFy) => TDS.secNew(s, fy).text;
 // bridge 2.4.3: a challan or certificate made from what Tally keeps, and where Tally and FinCom differ (TDSTally, src/js/72)
 const FromTally = ({ on }) => (on ? <span className="tag" data-from-tally="" title="Made from the details Tally keeps">From Tally</span> : null);
 function TallyDiffs({ kind }) {
-  const tags = kind === "challan" ? TDSTally.disagreements() : [], cs = TDSTally.conflicts(kind);
-  if (!tags.length && !cs.length) return null;
+  const tags = kind === "challan" ? TDSTally.disagreements() : [], cs = TDSTally.conflicts(kind), bad = kind === "challan" ? TDSTally.bad() : [];
+  if (!tags.length && !cs.length && !bad.length) return null;
   return <section className="dash-card" style={{ marginBottom: 12 }} data-tally-diffs={kind}><h3>Tally and FinCom differ</h3>
     <p className="note">Nothing here was changed: FinCom keeps what a person entered. Decide each, then change it in FinCom or in Tally.</p>
     <ul className="note">
       {tags.map((d) => <li key={"t" + d.row}>{d.party} ({day(d.date)}): {d.why ? d.why : <>Tally pays it with challan {d.tallyLabel}; FinCom has it on {d.fincomLabel}</>}</li>)}
       {cs.map((c, i) => <li key={"c" + i}>{c.label}: {c.what} is {String(c.fincom)} in FinCom, {String(c.tally)} in Tally</li>)}
+      {bad.map((z, i) => <li key={"b" + i}>Tally's challan {z.bad}: not made in FinCom. Enter it by hand.</li>)}
     </ul></section>;
 }
 

@@ -73,8 +73,11 @@ const TDSTally = {
       o[slot] = r2(o[slot] + a);
       if (duty.has(z.ledger)) out = r2(out + a);
     });
+    // (review 243 N1) every TDS line marked interest, fee or others (a payment of interest alone): tax 0, never the
+    // interest read as tax; more marked than the TDS paid: not Tally's split (the books' rule then)
     o.tax = r2(paid - out);
-    if (!(o.tax > 0)) return null;
+    if (o.tax < -0.005) return null;
+    if (o.tax < 0) o.tax = 0;
     return o;
   },
   kindOf(kind){ const w = String(kind || "").toLowerCase(); return /interest/.test(w) ? "interest" : /fee/.test(w) ? "fee" : /penalty|other/.test(w) ? "others" : "tax"; },
@@ -108,8 +111,8 @@ const TDSTally = {
         const one = list.filter(z => kOf(z) === key), it = one[0];
         if (!solo && (shareBad || one.some(z => z.paid == null))){ out.push(badOf(key, it, shareBad || "Tally gives no amount for this challan on a payment of several challans")); return; }
         const tax = solo ? (sp ? sp.tax : r2(tdsPaid)) : r2(one.reduce((a, z) => a + Math.abs(num(z.paid)), 0));
-        if (!(tax > 0)){ out.push(badOf(key, it, "no tax")); return; }
         const e = solo ? (sp || {}) : (extras[key] || {});
+        if (!(tax > 0) && !(num(e.interest) > 0 || num(e.fee) > 0 || num(e.others) > 0)){ out.push(badOf(key, it, "no amount")); return; }
         // TDSCH.make reads eight digits as ddmmyyyy (the portal's form): Tally's yyyymmdd goes as yyyy-mm-dd
         const d = TDS.ymd(it.ch.date), iso = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "";
         const c = TDSCH.make({bsr: it.ch.bsr, serial: it.ch.no, date: iso, tax, interest: e.interest || 0, fee: e.fee || 0,
@@ -131,18 +134,27 @@ const TDSTally = {
       if (v.cancel || v.opt || !v.tdsx || !this.isTds(v.tdsx)) return;
       (v.tdsx.refs || []).forEach(r => {
         if (!r.ref || !r.duty) return;
-        if (/new/i.test(r.type || "")) (ded[this.refKey(r, r.party || r.ledger)] = ded[this.refKey(r, r.party || r.ledger)] || []).push({row: v.id + "|" + r.duty, nature: r.nature || ""});
-        else if (/agst/i.test(r.type || "") && r.party) pay.push({vid: v.id, ref: r.ref, key: this.refKey(r, r.party), nature: r.nature || ""});
+        if (/new/i.test(r.type || "")) (ded[this.refKey(r, r.party || r.ledger)] = ded[this.refKey(r, r.party || r.ledger)] || []).push({row: v.id + "|" + r.duty, nature: r.nature || "", date: TDS.ymd(v.date)});
+        else if (/agst/i.test(r.type || "") && r.party) pay.push({vid: v.id, ref: r.ref, key: this.refKey(r, r.party), nature: r.nature || "", date: TDS.ymd(v.date)});
       });
     });
-    const out = [];
+    const out = [], fyStart = (d) => num(TDS.fyOf(d).slice(0, 4));
     pay.forEach(p => {
       const d = (ded[p.key] || []).filter(z => !p.nature || !z.nature || z.nature === p.nature);
       const rows = Array.from(new Set(d.map(z => z.row)));
-      if (rows.length === 1) out.push({row: rows[0], vid: p.vid, ref: p.ref});
-      else rows.forEach(row => out.push({row, vid: p.vid, ref: p.ref, many: rows.length}));
+      if (rows.length !== 1){ rows.forEach(row => out.push({row, vid: p.vid, ref: p.ref, many: rows.length})); return; }
+      // (review 243 N2) a payment dated before its deduction, or in a year after the next, is not its payment (another
+      // year's reference of the same name): listed, never tagged
+      const z = d.find(q => q.row === rows[0]);
+      if (z.date && p.date && p.date < z.date) out.push({row: rows[0], vid: p.vid, ref: p.ref, why: "Tally's payment of reference " + p.ref + " is dated before the deduction: tag it by hand"});
+      else if (z.date && p.date && fyStart(p.date) > fyStart(z.date) + 1) out.push({row: rows[0], vid: p.vid, ref: p.ref, why: "Tally's payment of reference " + p.ref + " is more than a year after the deduction: tag it by hand"});
+      else out.push({row: rows[0], vid: p.vid, ref: p.ref});
     });
-    return out;
+    // (review 243 N2) one deduction reached by several payments: none tagged, listed
+    const by = {};
+    out.forEach(l => { (by[l.row] = by[l.row] || new Set()).add(l.vid); });
+    return out.map(l => by[l.row].size > 1 && !l.many && !l.why ? Object.assign({}, l, {why: "Tally pays it with " + by[l.row].size + " payments: tag it by hand"}) : l)
+      .filter((l, i, a) => !(by[l.row].size > 1) || a.findIndex(q => q.row === l.row) === i);
   },
   // the certificates Tally keeps on the parties
   certsFrom(b){
@@ -164,6 +176,9 @@ const TDSTally = {
       const nat = this.natureOf(l), c = nat ? this.cat(nat, date) : null;
       if (!c || !(c.limit || c.single)) continue;
       if (TDS.sec(this.sectionOf(nat, date)) !== TDS.sec(R.old)) continue;
+      // (review 243 N3) a bill-or-year rule (194C) takes Tally's figures only when Tally fills both: one figure alone
+      // (Tally 7.1 keeps 194C's bill figure in EXEMPTIONLIMIT, its bill field blank) says not which it is
+      if (R.basis === "single_or_annual" && !(c.limit && c.single)) continue;
       const o = {nature: nat};
       if (c.limit && R.basis !== "single" && (!num(R.limit) || c.limit < num(R.limit))) o.limit = c.limit;
       if (c.single && R.basis !== "annual" && (!num(R.single) || c.single < num(R.single))) o.single = c.single;
@@ -193,7 +208,9 @@ const TDSTally = {
     const held = new Set();
     b.challans = b.challans.filter(c => {
       if (c.from !== "tally" || (now[c.fromVoucher] && now[c.fromVoucher].has(this.keyOf(c)))) return true;
-      if (!tagged.has(c.id)){ res.removed++; return false; }
+      // (review 243 N5) only one nobody changed in FinCom leaves; one a person corrected stays, shown like a tagged one
+      const was = c.tallyWas || {}, touched = FIELDS.some(k => (k in was) && val(was, k) !== val(c, k));
+      if (!tagged.has(c.id) && !touched){ res.removed++; return false; }
       held.add(c.fromVoucher);
       const t = tallyCh.find(z => z.vid === c.fromVoucher && !z.bad);
       res.conflicts.push({kind: "challan", challan: c.id, what: "details", fincom: TDSCH.label(c), tally: t ? t.bsr + "/" + t.date + "/" + t.serial : "no challan (the payment changed or is gone in Tally)", label: TDSCH.label(c)});
@@ -249,6 +266,7 @@ const TDSTally = {
     this.links(b).forEach(l => {
       const chs = byVid[l.vid] || [];
       if (!rows[l.row]) return;
+      if (l.why && !l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: l.why}); return; }
       if (l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: "Tally's reference " + l.ref + " is on " + l.many + " deductions of this party: tag it by hand"}); return; }
       if (chs.length !== 1){ if (chs.length > 1) res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: "the payment is " + chs.length + " challans here: tag it by hand"}); return; }
       const ch = chs[0], cur = b.alloc[l.row];
@@ -293,11 +311,18 @@ const TDSTally = {
       had.tallyWas = was;
     });
     // a certificate Tally no longer keeps leaves FinCom's list only when it came from Tally
-    b.certs = b.certs.filter(c => c.src !== "tally" || keepIds.has(c.id));
+    // (review 243 N5) one a person corrected stays, the difference shown
+    b.certs = b.certs.filter(c => {
+      if (c.src !== "tally" || keepIds.has(c.id)) return true;
+      const was = c.tallyWas || {}, touched = CF.some(([k, f]) => (k in was) && String(f(was[k] == null ? "" : was[k])) !== String(f(c[k] == null ? "" : c[k])));
+      if (touched) res.conflicts.push({kind: "certificate", cert: c.id, what: "certificate", fincom: c.certNo, tally: "no longer in Tally", label: c.certNo + " (" + c.party + ")"});
+      return touched;
+    });
     b.tallyTds = {at: new Date().toISOString(), disagree: res.disagree, conflicts: res.conflicts, bad: res.bad};
     return res;
   },
   // what is shown on the pages (the last sync)
   disagreements(){ return ((this.books().tallyTds || {}).disagree || []); },
+  bad(){ return ((this.books().tallyTds || {}).bad || []); },
   conflicts(kind){ return ((this.books().tallyTds || {}).conflicts || []).filter(c => !kind || c.kind === kind); }
 };
