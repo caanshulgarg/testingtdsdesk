@@ -1,0 +1,1 @@
+bodies.xml: every entry of the payroll test company as bridge 2.4.4 (next-payroll d816ff702, built from source) sent it from real TallyPrime 7.1 to the stand-in cloud: tally-versions mode payg, run 38271385254 (spike-results/versions/38271385254-7.1-payg/versions/captures/bodies.xml on branch tally-versions). Read by run_e2e_payroll.py with REAL=fixtures/payroll-e2e/real-7.1.
