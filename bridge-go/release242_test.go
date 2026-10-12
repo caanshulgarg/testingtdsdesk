@@ -31,7 +31,7 @@ func TestRelease242VersionAndDecisionLine(t *testing.T) {
 		}
 	}
 	// (2.4.3 changed the table: release243_test.go)
-	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9][^\n]*allowed for 2\.4\.2`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-1[1-9] for 2\.4\.2[^\n]*2\.4\.2 allowed by`).MatchString(al) {
 		t.Error("no dated re-measured line for 2.4.2")
 	}
 	tdl := readText(filepath.Join("addon", "FinComRecorder.tdl"))

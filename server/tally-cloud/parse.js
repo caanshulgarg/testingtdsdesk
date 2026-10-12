@@ -181,7 +181,7 @@ function gstType(s){
 const TDSX_TAGS = ["STATPAYMENTTYPE", "TAXCHALLANBSRCODE", "TAXBANKCHALLANNUMBER", "TAXCHALLANDATE", "TYPEOFTAXPAYMENT", "STATNATURENAME", "SUMMARYALLOCS.LIST", "TAXNAME", "TAXPAYPERIODFROMDATE"];
 const tx = (q, tag, n) => one(q, tag).replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
 function tdsChallanOf(q){
-  const c = {bsr: tx(q, "TAXCHALLANBSRCODE", 7).replace(/\D/g, ""), no: tx(q, "TAXBANKCHALLANNUMBER", 20), date: d8(one(q, "TAXCHALLANDATE")),
+  const c = {bsr: tx(q, "TAXCHALLANBSRCODE", 40).replace(/\D/g, "").slice(0, 7), no: tx(q, "TAXBANKCHALLANNUMBER", 20), date: d8(one(q, "TAXCHALLANDATE")),
     chq: tx(q, "TAXCHEQUENUMBER", 40), chqDate: d8(one(q, "TAXCHEQUEDATE")), bank: tx(q, "TAXBANKNAME", 100), branch: tx(q, "TAXBANKBRANCHNAME", 100)};
   return Object.values(c).some(Boolean) ? c : null;
 }
@@ -443,7 +443,9 @@ function takeVoucher(s){
     const head = cutOut(s, ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ALLINVENTORYENTRIES.LIST"]);
     const x = {stat: tx(head, "STATPAYMENTTYPE", 20), from: d8(one(head, "TAXPAYPERIODFROMDATE")), to: d8(one(head, "TAXPAYPERIODTODATE")),
       nature: tx(head, "TDSNATUREOFPAYMENT", 200), section: tx(head, "TDSSECTIONNO", 20), challan: tdsChallanOf(head), kinds: tdsKinds, periods: tdsPeriods, refs: tdsRefs};
-    if (x.stat || x.from || x.to || x.nature || x.section || x.challan || tdsKinds.length || tdsPeriods.length || tdsRefs.length) v.tdsx = x;
+    // (review 243 L2) another duty's stat payment (GST) is no TDS payment: no tdsx unless it carries TDS references
+    const otherDuty = x.stat && !/^(TDS|TCS)\b/i.test(x.stat) && !tdsRefs.length;
+    if (!otherDuty && (x.stat || x.from || x.to || x.nature || x.section || x.challan || tdsKinds.length || tdsPeriods.length || tdsRefs.length)) v.tdsx = x;
   }
   // ---- part A, the owner's accuracy checks: lines totalling zero; item lines' taxable value plus tax against the ledger
   // lines for that invoice; bill-wise and cost centre allocations against their line. Each failure in plain words. The

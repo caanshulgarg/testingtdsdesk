@@ -66,5 +66,17 @@ const rec = '<VOUCHER REMOTEID="g2" VCHTYPE="Payment"><GUID>g2</GUID><DATE>20261
 const rv = parseDay(rec).vouchers[0];
 ok(rv && rv.tdsx && rv.tdsx.periods.length === 1 && J(rv.tdsx.periods[0].challan) === J({bsr: "0510308", no: "00042", date: "20261207", chq: "", chqDate: "", bank: "", branch: ""}),
   "the challan on the nature's detail: " + J(rv && rv.tdsx));
+
+// 5. (review 243 L1) a BSR code typed with a space keeps its seven digits
+const sp7 = parseDay(rec.replace("<TAXCHALLANBSRCODE>0510308<", "<TAXCHALLANBSRCODE>05 10308<").replace('REMOTEID="g2"', 'REMOTEID="g3"').replace("<GUID>g2<", "<GUID>g3<")).vouchers[0];
+ok(sp7 && sp7.tdsx && sp7.tdsx.periods[0].challan.bsr === "0510308", "a BSR code with a space: " + J(sp7 && sp7.tdsx && sp7.tdsx.periods[0].challan));
+// 6. (review 243 L2) a GST stat payment carries no tdsx (even with a line's TYPEOFTAXPAYMENT and a challan)
+const gstPay = '<VOUCHER REMOTEID="g4" VCHTYPE="Payment"><GUID>g4</GUID><DATE>20261205</DATE><STATPAYMENTTYPE>GST</STATPAYMENTTYPE><TAXCHALLANBSRCODE>0510308</TAXCHALLANBSRCODE>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>CGST</LEDGERNAME><TYPEOFTAXPAYMENT>Tax</TYPEOFTAXPAYMENT><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Bank</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>';
+const gp = parseDay(gstPay).vouchers[0];
+ok(gp && gp.tdsx === undefined, "a GST stat payment carries no tdsx: " + J(gp && gp.tdsx));
+const tcsPay = parseDay(rec.replace("<STATPAYMENTTYPE>TDS<", "<STATPAYMENTTYPE>TCS<").replace('REMOTEID="g2"', 'REMOTEID="g5"').replace("<GUID>g2<", "<GUID>g5<")).vouchers[0];
+ok(tcsPay && tcsPay.tdsx && tcsPay.tdsx.stat === "TCS", "a TCS stat payment keeps its tdsx");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

@@ -185,7 +185,7 @@
 //                                                       rate were not kept before); one month a call, owners only;
 //                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { parseDay, amt, cleanName } from "./parse.js";
+import { parseDay, amt, cleanName, d8 } from "./parse.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
 
@@ -1149,7 +1149,7 @@ const TDSCOLS = "tds_nature, tds_special_rate, tds_ldc";
 function ledTds(l: any): { tds_nature: string; tds_special_rate: string; tds_ldc: string[][] } | null {
   if (!Array.isArray(l) || l.length < 14) return null;
   const ldc = (Array.isArray(l[13]) ? l[13] : []).slice(0, 50).filter((c: any) => Array.isArray(c))
-    .map((c: any) => [0, 1, 2, 3, 4, 5, 6].map((i) => String(c[i] ?? "").slice(0, i === 0 ? 200 : 60).trim()));
+    .map((c: any) => [0, 1, 2, 3, 4, 5, 6].map((i) => { const v = String(c[i] ?? "").slice(0, i === 0 ? 200 : 60).trim(); return (i === 1 || i === 2) ? d8(v) : v; }));   // (review 243 L3) from, to as yyyymmdd
   return { tds_nature: String(l[11] ?? "").trim().slice(0, 200), tds_special_rate: String(l[12] ?? "").trim().slice(0, 20), tds_ldc: ldc };
 }
 // the ledgers upserted; refused for want of 57's column (the cloud's update out before 57 ran, the column check cached):
@@ -1212,9 +1212,9 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   // 1b. bridge 2.4.3 (migration 73): the natures of payment, added or brought up to date by their Tally GUID (none removed)
   if (Array.isArray(body.natures) && body.natures.length) {
     const nat = body.natures.slice(0, 2000).filter((x: any) => Array.isArray(x)).map((x: any) => [s(x[0], 100).trim(), Math.max(0, Math.floor(Number(x[1]) || 0)), Math.max(0, Math.floor(Number(x[2]) || 0)),
-      cleanName(s(x[3], 200)), (Array.isArray(x[4]) ? x[4] : []).slice(0, 20).filter((c: any) => Array.isArray(c)).map((c: any) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => s(c[i], 30).trim()))]);
+      cleanName(s(x[3], 200)), (Array.isArray(x[4]) ? x[4] : []).slice(0, 20).filter((c: any) => Array.isArray(c)).map((c: any) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => i === 0 ? d8(s(c[i], 30)) : s(c[i], 30).trim()))]);   // (review 243 L3) APPLICABLEFROM as yyyymmdd
     const { data, error } = await db.rpc("tally_ingest_natures", { p_book: book, p_natures: nat });
-    if (error && /tally_ingest_natures|could not find|does not exist|schema cache/i.test(String(error.message || ""))) notes.push("natures of payment not kept: migration 73 is not applied");
+    if (error && (["PGRST202", "42883"].includes(String(error.code || "")) || /could not find the function public\.tally_ingest_natures/i.test(String(error.message || "")))) notes.push("natures of payment not kept: migration 73 is not applied");
     else if (error) throw new Error(error.message);
     else (out as any).natures = Math.max(0, Math.floor(Number(data) || 0));
   }
