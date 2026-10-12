@@ -166,7 +166,7 @@ try {
 
   Say '---- payroll: employee groups and employees'
   foreach ($g in @($G1, $G2)) { $null = XImp 'All Masters' ('<COSTCENTRE NAME="' + $g + '" ACTION="Create"><NAME.LIST><NAME>' + $g + '</NAME></NAME.LIST><PARENT/><CATEGORY>' + $PRCAT + '</CATEGORY><ISEMPLOYEEGROUP>Yes</ISEMPLOYEEGROUP><FORPAYROLL>Yes</FORPAYROLL></COSTCENTRE>') "employee group $g" }
-  for ($i = 0; $i -lt 3; $i++) { $null = XImp 'All Masters' ('<COSTCENTRE NAME="' + $E[$i] + '" ACTION="Create"><NAME.LIST><NAME>' + $E[$i] + '</NAME></NAME.LIST><PARENT>' + $EG[$i] + '</PARENT><CATEGORY>' + $PRCAT + '</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><DATEOFJOIN>2025040' + ($i + 1) + '</DATEOFJOIN></COSTCENTRE>') "employee $($E[$i]) (minimal)" }
+  for ($i = 0; $i -lt 3; $i++) { $null = XImp 'All Masters' ('<COSTCENTRE NAME="' + $E[$i] + '" ACTION="Create"><NAME.LIST><NAME>' + $E[$i] + '</NAME></NAME.LIST><PARENT>' + $EG[$i] + '</PARENT><CATEGORY>' + $PRCAT + '</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><DATEOFJOIN>' + @('20250401', '20250402', '20250501')[$i] + '</DATEOFJOIN></COSTCENTRE>') "employee $($E[$i]) (minimal)" }
   $go = Obj 'Cost Centre' $G1; XSave 'obj-group-before.xml' $go
   $eo = Obj 'Cost Centre' $E[0]; XSave 'obj-employee-schema.xml' $eo
   $ef = Fields (ObjNode $eo $E[0])
@@ -181,7 +181,7 @@ try {
       return $null
     }
     if ($t -eq 'Date') {
-      if ($u -match 'BIRTH|DOB') { return @('19900115', '19851120', '19980705')[$n - 1] }
+      if ($u -match 'BIRTH|DOB') { return @('19900101', '19850201', '19980731')[$n - 1] }
       if ($u -match 'JOIN') { return @('20250401', '20250501', '20260601')[$n - 1] }
       if ($u -match 'PASSPORT|VISA|PERMIT|CONTRACT') { return '20300131' }
       if ($u -match 'REGIME|DECL|TAX|PF|ESI|UAN|EFFECT|APPLICABLE|FROM') { return '20260401' }
@@ -192,7 +192,8 @@ try {
       return $null
     }
     if ($t -ne 'String' -and $t -ne '') { return $null }
-    if ($u -match 'AADHA|AADHAR|ADHAR|UIDAI|UID$') { return '99990000100' + $n }
+    if ($u -match '^REMOTE|WORKPERMIT|VISA|PASSPORT|COUNTRYISD|VIRTUALPAYMENT|DISPENS') { return $null }
+    if ($u -match 'AADHA|AADHAR|ADHAR|UIDAI') { return '99990000100' + $n }
     if ($u -match '(^|[^A-Z])PAN|INCOMETAXNUMBER|ITNUMBER|PERMANENTACC') { return @('ABCPE1001A', 'ABCPE1002B', 'ABCPE1003C')[$n - 1] }
     if ($u -match 'UAN|UNIVERSAL') { return '10020030040' + $n }
     if ($u -match 'DESIG') { return @('Accounts Manager', 'Accountant', 'Machine Operator')[$n - 1] }
@@ -390,10 +391,8 @@ try {
   # every other master type Tally lists with a payroll-like name (income-tax declarations may be kept outside the employee)
   $tcount = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>$$NumItems</ID></HEADER><BODY><DESC><FUNCPARAMLIST><PARAM>Ledger</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>') ''
   XSave 'cmpinfo.xml' $tcount
-  foreach ($ty in 'PayrollITDeclaration', 'EmployeeITDeclaration', 'ITDeclaration', 'IncomeTaxSlab', 'IncomeTaxClassification', 'SalaryDetails', 'PayStructure', 'EmployeeCategory', 'CostCategory') {
-    $x = Coll 'FcTy' $ty 'NAME' '' '<NATIVEMETHOD>*</NATIVEMETHOD>' 60; XSave "type-$ty.xml" $x
-    Info "payroll: collection of type $ty`: $("$x".Length) characters; first: $((("$x" -replace '\s+', ' ')).Substring(0, [Math]::Min(300, ("$x" -replace '\s+', ' ').Length)))"
-  }
+  # run 38236438871: a Collection of a type Tally does not have (PayrollITDeclaration, with NATIVEMETHOD *) got no answer and
+  # Tally answered nothing more on 3.0, 5.1 and 7.1: no such probe here; the object types Tally has are in cmpinfo.xml
   YRes $Y4 $(if ($ids.Count -and "$lraw" -match '<LEDGER') { 'PASS' } else { 'HARNESS' }) ("object answers: {0}; masters {1} characters; FinComLedgers {2}; Day Book {3}" -f ($objMs -join ', '), "$mx".Length, "$lraw".Length, "$db".Length)
 
   Say '---- payroll: 500 employees and the candidate requests'
