@@ -510,6 +510,9 @@ func pushCloudState(company, dir string) {
 
 // every turn: all companies kept here, whether open in Tally or not (sending needs no Tally); returns the days waiting
 func invokeCloudPush() int {
+	for _, d := range keptDirs() {
+		bankCleanOnce(d) // 2.4.4 (review 244 R2-L1): once per company folder
+	}
 	if !cloudOn() {
 		return 0
 	}

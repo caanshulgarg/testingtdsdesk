@@ -10,6 +10,7 @@ T = {"members": [], "clients": [], "tally_companies": [], "tally_jobs": [], "tal
 USERS = {}            # bearer token -> {id, email}
 FILES = {}            # bucket/path -> bytes
 RANGES = []           # (bucket/path, from, to) of each ranged GET (Range: bytes=from-to)
+REMOVED = []          # bucket/path of each object removed (Storage remove(), DELETE)
 QUEUE = []            # {msg_id, vt, read_ct, message, archived}
 DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
@@ -174,7 +175,7 @@ class H(http.server.BaseHTTPRequestHandler):
         t = (self.headers.get("Authorization") or "").replace("Bearer ", "")
         return "service" if t == SERVICE else USERS.get(t)
     def handle_any(self, method):
-        u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH") else b""
+        u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH", "DELETE") else b""
         CALLS.append((method, path))
         if MAX_URL[0] and len(self.path) > MAX_URL[0]: return self.send(414, {"message": "URI Too Long"})
         if path == "/auth/v1/user":
@@ -243,6 +244,13 @@ class H(http.server.BaseHTTPRequestHandler):
             return self.send(200, [{"name": n, "id": None if "." not in n else n} for n in names])
         if path.startswith("/storage/v1/object/"):
             key = unquote(path[len("/storage/v1/object/"):]).replace("authenticated/", "", 1)
+            if method == "DELETE":                                    # remove([paths]): DELETE /storage/v1/object/<bucket> {prefixes}
+                gone = []
+                for pf in (json.loads(raw or b"{}").get("prefixes") or []):
+                    k = key.rstrip("/") + "/" + pf
+                    if k in FILES: del FILES[k]; gone.append({"name": pf})
+                REMOVED.extend(key.rstrip("/") + "/" + g["name"] for g in gone)
+                return self.send(200, gone)
             if method == "POST" or method == "PUT": FILES[key] = raw; return self.send(200, {"Key": key})
             if method == "GET":
                 if key not in FILES: return self.send(404, {"message": "not found"})
@@ -270,5 +278,6 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self): self.handle_any("POST")
     def do_PATCH(self): self.handle_any("PATCH")
     def do_PUT(self): self.handle_any("PUT")
+    def do_DELETE(self): self.handle_any("DELETE")
 def start():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H); threading.Thread(target=srv.serve_forever, daemon=True).start(); return srv

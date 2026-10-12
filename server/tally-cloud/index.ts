@@ -2496,7 +2496,14 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const from = Math.max(0, Math.floor(Number(u.from) || 0)), size0 = Math.floor(Number(u.size) || 0);
   const end = late ? Math.min(Math.floor(Number(u.end) || 0), size0) : size0;
   const got = from < end ? await timed(storageRange(path, from, Math.min(end, from + PIECE) - 1)) : { bytes: new Uint8Array(0), size: size0 };
-  if (!got) throw new Error("The uploaded Day Book is not in FinCom's storage any more (" + path + ").");
+  if (!got) {
+    // 2.4.4 (review 244 R2-M2): the file is removed once its last piece is queued; this piece run again after that queued
+    // its work already
+    const { data: jr } = await timed(db.from("tally_jobs").select("upload").eq("id", job).maybeSingle());
+    const at = String((jr as any)?.upload?.at || "");
+    if (at && at !== (late ? "late:" : "main:") + from) { console.log("tally-ingest upload piece", job, "ran again after its file was removed: its work was queued already (" + at + ")"); return; }
+    throw new Error("The uploaded Day Book is not in FinCom's storage any more (" + path + ").");
+  }
   const bytes = got.bytes;
   let enc = String(u.enc || "");
   if (!enc) {
@@ -2520,11 +2527,11 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
     const v = m[0], d = (v.match(/<DATE>(\d{8})<\/DATE>/) || [])[1];
     if (!d || d < rf || d > rt) continue;
     n++;
-    if (late) { if (only.has(d)) (pend[d] = pend[d] || []).push(v); continue; }
+    if (late) { if (only.has(d)) (pend[d] = pend[d] || []).push(dropBankDetails(v)); continue; }
     const at = m.index < tailLen ? tailAt0 : from, e = ext[d];
     ext[d] = e ? [Math.min(e[0], at), Math.max(e[1], nextFrom)] : [at, nextFrom];
     if (seen.has(d)) { lateDays.add(d); continue; }
-    (pend[d] = pend[d] || []).push(v);
+    (pend[d] = pend[d] || []).push(dropBankDetails(v));   // 2.4.4 (review 244 R2-M2): never a salary payment's bank details queued
     if (d > top) top = d;
   }
   // the text after the last whole voucher: from a voucher's start (cut at the range end), else its last characters
@@ -2571,6 +2578,12 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   if (advErr) throw dbFail("upload piece " + job, advErr, "The upload's next part could not be queued just now; it is tried again.");
   if ((adv as any)?.moved === false) { console.log("tally-ingest upload piece", job, at, "ran again: its work was queued already (" + (adv as any)?.at + ")"); return; }
   await timed(jobStep(job, 0, []));
+  // 2.4.4 (review 244 R2-M2): the uploaded Day Book itself (it may hold employees' bank details) is not kept once every piece
+  // of it is queued: its days are cut, cleaned and queued; nothing reads the file after the last piece
+  if (nextAt === "end") {
+    const { error: rmErr } = await timed(db.storage.from(UPLOAD_BUCKET).remove([path]));
+    if (rmErr) { fail("storage", rmErr); console.error("tally-ingest upload file not removed", job, rmErr.message); }
+  }
   console.log("tally-ingest upload piece", job, "from", from, cut, "bytes", "work", (performance.now() - t0 - wait).toFixed(1), "ms", "vouchers", n, "days", queued, late ? "late pass" : "", isLast ? "last" : "");
 }
 async function work(budgetMs: number) {

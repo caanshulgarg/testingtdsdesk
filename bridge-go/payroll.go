@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -468,20 +469,38 @@ func entryTC(tc *TC, company, vchType string) *TC {
 	return &t2
 }
 
-// --- 5. never the bank details (the owner's decision of 12-Oct-2026, items 3 and 5; review 244 H1): Tally's whole entry, as
-// the Day Book gives it, carries a salary payment's bank details per employee (BANKALLOCATIONS: ACCOUNTNUMBER, IFSCODE,
-// PAYMENTFAVOURING; PAYMENTDETAILS likewise). The day files keep the entry whole for the cloud's Day Book path, so these
-// elements are taken out of every entry before a day file is written and again before a day is sent (a day file an older
-// bridge wrote): never on this computer's disk from 2.4.4 on, never in the cloud
-var reBankDetail = func() []*regexp.Regexp {
+// --- 5. never the bank details (the owner's decision of 12-Oct-2026, items 3 and 5; reviews 244 H1, R2-M1): Tally's whole
+// entry, as the Day Book gives it, carries a salary payment's bank details per employee (BANKALLOCATIONS: ACCOUNTNUMBER,
+// IFSCODE, PAYMENTFAVOURING, and the employee's own bank: BANKNAME, BANKBRANCHNAME, BENEFICIARYCODE, SWIFTCODE,
+// BANKPARTYNAME; PAYMENTDETAILS likewise). The day files keep the entry whole for the cloud's Day Book path, so these are
+// taken out of every entry before a day file is written and again before a day is sent (a day file an older bridge
+// wrote): the three anywhere, the bank's own names only in an allocation that names an employee (the company's bank ledger
+// and a TDS challan's TAXBANKNAME stay)
+var reBankDetail = bankRes("ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING")
+var reEmpBank = bankRes("BANKNAME", "BANKBRANCHNAME", "BENEFICIARYCODE", "SWIFTCODE", "BANKPARTYNAME")
+var reBankAlloc = regexp.MustCompile(`(?s)<BANKALLOCATIONS\.LIST(?:\s[^>]*)?>.*?</BANKALLOCATIONS\.LIST\s*>`)
+var reEmpNamed = regexp.MustCompile(`<BANKEMPLOYEENAME(?:\s[^>]*)?>\s*[^<\s]`)
+
+func bankRes(tags ...string) []*regexp.Regexp {
 	var l []*regexp.Regexp
-	for _, t := range []string{"ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING"} {
+	for _, t := range tags {
 		l = append(l, regexp.MustCompile(`(?s)<`+t+`(?:\s[^>]*)?/>|<`+t+`(?:\s[^>]*)?>.*?</`+t+`\s*>`))
 	}
 	return l
-}()
+}
 
 func dropBankDetails(x string) string {
+	if strings.Contains(x, "BANKEMPLOYEENAME") {
+		x = reBankAlloc.ReplaceAllStringFunc(x, func(b string) string {
+			if !reEmpNamed.MatchString(b) {
+				return b
+			}
+			for _, r := range reEmpBank {
+				b = r.ReplaceAllString(b, "")
+			}
+			return b
+		})
+	}
 	if !strings.Contains(x, "ACCOUNTNUMBER") && !strings.Contains(x, "IFSCODE") && !strings.Contains(x, "PAYMENTFAVOURING") {
 		return x
 	}
@@ -489,4 +508,52 @@ func dropBankDetails(x string) string {
 		x = r.ReplaceAllString(x, "")
 	}
 	return x
+}
+
+// review 244 R2-L1: the day files an earlier bridge kept may hold employees' bank details. Once per company folder (the
+// mark bank-clean-244.txt), on the first cloud round of 2.4.4: each such day file is written again without them, its
+// month's file put together again, and those days queued for FinCom, whose copy (the tally-days bucket) is then replaced
+// by the clean day through the existing upsert. Entries, GUIDs and counts are unchanged
+func bankCleanOnce(dir string) int {
+	mark := filepath.Join(dir, "bank-clean-244.txt")
+	if exists(mark) || !exists(filepath.Join(dir, "days")) {
+		return 0
+	}
+	if !keepMu.TryLock() { // the copy is being changed: the next round
+		return 0
+	}
+	defer keepMu.Unlock()
+	var days []string
+	months := map[string]bool{}
+	for _, f := range dayFiles(dir, "") {
+		t := readText(f)
+		c := dropBankDetails(t)
+		if c == t {
+			continue
+		}
+		if err := saveFile(f, c); err != nil {
+			writeLog("Payroll: " + f + " could not be written: " + err.Error())
+			return 0 // tried again at the next round
+		}
+		d := strings.TrimSuffix(filepath.Base(f), ".xml")
+		days = append(days, d)
+		if len(d) == 8 {
+			months[d[:6]] = true
+		}
+	}
+	for ym := range months {
+		if exists(filepath.Join(dir, "daybook-"+ym+".xml")) {
+			writeKeepMonthFile(dir, ym)
+		}
+	}
+	if len(days) > 0 {
+		addCloudDays(dir, days)
+		co := ""
+		if st := readKeepState(dir); st != nil {
+			co = str(st["company"])
+		}
+		writeLog(fmt.Sprintf("Payroll: %d day file(s) of %s kept by an earlier bridge held employees' bank details: taken out here, and those days sent to FinCom again so its copy is clean too", len(days), co))
+	}
+	_ = saveFile(mark, nowS())
+	return len(days)
 }
