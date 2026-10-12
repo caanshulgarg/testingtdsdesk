@@ -36,7 +36,7 @@ var tallyAllowList = map[string]allowedReq{
 	"Day Book":           {purpose: "the day book of one company for one month at most (Update now, the nightly run, a FinCom read)"},
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
-	ledListID: {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates)", maxSec: 0.32,
+	ledListID: {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates; 2.4.4: a pay head's PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL)", maxSec: 0.32,
 		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode tdsm, runs 38164963591 and 38187902681: a chunk at 20,000 ledgers, one in ten with a certificate, 316 ms worst (5.1); ZZ BIG TEST's masters 168 ms worst)"},
 	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
 	// one ledger an entry names that FinCom does not have (ledchanges.go)
@@ -48,6 +48,8 @@ var tallyAllowList = map[string]allowedReq{
 	// 2.4.3 (the owner's approval of 11-Oct-2026, (b)): the natures of payment (tdsnatures.go)
 	natListID: {purpose: "the TDS natures of payment (2.4.3): Tally's TDSRate masters, each one's section, rates and thresholds by the date they apply from, 5,000 MasterIDs a request at most, stored master fields only", maxSec: 0.006,
 		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode tdsm, runs 38164963591 and 38187902681: 5.6 ms worst (4.1))"},
+	// 2.4.4 (the owner's decision of 12-Oct-2026, item 1): the payroll's employees (payroll.go)
+	empListID:           {purpose: "the payroll's employees (2.4.4): Tally's Cost Centre masters, 2,000 MasterIDs a request at most, exactly GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, PANNUMBER, DATEOFJOIN, DEACTIVATIONDATE, DESIGNATION (stored master fields only, no period); only payroll rows kept, every other cost centre dropped before anything is logged, stored or sent; read again when Tally's master counter moves"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
 	"TDSDeskNames":      {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
@@ -60,7 +62,7 @@ var tallyAllowList = map[string]allowedReq{
 	datesProbeID:        {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
 	editLogProbeID:      {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
 	// next-fastfetch (the owner's approval of 07-Oct-2026 and decision of 08-Oct-2026): replaces FinComVoucherByMaster
-	vchObjectID: {purpose: "the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period", maxSec: 1.7,
+	vchObjectID: {purpose: "the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period; stopped at 2 s, a payroll voucher's at 3 s (2.4.4, the owner's decision of 12-Oct-2026)", maxSec: 1.7,
 		measuredOn: "2026-10-08 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; push-design runs 37718386662 and 37747408916: 9-23 ms median, 61 ms worst for an ordinary entry at 4,000-100,000 vouchers; 1.7 s worst for a 500-item invoice)"},
 	vchByNumberID:        {purpose: "the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields (2.3.1: the whole entry, as the body fetch)"},
 	"FinComMeasureB":     {purpose: "measure: entries above an AlterID over the year", measureOnly: true},
@@ -184,6 +186,7 @@ func allowListSamples() map[string]string {
 		ledByNameID:          ledgerByNameRequest(c, "SAMPLE LEDGER"),
 		grpListID:            groupListRequest(c),
 		natListID:            natureChunkRequest(c, 0, 5000),
+		empListID:            employeeChunkRequest(c, 0, 2000),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),

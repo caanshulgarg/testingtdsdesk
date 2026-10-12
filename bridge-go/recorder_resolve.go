@@ -1441,7 +1441,7 @@ func liveResolveOne(h heldLine, sent *bool) (x, why string, answered, final bool
 		liveResolveAskHook()
 	}
 	if h.MID != "" {
-		m, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+		m, err := fetchVouchersByMasterIn(entryTC(tc, h.Company, h.Type), h.Company, port, h.Date, []string{h.MID}, liveBodySec()) // 2.4.4: a payroll voucher's 3 s
 		if errors.Is(err, errFastShape) {
 			return "", err.Error(), true, true, nil // 2.3.4: held for good (the same answer would come again)
 		}

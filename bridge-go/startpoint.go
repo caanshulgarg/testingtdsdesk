@@ -603,6 +603,8 @@ func lightCheckOpen(sessions []M) {
 			bankAfterLightCheck(name, port)
 			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)
 			ledChangesAfterLightCheck(name, port)
+			// 2.4.4 (payroll): the master counter moved: the payroll's employees read again, in chunks (payroll.go)
+			employeesAfterLightCheck(name, port)
 			// next release (item e): the nightly self-check, once a night after hours while Tally is idle (selfcheck.go)
 			selfCheckAfterLightCheck(name, port)
 		}

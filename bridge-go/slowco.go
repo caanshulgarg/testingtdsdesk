@@ -211,7 +211,8 @@ func slowSeen(company string) slowSeenSt {
 
 // one background request's outcome (invokeTally): sent says it reached Tally (a request held back, refused or stopped for
 // a posting is nothing); took: the time Tally had it
-func slowNote(port int, x string, sent bool, took time.Duration, err error) {
+// limitMs: the request's own hard stop (2.4.4: a payroll voucher's entry request 3 s; else the 2-second rule)
+func slowNote(port int, x string, sent bool, took time.Duration, err error, limitMs int) {
 	if !sent || errors.Is(err, errPreempted) {
 		return
 	}
@@ -230,6 +231,9 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error) {
 		co = companyKey(name)
 	}
 	limit := time.Duration(liveLimitSec() * float64(time.Second))
+	if entry && limitMs > recorderLimitMs() && limitMs <= payrollLimitMs() {
+		limit = time.Duration(limitMs) * time.Millisecond // 2.4.4: a payroll voucher answered within its 3 s is in time
+	}
 	ok := err == nil && took <= limit
 	stopped := errors.Is(err, errRecorderStop)
 	if err != nil && !stopped && !tallyNoAnswer(err) {

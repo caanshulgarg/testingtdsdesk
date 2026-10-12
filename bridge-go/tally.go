@@ -327,6 +327,7 @@ var requestClass = map[string]string{
 	editLogProbeID: "undated", cnReportID: "undated",
 	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
 	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
+	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
@@ -917,7 +918,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	t2.slotOut = &given
 	r, err := invokeTallyNow(&t2, port, x, timeoutSec)
 	retryNote(port, tallyRequestID(x), err)
-	slowNote(port, x, sent, took, err)
+	slowNote(port, x, sent, took, err, tc.limitMs)
 	// next-inflight (the owner, 07-Oct-2026): after a stop the bridge waits up to TallyAbandonWaitSec (20 s) for Tally to
 	// finish that request, sending nothing; finished in time, the retry schedule's wait is lifted and the next request
 	// goes at once; not finished, the schedule's back-off stands
