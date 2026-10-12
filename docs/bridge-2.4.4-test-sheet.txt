@@ -1,0 +1,64 @@
+FINCOM 2.4.4 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.4.exe
+Fingerprint: (filled at build; compare with the .sha256 file next to the setup)
+
+What 2.4.4 changes (the full notes: docs/bridge-2.4.4-notes.md):
+1. Payroll from Tally: the employees (name, PAN, group, designation, date of joining and leaving), the pay heads, each
+   employee's amount per pay head, and the salary paid to each employee reach FinCom. Nothing personal: no date of birth,
+   Aadhaar, bank account or IFSC is read or kept.
+2. Under the client's TDS, a Salary tab: Employees (type in the regime and declarations Tally does not keep), Pay
+   register, Form 16. The 24Q return of a quarter is filled from Tally's payroll: Annexure I (with each month's challan),
+   Annexure II in Q4, and the text file, marked "check before filing" (run it through the FVU first).
+3. The bridge asks Tally for the employees only when masters change, and the ledger list asks four pay-head fields. A
+   payroll entry may take up to 3 seconds; everything else keeps 2 seconds. One request at a time.
+   A payroll voucher type of your own (not Tally's "Payroll") gets the 3 seconds after its first entry was read.
+   Bank account numbers, IFSC and the name in favour are taken out of every entry the bridge keeps or sends.
+4. FinCom's cloud stores these (migration 74, run on staging before the tally-ingest of 2.4.4).
+The add-on is 2.4.3's.
+
+WHAT YOUR STAFF DO IN TALLY (so payroll reaches FinCom)
+   a. Payroll on: F11 (Features) > Maintain payroll: Yes.
+   b. Employees: Payroll Masters > Employee Groups, then Employees: the name, the group, designation, date of joining, and
+      PAN (Statutory details). Date of leaving when someone leaves. (Bank and Aadhaar may be kept in Tally; FinCom never
+      reads them.)
+   c. Pay heads: each with its pay head type, and for earnings the Income Tax component (Basic Salary, House Rent
+      Allowance...); the TDS on salary as a pay head of type Employees' Statutory Deductions, statutory type Income Tax.
+   d. Each month: a Payroll voucher (Ctrl+F4) with Payroll Autofill for the employees; the salary paid with a Payment voucher
+      (Payroll Autofill > Salary Payment, so each employee's amount is on the bank line); the TDS paid with Stat Payment of
+      Income Tax, then Challan Reconciliation (BSR code, challan number, date) as for other TDS since 2.4.3.
+
+Before you start: migration 74 has run on staging and the tally-ingest of 2.4.4 is deployed; you are signed in to FinCom as
+the owner; TallyPrime 7.1 is open on NWS144 with a ZZ TEST company. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.4.4.exe and compare its fingerprint. The add-on is unchanged: nothing to reload.
+   You should see: the tray says FinCom Bridge 2.4.4; FinCom's Tally page shows version 2.4.4.
+
+CHECK 2 - EMPLOYEES
+   In the ZZ TEST company, do a. to c. above for two employees (one with PAN, one without). Wait a minute (or Update now).
+   You should see: TDS > Salary > Employees lists both, the one without PAN marked "no PAN"; no other cost centre listed.
+
+CHECK 3 - PAYROLL
+   Do d. for one month (narration "TRIAL 244 payroll"; salary payment "TRIAL 244 salary").
+   You should see: the Pay register of that month with each pay head per employee; the log shows the payroll entry
+   answered in under 3 seconds.
+
+CHECK 4 - 24Q
+   Choose the regime for each employee under Employees. Open TDS > Returns > 24Q for that quarter.
+   You should see: Annexure I with each employee's salary and TDS for the month, the challan beside it; Files: the text
+   file says "Check before filing".
+
+CHECK 5 - NOTHING SLOWER
+   Save an ordinary Journal of Rs 1, narration "TRIAL 244 speed".
+   You should see: it is in FinCom's books as fast as with 2.4.3 (a few seconds).
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.3)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.3). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.3 for your line. 2.4.3 sends no employees and no
+   pay-head fields; what 2.4.4 sent stays. Automatic updates stay off on this computer until FinCom turns them on again.

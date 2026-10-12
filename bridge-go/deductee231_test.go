@@ -55,7 +55,7 @@ func TestDeductee231LedgerChangesCarryType(t *testing.T) {
 	if len(c.ledChanges) != 2 || str(c.ledChanges[1]["why"]) != "wanted" {
 		t.Fatalf("the ledger did not go: %v", c.ledChanges)
 	}
-	if r := led231Rows(c.ledChanges[1])["New Contractor"]; len(r) != 14 || str(r[10]) != "Individual/HUF - Resident" {
+	if r := led231Rows(c.ledChanges[1])["New Contractor"]; len(r) != 18 || str(r[10]) != "Individual/HUF - Resident" {
 		t.Fatalf("New Contractor's row: %v", r)
 	}
 }

@@ -185,7 +185,7 @@
 //                                                       rate were not kept before); one month a call, owners only;
 //                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { parseDay, amt, cleanName, d8 } from "./parse.js";
+import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
 
@@ -2227,6 +2227,9 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
       }
     } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
     unzipped += z.size;
+    // 2.4.4 (review 244 H1): never a salary payment's bank details in the bucket, whatever bridge sent the day
+    const clean = dropBankDetails(z.text);
+    if (clean !== z.text) { z = { text: clean, size: z.size }; gz = await gzipBytes(new TextEncoder().encode(clean)); }
     const r = parseDay(z.text);
     // every entry of a day is dated that day; anything else means the file is not what it says
     if (r.dates.some((x: string) => x !== d.day)) return { done, bad, locked, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." };

@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -408,20 +409,33 @@ func payrollEntry(company, vchType string) bool {
 	return payTypes[companyKey(company)][t]
 }
 
-// a body Tally gave with employees' pay heads (CATEGORYENTRY / EMPLOYEEENTRIES): its type is remembered as payroll's
+// Tally's own voucher types (lower case): never learned as payroll's, whatever an entry of theirs carries (review 244 M1:
+// a Payment's entry may carry employees' pay heads, and every Payment would then wait 3 s); "payroll" is payroll's anyway
+var tallyBaseTypes = map[string]bool{"attendance": true, "contra": true, "credit note": true, "debit note": true, "delivery note": true,
+	"job work in order": true, "job work out order": true, "journal": true, "material in": true, "material out": true, "memorandum": true,
+	"payment": true, "physical stock": true, "purchase": true, "purchase order": true, "receipt": true, "receipt note": true,
+	"rejections in": true, "rejections out": true, "reversing journal": true, "sales": true, "sales order": true, "stock journal": true,
+	"payroll": true}
+
+// a body Tally gave as a pay slip (Tally's payroll form: ASPAYSLIP Yes, or the PaySlip view) with employees' pay heads
+// (EMPLOYEEENTRIES / PAYHEADALLOCATIONS), of a type of the company's own (not one of Tally's): its type is remembered as
+// payroll's
 func payrollLearn(company, voucher string) {
 	if !strings.Contains(voucher, "<EMPLOYEEENTRIES.LIST") || !strings.Contains(voucher, "<PAYHEADALLOCATIONS.LIST") {
 		return
 	}
+	if !strings.EqualFold(strings.TrimSpace(tagValue(voucher, "ASPAYSLIP")), "Yes") && !strings.EqualFold(strings.TrimSpace(tagValue(voucher, "PERSISTEDVIEW")), "PaySlip Voucher View") {
+		return
+	}
 	t := strings.TrimSpace(tagValue(voucher, "VOUCHERTYPENAME"))
-	if t == "" || len([]rune(t)) > 200 {
+	if t == "" || len([]rune(t)) > 200 || tallyBaseTypes[strings.ToLower(t)] {
 		return
 	}
 	lt, co := strings.ToLower(t), companyKey(company)
 	payTypesMu.Lock()
 	defer payTypesMu.Unlock()
 	payTypesLoad()
-	if payTypes[co][lt] || lt == "payroll" {
+	if payTypes[co][lt] {
 		return
 	}
 	if payTypes[co] == nil {
@@ -452,4 +466,27 @@ func entryTC(tc *TC, company, vchType string) *TC {
 	t2 := *tc
 	t2.limitMs = payrollLimitMs()
 	return &t2
+}
+
+// --- 5. never the bank details (the owner's decision of 12-Oct-2026, items 3 and 5; review 244 H1): Tally's whole entry, as
+// the Day Book gives it, carries a salary payment's bank details per employee (BANKALLOCATIONS: ACCOUNTNUMBER, IFSCODE,
+// PAYMENTFAVOURING; PAYMENTDETAILS likewise). The day files keep the entry whole for the cloud's Day Book path, so these
+// elements are taken out of every entry before a day file is written and again before a day is sent (a day file an older
+// bridge wrote): never on this computer's disk from 2.4.4 on, never in the cloud
+var reBankDetail = func() []*regexp.Regexp {
+	var l []*regexp.Regexp
+	for _, t := range []string{"ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING"} {
+		l = append(l, regexp.MustCompile(`(?s)<`+t+`(?:\s[^>]*)?/>|<`+t+`(?:\s[^>]*)?>.*?</`+t+`\s*>`))
+	}
+	return l
+}()
+
+func dropBankDetails(x string) string {
+	if !strings.Contains(x, "ACCOUNTNUMBER") && !strings.Contains(x, "IFSCODE") && !strings.Contains(x, "PAYMENTFAVOURING") {
+		return x
+	}
+	for _, r := range reBankDetail {
+		x = r.ReplaceAllString(x, "")
+	}
+	return x
 }

@@ -368,6 +368,23 @@ func TestPay244PayrollLimit(t *testing.T) {
 	if entryTC(tc, nwsCo, "Payment").limitMs != 2000 {
 		t.Fatal("a payment learned as payroll")
 	}
+	// review 244 M1: a Payment (or any of Tally's own types) is never learned, even carrying employees' pay heads as a pay
+	// slip; nor a type of the company's own whose entry is not a pay slip
+	for _, ty := range []string{"Payment", "Journal", "Receipt", "Contra"} {
+		payrollLearn(nwsCo, strings.Replace(v, "<VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME>", "<VOUCHERTYPENAME>"+ty+"</VOUCHERTYPENAME>", 1))
+		if entryTC(tc, nwsCo, ty).limitMs != 2000 {
+			t.Fatalf("%s learned as payroll", ty)
+		}
+	}
+	notSlip := strings.NewReplacer("<ASPAYSLIP>Yes</ASPAYSLIP>", "<ASPAYSLIP>No</ASPAYSLIP>", "<PERSISTEDVIEW>PaySlip Voucher View</PERSISTEDVIEW>", "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>",
+		"<VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME>", "<VOUCHERTYPENAME>Bank Salary</VOUCHERTYPENAME>").Replace(v)
+	if !strings.Contains(notSlip, "<ASPAYSLIP>No") {
+		t.Fatal("the capture's pay slip marks moved")
+	}
+	payrollLearn(nwsCo, notSlip)
+	if entryTC(tc, nwsCo, "Bank Salary").limitMs != 2000 {
+		t.Fatal("a type learned from an entry that is not a pay slip")
+	}
 	// kept across a restart
 	payTypesMu.Lock()
 	payTypes = nil

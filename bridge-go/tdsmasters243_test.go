@@ -230,7 +230,7 @@ func TestTDS243OutboxRowFrom242(t *testing.T) {
 	}
 	for _, x := range arr(c.ledList[0]["ledgers"]) {
 		a := arr(x)
-		if (str(a[0]) == "g1" && len(a) != 11) || (str(a[0]) == "g2" && (len(a) != 18 || str(a[11]) != "N1")) {
+		if (str(a[0]) == "g1" && len(a) != 11) || (str(a[0]) == "g2" && (len(a) != 14 || str(a[11]) != "N1")) {
 			t.Fatalf("row %v", a)
 		}
 	}
