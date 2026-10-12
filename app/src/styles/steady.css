@@ -53,6 +53,9 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
   header.top .tb-page .help-btn::after { content: "?"; position: absolute; inset: 0; display: grid; place-items: center; text-indent: 0; font-weight: 600; }
 }
 
+/* the line over the title is one line high even when it has no words (no firm name yet), so the header is one height */
+header.top .tbar-title .note { min-height: 20px; }
+
 /* ---------- a client's status tabs, at the top of the page (were a second row of the header) ---------- */
 #app > .react-host > .sbar-band, #app .sbar-band { position: sticky; top: var(--head-h, 0px); z-index: 3; margin: 0 -4px 12px; padding: 14px 4px 4px; background: var(--background); }
 /* (the same look as when they were in the header: arc-clean.css's #cobar nav.sbar[aria-label="Status"] rules) */
@@ -138,7 +141,8 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 .lt-page-head .skel + .skel { flex-basis: 160px; }
 
 /* ---------- the sidebar's foot: the quiet line (where the work is kept, last sync, or a background event) and the date ---------- */
-.side .side-ver { display: flex; flex-direction: column; gap: 2px; }
+/* (a computer only: on a phone the sidebar is the bottom bar, its five words need the whole width; stability batch 6) */
+@media (min-width: 601px) { .side .side-ver { display: flex; flex-direction: column; gap: 2px; } }
 .side .side-quiet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2.8em; line-height: 1.4; font-size: 11.5px; color: var(--text-muted); }
 .side .side-data { font-size: inherit; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .side .side-data:hover { color: var(--foreground); }
