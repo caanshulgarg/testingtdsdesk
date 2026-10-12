@@ -57,7 +57,8 @@ const TDSTally = {
     return n;
   },
   // a payment of TDS (or TCS) as Tally marks it: another duty's Stat Payment (GST) is never read as a TDS challan
-  isTds(x){ return !!x && (!x.stat || /^(TDS|TCS)\b/i.test(String(x.stat))); },
+  // bridge 2.4.4: salary TDS is Tally's Stat Payment of Income Tax (section 192): its challan is a TDS challan too (24Q)
+  isTds(x){ return !!x && (!x.stat || /^(TDS|TCS|Income\s*Tax)\b/i.test(String(x.stat))); },
   // what a payment pays, by Tally's TYPEOFTAXPAYMENT: {tax, interest, fee, others} in rupees. Interest, the late fee and
   // others are the lines Tally marks so; the tax is the rest of the TDS the books see paid (so a tax line whose blank mark
   // was not kept still counts). null when the entry carries no mark, or when the rest is not a tax (the books' rule then)

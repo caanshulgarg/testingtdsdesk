@@ -1,0 +1,1543 @@
+{
+ "annex1": {
+  "Q1": [
+   {
+    "challan": null,
+    "date": "20260402",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1001",
+     "20260502"
+    ],
+    "date": "20260402",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1001",
+     "20260502"
+    ],
+    "date": "20260402",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1001",
+     "20260502"
+    ],
+    "date": "20260402",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1001",
+     "20260502"
+    ],
+    "date": "20260402",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1001",
+     "20260502"
+    ],
+    "date": "20260402",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20260502",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1002",
+     "20260602"
+    ],
+    "date": "20260502",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1002",
+     "20260602"
+    ],
+    "date": "20260502",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1002",
+     "20260602"
+    ],
+    "date": "20260502",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1002",
+     "20260602"
+    ],
+    "date": "20260502",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1002",
+     "20260602"
+    ],
+    "date": "20260502",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20260602",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1003",
+     "20260702"
+    ],
+    "date": "20260602",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1003",
+     "20260702"
+    ],
+    "date": "20260602",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1003",
+     "20260702"
+    ],
+    "date": "20260602",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1003",
+     "20260702"
+    ],
+    "date": "20260602",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1003",
+     "20260702"
+    ],
+    "date": "20260602",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "Q2": [
+   {
+    "challan": null,
+    "date": "20260702",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1004",
+     "20260802"
+    ],
+    "date": "20260702",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20260802",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1005",
+     "20260902"
+    ],
+    "date": "20260802",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20260902",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1006",
+     "20261002"
+    ],
+    "date": "20260902",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "Q3": [
+   {
+    "challan": null,
+    "date": "20261002",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1007",
+     "20261102"
+    ],
+    "date": "20261002",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20261102",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1008",
+     "20261202"
+    ],
+    "date": "20261102",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20261202",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Farid Khan",
+    "paid": "35000.00",
+    "tds": "7000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1009",
+     "20270102"
+    ],
+    "date": "20261202",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "Q4": [
+   {
+    "challan": null,
+    "date": "20270102",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1010",
+     "20270202"
+    ],
+    "date": "20270102",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1010",
+     "20270202"
+    ],
+    "date": "20270102",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1010",
+     "20270202"
+    ],
+    "date": "20270102",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1010",
+     "20270202"
+    ],
+    "date": "20270102",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1010",
+     "20270202"
+    ],
+    "date": "20270102",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20270202",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1011",
+     "20270302"
+    ],
+    "date": "20270202",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1011",
+     "20270302"
+    ],
+    "date": "20270202",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1011",
+     "20270302"
+    ],
+    "date": "20270202",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1011",
+     "20270302"
+    ],
+    "date": "20270202",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1011",
+     "20270302"
+    ],
+    "date": "20270202",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   },
+   {
+    "challan": null,
+    "date": "20270302",
+    "employee": "PE Asha Rao",
+    "paid": "100000.00",
+    "tds": "0.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1012",
+     "20270331"
+    ],
+    "date": "20270302",
+    "employee": "PE Bimal Das",
+    "paid": "200000.00",
+    "tds": "23500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1012",
+     "20270331"
+    ],
+    "date": "20270302",
+    "employee": "PE Chitra Iyer",
+    "paid": "100000.00",
+    "tds": "5000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1012",
+     "20270331"
+    ],
+    "date": "20270302",
+    "employee": "PE Dev Malhotra",
+    "paid": "90000.00",
+    "tds": "4000.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1012",
+     "20270331"
+    ],
+    "date": "20270302",
+    "employee": "PE Esha Kapoor",
+    "paid": "80000.00",
+    "tds": "1500.00"
+   },
+   {
+    "challan": [
+     "0510308",
+     "1012",
+     "20270331"
+    ],
+    "date": "20270302",
+    "employee": "PE Gita Sharma",
+    "paid": "600000.00",
+    "tds": "165000.00"
+   }
+  ]
+ },
+ "annex2": {
+  "PE Asha Rao": {
+   "balance": "0.00",
+   "cess": "0.00",
+   "chapter6": "0.00",
+   "gross": "1200000.00",
+   "grossTotal": "1125000.00",
+   "houseProperty": "0.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "1125000.00",
+   "prevTds": "0.00",
+   "profTax": "0.00",
+   "rebate": "52500.00",
+   "regime": "new",
+   "salary": "1200000.00",
+   "slabTax": "52500.00",
+   "standard": "75000.00",
+   "surcharge": "0.00",
+   "taxPayable": "0.00",
+   "tdsHere": "0.00",
+   "totalIncome": "1125000.00"
+  },
+  "PE Bimal Das": {
+   "balance": "-5100.00",
+   "cess": "10650.00",
+   "chapter6": "60000.00",
+   "gross": "2400000.00",
+   "grossTotal": "2325000.00",
+   "houseProperty": "0.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "2325000.00",
+   "prevTds": "0.00",
+   "profTax": "0.00",
+   "rebate": "0.00",
+   "regime": "new",
+   "salary": "2400000.00",
+   "slabTax": "266250.00",
+   "standard": "75000.00",
+   "surcharge": "0.00",
+   "taxPayable": "276900.00",
+   "tdsHere": "282000.00",
+   "totalIncome": "2265000.00"
+  },
+  "PE Chitra Iyer": {
+   "balance": "-2360.00",
+   "cess": "2216.80",
+   "chapter6": "205000.00",
+   "gross": "1200000.00",
+   "grossTotal": "919600.00",
+   "houseProperty": "0.00",
+   "hraExempt": "228000.00",
+   "incomeSalary": "919600.00",
+   "prevTds": "0.00",
+   "profTax": "2400.00",
+   "rebate": "0.00",
+   "regime": "old",
+   "salary": "1200000.00",
+   "slabTax": "55420.00",
+   "standard": "50000.00",
+   "surcharge": "0.00",
+   "taxPayable": "57640.00",
+   "tdsHere": "60000.00",
+   "totalIncome": "714600.00"
+  },
+  "PE Dev Malhotra": {
+   "balance": "-4820.00",
+   "cess": "1660.80",
+   "chapter6": "170000.00",
+   "gross": "1080000.00",
+   "grossTotal": "827600.00",
+   "houseProperty": "-200000.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "1027600.00",
+   "prevTds": "0.00",
+   "profTax": "2400.00",
+   "rebate": "0.00",
+   "regime": "old",
+   "salary": "1080000.00",
+   "slabTax": "41520.00",
+   "standard": "50000.00",
+   "surcharge": "0.00",
+   "taxPayable": "43180.00",
+   "tdsHere": "48000.00",
+   "totalIncome": "657600.00"
+  },
+  "PE Esha Kapoor": {
+   "balance": "-23500.00",
+   "cess": "0.00",
+   "chapter6": "0.00",
+   "gross": "1020000.00",
+   "grossTotal": "945000.00",
+   "houseProperty": "0.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "945000.00",
+   "prevTds": "10000.00",
+   "profTax": "0.00",
+   "rebate": "34500.00",
+   "regime": "new",
+   "salary": "720000.00",
+   "slabTax": "34500.00",
+   "standard": "75000.00",
+   "surcharge": "0.00",
+   "taxPayable": "0.00",
+   "tdsHere": "13500.00",
+   "totalIncome": "945000.00"
+  },
+  "PE Farid Khan": {
+   "balance": "-15000.00",
+   "cess": "0.00",
+   "chapter6": "0.00",
+   "gross": "315000.00",
+   "grossTotal": "240000.00",
+   "houseProperty": "0.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "240000.00",
+   "prevTds": "0.00",
+   "profTax": "0.00",
+   "rebate": "0.00",
+   "regime": "new",
+   "salary": "315000.00",
+   "slabTax": "0.00",
+   "standard": "75000.00",
+   "surcharge": "0.00",
+   "taxPayable": "48000.00",
+   "tdsHere": "63000.00",
+   "totalIncome": "240000.00"
+  },
+  "PE Gita Sharma": {
+   "balance": "-15180.00",
+   "cess": "75570.00",
+   "chapter6": "0.00",
+   "gross": "7200000.00",
+   "grossTotal": "7125000.00",
+   "houseProperty": "0.00",
+   "hraExempt": "0.00",
+   "incomeSalary": "7125000.00",
+   "prevTds": "0.00",
+   "profTax": "0.00",
+   "rebate": "0.00",
+   "regime": "new",
+   "salary": "7200000.00",
+   "slabTax": "1717500.00",
+   "standard": "75000.00",
+   "surcharge": "171750.00",
+   "taxPayable": "1964820.00",
+   "tdsHere": "1980000.00",
+   "totalIncome": "7125000.00"
+  }
+ },
+ "registers": {
+  "202604": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202605": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202606": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202607": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202608": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202609": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202610": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202611": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202612": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "9000.00",
+    "employee": "PE Farid Khan",
+    "gross": "35000.00",
+    "net": "26000.00",
+    "tds": "7000.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202701": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202702": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ],
+  "202703": [
+   {
+    "ded": "2000.00",
+    "employee": "PE Asha Rao",
+    "gross": "100000.00",
+    "net": "98000.00",
+    "tds": "0.00"
+   },
+   {
+    "ded": "25500.00",
+    "employee": "PE Bimal Das",
+    "gross": "200000.00",
+    "net": "174500.00",
+    "tds": "23500.00"
+   },
+   {
+    "ded": "7000.00",
+    "employee": "PE Chitra Iyer",
+    "gross": "100000.00",
+    "net": "93000.00",
+    "tds": "5000.00"
+   },
+   {
+    "ded": "6000.00",
+    "employee": "PE Dev Malhotra",
+    "gross": "90000.00",
+    "net": "84000.00",
+    "tds": "4000.00"
+   },
+   {
+    "ded": "3500.00",
+    "employee": "PE Esha Kapoor",
+    "gross": "80000.00",
+    "net": "76500.00",
+    "tds": "1500.00"
+   },
+   {
+    "ded": "167000.00",
+    "employee": "PE Gita Sharma",
+    "gross": "600000.00",
+    "net": "433000.00",
+    "tds": "165000.00"
+   }
+  ]
+ }
+}

@@ -17,6 +17,7 @@ import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
 import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults, F16Link } from "./tds/Files.jsx";
 import More from "../parts/More.jsx";
+import { Return24Tally } from "./tds/Payroll.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -538,6 +539,8 @@ function Employees({ fy, q, a1 }) {
 
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
+  // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
+  if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} ReturnCard={ReturnCard} Tabs={Tabs} Upload={Upload} Suggest={Suggest} />;
   const tabs = [["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "Files"]]);
   if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "employees";
   const fname = TDS.formName("24Q", fy);

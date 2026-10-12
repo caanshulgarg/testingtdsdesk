@@ -53,6 +53,7 @@ const Route = {
       if (v === "challans") return "/" + e(S.tdsFy) + "/challans" + (S.tdsQ ? "/" + e(S.tdsQ) : "");
       if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
       if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
+      if (v === "salary") return "/" + e(S.tdsFy) + "/salary" + (S.paySub && S.paySub !== "employees" ? "/" + e(S.paySub) : "");
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
@@ -73,6 +74,7 @@ const Route = {
       if (p[1] === "challans"){ S.tdsView = "challans"; S.tdsQ = /^Q[1-4]$/.test(p[2] || "") ? p[2] : ""; return; }
       if (p[1] === "26as"){ S.tdsView = "recon"; return; }
       if (p[1] === "traces"){ S.tdsView = "traces"; return; }
+      if (p[1] === "salary"){ S.tdsView = "salary"; S.paySub = ["employees", "register", "form16"].includes(p[2]) ? p[2] : "employees"; return; }
       if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;

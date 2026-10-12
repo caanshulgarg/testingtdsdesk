@@ -134,7 +134,15 @@ const TDS = {
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
-  salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
+  // bridge 2.4.4: and Tally's payroll, one row per employee and payroll entry (Payroll.tdsRows, src/js/73), in place of the
+  // books' own 192 row of that entry (the entry's total, which says neither whom nor how much)
+  salaryRows(){
+    const pay = typeof Payroll === "object" ? Payroll.tdsRows() : [];
+    if (!pay.length) return this.allRows().filter(r => /^192/.test(String(r.section || "")));
+    const covered = new Set(pay.map(r => r.id.slice(4, r.id.indexOf("|"))));
+    return this.allRows().filter(r => /^192/.test(String(r.section || "")) && !covered.has(String(r.id).split("|")[0])).concat(pay)
+      .sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
   // every voucher that carries a TDS ledger becomes one deduction row
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){

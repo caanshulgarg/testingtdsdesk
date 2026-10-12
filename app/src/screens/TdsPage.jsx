@@ -26,6 +26,7 @@ import { LedgerBanner } from "../parts/Notes.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { TieOut, Limits, Correction } from "./tds/Smart.jsx";
 import { Recon26, TracesFiles, TracesDefaults } from "./tds/Files.jsx";
+import Salary from "./tds/Payroll.jsx";
 import "../parts/returns.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -46,8 +47,9 @@ export function tdsBarYears(b, rows) {
 }
 
 // the TDS tabs, and which tab each view is in
-const SECS = [["returns", "Returns"], ["challans", "Challans"], ["recon", "26AS & AIS"], ["traces", "TRACES files"], ["checks", "Checks"]];
-export const tdsSecOf = (v) => (v === "recon" || v === "traces" || v === "challans" ? v : v === "checks" || v === "certs" ? "checks" : "returns");
+// bridge 2.4.4: Salary (Tally's payroll: employees, the pay register, Form 16; tds/Payroll.jsx)
+const SECS = [["returns", "Returns"], ["salary", "Salary"], ["challans", "Challans"], ["recon", "26AS & AIS"], ["traces", "TRACES files"], ["checks", "Checks"]];
+export const tdsSecOf = (v) => (v === "recon" || v === "traces" || v === "challans" || v === "salary" ? v : v === "checks" || v === "certs" ? "checks" : "returns");
 const CHECKS = [["rates", "Rates and certificates"], ["limits", "Limits"], ["tieout", "Tie-out"], ["corr", "Corrections"]];
 // the quarter a page opens on when none is chosen: the one due now in this year, else Q1
 const dueQ = (fy) => { try { const d = Smart.tdsDue(); return d && d.fy === fy && d.q ? d.q : "Q1"; } catch (e) { return "Q1"; } };
@@ -239,7 +241,7 @@ export default function Tds({ b }) {
   // client. The quarter's own tax year names its forms (Form 140 from 2026-27, 26Q before: TDS.formLabel)
   if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
-  if (["year", "return", "challans", "checks", "recon", "traces"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
+  if (["year", "return", "challans", "checks", "recon", "traces", "salary"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices"].includes(S.tdsView)) S.tdsView = "years";
   if (S.tdsView === "challans" && !S.tdsQ) S.tdsQ = dueQ(S.tdsFy);
   const v = S.tdsView, sec = tdsSecOf(v);
@@ -257,7 +259,7 @@ export default function Tds({ b }) {
   const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
-  const none = !had.length && (sec === "returns" || sec === "challans" || sec === "checks") && v !== "notices";
+  const none = !had.length && (sec === "returns" || sec === "challans" || sec === "checks") && v !== "notices" && !Payroll.has("");
   return <>
     {/* the ledgers still to confirm: said once, on Returns (round 46), not on every tab */}
     {sec === "returns" && <LedgerBanner b={b} which="tds" />}
@@ -270,6 +272,7 @@ export default function Tds({ b }) {
       : v === "years" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p><Years rows={rows} fys={had} /></>
       : v === "challans" ? <YearChallans fy={S.tdsFy} q={S.tdsQ} />
       : v === "checks" ? <Checks />
+      : v === "salary" ? <Salary />
       : v === "recon" ? <Recon26 />
       : v === "traces" ? <TracesFiles />
       : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)

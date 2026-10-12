@@ -1,0 +1,1659 @@
+{
+ "company": "PE Payroll Test Co",
+ "fy": "2026-27",
+ "category": "Primary Cost Category",
+ "group": "PE Office Staff",
+ "other": [
+  "PE Delhi Branch"
+ ],
+ "payable": "PE Salary Payable",
+ "bank": "PE Salary Bank",
+ "payHeads": [
+  [
+   "PE Basic",
+   "Indirect Expenses",
+   "Earnings for Employees",
+   "",
+   "Basic Salary",
+   "earn"
+  ],
+  [
+   "PE HRA",
+   "Indirect Expenses",
+   "Earnings for Employees",
+   "",
+   "House Rent Allowance",
+   "earn"
+  ],
+  [
+   "PE Special Allowance",
+   "Indirect Expenses",
+   "Earnings for Employees",
+   "",
+   "",
+   "earn"
+  ],
+  [
+   "PE PF Employee",
+   "Current Liabilities",
+   "Employees' Statutory Deductions",
+   "PF Account (A/c No. 1)",
+   "",
+   "ded"
+  ],
+  [
+   "PE Professional Tax",
+   "Current Liabilities",
+   "Employees' Statutory Deductions",
+   "Professional Tax",
+   "",
+   "ded"
+  ],
+  [
+   "PE Income Tax",
+   "Current Liabilities",
+   "Employees' Statutory Deductions",
+   "Income Tax",
+   "",
+   "ded"
+  ],
+  [
+   "PE PF Employer",
+   "Indirect Expenses",
+   "Employer's Statutory Contributions",
+   "PF Account (A/c No. 1)",
+   "",
+   "employer"
+  ]
+ ],
+ "employees": [
+  [
+   "PE Asha Rao",
+   "ABCPR1001A",
+   "20240401",
+   "",
+   "Accountant",
+   [
+    50000,
+    20000,
+    30000,
+    1800,
+    200,
+    0
+   ]
+  ],
+  [
+   "PE Bimal Das",
+   "ABCPD1002B",
+   "20230601",
+   "",
+   "Manager",
+   [
+    100000,
+    40000,
+    60000,
+    1800,
+    200,
+    23500
+   ]
+  ],
+  [
+   "PE Chitra Iyer",
+   "ABCPI1003C",
+   "20220101",
+   "",
+   "Senior Accountant",
+   [
+    60000,
+    30000,
+    10000,
+    1800,
+    200,
+    5000
+   ]
+  ],
+  [
+   "PE Dev Malhotra",
+   "ABCPM1004D",
+   "20200401",
+   "",
+   "Consultant",
+   [
+    70000,
+    0,
+    20000,
+    1800,
+    200,
+    4000
+   ]
+  ],
+  [
+   "PE Esha Kapoor",
+   "ABCPK1005E",
+   "20260701",
+   "",
+   "Analyst",
+   [
+    40000,
+    16000,
+    24000,
+    1800,
+    200,
+    1500
+   ]
+  ],
+  [
+   "PE Farid Khan",
+   "",
+   "20250101",
+   "20261231",
+   "Driver",
+   [
+    20000,
+    8000,
+    7000,
+    1800,
+    200,
+    7000
+   ]
+  ],
+  [
+   "PE Gita Sharma",
+   "ABCPS1007G",
+   "20190401",
+   "",
+   "Director",
+   [
+    300000,
+    120000,
+    180000,
+    1800,
+    200,
+    165000
+   ]
+  ]
+ ],
+ "payrolls": [
+  {
+   "no": "PE-PAY-202604",
+   "date": "20260401",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202605",
+   "date": "20260501",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202606",
+   "date": "20260601",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202607",
+   "date": "20260701",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202608",
+   "date": "20260801",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202609",
+   "date": "20260901",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202610",
+   "date": "20261001",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202611",
+   "date": "20261101",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202612",
+   "date": "20261201",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Farid Khan",
+     "heads": {
+      "PE Basic": 20000,
+      "PE HRA": 8000,
+      "PE Special Allowance": 7000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 7000
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202701",
+   "date": "20270101",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202702",
+   "date": "20270201",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  },
+  {
+   "no": "PE-PAY-202703",
+   "date": "20270301",
+   "rows": [
+    {
+     "employee": "PE Asha Rao",
+     "heads": {
+      "PE Basic": 50000,
+      "PE HRA": 20000,
+      "PE Special Allowance": 30000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 0
+     }
+    },
+    {
+     "employee": "PE Bimal Das",
+     "heads": {
+      "PE Basic": 100000,
+      "PE HRA": 40000,
+      "PE Special Allowance": 60000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 23500
+     }
+    },
+    {
+     "employee": "PE Chitra Iyer",
+     "heads": {
+      "PE Basic": 60000,
+      "PE HRA": 30000,
+      "PE Special Allowance": 10000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 5000
+     }
+    },
+    {
+     "employee": "PE Dev Malhotra",
+     "heads": {
+      "PE Basic": 70000,
+      "PE HRA": 0,
+      "PE Special Allowance": 20000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 4000
+     }
+    },
+    {
+     "employee": "PE Esha Kapoor",
+     "heads": {
+      "PE Basic": 40000,
+      "PE HRA": 16000,
+      "PE Special Allowance": 24000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 1500
+     }
+    },
+    {
+     "employee": "PE Gita Sharma",
+     "heads": {
+      "PE Basic": 300000,
+      "PE HRA": 120000,
+      "PE Special Allowance": 180000,
+      "PE PF Employee": 1800,
+      "PE Professional Tax": 200,
+      "PE Income Tax": 165000
+     }
+    }
+   ]
+  }
+ ],
+ "salaryPayments": [
+  {
+   "no": "PE-SAL-202604",
+   "date": "20260402",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202605",
+   "date": "20260502",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202606",
+   "date": "20260602",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202607",
+   "date": "20260702",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202608",
+   "date": "20260802",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202609",
+   "date": "20260902",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202610",
+   "date": "20261002",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202611",
+   "date": "20261102",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202612",
+   "date": "20261202",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Farid Khan",
+     26000
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202701",
+   "date": "20270102",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202702",
+   "date": "20270202",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  },
+  {
+   "no": "PE-SAL-202703",
+   "date": "20270302",
+   "bank": "PE Salary Bank",
+   "rows": [
+    [
+     "PE Asha Rao",
+     98000
+    ],
+    [
+     "PE Bimal Das",
+     174500
+    ],
+    [
+     "PE Chitra Iyer",
+     93000
+    ],
+    [
+     "PE Dev Malhotra",
+     84000
+    ],
+    [
+     "PE Esha Kapoor",
+     76500
+    ],
+    [
+     "PE Gita Sharma",
+     433000
+    ]
+   ]
+  }
+ ],
+ "tdsPayments": [
+  {
+   "no": "PE-TDS-202604",
+   "date": "20260502",
+   "from": "20260401",
+   "bsr": "0510308",
+   "challan": "1001",
+   "challanDate": "20260502",
+   "tax": 204500
+  },
+  {
+   "no": "PE-TDS-202605",
+   "date": "20260602",
+   "from": "20260501",
+   "bsr": "0510308",
+   "challan": "1002",
+   "challanDate": "20260602",
+   "tax": 204500
+  },
+  {
+   "no": "PE-TDS-202606",
+   "date": "20260702",
+   "from": "20260601",
+   "bsr": "0510308",
+   "challan": "1003",
+   "challanDate": "20260702",
+   "tax": 204500
+  },
+  {
+   "no": "PE-TDS-202607",
+   "date": "20260802",
+   "from": "20260701",
+   "bsr": "0510308",
+   "challan": "1004",
+   "challanDate": "20260802",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202608",
+   "date": "20260902",
+   "from": "20260801",
+   "bsr": "0510308",
+   "challan": "1005",
+   "challanDate": "20260902",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202609",
+   "date": "20261002",
+   "from": "20260901",
+   "bsr": "0510308",
+   "challan": "1006",
+   "challanDate": "20261002",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202610",
+   "date": "20261102",
+   "from": "20261001",
+   "bsr": "0510308",
+   "challan": "1007",
+   "challanDate": "20261102",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202611",
+   "date": "20261202",
+   "from": "20261101",
+   "bsr": "0510308",
+   "challan": "1008",
+   "challanDate": "20261202",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202612",
+   "date": "20270102",
+   "from": "20261201",
+   "bsr": "0510308",
+   "challan": "1009",
+   "challanDate": "20270102",
+   "tax": 206000
+  },
+  {
+   "no": "PE-TDS-202701",
+   "date": "20270202",
+   "from": "20270101",
+   "bsr": "0510308",
+   "challan": "1010",
+   "challanDate": "20270202",
+   "tax": 199000
+  },
+  {
+   "no": "PE-TDS-202702",
+   "date": "20270302",
+   "from": "20270201",
+   "bsr": "0510308",
+   "challan": "1011",
+   "challanDate": "20270302",
+   "tax": 199000
+  },
+  {
+   "no": "PE-TDS-202703",
+   "date": "20270331",
+   "from": "20270301",
+   "bsr": "0510308",
+   "challan": "1012",
+   "challanDate": "20270331",
+   "tax": 199000
+  }
+ ],
+ "details": {
+  "PE Asha Rao": {
+   "regime": "new",
+   "address": "1 Test Road, New Delhi 110001"
+  },
+  "PE Bimal Das": {
+   "regime": "new",
+   "address": "2 Test Road, Gurugram 122001",
+   "d80CCD2": 60000
+  },
+  "PE Chitra Iyer": {
+   "regime": "old",
+   "hraMetro": "yes",
+   "rent": 300000,
+   "landlordPan": "AAAPL2003L",
+   "d80C": 150000,
+   "d80D": 25000,
+   "d80DParents": 30000,
+   "address": "3 Test Road, Mumbai 400001"
+  },
+  "PE Dev Malhotra": {
+   "regime": "old",
+   "senior": "yes",
+   "hlInterest": 250000,
+   "lenderPan": "AAACH1004H",
+   "d80C": 120000,
+   "d80TTA": 60000,
+   "address": "4 Test Road, Pune 411001"
+  },
+  "PE Esha Kapoor": {
+   "regime": "new",
+   "prevSalary": 300000,
+   "prevTds": 10000,
+   "address": "5 Test Road, Noida 201301"
+  },
+  "PE Farid Khan": {
+   "address": "6 Test Road, Delhi 110006"
+  },
+  "PE Gita Sharma": {
+   "regime": "new",
+   "address": "7 Test Road, New Delhi 110003"
+  }
+ }
+}
