@@ -43,7 +43,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tall
     challan: r.challan ? [r.challanBsr, r.challanNo, r.challanDate] : null}));
   out.annex2 = {};
   x.Payroll.annexII(setup.fy).forEach(f => { out.annex2[f.name] = f; });
-  out.checks = {}; for (const q of ["Q1", "Q2", "Q3", "Q4"]) out.checks[q] = x.Payroll.checks(setup.fy, q).map(c => c.what);
+  out.checks = {}; for (const q of ["Q1", "Q2", "Q3", "Q4"]) out.checks[q] = x.Payroll.checks(setup.fy, q).map(c => c.what + ": " + (c.who || []).join(", "));
   const firm = {tan: "DELP01234E", pan: "AAACP1234Q", name: setup.company, deductorType: "C"};
   out.fvu = {}; for (const q of ["Q1", "Q4"]) out.fvu[q] = x.TDS24Q_FILE.build(setup.fy, q, firm);
   out.salaryRows = x.TDS.salaryRows().filter(r => r.fy === setup.fy).length;

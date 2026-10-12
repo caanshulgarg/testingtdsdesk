@@ -81,7 +81,7 @@ const Payroll = {
   empByName(name){ const k = normName(name); return this.employees().find(e => normName(e.name) === k) || null; },
   // ---------- the details FinCom keeps for an employee (items: b.payDetails, id "emp:<Tally GUID>")
   FIELDS: ["regime", "senior", "hraMetro", "rent", "landlordPan", "hlInterest", "lenderPan", "prevSalary", "prevTds", "address",
-    "d80C", "d80CCD1B", "d80D", "d80DParents", "d80E", "d80G", "d80TTA", "d80CCD2", "dOther"],
+    "d80C", "d80CCD1B", "d80D", "d80DParents", "parentsSenior", "d80E", "d80G", "d80TTA", "d80CCD2", "dOther"],
   detail(e){
     const id = "emp:" + (e && e.guid || ""), list = this.books().payDetails || [];
     return list.find(x => x && x.id === id) || {id};
@@ -96,7 +96,7 @@ const Payroll = {
     if (/^(rent|hlInterest|prevSalary|prevTds|d8)/.test(k)) val = val === "" || val == null ? "" : r2(Math.max(0, num(val)));
     if (k === "landlordPan" || k === "lenderPan") val = String(val || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
     if (k === "regime") val = val === "old" ? "old" : "new";
-    if (k === "senior" || k === "hraMetro") val = val === true || val === "yes" ? "yes" : "no";
+    if (k === "senior" || k === "hraMetro" || k === "parentsSenior") val = val === true || val === "yes" ? "yes" : "no";
     if (k === "address") val = String(val || "").slice(0, 300);
     const next = Object.assign({}, cur, {[k]: val, name: e.name, at: new Date().toISOString()});
     if (i >= 0) b.payDetails[i] = next; else b.payDetails.push(next);
@@ -124,8 +124,10 @@ const Payroll = {
     const order = ["earn", "reimb", "ded", "loan", "employer"];
     return {rows, heads: Array.from(heads).sort((a, c) => order.indexOf(this.kind(a)) - order.indexOf(this.kind(c)) || a.localeCompare(c))};
   },
-  // ---------- 24Q: one row per employee and payroll entry (the credit), paid on the salary payment's date when Tally keeps one
-  // for that employee within 45 days of the credit; the TDS the Income Tax pay head deducted. id "pay:<entry GUID>|<employee>"
+  // ---------- 24Q: one row per employee and payroll entry, dated when the entry credits the salary and the Income Tax pay head
+  // deducts the TDS (review 244 M2: the same date Annexure II and Form 16 count the year's TDS by, so a March salary paid in
+  // April is March's in every one of them); the salary payment's date beside it when Tally keeps one for that employee
+  // within two months. id "pay:<entry GUID>|<employee>"
   tdsRows(){ return typeof perRender === "function" ? perRender(this, "tdsRows", () => this.tdsRowsNow()) : this.tdsRowsNow(); },
   tdsRowsNow(){
     const d = this.data(), b = this.books(), by = {};
@@ -138,7 +140,7 @@ const Payroll = {
     return Object.values(by).filter(r => r.paid > 0.005 || r.tds > 0.005).map(r => {
       const e = this.empByName(r.employee), pay = d.pays.filter(p => normName(p.employee) === normName(r.employee) && p.paidOn >= r.credit && TDS.monthsBetween(r.credit, p.paidOn) <= 2)
         .sort((x, y) => x.paidOn.localeCompare(y.paidOn))[0];
-      const date = pay ? pay.paidOn : r.credit, id = "pay:" + r.guid + "|" + r.employee;
+      const date = r.credit, id = "pay:" + r.guid + "|" + r.employee;
       return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: e ? e.pan : "", guid: e ? e.guid : "",
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
         src: "payroll", challan: (b.alloc || {})[id] || ""};
@@ -192,12 +194,14 @@ const Payroll = {
   annexII(fy){ return this.employees().filter(e => this.yearOf(e, fy).months > 0 || num(this.detail(e).prevSalary) > 0 && this.yearOf(e, fy).months > 0).map(e => this.form16(e, fy)); },
   form16(e, fy){
     const y = this.yearOf(e, fy), d = this.detail(e);
-    const c = PayTax.compute({fy, regime: d.regime === "old" ? "old" : "new", senior: d.senior === "yes", hraMetro: d.hraMetro === "yes",
-      basic: y.basic, da: y.da, hra: y.hra, other: y.other, pt: y.pt, rent: num(d.rent), hlInterest: num(d.hlInterest),
+    const old = d.regime === "old";
+    const c = PayTax.compute({fy, regime: old ? "old" : "new", senior: d.senior === "yes", parentsSenior: d.parentsSenior === "yes", hraMetro: d.hraMetro === "yes",
+      basic: y.basic, da: y.da, hra: y.hra, other: y.other, pt: y.pt, nps: num(d.d80CCD2), rent: num(d.rent), hlInterest: num(d.hlInterest),
       prevSalary: num(d.prevSalary), prevTds: num(d.prevTds), tdsHere: y.tds, pan: e.pan,
       ded: {c80C: num(d.d80C), c80CCD1B: num(d.d80CCD1B), c80D: num(d.d80D), c80DParents: num(d.d80DParents), c80E: num(d.d80E), c80G: num(d.d80G), c80TTA: num(d.d80TTA), c80CCD2: num(d.d80CCD2), other: num(d.dOther)}});
     return Object.assign({name: e.name, pan: e.pan, guid: e.guid, designation: e.designation, joined: e.joined, left: e.left, address: d.address || "",
-      landlordPan: d.landlordPan || "", lenderPan: d.lenderPan || "", regimeChosen: d.regime ? true : false, months: y.months}, c);
+      landlordPan: d.landlordPan || "", lenderPan: d.lenderPan || "", regimeChosen: d.regime ? true : false, months: y.months,
+      senior: old && d.senior === "yes", category: old && d.senior === "yes" ? "S" : "G"}, c);
   },
   // ---------- before filing
   checks(fy, q){
@@ -213,8 +217,10 @@ const Payroll = {
       if (rentNoPan.length) out.push({what: "Rent over ₹1,00,000 a year without the landlord's PAN", n: rentNoPan.length, how: "The landlord's PAN is needed for the HRA exemption on rent over ₹1,00,000 a year.", who: rentNoPan.slice(0, 4).map(e => e.name)});
       const hlNoPan = emp.filter(e => this.detail(e).regime === "old" && num(this.detail(e).hlInterest) > 0 && !this.detail(e).lenderPan);
       if (hlNoPan.length) out.push({what: "Housing-loan interest without the lender's PAN", n: hlNoPan.length, how: "Annexure II asks the lender's PAN with the interest.", who: hlNoPan.slice(0, 4).map(e => e.name)});
-      const short = this.annexII(fy).filter(x => x.balance > 1);
-      if (short.length) out.push({what: "Tax for the year more than the TDS deducted", n: short.length, how: "The year's tax is more than the TDS (here and with the previous employer); deduct the rest before the year ends.", who: short.slice(0, 4).map(x => x.name + " " + INR.format(x.balance))});
+      const short = this.annexII(fy).filter(x => x.shortfall > 1);
+      if (short.length) out.push({what: "TDS for the year less than due", n: short.length, how: "The year's tax (at least 20% of the income where there is tax and no PAN, section 206AA) is more than the TDS here and with the previous employer; deduct the rest before the year ends.", who: short.slice(0, 4).map(x => x.name + " " + INR.format(x.shortfall))});
+      const noRules = this.annexII(fy).filter(x => !x.rulesKnown);
+      if (noRules.length) out.push({what: "Tax rules of " + fy + " not in FinCom", n: noRules.length, how: "FinCom works out salary tax for " + PayTax.YEARS.join(" and ") + " only; work out this year's by hand.", who: noRules.slice(0, 4).map(x => x.name)});
     }
     return out;
   }
@@ -231,6 +237,7 @@ const Payroll = {
 // 37% above ₹5 crore in the old regime), with marginal relief; health and education cess 4%. Total income rounded to ₹10
 // (section 288A), the tax to ₹10 (section 288B). Check before filing.
 const PayTax = {
+  YEARS: ["2025-26", "2026-27"],   // the years these rules are written for (review 244 L2): another year is said, never worked out silently
   NEW: [[400000, 0], [800000, 5], [1200000, 10], [1600000, 15], [2000000, 20], [2400000, 25], [Infinity, 30]],
   slab(inc, slabs){ let t = 0, lo = 0; for (const [hi, rate] of slabs){ if (inc > lo) t += (Math.min(inc, hi) - lo) * rate / 100; lo = hi; } return t; },
   old(senior){ const ex = senior ? 300000 : 250000; return [[ex, 0], [500000, 5], [1000000, 20], [Infinity, 30]]; },
@@ -258,7 +265,9 @@ const PayTax = {
   round10(x){ return Math.round(x / 10) * 10; },
   compute(i){
     const regime = i.regime === "old" ? "old" : "new";
-    const salary = r2(num(i.basic) + num(i.da) + num(i.hra) + num(i.other));         // 17(1), this employer
+    // 17(1), this employer; the employer's NPS contribution (declared) is salary too, then deducted under 80CCD(2) (review 244 H3)
+    const nps = r2(Math.max(0, num(i.nps)));
+    const salary = r2(num(i.basic) + num(i.da) + num(i.hra) + num(i.other) + nps);
     const prev = r2(num(i.prevSalary));
     const gross = r2(salary + prev);
     // HRA (old regime): the least of the HRA received, rent less 10% of salary (basic and DA), 50% (metro) or 40% of salary
@@ -277,25 +286,26 @@ const PayTax = {
     const d = i.ded || {}, cap = (v, c) => r2(Math.min(Math.max(0, num(v)), c));
     let via = {};
     if (regime === "old"){
-      via = {c80C: cap(d.c80C, 150000), c80CCD1B: cap(d.c80CCD1B, 50000), c80D: cap(d.c80D, i.senior ? 50000 : 25000), c80DParents: cap(d.c80DParents, 50000),
-        c80E: cap(d.c80E, Infinity), c80G: cap(d.c80G, Infinity), c80TTA: cap(d.c80TTA, i.senior ? 50000 : 10000), c80CCD2: cap(d.c80CCD2, salary * 0.10), other: cap(d.other, Infinity)};
+      via = {c80C: cap(d.c80C, 150000), c80CCD1B: cap(d.c80CCD1B, 50000), c80D: cap(d.c80D, i.senior ? 50000 : 25000), c80DParents: cap(d.c80DParents, i.parentsSenior ? 50000 : 25000),
+        c80E: cap(d.c80E, Infinity), c80G: cap(d.c80G, Infinity), c80TTA: cap(d.c80TTA, i.senior ? 50000 : 10000), c80CCD2: cap(nps, (num(i.basic) + num(i.da)) * 0.10), other: cap(d.other, Infinity)};
     } else {
-      via = {c80CCD2: cap(d.c80CCD2, salary * 0.14)};
+      via = {c80CCD2: cap(nps, (num(i.basic) + num(i.da)) * 0.14)};
     }
     let via6 = r2(Object.values(via).reduce((a, v) => a + v, 0));
     if (via6 > grossTotal) via6 = grossTotal;
     const total = this.round10(Math.max(0, grossTotal - via6));
     const t = this.tax(total, regime, !!i.senior);
     const cess = r2((t.afterRebate + t.surcharge) * 0.04);
-    let taxPayable = this.round10(t.afterRebate + t.surcharge + cess);
-    // no valid PAN (section 206AA): at least 20% of the income
+    const taxPayable = this.round10(t.afterRebate + t.surcharge + cess);
+    // no valid PAN (section 206AA, review 244 H2): the tax stays the tax (Form 16, Annexure II); the TDS due is at least 20% of
+    // the income, only where there is tax
     const noPan = !(typeof Certs === "object" ? Certs.validPan(i.pan) : /^[A-Z]{5}\d{4}[A-Z]$/.test(String(i.pan || "")));
-    if (noPan && total > 0) taxPayable = Math.max(taxPayable, this.round10(total * 0.20));
+    const tdsDue = noPan && taxPayable > 0 ? Math.max(taxPayable, this.round10(total * 0.20)) : taxPayable;
     const tdsHere = r2(num(i.tdsHere)), prevTds = r2(num(i.prevTds));
-    return {regime, salary, prevSalary: prev, gross, basic: r2(num(i.basic)), da: r2(num(i.da)), hra: r2(num(i.hra)), other: r2(num(i.other)), perquisites: 0, profitsInLieu: 0,
+    return {regime, rulesKnown: this.YEARS.indexOf(i.fy) >= 0, nps, salary, prevSalary: prev, gross, basic: r2(num(i.basic)), da: r2(num(i.da)), hra: r2(num(i.hra)), other: r2(num(i.other)), perquisites: 0, profitsInLieu: 0,
       hraExempt: hraEx, standard: stdDed, profTax: ptDed, incomeSalary: incSalary, houseProperty: hp, grossTotal, via, chapter6: via6, totalIncome: total,
       slabTax: t.slabTax, rebate: t.rebate, surcharge: t.surcharge, cess, relief89: 0, taxPayable, noPan, tdsHere, prevTds, tdsTotal: r2(tdsHere + prevTds),
-      balance: r2(taxPayable - tdsHere - prevTds)};
+      balance: r2(taxPayable - tdsHere - prevTds), tdsDue, shortfall: r2(tdsDue - tdsHere - prevTds)};
   }
 };
 
@@ -338,9 +348,11 @@ const TDS24Q_FILE = {
     });
     let sd = 0;
     if (q === "Q4"){
-      Payroll.annexII(fy).forEach((e, i) => {
+      const a2 = Payroll.annexII(fy);
+      if (a2.some(e => !e.rulesKnown)) return {error: "FinCom works out salary tax for " + PayTax.YEARS.join(" and ") + " only: Annexure II of " + fy + " is not built."};
+      a2.forEach((e, i) => {
         sd++;
-        put(["SD", "1", String(i + 1), "A", Certs.validPan(e.pan) ? e.pan : "PANNOTAVBL", "", txt(e.name), e.senior ? "S" : "G", dmy(e.joined && e.joined > fy.slice(0, 4) + "0401" ? e.joined : fy.slice(0, 4) + "0401"),
+        put(["SD", "1", String(i + 1), "A", Certs.validPan(e.pan) ? e.pan : "PANNOTAVBL", "", txt(e.name), e.category || "G", dmy(e.joined && e.joined > fy.slice(0, 4) + "0401" ? e.joined : fy.slice(0, 4) + "0401"),
           dmy(e.left && e.left < (num(fy.slice(0, 4)) + 1) + "0331" ? e.left : (num(fy.slice(0, 4)) + 1) + "0331"), money(e.salary), "0.00", "0.00", money(e.gross), money(e.hraExempt), money(e.standard), "0.00", money(e.profTax),
           money(e.incomeSalary), money(e.houseProperty), money(e.grossTotal), money(e.chapter6), money(e.totalIncome), money(e.slabTax - e.rebate), money(e.surcharge), money(e.cess), "0.00",
           money(e.taxPayable), money(e.tdsHere), money(e.prevTds), money(e.tdsTotal), money(e.balance), e.regime === "old" ? "Y" : "N", money(e.prevSalary), e.landlordPan || "", e.lenderPan || ""]);

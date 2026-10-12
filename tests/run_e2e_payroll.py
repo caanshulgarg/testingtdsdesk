@@ -182,7 +182,7 @@ for name, w in EXP["annex2"].items():
     if not g: bad.append((name, "missing")); continue
     for k, v in w.items():
         gv = g.get(k)
-        if k == "regime":
+        if k in ("regime", "category"):
             if gv != v: bad.append((name, k, gv, v))
         elif P(gv) != v: bad.append((name, k, gv, v))
 ok(not bad, "24Q Annexure II and Form 16 Part B, every employee, every figure to the paisa (%d employees) %s" % (len(EXP["annex2"]), bad[:4]))
@@ -191,5 +191,11 @@ f4 = O["fvu"]["Q4"]
 ok(not f4.get("error") and f4.get("draft") and "_DRAFT" in f4.get("name", "") and f4["text"].count("^SD^") == len(EXP["annex2"]) and f4["text"].count("^DD^") == sum(1 for w in EXP["annex1"]["Q4"] if w["tds"] != "0.00"),
    "the Q4 text file: a challan record for each month, a deductee record for each payment with TDS, a salary record for each employee, marked a draft (%s)" % ({k: f4.get(k) for k in ("rows", "challans", "salaryRecords", "name", "error")}))
 ok(O["fvu"]["Q1"].get("text", "").count("^CD^") == 3, "the Q1 text file: three challans")
+sd = {l.split("^")[7]: l.split("^")[8] for l in f4.get("text", "").split("\r\n") if "^SD^" in l}
+ok(sd.get("PE Dev Malhotra") == "S" and sd.get("PE Gita Sharma") == "G" and sd.get("PE Asha Rao") == "G", "the salary record's category: the old-regime senior citizen S, the others G (review 244 M3) %s" % sd)
+fa = O["annex2"].get("PE Farid Khan") or {}
+ok(fa.get("noPan") and P(fa.get("taxPayable")) == "0.00" and P(fa.get("tdsDue")) == "0.00", "no PAN and no tax: the tax stays nil and no 20%% TDS is due (section 206AA; review 244 H2) %s" % {k: fa.get(k) for k in ("taxPayable", "tdsDue", "shortfall")})
+q4 = " | ".join(O["checks"]["Q4"])
+ok("TDS for the year less than due" in q4 and "PE Bimal Das" in q4 and "PE Farid Khan" not in q4.split("TDS for the year less than due")[1].split("|")[0], "before filing (Q4): the TDS short of the year's tax said for Bimal, not for the no-PAN employee with no tax")
 print("\n%s: %d" % ("FAILED" if fails else "ALL OK", len(fails)))
 if fails: raise SystemExit(1)

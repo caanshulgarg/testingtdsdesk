@@ -70,6 +70,7 @@ try:
         ok(pg.locator(det + ' [data-pay-field="senior"]').count() == 0, "new regime: no senior-citizen question")
         pg.select_option(det + ' select[data-pay-field="regime"]', "old"); pg.wait_for_timeout(300)
         ok(pg.locator(det + ' [data-pay-field="senior"]').count() == 1 and pg.locator(det + ' [data-pay-field="d80C"]').count() == 1, "old regime: the senior-citizen yes/no and the declarations appear")
+        ok(pg.locator(det + ' [data-pay-field="parentsSenior"]').count() == 1, "old regime: whether a parent is a senior citizen, yes / no (80D's limit; no date of birth)")
         pg.fill(det + ' input[data-pay-field="d80C"]', "150000"); pg.press(det + ' input[data-pay-field="d80C"]', "Enter"); pg.wait_for_timeout(300)
         d = pg.evaluate("() => (S.books.payDetails || []).find(x => x.name === 'PE Asha Rao')")
         ok(d and d.get("regime") == "old" and d.get("d80C") == 150000 and d.get("id", "").startswith("emp:"), "kept with the books as an item with its id (%s)" % d)

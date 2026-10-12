@@ -3,7 +3,7 @@
   "Q1": [
    {
     "challan": null,
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -14,7 +14,7 @@
      "01001",
      "20260502"
     ],
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -25,7 +25,7 @@
      "01001",
      "20260502"
     ],
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -36,7 +36,7 @@
      "01001",
      "20260502"
     ],
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -47,7 +47,7 @@
      "01001",
      "20260502"
     ],
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -58,14 +58,14 @@
      "01001",
      "20260502"
     ],
-    "date": "20260402",
+    "date": "20260401",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -76,7 +76,7 @@
      "01002",
      "20260602"
     ],
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -87,7 +87,7 @@
      "01002",
      "20260602"
     ],
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -98,7 +98,7 @@
      "01002",
      "20260602"
     ],
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -109,7 +109,7 @@
      "01002",
      "20260602"
     ],
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -120,14 +120,14 @@
      "01002",
      "20260602"
     ],
-    "date": "20260502",
+    "date": "20260501",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -138,7 +138,7 @@
      "01003",
      "20260702"
     ],
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -149,7 +149,7 @@
      "01003",
      "20260702"
     ],
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -160,7 +160,7 @@
      "01003",
      "20260702"
     ],
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -171,7 +171,7 @@
      "01003",
      "20260702"
     ],
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -182,7 +182,7 @@
      "01003",
      "20260702"
     ],
-    "date": "20260602",
+    "date": "20260601",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
@@ -191,7 +191,7 @@
   "Q2": [
    {
     "challan": null,
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -202,7 +202,7 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -213,7 +213,7 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -224,7 +224,7 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -235,7 +235,7 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -246,7 +246,7 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -257,14 +257,14 @@
      "01004",
      "20260802"
     ],
-    "date": "20260702",
+    "date": "20260701",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -275,7 +275,7 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -286,7 +286,7 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -297,7 +297,7 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -308,7 +308,7 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -319,7 +319,7 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -330,14 +330,14 @@
      "01005",
      "20260902"
     ],
-    "date": "20260802",
+    "date": "20260801",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -348,7 +348,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -359,7 +359,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -370,7 +370,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -381,7 +381,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -392,7 +392,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -403,7 +403,7 @@
      "01006",
      "20261002"
     ],
-    "date": "20260902",
+    "date": "20260901",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
@@ -412,7 +412,7 @@
   "Q3": [
    {
     "challan": null,
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -423,7 +423,7 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -434,7 +434,7 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -445,7 +445,7 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -456,7 +456,7 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -467,7 +467,7 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -478,14 +478,14 @@
      "01007",
      "20261102"
     ],
-    "date": "20261002",
+    "date": "20261001",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -496,7 +496,7 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -507,7 +507,7 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -518,7 +518,7 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -529,7 +529,7 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -540,7 +540,7 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -551,14 +551,14 @@
      "01008",
      "20261202"
     ],
-    "date": "20261102",
+    "date": "20261101",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -569,7 +569,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -580,7 +580,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -591,7 +591,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -602,7 +602,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -613,7 +613,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Farid Khan",
     "paid": "35000.00",
     "tds": "7000.00"
@@ -624,7 +624,7 @@
      "01009",
      "20270102"
     ],
-    "date": "20261202",
+    "date": "20261201",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
@@ -633,7 +633,7 @@
   "Q4": [
    {
     "challan": null,
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -644,7 +644,7 @@
      "01010",
      "20270202"
     ],
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -655,7 +655,7 @@
      "01010",
      "20270202"
     ],
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -666,7 +666,7 @@
      "01010",
      "20270202"
     ],
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -677,7 +677,7 @@
      "01010",
      "20270202"
     ],
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -688,14 +688,14 @@
      "01010",
      "20270202"
     ],
-    "date": "20270102",
+    "date": "20270101",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -706,7 +706,7 @@
      "01011",
      "20270302"
     ],
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -717,7 +717,7 @@
      "01011",
      "20270302"
     ],
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -728,7 +728,7 @@
      "01011",
      "20270302"
     ],
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -739,7 +739,7 @@
      "01011",
      "20270302"
     ],
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -750,14 +750,14 @@
      "01011",
      "20270302"
     ],
-    "date": "20270202",
+    "date": "20270201",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
    },
    {
     "challan": null,
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Asha Rao",
     "paid": "100000.00",
     "tds": "0.00"
@@ -768,7 +768,7 @@
      "01012",
      "20270331"
     ],
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Bimal Das",
     "paid": "200000.00",
     "tds": "23500.00"
@@ -779,7 +779,7 @@
      "01012",
      "20270331"
     ],
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Chitra Iyer",
     "paid": "100000.00",
     "tds": "5000.00"
@@ -790,7 +790,7 @@
      "01012",
      "20270331"
     ],
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Dev Malhotra",
     "paid": "90000.00",
     "tds": "4000.00"
@@ -801,7 +801,7 @@
      "01012",
      "20270331"
     ],
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Esha Kapoor",
     "paid": "80000.00",
     "tds": "1500.00"
@@ -812,7 +812,7 @@
      "01012",
      "20270331"
     ],
-    "date": "20270302",
+    "date": "20270301",
     "employee": "PE Gita Sharma",
     "paid": "600000.00",
     "tds": "165000.00"
@@ -822,6 +822,7 @@
  "annex2": {
   "PE Asha Rao": {
    "balance": "0.00",
+   "category": "G",
    "cess": "0.00",
    "chapter6": "0.00",
    "gross": "1200000.00",
@@ -829,62 +830,74 @@
    "houseProperty": "0.00",
    "hraExempt": "0.00",
    "incomeSalary": "1125000.00",
+   "nps": "0.00",
    "prevTds": "0.00",
    "profTax": "0.00",
    "rebate": "52500.00",
    "regime": "new",
    "salary": "1200000.00",
+   "shortfall": "0.00",
    "slabTax": "52500.00",
    "standard": "75000.00",
    "surcharge": "0.00",
    "taxPayable": "0.00",
+   "tdsDue": "0.00",
    "tdsHere": "0.00",
    "totalIncome": "1125000.00"
   },
   "PE Bimal Das": {
-   "balance": "-5100.00",
-   "cess": "10650.00",
+   "balance": "10500.00",
+   "category": "G",
+   "cess": "11250.00",
    "chapter6": "60000.00",
-   "gross": "2400000.00",
-   "grossTotal": "2325000.00",
+   "gross": "2460000.00",
+   "grossTotal": "2385000.00",
    "houseProperty": "0.00",
    "hraExempt": "0.00",
-   "incomeSalary": "2325000.00",
+   "incomeSalary": "2385000.00",
+   "nps": "60000.00",
    "prevTds": "0.00",
    "profTax": "0.00",
    "rebate": "0.00",
    "regime": "new",
-   "salary": "2400000.00",
-   "slabTax": "266250.00",
+   "salary": "2460000.00",
+   "shortfall": "10500.00",
+   "slabTax": "281250.00",
    "standard": "75000.00",
    "surcharge": "0.00",
-   "taxPayable": "276900.00",
+   "taxPayable": "292500.00",
+   "tdsDue": "292500.00",
    "tdsHere": "282000.00",
-   "totalIncome": "2265000.00"
+   "totalIncome": "2325000.00"
   },
   "PE Chitra Iyer": {
-   "balance": "-2360.00",
-   "cess": "2216.80",
-   "chapter6": "205000.00",
+   "balance": "-1320.00",
+   "category": "G",
+   "cess": "2256.80",
+   "chapter6": "200000.00",
    "gross": "1200000.00",
    "grossTotal": "919600.00",
    "houseProperty": "0.00",
    "hraExempt": "228000.00",
    "incomeSalary": "919600.00",
+   "nps": "0.00",
    "prevTds": "0.00",
    "profTax": "2400.00",
    "rebate": "0.00",
    "regime": "old",
    "salary": "1200000.00",
-   "slabTax": "55420.00",
+   "shortfall": "-1320.00",
+   "slabTax": "56420.00",
    "standard": "50000.00",
    "surcharge": "0.00",
-   "taxPayable": "57640.00",
+   "taxPayable": "58680.00",
+   "tdsDue": "58680.00",
    "tdsHere": "60000.00",
-   "totalIncome": "714600.00"
+   "totalIncome": "719600.00"
   },
   "PE Dev Malhotra": {
    "balance": "-4820.00",
+   "category": "S",
    "cess": "1660.80",
    "chapter6": "170000.00",
    "gross": "1080000.00",
@@ -892,20 +905,24 @@
    "houseProperty": "-200000.00",
    "hraExempt": "0.00",
    "incomeSalary": "1027600.00",
+   "nps": "0.00",
    "prevTds": "0.00",
    "profTax": "2400.00",
    "rebate": "0.00",
    "regime": "old",
    "salary": "1080000.00",
+   "shortfall": "-4820.00",
    "slabTax": "41520.00",
    "standard": "50000.00",
    "surcharge": "0.00",
    "taxPayable": "43180.00",
+   "tdsDue": "43180.00",
    "tdsHere": "48000.00",
    "totalIncome": "657600.00"
   },
   "PE Esha Kapoor": {
    "balance": "-23500.00",
+   "category": "G",
    "cess": "0.00",
    "chapter6": "0.00",
    "gross": "1020000.00",
@@ -913,20 +930,24 @@
    "houseProperty": "0.00",
    "hraExempt": "0.00",
    "incomeSalary": "945000.00",
+   "nps": "0.00",
    "prevTds": "10000.00",
    "profTax": "0.00",
    "rebate": "34500.00",
    "regime": "new",
    "salary": "720000.00",
+   "shortfall": "-23500.00",
    "slabTax": "34500.00",
    "standard": "75000.00",
    "surcharge": "0.00",
    "taxPayable": "0.00",
+   "tdsDue": "0.00",
    "tdsHere": "13500.00",
    "totalIncome": "945000.00"
   },
   "PE Farid Khan": {
-   "balance": "-15000.00",
+   "balance": "-63000.00",
+   "category": "G",
    "cess": "0.00",
    "chapter6": "0.00",
    "gross": "315000.00",
@@ -934,20 +955,24 @@
    "houseProperty": "0.00",
    "hraExempt": "0.00",
    "incomeSalary": "240000.00",
+   "nps": "0.00",
    "prevTds": "0.00",
    "profTax": "0.00",
    "rebate": "0.00",
    "regime": "new",
    "salary": "315000.00",
+   "shortfall": "-63000.00",
    "slabTax": "0.00",
    "standard": "75000.00",
    "surcharge": "0.00",
-   "taxPayable": "48000.00",
+   "taxPayable": "0.00",
+   "tdsDue": "0.00",
    "tdsHere": "63000.00",
    "totalIncome": "240000.00"
   },
   "PE Gita Sharma": {
    "balance": "-15180.00",
+   "category": "G",
    "cess": "75570.00",
    "chapter6": "0.00",
    "gross": "7200000.00",
@@ -955,15 +980,18 @@
    "houseProperty": "0.00",
    "hraExempt": "0.00",
    "incomeSalary": "7125000.00",
+   "nps": "0.00",
    "prevTds": "0.00",
    "profTax": "0.00",
    "rebate": "0.00",
    "regime": "new",
    "salary": "7200000.00",
+   "shortfall": "-15180.00",
    "slabTax": "1717500.00",
    "standard": "75000.00",
    "surcharge": "171750.00",
    "taxPayable": "1964820.00",
+   "tdsDue": "1964820.00",
    "tdsHere": "1980000.00",
    "totalIncome": "7125000.00"
   }

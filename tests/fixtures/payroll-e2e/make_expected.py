@@ -1,6 +1,6 @@
 """python3 make_expected.py - the known answers of the payroll test company (setup.json), worked out here on their own, from
 the Income-tax rules as they stand for the tax year 2026-27, NOT by FinCom's code (src/js/73-payroll.js): expected.json.
-Everything in paise (Decimal, half up). The rules, in words, are in EXPECTED.md."""
+Everything in paise (Decimal, half up). The rules, in words, are in the comments here."""
 import json
 from decimal import Decimal as D, ROUND_HALF_UP
 S = json.load(open("setup.json"))
@@ -50,7 +50,8 @@ for p in S["payrolls"]:
         rows.append({"employee": r["employee"], "gross": str(P(gross)), "ded": str(P(ded)), "net": str(P(gross - ded)), "tds": str(P(h["PE Income Tax"]))
                      })
     out["registers"][ym] = sorted(rows, key=lambda x: x["employee"])
-# Annexure I: per employee per month, paid on the salary payment's date, the month's challan (by the period it pays)
+# Annexure I: per employee per month, by the date the payroll entry credits the salary and deducts the TDS (review 244 M2:
+# the same date Annexure II and Form 16 count the year's TDS by), the month's challan (by the period it pays)
 q_of = lambda d: "Q1" if "04" <= d[4:6] <= "06" else "Q2" if "07" <= d[4:6] <= "09" else "Q3" if "10" <= d[4:6] <= "12" else "Q4"
 chal = {c["from"][:6]: c for c in S["tdsPayments"]}
 sal = {s["date"][:6]: {e: a for e, a in s["rows"]} for s in S["salaryPayments"]}
@@ -58,9 +59,8 @@ for p in S["payrolls"]:
     ym = p["date"][:6]
     for r in p["rows"]:
         h = r["heads"]; paid = sum(D(h[k]) for k in EARN); tds = D(h["PE Income Tax"])
-        pay_date = [s for s in S["salaryPayments"] if s["date"][:6] == ym][0]["date"]
         c = chal[ym] if tds > 0 else None
-        out["annex1"].setdefault(q_of(pay_date), []).append({"employee": r["employee"], "date": pay_date, "paid": str(P(paid)), "tds": str(P(tds)),
+        out["annex1"].setdefault(q_of(p["date"]), []).append({"employee": r["employee"], "date": p["date"], "paid": str(P(paid)), "tds": str(P(tds)),
             "challan": [c["bsr"], c["challan"].zfill(5), c["challanDate"]] if c else None})   # the challan serial as the return carries it: five digits
 for q in out["annex1"]: out["annex1"][q].sort(key=lambda x: (x["date"], x["employee"]))
 # Annexure II / Form 16 Part B
@@ -76,7 +76,10 @@ for e in S["employees"]:
             h = r["heads"]
             parts["basic"] += D(h["PE Basic"]); parts["hra"] += D(h["PE HRA"]); parts["other"] += D(h["PE Special Allowance"])
             pt += D(h["PE Professional Tax"]); tds += D(h["PE Income Tax"])
-    salary = parts["basic"] + parts["hra"] + parts["other"]
+    # the employer's NPS contribution (declared: d80CCD2) is salary under 17(1) and deducted under 80CCD(2), up to 14% (new) or
+    # 10% (old) of basic and DA (review 244 H3)
+    nps = D(str(d.get("d80CCD2", 0)))
+    salary = parts["basic"] + parts["hra"] + parts["other"] + nps
     prev = D(str(d.get("prevSalary", 0))); gross = salary + prev
     hra_ex = D(0)
     if regime == "old" and parts["hra"] > 0 and D(str(d.get("rent", 0))) > 0:
@@ -90,20 +93,23 @@ for e in S["employees"]:
     gti = max(D(0), inc_sal + hp)
     g = lambda k: D(str(d.get(k, 0)))
     if regime == "old":
-        via = min(g("d80C"), D(150000)) + min(g("d80CCD1B"), D(50000)) + min(g("d80D"), D(50000 if senior else 25000)) + min(g("d80DParents"), D(50000)) + \
-              g("d80E") + g("d80G") + min(g("d80TTA"), D(50000 if senior else 10000)) + min(g("d80CCD2"), salary * D("0.10")) + g("dOther")
+        via = min(g("d80C"), D(150000)) + min(g("d80CCD1B"), D(50000)) + min(g("d80D"), D(50000 if senior else 25000)) + min(g("d80DParents"), D(50000 if d.get("parentsSenior") == "yes" else 25000)) + \
+              g("d80E") + g("d80G") + min(g("d80TTA"), D(50000 if senior else 10000)) + min(nps, parts["basic"] * D("0.10")) + g("dOther")
     else:
-        via = min(g("d80CCD2"), salary * D("0.14"))
+        via = min(nps, parts["basic"] * D("0.14"))
     via = min(P(via), gti)
     total = R10(max(D(0), gti - via))
     t, reb, after, sur = tax_of(total, regime, senior)
     cess = P((P(after) + P(sur)) * D("0.04"))
     payable = R10(P(after) + P(sur) + cess)
-    if not pan and total > 0: payable = max(payable, R10(total * D("0.20")))
+    # no PAN (section 206AA): the tax stays the tax; the TDS to deduct is at least 20% of the income, only when there is tax
+    # (review 244 H2)
+    due = max(payable, R10(total * D("0.20"))) if not pan and payable > 0 else payable
     prev_tds = g("prevTds")
     out["annex2"][name] = {"regime": regime, "gross": str(P(gross)), "salary": str(P(salary)), "hraExempt": str(hra_ex), "standard": str(P(std)), "profTax": str(P(ptd)),
         "incomeSalary": str(P(inc_sal)), "houseProperty": str(P(hp)), "grossTotal": str(P(gti)), "chapter6": str(P(via)), "totalIncome": str(P(total)),
         "slabTax": str(P(t)), "rebate": str(P(reb)), "surcharge": str(P(sur)), "cess": str(cess), "taxPayable": str(P(payable)),
-        "tdsHere": str(P(tds)), "prevTds": str(P(prev_tds)), "balance": str(P(payable - tds - prev_tds))}
+        "tdsHere": str(P(tds)), "prevTds": str(P(prev_tds)), "balance": str(P(payable - tds - prev_tds)),
+        "tdsDue": str(P(due)), "shortfall": str(P(due - tds - prev_tds)), "nps": str(P(nps)), "category": "S" if senior and regime == "old" else "G"}
 json.dump(out, open("expected.json", "w"), indent=1, sort_keys=True)
 for n, x in out["annex2"].items(): print(n, x["regime"], "total", x["totalIncome"], "tax", x["taxPayable"], "tds", x["tdsHere"], "balance", x["balance"])

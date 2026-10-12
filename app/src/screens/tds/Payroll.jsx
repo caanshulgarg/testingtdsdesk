@@ -98,12 +98,13 @@ function Details({ e, fy }) {
     <div>
       {old && <><Field e={e} k="d80C" label="80C (PF, LIC, PPF…)" kind="money" /><Field e={e} k="d80CCD1B" label="80CCD(1B) NPS" kind="money" />
         <Field e={e} k="d80D" label="80D self and family" kind="money" /><Field e={e} k="d80DParents" label="80D parents" kind="money" />
+        <YesNo e={e} k="parentsSenior" label="A parent is a senior citizen (80D up to ₹50,000)" />
         <Field e={e} k="d80E" label="80E education loan" kind="money" /><Field e={e} k="d80G" label="80G donations (qualifying)" kind="money" />
         <Field e={e} k="d80TTA" label={d.senior === "yes" ? "80TTB interest" : "80TTA savings interest"} kind="money" /><Field e={e} k="dOther" label="Other Chapter VI-A" kind="money" /></>}
-      <Field e={e} k="d80CCD2" label="80CCD(2) employer's NPS" kind="money" />
+      <Field e={e} k="d80CCD2" label="Employer's NPS contribution for the year (salary, then 80CCD(2))" kind="money" hint="Not a pay head in Tally: the employer's contribution to the employee's NPS. It is added to salary under 17(1) and deducted under 80CCD(2), up to 14% (new regime) or 10% (old) of basic and DA" />
     </div>
     <Field e={e} k="address" label="Address (for Form 16)" width={520} />
-    <p className="note" data-pay-tax={e.guid}>{fy}: taxable income {money(f.totalIncome)}, tax {money(f.taxPayable)}, TDS {money(f.tdsTotal)}{f.balance > 1 ? <> · <b>{money(f.balance)} still to deduct</b></> : f.balance < -1 ? <> · {money(-f.balance)} deducted more than the tax</> : null}.
+    <p className="note" data-pay-tax={e.guid}>{fy}: taxable income {money(f.totalIncome)}, tax {money(f.taxPayable)}, TDS {money(f.tdsTotal)}{f.shortfall > 1 ? <> · <b>{money(f.shortfall)} still to deduct</b></> : f.balance < -1 ? <> · {money(-f.balance)} deducted more than the tax</> : null}.
       {" "}<button className="linkbtn" onClick={() => { S.paySub = "form16"; S.payF16 = e.guid; render(); }}>Form 16 Part B →</button></p>
   </div>;
 }
@@ -147,6 +148,7 @@ export function Form16PartB({ e, fy }) {
         {f.da ? row("    dearness allowance", f.da) : null}
         {row("    house rent allowance", f.hra)}
         {row("    other allowances", f.other)}
+        {f.nps ? row("    employer's contribution to NPS (section 17(1)(viii))", f.nps) : null}
         {row("(b) Perquisites, section 17(2)", f.perquisites)}
         {row("(c) Profits in lieu of salary, section 17(3)", f.profitsInLieu)}
         {f.prevSalary ? row("(d) Salary from the previous employer", f.prevSalary) : null}
@@ -167,12 +169,14 @@ export function Form16PartB({ e, fy }) {
         {row("13. Surcharge", f.surcharge)}
         {row("14. Health and education cess", f.cess)}
         {row("15. Relief under section 89", f.relief89)}
-        {row("16. Net tax payable (rounded, section 288B)" + (f.noPan ? " (no PAN: at least 20%)" : ""), f.taxPayable, true)}
+        {row("16. Net tax payable (rounded, section 288B)", f.taxPayable, true)}
         {row("17. Tax deducted by this employer", f.tdsHere)}
         {f.prevTds ? row("    by the previous employer", f.prevTds) : null}
         {row(f.balance >= 0 ? "18. Tax still to deduct" : "18. Deducted more than the tax", Math.abs(f.balance), true)}
       </tbody>
     </table>
+    {f.noPan && f.tdsDue > f.taxPayable ? <p className="note" data-f16-nopan=""><b>No PAN:</b> the TDS due is {money(f.tdsDue)} (at least 20% of the income, section 206AA){f.shortfall > 1 ? <>; {money(f.shortfall)} of it not yet deducted</> : null}. The tax above stays the tax on the income.</p> : null}
+    {!f.rulesKnown ? <p className="note warn" data-f16-rules="">FinCom works out salary tax for {PayTax.YEARS.join(" and ")} only: the figures above are not {fy}'s. Work this year's out by hand.</p> : null}
     <p className="note">Check before filing: the slabs, rebate, surcharge and cess are those of the tax year 2026-27; under the Income-tax Act, 2025 this is Form 130, its sections renumbered. Perquisites and profits in lieu of salary are not told apart in Tally: anything paid through a pay head is salary here.</p>
   </div>;
 }
