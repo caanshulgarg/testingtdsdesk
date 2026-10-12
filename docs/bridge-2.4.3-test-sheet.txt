@@ -1,7 +1,7 @@
 FINCOM 2.4.3 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.3.exe
-Fingerprint: (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 374bf99fdb6021a04c4403cd9d52016e5064d871f9f12bc6422709584913307a (FinComBridge-Setup-2.4.3.exe, built 12-Oct-2026 11:00 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.3 changes (the full notes: docs/bridge-2.4.3-notes.md):
 1. A TDS payment's challan as Tally keeps it reaches FinCom: BSR code, challan number and date (with the cheque, bank
