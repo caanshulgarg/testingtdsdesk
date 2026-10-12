@@ -67,6 +67,8 @@ export default function SignIn() {
   return <Box><h1>FinCom</h1>
     <p className="note">{S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place"}</p>
     <p className="note" style={{ margin: "2px 0 0" }}><a href="welcome/">What is FinCom?</a></p>
+    {/* stability batch 6: the same "No internet" line as the sidebar's, when this computer has no line */}
+    {typeof navigator === "object" && navigator.onLine === false && <p className="note warn" data-offline-line="" style={{ margin: "10px 0 0" }}>No internet · work kept on this computer. Sign in when the line is back, or use FinCom here without an account (below).</p>}
     {S.signedOutWhy ? <p className="bk-alert" data-signed-out-why="" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
       : <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>}
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />

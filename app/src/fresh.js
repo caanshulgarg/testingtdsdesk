@@ -3,6 +3,8 @@
 // once (by a new address, so no cache can answer); later, while the page stays open, a note offers to reload.
 const KEY = "fincom-reloaded-for";
 async function current() {
+  // no line: no check (it could only fail; stability batch 6), the next one runs when the page is shown again
+  if (typeof navigator === "object" && navigator.onLine === false) return null;
   try {
     const r = await fetch("build.json?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return null;

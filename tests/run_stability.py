@@ -15,6 +15,9 @@ build (app/dist-test, or TDSDESK_SITE), with a made-up firm kept in this browser
   8. page changes that take longer than 300 ms show a thin bar under the top bar (nav.js), still under reduced motion;
   9. one message at a time (#toast), none for something that happened by itself (the sidebar's quiet line instead), a
      message that must stay (a newer FinCom) coming back after any other;
+ 12. a phone (390 and 360 px, light and dark): the bottom bar's five words never cut or overlapping; the frame before
+     the program as tall as the real top and bottom bars (no shift); the sign-in frame's card as tall as the real one;
+     offline: no update check (no console error) and "No internet" on the sign-in page;
  10. the service worker (forced on for the local server): FinCom opens without a line; only the site's own files are
      kept (no Supabase, no build.json); a new build is said ("A newer FinCom is out. Reload"); sign-out clears the kept files.
 Screenshots to tests/out/stability/."""
@@ -283,14 +286,54 @@ try:
             ctx.set_offline(False); pg.reload(); pg.wait_for_timeout(2500)
             # a new build: another worker, another build.json; the open page says so, quietly, and keeps working
             NEWBUILD[0] = True
-            pg.evaluate("() => navigator.serviceWorker.getRegistration().then(r => r.update())"); pg.wait_for_timeout(3000)
+            pg.evaluate("() => navigator.serviceWorker.getRegistration().then(r => r.update())")
+            try: pg.wait_for_function("() => (document.getElementById('toast').innerText || '').includes('A newer FinCom is out.')", timeout=12000)
+            except Exception: pass
             ok("A newer FinCom is out." in pg.inner_text("#toast") and pg.locator('#toast [data-toast-act="Reload"]').count() == 1, "a new build: “A newer FinCom is out. Reload”, in the one message region")
             NEWBUILD[0] = False
             # signing out clears what was kept after the first open
             pg.evaluate("() => caches.open('fincom-files:/').then(c => c.put('./assets/x.js', new Response('1')))")
             pg.evaluate("() => Cloud.signOut()"); pg.wait_for_timeout(600)
             ok(not pg.evaluate("() => caches.keys().then(ks => ks.filter(k => k.startsWith('fincom-files:')))"), "signing out clears the files kept after the first open")
-        ctx.close(); br.close()
+        ctx.close()
+
+        print("12. a phone, and offline (stability batch 6)")
+        LABELS = """() => { const ls = [...document.querySelectorAll('#side .side-link[data-bar]')].filter((e) => e.offsetParent !== null).map((e) => { const sp = e.querySelector('span'); const r = sp.getBoundingClientRect(); return {t: sp.innerText, x: r.x, r: r.right, cut: sp.scrollWidth > sp.clientWidth + 1}; });
+          let over = []; for (let i = 1; i < ls.length; i++) if (ls[i].x < ls[i - 1].r - 0.5) over.push(ls[i - 1].t + '/' + ls[i].t); return {n: ls.length, words: ls.map((l) => l.t), cut: ls.filter((l) => l.cut).map((l) => l.t), over}; }"""
+        DIMS = "() => { const h = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().height) : null; }; return {head: h('header.top'), side: h('#side'), app: Math.round(document.getElementById('app').getBoundingClientRect().top)}; }"
+        for w in (390, 360):
+            for scheme in ("light", "dark"):
+                c2 = br.new_context(viewport={"width": w, "height": 844}, color_scheme=scheme, is_mobile=True, has_touch=True)
+                c2.add_init_script(PROBE); c2.add_init_script("try{if(!localStorage.getItem('tdsdesk-test:cloud'))localStorage.setItem('tdsdesk-test:cloud',JSON.stringify({gate:false}))}catch(e){}")
+                p2 = c2.new_page()
+                # the frame before the program (legacy.js held back), then the app: the same heights, no shift
+                HOLD[0] = 2.0; p2.goto(URL, wait_until="commit"); p2.wait_for_timeout(1200); boot = p2.evaluate(DIMS)
+                bslots = p2.evaluate("() => [...document.querySelectorAll('#side .boot-item')].filter((e) => e.getBoundingClientRect().width > 0).length")
+                ok(bslots == 5, "%d px %s: the frame's bottom bar has its five places (%d)" % (w, scheme, bslots)); p2.wait_for_timeout(3500); HOLD[0] = 0
+                real = p2.evaluate(DIMS); m = state(p2); c, worst = cls(m)
+                lab = p2.evaluate(LABELS)
+                if scheme == "light":
+                    ok(boot["head"] == real["head"] and boot["side"] == real["side"] and boot["app"] == real["app"], "%d px: the frame before the program has the real top bar and bottom bar heights (%s, %s)" % (w, boot, real))
+                    ok(c <= 0.01, "%d px: the open without an account shifts %.4f <= 0.01 %s" % (w, c, worst))
+                ok(lab["n"] == 5 and not lab["cut"] and not lab["over"] and "Compliance" in lab["words"], "%d px %s: the bottom bar's five words, none cut or overlapping (%s)" % (w, scheme, lab))
+                p2.screenshot(path=os.path.join(OUT, "phone-%d-%s.png" % (w, scheme)))
+                c2.close()
+        # the sign-in card: the frame's card as tall as the real one, so it does not grow when the form arrives
+        c2 = br.new_context(viewport={"width": 1440, "height": 900}); p2 = c2.new_page()
+        HOLD[0] = 2.0; p2.goto(URL, wait_until="commit"); p2.wait_for_timeout(1200)
+        bh = p2.evaluate("() => Math.round(document.querySelector('.boot-signin .signin-box').getBoundingClientRect().height)"); p2.wait_for_timeout(3000); HOLD[0] = 0
+        rh = p2.evaluate("() => Math.round(document.querySelector('#app .signin-box').getBoundingClientRect().height)")
+        ok(bh >= rh - 30, "the sign-in frame's card is about as tall as the real card (%d px, the card %d px)" % (bh, rh)); c2.close()
+        # offline: no update check (no console error), and the sign-in view says there is no internet
+        c2 = br.new_context(viewport={"width": 1440, "height": 900}); p2 = c2.new_page()
+        p2.goto(URL); p2.evaluate("() => localStorage.setItem('fincom.sw', 'on')"); p2.reload(); p2.wait_for_timeout(5000)
+        p2.evaluate("() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))])"); p2.reload(); p2.wait_for_timeout(2000)
+        errs2 = []; p2.on("console", lambda m: errs2.append(m.text[:120]) if m.type == "error" else None); p2.on("requestfailed", lambda r: errs2.append("failed " + r.url[:80]) if "build.json" in r.url else None)
+        c2.set_offline(True); p2.reload(); p2.wait_for_timeout(4000)
+        ok(not [e for e in errs2 if "build.json" in e or "INTERNET_DISCONNECTED" in e], "offline: no update check, no console error (%s)" % errs2[:2])
+        ok(p2.locator("#app [data-offline-line]").count() == 1 and "No internet" in p2.inner_text("#app [data-offline-line]"), "offline: the sign-in page says there is no internet (the sidebar's words)")
+        c2.set_offline(False); c2.close()
+        br.close()
 finally:
     srv.shutdown()
 ok(not errors, "no errors in the page (%s)" % errors[:3])
