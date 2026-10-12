@@ -1,0 +1,203 @@
+[14:43:21] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-12, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 5 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-12, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 14 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+  INFO paym: the ref's requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\ledreq (Written by a go test at a9b43caaaef60afa09fc353ac0994b82349e1a28 (the gate's ref): ledgerChunkRequest, groupListRequest, ledgerChangesRequest, ledgerByNameRequest, natureChunkRequest, employeeChunkRequest)
+[14:43:54] ---- paym: payroll by XML
+[paym] company payroll on: created 0, altered 1, errors 0, 11.4 ms
+[paym] salary payable: created 1, altered 0, errors 0, 7.2 ms
+[paym] pay head PM Basic: created 1, altered 0, errors 0, 6.6 ms
+[paym] pay head PM HRA: created 1, altered 0, errors 0, 7.4 ms
+[paym] pay head PM Special Allowance: created 1, altered 0, errors 0, 5.9 ms
+[paym] pay head PM PF Employee: created 1, altered 0, errors 0, 6.4 ms
+[paym] pay head PM ESI Employee: created 1, altered 0, errors 0, 7.4 ms
+[paym] pay head PM Professional Tax: created 1, altered 0, errors 0, 6.1 ms
+[paym] pay head PM Income Tax: created 1, altered 0, errors 0, 7.2 ms
+[paym] pay head PM PF Employer: created 1, altered 0, errors 0, 8.6 ms
+[paym] employee group: created 1, altered 0, errors 0, 6 ms
+[paym] employees, batch 1: created 250, altered 0, errors 0, 393.4 ms
+[paym] employees, batch 2: created 250, altered 0, errors 0, 327.7 ms
+[paym] employees, batch 3: created 250, altered 0, errors 0, 349.3 ms
+[paym] employees, batch 4: created 250, altered 0, errors 0, 371.3 ms
+[paym] employees, batch 5: created 250, altered 0, errors 0, 347.7 ms
+[paym] employees, batch 6: created 250, altered 0, errors 0, 359.5 ms
+[paym] employees, batch 7: created 250, altered 0, errors 0, 352 ms
+[paym] employees, batch 8: created 250, altered 0, errors 0, 367.1 ms
+[paym] cost centres not for payroll: created 20, altered 0, errors 0, 32.9 ms
+[paym] payroll of 500 employees (PaySlip form): created 1, altered 0, errors 0, 195.1 ms
+  voucher mid=1 aid=1 Journal/1/20260401 guid=5af08cef-0ca7-489e-b107-af219cc3587a-00000001 cancelled=False
+  voucher mid=2 aid=2 Payroll/1/20261031 guid=5af08cef-0ca7-489e-b107-af219cc3587a-00000002 cancelled=False
+  INFO paym: pay heads 8/8, employees 2000/2000, other cost centres 20/20, payroll of 500 created 1 (MasterID '2')
+######## PASS p1 payroll made by XML (pay heads, 2,000 employees, 20 other cost centres, a payroll of 500): pay heads 8/8, employees 2000/2000, other cost centres 20/20, the payroll of 500 1 (MasterID 2)
+[14:43:57] ---- paym: the ledger requests give the pay-head fields
+######## PASS p2 the ledger requests give the pay-head fields: PM Basic=Earnings for Employees|Not Applicable|Basic Salary|Yes; PM HRA=Earnings for Employees|Not Applicable|House Rent Allowance|Yes; PM Special Allowance=Earnings for Employees|Not Applicable||Yes; PM PF Employee=Employees' Statutory Deductions|PF Account (A/c No. 1)||Yes; PM ESI Employee=Employees' Statutory Deductions|Employee State Insurance||Yes; PM Professional Tax=Employees' Statutory Deductions|Professional Tax||Yes; PM Income Tax=Employees' Statutory Deductions|Income Tax||Yes; PM PF Employer=Employer's Statutory Contributions|PF Account (A/c No. 1)||Yes
+[14:43:57] ---- paym: FinComEmployees, chunked
+  INFO paym: FinComEmployees chunks 3 (99.8 ms, 16.2 ms, 4.3 ms); cost centres found 2021, Tally lists 2021; missed 0; payroll employees marked 2000, others marked No 20
+######## PASS p3 FinComEmployees, chunked, finds every cost centre, the payroll ones marked: chunks 3, 2021 cost centres of Tally's 2021, none missed: True; FORPAYROLL Yes on 2000 employees, No on 20 others; PM Emp 0001 PAN/joining/group as made: True; fields not asked in the answer: none
+[14:43:58] ---- paym: the payroll entry of 500 (FinComVoucherObject)
+######## PASS p4 the 500-employee payroll entry (FinComVoucherObject) under 3 s, Tally responding: MasterID 2: 1233.5/1215.3/1191.5/1233.3/1255.2 ms (worst 1255.2 ms, median 1233.3 ms), 11751194 characters, Tally responding after each: True
+[14:44:04] ---- paym: 20,000 ledgers and the times
+  INFO paym: 19986 ledgers added to the 14 there were
+[paym] FinComLedgers 1-2000: 24 ms, 15575 bytes; light 1.9 ms, responding True
+[paym] FinComLedgers 2.4.3 1-2000: 23.1 ms, 12893 bytes; light 2 ms, responding True
+[paym] FinComEmployees 1-2000: 89.8 ms, 1553368 bytes; light 2.3 ms, responding True
+[paym] FinComLedgers 2001-4000: 157.8 ms, 1851942 bytes; light 2.3 ms, responding True
+[paym] FinComLedgers 2.4.3 2001-4000: 105.6 ms, 1543242 bytes; light 4 ms, responding True
+[paym] FinComEmployees 2001-4000: 15.6 ms, 204639 bytes; light 2.1 ms, responding True
+[paym] FinComLedgers 4001-6000: 143.1 ms, 2099506 bytes; light 2.3 ms, responding True
+[paym] FinComLedgers 2.4.3 4001-6000: 122.3 ms, 1749506 bytes; light 2.3 ms, responding True
+[paym] FinComEmployees 4001-6000: 3.7 ms, 1505 bytes; light 1.5 ms, responding True
+[paym] FinComLedgers 6001-8000: 145.3 ms, 2099506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 6001-8000: 114.7 ms, 1749506 bytes; light 2.5 ms, responding True
+[paym] FinComEmployees 6001-8000: 5.1 ms, 1505 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 8001-10000: 141.2 ms, 2099513 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 8001-10000: 137.2 ms, 1749513 bytes; light 2.3 ms, responding True
+[paym] FinComEmployees 8001-10000: 3.6 ms, 1505 bytes; light 1.5 ms, responding True
+[paym] FinComLedgers 10001-12000: 144.6 ms, 2103506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 10001-12000: 115.7 ms, 1753506 bytes; light 2.4 ms, responding True
+[paym] FinComEmployees 10001-12000: 3.3 ms, 1505 bytes; light 1.6 ms, responding True
+[paym] FinComLedgers 12001-14000: 170.3 ms, 2103506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 12001-14000: 116.2 ms, 1753506 bytes; light 5.7 ms, responding True
+[paym] FinComEmployees 12001-14000: 3.4 ms, 1505 bytes; light 1.5 ms, responding True
+[paym] FinComLedgers 14001-16000: 166.1 ms, 2103506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 14001-16000: 114.1 ms, 1753506 bytes; light 2.3 ms, responding True
+[paym] FinComEmployees 14001-16000: 4 ms, 1505 bytes; light 1.5 ms, responding True
+[paym] FinComLedgers 16001-18000: 169.8 ms, 2103506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 16001-18000: 112.5 ms, 1753506 bytes; light 2.3 ms, responding True
+[paym] FinComEmployees 16001-18000: 3.3 ms, 1505 bytes; light 1.8 ms, responding True
+[paym] FinComLedgers 18001-20000: 144.9 ms, 2103506 bytes; light 2.4 ms, responding True
+[paym] FinComLedgers 2.4.3 18001-20000: 118.9 ms, 1753506 bytes; light 2.2 ms, responding True
+[paym] FinComEmployees 18001-20000: 3.3 ms, 1505 bytes; light 1.4 ms, responding True
+[paym] FinComLedgers 20001-22000: 172.7 ms, 2103506 bytes; light 2.5 ms, responding True
+[paym] FinComLedgers 2.4.3 20001-22000: 128.1 ms, 1753506 bytes; light 2.3 ms, responding True
+[paym] FinComEmployees 20001-22000: 4.8 ms, 1505 bytes; light 2.9 ms, responding True
+[paym] FinComLedgers 22001-24000: 32.7 ms, 234828 bytes; light 1.9 ms, responding True
+[paym] FinComLedgers 2.4.3 22001-24000: 28.8 ms, 195978 bytes; light 1.9 ms, responding True
+[paym] FinComEmployees 22001-24000: 3.2 ms, 1505 bytes; light 1.6 ms, responding True
+[paym] FinComLedgers from 24001: 18.6 ms, 1504 bytes; light 1.9 ms, responding True
+[paym] FinComEmployees from 24001: 3.1 ms, 1505 bytes; light 1.6 ms, responding True
+[paym] FinComLedgerByName PM Basic: 21.4 ms, 2538 bytes; light 2 ms, responding True
+[paym] FinComLedgerByName PM Income Tax: 21 ms, 2495 bytes; light 2 ms, responding True
+[paym] FinComLedgerByName PM Ledger 00007: 20.3 ms, 2555 bytes; light 2.1 ms, responding True
+[paym] FinComLedgerByName PM Ledger 19999: 20.6 ms, 1504 bytes; light 2.1 ms, responding True
+[paym] FinComLedgerChanges 1-200: 120.8 ms, 3467 bytes; light 2 ms, responding True
+[paym] FinComLedgerChanges 201-400: 120.3 ms, 13614 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 401-600: 118.8 ms, 1504 bytes; light 2.1 ms, responding True
+[paym] FinComLedgerChanges 601-800: 122.3 ms, 1504 bytes; light 3.2 ms, responding True
+[paym] FinComLedgerChanges 801-1000: 122.3 ms, 1504 bytes; light 2 ms, responding True
+[paym] FinComLedgerChanges 1001-1200: 127.6 ms, 1504 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 1201-1400: 124.5 ms, 1504 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 1401-1600: 127.1 ms, 1504 bytes; light 4.3 ms, responding True
+[paym] FinComLedgerChanges 1601-1800: 123.9 ms, 1504 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 1801-2000: 124.5 ms, 1504 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 2001-2200: 121.9 ms, 1504 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 2201-2400: 131.1 ms, 168297 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 2401-2600: 132.5 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 2601-2800: 137 ms, 211306 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 2801-3000: 134.4 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 3001-3200: 136.8 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 3201-3400: 135.5 ms, 211306 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 3401-3600: 134.2 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 3601-3800: 134.5 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 3801-4000: 135.3 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 4001-4200: 133.5 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 4201-4400: 140.9 ms, 211306 bytes; light 2 ms, responding True
+[paym] FinComLedgerChanges 4401-4600: 133.6 ms, 211306 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 4601-4800: 136.8 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 4801-5000: 133.6 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 5001-5200: 134.6 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 5201-5400: 133.7 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 5401-5600: 134.8 ms, 211306 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 5601-5800: 134.5 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 5801-6000: 134.6 ms, 211306 bytes; light 2 ms, responding True
+[paym] FinComLedgerChanges 6001-6200: 131.5 ms, 211306 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 6201-6400: 138.4 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 6401-6600: 134.3 ms, 211306 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 6601-6800: 134.3 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 6801-7000: 135.3 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 7001-7200: 138.6 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 7201-7400: 140.3 ms, 211306 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 7401-7600: 143.2 ms, 211306 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 7601-7800: 142.3 ms, 211306 bytes; light 3.3 ms, responding True
+[paym] FinComLedgerChanges 7801-8000: 185.6 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 8001-8200: 183 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 8201-8400: 149.7 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 8401-8600: 142.4 ms, 211306 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 8601-8800: 139.5 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 8801-9000: 139.3 ms, 211306 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 9001-9200: 139.5 ms, 211306 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 9201-9400: 137.6 ms, 211306 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 9401-9600: 138.9 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 9601-9800: 138.9 ms, 211306 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 9801-10000: 141.5 ms, 211307 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 10001-10200: 142.1 ms, 211702 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 10201-10400: 144.2 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 10401-10600: 142.8 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 10601-10800: 142.6 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 10801-11000: 141.9 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 11001-11200: 141.5 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 11201-11400: 182 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 11401-11600: 146 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 11601-11800: 140.4 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 11801-12000: 149.3 ms, 211706 bytes; light 3.4 ms, responding True
+[paym] FinComLedgerChanges 12001-12200: 142.1 ms, 211706 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 12201-12400: 142.8 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 12401-12600: 144.8 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 12601-12800: 144 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 12801-13000: 141.6 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 13001-13200: 157.1 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 13201-13400: 148.5 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 13401-13600: 148.8 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 13601-13800: 144.4 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 13801-14000: 143.7 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 14001-14200: 144.1 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 14201-14400: 142.7 ms, 211706 bytes; light 2.7 ms, responding True
+[paym] FinComLedgerChanges 14401-14600: 144.7 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 14601-14800: 143.4 ms, 211706 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 14801-15000: 142.9 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 15001-15200: 144.4 ms, 211706 bytes; light 2 ms, responding True
+[paym] FinComLedgerChanges 15201-15400: 140.7 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 15401-15600: 143.4 ms, 211706 bytes; light 2.1 ms, responding True
+[paym] FinComLedgerChanges 15601-15800: 140.7 ms, 211706 bytes; light 2.1 ms, responding True
+[paym] FinComLedgerChanges 15801-16000: 142.4 ms, 211706 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 16001-16200: 147.5 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 16201-16400: 143 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 16401-16600: 146.7 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 16601-16800: 149.4 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 16801-17000: 145.1 ms, 211706 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 17001-17200: 145.5 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 17201-17400: 145.9 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 17401-17600: 146.4 ms, 211706 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 17601-17800: 144.5 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 17801-18000: 149.7 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 18001-18200: 148.9 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 18201-18400: 148.9 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 18401-18600: 155 ms, 211706 bytes; light 5.9 ms, responding True
+[paym] FinComLedgerChanges 18601-18800: 149 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 18801-19000: 147.9 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 19001-19200: 149.5 ms, 211706 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 19201-19400: 150.4 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 19401-19600: 149.6 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 19601-19800: 145.4 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 19801-20000: 145.6 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 20001-20200: 145.7 ms, 211706 bytes; light 2.2 ms, responding True
+[paym] FinComLedgerChanges 20201-20400: 147.4 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 20401-20600: 142.6 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 20601-20800: 146.5 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 20801-21000: 149.6 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 21001-21200: 146.4 ms, 211706 bytes; light 2.3 ms, responding True
+[paym] FinComLedgerChanges 21201-21400: 147.5 ms, 211706 bytes; light 3.1 ms, responding True
+[paym] FinComLedgerChanges 21401-21600: 148.8 ms, 211706 bytes; light 2.6 ms, responding True
+[paym] FinComLedgerChanges 21601-21800: 150.3 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 21801-22000: 148.9 ms, 211706 bytes; light 2.4 ms, responding True
+[paym] FinComLedgerChanges 22001-22200: 146.1 ms, 211706 bytes; light 2.5 ms, responding True
+[paym] FinComLedgerChanges 22201-22400: 141.9 ms, 29883 bytes; light 2.4 ms, responding True
+######## PASS p5 times at 20,000 ledgers and 2,000 employees (every 2.4.4 master request under 2 s, Tally responding): worst FinComLedgers (2.4.4) 172.7 ms, the same chunk with 2.4.3's fields 137.2 ms, FinComEmployees 89.8 ms, FinComLedgerChanges 185.6 ms, FinComLedgerByName 21.4 ms; failed 0, not responding 0, a 2.4.4 request over 2 s 0
+[14:44:59] quick mode: done
