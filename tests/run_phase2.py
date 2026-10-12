@@ -118,7 +118,8 @@ with sync_playwright() as p:
     # owner's spec K1 (04-Oct-2026): the build stamp moved from the sidebar to the About line in Settings
     foot = pg.inner_text("#side .side-ver")
     pg.evaluate("() => goSettings(null)"); pg.wait_for_timeout(500); about = pg.inner_text("[data-about]"); pg.evaluate("() => { S.view = 'company'; goClient('txn'); }"); pg.wait_for_timeout(600)
-    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", about) and "Sept" not in foot + about and " am" not in foot + about and " pm" not in foot + about,
+    # (stability batch 5: the date line ends with the "Your data" link)
+    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}( · Your data)?\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", about) and "Sept" not in foot + about and " am" not in foot + about and " pm" not in foot + about,
        "31. the sidebar foot reads 30-Sep-2026, the About line 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + " | " + about + ")")
     # 30. Transactions: Excel, columns, the first columns kept
     ok(pg.locator('#app button:text-is("Excel")').count() == 1 and pg.locator("#app .txntbl th.stick1").count() == 1, "30. Transactions: Excel export and the first columns kept in view")
