@@ -141,13 +141,15 @@ const TDSCH = {
     const add = rows.reduce((a, r) => a + this.p(r.tds), 0), left = this.p(this.left(c));
     if (add > left) return {ok: false, over: (add - left) / 100, why: "That is " + money((add - left) / 100) + " more than is left on challan " + this.label(c) + " (" + money(left / 100) + ")."};
     b.alloc = b.alloc || {};
-    rows.forEach(r => { b.alloc[r.id] = chId; });
+    // bridge 2.4.3 (review 243 S1, S2): a tag made here is the person's (the sync marks its own "tally" after)
+    rows.forEach(r => { b.alloc[r.id] = chId; if (b.allocFrom) delete b.allocFrom[r.id]; });
     saveBooks();
     return {ok: true, n: rows.length};
   },
   untag(ids){
     const b = S.books; let n = 0;
-    (ids || []).forEach(id => { if (b && b.alloc && b.alloc[id]){ delete b.alloc[id]; n++; } });
+    // a deduction a person takes off the challan Tally linked it to stays off ("off": the sync lists it, never tags it back)
+    (ids || []).forEach(id => { if (b && b.alloc && b.alloc[id]){ delete b.alloc[id]; n++; if (b.allocFrom && b.allocFrom[id] === "tally") b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id]; } });
     if (n) saveBooks();
     return {ok: true, n};
   },

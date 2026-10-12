@@ -268,5 +268,23 @@ b = books(); x.TDSTally.sync(b);
 const props = x.TDS.paymentsFromBooks().filter((p) => x.TDSTally.notChallan(p, b.challans));
 ok(!props.some((p) => p.vid === G.PX1), "R3. PX1, already a challan From Tally dated 31-Dec, is not proposed again (" + J(props.map((p) => p.vid)) + ")");
 ok(props.some((p) => p.vid === G.SP1), "R3. SP1, no challan yet, is proposed");
+
+// ==== review 243 (round 4): S1, S2
+// S1: a person takes K1 off the challan Tally linked it to: the sync leaves it off and lists it
+b = books(); upload(); r = x.TDSTally.sync(b);
+const s1ch = b.alloc[k1row];
+ok(s1ch && b.allocFrom[k1row] === "tally", "S1. K1 tagged from Tally's link first");
+x.TDSCH.untag([k1row]); r = x.TDSTally.sync(b);
+ok(!b.alloc[k1row] && r.tagged === 0 && r.disagree.some((d) => d.row === k1row && /by hand/.test(d.why || "")), "S1. untagged by a person: not tagged back, listed (" + J([b.alloc[k1row], b.allocFrom[k1row], r.tagged, r.disagree]) + ")");
+x.TDSCH.tag([k1row], s1ch); r = x.TDSTally.sync(b);
+ok(b.alloc[k1row] === s1ch && !r.disagree.some((d) => d.row === k1row), "S1. tagged again by the person: kept, nothing listed (" + J([b.allocFrom[k1row], r.disagree]) + ")");
+// S2: a person's own tag is not marked From Tally
+b = books(); upload(); x.TDSTally.sync(b);
+x.TDSCH.add([{ bsr: "0240020", serial: "00990", date: "20261215", tax: 5000, interest: 0, section: "194C" }]);
+const s2ch = b.challans.find((c) => c.serial === "00990");
+x.TDSCH.untag([k1row]); x.TDSCH.tag([k1row], s2ch.id);
+ok(b.alloc[k1row] === s2ch.id && b.allocFrom[k1row] !== "tally", "S2. a person's retag is not marked From Tally (" + b.allocFrom[k1row] + ")");
+// S2: a challan made by hand from a payment before 2.4.3 (from "tally", a uid id) is not shown as From Tally
+ok(x.TDSTally.made({ id: "ch5", from: "tally" }) === false && x.TDSTally.made({ id: "tally:v:k", from: "tally", madeBy: "tally-sync" }) === true, "S2. only the sync's challans are From Tally");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

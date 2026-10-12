@@ -280,6 +280,7 @@ const TDSTally = {
       if (l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: "Tally's reference " + l.ref + " is on " + l.many + " deductions of this party: tag it by hand"}); return; }
       if (chs.length !== 1){ if (chs.length > 1) res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: "the payment is " + chs.length + " challans here: tag it by hand"}); return; }
       const ch = chs[0], cur = b.alloc[l.row];
+      if (!cur && b.allocFrom[l.row] === "off"){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: "", tally: ch.id, why: "taken off Tally's challan " + TDSCH.label(ch) + " by hand: left off"}); return; }
       if (cur === ch.id){ if (!b.allocFrom[l.row]) b.allocFrom[l.row] = "tally"; return; }
       if (cur){
         const was = b.challans.find(c => c.id === cur);

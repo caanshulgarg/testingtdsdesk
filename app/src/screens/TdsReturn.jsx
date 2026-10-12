@@ -180,7 +180,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
       cols={[
         { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (c, p, i) => i + 1 },
         { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
-        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <><Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> <FromTally on={c.from === "tally"} /></> },
+        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <><Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> <FromTally on={TDSTally.made(c)} /></> },
         { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
         { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
         { k: "state", role: "status", label: "Use", v: (c, p) => chState(c, use), cell: (c) => { const w = chState(c, use); return <span className={"tag " + (/more than/.test(w) ? "bad" : /Not used|Part/.test(w) ? "warn" : "ok")}>{w}</span>; } },
