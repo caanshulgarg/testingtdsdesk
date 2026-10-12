@@ -2323,7 +2323,7 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 })();
 // whether new firms may sign up, and their starting credit (the sign-in page's "New here? Create an account" line)
 function loadSignupInfo(){
-  if (Cloud.on() || S.signupInfo || S.signupAsked) return;
+  if (Cloud.on() || S.signupInfo || S.signupAsked || navigator.onLine === false) return;   // no line: asked when it is back
   S.signupAsked = true;
   fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
     .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => { S.signupAsked = false; });
