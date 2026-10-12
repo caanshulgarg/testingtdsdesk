@@ -1,0 +1,32 @@
+2026-10-12 18:54:42  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 17b3daed…): asking Tally by MasterID
+2026-10-12 18:54:42  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-12 18:54:42  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 17b3daed…): taken: Tally's GUID 97e363f9-fa90-4f24-b0c0-3df4f2819f44-00000003, AlterID 3
+2026-10-12 18:54:42  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-12 18:55:24  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 9454250d…): asking Tally by MasterID
+2026-10-12 18:55:24  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+2026-10-12 18:55:24  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 9454250d…): taken: Tally's GUID 97e363f9-fa90-4f24-b0c0-3df4f2819f44-00000004, AlterID 4
+2026-10-12 18:55:24  Renumbering: made Receipt 2 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-12 18:55:36  Stopping: asked to (setup or uninstall)
+2026-10-12 18:55:41  FinCom Bridge 2.4.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-12 18:55:41  FinCom Bridge 2.4.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-12 18:55:41  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-12 18:55:41  Recorder: re-scan of the add-on's files for 2.4.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-12 18:55:41  Check:  - 
+2026-10-12 18:55:44  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-12 18:55:44  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-12 18:55:44  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=4, ALTMSTID=209
+2026-10-12 18:55:44  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=4, ALTMSTID=209
+2026-10-12 18:55:45  Employees of FinCom Spike Co: Tally's master counter 209: the payroll list read (2 request(s), 0 row(s)); unchanged, nothing sent
+2026-10-12 18:57:08  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line cd696dd3…): asking Tally by MasterID
+2026-10-12 18:57:08  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+2026-10-12 18:57:08  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line cd696dd3…): taken: Tally's GUID 97e363f9-fa90-4f24-b0c0-3df4f2819f44-00000005, AlterID 5
+2026-10-12 18:57:08  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-12 19:00:11  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-12 19:00:11  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-12 19:00:12  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+2026-10-12 19:00:12  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+2026-10-12 19:00:13  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 6 ledger(s) (0.2s); saved
+2026-10-12 19:00:13  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-12 19:00:13  Keeping FinCom Spike Co: the ledger list read (6 ledgers, 28 groups, 5 request(s)): 6 new, 0 changed, 0 renamed, 0 gone
+2026-10-12 19:00:13  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=5 ALTMSTID=209
+2026-10-12 19:00:13  Nightly catch-up: done (7 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)

@@ -1,0 +1,293 @@
+[19:12:40] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-12, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-12, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.2 s after start, GET 14 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[19:13:14] ---- the stub cloud and the bridge
+[ledger Spike Income] 9 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[19:13:17] ---- payg masters (before the bridge)
+[payg masters] 40 ms: <RESPONSE><CREATED>18</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO payg masters: created 18, altered 1, errors 0
+[payg masters export] 70 ms: <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><CURRENCY NAME="?" RESERVEDNAME=""><ACTIVEFROM/><ACTIVETO/><GUID>7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001d</GUID><MAILINGNAME>INR</MAILINGNAME><NARRATION/><ENTEREDBY/><ALTEREDBY/><TYPEOFUPDATEACTIVITY/><OBJECTUPDATEACTION/><REQUESTORRULE/><ORIGINALNAME>?</ORIGINALNAME><ISOCURRENCYCODE/><EXPANDEDSYMBOL>INR</EXPAN...
+  INFO payg: cost centres in Tally: PE Delhi Branch, PE Office Staff, PE Asha Rao, PE Bimal Das, PE Chitra Iyer, PE Dev Malhotra, PE Esha Kapoor, PE Farid Khan, PE Gita Sharma
+[renum journal] 21 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.4.exe SHA-256 ea07363ca089ecbb17fa56f02185c32ddf66eec233189c4e768a0ded327f227d; bridge source: 214c7d928515e217c69b681ece533c957ad8bfe6 docs: migration 74 run on staging (12-Oct-2026 18:34 UTC), read back
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.4, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-12 19:13:22  FinCom Bridge 2.4.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-12 19:13:23  FinCom Bridge 2.4.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-12 19:13:23  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-12 19:13:23  Recorder: re-scan of the add-on's files for 2.4.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-12 19:13:23  Check:  - 
+  bridge log: 2026-10-12 19:13:23  Nightly catch-up (19:00): Tally is open and nobody has used FinCom for 15 minutes
+  bridge log: 2026-10-12 19:13:23  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+  bridge log: 2026-10-12 19:13:25  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-12 19:13:26  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-12 19:13:26  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-10-12 19:13:26  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-12 19:13:26  Company FinCom Spike Co: its Tally GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833 is held from now on
+  bridge log: 2026-10-12 19:13:26  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=230 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-12 19:13:26  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=230
+  bridge log: 2026-10-12 19:13:26  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=230)
+  bridge log: 2026-10-12 19:13:27  Employees of FinCom Spike Co: Tally's master counter 230: 2 request(s), 8 payroll row(s) kept (1 other cost centre(s) not kept)
+  bridge log: 2026-10-12 19:13:27  Employees of FinCom Spike Co: the payroll list (8) sent to FinCom
+  bridge log: 2026-10-12 19:13:27  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading
+  INFO add-on: recorder files after start: none
+[19:14:19] ---- payg: the entries, the bridge
+  INFO payg: Update now: asked
+[payg PE-PAY-202604] 35 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>3</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202604] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>4</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202604] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>5</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202605] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202605] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>7</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202605] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>8</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202606] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>9</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202606] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>10</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202606] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>11</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202607] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>12</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202607] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>13</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202607] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>14</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202608] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>15</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202608] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>16</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202608] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>17</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202609] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>18</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202609] 16 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>19</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202609] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>20</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202610] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>21</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202610] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>22</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202610] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>23</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202611] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>24</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202611] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>25</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202611] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>26</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202612] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>27</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202612] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>28</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202612] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>29</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202701] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>30</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202701] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>31</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202701] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>32</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202702] 15 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>33</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202702] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>34</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202702] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>35</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-PAY-202703] 16 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>36</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-SAL-202703] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>37</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[payg PE-TDS-202703] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>38</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+######## PASS w1 the payroll company made in Tally (masters and the 36 entries): masters: created 18, errors 0; employees and the other cost centre in Tally: True; entries made by XML: 36 of 36 (in Tally: 36); refused: none
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 36 of 36 entries, employees sent
+[payg] waiting: 24 of 36 entries, employees sent
+[payg] waiting: 12 of 36 entries, employees sent
+[payg] waiting: 4 of 36 entries, employees sent
+  bridge log: 2026-10-12 19:14:49  Update from Tally asked for now
+  bridge log: 2026-10-12 19:15:48  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-12 19:15:48  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-12 19:15:49  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-12 19:15:49  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 15 ledger(s) (0.2s); saved
+  bridge log: 2026-10-12 19:15:49  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-12 19:15:50  Keeping FinCom Spike Co: the ledger list read (15 ledgers, 28 groups, 5 request(s)): 15 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-12 19:15:50  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=38 ALTMSTID=230
+  bridge log: 2026-10-12 19:15:50  Cloud: FinCom Spike Co is linked in FinCom; sending its copy (0 days)
+  bridge log: 2026-10-12 19:15:50  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-12 19:15:50  Nightly catch-up: done (12 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  bridge log: 2026-10-12 19:15:50  Update from Tally: asked for now
+  bridge log: 2026-10-12 19:15:50  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-12 19:15:51  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-12 19:15:51  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 15 ledger(s) (0.2s); saved
+  bridge log: 2026-10-12 19:15:51  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-12 19:15:52  Keeping FinCom Spike Co: the ledger list read (15 ledgers, 28 groups, 5 request(s)): 0 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-12 19:15:52  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=38 ALTMSTID=230
+  bridge log: 2026-10-12 19:15:52  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-12 19:15:52  Update from Tally: done (7 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  bridge log: 2026-10-12 19:23:56  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=38, ALTMSTID=230
+  bridge log: 2026-10-12 19:23:56  Recorder (Tally's change list) for FinCom Spike Co: 36 change(s) found
+  bridge log: 2026-10-12 19:23:56  Recorder: An entry of 01-Apr-2026 (MasterID 3, line 79586867…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:56  Nightly check of FinCom Spike Co: 36 listed, 0 missing, 0 fetched, 0 still missing
+  bridge log: 2026-10-12 19:23:57  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-12 19:23:57  Recorder: Payroll 1 of 01-Apr-2026 (MasterID 3, line 79586867…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000003, AlterID 3
+  bridge log: 2026-10-12 19:23:57  Recorder: An entry of 02-Apr-2026 (MasterID 4, line b7ce09c3…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:57  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+  bridge log: 2026-10-12 19:23:57  Recorder: Payment 1 of 02-Apr-2026 (MasterID 4, line b7ce09c3…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000004, AlterID 4
+  bridge log: 2026-10-12 19:23:57  Recorder: An entry of 02-May-2026 (MasterID 5, line c2320e04…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:57  Recorder: entry fetch of FinCom Spike Co: answered in 5 ms
+  bridge log: 2026-10-12 19:23:57  Recorder: Payment 2 of 02-May-2026 (MasterID 5, line c2320e04…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000005, AlterID 5
+  bridge log: 2026-10-12 19:23:57  Recorder: An entry of 02-May-2026 (MasterID 7, line bea5127c…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:58  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+  bridge log: 2026-10-12 19:23:58  Recorder: Payment 3 of 02-May-2026 (MasterID 7, line bea5127c…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000007, AlterID 7
+  bridge log: 2026-10-12 19:23:58  Recorder: An entry of 01-May-2026 (MasterID 6, line 55493320…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:58  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-12 19:23:58  Recorder: Payroll 2 of 01-May-2026 (MasterID 6, line 55493320…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000006, AlterID 6
+  bridge log: 2026-10-12 19:23:58  Recorder: An entry of 02-Jun-2026 (MasterID 8, line 7ce3c746…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:58  Recorder: Payment 4 of 02-Jun-2026 (MasterID 8, line 7ce3c746…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000008, AlterID 8
+  bridge log: 2026-10-12 19:23:58  Recorder: An entry of 02-Jun-2026 (MasterID 10, line 00099f6b…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:59  Recorder: Payment 5 of 02-Jun-2026 (MasterID 10, line 00099f6b…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000a, AlterID 10
+  bridge log: 2026-10-12 19:23:59  Recorder: An entry of 01-Jun-2026 (MasterID 9, line a62c844c…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:59  Recorder: Payroll 3 of 01-Jun-2026 (MasterID 9, line a62c844c…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000009, AlterID 9
+  bridge log: 2026-10-12 19:23:59  Recorder: An entry of 02-Jul-2026 (MasterID 11, line 05aa94aa…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:59  Recorder: Payment 6 of 02-Jul-2026 (MasterID 11, line 05aa94aa…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000b, AlterID 11
+  bridge log: 2026-10-12 19:23:59  Recorder: An entry of 02-Jul-2026 (MasterID 13, line c7988b7c…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:23:59  Recorder: Payment 7 of 02-Jul-2026 (MasterID 13, line c7988b7c…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000d, AlterID 13
+  bridge log: 2026-10-12 19:23:59  Recorder: An entry of 01-Jul-2026 (MasterID 12, line 164b8cc1…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:24:00  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-12 19:24:00  Recorder: Payroll 4 of 01-Jul-2026 (MasterID 12, line 164b8cc1…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000c, AlterID 12
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Aug-2026 (MasterID 14, line 581a67c1…): asking Tally by MasterID
+  bridge log: 2026-10-12 19:24:00  Recorder: Payment 8 of 02-Aug-2026 (MasterID 14, line 581a67c1…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000e, AlterID 14
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Aug-2026 (MasterID 16, line 71128cba…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Aug-2026 (MasterID 15, line 22ef5c45…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Sep-2026 (MasterID 17, line f6df0031…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Sep-2026 (MasterID 19, line d7bce546…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Sep-2026 (MasterID 18, line 82ab89fa…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Oct-2026 (MasterID 20, line b6f281e4…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Oct-2026 (MasterID 22, line b5f47cae…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Oct-2026 (MasterID 21, line 14e94e0b…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Nov-2026 (MasterID 23, line 65d42706…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Nov-2026 (MasterID 25, line 8e93a254…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Nov-2026 (MasterID 24, line 68620960…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Dec-2026 (MasterID 26, line a647b55e…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Dec-2026 (MasterID 28, line 7942c490…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Dec-2026 (MasterID 27, line c1ae29a0…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Jan-2027 (MasterID 29, line 2806b171…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Jan-2027 (MasterID 31, line 26380918…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Jan-2027 (MasterID 30, line a8cfec66…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Feb-2027 (MasterID 32, line 8b1c68fb…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Feb-2027 (MasterID 34, line 2ae8767d…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Feb-2027 (MasterID 33, line 6001fe2d…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Mar-2027 (MasterID 35, line 522bc0a2…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 02-Mar-2027 (MasterID 37, line cd5ec390…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 01-Mar-2027 (MasterID 36, line 22e215b8…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:00  Recorder: An entry of 31-Mar-2027 (MasterID 38, line 9e4cd1fe…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 19:24 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+  bridge log: 2026-10-12 19:24:26  Recorder: FinCom asks again for 20 held line(s) of this bridge: 20 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+  bridge log: 2026-10-12 19:24:26  Recorder: An entry of 01-Oct-2026 (MasterID 21, line 14e94e0b…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:26  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-12 19:24:26  Recorder: Payroll 7 of 01-Oct-2026 (MasterID 21, line 14e94e0b…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000015, AlterID 21
+  bridge log: 2026-10-12 19:24:26  Recorder:   of 20261001 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000015 and body
+  bridge log: 2026-10-12 19:24:26  Recorder: held lines: 20 from FinCom, 1 asked, 1 resolved, 19 still held (20 in the list)
+  bridge log: 2026-10-12 19:24:26  Recorder: An entry of 01-Aug-2026 (MasterID 15, line 22ef5c45…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:26  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-12 19:24:26  Recorder: Payroll 5 of 01-Aug-2026 (MasterID 15, line 22ef5c45…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000f, AlterID 15
+  bridge log: 2026-10-12 19:24:26  Recorder:   of 20260801 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000000f and body
+  bridge log: 2026-10-12 19:24:26  Recorder: held lines: 19 from FinCom, 1 asked, 1 resolved, 18 still held (19 in the list)
+  bridge log: 2026-10-12 19:24:26  Recorder: An entry of 02-Jan-2027 (MasterID 31, line 26380918…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:27  Recorder: Payment 19 of 02-Jan-2027 (MasterID 31, line 26380918…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001f, AlterID 31
+  bridge log: 2026-10-12 19:24:27  Recorder:   of 20270102 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001f and body
+  bridge log: 2026-10-12 19:24:27  Recorder: held lines: 18 from FinCom, 1 asked, 1 resolved, 17 still held (18 in the list)
+  bridge log: 2026-10-12 19:24:27  Recorder: An entry of 02-Jan-2027 (MasterID 29, line 2806b171…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:27  Recorder: Payment 18 of 02-Jan-2027 (MasterID 29, line 2806b171…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001d, AlterID 29
+  bridge log: 2026-10-12 19:24:27  Recorder:   of 20270102 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001d and body
+  bridge log: 2026-10-12 19:24:27  Recorder: held lines: 17 from FinCom, 1 asked, 1 resolved, 16 still held (17 in the list)
+  bridge log: 2026-10-12 19:24:27  Recorder: An entry of 02-Feb-2027 (MasterID 34, line 2ae8767d…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:27  Recorder: Payment 21 of 02-Feb-2027 (MasterID 34, line 2ae8767d…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000022, AlterID 34
+  bridge log: 2026-10-12 19:24:27  Recorder:   of 20270202 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000022 and body
+  bridge log: 2026-10-12 19:24:27  Recorder: held lines: 16 from FinCom, 1 asked, 1 resolved, 15 still held (16 in the list)
+  bridge log: 2026-10-12 19:24:27  Recorder: An entry of 01-Feb-2027 (MasterID 33, line 6001fe2d…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:28  Recorder: Payroll 11 of 01-Feb-2027 (MasterID 33, line 6001fe2d…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000021, AlterID 33
+  bridge log: 2026-10-12 19:24:28  Recorder:   of 20270201 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000021 and body
+  bridge log: 2026-10-12 19:24:28  Recorder: held lines: 15 from FinCom, 1 asked, 1 resolved, 14 still held (15 in the list)
+  bridge log: 2026-10-12 19:24:28  Recorder: An entry of 02-Nov-2026 (MasterID 23, line 65d42706…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:28  Recorder: entry fetch of FinCom Spike Co: answered in 4 ms
+  bridge log: 2026-10-12 19:24:28  Recorder: Payment 14 of 02-Nov-2026 (MasterID 23, line 65d42706…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000017, AlterID 23
+  bridge log: 2026-10-12 19:24:28  Recorder:   of 20261102 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000017 and body
+  bridge log: 2026-10-12 19:24:28  Recorder: held lines: 14 from FinCom, 1 asked, 1 resolved, 13 still held (14 in the list)
+  bridge log: 2026-10-12 19:24:28  Recorder: An entry of 01-Nov-2026 (MasterID 24, line 68620960…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:28  Recorder: Payroll 8 of 01-Nov-2026 (MasterID 24, line 68620960…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000018, AlterID 24
+  bridge log: 2026-10-12 19:24:28  Recorder:   of 20261101 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000018 and body
+  bridge log: 2026-10-12 19:24:28  Recorder: held lines: 13 from FinCom, 1 asked, 1 resolved, 12 still held (13 in the list)
+  bridge log: 2026-10-12 19:24:28  Recorder: An entry of 02-Aug-2026 (MasterID 16, line 71128cba…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:29  Recorder: Payment 9 of 02-Aug-2026 (MasterID 16, line 71128cba…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000010, AlterID 16
+  bridge log: 2026-10-12 19:24:29  Recorder:   of 20260802 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000010 and body
+  bridge log: 2026-10-12 19:24:29  Recorder: held lines: 12 from FinCom, 1 asked, 1 resolved, 11 still held (12 in the list)
+  bridge log: 2026-10-12 19:24:29  Recorder: An entry of 02-Dec-2026 (MasterID 28, line 7942c490…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:29  Recorder: Payment 17 of 02-Dec-2026 (MasterID 28, line 7942c490…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001c, AlterID 28
+  bridge log: 2026-10-12 19:24:29  Recorder:   of 20261202 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001c and body
+  bridge log: 2026-10-12 19:24:29  Recorder: held lines: 11 from FinCom, 1 asked, 1 resolved, 10 still held (11 in the list)
+  bridge log: 2026-10-12 19:24:29  Recorder: An entry of 01-Sep-2026 (MasterID 18, line 82ab89fa…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:29  Recorder: Payroll 6 of 01-Sep-2026 (MasterID 18, line 82ab89fa…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000012, AlterID 18
+  bridge log: 2026-10-12 19:24:29  Recorder:   of 20260901 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000012 and body
+  bridge log: 2026-10-12 19:24:29  Recorder: held lines: 10 from FinCom, 1 asked, 1 resolved, 9 still held (10 in the list)
+  bridge log: 2026-10-12 19:24:29  Recorder: An entry of 02-Feb-2027 (MasterID 32, line 8b1c68fb…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:30  Recorder: Payment 20 of 02-Feb-2027 (MasterID 32, line 8b1c68fb…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000020, AlterID 32
+  bridge log: 2026-10-12 19:24:30  Recorder:   of 20270202 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000020 and body
+  bridge log: 2026-10-12 19:24:30  Recorder: held lines: 9 from FinCom, 1 asked, 1 resolved, 8 still held (9 in the list)
+  bridge log: 2026-10-12 19:24:30  Recorder: An entry of 02-Nov-2026 (MasterID 25, line 8e93a254…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:30  Recorder: Payment 15 of 02-Nov-2026 (MasterID 25, line 8e93a254…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000019, AlterID 25
+  bridge log: 2026-10-12 19:24:30  Recorder:   of 20261102 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000019 and body
+  bridge log: 2026-10-12 19:24:30  Recorder: held lines: 8 from FinCom, 1 asked, 1 resolved, 7 still held (8 in the list)
+  bridge log: 2026-10-12 19:24:30  Recorder: An entry of 02-Dec-2026 (MasterID 26, line a647b55e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:30  Recorder: Payment 16 of 02-Dec-2026 (MasterID 26, line a647b55e…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001a, AlterID 26
+  bridge log: 2026-10-12 19:24:30  Recorder:   of 20261202 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001a and body
+  bridge log: 2026-10-12 19:24:30  Recorder: held lines: 7 from FinCom, 1 asked, 1 resolved, 6 still held (7 in the list)
+  bridge log: 2026-10-12 19:24:30  Recorder: An entry of 01-Jan-2027 (MasterID 30, line a8cfec66…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:31  Recorder: Payroll 10 of 01-Jan-2027 (MasterID 30, line a8cfec66…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001e, AlterID 30
+  bridge log: 2026-10-12 19:24:31  Recorder:   of 20270101 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001e and body
+  bridge log: 2026-10-12 19:24:31  Recorder: held lines: 6 from FinCom, 1 asked, 1 resolved, 5 still held (6 in the list)
+  bridge log: 2026-10-12 19:24:31  Recorder: An entry of 02-Oct-2026 (MasterID 22, line b5f47cae…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:31  Recorder: Payment 13 of 02-Oct-2026 (MasterID 22, line b5f47cae…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000016, AlterID 22
+  bridge log: 2026-10-12 19:24:31  Recorder:   of 20261002 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000016 and body
+  bridge log: 2026-10-12 19:24:31  Recorder: held lines: 5 from FinCom, 1 asked, 1 resolved, 4 still held (5 in the list)
+  bridge log: 2026-10-12 19:24:31  Recorder: An entry of 02-Oct-2026 (MasterID 20, line b6f281e4…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:31  Recorder: Payment 12 of 02-Oct-2026 (MasterID 20, line b6f281e4…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000014, AlterID 20
+  bridge log: 2026-10-12 19:24:31  Recorder:   of 20261002 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000014 and body
+  bridge log: 2026-10-12 19:24:31  Recorder: held lines: 4 from FinCom, 1 asked, 1 resolved, 3 still held (4 in the list)
+  bridge log: 2026-10-12 19:24:31  Recorder: An entry of 01-Dec-2026 (MasterID 27, line c1ae29a0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:32  Recorder: Payroll 9 of 01-Dec-2026 (MasterID 27, line c1ae29a0…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001b, AlterID 27
+  bridge log: 2026-10-12 19:24:32  Recorder:   of 20261201 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-0000001b and body
+  bridge log: 2026-10-12 19:24:32  Recorder: held lines: 3 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+  bridge log: 2026-10-12 19:24:32  Recorder: An entry of 02-Sep-2026 (MasterID 19, line d7bce546…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:32  Recorder: Payment 11 of 02-Sep-2026 (MasterID 19, line d7bce546…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000013, AlterID 19
+  bridge log: 2026-10-12 19:24:32  Recorder:   of 20260902 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000013 and body
+  bridge log: 2026-10-12 19:24:32  Recorder: held lines: 2 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+  bridge log: 2026-10-12 19:24:32  Recorder: An entry of 02-Sep-2026 (MasterID 17, line f6df0031…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:32  Recorder: Payment 10 of 02-Sep-2026 (MasterID 17, line f6df0031…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000011, AlterID 17
+  bridge log: 2026-10-12 19:24:32  Recorder:   of 20260902 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000011 and body
+  bridge log: 2026-10-12 19:24:32  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+  bridge log: 2026-10-12 19:24:56  Recorder: FinCom asks again for 4 held line(s) of this bridge: 4 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+  bridge log: 2026-10-12 19:24:56  Recorder: An entry of 01-Mar-2027 (MasterID 36, line 22e215b8…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:56  Recorder: Payroll 12 of 01-Mar-2027 (MasterID 36, line 22e215b8…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000024, AlterID 36
+  bridge log: 2026-10-12 19:24:56  Recorder:   of 20270301 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000024 and body
+  bridge log: 2026-10-12 19:24:56  Recorder: held lines: 4 from FinCom, 1 asked, 1 resolved, 3 still held (4 in the list)
+  bridge log: 2026-10-12 19:24:56  Recorder: An entry of 02-Mar-2027 (MasterID 35, line 522bc0a2…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:56  Recorder: Payment 22 of 02-Mar-2027 (MasterID 35, line 522bc0a2…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000023, AlterID 35
+  bridge log: 2026-10-12 19:24:56  Recorder:   of 20270302 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000023 and body
+  bridge log: 2026-10-12 19:24:56  Recorder: held lines: 3 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+  bridge log: 2026-10-12 19:24:56  Recorder: An entry of 31-Mar-2027 (MasterID 38, line 9e4cd1fe…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:57  Recorder: Payment 24 of 31-Mar-2027 (MasterID 38, line 9e4cd1fe…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000026, AlterID 38
+  bridge log: 2026-10-12 19:24:57  Recorder:   of 20270331 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000026 and body
+  bridge log: 2026-10-12 19:24:57  Recorder: held lines: 2 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+  bridge log: 2026-10-12 19:24:57  Recorder: An entry of 02-Mar-2027 (MasterID 37, line cd5ec390…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-12 19:24:57  Recorder: Payment 23 of 02-Mar-2027 (MasterID 37, line cd5ec390…): taken: Tally's GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000025, AlterID 37
+  bridge log: 2026-10-12 19:24:57  Recorder:   of 20270302 in FinCom Spike Co resolved: sent as altered with its GUID 7b8cb1a4-8a83-478c-8a89-a72345f75833-00000025 and body
+  bridge log: 2026-10-12 19:24:57  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+######## PASS w2 FinComEmployees: only payroll rows reach FinCom, nothing personal: 8 rows sent (PE Office Staff, PE Asha Rao, PE Bimal Das, PE Chitra Iyer, PE Dev Malhotra, PE Esha Kapoor, PE Farid Khan, PE Gita Sharma); missing: none; not payroll's yet sent: none; columns per row: 11; the group marked: 1; a PAN as typed: 1; bank account, IFSC or Aadhaar-like number in what the bridge sent or logged: none; the log: 2026-10-12 19:13:27  Employees of FinCom Spike Co: Tally's master counter 230: 2 request(s), 8 payroll row(s) kept (1 other cost centre(s) not kept) | 2026-10-12 19:13:27  Employees of FinCom Spike Co: the payroll list (8) sent to FinCom
+######## PASS w3 the ledger list carries the pay-head fields: 15 ledger rows sent; pay heads (PAYTYPE / PAYSTATTYPE / ITCOMPONENT / FORPAYROLL): PE Basic: ok; PE HRA: ok; PE Special Allowance: ok; PE PF Employee: ok; PE Professional Tax: ok; PE Income Tax: ok; PE PF Employer: ok; PE Salary Payable not for payroll: True
+######## PASS w4 every entry reaches FinCom; a salary payment keeps the employee and amount, never the bank details: 36 of 36 entries reached the stub with Tally's entry in 10.3 min (not: none); payrolls with each employee's amount per pay head (cost centre allocations): 12 of 12; salary payments naming the employee on the bank line: 12 (of 12 payments with a bank line); an entry keeping ACCOUNTNUMBER, IFSCODE or PAYMENTFAVOURING: none; those tags anywhere in what the bridge sent: False
+######## PASS w5 the payroll entry within 3 s, every other request within 2 s, Tally responding: the bridge's entry fetches stopped or over the limit: none; the payroll type learnt or known: Tally's own Payroll type; the ref's FinComVoucherObject on the 12 payroll entries: 49.1/14.7/13/15.6/17.5/28.6/13.2/12.6/12.6/12.3/13.9/13.3 ms (worst 49.1 ms), Tally responding after each: True
