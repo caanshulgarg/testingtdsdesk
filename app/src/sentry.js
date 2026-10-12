@@ -75,6 +75,8 @@ export function start() {
     last = r; setTag("route", r);
   };
   onDraw(); subscribe(onDraw);
+  // errors from before Sentry was loaded (main.jsx loads it once the page is up): reported now
+  try { (window.__fincomEarly || []).splice(0).forEach((e) => { if (e instanceof Error) captureException(e); }); } catch { /* never in the way */ }
   // a part of the page that failed to draw (Guard.jsx): reported with the part's name
   window.__fincomReport = (error, guard) => { try { captureException(error, { tags: { guard: String(guard || "") } }); } catch { /* never in the way */ } };
   return true;

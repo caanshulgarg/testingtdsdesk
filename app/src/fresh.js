@@ -10,7 +10,12 @@ async function current() {
     return j && j.build ? j.build : null;
   } catch (e) { return null; }
 }
+// stability batch 3: in the page's one message region (#toast), in its look, staying until Reload is pressed (and coming
+// back after any other message), never a second box of its own stacked with a message
+let noted = null;
 function note(build) {
+  if (noted === build) return;
+  if (typeof window.toast === "function") { noted = build; window.toast("A newer FinCom is out.", { stay: true, actions: [{ label: "Reload", run: () => go(build) }] }); return; }
   if (document.getElementById("fresh-note")) return;
   const d = document.createElement("div");
   d.id = "fresh-note"; d.setAttribute("role", "status");
@@ -29,10 +34,15 @@ export async function checkFresh(onOpen) {
   const build = await current();
   if (!build || build === __BUILD_ID__) return;
   let tried = null; try { tried = sessionStorage.getItem(KEY); } catch (e) { /* private window */ }
-  if (onOpen && tried !== build) go(build); else note(build);
+  // stability batch 4: never a second load after the app has loaded (that loaded everything twice after each release on
+  // a slow line). The page is checked before the big files by index.html's own little script when no service worker
+  // serves it; with the worker the page itself always comes from the network first. What is left: the quiet note
+  if (onOpen && tried !== build && !document.querySelector("#app .react-host")) go(build); else note(build);
 }
 export function watchFresh() {
   checkFresh(true);
+  // a new build's service worker took over this page: say so (the page still runs the build it opened with)
+  try { navigator.serviceWorker.addEventListener("controllerchange", () => checkFresh(false)); } catch (e) { /* no workers here */ }
   setInterval(() => checkFresh(false), 10 * 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkFresh(false); });
 }

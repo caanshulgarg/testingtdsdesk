@@ -49,18 +49,20 @@ with sync_playwright() as p:
     pg.evaluate("S.books = window.__bk; goClient('books:reports');"); pg.wait_for_timeout(1200)
     R = pg.evaluate("RPT.range()")
     ok(R["from"] == "20260401" and R["to"] == "20270331", "Reports shows 2026-27: " + json.dumps(R))
+    pg.click("#app [data-rpt-charts] > summary"); pg.wait_for_timeout(400)   # clean-up batch 3: the figures are under "Figures and charts"
     rpt_sales = pg.locator('#app .rpt-overview .dtile:has(span:text-is("Sales")) b').inner_text()
     rpt_head = pg.inner_text("#app .rpt-overview .rpt-ah")
     pg.evaluate("goClient('books:mis'); MIS.run('20260401', '20270331', 'run now'); render();"); pg.wait_for_timeout(1200)
     mis_sales = pg.locator('#app .dtile:has(span:text-is("Sales, the period")) b').inner_text()
     ok(rpt_sales == mis_sales, "Reports' sales %s = MIS's sales %s, 01-Apr-2026 to 31-Mar-2027" % (rpt_sales, mis_sales))
-    ok(rpt_sales == "15,50,000.00", "the year's sales, as worked out by hand in tests/fixtures/books/EXPECTED.md: " + rpt_sales)
+    ok(rpt_sales == "₹15,50,000.00", "the year's sales, as worked out by hand in tests/fixtures/books/EXPECTED.md: " + rpt_sales)
     ok("2026-27" in rpt_head, "Reports says the year it shows: " + rpt_head.replace("\n", " "))
     # the chart's sales are the same figure, month by month
     ch = pg.evaluate("RPT._d = null; (() => { const d = RPT.data(); return d.months.reduce((a, m) => a + d.sales[m], 0); })()")
     ok(abs(ch - 1550000) < 0.01, "the chart's monthly sales add up to the tile: " + str(ch))
     # without the groups the profit is not known: a dash, as MIS shows it, not 0.00
     pg.evaluate("goClient('books:reports');"); pg.wait_for_timeout(800)
+    pg.evaluate("document.querySelectorAll('#app [data-rpt-charts]').forEach(d => d.open = true)"); pg.wait_for_timeout(200)
     gp = pg.locator('#app .rpt-overview .dtile:has(span:text-is("Profit before tax")) b').inner_text()
     ok(gp == "—", "profit before tax without the ledgers' groups is a dash, as on MIS: " + gp)
     # ---------- (a) TDS: the Dashboard against the TDS page, the same year and the same source

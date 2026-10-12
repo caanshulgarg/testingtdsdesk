@@ -382,7 +382,8 @@ const Live = {
   // ---------- notes: who changed what
   who(uid){ const m = ((Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid); return m ? (m.name || m.email) : "a colleague"; },
   when(at){ try { return fmtTime(at ? Date.parse(at) : Date.now()); } catch (e){ return ""; } },
-  say(text){ this.notes = [{text, at: Date.now()}].concat(this.notes).slice(0, 8); toast(text); },
+  // a colleague's change, synced in by itself: the quiet line at the foot of the sidebar, not a toast (stability batch 3)
+  say(text){ this.notes = [{text, at: Date.now()}].concat(this.notes).slice(0, 8); toast(text, {background: true}); },
   noteItems(cid, rows){
     const by = {};
     rows.forEach(r => { (by[r.updated_by] = by[r.updated_by] || []).push(r); });

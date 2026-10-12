@@ -470,7 +470,8 @@ function heldSheetRows(cid, led, to){ const w = heldWords(cid, led, to); return 
 // "This will post through Office computer (NWS144)." before Post (the bank's and sales' bars, and the posting preview):
 // the computer the posting goes through, the same as the Tally sign says; "" when none is connected
 function postThroughWords(co){
-  const s = typeof tallySign === "function" ? tallySign(co) : null;
+  // the real state now (tallySignNow), never the steady sign's (11-Oct-2026): a stale "ready" must not promise a posting
+  const s = typeof tallySignNow === "function" ? tallySignNow(co) : null;
   if (!s || !s.on) return "";
   // the owner's rule of 05-Oct-2026: the poster's own bridge, named with its Windows user (a shared computer has one a user)
   try {

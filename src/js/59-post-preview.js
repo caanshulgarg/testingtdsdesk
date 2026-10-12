@@ -371,8 +371,12 @@ const PostPage = {paneAt: 0};
 function postStatusFor(co){
   const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
   const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
-  if (l && l.state === "open"){ out.where = l.text.replace(/ · last read .*$/, ""); out.read = l.read; out.reading = !!l.reading; }
-  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Connected \u00b7 Tally open on " + pl.computer;   // 2.3.5: the cards' words
+  // the steady sign (11-Oct-2026): the connection in the line is the firm's sign for this client (tallySign, src/js/49),
+  // as steady as the top bar: "Posting into X on NWS144 (anshul) · Tally ready · read 15:34" (the owner: no "via"); not
+  // ready only once that held a minute. Only the words: posting itself checks the bridge and the cloud at the moment it
+  // posts (canPostTally, the posting's own checks), never this
+  const sg = typeof tallySign === "function" ? tallySign(co) : null;
+  if (sg && sg.on){ out.where = "Tally ready"; out.on = sg.many ? sg.many.length + " computers" : sg.pc || ""; if (l){ out.read = l.read; out.reading = !!l.reading; } }
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
@@ -388,7 +392,10 @@ function postStatusFor(co){
     return out;
   }
   if (pl.go === "cotally") { out.problem = p(pl.action === "Confirm the Tally company" ? "Posting waits: confirm the Tally company (" + pl.company + " was found by FinCom, not chosen by a person)." : "Posting waits: choose the Tally company this client posts to.", pl.action, goChooseTallyCompany, "company"); return out; }
-  if (l && l.state !== "open"){
+  // not ready (confirmed): the sign's reason and what to do, with Check again
+  if (sg && !sg.on && (sg.computer || l)){ out.problem = p(sg.reason + " " + sg.fix, "Check again", () => tallyCheckNow(), sg.code); return out; }
+  // ready: what is about this client's company on that computer (Tally not answering, reading paused, FinCom's Stop)
+  if (l && sg && sg.on && ["notanswering", "paused", "stopped"].includes(l.state)){
     const T = {offline: [l.text + ": start that computer, or FinCom Bridge on it. Nothing can be posted or checked until then.", "", null],
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
@@ -396,7 +403,7 @@ function postStatusFor(co){
       stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
-  if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
+  if (!pl.state && pl.action && !(sg && sg.on)){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
   const b = postBills(co.id), why = b && typeof billGuessedWhy === "function" ? b.ready.map(e => billGuessedWhy(e, co)).find(Boolean) : "";
   if (why) out.problem = p(why + " Confirm it in Client setup.", "Open Client setup", () => goSetupFor(why), "ledger");
   return out;

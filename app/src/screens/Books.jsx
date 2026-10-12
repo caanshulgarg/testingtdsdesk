@@ -59,10 +59,11 @@ function FreshLine({ b, unknown = true }) {
 // the Tally data in (clean-up batch 1): "Bring in from Tally", which opens From Tally
 const BRING = "Bring in from Tally";
 const EMPTY_TAB = {
-  ledgers: ["The Tally ledgers come from the client's books. Bring in the books from Tally first.", BRING, () => booksTabGo("import")],
-  mis: ["MIS is worked out from the day book. Bring in the books from Tally first.", BRING, () => goClient("books:import")],
-  fs: ["The accounts (balance sheet and profit and loss) are made from the day book. Bring in the books from Tally first.", BRING, () => goClient("books:import")],
-  audit: ["The audit checks run over the day book. Bring in the books from Tally first.", BRING, () => goClient("books:import")],
+  // clean-up batch 3: one sentence, one button
+  ledgers: ["The Tally ledgers come from the client's books, which are not in yet.", BRING, () => booksTabGo("import")],
+  mis: ["MIS is worked out from the day book, which is not in yet.", BRING, () => goClient("books:import")],
+  fs: ["The accounts (balance sheet and profit and loss) are made from the day book, which is not in yet.", BRING, () => goClient("books:import")],
+  audit: ["The audit checks run over the day book, which is not in yet.", BRING, () => goClient("books:import")],
 };
 function EmptyTab({ tab }) {
   const [say, label, go] = EMPTY_TAB[tab] || ["Bring in the books from Tally first.", BRING, () => goClient("books:import")];
@@ -84,9 +85,9 @@ export default function Books() {
 
 function BooksPage() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" />; }
+  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" page="books" />; }
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
-  if (S.books.loading) return <Loading what="the books" note="The latest from FinCom’s server." />;
+  if (S.books.loading) return <Loading what="the books" page="books" note="The latest from FinCom’s server." />;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);

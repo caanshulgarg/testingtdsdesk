@@ -1,6 +1,7 @@
 // Transactions: everything filed for this client in one register — purchase bills, sales invoices or bank lines —
 // with where each stands in Tally and its document. Was viewTransactions (src/js/03). The rows are made by
 // txnRowsBills / txnRowsSales / txnRowsBank and filtered by txnFiltered (src/js/03), shared with the CSV download.
+import HowPage from "../parts/HowPage.jsx";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
@@ -29,7 +30,7 @@ export default function Txn() {
   if (all === null || (tab === "bank" && S.bank && S.bank.loading) || (tab === "sales" && S.sales && S.sales.loading)) {
     if (all === null && tab === "sales" && (!S.sales || S.sales.cid !== co.id)) loadSales(co.id).then(() => render());
     if (all === null && tab === "bank" && (!S.bank || S.bank.cid !== co.id)) loadBank(co.id).then(() => render());
-    return <Loading what={tab === "sales" ? "sales invoices" : "bank lines"} />;
+    return <Loading what={tab === "sales" ? "sales invoices" : "bank lines"} page="table" />;
   }
   if (!S.fileIndex || S.fileIndexCid !== co.id) { S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
   const rows = txnFiltered(all), bank = tab === "bank", c = txnColShown;
@@ -37,6 +38,7 @@ export default function Txn() {
   return <>
     <nav className="sbar" aria-label="Kind">{kinds.map(([id, label, n]) =>
       <button key={id} aria-selected={tab === id} onClick={() => txnTabGo(id)}>{label}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}</nav>
+    <HowPage page="txn" />
     <div className="revfilter">
       <input type="search" value={S.txnQ || ""} placeholder="Find by invoice no., party, file or amount" aria-label="Find a transaction"
         onChange={(ev) => { S.txnQ = ev.target.value; FinComReact.redraw(); later("txnq", render, 250); }} />

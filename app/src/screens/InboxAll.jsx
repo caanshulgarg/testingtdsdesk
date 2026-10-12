@@ -17,6 +17,6 @@ export default function InboxAll() {
     ))}
     {loose > 0 && <div className="inbox-client"><h3 style={{ margin: "0 0 6px" }}>Not matched to a client</h3><DocqPanel cid="" /></div>}
     {un > 0 && <div className="inbox-client"><h3 style={{ margin: "0 0 6px" }}>Uploads that matched no client</h3><Unsorted /></div>}
-    {!cos.length && !loose && !un && <p className="note">Nothing waiting. New documents appear here as soon as they arrive.</p>}
+    {!cos.length && !loose && !un && <p className="note" data-inbox-empty="">Nothing waiting: new documents appear here as soon as they arrive. <button className="linkbtn" onClick={() => goSettings("account")}>How to send documents in</button></p>}
   </>;
 }

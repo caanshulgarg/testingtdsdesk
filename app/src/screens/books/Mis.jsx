@@ -13,10 +13,15 @@ import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
+import PageTabs from "../../parts/PageTabs.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
+// clean-up batch 3: ₹ on every amount of the summary (its figures and the cash and bank table); the same figure as m()
+const rs = (v) => money(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
-const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
+import { FinComNav } from "../../nav.js";
+// stability batch 3: Run now shows the thin bar while the run takes over 300 ms
+const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => (act === "misRun" || act === "auditRun" ? FinComNav.go(() => doAct(act)) : doAct(act))}>{children}</button>;
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
 // MIS statements and schedules (profit and loss, ages, months): their rows in the report's order
 const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><table className="bk-table" id={id} style={style} data-statement="">{head && <thead><tr>{head}</tr></thead>}<tbody>{children}</tbody></table></div>;
@@ -24,6 +29,8 @@ const Card = ({ title, top, children }) => <section className="dash-card" style=
 const Opener = ({ open, onClick, children }) => <button className="linkbtn" onClick={onClick}>{(open ? "▾ " : "▸ ")}{children}</button>;
 const toggle = (key, v, none = "") => () => setAndShow(key, S[key] === v ? none : v);
 const MonthHeads = ({ months, cols, short }) => cols ? months.map((mm) => <th key={mm} className="n">{short ? GSTR.label(mm).replace(/[-\s]\d{4}$/, "") : GSTR.label(mm)}</th>) : null;
+// clean-up batch 3: the order on the page; the first six show, the rest are under More
+const TAB_ORDER = ["summary", "pl", "recv", "pay", "cash", "ratios", "sales", "purch", "regs", "cc", "budget", "comp"];
 const TABS = [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Receivables"], ["pay", "Payables"], ["sales", "Sales"], ["purch", "Purchases and expenses"], ["cash", "Cash flow"], ["ratios", "Ratios"], ["regs", "Registrations"], ["cc", "Cost centres"], ["budget", "Budget"], ["comp", "Compliance"]];
 
 // the period and Run now, under the tabs; how often it runs on its own and the downloads fold away (review of 01-Oct-2026)
@@ -68,29 +75,29 @@ function Summary({ b, r }) {
   // review of 02-Oct-2026: the headline is the ledger balances (Parties.position, as Reports and Letters show it); the ages split it
   const owed = (A) => r.owed ? (A === r.recv ? r.owed.r : r.owed.p) : A.sum.owe != null ? A.sum.owe : (A.sum.tally != null ? A.sum.tally : A.sum.open);
   const over90 = (A) => A.sum.nb ? A.sum.nb[3] + A.sum.nb[4] : A.sum.b[3] + A.sum.b[4];
-  const adv = (A, who) => A.sum.advance >= 1 ? " · advance " + who + " " + m(A.sum.advance) : "";
-  const owedNote = (A) => A.sum.tally != null ? "ledger balances" + (A.sum.und >= 1 ? ", " + m(A.sum.und) + " not bill-wise" : "") : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
+  const adv = (A, who) => A.sum.advance >= 1 ? " · advance " + who + " " + rs(A.sum.advance) : "";
+  const owedNote = (A) => A.sum.tally != null ? "ledger balances" + (A.sum.und >= 1 ? ", " + rs(A.sum.und) + " not bill-wise" : "") : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + rs(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
   const cb = (r.balances.cash || []).concat(r.balances.bank || []);
   // review of 01-Oct-2026: without Tally's ledger groups the profit and loss cannot tell an expense from anything else
   const noGroups = !Audit.mastersIn();
   return <>
     {noGroups && <p className="bk-alert" role="status" style={{ margin: "0 0 10px" }}>The ledgers’ groups are not in these books yet, so the profit and loss counts only ledgers named as sales or purchases: expenses are left out and the profit shown is too high. They come with the ledgers from Tally (FinCom Bridge 2.1).</p>}
     <div className="dash-tiles">
-      <Tile l="Sales, the period" v={m(r.sales.total)} sub={(r.sales.other ? "other income " + m(r.sales.other) + " · " : "") + (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
-      <Tile l="Profit before tax" v={noGroups ? "—" : m(r.pl.pbt.t)} sub={"gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />
+      <Tile l="Sales, the period" v={rs(r.sales.total)} sub={(r.sales.other ? "other income " + rs(r.sales.other) + " · " : "") + (r.prev ? "previous period " + rs(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + rs(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
+      <Tile l="Profit before tax" v={noGroups ? "—" : rs(r.pl.pbt.t)} sub={"gross profit " + rs(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />
       {/* review of 02-Oct-2026: the tile is sales, of the period's last month up to its last day, and of the year so far */}
-      <Tile l={"Sales, " + GSTR.label(String(r.to).slice(0, 6)) + (MIS.shift(r.to, 0, 1).slice(6) === "01" ? "" : " to " + d(r.to))} v={r.mtd != null ? m(r.mtd) : "—"} sub={r.ytd != null ? "year to date (from " + d(Audit.fyStart(r.to)) + ") " + m(r.ytd) : ""} />
-      <Tile l="Received · paid" v={m(r.cash.rec)} sub={"paid out " + m(r.cash.pay) + ", net " + m(r.cash.rec - r.cash.pay)} />
+      <Tile l={"Sales, " + GSTR.label(String(r.to).slice(0, 6)) + (MIS.shift(r.to, 0, 1).slice(6) === "01" ? "" : " to " + d(r.to))} v={r.mtd != null ? rs(r.mtd) : "—"} sub={r.ytd != null ? "year to date (from " + d(Audit.fyStart(r.to)) + ") " + rs(r.ytd) : ""} />
+      <Tile l="Received · paid" v={rs(r.cash.rec)} sub={"paid out " + rs(r.cash.pay) + ", net " + rs(r.cash.rec - r.cash.pay)} />
     </div>
     <div className="dash-tiles">
-      <Tile l="Owed to you" v={m(owed(r.recv))} sub={owedNote(r.recv) + " · over 90 days " + m(over90(r.recv)) + adv(r.recv, "from customers") + (r.dso != null ? " · " + r.dso + " days of sales" : "")} />
-      <Tile l="You owe" v={m(owed(r.pay))} sub={owedNote(r.pay) + " · over 90 days " + m(over90(r.pay)) + adv(r.pay, "to suppliers") + (r.dpo != null ? " · " + r.dpo + " days of purchases" : "")} />
-      <Tile l={"MSME suppliers past " + MIS.cfg(b).msmeDays + " days"} v={m(r.msme.reduce((s, x) => s + x.amt, 0))} sub={r.msme.length + " suppliers · section 43B(h)"} />
-      <Tile l="GST worked out, last month" v={m((r.comp.gst[r.comp.gst.length - 1] || {}).due)} sub={"after credit, FinCom's working from the books · paid from the bank " + m((r.comp.gst[r.comp.gst.length - 1] || {}).pay)} />
+      <Tile l="Owed to you" v={rs(owed(r.recv))} sub={owedNote(r.recv) + " · over 90 days " + rs(over90(r.recv)) + adv(r.recv, "from customers") + (r.dso != null ? " · " + r.dso + " days of sales" : "")} />
+      <Tile l="You owe" v={rs(owed(r.pay))} sub={owedNote(r.pay) + " · over 90 days " + rs(over90(r.pay)) + adv(r.pay, "to suppliers") + (r.dpo != null ? " · " + r.dpo + " days of purchases" : "")} />
+      <Tile l={"MSME suppliers past " + MIS.cfg(b).msmeDays + " days"} v={rs(r.msme.reduce((s, x) => s + x.amt, 0))} sub={r.msme.length + " suppliers · section 43B(h)"} />
+      <Tile l="GST worked out, last month" v={rs((r.comp.gst[r.comp.gst.length - 1] || {}).due)} sub={"after credit, FinCom's working from the books · paid from the bank " + rs((r.comp.gst[r.comp.gst.length - 1] || {}).pay)} />
     </div>
     {r.balances.cash || r.balances.bank ? <Card top title={"Cash and bank on " + d(r.to)}>
-      <Table>{cb.filter((x) => Math.abs(x[1]) >= 1).map(([l, v], i) => <tr key={l + ":" + i}><td>{l}</td><td className={"n" + (v < 0 ? " bad" : "")}>{m(v)}</td></tr>)}
-        <tr><td><b>Total</b></td><td className="n"><b>{m(cb.reduce((s, x) => s + x[1], 0))}</b></td></tr></Table>
+      <Table>{cb.filter((x) => Math.abs(x[1]) >= 1).map(([l, v], i) => <tr key={l + ":" + i}><td>{l}</td><td className={"n" + (v < 0 ? " bad" : "")}>{rs(v)}</td></tr>)}
+        <tr><td><b>Total</b></td><td className="n"><b>{rs(cb.reduce((s, x) => s + x[1], 0))}</b></td></tr></Table>
       <p className="note">From {r.balances.src}.</p></Card>
       : <p className="note">Cash and bank balances: {r.balances.why || ""}.</p>}
     <Card top title="Due in the coming weeks">{r.dues.map(([dt, l], i) => <div key={i} className="dash-row"><span>{l}</span><b>{d(dt)}</b></div>)}</Card>
@@ -336,9 +343,10 @@ export default function Mis({ b }) {
     onShow={() => { S.misRange = { from: Audit.iso(Smart.fyStartOf(end)), to: Audit.iso(end) }; Smart.keep("mis", S.misRange); render(); }} /> : null;
   const tab = S.misTab || "summary";
   // the tabs first, at the top of the page (review of 01-Oct-2026), then the period
-  const tabs = <nav className="sbar" aria-label="MIS">{TABS.map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => misTabGo(id)}>{l}</button>)}</nav>;
+  // clean-up batch 3: six tabs (the statements and the figures most asked for), the rest under More (parts/PageTabs.jsx)
+  const tabs = <PageTabs label="MIS" attr="data-mis-tab" value={tab} onPick={misTabGo} tabs={TAB_ORDER.map((id) => TABS.find((t) => t[0] === id))} />;
   if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
-  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" style={{ marginTop: 12 }}>Choose a period and press Run now.</div></>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("misRun"))}>Run now</button></div></>;
   const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;

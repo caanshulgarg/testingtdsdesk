@@ -296,8 +296,8 @@ function Create() {
 
 export default function Sales() {
   const co = CO(), s = SL();
-  if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" />; }
-  if (s.loading) return <Loading what="sales invoices" />;
+  if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" page="table" />; }
+  if (s.loading) return <Loading what="sales invoices" page="table" />;
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
   const tc = salesCounts(), all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();

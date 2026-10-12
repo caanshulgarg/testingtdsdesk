@@ -75,7 +75,9 @@ const Cloud = {
     const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
     if (Date.now() > until - 120000) await this.refreshToken();
   },
-  signOut(){ try { Live.stop(); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  // stability batch 4: and the files the service worker kept after the first open (only app code is ever kept there,
+  // never the firm's data; cleared all the same, so nothing of this sign-in stays behind)
+  signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith("fincom-files:")).forEach(k => caches.delete(k))).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
     if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
@@ -1390,7 +1392,9 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
+      // stability batch 1: until the firm's first sync after signing in, the page shows FinCom opening (Main.jsx, OpenLoader)
+      // rather than an empty list filling in; at most 15 s
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; S.signInOpening = Date.now(); setTimeout(render, 15000); toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
         // back where you left off (smart moves 7), once the firm's clients are known, if the page is still the one signed in on
         render(); const at = Smart.here();
         loadAccount(true).then(() => { render(); setTimeout(() => Smart.afterSignIn(at), 0); }); },
@@ -1525,7 +1529,9 @@ function doAct(act, t){
       toast("Connecting to the bridge on this computer\u2026");
       Bridge.pair(a.data).then(j => {
         Bridge.lastOpenKey = null;
-        return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); render(); });
+        return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); if (typeof TallySteady === "object") TallySteady.now();
+          // came from the top bar's "Connect this computer": back to that page, where the sign is now green by itself
+          if (S.tallyConnectBack && S.returnTo && Bridge.up()){ S.tallyConnectBack = false; Smart.goBack(); } render(); });
       }, err => { Bridge.st.error = err.message; toast(err.message); render(); });
       });
       break;
@@ -1811,6 +1817,12 @@ function doAct(act, t){
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
+    // the top bar's sign, not ready (the steady sign, 11-Oct-2026): the next step for its state. Connect this computer:
+    // the Tally page's install and connect steps, back to this page once connected; Check again: ask now, answer at once
+    case "tallyConnect": Smart.setReturn(); S.tallyConnectBack = !!S.returnTo; S.tallyPanel = false; S.firmMenu = false; S.view = "home"; S.homeTab = "tally"; S.tallyTab = "computers";
+      S.tallyMore = Object.assign({}, S.tallyMore || {}, {page: true}); render(); window.scrollTo(0, 0);
+      setTimeout(() => { const e = document.querySelector("#app [data-connect-section]"); if (e && e.scrollIntoView) e.scrollIntoView({block: "start"}); }, 80); break;
+    case "tallyCheck": tallyCheckNow(); break;
     case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
     case "firmMenuClose": S.firmMenu = false; render(); break;
@@ -2274,11 +2286,17 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   S.askClaudeNewSupplier = lsGet("tdsdesk:askClaudeNew") === "1";
   const samplePromise = (async () => { try { return window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch(e){ return null; } })();
   if (!window.claude) S.sampleReady = false;
+  // stability batch 2: the opening work in short steps, the browser free to draw and to take a click between them (one
+  // long block of up to 200 ms on an office computer before); the same work, in the same order
+  const pause = () => new Promise(r => (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield().then(r, r) : setTimeout(r, 0));
   await Store.init();
+  await pause();
   try { await Store.loadFirm(); }
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
+  await pause();
   Object.keys(S.data).forEach(refreshStats);
   render();
+  await pause();
   // a page link (#/…) opens that page; otherwise the client open last time
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
@@ -2302,10 +2320,18 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
   startCloudSync();
-  if (!Cloud.on()) fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
-    .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => {});
+  // stability batch 2: asked only for the sign-in page, where its "Create an account" line is (SignIn.jsx asks too, when
+  // the page is shown later), not on every open of FinCom used without an account
+  if (!Cloud.on() && signInNeeded()) loadSignupInfo();
   render();
 })();
+// whether new firms may sign up, and their starting credit (the sign-in page's "New here? Create an account" line)
+function loadSignupInfo(){
+  if (Cloud.on() || S.signupInfo || S.signupAsked) return;
+  S.signupAsked = true;
+  fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
+    .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => { S.signupAsked = false; });
+}
 window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk:last", S.coId); });
 
 // an owner clears a client's wrong GSTIN or PAN, with a reason (review of 02-Oct-2026): on the server through

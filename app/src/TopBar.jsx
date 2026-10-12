@@ -18,6 +18,7 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
+import { FinComNav } from "./nav.js";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -30,7 +31,7 @@ const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 function Title({ title, sub, crumb, children }) {
   return (
     <div className="tbar" data-crumb={crumb}>
-      <div className="tbar-title"><h2>{title}</h2><span className="note">{sub}</span></div>
+      <div className="tbar-title"><h2>{title}</h2><span className="note" title={sub || undefined}>{sub}</span></div>
       {children}
     </div>
   );
@@ -92,10 +93,26 @@ function ClientHeader() {
       </div>
     </Title>
   );
-  if (["dash", "clientInbox", "txn", "books"].includes(S.tab)) return head;
-  if (setup) return head;   // its sections are listed on the left of the page (screens/Settings.jsx)
+  return head;
+}
+
+// whether this client page has the status tabs (To review · Post to Tally · In Tally …)
+export function statusTabsShown() {
+  const co = S.view === "company" ? CO() : null;
+  if (!co || S.loadingCo) return false;
+  const setup = isSetupTab(S.tab), t = docType();
+  if (["dash", "clientInbox", "txn", "books"].includes(S.tab)) return false;
+  if (setup) return false;   // its sections are listed on the left of the page (screens/Settings.jsx)
   // sales and the bank page have their own tabs
-  if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
+  if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return false;
+  return true;
+}
+
+// a client's status tabs: were a second row of the header, which made the header taller on these pages only (the page
+// jumped 53 px between Purchase and TDS). Now the first thing on the page, kept in view under the header (steady.css)
+export function StatusTabs() {
+  if (!statusTabsShown()) return null;
+  const t = docType();
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
   // purchase bills: one row of tabs (review of 02-Oct-2026: a second row under it repeated "To review"): the three steps,
   // then the bills held as duplicates, deleted, or needing no entry
@@ -107,14 +124,14 @@ function ClientHeader() {
   // each tab's words first, as the tests read them; the chosen tab's pill is drawn in styles/arc-look.css. A tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
   // (activationMode "manual"), so going along the tabs never opens a page on the way
   const cur = onSide ? S.filter : now || "";
-  return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
+  return <div className="sbar-band"><nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
     <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
+      <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => FinComNav.go(() => goStep(id))} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
         {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsPrimitive.Trigger>)}
     {side.map(([id, label]) => <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsPrimitive.Trigger>)}
     </TabsPrimitive.List></Tabs>
-  </nav></>;
+  </nav></div>;
 }
 
 // Saving shows only when it matters (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click
@@ -160,28 +177,57 @@ export function TallyDetail({ s, link = null }) {
     {!s.on && <><dt>Why</dt><dd className="why">{s.reason}</dd><dt>What to do</dt><dd>{s.fix}</dd></>}
   </dl>;
 }
+// the top bar's sign (the owner, 11-Oct-2026): THIS computer only, a dot and a short word, steady (tallyHere, src/js/49):
+// green "Tally ready"; amber "Tally closed", "Tally busy", "Company not open", "Company not linked", "No internet"; red
+// "Bridge stopped"; grey "Tally not on this computer" (no bridge here: not an alarm). The hover card: the company, the
+// Windows user, when last confirmed, the next step as a button, and the firm's other computers in one quiet line
+export function HereCard({ h, link = null }) {
+  const pc = h.computer ? tallyPcShort(h.computer, h.user) : "";
+  return <div className="there" data-tally-here-card={h.code}>
+    <p className="there-head"><span className={"tsign-dot " + h.level} aria-hidden="true" /><b>{h.label}</b></p>
+    <dl className="tdetail" data-tally-detail="" data-tally-reason={h.level === "ok" ? "" : h.code}>
+      {pc && <><dt>Computer</dt><dd>{pc}</dd></>}
+      {h.company && <><dt>Company</dt><dd>{h.company}</dd></>}
+      {link && <><dt>Link</dt><dd data-tally-link-word={link.state}>{link.word}</dd></>}
+      {h.code !== "none" && <><dt>Last confirmed</dt><dd data-tally-confirmed="">{h.confirmed ? tallyIst(h.confirmed) : "\u2014"}</dd></>}
+    </dl>
+    {h.hint && <p className="note there-hint" data-tally-hint="">{h.hint}</p>}
+    {h.other && <p className="note there-other" data-tally-other="">{h.other}</p>}
+    {h.next.length > 0 && <div className="there-acts">{h.next.map((n, i) => <button key={n.act} type="button" data-tally-next={n.act}
+      className={"btn small" + (i === 0 && h.level !== "ok" && n.act !== "tallyCheck" ? " primary" : "")} onClick={(ev) => { ev.stopPropagation(); doAct(n.act); }}>{n.label}</button>)}</div>}
+  </div>;
+}
 function TallySign() {
-  // round 39: in a client, the hover also says its link in the four words of its Link to Tally card
-  const co = S.view === "company" ? CO() : null, s = tallySign(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
+  const co = S.view === "company" ? CO() : null, h = tallyHere(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
+  const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
   return <span className="tsign-wrap">
-    <button className={"tsign tallychip " + (s.on ? "on" : "off")} data-tally-sign={s.on ? "on" : "off"} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined} aria-haspopup="dialog"
-      title={tallySignWords(s) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
-      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{s.words}</span><span className="tsign-short">{s.short || s.computer}</span>
+    <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
+      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
+      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
     </button>
-    {!S.tallyPanel && <span className="tsign-pop" role="tooltip"><TallyDetail s={s} link={k} /></span>}
+    {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}
   </span>;
 }
 
 function TopRight() {
   const bal = accountBalance(), plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
   const inCo = S.view === "company" && CO();
+  // stability batch 1: two parts. The page's own buttons (left), which come and go with the page; then the bell, the
+  // Tally sign and the firm, each in a place of its own width (steady.css), at the same spot on every page
   return (
     <div className="topright">
+      {/* keyed by the page: a page's own buttons are its own, drawn new with it (not slid along when their width changes) */}
+      <span className="tb-page" key={S.view + ":" + (inCo ? S.tab + ":" + (S.tab === "books" ? booksTab() : "") : S.homeTab)}>
       {inCo && <HelpButton page />}
       <ReviewLink />
       <SaveState />
-      <Bell />
-      <TallySign />
+      {/* the page's one primary action, at the right of the page's own buttons, in the same place on every page (spec I, K2) */}
+      {inCo && !isSetupTab(S.tab) && <MainAction />}
+      </span>
+      <span className="tb-global">
+      <span className="tb-slot tb-bell"><Bell /></span>
+      <span className="tb-slot tb-tally"><TallySign /></span>
+      <span className="tb-slot tb-firm">
       <Menu.Root open={!!S.firmMenu && !signInNeeded()} onOpenChange={(o) => { if (o !== !!S.firmMenu) doAct(o ? "firmMenu" : "firmMenuClose"); }} modal={false}>
         <Menu.Trigger asChild><button className="firmbtn" title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
           <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
@@ -189,8 +235,8 @@ function TopRight() {
         </button></Menu.Trigger>
         <FirmMenu />
       </Menu.Root>
-      {/* the page's one primary action, always at the far right, in the same place on every page (spec I, K2) */}
-      {inCo && !isSetupTab(S.tab) && <MainAction />}
+      </span>
+      </span>
     </div>
   );
 }
@@ -206,11 +252,13 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
-        <TallyDetail s={tallySign(co)} link={co ? tallyLinkOf(co) : null} />
+        <HereCard h={tallyHere(co)} link={co ? tallyLinkOf(co) : null} />
+        <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
+        <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
-          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>
+          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>
           {co && <p className="note">{(Bridge.openFor(co) || {}).name ? Bridge.openFor(co).name + " is open in Tally." : (co.tallyName || co.name) + " is not open in Tally."}</p>}
           {!live && <p className="note">Open TallyPrime on the computer where the bridge runs, and keep the company open.</p>}
         </> : <p className="note">FinCom Bridge is not set up on this computer. Install FinCom Bridge from the Tally page on the computer where TallyPrime runs, then come back here.</p>}
@@ -239,12 +287,19 @@ function FirmMenu() {
   </Menu.Content></Menu.Portal>;
 }
 
+// the header's height as --head-h, for what stays in view under it (the status tabs)
+let headObs = null;
+function watchHead(top) {
+  if (headObs || !top || typeof ResizeObserver !== "function") return;
+  headObs = new ResizeObserver(() => document.documentElement.style.setProperty("--head-h", Math.round(top.getBoundingClientRect().height) + "px"));
+  headObs.observe(top);
+}
+
 export default function TopBar() {
   const hide = signInNeeded();
-  useLayoutEffect(() => { const top = document.querySelector("header.top"); if (top) top.style.display = hide ? "none" : ""; });
+  useLayoutEffect(() => { const top = document.querySelector("header.top"); if (top) { top.style.display = hide ? "none" : ""; watchHead(top); } });
   const inCo = S.view === "company" && CO();
   return <>
-    {createPortal(S.firm.firmName || "", document.getElementById("firmLine"))}
     {createPortal(
       <div className="headrow">
         {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}

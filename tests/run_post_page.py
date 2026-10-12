@@ -35,7 +35,7 @@ SETUP = """async () => {
   const save0 = Store.saveCompany.bind(Store); Store.saveCompany = (co) => { window.__saved.push(JSON.parse(JSON.stringify({id: co.id, postTo: co.postTo, postToBy: co.postToBy}))); return save0(co); };
   Cloud.on = () => true; Cloud.st.firm = {id: "f-1"}; Cloud.st.members = [];
   TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: "GARG SHEKHAR & COMPANY"}]};
-  TCloud.pane = {devices: [{id: "d-1", name: "NWS144", main_bridge: "go-1", revoked: false, info: {computer: "NWS144", bridges: {"go-1": {computer: "NWS144", user: "anshul", version: "2.1.1", mode: "main", at: now, tallyState: "open", open: ["GARG SHEKHAR & COMPANY"]}}}}],
+  TCloud.pane = {devices: [{id: "d-1", name: "NWS144", main_bridge: "go-1", revoked: false, info: {computer: "NWS144", user: "anshul", beat: {at: now, every: 30, tally: true, tallyState: "open", open: ["GARG SHEKHAR & COMPANY"], computer: "NWS144"}, bridges: {"go-1": {computer: "NWS144", user: "anshul", version: "2.1.1", mode: "main", at: now, tallyState: "open", open: ["GARG SHEKHAR & COMPANY"]}}}}],
     companies: [{company: "GARG SHEKHAR & COMPANY", client_id: c.id, gstin: "09AANFG3202D1ZR"}], busy: "", err: "", at: Date.now()};
   TCloud.restAll = async (u) => /tally_post_jobs/.test(u) ? [] : [];
   TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a))]);
@@ -84,7 +84,7 @@ with sync_playwright() as p:
     E("() => { S.account = window.__acct; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
-    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY · Connected · Tally open on NWS144 · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
+    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY on NWS144 (anshul) · Tally ready · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
     E("document.querySelector(\"#app details[data-more='post']\").open = true")
     ok(pg.inner_text("#app [data-post-bridge]") == "FinCom Bridge 2.1.1 · Ready", "C15. the bridge's version and Ready under More")
     E("document.querySelector(\"#app details[data-more='post']\").open = false")
@@ -109,12 +109,13 @@ with sync_playwright() as p:
     # C18: the finished postings below (QueueJobs)
     ok(E("(() => { const t = document.querySelector('#app [data-post-table]'), j = document.querySelector('#app [data-post-jobs]'); return !j || !!(t.compareDocumentPosition(j) & 4); })()"), "C18. the postings in FinCom's cloud come below the table")
     # C15: the action to take
-    E("() => { TCloud.pane.devices[0].info.bridges['go-1'].tallyState = 'closed'; render(); }"); pg.wait_for_timeout(300)
-    ok(line() == "Posting into GARG SHEKHAR & COMPANY" and prob() == "Tally not open on NWS144.", "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
-    E("() => { TCloud.pane.devices[0].info.bridges['go-1'].tallyState = 'open'; render(); }")
+    # the steady sign (11-Oct-2026): the sign's reason and fix (TallySteady.reset: first sight, no minute's wait here)
+    E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'closed'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'closed', tally: false, open: []}); TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
+    ok(line() == "Posting into GARG SHEKHAR & COMPANY" and prob().startswith("TallyPrime is closed on NWS144. Open TallyPrime on NWS144") and prob().endswith("Check again"), "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
+    E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'open'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'open', tally: true, open: ['GARG SHEKHAR & COMPANY']}); render(); }")
     E("() => { const c = CO(); window.__keep = c.postTo; c.postTo = ''; AutoPostTo.at[c.id] = Date.now(); render(); }"); pg.wait_for_timeout(300)
     ok(prob().endswith("Choose the Tally company") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen: 'Choose the Tally company' (%s)" % prob())
-    E("() => { const c = CO(); c.postTo = window.__keep; TCloud.pane.devices = []; TCloud.on = () => false; render(); }"); pg.wait_for_timeout(300)
+    E("() => { const c = CO(); c.postTo = window.__keep; TCloud.pane.devices = []; TCloud.on = () => false; TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
     ok(prob().startswith("Install FinCom Bridge"), "C15. no bridge anywhere: 'Install FinCom Bridge' (%s)" % prob())
     E("() => { TCloud.on = () => TCloud.__on !== false; TCloud.pane.devices = [{id: 'd-1', name: 'NWS144', main_bridge: 'go-1', revoked: false, info: {computer: 'NWS144', bridges: {'go-1': {computer: 'NWS144', version: '2.1.1', mode: 'main', at: new Date().toISOString(), tallyState: 'open'}}}}]; render(); }")
     pg.wait_for_timeout(300)

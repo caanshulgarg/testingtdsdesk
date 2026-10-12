@@ -157,6 +157,7 @@ run_migration47.py                    120
 run_migration48.py                    180
 run_upload_split.py                   180
 run_tally_sign.py                     180  TDSDESK_SITE=../app/dist-test
+run_tally_sign_stable.py              180  TDSDESK_SITE=../app/dist-test
 run_single_upload.py                  180  TDSDESK_SITE=../app/dist-test
 run_ui_standards.py                   300  TDSDESK_SITE=../app/dist-test
 run_post_reasons.py                   120
@@ -249,3 +250,6 @@ run_book_sources.js                   120
 # clean-up batch 1, "Find your way": the sidebar tree, page titles, old addresses, count words, the phone bar
 run_nav_clean.py                      300  TDSDESK_SITE=../app/dist-test
 run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
+run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test
+# stability (11-Oct-2026, the owner: "as stable and strong as Claude, anthropic.com, Microsoft"): the frame before the program, the FinCom loader's rules, one loading state, no layout shift on any page, the top bar's fixed places
+run_stability.py                      300  TDSDESK_SITE=../app/dist-test

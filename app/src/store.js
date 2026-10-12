@@ -7,6 +7,7 @@
 // element of its own, put back in that place after every redraw, so it keeps what was typed and where the cursor was.
 // The placeholder's other data-* attributes are passed to the screen as props: <div data-react="DocqPanel" data-cid="x">.
 import { flushSync } from "react-dom";
+import { whyPass } from "./parts/WhyNotes.jsx";
 
 const legacyRender = window.render;
 let version = 0, hosts = new Map(), placed = [];
@@ -76,7 +77,10 @@ function drawReactNow() {
     if (keys() === before) break;
   }
 }
-export function redraw() { const f = noteFocus(); drawReact(); giveFocus(f); }
+// stability batch 1: the grey "why" words beside each disabled button (WhyNotes.jsx) are put in with the drawing, before
+// the page is painted, not a frame later (a note arriving a frame late pushed the buttons after it sideways)
+function why() { try { whyPass(); } catch (e) { /* never in the way of the page */ } }
+export function redraw() { const f = noteFocus(); drawReact(); why(); giveFocus(f); }
 window.FinComReact = { redraw };
 
 window.render = function render() {
@@ -86,6 +90,7 @@ window.render = function render() {
   try { legacyRender(); }
   finally {
     drawReact();
+    why();
     giveFocus(f);
     // what the page needs once drawn: the ledger list's box, keeping in step with Tally (afterRender, src/js/01)
     if (typeof afterRender === "function") afterRender();

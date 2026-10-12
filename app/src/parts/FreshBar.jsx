@@ -30,9 +30,11 @@ export default function FreshBar({ b, held = true }) {
   const f = LK.fr(), live = LK.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
   if (!have && !live && !meta.keep && !TCloud.has(S.coId)) return null;
   const chk = f.check ? <Check c={f.check} /> : null;
+  // the server not answering when the books were opened: this is this computer's copy, said here (not only in passing)
+  const off = b && b.offline ? <p className="note warn" data-books-offline="">{"FinCom’s server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."}</p> : null;
   // the cloud's copy: what this page shows when it is the source
   const hb = held && <HeldBooks cid={S.coId} where="fresh" />, hd = typeof booksHeld === "function" && !!booksHeld(S.coId);
-  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}<CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}</div></>;
+  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}<CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}{off}</div></>;
   let upTo, btns = null;
   if (m.keep) {
     const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
@@ -51,5 +53,5 @@ export default function FreshBar({ b, held = true }) {
       if (kp.on) upTo = <>{upTo} The bridge reads it when this client is opened, on Update now, and in the nightly catch-up.</>;
     } else btns = <span className="note">Connect FinCom Bridge to keep this up to date.</span>;
   }
-  return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}</div></>;
+  return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}{off}</div></>;
 }

@@ -150,7 +150,7 @@ function Contacts({ b }) {
 
 export default function GstSettings() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" />; }
+  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" page="books" />; }
   const b = S.books, regs = GSTR.gstins(b) || [];
   if (!regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
   return (

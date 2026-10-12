@@ -1,9 +1,10 @@
 """python3 run_tally_states.py - the Tally connection in FinCom (go-bridge, review of 01-Oct-2026: the status went
 between connected and disconnected while the bridge was busy with Tally):
   - three parts, apart: Bridge (online / reconnecting / offline), Tally (open / busy / not open), Company (linked / not);
-  - a heartbeat a little late: "Reconnecting…", not offline; Offline only after three missed beats (about two minutes);
+  - a heartbeat a little late: still online (the steady sign, 11-Oct-2026: no "Reconnecting…"); Offline only after three
+    missed beats that held for a minute;
   - a busy Tally: "Connected – Tally busy", never offline or disconnected, also on this computer's bridge chip;
-  - the bridge on this computer not answering for a moment (1.15.0 busy with Tally): reconnecting, offline only after
+  - the bridge on this computer not answering for a moment (1.15.0 busy with Tally): still connected, offline only after
     two minutes;
   - Settings → Tally Bridge: the connection history of the last 24 hours.
 Offline, a made-up client, the React test build (app/dist-test)."""
@@ -29,22 +30,29 @@ with sync_playwright() as p:
     ok(st["state"] == "ok" and st["parts"] == {"bridge": "online", "tally": "open", "company": "linked", "busySince": ""}, "a beat 5 s ago: Bridge online, Tally open, Company linked (%s)" % st["label"])
     st = pg.evaluate(setup, [cid, {"at": iso(20), "every": 30, "tally": True, "tallyState": "busy", "busySince": iso(200)[:19], "companies": [], "open": ["TESTING AAD"]}])
     ok(st["state"] == "busy" and st["label"] == "Connected – Tally busy" and st["parts"]["bridge"] == "online" and st["parts"]["tally"] == "busy", "Tally busy: “Connected – Tally busy”, the bridge still online")
-    # the same beat seen and then time passing: late -> reconnecting -> offline
-    seen = """(a) => { const [cid, ago] = a; BeatSeen.d1.seen = Date.now() - ago * 1000; return tallyStatus(S.companies[cid]); }"""
+    # the steady sign (11-Oct-2026): a late beat is not "Reconnecting…" any more: it stays online; offline once three beats
+    # are missed AND that held for a minute (TallySteady); the beat's age is from its own time (beat.at)
+    late = """(a) => { const [cid, ago, every] = a; TLight.st.devs[0].info.beat = Object.assign({}, TLight.st.devs[0].info.beat, {at: new Date(Date.now() - ago * 1000).toISOString(), every: every || 30}); return tallyStatus(S.companies[cid]); }"""
+    pg.evaluate("TallySteady.reset()")
     st = pg.evaluate(setup, [cid, {"at": iso(1), "every": 30, "tally": True, "tallyState": "open", "companies": []}])
-    for ago, want in [(60, "online"), (90, "reconnecting"), (115, "reconnecting"), (125, "offline")]:
-        st = pg.evaluate(seen, [cid, ago])
-        ok(st["parts"]["bridge"] == want, "no new beat for %d s (beats every 30 s): %s (%s)" % (ago, want, st["label"]))
-    ok(st["state"] == "offline" and st["label"].startswith("Offline since"), "offline only after three missed beats and a little: “%s”" % st["label"])
+    for ago in (60, 90, 115):
+        st = pg.evaluate(late, [cid, ago])
+        ok(st["parts"]["bridge"] == "online" and "econnecting" not in st["label"] + st["short"], "no new beat for %d s (beats every 30 s): still online, no “Reconnecting…” (%s)" % (ago, st["label"]))
+    st = pg.evaluate(late, [cid, 125])
+    ok(st["parts"]["bridge"] == "online", "125 s: three beats missed, but not yet for a minute: still online (%s)" % st["label"])
+    st = pg.evaluate("""(cid) => { const n = Date.now; const t = n() + 61000; Date.now = () => t; TLight.st.devs[0].info.beat.at = new Date(t - 186000).toISOString();
+      const r = tallyStatus(S.companies[cid]); Date.now = n; return r; }""", cid)
+    ok(st["state"] == "offline" and st["label"].startswith("Offline since"), "offline once that held a minute: “%s”" % st["label"])
+    pg.evaluate("TallySteady.reset()")
     st = pg.evaluate(setup, [cid, {"at": iso(1), "every": 60, "tally": True, "companies": []}])
-    st = pg.evaluate(seen, [cid, 150])
-    ok(st["parts"]["bridge"] == "reconnecting", "bridge 1.15.0 (a beat every 60 s): 150 s without one is still reconnecting")
+    st = pg.evaluate(late, [cid, 150, 60])
+    ok(st["parts"]["bridge"] == "online", "bridge 1.15.0 (a beat every 60 s): 150 s without one is still online")
     # this computer's bridge: one status check not answered (1.15.0 busy with Tally) is not a lost bridge
     r = pg.evaluate("""async () => { Bridge.on = () => true; Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "open"}; Bridge.okAt = Date.now() - 30000;
       Bridge.call = async () => { throw {code: "bridge_down", message: "The Tally Bridge did not answer in time."}; };
       await Bridge.refresh(false); clearTimeout(Bridge.again); const a = [Bridge.up(), !!Bridge.st.shaky, bridgeChip(null)];
       Bridge.okAt = Date.now() - 130000; await Bridge.refresh(false); clearTimeout(Bridge.again); return a.concat([Bridge.st.state]); }""")
-    ok(r[0] and r[1] and "reconnecting" in r[2], "this computer's bridge not answering for 30 s: still connected, “reconnecting…”")
+    ok(r[0] and r[1] and "reconnecting" not in r[2].lower(), "this computer's bridge not answering for 30 s: still connected, no “reconnecting…” (the steady sign, 11-Oct-2026)")
     ok(r[3] == "down", "not answering for over two minutes: offline")
     chip = pg.evaluate("""() => { Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "busy", busySince: "2026-10-01T12:40:00", stuck: {since: "2026-10-01T12:40:00"}}; return bridgeChip(null); }""")
     ok("Tally busy since 12:40" in chip and "tchip warn" in chip and "not responding" not in chip, "Tally stuck on this computer: “Tally busy since 12:40” (amber), not “not responding”")

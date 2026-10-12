@@ -1,0 +1,22 @@
+/* The ₹ sign in the first face loaded (stability batch 2). Inter and Geist carry ₹ (U+20B9) only in their latin-ext
+   part (85 KB and 16 KB), fetched the first time a ₹ is drawn, so every money figure reflowed when it came. These two
+   tiny faces (src/fonts/*-inr-wght-normal.woff2: the ₹ alone, cut from @fontsource-variable's latin-ext faces with
+   fontTools' pyftsubset --unicodes=U+20B9, the weight axis kept; SIL Open Font License 1.1, as Inter and Geist) are put
+   inline in the stylesheet (under Vite's 4 KB limit), so ₹ is there with the first text. Declared after @fontsource's
+   faces (main.jsx), they are the ones used for ₹. */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(../fonts/inter-inr-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+20B9;
+}
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(../fonts/geist-inr-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+20B9;
+}

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { transform as esbuildTransform } from "esbuild";
 
 // Arc UI (src/arc, copied from github.com/kuratlielia/arc-library; see src/arc/README.md). Its files import each other
 // as "@/lib/…" and "@/registry/…", so "@" is src/arc. "motion/react" is FinCom's calm version of Motion
@@ -21,8 +22,9 @@ const alias = [
 // carries src/sentry.js, and its page may not reach Sentry's address
 const SENTRY_INGEST = "https://o4512221111320576.ingest.us.sentry.io";
 const sentryOn = (mode) => mode === "test" && process.env.FINCOM_SENTRY !== "off";
-const csp = (mode) => "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-  "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
+// stability batch 2: no font from Google (the IBM Plex link was never used), so neither its host is allowed
+const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + hashes + " 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+  "font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
   "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
   "worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'";
 
@@ -37,8 +39,15 @@ function legacy(mode) {
     configureServer(server) {
       server.middlewares.use("/legacy.js", (_req, res) => { res.setHeader("Content-Type", "text/javascript"); res.end(read()); });
     },
-    generateBundle() {
-      this.emitFile({ type: "asset", fileName: "legacy.js", source: read() });
+    async generateBundle() {
+      // stability batch 2: the program minified (2.5 MB -> about a third less to send and to read), with its source map
+      // for error reports (src/sentry.js). Only whitespace, syntax and the names inside functions change: the program's
+      // own top-level names (S, render, GSTAPI, …), which the React screens and the tests use, stay as they are
+      // (esbuild keeps a classic script's top-level names), and so does every string (publish-preview.sh's database check)
+      const src = read();
+      const out = await esbuildTransform(src, { minify: true, sourcemap: "external", sourcefile: "legacy.src.js", charset: "utf8", legalComments: "inline" });
+      this.emitFile({ type: "asset", fileName: "legacy.js", source: out.code + "//# sourceMappingURL=legacy.js.map\n" });
+      this.emitFile({ type: "asset", fileName: "legacy.js.map", source: out.map });
       // go-bridge: FinCom Bridge 2.0 (Go) is handed out by the testing site only (assets-test/bridge-go); a live build
       // never carries it, so what live users download stays as it is
       const goDir = new URL("../assets-test/bridge-go/", import.meta.url);
@@ -49,13 +58,41 @@ function legacy(mode) {
     transformIndexHtml(html) {
       // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the
       // Pages cache, or a tab left open) and ran old code under the new screens. Its address now changes with its content
-      if (fs.existsSync(file)) html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12) + '"');
-      html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode) + '">\n</head>');
+      if (fs.existsSync(file)) {
+        const v = crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12);
+        html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + v + '"');
+        // stability batch 2: fetched from the start (it was found only when the page's end was read: 2.1 s on an office PC)
+        html = html.replace("<!--fincom-preload-->", '<link rel="preload" as="script" fetchpriority="low" href="./legacy.js?v=' + v + '">');
+      }
+      // the frame drawn before the program loads (index.html, stability batch 1): its little script gets this build's
+      // storage prefix (the test build keeps its own, tdsdesk-test:) and id, and is allowed by its hash, the one inline script
+      html = html.replace("__FINCOM_LS__", test ? "tdsdesk-test:" : "tdsdesk:").replaceAll("__FINCOM_BUILD__", BUILD_ID);
+      const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].filter((m) => !/type="module"/.test(m[0]))
+        .map((m) => " 'sha256-" + crypto.createHash("sha256").update(m[1], "utf8").digest("base64") + "'").join("");
+      html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode, hashes) + '">\n</head>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
       // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
       const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>]/g, "");
       if (banner) html = html.replace("</head>", '<style>body.is-test::after{content:"' + banner + ' · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"' + banner + '";color:#C9A8F0}</style>\n</head>');
       return html;
+    },
+  };
+}
+
+// stability batch 2: the two faces of the first screen (Inter for the text, Geist for headings and figures, latin) are
+// fetched from the start, so the headings do not change typeface after they appear (fonts.css has the ₹ sign inline)
+function preloadFonts() {
+  return {
+    name: "fincom-preload-fonts",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        if (!ctx || !ctx.bundle) return html;
+        const want = [/^assets\/inter-latin-wght-normal-[\w-]+\.woff2$/, /^assets\/geist-latin-wght-normal-[\w-]+\.woff2$/];
+        const files = Object.keys(ctx.bundle).filter((f) => want.some((r) => r.test(f)));
+        const links = files.map((f) => '<link rel="preload" as="font" type="font/woff2" crossorigin href="./' + f + '">').join("\n");
+        return html.replace("</head>", links + "\n</head>");
+      },
     },
   };
 }
@@ -83,11 +120,27 @@ function fresh() {
   };
 }
 
+// stability batch 4: the service worker (sw/sw.js), with this build's id and the files of its first open: the page, the
+// program (legacy.js?v=…), the app's scripts, styles and fonts (not the source maps, not the downloads)
+function serviceWorker(mode) {
+  const legacyFile = new URL("./legacy/" + (mode === "test" ? "test" : "live") + ".js", import.meta.url);
+  return {
+    name: "fincom-sw",
+    // written once the files are on disk (Vite drops a CSS-only chunk after generateBundle): only files that are there
+    writeBundle(o, bundle) {
+      const v = fs.existsSync(legacyFile) ? crypto.createHash("sha256").update(fs.readFileSync(legacyFile, "utf8")).digest("hex").slice(0, 12) : "";
+      const files = ["./", "./legacy.js?v=" + v, "./guard.js", "./oldcheck.js"].concat(Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f)).map((f) => "./" + f));
+      const src = fs.readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8").replace("__SW_BUILD__", BUILD_ID).replace("__SW_FILES__", JSON.stringify(files));
+      fs.writeFileSync(o.dir + "/sw.js", src);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: "./",
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
     __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
-  plugins: [react(), legacy(mode), fresh()],
+  plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
 }));
