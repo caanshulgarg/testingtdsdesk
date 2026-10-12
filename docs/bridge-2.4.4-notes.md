@@ -34,9 +34,13 @@ other personal field read or kept. The two data locations (next-241) are not in 
    strip keeps two more fields: ALLLEDGERENTRIES.BANKALLOCATIONS.BANKEMPLOYEENAME and its AMOUNT, from a salary payment.
    ACCOUNTNUMBER, IFSCODE and PAYMENTFAVOURING are never kept (a test refuses them on the kept list), and a bank allocation
    that names no employee keeps exactly what 2.4.3 kept. The Day Book path keeps Tally's entry whole (the day files, sent to
-   the cloud's tally-days bucket): from 2.4.4 these three elements are taken out of every entry before a day file is written
-   and again before a day is sent (a day file an older bridge wrote), and tally-ingest takes them out of a day before it
-   keeps it, whatever bridge sent it (review 244 H1).
+   the cloud's tally-days bucket): from 2.4.4 these three elements, and the employee's own bank (BANKNAME, BANKBRANCHNAME,
+   BENEFICIARYCODE, SWIFTCODE, BANKPARTYNAME, only in a bank allocation that names an employee), are taken out of every
+   entry before a day file is written and again before a day is sent, and tally-ingest takes them out of a day before it
+   keeps it, whatever bridge sent it (reviews 244 H1, R2-M1). Day files an earlier bridge kept with them are cleaned once
+   on 2.4.4's first cloud round (bank-clean-244.txt marks the folder), their month files put together again, and those days
+   sent again so the cloud's copy is replaced (R2-L1). A Day Book uploaded in FinCom is cleaned the same way as it is cut
+   into days, and the uploaded file is removed from the tally-uploads bucket once its last piece is queued (R2-M2).
 
 4. **A payroll voucher's entry request may take 3 s ((4)).** Only FinComVoucherObject, only for an entry whose voucher
    type is a payroll type (Tally's "Payroll", or a type of the company's own the bridge saw as a pay slip with employees'

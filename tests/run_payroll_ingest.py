@@ -106,7 +106,7 @@ try:
     ok(not any(k in json.dumps(v1.get("salpay")) for k in ("50100123456781", "HDFC0001001", "ACCOUNT", "IFSC", "FAVOURING")), "never the account, IFSC or the name in favour")
     kept = [gzip.decompress(b).decode("utf8") for k, b in FS.FILES.items() if "tally-days" in k and k.endswith("20261202.xml.gz")]
     sent = gzip.open(os.path.join(TD, "full-SAL-PAY-NOV.xml.gz")).read().decode("utf8")
-    ok("<ACCOUNTNUMBER" in sent and len(kept) == 1 and "<BANKEMPLOYEENAME" in kept[0] and not any(w in kept[0] for w in ("<ACCOUNTNUMBER", "<IFSCODE", "<PAYMENTFAVOURING", "50100123456781", "HDFC0001001")),
+    ok("<ACCOUNTNUMBER" in sent and len(kept) == 1 and "<BANKEMPLOYEENAME" in kept[0] and not any(w in kept[0] for w in ("<ACCOUNTNUMBER", "<IFSCODE", "<PAYMENTFAVOURING", "50100123456781", "HDFC0001001", "HDFC Bank Ltd")),
        "the day kept in the bucket: the employee and amount, never the account, IFSC or the name in favour, though the day sent had them (review 244 H1; %d kept)" % len(kept))
     v2 = (g2[0]["p_vouchers"] if g2 else [{}])[0]
     cs = sorted((x.get("centre"), x.get("ledger"), x.get("amt")) for x in v2.get("costs", []))

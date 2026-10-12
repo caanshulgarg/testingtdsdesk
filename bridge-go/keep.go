@@ -559,8 +559,8 @@ func keepHeld(dir, ym string) map[string]held {
 	return h
 }
 
-// a month's day book file, put together from its days, for FinCom to read
-func writeKeepMonth(dir, ym string, st M) {
+// the month's file put together from its days (its entries counted)
+func writeKeepMonthFile(dir, ym string) int {
 	var b strings.Builder
 	b.WriteString("<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>")
 	n := 0
@@ -571,6 +571,12 @@ func writeKeepMonth(dir, ym string, st M) {
 	}
 	b.WriteString("</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>")
 	_ = saveFile(filepath.Join(dir, "daybook-"+ym+".xml"), b.String())
+	return n
+}
+
+// a month's day book file, put together from its days, for FinCom to read
+func writeKeepMonth(dir, ym string, st M) {
+	n := writeKeepMonthFile(dir, ym)
 	months := obj(st["months"])
 	if months == nil {
 		months = M{}
