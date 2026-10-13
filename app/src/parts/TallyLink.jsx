@@ -1,7 +1,8 @@
 // Link to Tally: one card for each client, the same wherever it shows (Client setup → Tally, From Tally, and where Add
 // client, Getting ready and Post to Tally's "Choose the Tally company" lead). Round 39, 10-Oct-2026 (the owner could not
 // tell whether a client is linked, when it will link, or whether he needs a port; none is needed to link).
-//   One status line, one of four (tallyLinkOf, src/js/49):
+//   One status line, one of four (tallyLinkOf, src/js/49; ui-tidy: "Not linked → Link", "Waiting for Tally", "Linked · reading",
+//   "Needs you"), then, while not linked or waiting for Tally, the three numbered steps (Steps, below):
 //     Not linked          "Choose this client's company in Tally", then the companies FinCom has seen (name · computer ·
 //                         last seen; the one with this client's GSTIN on top, "Same GSTIN"), each with [Link]. A company
 //                         not in the list: "Open it in TallyPrime on the office computer; it appears here within a
@@ -20,6 +21,7 @@ import { useEffect, useState } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
 import Button from "./Button.jsx";
 import CommitBox from "./CommitBox.jsx";
+import { useSetup, DownloadBtn } from "../screens/Tally.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
@@ -69,6 +71,35 @@ function Picker({ co, current = "", onDone }) {
         : <>FinCom Bridge is not on any computer yet. Install it on the computer where TallyPrime runs, then open {name} there. <button className="linkbtn" data-tally-link-install="" onClick={() => openTallyFor(co.id)}>How</button></>}
       {!canWrite() && " A member of the firm who may make changes links it."}</p>
   </div>;
+}
+
+// ui-tidy (13-Oct-2026; the owner: "still it is very confusing ... how to link tally"): three plain numbered steps, each
+// ticked by itself from what FinCom already reads, the step the client is on marked:
+//   1. Install FinCom Bridge on the office computer   ticked when a bridge beats (a computer heard from in the last 10 minutes)
+//   2. Open the company in TallyPrime                 ticked when a company shows among the companies seen (tallyCompaniesSeen)
+//   3. Choose it here, then press Link                ticked when the client is linked (TCloud.link, by the Link buttons below)
+// Shown while the client is not linked, and while it waits for Tally (linked; the company not open)
+const BEAT_MS = 10 * 60000;
+export function linkSteps(co, k) {
+  const tl = (typeof TLight === "object" && TLight.st) || {}, p = (typeof TCloud === "object" && TCloud.pane) || {};
+  const devs = [].concat(tl.devs || [], p.devices || []).filter((d) => d && !d.revoked);
+  const recent = (t) => { const n = Date.parse(t || ""); return !!n && Date.now() - n < BEAT_MS; };
+  const beat = (typeof Bridge === "object" && typeof Bridge.up === "function" && Bridge.up()) || devs.some((d) => recent(((d.info || {}).beat || {}).at) || recent(d.last_seen));
+  const seen = companiesSeen(co).length > 0 || (typeof tallyCompaniesSeen === "function" && tallyCompaniesSeen().some((c) => !c.client || c.client === String(co.id)));
+  const done = [!!beat, !!seen, !!k && k.state !== "unlinked"];
+  return { done, now: done.indexOf(false) };
+}
+function Steps({ co, k }) {
+  const m = useSetup(), { done, now } = linkSteps(co, k), name = co.tallyName || co.name;
+  const Step = ({ i, title, children }) => <li data-tally-step={i + 1} data-done={done[i] ? "" : undefined} data-now={now === i ? "" : undefined} className={done[i] ? "done" : now === i ? "now" : ""}>
+    <span className="tguide-mark" aria-hidden="true">{done[i] ? "✔" : i + 1}</span>
+    <div><b>{title}</b>{done[i] && <span className="tag ok" style={{ marginLeft: 8 }}>Done</span>}{now === i && !done[i] && <span className="tag info" style={{ marginLeft: 8 }}>Now</span>}
+      {children && !done[i] ? <div className="note">{children}</div> : null}</div></li>;
+  return <ol className="tguide-steps tlink-steps" data-tally-steps={now < 0 ? "done" : now + 1}>
+    <Step i={0} title="Install FinCom Bridge on the office computer">On the computer where TallyPrime runs. <DownloadBtn m={m} primary={now === 0} /></Step>
+    <Step i={1} title="Open the company in TallyPrime">{"Open " + name + " in TallyPrime on that computer; it appears here within a minute."}</Step>
+    <Step i={2} title="Choose it here, then press Link">{now === 2 ? "Its company is in the list below: press Link beside it." : ""}</Step>
+  </ol>;
 }
 
 // the one status line: the state's word, what it means, and at most one button
@@ -205,6 +236,7 @@ export default function TallyLink({ co, where = "setup", b = null }) {
       <More co={co} k={k} onPick={() => setPick(true)} onName={() => setName(true)} />
     </div>
     <StatusLine co={co} k={k} where={where} b={b} />
+    {(unlinked || k.state === "waiting") && <Steps co={co} k={k} />}
     {unlinked && <Picker co={co} />}
     {!unlinked && pick && <div className="tlink-change" data-tally-link-changebox=""><p className="note" style={{ margin: "8px 0 0" }}>{"Choose the company in Tally instead of " + k.company + ":"}</p>
       <Picker co={co} current={k.company} onDone={() => setPick(false)} /><button className="linkbtn" onClick={() => setPick(false)}>Cancel</button></div>}

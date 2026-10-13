@@ -63,8 +63,11 @@ function tree() {
   }
   const st = open.stats || {}, mod = inCo ? docType() : "", setup = inCo && isSetupTab(S.tab), bt = inCo && S.tab === "books" ? booksTab() : "";
   const work = inCo && !setup && !["dash", "clientInbox", "txn", "books"].includes(S.tab);
+  // ui-tidy (13-Oct-2026; the owner: "still it is very confusing where is the client"): Clients first, in the sidebar and
+  // the phone's bar, from inside a client too (was "All clients" at the foot)
   return [
-    [null, [{ icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
+    [null, [{ icon: "clients", label: "Clients", on: false, go: () => navHome("clients"), bar: true, title: "Every client: find one, open it" },
+      { icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
     ["Bring in", [
       { icon: "inbox", label: "Inbox", on: inCo && S.tab === "clientInbox", count: docqCount(open.id), go: () => goClient("inbox"), title: "Documents that arrived for this client" },
       // the client's Tally data (Day Book, masters, balances) and its Tally ledgers, a tab of the same page
@@ -74,7 +77,7 @@ function tree() {
       { icon: "bills", label: "Purchase", count: st.drafts || 0, go: () => goClient("bills"), bar: true, on: work && mod === "bills" },
       { icon: "bank", label: "Bank", on: work && mod === "bank", go: () => goClient("bank"), bar: true,
         count: S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0 },
-      { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales"), bar: true },
+      { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales") },
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
     ]],
     ["Returns", [
@@ -92,7 +95,6 @@ function tree() {
     ]],
     ["sep", [
       { icon: "setup", label: "Client setup", on: setup, go: () => { if (!setup) toggleSetup(); }, title: "This client's company, suppliers, Tally and ledgers" },
-      { icon: "clients", label: "All clients", on: false, go: () => navHome("clients") },
       help,
     ]],
   ];

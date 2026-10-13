@@ -27,7 +27,7 @@ with sync_playwright() as p:
     first = pg.evaluate("document.querySelector('#r1Table tbody tr td button').textContent.slice(2)")
     box = pg.locator('input[aria-label="Find a customer, invoice or GSTIN"]'); box.click(); pg.keyboard.type(first[:6], delay=20); pg.wait_for_timeout(600)
     ok(rows() < n0 and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Find a customer, invoice or GSTIN", "typing “%s”: fewer customers, the cursor stays in the box" % first[:6])
-    pg.click('.revfilter button.linkbtn:text-is("Clear")'); pg.wait_for_timeout(400)
+    pg.click('.revfilter button:text-is("Clear filters")')   # ui-tidy: the one filter bar's Clear filters; pg.wait_for_timeout(400)
     ok(rows() == n0, "Clear: all of them again")
     pg.click('#r1Table tbody tr td button >> nth=0'); pg.wait_for_timeout(400)
     ok(pg.locator("#r1Table table").count() == 1, "a click on a customer opens its invoices")

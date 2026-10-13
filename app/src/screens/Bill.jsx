@@ -6,6 +6,11 @@ import { useEffect } from "react";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
 import DateBox from "../parts/DateBox.jsx";
+import More from "../parts/More.jsx";
+import { Info } from "../parts/Answer.jsx";
+
+// ui-tidy (13-Oct-2026): how the bill was read, in one short line ("Read free from the PDF text · all checks passed ✓")
+const readWords = (m) => m === "free (PDF text)" ? "Read free from the PDF text" : m === "free OCR" ? "Read free by OCR" : m === "Google OCR" ? "Read by Google OCR" : m === "pasted" ? "Pasted in" : "Read by " + m;
 
 const money_ = (n) => money(n);
 const isFree = (m) => /^(free (OCR|\(PDF)|Google OCR$)/.test(m);
@@ -323,7 +328,7 @@ function DupBeside({ e }) {
 }
 
 function FocusMissing({ id, miss }) {
-  useEffect(() => { if (miss && typeof focusBillField === "function") setTimeout(() => focusBillField(miss), 0); }, [id]);
+  useEffect(() => { if (miss && typeof focusBillField === "function") setTimeout(() => focusBillField(miss, { noScroll: true }), 0); }, [id]);
   return null;
 }
 export default function BillDetail({ id }) {
@@ -352,29 +357,36 @@ export default function BillDetail({ id }) {
   return (
     <div className="detail">
       <FocusMissing id={e.id} miss={miss} />
-      <section className="dhead">
-        <div>
+      {/* ui-tidy (13-Oct-2026): the bill's name once; how it was read in one line, its full checks under Details; Read again
+          and Delete under More */}
+      <section className="dhead" data-bill-head="">
+        <div className="dhead-main">
           <h2>{x.vendorName || "New invoice"}</h2>
-          {e.readMode && <div className={"readby " + (isFree(e.readMode) ? "isfree" : /Claude/.test(e.readMode) ? "isclaude" : "")}>Read by {e.readMode}{costNote(e.readMode)}</div>}
-          {e.checks && e.checks.length > 0 && e.status === "draft" && <div className="note" style={{ marginTop: 2 }}>Checks passed: {e.checks.join(" · ")}</div>}
-          <div className="note">{e.fileName}{e.routedBy ? ", filed here by " + e.routedBy : ""}{c.party || !x.vendorName ? "" : ", new deductee"}</div>
+          <div className="dhead-line">
+            {e.readMode && <span className={"readby " + (isFree(e.readMode) ? "isfree" : /Claude/.test(e.readMode) ? "isclaude" : "")} data-read-line="">{readWords(e.readMode)}
+              {e.checks && e.checks.length > 0 && e.status === "draft" ? <span className="read-ok"> · all checks passed ✓</span> : null}</span>}
+            <details className="read-more" data-read-details=""><summary>Details</summary><div className="note">
+              {e.readMode && <div>Read by {e.readMode}{costNote(e.readMode)}</div>}
+              {e.checks && e.checks.length > 0 && e.status === "draft" && <div>Checks passed: {e.checks.join(" · ")}</div>}
+              <div>{e.fileName}{e.routedBy ? ", filed here by " + e.routedBy : ""}{c.party || !x.vendorName ? "" : ", new deductee"}</div></div></details>
+          </div>
         </div>
-        {e.status === "draft" && <div className="row" style={{ gap: 8, marginTop: 8 }}>
-          <span className="note">Read again:</span>
-          <button className="btn small" onClick={() => rereadEntry(e, null)}>Free</button>
-          <button className="btn small" disabled={!googleReady()} title={googleReady() ? undefined : "Google OCR is not set up"} onClick={() => rereadEntry(e, "google")}>Google OCR</button>
-          <button className="btn small" disabled={!claudeReady()} title={claudeReady() ? undefined : "Claude is not available here"} onClick={() => rereadEntry(e, "claude")}>Claude</button>
-        </div>}
-        <div className="actions">{e.status === "draft" && canDeleteBills() && <button className="linkbtn" onClick={() => billDelete(e.id)}>Delete…</button>}</div>
+        {e.status === "draft" && <More label="⋯ More" data-bill-more="" items={[
+          ["Read again: Free", () => rereadEntry(e, null), { "data-reread": "free" }],
+          ["Read again: Google OCR", () => rereadEntry(e, "google"), { "data-reread": "google", disabled: !googleReady(), title: googleReady() ? undefined : "Google OCR is not set up" }],
+          ["Read again: Claude", () => rereadEntry(e, "claude"), { "data-reread": "claude", disabled: !claudeReady(), title: claudeReady() ? undefined : "Claude is not available here" }],
+          canDeleteBills() && ["Delete…", () => billDelete(e.id), { "data-bill-delete": "", className: "more-item danger" }],
+        ]} />}
       </section>
       {e.readError && <section><p className="banner" style={{ margin: 0 }}>{e.readError}</p></section>}
       {notReadYet(e) && e.status === "draft" && <section data-notread=""><p className="banner bad" style={{ margin: 0 }}>
         <b>Not read yet:</b> {e.notRead.reason} <button className="btn small" onClick={() => retryNotRead(e.id)}>Retry</button>
         <span className="note"> Or type in the supplier, date and amounts below. It cannot be approved until then.</span></p></section>}
-      {!ro && e.readMode !== "free (partly read)" && (e.handwritten || (e.uncertain && e.uncertain.length > 0)) && <section><p className="banner" style={{ margin: 0 }}>
-        {e.handwritten ? "Handwritten bill. " : ""}
-        {e.uncertain && e.uncertain.length ? "Fields marked in amber need a quick look. Compare them with the image; to correct one, click in the box and type. When they are right, press “Fields look right” in the bar at the bottom." : "Check the figures against the image."}
-        {e.legibility ? " Claude noted: " + e.legibility : ""}</p></section>}
+      {/* one short line; each amber field is marked where it sits (Field: .unsure) */}
+      {!ro && e.readMode !== "free (partly read)" && (e.handwritten || (e.uncertain && e.uncertain.length > 0)) && <section><p className="banner amber-line" data-amber-line="" style={{ margin: 0 }}>
+        {e.uncertain && e.uncertain.length ? e.uncertain.length + (e.uncertain.length === 1 ? " field needs" : " fields need") + " a quick look (amber)" : "Check the figures against the image"}{e.handwritten ? " · handwritten bill" : ""}
+        {" "}<Info label="What to do">{e.uncertain && e.uncertain.length ? "Compare the fields marked in amber with the image; to correct one, click in the box and type. When they are right, press “Fields look right” in the bar at the bottom." : "Check the figures against the image."}
+          {e.legibility ? " Claude noted: " + e.legibility : ""}</Info></p></section>}
       <DocWarnings e={e} />
       {closed.length > 0 && <div className="banner cp-banner"><b>Closed period.</b> This bill is dated {fmtDate(x.invoiceDate)}: {closed.join("; ")}. It can still be posted; FinCom will ask first.</div>}
       <section className={e.fileName !== "Manual entry" ? "withprev" : ""}>

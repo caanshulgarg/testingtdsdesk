@@ -36,6 +36,8 @@ import FiledCompare from "./gst/FiledCompare.jsx";
 import Recon from "./gst/Recon.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
 import "../parts/returns.css";
+import Filters, { Field } from "../parts/Filters.jsx";
+import { Answer } from "../parts/Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => (s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "");
@@ -60,19 +62,19 @@ function periodLabel(ym, reg) {
 function Bar({ months, regs, gNow, ftype, noDownload }) {
   const fys = Array.from(new Set(months.map((m) => GSTF.fyOf(m)))).sort().reverse(), fy = GSTF.fyOf(S.gstYm || "");
   const inFy = months.filter((m) => GSTF.fyOf(m) === fy);
-  return <div className="tg-bar" role="group" aria-label="Choose the return" data-gst-bar="">
-    <label className="rp-f">Financial Year
-      <select aria-label="Financial year" value={fy} onChange={(ev) => { const l = months.filter((m) => GSTF.fyOf(m) === ev.target.value); gstSetYm(l[l.length - 1]); }}>
-        {fys.map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
-    <label className="rp-f">{ftype === "qrmp" ? "Quarter or month" : "Month"}
-      <select aria-label="Month" value={S.gstYm} onChange={(ev) => gstSetYm(ev.target.value)}>{inFy.map((m) => <option key={m} value={m}>{periodLabel(m, S.gstReg || "")}</option>)}</select></label>
-    {regs.length > 1 && <label className="rp-f">GSTIN<select aria-label="GSTIN" value={S.gstReg} onChange={(ev) => gstSetReg(ev.target.value)}>{regs.map((g) => <option key={g} value={g.slice(0, 2)}>{g}</option>)}</select></label>}
-    <span className="tg-right">
-      {gNow && <span className="note">{regs.length > 1 ? "" : gNow + " · "}{GSTSet.typeLabel(ftype)}{GSTSet.peek(S.gstReg).portalUser ? " · portal user " + GSTSet.peek(S.gstReg).portalUser : ""}</span>}
-      <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button>
-      <More items={[!noDownload && ["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")]]} />
-    </span>
-  </div>;
+  // ui-tidy (13-Oct-2026): the one filter bar (parts/Filters.jsx): the year and the period, then the GSTIN; the filing
+  // type, GST settings and More at its end
+  return <Filters className="tg-bar" label="Choose the return" data-gst-bar=""
+    period={<>
+      <Field label="Financial Year"><select aria-label="Financial year" value={fy} onChange={(ev) => { const l = months.filter((m) => GSTF.fyOf(m) === ev.target.value); gstSetYm(l[l.length - 1]); }}>
+        {fys.map((f) => <option key={f} value={f}>{f}</option>)}</select></Field>
+      <Field label={ftype === "qrmp" ? "Quarter or month" : "Month"}>
+        <select aria-label="Month" value={S.gstYm} onChange={(ev) => gstSetYm(ev.target.value)}>{inFy.map((m) => <option key={m} value={m}>{periodLabel(m, S.gstReg || "")}</option>)}</select></Field>
+    </>}
+    client={regs.length > 1 ? <Field label="GSTIN"><select aria-label="GSTIN" value={S.gstReg} onChange={(ev) => gstSetReg(ev.target.value)}>{regs.map((g) => <option key={g} value={g.slice(0, 2)}>{g}</option>)}</select></Field> : null}
+    count={gNow ? (regs.length > 1 ? "" : gNow + " · ") + GSTSet.typeLabel(ftype) + (GSTSet.peek(S.gstReg).portalUser ? " · portal user " + GSTSet.peek(S.gstReg).portalUser : "") : ""}
+    tools={<><button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button>
+      <More items={[!noDownload && ["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")]]} /></>} />;
 }
 
 // one cell of the grid
@@ -124,7 +126,14 @@ function Grid({ months, reg }) {
   const g9 = (() => { const on = (GSTV.copies(reg, "gstr9", fy)[0] || {}).arnDate || ((GSTV.copies(reg, "gstr9", fy)[0] || {}).at ? "on file" : "");
     if (on) return { st: "filed", on: on === "on file" ? "" : dmy(on), lines: ["copy on file"] };
     return cols.every((m) => inBooks(m)) ? { st: "ready", lines: ["the year is in the books"] } : { st: "none", lines: [cols.filter((m) => inBooks(m)).length + " of 12 months in the books"] }; })();
-  return <section className="dash-card" data-gst-grid={fy}>
+  // ui-tidy (13-Oct-2026): the answer first: each return's months by status, as the grid's cells below say them
+  const tally = (part) => { const n = { filed: 0, bad: 0, ready: 0, none: 0 }; cols.forEach((m) => { const c = cell(part, m); if (c && n[c.st] != null) n[c.st]++; }); return n; };
+  const fig = (part, label) => { const n = tally(part), done = part === "r2b" ? n.ready : n.filed, of = done + n.bad + n.ready + (part === "r2b" ? n.none : n.none);
+    return [label, part === "r2b" ? n.ready + " of 12 fetched" : n.filed + " filed", [n.bad && n.bad + " to fix", part !== "r2b" && n.ready && n.ready + " ready", part !== "r2b" && n.none && n.none + " not started"].filter(Boolean).join(" · ") || (of ? "" : "nothing yet"), n.bad ? "warn" : ""]; };
+  return <>
+  <Answer label={"GST " + fy + " key figures"} data-gst-answer={fy} figs={[fig("r1", "GSTR-1 / IFF"), fig("r3b", "GSTR-3B"), fig("r2b", "GSTR-2B"),
+    ["GSTR-9", g9.st === "filed" ? "Filed" : g9.st === "ready" ? "Ready" : "Not yet", (g9.lines || []).join(" · ")]]} />
+  <section className="dash-card" data-gst-grid={fy}>
     <div className="rp-title"><h3>{fy}</h3><span className="note">{GSTR.gstins(S.books).find((g) => g.slice(0, 2) === reg)} · open a return from its cell.</span></div>
     <div className="bk-tablewrap"><table className="rp-grid gf-off" style={{ minWidth: 1100 }}>
       <thead><tr><th>Return</th>{cols.map((m) => <th key={m}>{GSTR.label(m)}{GSTSet.typeOf(m, reg) === "qrmp" && GSTSet.isQEnd(m) && <small>quarter end</small>}</th>)}</tr></thead>
@@ -135,7 +144,7 @@ function Grid({ months, reg }) {
     </table></div>
     <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready / 2B fetched</span>
       <span style={{ "--k": "var(--bad)" }}>Errors to fix, or the filed return differs from the books</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
-  </section>;
+  </section></>;
 }
 
 
@@ -211,7 +220,7 @@ export default function Gst() {
   const secGo = (k) => { if (k === "returns" && !noBooks) { gstViewGo("year"); return; } const first = secParts(k)[0]; if (first) gstPartGo(first[0]); };
   const shownSecs = SECS.filter(([k]) => secParts(k).length || (k === "returns" && !noBooks));
   const subParts = secParts(sec);
-  return <>
+  return <div data-phone-scroll="" data-gst-page="">
     {/* the ledgers still to confirm: said once, on Returns (round 46) */}
     {sec === "returns" && <LedgerBanner b={b} which="gst" />}
     <div className="tg-head">
@@ -240,5 +249,5 @@ export default function Gst() {
       <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p></section>}
     {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
-  </>;
+  </div>;
 }

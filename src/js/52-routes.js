@@ -100,15 +100,28 @@ const Route = {
     // smart moves round 1: the client's page kept for the next opening (7), the way back from a setup page let go once
     // the person has gone elsewhere (9), a Getting ready step just done (10)
     if (typeof Smart === "object"){ try { Smart.remember(h); Smart.dropReturn(h); setTimeout(() => Smart.onbWatch(), 0); } catch (e){} }
-    if (h === location.hash){ this.replaceNext = false; return; }
+    // ui-tidy (13-Oct-2026): a detail open beside the page (DetailDrawer) is kept after the page's address (…?d=<kind>:<id>), so
+    // Refresh opens it again and Back closes it; it belongs to the page it was opened on
+    const full = h + this.detailSuffix(h);
+    if (full === location.hash){ this.replaceNext = false; return; }
     try {
-      if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
-      else history.pushState(null, "", location.pathname + location.search + h);
+      const st = S.detail ? {fcDetail: 1} : null;
+      if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(st, "", location.pathname + location.search + full);
+      else history.pushState(st, "", location.pathname + location.search + full);
     } catch (e){}
     this.replaceNext = false;
   },
+  // the detail open beside the page, as the end of its address; dropped once the page itself changes
+  detailSuffix(h){
+    if (S.detail && S.detail.at !== h) S.detail = null;
+    return S.detail ? "?d=" + encodeURIComponent(S.detail.k + ":" + S.detail.id) : "";
+  },
+  full(){ const h = this.of(); return h + this.detailSuffix(h); },
   // the address into the page: from Back/Forward, a link, or a refresh
   async apply(h){
+    const dm = String(h || "").match(/\?d=([^?#]*)$/), dv = dm ? (() => { try { return decodeURIComponent(dm[1]); } catch (e){ return dm[1]; } })() : "";
+    h = String(h || "").replace(/\?d=[^?#]*$/, "");
+    S.detail = null;
     const p = String(h || "").replace(/^#\/?/, "").split("/").map(x => { try { return decodeURIComponent(x); } catch (e){ return x; } });
     if (!p[0]) return false;
     this.applying = true;
@@ -144,6 +157,8 @@ const Route = {
       else return false;
       return true;
     } finally {
+      // the detail named in the address, over the page it was opened on
+      if (dv && dv.indexOf(":") > 0){ const i = dv.indexOf(":"); S.detail = {k: dv.slice(0, i), id: dv.slice(i + 1), at: this.of()}; }
       this.applying = false;
       this.replaceNext = true;       // the address already says where we are
       render();
@@ -164,5 +179,19 @@ function backToClient(){
 function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
 if (typeof window !== "undefined"){
   window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
-  window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });
+  window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.full()) Route.apply(location.hash); });
 }
+// ui-tidy (13-Oct-2026): a row's detail opens beside it (app/src/parts/DetailDrawer.jsx: a drawer on a computer, the whole
+// screen on a phone), never at the foot of the page. One at a time: S.detail = {k: kind, id, at: the page's address}.
+// Opening is a new step in the browser's history, so Back closes it; Esc and the drawer's ✕ close it the same way.
+function openDetail(k, id){ S.detail = {k: String(k), id: String(id), at: Route.of()}; render(); }
+function detailOpen(k){ return S.detail && S.detail.k === k && S.detail.at === Route.of() ? S.detail.id : null; }
+function closeDetail(){
+  if (!S.detail) return;
+  if (typeof history !== "undefined" && history.state && history.state.fcDetail && Route.ready){ try { history.back(); return; } catch (e){} }
+  S.detail = null; Route.replaceNext = true; render();
+}
+if (typeof document !== "undefined") document.addEventListener("keydown", ev => {
+  // Esc closes an open detail first, before any other shortcut sees the key (Esc in a client otherwise leaves it)
+  if (ev.key === "Escape" && S.detail && !S.switcher && !document.querySelector("#confirmBox[style*='flex']")){ ev.preventDefault(); ev.stopImmediatePropagation(); closeDetail(); }
+}, true);

@@ -167,21 +167,24 @@ function BillBar({ e }) {
     if (c.gd.blockSuggest) todo.push(["block", <><span className="tag warn" title={catLabel(BLOCK_CATS, c.gd.blockSuggest.cat) + ": " + c.gd.blockSuggest.why}>Blocked credit?</span><B act="blockAccept">Block</B><B act="blockReject">Allow</B></>, true]);
     if (c.tdsWould > 0 && !c.skip) todo.push(["skip", <B act="skipTds" title="Approve this bill without a TDS line">Don’t book TDS</B>, true]);
     if (c.skip) todo.push(["book", <><span className="tag warn" title={skipText(c.skip)}>TDS not booked</span><B act="bookTds">Book TDS {money0(c.tdsWould)}</B></>, true]);
+    // ui-tidy: what is still to fill in is said once, in the line beside Approve ("Cannot approve: …", each item a click to
+    // its box); To do keeps the buttons
     const other = c.missing.filter((m) => !/payment type|duplicate/.test(m));
-    if (other.length) todo.push(["fill", <span className="missing">Fill in: {other.join(", ")}</span>]);
+    if (other.length) todo.push(["fill", <span className="missing" data-fill-n={other.length}>{"Fill in " + other.length + (other.length === 1 ? " box" : " boxes")}</span>]);
     const items = todo.map(([k, el]) => <span key={k} style={{ display: "contents" }}>{el} </span>);
     left = todo.length && !todo.every((t) => t[2]) ? <><b>To do:</b> {items}</>
       : <><span className="tag ok">Ready to approve</span> <span className="note">{c.skip ? "No TDS booked (would be " + money0(c.tdsWould) + ")" : "TDS " + money(c.tds)} · {c.rule.label}</span> {items}</>;
     // round 14c (C1, C2): a disabled Approve says why in plain words beside it (the title too); an item that is a box on
     // the bill is a click to it (focusBillField)
-    const cannot = c.missing.length > 0 && <div className="cannot-approve" data-cannot-approve="">{"Cannot approve: "}
+    const cannot = c.missing.length > 0 && <div className="cannot-approve" data-cannot-approve="" title={"Cannot approve: " + c.missing.join(", ")}>{"Cannot approve: "}
       {c.missing.map((m, i) => { const k = missingField(m);
         return <span key={m}>{i ? ", " : ""}{k ? <button type="button" className="linkbtn" data-focus-field={k} onClick={() => focusBillField(k)}>{m}</button> : m}</span>; })}</div>;
     right = <>
       <button className="btn" onClick={() => doAct("reject")}>No entry needed</button>
-      <span className="approve-wrap" style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-        <button className="btn primary" disabled={c.missing.length > 0} title={c.missing.length ? "Still needed: " + c.missing.join(", ") : undefined} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+Enter</kbd></button>
+      {/* ui-tidy: what stops Approve is said once, in one line beside it (it was also the button's tip) */}
+      <span className="approve-wrap" style={{ display: "inline-flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
         {cannot}
+        <button className="btn primary" disabled={c.missing.length > 0} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+Enter</kbd></button>
       </span>
       {next}
     </>;
@@ -221,7 +224,8 @@ export function Drawer() {
     <button className={"drawer-scrim" + enter} aria-label="Close" onClick={close}></button>
     <aside className={"drawer" + enter} role="dialog" aria-modal="true" aria-label="Bill">
       <div className="drawer-head">
-        <div><b>{e.x.vendorName || e.fileName || "Bill"}</b><span className="note">{e.x.invoiceNo || ""}{i >= 0 ? " · " + (i + 1) + " of " + rows.length : ""}</span></div>
+        {/* ui-tidy: the bill's name is its card's title, once; here its number and place in the list */}
+        <div><span className="note" data-drawer-pos="">{e.x.invoiceNo || e.fileName || "Bill"}{i >= 0 ? " · " + (i + 1) + " of " + rows.length : ""}</span></div>
         <button className="btn small" onClick={close}>Close</button>
       </div>
       <BillDetail id={e.id} />

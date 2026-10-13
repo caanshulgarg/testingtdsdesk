@@ -259,3 +259,5 @@ run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
 run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test
 # stability (11-Oct-2026, the owner: "as stable and strong as Claude, anthropic.com, Microsoft"): the frame before the program, the FinCom loader's rules, one loading state, no layout shift on any page, the top bar's fixed places
 run_stability.py                      300  TDSDESK_SITE=../app/dist-test
+# ui-tidy (13-Oct-2026): details beside the row, one filter bar, one table, the answer first, the client and its Tally link, the bill drawer
+run_ui_tidy.py                        420  TDSDESK_SITE=../app/dist-test

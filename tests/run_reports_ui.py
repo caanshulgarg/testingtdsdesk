@@ -49,6 +49,8 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("Receivables ageing" in t and "Payables ageing" in t and "How the business is doing" not in t, "finding a report by name")
     pg.fill("#rptQ", ""); pg.wait_for_timeout(400)
+    # ui-tidy (13-Oct-2026): the areas are sections folded but the first; Customers and suppliers opened first
+    if pg.locator('[data-rpt-group="parties"]:not([open]) > summary').count(): pg.click('[data-rpt-group="parties"] > summary'); pg.wait_for_timeout(300)
     pg.click('.rpt-link:has(b:text-is("Receivables ageing"))'); pg.wait_for_timeout(1500)
     ok(pg.evaluate("S.booksTab") == "mis" and pg.evaluate("S.misTab") == "recv" and pg.evaluate("!!(S.books.mis && S.books.mis.last)"), "a report opens its screen with the MIS worked out")
     # ---------- Look up: a ledger

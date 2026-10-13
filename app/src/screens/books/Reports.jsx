@@ -3,13 +3,19 @@
 // other figures and its chart are under "Figures and charts", folded. Was RPT.view and RPT.areaDash (src/js/45); the figures are RPT.data, a report opens with
 // RPT.open. The line saying how fresh the books are is parts/FreshBar.jsx.
 //
-// State: S.rptQ (the search), S.rptFy (the year).
+// ui-tidy (13-Oct-2026; the owner: "mis and reports are also very cluttered"): the answer first (the year's sales, profit
+// before tax, what is owed to and by the client: the same figures as the areas' headlines), the year and the search in
+// the one filter bar, then the areas as sections, folded but the first; the year said once, not on every area.
+//
+// State: S.rptQ (the search), S.rptFy (the year), S.folds (the areas opened).
 import { useEffect } from "react";
 import Bars from "../../parts/Bars.jsx";
 import NotRead from "../../parts/NotRead.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
+import Filters, { Field, Search } from "../../parts/Filters.jsx";
+import { Answer, Fold } from "../../parts/Answer.jsx";
 
 // two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));
@@ -113,29 +119,33 @@ export default function Reports({ b }) {
   // when the bridge is live, the books are brought up to date on opening (as before, after each drawing)
   useEffect(() => { if (LK.live()) setTimeout(() => LK.autoFresh(), 0); });
   const d = have ? RPT.data() : null, R = have ? RPT.range() : null;
+  const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
   const head = <>
     {(have || LK.live()) && <FreshBar b={b} />}
-    <div className="rpt-top-row rpt-find"><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + ", by area. Click one to open it."}</p>
-      <input type="search" id="rptQ" data-fk="rptQ" value={S.rptQ || ""} placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report" onChange={(ev) => setAndShow("rptQ", ev.target.value, true)} />
-      {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div>
+    <Filters className="rpt-find" label="Find a report" data-rpt-find=""
+      period={have ? <Field label="Year"><select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select></Field> : null}
+      search={<Search id="rptQ" data-fk="rptQ" value={S.rptQ} placeholder="Find a report: ageing, 3B, cash, ratios…" label="Find a report" onChange={(v) => setAndShow("rptQ", v, true)} />}
+      onClear={() => setAndShow("rptQ", "")} active={!!q} />
     {have && R && R.notRead && <NotRead end={R.end} what={"Reports " + FC.fyLabel(R.fy)} read={FC.fyLabel(R.fy)} show={RPT.fys()[0] ? FC.fyLabel(RPT.fys()[0]) : ""} onShow={() => RPT.pickFy(RPT.fys()[0])} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {!have && <NoBooks what="Reports" />}
   </>;
   if (q) {
     const hits = RPT.LIST.filter((r) => (r[2] + " " + r[3] + " " + RPT.AREAS.find((a) => a.id === r[1]).title).toLowerCase().includes(q));
-    return <>{head}<section className="rpt-group" style={{ marginTop: 12 }}><header><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3></header>
-      {hits.length ? <ul className="rpt-list">{hits.map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul> : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</section></>;
+    return <div data-phone-scroll="">{head}<section className="rpt-group" style={{ marginTop: 12 }}><header><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3></header>
+      {hits.length ? <ul className="rpt-list">{hits.map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul> : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</section></div>;
   }
-  const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
-  return <>{head}
-    <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a) => { const h = heads(a.id, d);
-      return <section key={a.id} className={"rpt-group rpt-g-" + a.id} data-rpt-group={a.id}><header><h3>{a.title}</h3>{yr && <span className="note">{yr}</span>}</header>
-        {h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}
-        <ul className="rpt-list">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul></section>; })}</div>
+  // the answer: the overview's and the parties' headline figures (heads), the same as before, for the year shown
+  const top = d ? heads("overview", d).concat(heads("parties", d)).map(([l, v], i) => [l, v, i === 0 ? yr : ""]) : [];
+  return <div data-phone-scroll="">{head}
+    <Answer label="Reports key figures" figs={top} />
+    <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a, i) => { const h = heads(a.id, d), n = RPT.LIST.filter((r) => r[1] === a.id).length;
+      return <Fold key={a.id} id={"rpt:" + a.id} first={i === 0} className={"fold rpt-group rpt-g-" + a.id} data-rpt-group={a.id} title={a.title}
+        sub={<>{h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}<span className="rpt-n">{n + " reports"}</span></>}>
+        <ul className="rpt-list">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul></Fold>; })}</div>
     {/* the areas' figures and charts, as they were, folded */}
-    {d && <details className="rpt-charts" data-rpt-charts="" style={{ marginTop: 14 }}><summary>Figures and charts</summary>
-      <div className="rpt-grid">{RPT.AREAS.map((a) => <section key={a.id} className={"dash-card rpt-area rpt-" + a.id}><div className="rpt-ah"><i className={"rpt-dot " + a.ic} aria-hidden="true"></i><h3>{a.title}</h3><span className="note">{yr}</span></div>
-        <AreaDash id={a.id} d={d} /></section>)}</div></details>}
-  </>;
+    {d && <details className="fold rpt-charts" data-rpt-charts=""><summary><span>Figures and charts</span><span className="fold-sub">{yr}</span></summary>
+      <div className="fold-body"><div className="rpt-grid">{RPT.AREAS.map((a) => <section key={a.id} className={"dash-card rpt-area rpt-" + a.id}><div className="rpt-ah"><i className={"rpt-dot " + a.ic} aria-hidden="true"></i><h3>{a.title}</h3><span className="note">{yr}</span></div>
+        <AreaDash id={a.id} d={d} /></section>)}</div></div></details>}
+  </div>;
 }

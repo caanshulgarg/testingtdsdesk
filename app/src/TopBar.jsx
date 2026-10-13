@@ -19,6 +19,7 @@ import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { FinComNav } from "./nav.js";
+import { goTallyCard } from "./parts/TallyChip.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -31,7 +32,7 @@ const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 function Title({ title, sub, crumb, children }) {
   return (
     <div className="tbar" data-crumb={crumb}>
-      <div className="tbar-title"><h2>{title}</h2><span className="note" title={sub || undefined}>{sub}</span></div>
+      <div className="tbar-title"><h2>{title}</h2>{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
       {children}
     </div>
   );
@@ -86,8 +87,14 @@ function ClientHeader() {
   const co = CO(), setup = isSetupTab(S.tab), t = docType(), inbox = docqCount(S.coId);
   const title = S.tab === "dash" ? "Overview" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions"
     : S.tab === "books" ? BOOKS_TITLES[booksTab()] || "From Tally" : setup ? "Client setup" : DOC_NAMES[t];
+  // ui-tidy (13-Oct-2026; the owner: "still it is very confusing where is the client"): the breadcrumb is the way about:
+  // Clients (the list) › the client (a click: the switcher, to find another by name, GSTIN or PAN) › the page
+  const crumbs = <nav className="note crumbs" aria-label="Breadcrumb" data-crumbs="">
+    <button type="button" className="linkbtn" data-crumb-clients="" onClick={() => navHome("clients")}>Clients</button><span aria-hidden="true">›</span>
+    <button type="button" className="linkbtn crumb-co" data-client-switch="" title="Switch client (F3 or Ctrl+K)" aria-label={"Client " + co.name + ": switch client"} onClick={() => openSwitcher()}>{co.name} <span aria-hidden="true">▾</span></button>
+    <span aria-hidden="true">›</span><span data-crumb-page="">{title}</span></nav>;
   const head = (
-    <Title title={title} sub={co.name} crumb="client">
+    <Title title={title} sub={crumbs} crumb="client-nav">
       <div className="tbar-actions">
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
       </div>
@@ -202,7 +209,9 @@ function TallySign() {
   const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
   return <span className="tsign-wrap">
     <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
-      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")} onClick={() => doAct("tallyPanel")}>
+      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")}
+      // ui-tidy: while the client is not linked, the sign opens its Link to Tally card (parts/TallyChip.jsx), as every Tally chip does
+      onClick={() => (co && k && k.state === "unlinked" ? goTallyCard(co.id) : doAct("tallyPanel"))}>
       <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
     </button>
     {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}

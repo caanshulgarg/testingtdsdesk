@@ -4,6 +4,7 @@
 // viewBridgeSettings, bridgeSetupSteps, bridgeDownHelp, viewBridgeDiagnosis and viewReadTest (src/js/24), and TCloud.view
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
+import { goTallyCard } from "../parts/TallyChip.jsx";
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
@@ -49,7 +50,7 @@ function Diagnosis() {
 
 // FinCom Bridge's setup, from the test site's latest.json (assets/bridge-go): the one download, its fingerprint, its direct
 // address and a PowerShell command for a server without a modern browser (review of 02-Oct-2026)
-function useSetup() {
+export function useSetup() {
   const [m, setM] = useState(undefined);
   useEffect(() => { fetch("assets/bridge-go/latest.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setM).catch(() => setM(null)); }, []);
   return m;
@@ -344,7 +345,7 @@ function setupOf(m) {
   const file = set.url.split("/").pop();
   return { file, version: set.version, sha: set.sha256, href: "assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12), dl: new URL("assets/bridge-go/" + file, location.href).href.replace(/[?#].*$/, "") };
 }
-const DownloadBtn = ({ m, primary }) => { const s = setupOf(m);
+export const DownloadBtn = ({ m, primary }) => { const s = setupOf(m);
   return s ? <a className={"btn small" + (primary ? " primary" : "")} data-bridge-download="" href={s.href} download={s.file}>{"Download FinCom Bridge " + s.version}</a>
     : <span className="note">{m === undefined ? "Reading…" : "The FinCom Bridge setup is not on this site yet."}</span>; };
 const ROW = { alignItems: "center", gap: 8, flexWrap: "wrap", margin: "4px 0" };
@@ -581,7 +582,7 @@ function TallyGuide({ rows, m, connectStep }) {
   const seen = (p.companies || []).filter((c) => !c.client_id);
   const done = { install: devs.length > 0, connect: heard.length > 0, link: linked };
   // the first client not linked: its own Link to Tally card (Client setup → Tally)
-  const linkFirst = () => { const c = unlinked[0]; if (!c) return; openCompany(c.id); S.tab = "cotally"; render(); };
+  const linkFirst = () => { const c = unlinked[0]; if (!c) return; goTallyCard(c.id); };
   const next = ["install", "connect", "link"].find((k) => !done[k]);
   const openConnect = () => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { page: true }); render();
     setTimeout(() => { const e = document.querySelector("#app [data-connect-section]"); if (e && e.scrollIntoView) e.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); };
@@ -852,6 +853,19 @@ export function CloudBooks() {
 // connectStep: the mount point for the new connect flow (see TallyGuide)
 const TALLY_TABS = [["computers", "Computers"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
 // sourcesSlot: the mount point for 2.4.1's two-data-locations card (SourceCards on next-241), drawn inside Needs you
+// ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked yet, first on the page, each with Link,
+// which opens that client's own Link to Tally card (parts/TallyChip.jsx), the one place a client is linked
+function NotLinked() {
+  const list = Object.values(S.companies || {}).filter((c) => !c.deleted && typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked").sort((a, c) => a.name.localeCompare(c.name));
+  if (!list.length) return null;
+  return <section className="pane tnotlinked" data-not-linked={list.length}>
+    <h3 style={{ margin: "0 0 6px" }}>Clients not linked ({list.length})</h3>
+    <ul className="tnl-list">{list.map((c) => <li key={c.id} data-not-linked-client={c.id}>
+      <span className="tnl-name"><b>{c.name}</b>{c.gstin ? <span className="note"> · {c.gstin}</span> : null}</span>
+      <button type="button" className="btn small" data-not-linked-link={c.id} onClick={() => goTallyCard(c.id)}>Link</button></li>)}</ul>
+  </section>;
+}
+
 export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const m = useSetup();
   // the page is named in the top bar (one heading, spec I)
@@ -868,7 +882,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />
       : tab === "sent" ? <PostLog />
-      : <><AlertLine />
+      : <><NotLinked /><AlertLine />
         <NeedsYou cards={cards} latest={latest} m={m} sources={sourcesSlot} />
         <TallyGuide rows={rows} m={m} connectStep={connectStep} />
         <FocusLine f={f} cards={cards} />

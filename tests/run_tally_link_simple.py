@@ -1,6 +1,7 @@
 """python3 run_tally_link_simple.py - one simple Link to Tally card for each client (round 39, 10-Oct-2026; the owner could
 not tell whether a client is linked, when it will link, or whether he needs a port).
-  1. The card shows exactly one status line, one of four: Not linked / Waiting for Tally / Linked and reading / Needs you.
+  1. The card shows exactly one status line, one of four: Not linked → Link / Waiting for Tally / Linked · reading / Needs you
+     (ui-tidy, 13-Oct-2026: the words of every chip; were Not linked and Linked and reading).
   2. Not linked: the companies FinCom has seen, the one with the client's GSTIN on top ("Same GSTIN"), each with Link;
      Link calls tally_company_link once and sets the client's Tally name; while not linked the card reads the cloud again
      by itself, so a company opened in Tally shows.
@@ -22,7 +23,8 @@ SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test
 SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
 PORT = 8629
 GSTIN = "09AANFG3202D1ZR"
-WORDS = ["Not linked", "Waiting for Tally", "Linked and reading", "Needs you"]
+# ui-tidy (13-Oct-2026): the same short words on every chip and card ("Not linked → Link" says what to do)
+WORDS = ["Not linked → Link", "Waiting for Tally", "Linked · reading", "Needs you"]
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []
@@ -130,7 +132,7 @@ def main():
 
         # ---- 1. Not linked: the companies seen, same GSTIN on top, Link
         scene(SEEN)
-        line = one_line("Not linked", "1. not linked")
+        line = one_line("Not linked → Link", "1. not linked")
         ok("Choose this client" in line, "1. not linked: 'Choose this client's company in Tally' (%s)" % line)
         opts = E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tally-link-option]')].map(e => [e.getAttribute('data-tally-link-option'), e.hasAttribute('data-same-gstin'), e.innerText.replace(/\\s+/g, ' ').trim()])")
         ok([o[0] for o in opts] == ["ABC LTD", "GARG SHEKHAR"] and opts[0][1] and "Same GSTIN" in opts[0][2], "1. the companies seen, the same GSTIN on top (%s)" % opts)
@@ -164,7 +166,7 @@ def main():
 
         # ---- 4. Linked and reading
         scene(LINKED(D1))
-        line = one_line("Linked and reading", "4. reading")
+        line = one_line("Linked · reading", "4. reading")
         ok(re.search(r"Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d", line) is not None and pg.locator(card + " [data-update-now]").count() == 1, "4. reading: computer and last entry, Update now (%s)" % line)
         no_port("4. Client setup → Tally")
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no separate name box, no 'Posting allowed to' card")

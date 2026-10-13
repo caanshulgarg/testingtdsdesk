@@ -2060,7 +2060,9 @@ async function tallyLinkClient(company, cid){
 //   needs    "Needs you"           linked, and a person must act: reading stopped, Tally not answering or paused, held
 //                                  entries (that day's Day Book, the starting point, others), days not received.
 // {state, word, level, company, computer, line (tallyLine), needs: [{kind, n}]}
-const TALLY_LINK_WORDS = {unlinked: "Not linked", waiting: "Waiting for Tally", reading: "Linked and reading", needs: "Needs you"};
+// ui-tidy (13-Oct-2026; the owner: "still it is very confusing where is the client and how to link tally"): the same short
+// words on every chip and card; "Not linked → Link" says what to do
+const TALLY_LINK_WORDS = {unlinked: "Not linked → Link", waiting: "Waiting for Tally", reading: "Linked · reading", needs: "Needs you"};
 const TALLY_LINK_LEVEL = {unlinked: "warn", waiting: "warn", reading: "ok", needs: "bad"};
 function tallyLinkOf(co){
   if (!co) return null;

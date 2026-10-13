@@ -682,7 +682,8 @@ function switcherList(){
   const q = (S.switcher.q || "").trim().toLowerCase();
   const rec = recentIds();
   let list = sortedCompanies();
-  if (q) list = list.filter(c => c.name.toLowerCase().includes(q) || (c.gstin || "").toLowerCase().includes(q) || (c.tallyName || "").toLowerCase().includes(q));
+  // ui-tidy (13-Oct-2026): a client is found by its name, GSTIN, PAN (its own, or the one inside its GSTIN) or Tally name
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q) || (c.gstin || "").toLowerCase().includes(q) || (c.pan || "").toLowerCase().includes(q) || (c.tallyName || "").toLowerCase().includes(q));
   else list.sort((a, b) => { const ia = rec.indexOf(a.id), ib = rec.indexOf(b.id); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.name.localeCompare(b.name); });
   return list;
 }
@@ -982,10 +983,14 @@ function billRestore(id){
 const MISSING_FIELD = {"invoice date": "invoiceDate", "supplier name": "vendorName", "taxable value": "taxable", "party ledger": "partyLedger", "expense ledger": "expenseLedger", "TDS ledger": "tdsLedger"};
 function missingField(item){ return MISSING_FIELD[String(item || "").trim()] || ""; }
 function firstMissingField(missing){ for (const m of (missing || [])){ const k = missingField(m); if (k) return k; } return ""; }
-function focusBillField(key){
+// ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): when a bill opens, its first missing
+// field gets the cursor without the page or the drawer scrolling to it ({noScroll}); the bill opens at its top, the PDF and
+// the fields in view. A click on a missing item ("Cannot approve: …") still scrolls to it
+function focusBillField(key, o){
   const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
   const el = host.querySelector('[data-focus-field="' + key + '"]');
   if (!el) return false;
+  if (o && o.noScroll){ try { el.focus({preventScroll: true}); } catch (e){ el.focus(); } return true; }
   try { el.scrollIntoView({block: "center"}); } catch (e){}
   el.focus();
   return true;

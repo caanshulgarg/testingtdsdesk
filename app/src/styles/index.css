@@ -10,7 +10,8 @@
    7. Purchase, Bank, Reports and MIS, GST and the TDS return in Arc's layout (arc-pages.css, step 3 group 2).
    0. The ₹ sign with the first text (fonts.css, stability batch 2).
    8. A steady frame: the top bar's fixed places, the status tabs in the page, the page's shape while data comes (steady.css).
-   9. Clean-up batch 3, "Polish": one tab style, one width, the tables, one banner, the bars (arc-clean.css). */
+   9. Clean-up batch 3, "Polish": one tab style, one width, the tables, one banner, the bars (arc-clean.css).
+  10. ui-tidy: one filter bar, one table, details beside the row, the answer first (tidy.css). */
 @import "./fonts.css";
 @import "../../legacy/app.css" layer(fincom);
 @import "../arc/foundation.css";
@@ -21,3 +22,4 @@
 @import "./arc-pages.css";
 @import "./arc-clean.css";
 @import "./steady.css";
+@import "./tidy.css";

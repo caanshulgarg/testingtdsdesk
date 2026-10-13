@@ -138,8 +138,11 @@ try:
                 # arc-ui, 09-Oct-2026: on a phone the grid is shown as cards (src/js/53-phone.js), each cell labelled with its
                 # column's heading; the quarter's label ran into its due date ("Q1 · Apr–Jundue 31 Jul"). Each quarter's
                 # cell now reads "Q1 · Apr–Jun, due 31 Jul"
-                lb = pg.evaluate("[...document.querySelectorAll('#app [data-tds-grid] tbody tr:first-child [data-cell]')].map(c => c.closest('td').getAttribute('data-label') || '')")
-                ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}$", x) for x in lb), "phone, the TDS grid: each quarter's label and its due date apart (%s)" % lb)
+                # ui-tidy (13-Oct-2026): on a phone the grid keeps its columns and scrolls sideways in its own box (it was cards
+                # labelled from the heads); the heads keep the quarter and its due date apart
+                lb = pg.evaluate("[...document.querySelectorAll('#app [data-tds-grid] thead th[aria-label]')].map(c => c.getAttribute('aria-label') || '')")
+                ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}$", x) for x in lb)
+                   and pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0, "phone, the TDS grid: each quarter's label and its due date apart, the page not wider than the phone (%s)" % lb)
         ph.close()
     # every figure and file, as before the redesign
     before = json.load(open(os.path.join(HERE, "fixtures", "tdsgst-before.json")))
