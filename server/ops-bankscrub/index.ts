@@ -41,7 +41,7 @@ async function decode(buf: Uint8Array): Promise<{ meta: Meta; text: string } | n
 }
 async function encode(meta: Meta, text: string) {
   let body: Uint8Array;
-  if (meta.enc === "utf-16le") { body = new Uint8Array(text.length * 2); for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); body[2 * i] = c & 255; body[2 * i + 1] = c >> 8; } }
+  if (meta.enc === "utf-16le") { const w = new Uint16Array(text.length); for (let i = 0; i < text.length; i++) w[i] = text.charCodeAt(i); body = new Uint8Array(w.buffer); } // little-endian host
   else body = new TextEncoder().encode(text);
   if (meta.bom) { const p = meta.enc === "utf-16le" ? [0xff, 0xfe] : [0xef, 0xbb, 0xbf]; const b = new Uint8Array(p.length + body.length); b.set(p); b.set(body, p.length); body = b; }
   return meta.gz ? await gzip(body) : body;
@@ -61,7 +61,7 @@ const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, 
 const rawCount = (t: string) => (t.match(/<VOUCHER\b/g) || []).length;
 function elem(t: string) { return new RegExp("<" + t + "(?:\\s[^>]*)?/>|<" + t + "(?:\\s[^>]*)?>[\\s\\S]*?</" + t + "\\s*>", "y"); }
 // the new text is the old text with only whole allowed elements cut out
-function onlyTagsRemoved(a: string, b: string): Record<string, number> | null {
+function onlyTagsRemoved(a: string, b: string, at: number[] = []): Record<string, number> | null {
   const removed: Record<string, number> = {}; let i = 0, j = 0;
   while (i < a.length) {
     if (j < b.length && a.charCodeAt(i) === b.charCodeAt(j)) { i++; j++; continue; }
@@ -70,7 +70,7 @@ function onlyTagsRemoved(a: string, b: string): Record<string, number> | null {
     let hit: [string, number] | null = null;
     for (const t of [...ALWAYS, ...EMP_ONLY]) { const re = elem(t); re.lastIndex = i; const m = re.exec(a); if (m) { hit = [t, m[0].length]; break; } }
     if (!hit) return null;
-    removed[hit[0]] = (removed[hit[0]] || 0) + 1; i += hit[1];
+    removed[hit[0]] = (removed[hit[0]] || 0) + 1; at.push(i); i += hit[1];
   }
   return j === b.length ? removed : null;
 }
@@ -89,19 +89,21 @@ const vre = () => /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g;
 function scrubText(text: string) {
   const clean = dropBankDetails(text) as string;
   if (clean === text) return { changed: false as const, clean };
-  const removed = onlyTagsRemoved(text, clean);
-  let entries = false, tb = false, mode = "whole", vouchers = 0;
+  const at: number[] = [];
+  const removed = onlyTagsRemoved(text, clean, at);
+  let entries = false, tb = false, mode = "whole", vouchers = 0, slices = -1;
   if (rawCount(text) === rawCount(clean)) {
     let a = text, b = clean;
     if (text.length > BIG) { // only the entries that changed are read; every other byte is proven identical above
       mode = "changed-entries";
-      const va = text.match(vre()) || [], vb = clean.match(vre()) || [];
-      if (va.length === vb.length) { const ia: string[] = [], ib: string[] = []; va.forEach((x, k) => { if (x !== vb[k]) { ia.push(x); ib.push(vb[k]); } }); a = ia.join(""); b = ib.join(""); }
-      else { a = "x"; b = "y"; }
+      // the entries holding a removed tag, found from where the tags were cut (no full scan); each read as it was and as 2.4.4 leaves it
+      const ia: string[] = []; let last = -1;
+      for (const p of at) { if (p < last) continue; const s0 = Math.max(text.lastIndexOf("<VOUCHER ", p), text.lastIndexOf("<VOUCHER>", p)), e0 = text.indexOf("</VOUCHER>", p); if (s0 < 0 || e0 < 0) { ia.length = 0; ia.push("x"); break; } ia.push(text.slice(s0, e0 + 10)); last = e0 + 10; }
+      a = ia.join(""); b = ia.map((x) => dropBankDetails(x) as string).join(""); slices = ia.length;
     }
     const f0 = facts(a), f1 = facts(b);
     vouchers = f0.n;
-    entries = f0.n === f1.n && f0.skipped === f1.skipped && same(f0.vs, f1.vs) && same(f0.ls, f1.ls);
+    entries = f0.n === f1.n && f0.skipped === f1.skipped && same(f0.vs, f1.vs) && same(f0.ls, f1.ls) && (slices < 0 || (slices > 0 && f0.n + f0.skipped === slices));
     tb = same(f0.tbs, f1.tbs);
   }
   const left = leftover(clean);
@@ -111,7 +113,10 @@ function scrubText(text: string) {
 function addTo(t: Record<string, number>, r: Record<string, number>) { for (const k in r) t[k] = (t[k] || 0) + r[k]; }
 
 // ---------- a stored object
-async function doObject(bucket: string, name: string, apply: boolean, tot: any) {
+async function shaHex(u: Uint8Array) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", u))].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+// trustSha (a large upload, CPU-bound): the write call only re-makes the bytes the checked dry run made and writes them when
+// their SHA-256 is the dry run's (dropBankDetails and the encoding are deterministic); every check ran in that dry run
+async function doObject(bucket: string, name: string, apply: boolean, tot: any, trustSha = "") {
   const [o] = await sql`select (metadata->>'mimetype') mime, updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
   if (!o) { tot.missing.push(name); return; }
   const { data, error } = await db.storage.from(bucket).download(name);
@@ -120,6 +125,16 @@ async function doObject(bucket: string, name: string, apply: boolean, tot: any) 
   const d = await decode(buf);
   if (!d) { tot.notText.push(name); return; }
   tot.read++;
+  if (trustSha && apply) {
+    const out = await encode(d.meta, dropBankDetails(d.text) as string);
+    if (await shaHex(out) !== trustSha) { tot.failed.push({ name, checks: { sameAsDryRun: false } }); return; }
+    tot.withTags++; tot.passed++; tot.mode = "write-checked-bytes";
+    const [o2] = await sql`select updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
+    if (!o2 || +o2.updated_at !== +o.updated_at) { tot.changedMeanwhile.push(name); return; }
+    const up = await db.storage.from(bucket).upload(name, out, { upsert: true, contentType: o.mime || "application/octet-stream" });
+    if (up.error) { tot.failed.push({ name, checks: { upload: false } }); return; }
+    tot.written.push(name); return;
+  }
   const r = scrubText(d.text);
   if (!r.changed) { tot.clean++; return; }
   tot.withTags++; addTo(tot.removed, r.removed); tot.vouchersInChanged += r.vouchers;
@@ -127,7 +142,8 @@ async function doObject(bucket: string, name: string, apply: boolean, tot: any) 
   const out = await encode(d.meta, r.clean);
   const back = await decode(out);                                                // written bytes read back the same way
   if (!back || back.text !== r.clean || JSON.stringify(back.meta) !== JSON.stringify(d.meta)) { tot.failed.push({ name, checks: { encoding: false } }); return; }
-  tot.passed++;
+  tot.passed++; tot.mode = r.mode;
+  if (bucket === "tally-uploads") tot.outSha = await shaHex(out);
   if (!apply) return;
   const [o2] = await sql`select updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
   if (!o2 || +o2.updated_at !== +o.updated_at) { tot.changedMeanwhile.push(name); return; }   // a newer write (2.4.4, clean) wins
@@ -236,7 +252,7 @@ export function start(wantHash: string) { Deno.serve(async (req) => {
       return reply(200, { op: "days", apply, offset: off, got: names.length, ...tot });
     }
     if (b.op === "upload") {         // one tally-uploads object
-      const tot = newTot(); await doObject("tally-uploads", String(b.path || ""), apply, tot);
+      const tot = newTot(); await doObject("tally-uploads", String(b.path || ""), apply, tot, /^[0-9a-f]{64}$/.test(String(b.trustSha || "")) ? String(b.trustSha) : "");
       return reply(200, { op: "upload", apply, path: b.path, ...tot });
     }
     if (b.op === "msgs") return reply(200, { op: "msgs", apply, ...(await doMessages(Array.isArray(b.ids) ? b.ids.map(Number) : null, apply)) });
