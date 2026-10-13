@@ -276,7 +276,8 @@ const AuditWP = {
       checks, ranked: ranked.map(c => c.id), flagged: checks.filter(c => c.status === "flag").length, ms: Date.now() - t0};
   },
   // one check's detail (the Assistant's audit_check)
-  check(id, from, to){ if (!this.meta(id)) return null; const r = this.runNow(from, to, id); return r.checks[0]; },
+  // (its rank is only known against the other checks: run() gives it; here it is left out)
+  check(id, from, to){ if (!this.meta(id)) return null; const c = this.runNow(from, to, id).checks[0]; c.rank = null; return c; },
   // ---------------------------------------------------------------- the working papers (kept with the books as items)
   items(b){ b = b || S.books || {}; return Array.isArray(b.auditWp) ? b.auditWp : []; },
   wp(period, id, b){ return this.items(b).find(x => x.id === "wp|" + period + "|" + id) || {status: "nr", remark: ""}; },
