@@ -14,17 +14,17 @@ import { FinComNav } from "./nav.js";
 //           BOOKS Reports · MIS · Accounts · Audit · Look up · Letters / then Client setup · All clients · Help
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
-import { ArrowLeftRight, BookOpen, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
+import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
   Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
   TrendingUp, Users, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug };
+  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal" };
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald" };
 
 function Item({ icon, label, on, count, onClick, title, bar }) {
   const Icon = ICONS[icon] || LayoutDashboard;
@@ -83,8 +83,10 @@ function tree() {
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
     ]],
     ["Returns", [
-      { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns, challans, 26AS and checks" },
+      { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns and the challan register" },
       { icon: "gst", label: "GST", on: bt === "gst", go: () => goClient("books:gst"), title: "GST returns" },
+      // tds-layout (14-Oct-2026): TDS receivable vs 26AS, out of TDS
+      { icon: "recon", label: "Reconciliations", on: bt === "recon", go: () => goClient("books:recon"), title: "TDS receivable vs 26AS" },
     ]],
     ["Books", [
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },

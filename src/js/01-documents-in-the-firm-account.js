@@ -75,6 +75,10 @@ const CloudDocs = {
       // a Form 16A kept with its deductee (src/js/70-traces-files.js)
       const x = S.books && S.books.cid === job.cid && Array.isArray(S.books.f16a) ? S.books.f16a.find(z => z.id === job.id) : null;
       if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
+    } else if (job.kind === "challan"){
+      // a challan's receipt, kept with the challan entered by hand (the register, src/js/79)
+      const x = S.books && S.books.cid === job.cid && Array.isArray(S.books.challans) ? S.books.challans.find(z => z.id === job.id) : null;
+      if (x && x.receipt){ x.receipt.docPath = path; x.receipt.docSize = size; saveBooks(); }
     } else if (job.kind === "notice"){
       const n = S.books && S.books.cid === job.cid ? ((S.books.ai || {}).notices || []).find(z => z.id === job.id) : null;
       if (n){ n.docPath = path; n.docSize = size; saveBooks(); }
@@ -474,7 +478,8 @@ function toastWire(t){
   t.addEventListener("click", toastHide);
   let y0 = null;
   t.addEventListener("pointerdown", ev => { y0 = ev.clientY; clearTimeout(toastTimer); });
-  t.addEventListener("pointermove", ev => { if (y0 == null) return; const d = Math.max(0, ev.clientY - y0); t.style.transform = "translate(-50%," + d + "px)"; t.style.opacity = String(Math.max(.3, 1 - d / 80)); });
+  // tds-layout: the message sits in a corner now, not centred, so a swipe moves it down only
+  t.addEventListener("pointermove", ev => { if (y0 == null) return; const d = Math.max(0, ev.clientY - y0); t.style.transform = "translateY(" + d + "px)"; t.style.opacity = String(Math.max(.3, 1 - d / 80)); });
   const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; toastTimer = setTimeout(toastHide, 2000); } };
   t.addEventListener("pointerup", end); t.addEventListener("pointercancel", end);
 }

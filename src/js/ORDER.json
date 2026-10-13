@@ -72,5 +72,6 @@
  "71-supplier-health.js",
  "72-tds-tally.js",
  "73-payroll.js",
- "74-zoho-books.js"
+ "74-zoho-books.js",
+ "79-challan-register.js"
 ]

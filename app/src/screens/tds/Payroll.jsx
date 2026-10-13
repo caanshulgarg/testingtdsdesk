@@ -7,12 +7,13 @@
 //     Pay register   a month: each employee's amount per pay head as Tally keeps it, gross, deductions, net, TDS.
 //     Form 16        Part B for one employee: the year's salary, exemptions, deductions and tax (PayTax, FinCom's rule).
 //   Return24Tally: the 24Q (Form 138) return of a quarter from Tally's payroll: Annexure I (per employee per month, with the
-//     challan), Annexure II in the fourth quarter, Errors to fix, Files (the text file, built to the current layout and
+//     challan), Annexure II in the fourth quarter (Employees & declarations), To fix, Return file (the text file, built to the current layout and
 //     marked "check before filing").
 // Nothing here is worked out by AI; every figure is Tally's or FinCom's own rule, to the paisa.
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";
+import { tabNow, checksToFix, ReturnChallans, ToFix, PreFileSlot, AfterFiling, unknownItem, UnknownChallans } from "./ReturnParts.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
@@ -194,11 +195,11 @@ function Form16({ fy }) {
 }
 
 /* ---------------------------------------------------------------- the 24Q return from Tally's payroll */
-export function Return24Tally({ fy, q, ReturnCard, Tabs, Upload, Suggest }) {
+export function Return24Tally({ fy, q, ReturnCard, Tabs, Suggest }) {
   const a1 = Payroll.annexI(fy, q), checks = Payroll.checks(fy, q), filed = TDSFiled.get(fy, q, "24Q");
-  const tabs = [["employees", "Annexure I"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "Files"]]);
-  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "employees";
-  const ch = TDS.challans().filter((c) => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q && /^192/.test(String(c.section || "")));
+  // tds-layout (14-Oct-2026): the owner's tabs: Deductions (Annexure I), Employees & declarations (the old Salary tab, with
+  // Annexure II in Q4), Challans (from the register), To fix, Return file, After filing (ReturnParts.jsx)
+  S.tdsTab = tabNow(S.tdsTab, "24Q");
   const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0));
   return <>
     <ReturnCard fy={fy} q={q} form="24Q" filed={filed} errN={checks.length} driftN={0} draft={TDS.isNew(fy)}
@@ -208,8 +209,8 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs, Upload, Suggest }) {
         { label: "TDS deducted", value: money(tds), sub: q + " " + fy + " · from Tally's payroll" },
         { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
       ]} />
-    <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length || null) : null])} />
-    {S.tdsTab === "employees" ? <ListTable name="q24Annex1" id="q24A1Table" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
+    <Tabs counts={{ deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length || null }} />
+    {S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
         empty="No salary paid or credited in this quarter."
         cols={[
           { k: "emp", role: "party", label: "Employee", v: (r) => r.employee, cell: (r) => r.employee },
@@ -220,20 +221,11 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs, Upload, Suggest }) {
           { k: "ded", role: "date", label: "Deducted on", v: (r) => TDS.ymd(r.deducted), cell: (r) => day(r.deducted) || "—" },
           { k: "ch", label: "Challan", v: (r) => r.challanNo, cell: (r) => (r.challan ? <span data-challan-of={r.id}>{r.challanBsr} / {r.challanNo} · {day(r.challanDate)}</span> : r.tds > 0 ? <span className="tag warn">not tagged</span> : "—") },
         ]} />
-      : S.tdsTab === "challans" ? <><p className="note">Salary TDS challans of {q} (section 192): those made from Tally's Stat Payment of Income Tax are marked From Tally; each month's TDS is tagged to the challan of its period.</p>
-        {Upload && <Upload />}{Suggest && <Suggest fy={fy} q={q} form="24Q" />}
-        <ListTable name="q24TChallans" rows={ch} rowKey={(c) => c.id} unit={["challan", "challans"]} empty="No salary TDS challan deposited in this quarter."
+      : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
+      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q">{Suggest && <Suggest fy={fy} q={q} form="24Q" />}</ReturnChallans>
+      : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><ListTable name="q24Annex2" id="q24A2Table" rows={Payroll.annexII(fy)} rowKey={(x) => x.guid} unit={["employee", "employees"]}
           cols={[
-            { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
-            { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => c.bsr },
-            { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
-            { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
-            { k: "used", label: "Tagged", cls: "n", v: (c) => TDS.challanUse()[c.id] || 0, fmt: money, cell: (c) => money(TDS.challanUse()[c.id] || 0) },
-            { k: "from", label: "", cell: (c) => (c.from === "tally" ? <span className="tag">From Tally</span> : null) },
-          ]} /></>
-      : S.tdsTab === "annex2" ? <ListTable name="q24Annex2" id="q24A2Table" rows={Payroll.annexII(fy)} rowKey={(x) => x.guid} unit={["employee", "employees"]}
-          cols={[
-            { k: "name", role: "party", label: "Employee", v: (x) => x.name, cell: (x) => <button className="linkbtn" onClick={() => { tdsNav("salary"); S.paySub = "form16"; S.payF16 = x.guid; render(); }}>{x.name}</button> },
+            { k: "name", role: "party", label: "Employee", v: (x) => x.name, cell: (x) => <button className="linkbtn" onClick={() => { S.paySub = "form16"; S.payF16 = x.guid; tdsTabGo("people"); }}>{x.name}</button> },
             { k: "pan", label: "PAN", v: (x) => x.pan, cell: (x) => <Pan pan={x.pan} /> },
             { k: "reg", label: "Regime", v: (x) => x.regime, cell: (x) => (x.regime === "old" ? "Old" : "New") },
             { k: "gross", label: "Gross salary", cls: "n", v: (x) => x.gross, fmt: money, sum: true, cell: (x) => money(x.gross) },
@@ -245,12 +237,12 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs, Upload, Suggest }) {
             { k: "tax", label: "Tax", cls: "n", v: (x) => x.taxPayable, fmt: money, sum: true, cell: (x) => money(x.taxPayable) },
             { k: "tds", label: "TDS", cls: "n", v: (x) => x.tdsTotal, fmt: money, sum: true, cell: (x) => money(x.tdsTotal) },
             { k: "bal", label: "Short (+) / excess (−)", cls: "n", v: (x) => x.balance, fmt: money, sum: true, cell: (x) => money(x.balance) },
-          ]} />
-      : S.tdsTab === "checks" ? (checks.length ? <section className="dash-card" data-pay-checks=""><h3>Before filing</h3>{checks.map((c, i) => <span key={i} style={{ display: "contents" }}>
-          <div className="dash-row"><span>{c.what}</span><b>{c.n}</b></div><p className="note">{c.how}{c.who.length ? " e.g. " + c.who.join(", ") : ""}</p></span>)}</section>
-        : <p className="note">Nothing to fix for this quarter.</p>)
+          ]} /></section>}</>
+      : S.tdsTab === "checks" ? <div data-pay-checks=""><ToFix items={checksToFix(checks).items.concat([unknownItem(fy, q)])}
+          parts={[["chtype", <UnknownChallans fy={fy} q={q} form="24Q" />]].concat(checksToFix(checks).parts)} /></div>
       : <><section className="dash-card" data-file="24Q-tally"><h3>{TDS.formName("24Q", fy)}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
           <p className="note"><b>Check before filing.</b> The text file is built to the current 24Q layout (Annexure I{q === "Q4" ? " and II" : ""}); the new form's own layout could not be checked where FinCom was built, so the file is named _DRAFT. Run it through Protean's FVU first.</p>
+          <PreFileSlot />
           <div className="revfilter"><button className="btn small primary" data-pay-fvu="" onClick={() => payFvuDownload(fy, q)}>Download the text file</button>
             <button className="btn small" onClick={() => printTable("q24A1Table", "24Q Annexure I, " + q + " " + fy)}>Print Annexure I</button></div></section>
         <MarkFiled fy={fy} q={q} form="24Q" /></>}

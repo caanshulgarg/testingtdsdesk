@@ -106,6 +106,8 @@ const TRF = {
   kindOfText(t){
     if (/^\s*\d+\^FH\^/m.test(t) && /^\s*\d+\^DD\^/m.test(t)) return "conso";
     if (/Justification Report|Short Deduction|Short Payment|Interest on (Payment|Deduction) Default|Late Filing Fee/i.test(t)) return "jr";
+    // tds-layout: TRACES' challan status (a table naming BSR and the amount consumed), read by the register (src/js/79)
+    if (/BSR/i.test(t) && /consum|utili[sz]ed|claimed/i.test(t) && typeof TDSReg === "object" && TDSReg.parseStatus(t).length) return "chstatus";
     return "";
   },
   // ---------------- Form 16A ----------------
@@ -217,7 +219,7 @@ const TRF = {
   jrFor(fy, q, form){ return this.jrs().find(x => x.fy === fy && x.q === q && x.form === (form || "26Q")) || null; },
   // ---------------- consolidated file ----------------
   parseConso(text){
-    const out = {kind: "conso", tan: "", fy: "", q: "", form: "", rows: [], challans: 0};
+    const out = {kind: "conso", tan: "", fy: "", q: "", form: "", rows: [], challans: 0, cd: []};
     String(text || "").replace(/\r/g, "").split("\n").forEach(raw => {
       const f = raw.split("^").map(x => x.trim()); if (f.length < 3) return;
       const rt = f[1];
@@ -226,7 +228,14 @@ const TRF = {
         const fm = f.find(x => /^(24Q|26Q|27Q|27EQ|13[0-9]|14[0-9])$/.test(x)); if (fm) out.form = ({138: "24Q", 140: "26Q", 144: "27Q", 143: "27EQ"})[fm] || fm;
         const y = f.find(x => /^20\d{4}$/.test(x)); if (y) out.fy = y.slice(0, 4) + "-" + y.slice(4);
         const q = f.find(x => /^Q[1-4]$/.test(x)); if (q) out.q = q;
-      } else if (rt === "CD") out.challans++;
+      } else if (rt === "CD"){
+        out.challans++;
+        // tds-layout (14-Oct-2026): the challan as TRACES holds it, and what the statement consumes of it (the deductee
+        // annexure's total, the first amount after the challan's serial; the FVU layout, as FinCom writes it in src/js/16)
+        const bi = f.findIndex((x, i) => i > 4 && /^\d{7}$/.test(x)), di = bi > 0 ? f.findIndex((x, i) => i > bi && /^\d{8}$/.test(x)) : -1;
+        const si = di > 0 ? f.findIndex((x, i) => i > di && /^\d{1,5}$/.test(x)) : -1, ai = si > 0 ? f.findIndex((x, i) => i > si && /^-?\d+\.\d{2}$/.test(x)) : -1;
+        if (bi > 0 && di > 0 && si > 0){ const d = f[di]; out.cd.push({n: f[3] || "", bsr: f[bi], date: d.slice(4, 8) + d.slice(2, 4) + d.slice(0, 2), serial: f[si].padStart(5, "0"), consumed: ai > 0 ? num(f[ai]) : 0}); }
+      }
       else if (rt === "DD"){
         const pan = f.find(x => /^(?:[A-Z]{5}\d{4}[A-Z]|PANNOTAVBL|PANINVALID|PANAPPLIED)$/.test(x)) || "";
         const pi = f.indexOf(pan);
@@ -281,7 +290,14 @@ const TRF = {
       } else if (k === "conso"){
         const r = this.parseConso(t); r.file = f.name; r.at = new Date().toISOString(); r.id = uid("cs");
         b.tracesConso = this.consos().filter(x => !(x.fy === r.fy && x.q === r.q && x.form === r.form)).concat([r]);
-        said.push("Consolidated file, " + TDS.formShort(r.form || "26Q", r.fy) + " " + r.q + " " + r.fy + ": " + r.rows.length + " deductee line" + (r.rows.length === 1 ? "" : "s") + " read.");
+        const cdiff = typeof TDSReg === "object" ? TDSReg.traces({form: r.form || "26Q", fy: r.fy, q: r.q}).filter(x => x.src === "conso" && Math.abs(x.diff) >= 0.01).length : 0;
+        said.push("Consolidated file, " + TDS.formShort(r.form || "26Q", r.fy) + " " + r.q + " " + r.fy + ": " + r.rows.length + " deductee line" + (r.rows.length === 1 ? "" : "s") + " read." +
+          (cdiff ? " " + cdiff + " challan" + (cdiff === 1 ? "" : "s") + ": TRACES' consumed amount differs from FinCom's used." : ""));
+      } else if (k === "chstatus"){
+        const rows = TDSReg.parseStatus(t);
+        b.tracesChStatus = [{id: uid("cs"), file: f.name, at: new Date().toISOString(), rows}];
+        const diff = TDSReg.traces().filter(x => x.src === "status" && Math.abs(x.diff) >= 0.01).length;
+        said.push("Challan status file: " + rows.length + " challan" + (rows.length === 1 ? "" : "s") + " read" + (diff ? "; " + diff + " differ from what FinCom uses of them (see the challan register)." : ", each as FinCom uses it."));
       } else if (texts.length && !pdfs.length && /\.txt$/i.test(f.name)) said.push(f.name + ": this text file is not a justification report or a consolidated file. A Form 16A zip holding only a text file is for TRACES-PDF-CONVERTER: convert it there, then upload the PDFs (or their zip) here.");
     }
     if (pdfs.length){

@@ -157,16 +157,22 @@ const Payroll = {
     if (!chs.length) return 0;
     const use = TDS.challanUse(), vouch = {}; (b.vouchers || []).forEach(v => { vouch[v.id] = v; vouch[v.guid] = v; });
     const period = (c) => { const v = vouch[c.fromVoucher], x = v && v.tdsx || {}; return {from: TDS.ymd(x.from), to: TDS.ymd(x.to)}; };
-    b.alloc = Object.assign({}, b.alloc); b.allocFrom = Object.assign({}, b.allocFrom);
-    let n = 0;
+    // tds-layout (the TDS review of 14-Oct-2026, M8): a 24Q marked filed is never changed; the tags go through the one
+    // tagging (TDSCH.tag: the lock, the limit, the trail), marked "tally"
+    const plan = {};
     rows.forEach(r => {
+      if (typeof TDSReg === "object" && TDSReg.locked(r.fy, r.q, "24Q")) return;
       const fits = (c) => Math.round(((use[c.id] || 0) + r.tds) * 100) <= Math.round(num(c.tax) * 100);
       const ym = this.ym(r.date);
       let c = chs.find(c => { const p = period(c); return p.from && p.from.slice(0, 6) <= ym && (p.to || p.from).slice(0, 6) >= ym && fits(c); });
       if (!c) c = chs.find(c => TDS.ymd(c.date) >= TDS.ymd(r.date) && TDS.monthsBetween(r.date, c.date) <= 2 && fits(c));
       if (!c) return;
-      b.alloc[r.id] = c.id; b.allocFrom[r.id] = "tally"; use[c.id] = r2((use[c.id] || 0) + r.tds); n++;
+      (plan[c.id] = plan[c.id] || []).push(r.id); use[c.id] = r2((use[c.id] || 0) + r.tds);
     });
+    let n = 0;
+    b.allocFrom = b.allocFrom || {};
+    Object.entries(plan).forEach(([chId, ids]) => { const t = TDSCH.tag(ids, chId, {via: "tally", nosave: true}); if (t.ok){ ids.forEach(id => { b.allocFrom[id] = "tally"; }); n += t.n; } });
+    if (n && typeof TDSReg === "object") TDSReg.done();
     return n;
   },
   // ---------- 24Q Annexure I: per employee per month, the amount paid or credited, the TDS, the dates and the challan
@@ -339,8 +345,11 @@ const TDS24Q_FILE = {
     live.forEach((c, ci) => {
       const mine = used[c.id];
       const tax = r2(mine.reduce((a, r) => a + r.tds, 0));
-      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(c.interest), money(num(c.fee) + num(c.others)),
-        money(num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)), "", c.bsr, dmy(c.date), c.serial, "C", String(c.minorHead || "200"), "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
+      // tds-layout: a person's interest and fee portion for this return (the register, src/js/79), else the whole, as before
+      const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, "24Q", fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)};
+      // the record adds up (the TDS review, H5): this return's tax and the interest and fee it carries
+      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(part.interest), money(part.fee),
+        money(tax + num(part.interest) + num(part.fee)), "", c.bsr, dmy(c.date), c.serial, "C", String(c.minorHead || "200"), "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
       mine.forEach((r, di) => {
         put(["DD", "1", String(ci + 1), String(di + 1), "O", "", Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", "", txt(r.employee), money(r.tds), "0.00", "0.00", money(r.tds), "", money(r.tds),
           "", "", dmy(r.date), money(r.paid), dmy(r.date), Certs.validPan(r.pan) ? "" : "C", "", "", "92B", "", "", "", "", ""]);

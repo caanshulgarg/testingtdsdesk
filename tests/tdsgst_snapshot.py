@@ -78,9 +78,11 @@ def snapshot(site, port=8290, shots=None):
         for fy in fys:
             pg.evaluate("(fy) => { S.booksTab = 'tds'; S.tdsFy = fy; S.tdsView = 'year'; S.tdsQ = ''; render(); }", fy); take("tds/%s/year" % fy)
             # round 46 (TDS & GST makeover): the tie-out and the TDS limits, under the year's grid before, are TDS › Checks;
-            # their figures count as the year's page's (a build without Checks shows the grid again: the same figures)
+            # their figures count as the year's page's (a build without Checks shows the grid again: the same figures).
+            # tds-layout (14-Oct-2026): no TDS tabs any more; the old Checks view leads to a return's To fix with that list
+            # (S.tdsView 'checks' is still read), so it is asked for whenever the page has the grid (as every build since round 46)
             for chk in ["tieout", "limits"]:
-                pg.evaluate("([fy, c]) => { S.tdsFy = fy; S.tdsView = typeof tdsNav === 'function' && document.querySelector('[data-tds-sec]') ? 'checks' : 'year'; S.tdsCheck = c; render(); }", [fy, chk]); take("tds/%s/year" % fy)
+                pg.evaluate("([fy, c]) => { S.tdsFy = fy; S.tdsQ = ''; S.tdsView = typeof tdsNav === 'function' && (document.querySelector('[data-tds-sec]') || typeof TDSReg === 'object') ? 'checks' : 'year'; S.tdsCheck = c; render(); }", [fy, chk]); take("tds/%s/year" % fy)
             for q in ["Q1", "Q2", "Q3", "Q4"]:
                 for form in ["26Q", "27Q", "27EQ", "24Q"]:
                     key = "tds/%s/%s/%s" % (fy, q, form)

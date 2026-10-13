@@ -317,7 +317,8 @@ const AS26 = {
     if (!f) return null;
     const lines = f.rows.filter(r => r.fy === f.fy).map(r => Object.assign({}, r, {party: this.partyOf(r.tan, r.name)}));
     const books = this.bookCredits().filter(x => x.fy === f.fy);
-    const res = this.pair(lines, books, l => l.party.party, x => x.party);
+    // a TCS credit (Part VI) only against TCS in the books, TDS against TDS (the TDS review, L6)
+    const res = this.pair(lines, books, l => l.party.party && l.party.party + "|" + (l.part === "TCS" ? "TCS" : "TDS"), x => x.party + "|" + (x.tcs ? "TCS" : "TDS"));
     // by deductor: the file's tax, the books' tax for the party it is linked to, the difference
     const by = {};
     lines.forEach(l => { const d = by[l.tan] = by[l.tan] || {tan: l.tan, name: l.name, party: l.party, file: 0, books: 0, pending: 0}; d.file = r2(d.file + l.tax); if (l.status && l.status !== "F") d.pending = r2(d.pending + l.tax); });

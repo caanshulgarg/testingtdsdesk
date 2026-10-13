@@ -111,7 +111,7 @@ const DueList = {
   },
   // ---- every client: the open one from S.books, the others from their copy on this computer
   cache: {},          // cid -> {key, items}
-  keyOf(b){ return b ? [b.cid, (b.vouchers || []).length, b.mapV || 0, fpHash(JSON.stringify([b.gstFiled, b.portalFiled, b.tdsFiled, b.challans, b.alloc, b.gstSet, b.gstRegs, (b.gstVault || []).length, (b.salary || []).length])), this.today()].join("|") : ""; },
+  keyOf(b){ return b ? [b.cid, (b.vouchers || []).length, b.mapV || 0, fpHash(JSON.stringify([b.gstFiled, b.portalFiled, b.tdsFiled, b.challans, b.alloc, b.gstSet, b.gstRegs, (b.gstVault || []).length, (b.salary || []).length, (b.payroll || {}).at || ""])), this.today()].join("|") : ""; },
   forClient(co, b){
     const k = this.keyOf(b), c = this.cache[co.id];
     if (c && c.key === k && c.b === b) return c.items;

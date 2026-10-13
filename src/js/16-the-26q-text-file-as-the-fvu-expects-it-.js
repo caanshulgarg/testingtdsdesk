@@ -17,15 +17,27 @@ const TDS_FORMS = {
 const NEW_FORMS_VALIDATED = false;
 // payment code by old section (TDS) or 27EQ collection code (TCS): to be filled from Protean's documents
 const PAY_CODES = {};
+// The section codes of the 26Q / 27Q file's deductee records, in one place (the TDS review of 14-Oct-2026, H4). A section
+// not listed keeps the code the file has always carried (194C -> 94C; 195 stays 195). A section split by what was paid for
+// (TDSRate.payType: r.pay) has a code for each kind; a row whose kind is not known gets none, and the file says so.
+// THE CODES MARKED unverified ARE NOT CHECKED AGAINST PROTEAN'S FILE FORMAT (the reviewer's memory of it): the owner to
+// confirm them against Protean's current list before filing; docs/tds-codes.md says how.
+const TDS_SEC_CODES = {
+  "194J": {by: {technical: "4JA", professional: "4JB"}, unverified: true, note: "194J(a) fees for technical services; 194J(b) professional fees"},
+  "194I": {by: {rent_machinery: "4IA", rent_building: "4IB"}, unverified: true, note: "194-I(a) plant and machinery; 194-I(b) land, building or furniture"},
+  "194DA": {code: "4DA", unverified: true}, "194BB": {code: "4BB", unverified: true}, "194LA": {code: "4LA", unverified: true}
+};
 const TDS26Q = {
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){
     form = TDS_FORMS[form] ? form : "26Q";
     const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
     const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
-    const chs = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
+    // tds-layout (14-Oct-2026, the owner's register rules): a challan of another quarter or an earlier year that pays this
+    // return's deductions is listed too (it was left out, and its deductions with it); the quarter's own as before
+    const chs = TDS.challans().filter(c => (TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q) || (used[c.id] || []).length);
     const live = chs.filter(c => (used[c.id] || []).length);
     if (!live.length) return {error: "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in " + form + " against it yet."};
     // tds-challans (10-Oct-2026): a challan is never used beyond its amount; one that is (an old tagging) stops the file
@@ -57,17 +69,23 @@ const TDS26Q = {
       const tax = mine.reduce((a, r) => a + num(r.tds), 0);
       // the challan as deposited: interest, and fee and others where the challan read has them (tds-challans); its minor
       // head (200 unless the challan says 400)
-      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(c.interest), money(num(c.fee) + num(c.others)),
-        money(num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)), "", c.bsr, dmy(c.date), c.serial, "C", String(c.minorHead || "200"), "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
+      // the interest and fee: a person's portion for this return where one is set in the register (TDSReg, src/js/79);
+      // else the challan's whole interest and fee, as before
+      const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)};
+      // the record adds up (the TDS review, H5): its total is the tax of this return's deductions and the interest and fee it
+      // carries, not the whole challan's deposit (a challan shared with another return was counted in full in each)
+      put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(part.interest), money(part.fee),
+        money(tax + num(part.interest) + num(part.fee)), "", c.bsr, dmy(c.date), c.serial, "C", String(c.minorHead || "200"), "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
       mine.forEach((r, di) => {
         const m = this.remark(r, form);
-        const old = form === "27EQ" ? r.code || "" : this.code(r.section);
+        const old = form === "27EQ" ? r.code || "" : this.codeFor(r);
+        if (!isNew && form !== "27EQ" && !old) missing.add(TDS.sec(r.section) + " (" + r.party + "): what was paid for is not known, so the section code (" + Object.keys(TDS_SEC_CODES[TDS.sec(r.section)].by).join(" or ") + ") cannot be chosen");
         const code = isNew ? this.payCode(r, form) : old;
         if (isNew && !code) missing.add(form === "27EQ" ? r.code || r.ledger : TDS.sec(r.section));
         const tail = form === "27Q" ? this.nrTail(r) : form === "27EQ" ? this.tcsTail(r) : [];
         put(["DD", "1", String(ci + 1), String(di + 1), "", r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02",
           r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
-          dmy(r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, m.remark, m.certNo, "", "", "", "", "", "", ""].concat(tail));
+          dmy(r.credit || r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, m.remark, m.certNo, "", "", "", "", "", "", ""].concat(tail));
       });
     });
     return {text: lines.join("\r\n") + "\r\n", rows: rows.length, challans: live.length,
@@ -79,6 +97,13 @@ const TDS26Q = {
   payCode(r, form){ return String(PAY_CODES[form === "27EQ" ? r.code : TDS.sec(r.section)] || ""); },
   // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
   code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
+  // a deduction's code, from the one table (TDS_SEC_CODES); "" when its section is split and what was paid for is not known
+  codeFor(r){
+    const s = TDS.sec(r.section), t = TDS_SEC_CODES[s];
+    if (!t) return this.code(r.section);
+    if (t.code) return t.code;
+    return (t.by && t.by[r.pay]) || "";
+  },
   // A: a certificate covers the payment (its number goes beside); C: the higher rate, with no PAN or an inoperative one
   remark(r, form){
     const cert = form === "27EQ" ? TCS27EQ.certFor(r) : Certs.forRow(r);
@@ -122,22 +147,36 @@ const TDS26Q = {
 const TCS27EQ = {
   // the collection code of the 27EQ file, from the words in the TCS ledger's name; a ledger the words do not place is left
   // for a person to choose (S.books.tcsCodes[ledger])
+  // the official codes of Form 27EQ (the TDS review of 14-Oct-2026, H3: 6CB to 6CI were shifted by one), matched in this
+  // order (tendu before forest produce, timber under a lease before other timber)
   CODES: [
     ["6CA", "Alcoholic liquor for human consumption", /LIQUOR|ALCOHOL/],
-    ["6CB", "Tendu leaves", /TENDU/],
-    ["6CC", "Timber obtained under a forest lease", /TIMBER.*LEASE|FOREST\s*LEASE/],
-    ["6CD", "Timber obtained other than under a forest lease", /TIMBER/],
-    ["6CE", "Any other forest produce", /FOREST/],
-    ["6CF", "Scrap", /SCRAP/],
-    ["6CG", "Parking lot (lease or licence)", /PARKING/],
-    ["6CH", "Toll plaza (lease or licence)", /TOLL/],
-    ["6CI", "Mining and quarrying (lease or licence)", /MINING|QUARR/],
+    ["6CI", "Tendu leaves", /TENDU/],
+    ["6CB", "Timber obtained under a forest lease", /TIMBER.*LEASE|FOREST\s*LEASE/],
+    ["6CC", "Timber obtained other than under a forest lease", /TIMBER/],
+    ["6CD", "Any other forest produce", /FOREST/],
+    ["6CE", "Scrap", /SCRAP/],
+    ["6CF", "Parking lot (lease or licence)", /PARKING/],
+    ["6CG", "Toll plaza (lease or licence)", /TOLL/],
+    ["6CH", "Mining and quarrying (lease or licence)", /MINING|QUARR/],
     ["6CJ", "Minerals: coal, lignite or iron ore", /COAL|LIGNITE|IRON\s*ORE|MINERAL/],
     ["6CL", "Motor vehicle above ₹10 lakh", /MOTOR|VEHICLE|CAR\b/],
     ["6CO", "Overseas tour programme package", /OVERSEAS|TOUR\s*PACKAGE|FOREIGN\s*TOUR/]
   ],
+  // a code a person chose from the old, shifted list (before 14-Oct-2026) means the nature it was shown with: moved to that
+  // nature's official code, once per client (b.tcsCodesFixed)
+  OLD_TO_NEW: {"6CB": "6CI", "6CC": "6CB", "6CD": "6CC", "6CE": "6CD", "6CF": "6CE", "6CG": "6CF", "6CH": "6CG", "6CI": "6CH"},
+  fixCodes(b){
+    if (!b || b.tcsCodesFixed) return false;
+    const t = b.tcsCodes || {}, out = {};
+    Object.keys(t).forEach(l => { out[l] = this.OLD_TO_NEW[t[l]] || t[l]; });
+    b.tcsCodes = out; b.tcsCodesFixed = "2026-10-14";
+    return true;
+  },
   codeOf(ledger, section){
-    const set = ((S.books || {}).tcsCodes || {})[ledger];
+    const b = S.books || {};
+    if (b.tcsCodes && !b.tcsCodesFixed && this.fixCodes(b) && typeof saveBooks === "function") try { saveBooks(); } catch (e){}
+    const set = (b.tcsCodes || {})[ledger];
     if (set) return set;
     const up = String(ledger || "").toUpperCase();
     const hit = this.CODES.find(([, , re]) => re.test(up));

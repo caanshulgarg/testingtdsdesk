@@ -145,7 +145,7 @@ const TDSTally = {
     if (cs.some(c => c.fromVoucher === p.vid)) return false;
     return !cs.some(c => !c.fromVoucher && TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - num(p.tax)) < 1);
   },
-  keyOf(c){ return c.bsr + "|" + TDS.ymd(c.date) + "|" + String(c.serial || "").padStart(5, "0"); },
+  keyOf(c){ return TDSCH.chKey(c); },
   // the links Tally keeps: [{row: the deduction's row id, vid: the paying voucher, ref}] where exactly one deduction carries
   // the payment's reference for that party and duty ledger (Tally's reference names are unique only per party and duty,
   // and are often a voucher number); [{row, vid, ref, many}] where several do (none tagged: a person decides)
@@ -280,6 +280,7 @@ const TDSTally = {
       if (t.chq) c.cheque = t.chq;
       if (t.bank) c.bank = t.bank + (t.branch ? ", " + t.branch : "");
       c.tallyWas = {tax: c.tax, interest: c.interest, fee: c.fee || 0, others: c.others || 0, section: c.section || ""};
+      if (typeof TDSReg === "object") c.autoPlace = "pending";        // tds-layout: placed once Tally's own tags are in
       b.challans.push(c); byKey[t.key] = c; (byVid[t.vid] = byVid[t.vid] || []).push(c); res.challans++;
     });
     // ---- the tags: a deduction Tally links to a payment that is one challan here
@@ -302,10 +303,12 @@ const TDSTally = {
       (want[ch.id] = want[ch.id] || []).push(l.row);
     });
     Object.entries(want).forEach(([chId, ids]) => {
-      const r = TDSCH.tag(ids, chId);
+      const r = TDSCH.tag(ids, chId, {via: "tally"});
       if (r.ok){ ids.forEach(id => { b.allocFrom[id] = "tally"; }); res.tagged += r.n; }
       else ids.forEach(id => res.disagree.push({row: id, party: rows[id].party, date: rows[id].date, fincom: "", tally: chId, why: r.why}));
     });
+    // ---- tds-layout: a challan new from Tally, with nothing tagged by Tally, goes to its own draft return (TDSReg.placeNew)
+    if (typeof TDSReg === "object") res.placed = TDSReg.placeNew().filter(x => x.placed).length;
     // ---- the certificates
     b.certs = b.certs || [];
     const CF = [["party", String], ["pan", String], ["section", TDS.sec], ["certNo", String], ["rate", num], ["limit", num], ["from", TDS.ymd], ["to", TDS.ymd], ["nature", String], ["under", String]];
