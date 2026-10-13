@@ -246,7 +246,7 @@ def main():
         scene(DEVS, LINKED); E("() => goClient('books:import')"); pg.wait_for_timeout(1200)
         # round 39: the Link to Tally card (run_tally_link_simple.py has the rest): one status line, Update now, Change company in More
         lt = txt(link + " [data-tally-link-text]")
-        ok(re.match(r"^Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d IST$", lt) is not None and txt(link + " [data-tally-link-state]") == "Linked and reading", "5. linked: one line (%r)" % lt)
+        ok(re.match(r"^Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d IST$", lt) is not None and txt(link + " [data-tally-link-state]") == "Linked · reading", "5. linked: one line (%r)" % lt)   # ui-tidy: the same words on every chip and card
         ok(pg.locator(link + " [data-update-now]").count() == 1 and pg.locator(link + " [data-tally-link-change]").count() == 0, "5. linked: Update now (Change company is on the card in Client setup)")
         ok(pg.locator("#app [data-upload-page] [data-update-now]").count() == 1, "5. From Tally: Update now once (on the link line)")
         E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)   # clean-up batch 2: Change company is on the card, in Client setup -> Tally

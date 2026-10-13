@@ -1,7 +1,10 @@
 // The GSTR-1 and GSTR-3B as filed on the portal (fetched through the firm's GST API, by Fetch now or the daily run)
 // against FinCom's working from the books now, month by month for the year, and table by table for the month opened.
 // The comparison is GSTCMP (src/js/39); the fetching is GSTAPI.fetch / syncKept.
+// ui-tidy (13-Oct-2026; the owner: "every detail is showing at the last of the page"): the month's tables open under the
+// month's row (it was under the whole year's table); the month is the page's (S.gstYm), kept in the address.
 import { Fragment, useEffect, useState } from "react";
+import { Info } from "../../parts/Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const H = [["taxable", "Taxable"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]];
@@ -39,8 +42,7 @@ export default function FiledCompare({ b = S.books }) {
   };
   const cell = (part) => !part ? <span className="nr">not fetched</span> : part.any ? <span className="tag warn">differs</span> : <span className="tag ok">matches</span>;
   return <>
-    <section className="dash-card" style={{ marginBottom: 12 }}><h3>Filed returns against FinCom’s working · {gstin}</h3>
-      <p className="note">The GSTR-1 and GSTR-3B as filed, fetched from the portal through the firm’s GST API (each morning, or with the buttons), against what FinCom works out from the books now. A difference is a change in the books since filing, or something filed differently: amend it in the next GSTR-1, or pay or claim it in the next 3B.</p>
+    <section className="dash-card" style={{ marginBottom: 12 }}><h3>Filed returns against FinCom’s working · {gstin} <Info label="About this comparison">The GSTR-1 and GSTR-3B as filed, fetched from the portal through the firm’s GST API (each morning, or with the buttons), against what FinCom works out from the books now. A difference is a change in the books since filing, or something filed differently: amend it in the next GSTR-1, or pay or claim it in the next 3B.</Info></h3>
       {GSTAPI.on() && GSTAPI.live(gstin) ? <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <button className="btn small" disabled={!!busy} onClick={() => fetchAll("R1")}>Fetch the filed GSTR-1 not here</button>
         <button className="btn small" disabled={!!busy} onClick={() => fetchAll("3B")}>Fetch the filed 3B not here</button></div>
@@ -51,15 +53,20 @@ export default function FiledCompare({ b = S.books }) {
         <tbody>{rows.map((r) => {
           const t1 = (side) => r.r1 ? r2(r.r1.rows.reduce((a, x) => a + num(x[side].igst) + num(x[side].cgst) + num(x[side].sgst) + num(x[side].cess), 0)) : null;
           const itc = (side) => { if (!r.r3b) return null; const x = r.r3b.rows.find((y) => y.label.startsWith("4(C)")); return r2(num(x[side].igst) + num(x[side].cgst) + num(x[side].sgst) + num(x[side].cess)); };
-          return <tr key={r.ym} className={r.ym === S.gstYm ? "picked" : ""}>
-            <td><button className="linkbtn" onClick={() => gstSetYm(r.ym)}>{GSTR.label(r.ym)}</button></td>
+          const open = r.ym === S.gstYm;
+          return [<tr key={r.ym} className={open ? "picked" : ""} data-cmp-month={r.ym}>
+            <td><button className="linkbtn" aria-expanded={open} onClick={() => gstSetYm(r.ym)}>{(open ? "▾ " : "▸ ") + GSTR.label(r.ym)}</button></td>
             <td>{cell(r.r1)}</td><td className="n">{t1("filed") == null ? "" : money(t1("filed"))}</td><td className="n">{t1("work") == null ? "" : money(t1("work"))}</td>
-            <td>{cell(r.r3b)}</td><td className="n">{itc("filed") == null ? "" : money(itc("filed"))}</td><td className="n">{itc("work") == null ? "" : money(itc("work"))}</td></tr>;
+            <td>{cell(r.r3b)}</td><td className="n">{itc("filed") == null ? "" : money(itc("filed"))}</td><td className="n">{itc("work") == null ? "" : money(itc("work"))}</td></tr>,
+            open && <tr key={r.ym + ":open"} className="lt-open" data-cmp-open={r.ym}><td colSpan={7} style={{ padding: "8px 10px 4px", background: "var(--paper)" }}>
+              <Table title={"GSTR-1, " + GSTR.label(r.ym)} part={cur.r1} />
+              <Table title={"GSTR-3B, " + GSTR.label(r.ym)} part={cur.r3b} />
+              {!cur.r1 && !cur.r3b && <p className="note" style={{ margin: "2px 0 6px" }}>Nothing filed is here for {GSTR.label(r.ym)} yet.</p>}
+            </td></tr>];
         })}</tbody>
       </table></div>
     </section>
-    <Table title={"GSTR-1, " + GSTR.label(S.gstYm)} part={cur.r1} />
-    <Table title={"GSTR-3B, " + GSTR.label(S.gstYm)} part={cur.r3b} />
-    {!cur.r1 && !cur.r3b && <p className="note">Nothing filed is here for {GSTR.label(S.gstYm)} yet.</p>}
+    {!months.includes(S.gstYm) && <><Table title={"GSTR-1, " + GSTR.label(S.gstYm)} part={cur.r1} />
+      <Table title={"GSTR-3B, " + GSTR.label(S.gstYm)} part={cur.r3b} /></>}
   </>;
 }

@@ -231,10 +231,15 @@ try:
         ok(len(groups) == 6 and all(g[1] >= 3 for g in groups), "six areas, each its list of reports (%s)" % groups)
         ok(all(g[2] <= 2 for g in groups), "at most two headline figures an area")
         ok(sum(g[1] for g in groups) == E("RPT.LIST.length"), "every report is in the list (%d)" % sum(g[1] for g in groups))
-        ok(E("[...document.querySelectorAll('#app .dtile')].filter(e => e.offsetParent && !e.closest('details:not([open])')).length") == 0, "no boxes of figures on the page (they are folded under Figures and charts)")
+        # ui-tidy (13-Oct-2026; the owner: "mis and reports are also very cluttered"): the answer first, at most four key
+        # figures in one row ([data-answer]); every other box of figures folded under Figures and charts
+        ok(E("[...document.querySelectorAll('#app .dtile')].filter(e => e.offsetParent && !e.closest('details:not([open])') && !e.closest('[data-answer]')).length") == 0
+           and E("document.querySelectorAll('#app [data-answer] .dtile').length") <= 4, "no boxes of figures on the page but the answer's four (the rest folded under Figures and charts)")
         ok(pg.locator("#app [data-rpt-charts]:not([open])").count() == 1 and pg.locator("#app [data-rpt-charts] .dtile").count() >= 20, "  … where every figure and chart still is")
         ok(pg.locator("#app .lk-fresh").count() <= 1 and E(BANNERS) == [], "the books' freshness is a line, not a banner")
         pg.screenshot(path=os.path.join(OUT, "desk-reports.png"), full_page=True)
+        # ui-tidy: the areas are sections folded but the first; Customers and suppliers opened first
+        pg.click('#app [data-rpt-group="parties"] > summary'); W(300)
         pg.click('#app .rpt-link:has(b:text-is("Receivables ageing"))'); W(1200)
         ok(E("booksTab()") == "mis" and E("S.misTab") == "recv", "a report opens from the list (Receivables ageing → MIS)")
 

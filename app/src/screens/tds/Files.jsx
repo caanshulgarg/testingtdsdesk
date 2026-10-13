@@ -8,6 +8,7 @@
 // Nothing here changes a figure of the books or a return.
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
+import { Answer, Info } from "../../parts/Answer.jsx";
 
 const money = (v) => (v == null ? "—" : "₹" + INR.format(r2(v || 0)));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
@@ -40,7 +41,10 @@ function OwnCredit({ fy }) {
   if (!r) return <p className="note">Upload the client’s own 26AS (or AIS) for {fy} to compare its tax credit with the TDS receivable in the books.</p>;
   const parties = AS26.parties(), k = r.file.kind, rows = r.rows;
   const n = (s) => rows.filter((x) => x.status === s).length, amt = (s) => r2(rows.filter((x) => x.status === s).reduce((a, x) => a + (x.line ? x.line.tax : x.book.tax), 0));
-  return <section className="dash-card" data-as26-own={fy} style={{ marginTop: 12 }}>
+  return <>
+  <Answer label="26AS key figures" data-as26-answer={fy} figs={[[k + ", " + fy, money(r.sum.file)], ["TDS receivable in the books", money(r.sum.books)],
+    ["Difference", money(r2(r.sum.file - r.sum.books)), "", Math.abs(r.sum.file - r.sum.books) >= 1 ? "bad" : ""], ["Lines matched", n("matched") + " of " + rows.length, n("file") + " only in " + k + " · " + n("books") + " only in the books"]]} />
+  <section className="dash-card" data-as26-own={fy} style={{ marginTop: 12 }}>
     <h3>The client’s tax credit, {fy}: {k} against the books</h3>
     <p className="note">{k} {money(r.sum.file)} · TDS receivable in the books {money(r.sum.books)} · difference <b className={Math.abs(r.sum.file - r.sum.books) >= 1 ? "bad" : ""}>{money(r2(r.sum.file - r.sum.books))}</b>.
       A deductor is matched to the party in Tally of the same name; where the name differs, choose the party.</p>
@@ -60,7 +64,7 @@ function OwnCredit({ fy }) {
     <div className="gf-chips" style={{ margin: "10px 0 6px" }}><span className="note">Lines: </span>
       <span className="tag ok">Matched {n("matched")} · {money(amt("matched"))}</span> <span className="tag bad">Only in {k} {n("file")} · {money(amt("file"))}</span> <span className="tag warn">Only in the books {n("books")} · {money(amt("books"))}</span></div>
     <Lines rows={rows} kind={k} other="books" name="as26Own" />
-  </section>;
+  </section></>;
 }
 
 function Lines({ rows, kind, other, name }) {
@@ -96,13 +100,13 @@ export function Recon26() {
   return <>
     <section className="dash-card" data-as26="">
       <div className="rp-title"><h3>Form 26AS, AIS and TIS</h3>
-        <span className="note">The tax credit TRACES and the compliance portal show, against the books.</span></div>
-      <p className="note">Upload the client’s 26AS (TRACES: View Tax Credit → Export as Text, or the PDF) or its AIS / TIS (JSON, or the PDF). A deductee’s 26AS or AIS shows the client’s deductions as the deductee sees them, against FinCom’s returns.</p>
+        <span className="note">The tax credit TRACES and the compliance portal show, against the books.</span>
+        <Info label="Which files, and how they are read">Upload the client’s 26AS (TRACES: View Tax Credit → Export as Text, or the PDF) or its AIS / TIS (JSON, or the PDF). A deductee’s 26AS or AIS shows the client’s deductions as the deductee sees them, against FinCom’s returns.
+          {" "}Read from the files’ usual layouts: the text file’s and the JSON’s amounts are read by what each field is; a PDF is read as lines of text, and its lines are checked against the totals it prints.</Info></div>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 10px" }}>
         <Upload name="as26" label="Upload 26AS or AIS" accept=".txt,.pdf,.json,text/plain,application/pdf,application/json" onFiles={async (fs) => { for (const f of fs) await AS26.add(f); }} />
       </div>
       <FileList files={files} />
-      <p className="note" style={{ marginTop: 6 }}>Read from the files’ usual layouts: the text file’s and the JSON’s amounts are read by what each field is; a PDF is read as lines of text, and its lines are checked against the totals it prints.</p>
     </section>
     <OwnCredit fy={fy} />
     <Deductees fy={fy} />
@@ -117,8 +121,8 @@ export function TracesFiles() {
   f16.forEach((r) => { (byPan[r.pan] = byPan[r.pan] || { pan: r.pan, party: r.party || TRF.partyOfPan(r.pan), certs: [] }).certs.push(r); });
   return <>
     <section className="dash-card" data-traces="">
-      <div className="rp-title"><h3>TRACES files, {fy}</h3><span className="note">Form 16A, the justification report and the consolidated file, as downloaded from TRACES.</span></div>
-      <p className="note">Upload the zip TRACES gives, or the files inside it. Form 16A PDFs are kept with each deductee; a justification report’s defaults and a consolidated file’s deductees are read for their return.</p>
+      <div className="rp-title"><h3>TRACES files, {fy}</h3><span className="note">Form 16A, the justification report and the consolidated file, as downloaded from TRACES.</span>
+        <Info label="Which files">Upload the zip TRACES gives, or the files inside it. Form 16A PDFs are kept with each deductee; a justification report’s defaults and a consolidated file’s deductees are read for their return.</Info></div>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 10px" }}>
         <Upload name="traces" label="Upload TRACES files" accept=".zip,.pdf,.txt,application/zip,application/pdf,text/plain" onFiles={async (fs) => setSaid(await TRF.add(fs))} />
       </div>

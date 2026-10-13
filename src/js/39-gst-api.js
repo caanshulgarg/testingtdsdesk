@@ -6,6 +6,9 @@
 // encryption). The taxpayer's portal session is kept by that function, encrypted, and renewed in the background, so one
 // OTP lasts the taxpayer's API access period (up to 30 days) for every user of the firm. This tab only knows until when
 // each GSTIN is connected, never the token.
+// the owner's rule of 13-Oct-2026: the GSP behind FinCom's GST connection is never named to a user (only the e-invoice
+// set-up's own step names it, where the portal asks for it): a server message that names it is said in FinCom's words
+function gstWords(t){ return String(t == null ? "" : t).replace(/TaxPro(?:['’]s)?(?:\s+(?:GSP|ASP))?/gi, "FinCom's GST connection").replace(/\bASP\b/g, "GST connection"); }
 const GSTAPI = {
   sess: {}, seen: {},
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
@@ -17,7 +20,7 @@ const GSTAPI = {
     if (r.status === 401 && !retry){ await Cloud.refreshToken(s && s.access_token); return this.call(body, true); }
     let j = null; try { j = await r.json(); } catch (e){}
     if (!j) throw new Error("The GST API answered HTTP " + r.status + ".");
-    if (!j.ok) throw new Error(j.error || "The GST API refused the request.");
+    if (!j.ok) throw new Error(gstWords(j.error || "The GST API refused the request."));
     return j;
   },
   ready(ym){ const nx = GSTR.nextYm(ym), t = GSTF.today(); return t.slice(0, 7).replace("-", "") > nx || (t.slice(0, 7).replace("-", "") === nx && +t.slice(8, 10) >= 14); },

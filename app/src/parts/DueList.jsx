@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import ListTable from "./ListTable.jsx";
 import Loading from "./Loading.jsx";
 import More from "./More.jsx";
+import Filters, { Field } from "./Filters.jsx";
+import { Answer } from "./Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const VIEWS = [["overdue", "Overdue"], ["month", "Due this month"], ["filed", "Filed"], ["all", "All"]];
@@ -47,23 +49,23 @@ export default function DueAll() {
   const view = f || (count("overdue") ? "overdue" : "month");
   const rows = pick(view), clients = Array.from(new Map(res.items.map((x) => [x.cid, x.client])).entries()).sort((a, b) => a[1].localeCompare(b[1]));
   const over = res.items.filter((x) => x.status === "overdue").length, month = res.items.filter((x) => inView(x, "month")).length;
-  return <section data-due-list="">
-    {/* the answer first */}
-    <p className="cmp-sum" data-due-sum=""><span className={over ? "bad" : ""}><b>{over}</b> overdue</span><span><b>{month}</b> due this month</span>
-      <span className="note" style={{ margin: 0 }}>across {clients.length} client{clients.length === 1 ? "" : "s"}</span></p>
+  return <section data-due-list="" data-phone-scroll="">
+    {/* the answer first (ui-tidy: the one row of key figures) */}
+    <Answer label="Compliance key figures" data-due-sum="" figs={[["Overdue", String(over), "returns and payments", over ? "bad" : ""], ["Due this month", String(month), "returns and payments"],
+      ["Clients", String(clients.length), "with returns in the list"]]} />
     <nav className="sbar" aria-label="Show" style={{ marginBottom: 14 }}>
       {VIEWS.map(([k, l]) => <button key={k} data-due-chip={k} aria-selected={view === k} onClick={() => setF(k)}>{l} <span className="sbar-n">{count(k)}</span></button>)}
     </nav>
-    <div className="cmp-filters">
-      <label className="rp-f">Tax<select aria-label="Tax" data-due-tax-pick="" value={tax} onChange={(e) => setTax(e.target.value)}>
-        <option value="">GST and TDS</option><option value="GST">GST</option><option value="TDS">TDS</option></select></label>
-      <label className="rp-f">Client<select aria-label="Client" data-due-client="" value={cid} onChange={(e) => setCid(e.target.value)}>
-        <option value="">Every client</option>{clients.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-      <span className="tg-right"><More label="How this list works">
+    <Filters className="cmp-filters" label="Filter the returns"
+      type={<Field label="Tax"><select aria-label="Tax" data-due-tax-pick="" value={tax} onChange={(e) => setTax(e.target.value)}>
+        <option value="">GST and TDS</option><option value="GST">GST</option><option value="TDS">TDS</option></select></Field>}
+      client={<Field label="Client"><select aria-label="Client" data-due-client="" value={cid} onChange={(e) => setCid(e.target.value)}>
+        <option value="">Every client</option>{clients.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field>}
+      onClear={() => { setTax(""); setCid(""); }} active={!!(tax || cid)}
+      tools={<More label="How this list works">
         <p>Every client’s GST and TDS returns and TDS deposits due up to {fmtDate(DueList.addDays(DueList.today(), DueList.AHEAD))}: all not yet filed, and those filed since {fmtDate(DueList.addDays(DueList.today(), -DueList.BACK))}, by due date.</p>
         <p>GST is filed when the portal’s return status, a filed return’s PDF or a date typed on the GST page says so; TDS when marked filed on the return’s Files tab or under Settings › Closed periods; a deposit when every deduction of the month is against a challan.</p>
-      </More></span>
-    </div>
+      </More>} />
     <ListTable name="dueList" rows={rows} rowKey={(x) => x.cid + "|" + x.kind + "|" + x.what + "|" + x.per + "|" + (x.gstin || "")} unit={["return or payment", "returns and payments"]}
       rowProps={(x) => ({ "data-due": x.cid + "|" + x.kind + "|" + (x.form || x.what) + "|" + x.per, "data-status": x.status, className: "rowlink", onClick: (e) => { if (!e.target.closest("button")) DueList.open(x); } })}
       empty={view === "overdue" ? "Nothing overdue. Every return and payment due so far is filed or paid." : view === "month" ? "Nothing more due this month." : "Nothing here."}

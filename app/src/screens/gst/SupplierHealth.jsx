@@ -19,7 +19,7 @@ export default function SupplierHealth() {
   return <section className="dash-card" data-sup-health={reg + "|" + fy}>
     <div className="rp-title"><h3>Supplier health, {fy}</h3>
       <span className="note">From the 2B of {r.months.map((m) => GSTR.label(m)).join(", ")}.</span></div>
-    <p className="note" data-sup-source="">FinCom’s GST connection (TaxPro) has no “search taxpayer” call, so a supplier’s registration (active, cancelled or suspended) cannot be read here: check the suppliers flagged below on the GST portal’s Search Taxpayer before taking their credit. Whether they file is read from the client’s 2B.</p>
+    <p className="note" data-sup-source="">FinCom’s GST connection has no “search taxpayer” call, so a supplier’s registration (active, cancelled or suspended) cannot be read here: check the suppliers flagged below on the GST portal’s Search Taxpayer before taking their credit. Whether they file is read from the client’s 2B.</p>
     <div className="gf-chips" style={{ margin: "8px 0" }} role="group" aria-label="Show">
       {[["flag", "To look at"], ["notfiling", "Not filing"], ["missing", "Bills missing"], ["late", "Files late"], ["bad", "GSTIN not valid"], ["all", "All"]].map(([k, l]) =>
         <button key={k} data-sup-chip={k} className={"gf-chip" + (f === k ? " on" : "") + (k === "notfiling" && count(k) ? " warn" : "")} aria-pressed={f === k} onClick={() => setF(k)}>{l} <b>{count(k)}</b></button>)}

@@ -9,6 +9,8 @@ import TopBar from "./TopBar.jsx";
 import Switcher from "./Switcher.jsx";
 import FirmSetup from "./parts/FirmSetup.jsx";
 import WhyNotes from "./parts/WhyNotes.jsx";
+import Assistant from "./parts/Assistant.jsx";
+import PreFilePanel from "./parts/PreFile.jsx";
 import SCREENS from "./screens/index.js";
 import Main from "./Main.jsx";
 import { clearBoot, bootDone } from "./boot.js";
@@ -41,6 +43,8 @@ export default function App() {
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
       <Guard name="the firm's details" v={v} quiet><FirmSetup /></Guard>
       <WhyNotes />
+      <Guard name="the assistant" v={v} quiet><Assistant /></Guard>
+      <Guard name="the check before filing" v={v} quiet><PreFilePanel /></Guard>
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
         return Screen ? createPortal(<Guard name={name} v={v}><Suspense fallback={null}><Screen {...props} /></Suspense></Guard>, host, key) : null;

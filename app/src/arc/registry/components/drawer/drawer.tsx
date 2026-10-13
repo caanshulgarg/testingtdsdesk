@@ -53,6 +53,8 @@ export interface DrawerContentProps
   container?: HTMLElement | null;
   /** FinCom: the close button's accessible name (default "Close drawer"). */
   closeLabel?: string;
+  /** FinCom (ui-tidy): the element the drawer is put in (still fixed to the window, unlike `container`); the page's #app for a row's detail. */
+  portal?: HTMLElement | null;
 }
 
 const fade: Transition = { duration: motionTokens.duration.instant };
@@ -87,6 +89,7 @@ export function DrawerContent({
   side = "right",
   container,
   closeLabel = "Close drawer",
+  portal,
   className,
   onInteractOutside,
   ...props
@@ -147,7 +150,7 @@ export function DrawerContent({
   // Under a bare Radix root the open state is unknown here, so CSS keyframes keyed off data-state animate the layers instead.
   if (drawer === null) {
     return (
-      <DialogPrimitive.Portal container={container}>
+      <DialogPrimitive.Portal container={container || portal}>
         <DialogPrimitive.Overlay className={`${styles.overlay} ${styles.keyframes}`} data-contained={container ? "" : undefined} />
         <DialogPrimitive.Content {...props} onInteractOutside={onInteractOutside} data-side={side} data-contained={container ? "" : undefined} className={`${classes} ${styles.keyframes}`}>{inner}</DialogPrimitive.Content>
       </DialogPrimitive.Portal>
@@ -158,7 +161,7 @@ export function DrawerContent({
   return (
     <AnimatePresence custom={drawer.flung}>
       {drawer.open && (
-        <DialogPrimitive.Portal key="drawer" forceMount container={container}>
+        <DialogPrimitive.Portal key="drawer" forceMount container={container || portal}>
           <DialogPrimitive.Overlay asChild forceMount>
             <motion.div
               className={styles.overlay}

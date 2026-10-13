@@ -61,6 +61,8 @@ with sync_playwright() as p:
     ok("Ctrl+Enter" in pg.evaluate("KEYS.map(k => k[0]).join(' ')") and "J or K" in pg.evaluate("KEYS.map(k => k[0]).join(' ')"), "33. the ? list shows Ctrl+Enter and J/K")
     # 24. soft delete with a reason, restore
     pg.evaluate("(b) => { S.filter = 'draft'; S.selected = b; render(); }", b); pg.wait_for_timeout(500)
+    # ui-tidy (13-Oct-2026): Delete is under the bill's ⋯ More, with Read again
+    pg.click('#app .detail [data-bill-more] > summary'); pg.wait_for_timeout(200)
     pg.click('#app .detail button:has-text("Delete")'); pg.wait_for_timeout(300)
     pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(300)
     ok(pg.locator("#confirmBox .cbx-err").count() == 1 and pg.evaluate("(b) => D().entries[b].status", b) == "draft", "24. Delete asks why, and waits for a reason")

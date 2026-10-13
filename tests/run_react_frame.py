@@ -58,8 +58,12 @@ with sync_playwright() as p:
     pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "invoices", "the sidebar's Purchase leaves Client setup")
     # the Tally panel and the firm menu
-    pg.click("#cobar .tallychip"); pg.wait_for_timeout(400)
-    ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally chip opens the Tally panel")
+    # ui-tidy (13-Oct-2026): while the client is not linked, the Tally sign opens its Link to Tally card (one way to link);
+    # once linked it opens the Tally panel, as before
+    pg.click("#cobar .tallychip"); pg.wait_for_timeout(600)
+    ok(pg.evaluate("S.tab") == "cotally" and pg.locator("#app [data-tally-link]").count() >= 1, "the Tally sign of a client not linked opens its Link to Tally card")
+    pg.evaluate("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
+    ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally panel opens")
     pg.click('.tallypanel button[aria-label="Close"]'); pg.wait_for_timeout(300)
     ok(pg.locator(".tallypanel").count() == 0, "and it closes")
     pg.click("#cobar .firmbtn"); pg.wait_for_timeout(400)

@@ -3,6 +3,19 @@
 // same on Today, Clients, a client's Overview and the review table's status.
 import ListTable from "../parts/ListTable.jsx";
 import { DueLine } from "../parts/DueList.jsx";
+import { goTallyCard } from "../parts/TallyChip.jsx";
+
+// ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked to Tally, in one line; each name opens its
+// own Link to Tally card, the rest are listed first on the Tally page
+function NotLinkedLine() {
+  const list = sortedCompanies().filter((c) => typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked");
+  if (!list.length) return null;
+  return <div className="due-line" data-not-linked-line={list.length}>
+    <span className="warn-text"><b>{list.length}</b>{list.length === 1 ? " client not linked to Tally:" : " clients not linked to Tally:"}</span>
+    {list.slice(0, 3).map((c, i) => <span key={c.id}>{i ? ", " : " "}<button className="linkbtn" data-not-linked-open={c.id} onClick={() => goTallyCard(c.id)}>{c.name + " → Link"}</button></span>)}
+    {list.length > 3 && <>{" and "}<button className="linkbtn" data-not-linked-more="" onClick={() => { S.tallyFocus = ""; navHome("tally"); }}>{list.length - 3} more</button></>}
+  </div>;
+}
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -48,6 +61,7 @@ export default function Today() {
         <p className="note" style={{ marginTop: 8 }}>Counts cover clients opened on this computer; open a client to bring its figures up to date.</p>
         {/* round 46: the returns due are on the Compliance page; Today keeps one line */}
         <DueLine />
+        <NotLinkedLine />
       </>}
     </section>
   );

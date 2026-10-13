@@ -1,0 +1,20 @@
+{
+ "form": "ASMT-10",
+ "law": "GST",
+ "section": "61",
+ "rule": "99",
+ "amount": 5600,
+ "reply_by": "2026-11-15",
+ "periods": [
+  "2026-02"
+ ],
+ "gstin": "07AAGCL4827M1Z3",
+ "check": {
+  "tool": "itc_vs_2b",
+  "from": "2026-02-01",
+  "to": "2026-02-28",
+  "books": 5400,
+  "twob": 5400,
+  "rcm_credit": 5600
+ }
+}

@@ -39,7 +39,7 @@ export default function GstApiAll() {
   };
   return <div className="pane" data-pane="gstapi-all">
     <h2>GST API, all clients</h2>
-    <p className="note">Each client's GST portal connection through the firm's GST API (TaxPro). FinCom keeps a connection alive until the taxpayer's API access period ends, fetches 2B after the 14th and the filed GSTR-1 and 3B each morning, and reminds you 3 days before access ends. The OTP is given in the client's GST tab (2B).</p>
+    <p className="note">Each client's GST portal connection through FinCom's GST connection. The taxpayer switches on API access on the GST portal once (Profile → Manage API Access → Yes, for up to 30 days) and approves FinCom's OTP. FinCom keeps a connection alive until the taxpayer's API access period ends, fetches 2B after the 14th and the filed GSTR-1 and 3B each morning, and reminds you 3 days before access ends. The OTP is given in the client's GST tab (2B).</p>
     <div className="gf-chips" style={{ margin: "8px 0" }}>
       {[["", "All", clients.length], ["live", "Connected", count("live")], ["soon", "Ending soon", count("soon")], ["ended", "Ended", count("ended")], ["none", "Not connected", count("none")]].map(([k, l, n]) =>
         <button key={k} className={"gf-chip" + (f === k ? " on" : "") + (k === "soon" && n ? " warn" : "")} onClick={() => setF(k)}>{l} <b>{n}</b></button>)}

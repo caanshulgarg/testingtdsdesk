@@ -4,6 +4,9 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Button from "./parts/Button.jsx";
 
+// Ctrl+K, then a question: the switcher's last line asks FinCom Assistant (src/js/75-assistant.js)
+function askFromSwitcher() { const q = S.switcher && S.switcher.q; closeSwitcher(); if (q && typeof ASST === "object") { ASST.open(q); ASST.ask(q); } }
+
 export default function Switcher() {
   const modal = document.getElementById("modal"), sw = S.switcher;
   const input = useRef(null), selected = useRef(null);
@@ -23,9 +26,9 @@ export default function Switcher() {
     const keys = (ev) => {
       const list = switcherList(), k = ev.key;
       if (k === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeSwitcher(); }   // Esc closes the switcher only, not the client too
-      else if (k === "ArrowDown") { ev.preventDefault(); S.switcher.idx = Math.min(list.length - 1, S.switcher.idx + 1); renderSwitcher(); }
+      else if (k === "ArrowDown") { ev.preventDefault(); S.switcher.idx = Math.min(list.length - (S.switcher.q ? 0 : 1), S.switcher.idx + 1); renderSwitcher(); }
       else if (k === "ArrowUp") { ev.preventDefault(); S.switcher.idx = Math.max(0, S.switcher.idx - 1); renderSwitcher(); }
-      else if (k === "Enter") { ev.preventDefault(); if (list[S.switcher.idx]) openCompany(list[S.switcher.idx].id); }
+      else if (k === "Enter") { ev.preventDefault(); if (list[S.switcher.idx]) openCompany(list[S.switcher.idx].id); else if (S.switcher.q) askFromSwitcher(); }
       else if (k === "F3") ev.preventDefault();
     };
     document.addEventListener("keydown", keys, true);
@@ -34,7 +37,7 @@ export default function Switcher() {
   if (!sw) return null;
 
   const list = switcherList(), rec = recentIds();
-  sw.idx = Math.max(0, Math.min(sw.idx, list.length - 1));
+  sw.idx = Math.max(0, Math.min(sw.idx, list.length - (sw.q ? 0 : 1)));
   return createPortal(
       <div className="sw" role="dialog" aria-modal="true" aria-label="Select company">
         <div className="swhead"><b>Select company</b><span className="note">↑↓ to move, Enter to open, Esc to close</span></div>
@@ -53,6 +56,9 @@ export default function Switcher() {
               </li>
             );
           }) : <li className="note">No client matches.</li>}
+          {/* FinCom Assistant: what was typed, asked (Enter on this line) */}
+          {sw.q ? <li role="option" aria-selected={sw.idx === list.length} ref={sw.idx === list.length ? selected : null} data-sw-ask="" onClick={askFromSwitcher}>
+            <span><b>Ask FinCom Assistant</b><br /><span className="note">“{sw.q}”{S.view === "company" && CO() ? " · about " + CO().name : ""}</span></span></li> : null}
         </ul>
         <div className="swfoot">
           <Button className="btn small" onClick={() => doAct("swHome")}>All clients</Button>

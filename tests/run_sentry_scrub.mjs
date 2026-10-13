@@ -14,10 +14,10 @@ const leaks = (x) => { const s = typeof x === "string" ? x : JSON.stringify(x); 
 
 // the fields an event may carry (docs/sentry.md, "What is sent"); anything else is a failure
 const ALLOWED = {
-  top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk"],
+  top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk", "fingerprint", "extra"],
   exception: ["type", "value", "mechanism", "stacktrace"], mechanism: ["type", "handled"], frame: ["filename", "function", "module", "lineno", "colno", "in_app"],
   breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to"],
-  tags: ["route", "install", "where", "kind", "guard", "firm", "mode"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
+  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
   contexts: ["os", "runtime", "browser"], context: ["name", "version"], sdk: ["name", "version", "settings"], settings: ["infer_ip"],
 };
 function shape(e) {
@@ -136,6 +136,25 @@ ok(/from "\.\/sentry-scrub\.js"/.test(cloudSrc) && /scrubEvent\(/.test(cloudSrc)
 ok(/sendDefaultPii: false/.test(appSrc) && !/replayIntegration|feedbackIntegration|Replay|Feedback|captureFeedback|httpClientIntegration|browserTracingIntegration|contextLinesIntegration|extraErrorDataIntegration|captureConsoleIntegration/.test(appSrc) && /defaultIntegrations: false/.test(appSrc),
   "app: sendDefaultPii false; no replay, feedback, tracing, HTTP-client or extra-data integration; no default integrations");
 ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test(appSrc) && /history: false/.test(appSrc), "app: no XHR/fetch/click/history breadcrumbs");
+
+// FinCom Assistant's mismatch events (13-Oct-2026): only their grouping (code names), the row's id and the entries' ids
+{
+  const base = { event_id: "0123456789abcdef0123456789abcdef", timestamp: 1, platform: "javascript", level: "error", release: "fincom-assistant-1.0.0",
+    message: "Assistant mismatch: rcm.summary.tax", fingerprint: ["assistant-mismatch", "rcm.summary.tax", "rcm"],
+    tags: { kind: "assistant-mismatch", tool: "rcm", firm_id: "0a1b2c3d4e5f", client_id: "a1b2c3d4e5f6", where: "assistant" },
+    extra: { mismatch_id: "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab", entry_ids: ["5f1c0d2a-7b3e-4c9a-9e21-3d8f6a0b4c71-00000060"], ai_value: 4000, fincom_value: 3600, figure: "rent paid to ALPHA TRADERS", question: "what did we pay Alpha" } };
+  const o = S.scrubEvent(JSON.parse(JSON.stringify(base)));
+  ok(o.message === "Assistant mismatch: rcm.summary.tax" && JSON.stringify(o.fingerprint) === JSON.stringify(base.fingerprint), "assistant mismatch: its title and grouping kept");
+  ok(o.tags.kind === "assistant-mismatch" && o.tags.tool === "rcm" && o.tags.firm_id === "0a1b2c3d4e5f" && o.tags.client_id === "a1b2c3d4e5f6", "assistant mismatch: kind, tool and the hashes kept");
+  ok(JSON.stringify(Object.keys(o.extra).sort()) === '["entry_ids","mismatch_id"]', "assistant mismatch: extra keeps the row's id and the entries' ids only");
+  ok(!/4000|3600|ALPHA|Alpha|rent/.test(JSON.stringify(o)), "assistant mismatch: no amount, name or words survive");
+  const bad = S.scrubEvent({ ...JSON.parse(JSON.stringify(base)), message: "Assistant mismatch: rent paid to ALPHA TRADERS 4000", fingerprint: ["assistant-mismatch", "ALPHA TRADERS", "rcm"],
+    tags: { kind: "assistant-mismatch", tool: "ALPHA TRADERS", firm_id: "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab", client_id: "alpha-traders" }, extra: { mismatch_id: "ALPHA", entry_ids: ["09AANFG3202D1ZR", "ALPHA TRADERS"] } });
+  ok(!bad.fingerprint && !bad.extra && !bad.tags.tool && !bad.tags.firm_id && !bad.tags.client_id && !/ALPHA|4000/.test(JSON.stringify(bad)), "assistant mismatch with data in it: those fields are dropped");
+  const other = S.scrubEvent({ ...JSON.parse(JSON.stringify(base)), tags: { kind: "beat" } });
+  ok(!other.fingerprint && !other.extra, "any other event: still no fingerprint and no extra");
+  ok(S.scrubEvent({ ...JSON.parse(JSON.stringify(base)), tags: { kind: "user-report", tool: "entries_filter" }, message: "Assistant answer reported wrong: user_report", fingerprint: ["user-report", "user_report", "entries_filter"] }).message === "Assistant answer reported wrong: user_report", "a user's report: its title kept");
+}
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

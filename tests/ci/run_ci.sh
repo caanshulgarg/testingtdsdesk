@@ -73,7 +73,7 @@ SUDO=()
 # listening (CI shard 1, 03-Oct-2026: run_clean_names_server and run_queue_server, the shard's first Deno tests)
 DENO_BIN="${DENO:-$(command -v deno || true)}"
 if [ -n "$DENO_BIN" ] && [ -x "$DENO_BIN" ]; then
-  "$DENO_BIN" cache "$TESTS/../server/tally-cloud/index.ts" >"$LOGS/_deno_cache.log" 2>&1 || { echo "deno cache failed (tests go on):"; tail -5 "$LOGS/_deno_cache.log"; }
+  "$DENO_BIN" cache "$TESTS/../server/tally-cloud/index.ts" "$TESTS/../server/zoho-books/index.ts" >"$LOGS/_deno_cache.log" 2>&1 || { echo "deno cache failed (tests go on):"; tail -5 "$LOGS/_deno_cache.log"; }
 fi
 
 declare -a R S
