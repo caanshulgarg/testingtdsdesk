@@ -9,6 +9,7 @@
 //   TracesCheck: TRACES' consumed amount against FinCom's (a return's After filing).
 import { useEffect, useRef, useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
+import Filters, { Field as FbField } from "../../parts/Filters.jsx";
 import { Info } from "../../parts/Answer.jsx";
 import { Lock as LockIcon } from "lucide-react";
 
@@ -212,13 +213,13 @@ export default function Register() {
     <div className="rp-title"><h2 className="tg-h2">Challan register{co.tan ? " · TAN " + co.tan : ""}</h2>
       <Info label="The rules">One register for the client’s TAN; every return draws on it. A challan is never used beyond what it paid: tax, interest and fee each have their own limit. A new challan goes to the draft return of its own type and quarter by itself. A challan of another form or an earlier quarter or year may be used: a note says so, and the trail keeps it. A return marked filed is locked: its challans change only once a correction is opened for it.</Info></div>
     <Said />
-    <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }}>
-      <label className="chk"><input type="checkbox" data-reg-filter="needs" checked={!!f.needs} onChange={(ev) => { S.regFl = { ...f, needs: ev.target.checked }; render(); }} /> Needs a return</label>
-      <span style={{ flex: 1 }} />
-      <button className="btn small primary" data-reg-add="" onClick={() => setAdding(!adding)}>Add challan</button>
-      <button className="btn small" onClick={() => up.current && up.current.click()}>Upload challans</button>
-      <input ref={up} type="file" multiple hidden accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf" onChange={(ev) => { const fs = Array.from(ev.target.files || []); ev.target.value = ""; upload(fs); }} />
-    </div>
+    {/* the one filter bar (parts/Filters.jsx); its one filter, "Needs a return" */}
+    <Filters label="Challan filters" active={!!f.needs} onClear={() => { S.regFl = {}; render(); }}
+      type={<FbField label="Show"><select data-reg-filter="needs" value={f.needs ? "needs" : ""} onChange={(ev) => { S.regFl = { ...f, needs: ev.target.value === "needs" }; render(); }}>
+        <option value="">Every challan</option><option value="needs">Needs a return</option></select></FbField>}
+      tools={<><button className="btn small primary" data-reg-add="" onClick={() => setAdding(!adding)}>Add challan</button>
+        <button className="btn small" onClick={() => up.current && up.current.click()}>Upload challans</button>
+        <input ref={up} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf" onChange={(ev) => { const fs = Array.from(ev.target.files || []); ev.target.value = ""; upload(fs); }} /></>} />
     {adding && <AddChallan onDone={() => setAdding(false)} />}
     <ListTable name="tdsRegister" id="tdsRegTable" rows={shown} rowKey={(x) => x.c.id} unit={["challan", "challans"]} of={all.length}
       rowProps={(x) => ({ "data-reg-row": x.c.id })}

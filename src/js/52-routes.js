@@ -77,7 +77,7 @@ const Route = {
       if (p[1] === "26as"){ S.booksTab = "recon"; S.recFy = p[0]; this.replaceNext = true; return; }
       if (p[1] === "traces"){ S.tdsView = "traces"; S.tdsQ = ""; S.tdsForm = "26Q"; this.replaceNext = true; return; }
       if (p[1] === "salary"){ S.tdsView = "salary"; S.tdsQ = ""; S.paySub = ["employees", "register", "form16"].includes(p[2]) ? p[2] : "employees"; this.replaceNext = true; return; }
-      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
+      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; S.tdsFix = ""; return; }
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;
     }

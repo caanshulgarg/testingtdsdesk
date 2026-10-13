@@ -159,6 +159,7 @@ const TDSCH = {
       if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id];
     });
     TDSReg.logTag(rows, c, opt.via || "tag", cx);
+    TDSReg.kept(cx);
     if (!opt.nosave){ TDSReg.done(); saveBooks(); }
     return {ok: true, n: rows.length};
   },
@@ -177,6 +178,7 @@ const TDSCH = {
       if (b.allocFrom && (b.allocFrom[id] === "tally" || b.allocFrom[id] === "off")) b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id];
     });
     if (gone.length) TDSReg.logUntag(gone, cx);
+    TDSReg.kept(cx);
     if (on.length && !opt.nosave){ TDSReg.done(); saveBooks(); }
     return {ok: true, n: on.length};
   },

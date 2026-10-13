@@ -13,7 +13,8 @@ BOOKS = """() => {
     rec(5, '20260315', 'Marigold Expo Services', 1000, 50000),
     v(6, '20260331', 'Journal', '', [{l: R2, a: -19000}, {l: R1, a: 19000}])]);
   b.pans = Object.assign({}, b.pans, {'Juniper Legal Associates': 'AAJFJ1234K'});
-  S.booksTab = 'tds'; S.tdsFy = '2025-26'; S.tdsView = 'recon'; render();
+  // tds-layout (14-Oct-2026): 26AS is the client's Reconciliations, not a TDS tab
+  S.booksTab = 'recon'; S.recFy = '2025-26'; S.tdsFy = '2025-26'; render();
 }"""
 
 ME = "07AAGCL4827M1Z3"

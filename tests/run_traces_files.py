@@ -1,5 +1,5 @@
-"""python3 run_traces_files.py - TRACES files by upload (TDS/GST round 2, item 3; TRF, src/js/70-traces-files.js; the TDS
-page › TRACES files):
+"""python3 run_traces_files.py - TRACES files by upload (TDS/GST round 2, item 3; TRF, src/js/70-traces-files.js; a
+return's After filing since tds-layout, 14-Oct-2026; it was the TDS page › TRACES files):
 
   Form 16A   a zip from TRACES (locked with a password, holding another zip with the PDFs) is opened; each certificate is
              kept with its deductee, by the PAN in its file name or, failing that, in its text ("PAN of the Deductee"), and
@@ -76,9 +76,12 @@ def upload(pg, paths, password=None, wait=1800):
     if password is not None:
         pg.wait_for_selector("#confirmBox #trfpw", timeout=5000); pg.fill("#confirmBox #trfpw", password); pg.click("#confirmBox [data-cbx=yes]")
     pg.wait_for_timeout(wait)
-    return pg.inner_text("#app [data-traces]")
+    return pg.inner_text("#app [data-after-filing]")
 
-def go(pg, view="traces", fy="2025-26", q="", form="", tab=""):
+# tds-layout (14-Oct-2026): TRACES files is no TDS tab; a return's After filing takes its TRACES files once it is marked
+# filed. go() with no view opens 26Q Q3 2025-26's After filing (the return the fixtures' files are of).
+def go(pg, view="after", fy="2025-26", q="Q3", form="26Q", tab="after"):
+    if view == "after": view = "return"
     if view == "return": pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsForm = a[2]; S.tdsPickForm = a[2]; S.tdsView = 'return'; S.tdsTab = a[3]; render(); }", [fy, q, form, tab])
     else: pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsView = a[1]; render(); }", [fy, view])
     pg.wait_for_timeout(500)
@@ -91,7 +94,9 @@ try:
         pg.evaluate("() => { S.books.pans = Object.assign({}, S.books.pans, {'Juniper Legal Associates': 'AAJFJ1234K', 'Nightjar Sound & Light Co': 'ABCPN5555N'}); }")
         ok(pg.evaluate("['f16a', 'tracesJr', 'tracesConso'].every(k => BOOKS_KEYS.includes(k))"), "the certificates' records, the defaults and the consolidated file are kept with the books (BOOKS_KEYS)")
         go(pg)
-        ok(pg.locator("#app [data-traces]").count() == 1 and "Upload TRACES files" in pg.inner_text("#app [data-traces]"), "TDS › TRACES files: the page with its upload")
+        ok(pg.locator("#app [data-after-wait]").count() == 1 and pg.locator('#app [data-upload="traces"]').count() == 0, "a return not marked filed: After filing says it is available once marked filed")
+        pg.evaluate("() => { S.books.tdsFiled = Object.assign({}, S.books.tdsFiled, {[TDSFiled.key('2025-26', 'Q3', '26Q')]: {on: '2026-01-31', token: ''}}); render(); }"); pg.wait_for_timeout(300)
+        ok(pg.locator("#app [data-after-filing]").count() == 1 and "Upload TRACES files" in pg.inner_text("#app [data-after-filing]"), "marked filed: 26Q Q3's After filing, with its upload")
 
         # ---- Form 16A
         pdf1 = make_pdf(br, ["FORM NO. 16A", "Certificate under section 203 of the Income-tax Act, 1961 for tax deducted at source", "Certificate No. JLAQ3XY",
@@ -107,13 +112,13 @@ try:
         ok(sorted(f16) == sorted([["AAJFJ1234K", "Juniper Legal Associates", "Q3", "2025-26", "JLAQ3XY", "AAJFJ1234K_Q3_2025-26.pdf"], ["ABCPN5555N", "Nightjar Sound & Light Co", "Q3", "2025-26", "NJQ3ABC", "certificate-2.pdf"]]),
            "the locked zip, with a zip inside, opened: two certificates kept, each with its deductee (one by its file name, one by the PAN in its text) (%s)" % f16)
         ok("Form 16A: 2 certificates kept with 2 deductees" in t, "said: 2 certificates kept with 2 deductees")
-        ok(pg.locator('#app [data-f16-pan="AAJFJ1234K"]').count() == 1 and "Juniper Legal Associates" in pg.inner_text('#app [data-f16-pan="AAJFJ1234K"]'), "the deductee's line on the page")
+        ok(pg.locator('#app [data-f16-pan="AAJFJ1234K"]').count() == 1 and "Juniper Legal Associates" in pg.inner_text('#app [data-f16-pan="AAJFJ1234K"]'), "the deductee's line on the return's After filing")
         with pg.expect_download() as dl:
             pg.click('#app [data-f16-pan="AAJFJ1234K"] [data-f16-get]')
         d = dl.value; path = d.path()
         ok(d.suggested_filename == "AAJFJ1234K_Q3_2025-26.pdf" and open(path, "rb").read()[:4] == b"%PDF", "the certificate downloads as it came (%s)" % d.suggested_filename)
         go(pg, "return", "2025-26", "Q3", "26Q", "deductees")
-        ok(pg.locator('#app [data-f16-link="AAJFJ1234K"]').count() == 1, "the return's Deductees tab: Form 16A beside Juniper's PAN")
+        ok(pg.locator('#app [data-f16-link="AAJFJ1234K"]').count() == 1, "the return's Deductions, by deductee: Form 16A beside Juniper's PAN")
         go(pg)
         # the same certificate again: in place of the earlier one
         upload(pg, locked, password="DELZ12345A", wait=3500)
@@ -141,9 +146,9 @@ try:
         ok(jr and jr["diffs"] == [] and jr["summary"].get("total") == 3770, "the report's summary agrees with its lines (total ₹3,770)")
         box = '#app [data-traces-defaults="26Q|Q3|2025-26"]'
         tt = pg.inner_text(box)
-        ok("TRACES defaults" in tt and "₹3,770.00 to pay" in tt and "file a correction" in tt.lower(), "the TRACES defaults list on the page: ₹3,770.00 to pay, with what to do")
+        ok("TRACES defaults" in tt and "₹3,770.00 to pay" in tt and "file a correction" in tt.lower(), "the TRACES defaults list on After filing: ₹3,770.00 to pay, with what to do")
         go(pg, "return", "2025-26", "Q3", "26Q", "checks")
-        ok(pg.locator(box).count() == 1, "the return's Errors to fix tab shows the TRACES defaults of that return")
+        ok(pg.locator(box).count() == 1, "the return's To fix tab shows the TRACES defaults of that return")
         go(pg, "return", "2025-26", "Q2", "26Q", "checks")
         ok(pg.locator("#app [data-traces-defaults]").count() == 0, "another quarter's return does not show them")
         go(pg)

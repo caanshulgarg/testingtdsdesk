@@ -153,7 +153,8 @@ try:
           b.challans.push({id: 'chNR', bsr: '0240020', serial: '20001', date: '20251020', tax: 20800, interest: 0}, {id: 'chTC', bsr: '0240020', serial: '20002', date: '20251020', tax: 100, interest: 0});
           b.alloc['zz-nr|TDS ON NON RESIDENT 195'] = 'chNR'; b.alloc['zz-tcs|TCS PAYABLE 206C1H'] = 'chTC'; render(); }""")
         pg.wait_for_timeout(300)
-        it = pg.evaluate("TDS.interest('2025-26', 'Q2', '26Q').filter(x => x.row.party === 'Kestrel Movers').map(x => [x.kind, x.months, x.amount, x.from])")
+        # the TDS review (L1, 14-Oct-2026): a deduction not yet against a challan also carries its "unpaid" interest to date; this check is the late deduction's
+        it = pg.evaluate("TDS.interest('2025-26', 'Q2', '26Q').filter(x => x.row.party === 'Kestrel Movers' && x.kind !== 'unpaid').map(x => [x.kind, x.months, x.amount, x.from])")
         ok(it == [["deduct", 3, 30, "20250610"]], "26Q: deducted on 05-Aug for the bill of 10-Jun: 1%% x 3 months on ₹1,000 = ₹30 (%s)" % it)
         it = pg.evaluate("TDS.interest('2025-26', 'Q2', '27Q').map(x => [x.kind, x.rate, x.months, x.amount])")
         ok(it == [["pay", 1.5, 3, 936]], "27Q: ₹20,800 deducted 12-Aug, paid 20-Oct (due 07-Sep): 1.5%% x 3 months = ₹936 (%s)" % it)

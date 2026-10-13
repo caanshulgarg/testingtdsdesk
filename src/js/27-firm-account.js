@@ -1076,7 +1076,7 @@ function r2Copy(k){
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
-function tdsTabGo(id){ S.tdsTab = id; render(); }
+function tdsTabGo(id){ S.tdsTab = id; S.tdsFix = ""; render(); }
 function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
 function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}}); render(); }
 function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
@@ -1143,14 +1143,14 @@ function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = g
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
   S.tdsFy = fy; Smart.keep("tds", {fy, q: q || ""});
-  if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
+  if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = ""; }
   else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
 }
 // tds-layout (14-Oct-2026): a return opened on one of its tabs (the old TDS tabs' addresses lead here: Salary, TRACES files,
 // Checks), with the To fix list or the salary part chosen (S.tdsFix, S.paySub)
 function tdsGoTab(fy, q, form, tab, extra){
-  S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsPickForm = S.tdsForm; S.tdsView = "return"; S.tdsTab = tab || ""; S.tdsOpen = ""; S.chOpen = "";
+  S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsPickForm = S.tdsForm; S.tdsView = "return"; S.tdsTab = tab || ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = "";
   Object.assign(S, extra || {}); render(); window.scrollTo(0, 0);
 }
 function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsView === "return") S.tdsView = "year"; render(); }
@@ -1159,7 +1159,7 @@ function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsVi
 function tdsPick(fy, q, form){
   const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
   S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; Smart.keep("tds", {fy, q: q || ""});
-  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
+  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = ""; } }
   else S.tdsView = "year";
   render();
 }

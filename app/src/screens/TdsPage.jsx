@@ -57,7 +57,7 @@ export function tdsRedirect() {
   else if (v === "checks" || v === "certs") {
     const k = v === "certs" ? "rates" : S.tdsCheck || "rates";
     S.tdsView = "return"; S.tdsQ = q; S.tdsForm = "26Q"; S.tdsPickForm = "26Q"; S.tdsTab = "checks";
-    S.tdsFix = k === "corr" ? "" : k;
+    S.tdsFix = k === "corr" ? "" : k; S.tdsFixAt = S.tdsFy + "|" + S.tdsQ + "|26Q";
   } else if (v === "recon") S.tdsView = "year";     // the address …/26as opens Reconciliations itself (Route.booksApply)
   return true;
 }

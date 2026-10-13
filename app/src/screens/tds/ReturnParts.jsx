@@ -116,8 +116,11 @@ export function ReturnChallans({ fy, q, form, children }) {
 // items: [{k, n, one, many}]: what is wrong, counted, in words; a click opens that list alone (S.tdsFix)
 // parts: [[k or [k…], element]]: each list; year: [[k, label, element]]: the year's checks, opened by their links
 export function ToFix({ items, parts, year = [] }) {
+  // the list chosen belongs to the return it was chosen on (S.tdsFixAt); another return opens on all its lines
+  const at = S.tdsFy + "|" + S.tdsQ + "|" + (S.tdsForm || "26Q");
+  if (S.tdsFix && S.tdsFixAt !== at) S.tdsFix = "";
   const live = items.filter((x) => x.n > 0), sel = S.tdsFix || "";
-  const pick = (k) => { S.tdsFix = S.tdsFix === k ? "" : k; render(); };
+  const pick = (k) => { S.tdsFix = S.tdsFix === k ? "" : k; S.tdsFixAt = at; render(); };
   const showing = (ks) => !sel || [].concat(ks).includes(sel);
   return <div data-to-fix={sel || "all"}>
     <section className="dash-card" style={{ marginBottom: 12 }}>
@@ -180,7 +183,7 @@ export function AfterFiling({ fy, q, form }) {
     <section className="dash-card" style={{ marginTop: 12 }} data-after-certs="">
       <h3>{cert}</h3>
       {form === "24Q" ? <p className="note">Form 16 Part B for each employee is under <button className="linkbtn" onClick={() => tdsGoTab(fy, q, "24Q", "people", { paySub: "form16" })}>Employees & declarations › Form 16</button>; Part A comes from TRACES.</p> : null}
-      {f16.length ? <ul className="note" style={{ margin: "4px 0 0 18px" }}>{f16.map((c) => <li key={c.id}><button className="linkbtn" data-f16-get={c.id} onClick={() => TRF.downloadF16(c.id)}>{c.party || c.pan}</button> · {c.pan}{c.cert ? " · " + c.cert : ""}</li>)}</ul>
+      {f16.length ? <ul className="note" style={{ margin: "4px 0 0 18px" }}>{f16.map((c) => <li key={c.id} data-f16-pan={c.pan}><button className="linkbtn" data-f16-get={c.id} onClick={() => TRF.downloadF16(c.id)}>{c.party || c.pan}</button> · {c.pan}{c.cert ? " · " + c.cert : ""}</li>)}</ul>
         : <p className="note">No certificate of this return brought in yet.</p>}
     </section>
     {jr ? <TracesDefaults jr={jr} full /> : <section className="dash-card" style={{ marginTop: 12 }}><h3>Justification report</h3><p className="note">None brought in for this return.</p></section>}

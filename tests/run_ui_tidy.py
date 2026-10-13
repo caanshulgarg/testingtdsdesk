@@ -146,10 +146,11 @@ try:
         row, opn = E(TOP, '#app [data-cmp-month="202506"]'), E(TOP, '#app [data-cmp-open="202506"]')
         ok(row and opn and abs(opn["top"] - row["bottom"]) <= 2, "GST checks: a month's filed returns open directly under its row (%s, %s)" % (row, opn))
         # TDS: a challan's deductions under its row
+        # tds-layout (14-Oct-2026): the old TDS › Challans address opens the challan register; a challan opens under its row
         go(pg, cid, "#/c/{cid}/books/tds/2026-27/challans/Q1")
-        pg.click('#app table[data-list="tdsChallans"] tbody tr:first-child button.linkbtn:has-text("▸")'); W(600)
-        r1, r2 = E(TOP, '#app table[data-list="tdsChallans"] tbody tr:first-child'), E(TOP, '#app table[data-list="tdsChallans"] tbody tr.lt-open')
-        ok(r1 and r2 and abs(r2["top"] - r1["bottom"]) <= 2, "TDS challans: a challan's deductions open directly under its row (%s, %s)" % (r1, r2))
+        pg.click('#app table[data-list="tdsRegister"] tbody tr:first-child button.linkbtn:has-text("▸")'); W(600)
+        r1, r2 = E(TOP, '#app table[data-list="tdsRegister"] tbody tr:first-child'), E(TOP, '#app table[data-list="tdsRegister"] tbody tr.lt-open')
+        ok(r1 and r2 and abs(r2["top"] - r1["bottom"]) <= 2, "TDS challan register: a challan's details open directly under its row (%s, %s)" % (r1, r2))
 
         print("2. one filter bar, 3. figures right-aligned, 4. one banner")
         bars = {}

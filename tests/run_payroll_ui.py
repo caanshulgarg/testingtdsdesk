@@ -1,7 +1,7 @@
 """python3 run_payroll_ui.py - bridge 2.4.4: the salary pages under the client's TDS, on the payroll test company
 (tests/fixtures/payroll-e2e: tables.json, the cloud copy's rows as run_e2e_payroll.py stores them; the answers in
 expected.json, worked out apart). Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test).
-  1. TDS has a Salary tab: Employees (each from Tally with PAN, group, designation, joined, left; "no PAN" said), the regime
+  1. 24Q's Employees & declarations (the TDS page's Salary tab until 14-Oct-2026): Employees (each from Tally with PAN, group, designation, joined, left; "no PAN" said), the regime
      and declarations typed in under an employee and kept with the books as items (payDetails); the senior-citizen question
      only for the old regime; no date of birth asked anywhere
   2. the pay register of a month: each pay head, gross, deductions, net, TDS as expected
@@ -58,7 +58,9 @@ try:
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, {"tables": TABLES, "details": SETUP["details"]}); pg.wait_for_timeout(800)
         print("== 1. the Salary tab and the employees")
-        ok(pg.locator('[data-tds-sec="salary"]').count() == 1, "TDS has a Salary tab")
+        # tds-layout (14-Oct-2026): no Salary tab on the TDS page; the salary pages are 24Q's "Employees & declarations"
+        ok(pg.locator('[data-ret-tab="people"][aria-selected="true"]').count() == 1 and pg.evaluate("[S.tdsForm, S.tdsTab]") == ["24Q", "people"],
+           "the salary pages: 24Q's Employees & declarations (the old Salary address leads there)")
         t = txt(pg)
         names = sorted(e[0] for e in SETUP["employees"])
         ok(all(n in t for n in names), "every employee from Tally is listed")

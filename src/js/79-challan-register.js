@@ -40,15 +40,21 @@ const TDSReg = {
     // within a drawing, once per drawing (perRender); in an action, once per action: kept for the rest of this task (an
     // action runs at once; one that waits starts again with its books as they are then)
     if (typeof IN_RENDER === "undefined" || !IN_RENDER){
-      const b = S.books || {};
-      if (this._cx && this._cx.books === S.books && this._cx.v === b.vouchers && this._cx.s === b.salary && this._cx.p === b.payroll) return this._cx.cx;
+      // kept while the same books, entries, salary and payroll, and the same allocations (the object and how many: tag and
+      // untag keep the context up to date themselves; a write to b.alloc made elsewhere adds or takes out a key, or calls forget)
+      const b = S.books || {}, a = b.alloc, an = a ? Object.keys(a).length : 0;
+      if (this._cx && this._cx.books === S.books && this._cx.v === b.vouchers && this._cx.s === b.salary && this._cx.p === b.payroll && this._cx.a === a && this._cx.an === an) return this._cx.cx;
       const cx = this.build();
-      this._cx = {books: S.books, v: b.vouchers, s: b.salary, p: b.payroll, cx};
+      this._cx = {books: S.books, v: b.vouchers, s: b.salary, p: b.payroll, a, an, cx};
       Promise.resolve().then(() => { this._cx = null; });
       return cx;
     }
     return this.memo("ctx", () => this.build());
   },
+  // the context worked out again at the next ctx() (after a write to b.alloc that is not a tag or an untag)
+  forget(){ this._cx = null; },
+  // tag and untag kept the context up to date (track): it stays the action's context with the allocations as they are now
+  kept(cx){ const b = S.books || {}; if (this._cx && this._cx.cx === cx){ this._cx.a = b.alloc; this._cx.an = b.alloc ? Object.keys(b.alloc).length : 0; } },
   build(){
     {
       const byRow = {}, uses = {}, use = {};
@@ -363,15 +369,25 @@ const TDSReg = {
     if (c.placedIn) return c.placedIn;
     return this.key(form, TDS.fyOf(d), TDS.qOf(d));
   },
-  autoPlace(c){
+  // what Tally links (its bill references): the deductions, Tally's to tag (TDSTally.sync) or the person's where Tally's link
+  // is unclear ("tag it by hand"), never placed by autoPlace; and the payments, whose challan waits for the sync's tags
+  // before it is placed (the owner's order: Tally's tags first). {rows: Set, vids: Set}
+  tallyLinked(){
+    try { const l = typeof TDSTally === "object" && S.books ? TDSTally.links(S.books) : []; return {rows: new Set(l.map(x => x.row)), vids: new Set(l.map(x => x.vid))}; }
+    catch (e){ return {rows: new Set(), vids: new Set()}; }
+  },
+  // tl: tallyLinked(), once for several; synced: called by the sync, after Tally's tags
+  autoPlace(c, tl, synced){
     if (!c || c.autoPlace !== "pending") return {placed: false};
+    tl = tl || this.tallyLinked();
+    if (c.fromVoucher && tl.vids.has(c.fromVoucher) && !synced) return {placed: false, waiting: true};   // still "pending": the sync places it
     const cx = this.ctx();
     if (this.usedTax(c, cx) > 0.005){ c.autoPlace = "used"; return {placed: false}; }
     const form = this.homeForm(c);
     if (!form){ c.autoPlace = "unknown"; return {placed: false, unknown: true}; }
     const d = TDS.ymd(c.date), fy0 = TDS.fyOf(d), q0 = TDS.qOf(d);
     const prev = q0 === "Q1" ? {fy: (num(fy0.slice(0, 4)) - 1) + "-" + fy0.slice(2, 4), q: "Q4"} : {fy: fy0, q: "Q" + (num(q0.slice(1)) - 1)};
-    const only = (r) => TDS.ymd(r.date) <= d && (form === "24Q" || TDSCH.secOk(c.section, r.section));
+    const only = (r) => TDS.ymd(r.date) <= d && !tl.rows.has(r.id) && (form === "24Q" || TDSCH.secOk(c.section, r.section));
     for (const t of [{fy: fy0, q: q0}, prev]){
       if (this.locked(t.fy, t.q, form) || !this.openRows(t.fy, t.q, form, cx).some(only)) continue;
       const r = this.useBalance(c.id, form, t.fy, t.q, this.balance(c, cx).tax, 0, 0, "auto", only);
@@ -381,7 +397,7 @@ const TDSReg = {
     return {placed: false};
   },
   // every pending challan, once the challans are made (addHand, TDSCH.add, TDSTally.sync, challanFromBooks)
-  placeNew(){ return TDS.challans().filter(c => c.autoPlace === "pending").map(c => Object.assign({c}, this.autoPlace(c))); },
+  placeNew(synced){ const p = TDS.challans().filter(c => c.autoPlace === "pending"), tl = p.length ? this.tallyLinked() : null; return p.map(c => Object.assign({c}, this.autoPlace(c, tl, synced))); },
   // the words and the way to the return a new challan went to: "Added to 26Q Q2 →"
   placedToast(p, lead){
     if (!p || !p.placed) return toast(lead);
