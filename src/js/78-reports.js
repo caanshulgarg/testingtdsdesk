@@ -1944,9 +1944,10 @@ const FSX = (() => {
     const cashL = (inp.tb || []).filter(t => isCash(t.l)), open = sum(cashL, t => P(t.o)), move = sum(cashL, t => P(t.d) - P(t.c));
     // the reconciliation: profit (accrual) + the movement of every other balance sheet ledger = the movement in cash and bank
     const pls = (inp.tb || []).filter(t => { const m = (inp.map || {})[t.l]; return m ? X.isPL(m.line) : /^(sales accounts|purchase accounts|direct incomes|indirect incomes|direct expenses|indirect expenses)$/i.test((t.g || []).slice(-1)[0] || ""); });
-    const plSet = new Set(pls.map(t => t.l)), profit = -sum(pls, t => P(t.d) - P(t.c));
+    const plSet = new Set(pls.map(t => t.l)), stockCh = inp.stock ? P(inp.stock.close) - P(inp.stock.open) : 0, profit = -sum(pls, t => P(t.d) - P(t.c)) + stockCh;
     const adj = {}; (inp.tb || []).filter(t => !plSet.has(t.l) && !isCash(t.l)).forEach(t => { const m = (inp.map || {})[t.l], k = m && m.line ? (X.line(m.line) || {face: m.line}).face : ((t.g || []).slice(-1)[0] || "(not grouped)"); adj[k] = (adj[k] || 0) + (P(t.c) - P(t.d)); });
-    const recon = [["Profit for the period (accrual basis, from the books)", profit]].concat(Object.entries(adj).filter(([, v]) => v).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [(v > 0 ? "Add: increase in / decrease of " : "Less: decrease in / increase of ") + k, v]));
+    if (stockCh) adj["Inventories (closing stock not booked in the ledgers)"] = -stockCh;
+    const recon = [["Profit for the period (accrual basis" + (inp.stock ? ", as in the statements" : ", from the books") + ")", profit]].concat(Object.entries(adj).filter(([, v]) => v).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [(v > 0 ? "Add: increase in / decrease of " : "Less: decrease in / increase of ") + k, v]));
     const reconTot = sum(recon, z => z[1]);
     return {from: inp.from, to: inp.to, months: ms, rec, pay, lines, totals: {receipts: R, payments: Pp, net: R - Pp}, cash: {open, move, close: open + move, ledgers: cashL.map(t => t.l)}, recon, reconTot, diff: reconTot - move, voucherDiff: (R - Pp) - move, entity: inp.entity || {}};
   };
@@ -1965,10 +1966,10 @@ const FSX = (() => {
     };
     const tr = block("Receipts", cm.rec, "CM_R"); rp.rows.push([]); const tp = block("Payments", cm.pay, "CM_P"); rp.rows.push([]);
     const tc = colL(cm.months.length + 1);
-    rp.rows.push([{v: "Net receipts / (payments)", s: 1}].concat(cm.months.map((m, j) => ({v: null, f: colL(j + 1) + tr + "-" + colL(j + 1) + tp, s: 3}))).concat([{v: cm.totals.net / 100, f: tc + tr + "-" + tc + tp, s: 3}]));
-    rp.rows.push([], ["Cash and bank at the start", {v: cm.cash.open / 100, s: 2}], ["Cash and bank at the end (books)", {v: cm.cash.close / 100, s: 2}], ["Movement in cash and bank (books)", {v: cm.cash.move / 100, f: "B" + (rp.rows.length + 1) + "-B" + rp.rows.length, s: 3}]);
-    // the net month values: computed
-    const netRow = rp.rows.length - 4; rp.rows[netRow - 1].forEach((c, j) => { if (j && c && c.v === null) c.v = (sum(cm.rec, h => h.m[cm.months[j - 1]] || 0) - sum(cm.pay, h => h.m[cm.months[j - 1]] || 0)) / 100; });
+    rp.rows.push([{v: "Net receipts / (payments)", s: 1}].concat(cm.months.map((m, j) => ({v: (sum(cm.rec, h => h.m[m] || 0) - sum(cm.pay, h => h.m[m] || 0)) / 100, f: colL(j + 1) + tr + "-" + colL(j + 1) + tp, s: 3}))).concat([{v: cm.totals.net / 100, f: tc + tr + "-" + tc + tp, s: 3}]));
+    rp.rows.push([]); rp.rows.push(["Cash and bank at the start", {v: cm.cash.open / 100, s: 2}]); const rS = rp.rows.length;
+    rp.rows.push(["Cash and bank at the end (books)", {v: cm.cash.close / 100, s: 2}]); const rE = rp.rows.length;
+    rp.rows.push(["Movement in cash and bank (books)", {v: cm.cash.move / 100, f: "B" + rE + "-B" + rS, s: 3}]);
     const rc = {name: "Reconciliation", rows: [["Reconciliation of the cash-basis result to the accrual profit"], [X.UNITS], [], ["Particulars", "Amount"]], widths: [70, 18]};
     const f0 = rc.rows.length + 1; cm.recon.forEach(([t, v]) => rc.rows.push([t, {v: v / 100, s: 2}]));
     const f1 = rc.rows.length; rc.rows.push([{v: "Net movement in cash and bank (cash basis)", s: 1}, {v: cm.reconTot / 100, f: "SUM(B" + f0 + ":B" + f1 + ")", s: 9}]);
@@ -2227,7 +2228,10 @@ const FSX = (() => {
     const mp = X.mapping(X.store(b).map, t.tb, X.kindOf(b)).map;
     // the cash and bank movement over the period, from the books
     const tb = t.tb.map(r => Object.assign({}, r));
-    return {entity: {name: (typeof CO === "function" ? CO() || {} : {}).name || ""}, from: iso(from), to: iso(to), tb, vouchers: vs, map: mp};
+    // the closing stock of the statements when Tally does not carry it (Details for you)
+    const det = (X.store(b).det || {})[fy] || {}, stockOpen = tb.filter(r => (mp[r.l] || {}).line === "inv").reduce((a, r) => a + r.o, 0);
+    const stock = det.stock && det.stock.cy && to === String(Number(fy) + 1) + "0331" ? {open: stockOpen, close: Object.values(det.stock.cy).reduce((a, v) => a + (Number(v) || 0), 0)} : null;
+    return {entity: {name: (typeof CO === "function" ? CO() || {} : {}).name || ""}, from: iso(from), to: iso(to), tb, vouchers: vs, map: mp, stock};
   };
   // the Form 3CD draft from the shared audit functions (src/js/77-audit.js when present, else the audit's own checks in
   // 06-audit.js / 07-mis.js through Audit.runNow and Audit.form3cd): the same computation the audit shows, never a second one
