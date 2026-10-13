@@ -10,6 +10,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import postgres from "npm:postgres@3.4.4";
 import { unzipSync } from "npm:fflate@0.8.2";
+import { Buffer } from "node:buffer";
 import { parseDay, dropBankDetails } from "../tally-cloud/parse.js";
 
 const ALWAYS = ["ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING"];
@@ -37,11 +38,16 @@ async function decode(buf: Uint8Array): Promise<{ meta: Meta; text: string } | n
   else if (raw[0] === 0xfe && raw[1] === 0xff) return null;
   else if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) { enc = "utf-8"; bom = true; }
   else enc = raw.length > 1 && raw[1] === 0 && raw[0] !== 0 ? "utf-16le" : "utf-8";
+  if (enc === "utf-16le") { // code units kept exactly (no replacement), BOM taken off
+    const o = raw.byteOffset + (bom ? 2 : 0), n = raw.length - (bom ? 2 : 0);
+    if (n % 2) return null;
+    return { meta: { gz, enc, bom }, text: Buffer.from(raw.buffer, o, n).toString("utf16le") };
+  }
   try { return { meta: { gz, enc, bom }, text: new TextDecoder(enc, { ignoreBOM: false, fatal: true }).decode(raw) }; } catch { return null; }
 }
 async function encode(meta: Meta, text: string) {
   let body: Uint8Array;
-  if (meta.enc === "utf-16le") { const w = new Uint16Array(text.length); for (let i = 0; i < text.length; i++) w[i] = text.charCodeAt(i); body = new Uint8Array(w.buffer); } // little-endian host
+  if (meta.enc === "utf-16le") body = new Uint8Array(Buffer.from(text, "utf16le"));
   else body = new TextEncoder().encode(text);
   if (meta.bom) { const p = meta.enc === "utf-16le" ? [0xff, 0xfe] : [0xef, 0xbb, 0xbf]; const b = new Uint8Array(p.length + body.length); b.set(p); b.set(body, p.length); body = b; }
   return meta.gz ? await gzip(body) : body;
@@ -59,28 +65,31 @@ function facts(text: string) {
 }
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 const rawCount = (t: string) => (t.match(/<VOUCHER\b/g) || []).length;
-function elem(t: string) { return new RegExp("<" + t + "(?:\\s[^>]*)?/>|<" + t + "(?:\\s[^>]*)?>[\\s\\S]*?</" + t + "\\s*>", "y"); }
-// the new text is the old text with only whole allowed elements cut out
+// the new text is the old text with only whole allowed elements cut out: every allowed element of the old text is found (native
+// regex), and the text between them is compared as whole segments (native); an element is either kept as it was or cut whole
+const ANY_ELEM = new RegExp([...ALWAYS, ...EMP_ONLY].map((t) => "<" + t + "(?:\\s[^>]*)?/>|<" + t + "(?:\\s[^>]*)?>[\\s\\S]*?</" + t + "\\s*>").join("|"), "g");
 function onlyTagsRemoved(a: string, b: string, at: number[] = []): Record<string, number> | null {
-  const removed: Record<string, number> = {}; let i = 0, j = 0;
-  while (i < a.length) {
-    if (j < b.length && a.charCodeAt(i) === b.charCodeAt(j)) { i++; j++; continue; }
-    const k = a.lastIndexOf("<", i); if (k < 0) return null;
-    j -= i - k; i = k;
-    let hit: [string, number] | null = null;
-    for (const t of [...ALWAYS, ...EMP_ONLY]) { const re = elem(t); re.lastIndex = i; const m = re.exec(a); if (m) { hit = [t, m[0].length]; break; } }
-    if (!hit) return null;
-    removed[hit[0]] = (removed[hit[0]] || 0) + 1; at.push(i); i += hit[1];
+  const removed: Record<string, number> = {}; let i = 0, j = 0, m: RegExpExecArray | null;
+  const re = new RegExp(ANY_ELEM.source, "g");
+  while ((m = re.exec(a))) {
+    const seg = m.index - i;
+    if (!b.startsWith(a.slice(i, m.index), j)) return null;
+    j += seg; i = m.index;
+    if (b.startsWith(m[0], j)) { j += m[0].length; i += m[0].length; continue; }
+    const t = (m[0].match(/^<([A-Z]+)/) || [])[1] || "?";
+    removed[t] = (removed[t] || 0) + 1; at.push(i); i += m[0].length;
   }
-  return j === b.length ? removed : null;
+  return b.length - j === a.length - i && b.endsWith(a.slice(i)) ? removed : null;
 }
 // what 2.4.4 would still take out (0 everywhere when clean)
+const LEFT_ALWAYS = ALWAYS.map((t) => [t, new RegExp("<" + t + "[\\s/>]", "g")] as const);
+const LEFT_EMP = EMP_ONLY.map((t) => [t, new RegExp("<" + t + "[\\s/>]")] as const);
 function leftover(text: string) {
   const out: Record<string, number> = {};
-  for (const t of ALWAYS) { const n = (text.match(new RegExp("<" + t + "[\\s/>]", "g")) || []).length; if (n) out[t] = n; }
+  for (const [t, re] of LEFT_ALWAYS) { const n = (text.match(re) || []).length; if (n) out[t] = n; }
   if (/BANKEMPLOYEENAME/.test(text)) for (const b of text.match(/<BANKALLOCATIONS\.LIST(?:\s[^>]*)?>[\s\S]*?<\/BANKALLOCATIONS\.LIST\s*>/g) || []) {
     if (!/<BANKEMPLOYEENAME(?:\s[^>]*)?>\s*[^<\s]/.test(b)) continue;
-    for (const t of EMP_ONLY) if (new RegExp("<" + t + "[\\s/>]").test(b)) out[t] = (out[t] || 0) + 1;
+    for (const [t, re] of LEFT_EMP) if (re.test(b)) out[t] = (out[t] || 0) + 1;
   }
   return out;
 }
@@ -97,8 +106,11 @@ function scrubText(text: string) {
     if (text.length > BIG) { // only the entries that changed are read; every other byte is proven identical above
       mode = "changed-entries";
       // the entries holding a removed tag, found from where the tags were cut (no full scan); each read as it was and as 2.4.4 leaves it
+      const starts: number[] = []; const sre = /<VOUCHER[\s>]/g; let sm: RegExpExecArray | null;
+      while ((sm = sre.exec(text))) starts.push(sm.index);
+      const startBefore = (p: number) => { let lo = 0, hi = starts.length - 1, r = -1; while (lo <= hi) { const mid = (lo + hi) >> 1; if (starts[mid] <= p) { r = starts[mid]; lo = mid + 1; } else hi = mid - 1; } return r; };
       const ia: string[] = []; let last = -1;
-      for (const p of at) { if (p < last) continue; const s0 = Math.max(text.lastIndexOf("<VOUCHER ", p), text.lastIndexOf("<VOUCHER>", p)), e0 = text.indexOf("</VOUCHER>", p); if (s0 < 0 || e0 < 0) { ia.length = 0; ia.push("x"); break; } ia.push(text.slice(s0, e0 + 10)); last = e0 + 10; }
+      for (const p of at) { if (p < last) continue; const s0 = startBefore(p), e0 = text.indexOf("</VOUCHER>", p); if (s0 < 0 || e0 < 0) { ia.length = 0; ia.push("x"); break; } ia.push(text.slice(s0, e0 + 10)); last = e0 + 10; }
       a = ia.join(""); b = ia.map((x) => dropBankDetails(x) as string).join(""); slices = ia.length;
     }
     const f0 = facts(a), f1 = facts(b);
