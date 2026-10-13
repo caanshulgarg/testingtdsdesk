@@ -111,4 +111,8 @@ ok(BR.length === 11 && BR.slice(1, 10).every((r, i) => r[0] === i + 1 && r[1] ==
 const h = x.AuditWP.html(res, f.books);
 ok(res.checks.every((c) => h.includes(x.esc(c.title))) && h.includes("Receipts to be explained by the client") && (h.match(/<tr>/g) || []).length >= all, "the PDF page lists every check, the remarks and the entries");
 
+// the items as the books keep them, for the Assistant's tool test (tests/run_audit_wp_tool.py): the run and the working papers,
+// and the figures the run gave, to compare to the paisa
+fs.writeFileSync(path.join(OUT, "audit-wp-items.json"), JSON.stringify({items: f.books.auditWp, period: per, run: {code: res.code, checks: res.checks.map((c) => ({id: c.id, status: c.status, count: c.count, amount: c.amount, score: c.score, rank: c.rank, vids: c.entries.slice(0, 50).map((e) => e.vid)}))},
+  periods: ["2025-26", "Q2 2025-26", "Q4 2025-26", "2026-02", "2024-02", "2025-04-01..2026-03-31", "20250401-20260331", "2025-27", "FY 2025-2026", "x"].map((s) => [s, x.AuditWP.parsePeriod(s)])}, null, 1));
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
