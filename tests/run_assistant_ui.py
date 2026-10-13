@@ -92,12 +92,18 @@ try:
     SUPA.start(db, SUPA_PORT)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:%d" % SUPA_PORT, NO_COLOR="1")
     if os.path.exists("/root/.ccr/ca-bundle.crt"): env.setdefault("DENO_CERT", "/root/.ccr/ca-bundle.crt")
-    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "tests/assistant_fnserve.ts", str(FN_PORT)], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    line = fn.stdout.readline()
-    for _ in range(200):
-        if "listening" in line: break
+    # the function's npm packages are fetched first (on a fresh CI machine this takes a while), then it is started
+    pre = subprocess.run([DENO, "cache", "tests/assistant_fnserve.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+    if pre.returncode: print(pre.stdout[-2000:] + pre.stderr[-2000:])
+    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "tests/assistant_fnserve.ts", str(FN_PORT)], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    t0, line, seen = time.time(), "", []
+    while time.time() - t0 < 300:
         line = fn.stdout.readline()
-    ok("listening" in line, "the function is served (Deno) in front of the stand-in")
+        if not line and fn.poll() is not None: break
+        seen.append(line)
+        if "listening" in line: break
+    ok("listening" in line, "the function is served (Deno) in front of the stand-in" + ("" if "listening" in line else ": " + "".join(seen[-20:])[-1500:]))
+    if "listening" not in line: raise SystemExit(1)
     threading.Thread(target=lambda: [None for _ in fn.stdout], daemon=True).start()
     FNURL = "http://127.0.0.1:%d" % FN_PORT
     with sync_playwright() as p:
