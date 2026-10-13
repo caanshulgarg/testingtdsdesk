@@ -96,7 +96,7 @@ export function tdsLedger(t){ const s = sectionOf(t); return (/^206C/.test(s) ? 
 // ledgerOfAccount(id), ledgerOfContact(id), cmp: the organisation's GSTIN}
 export function makeCtx(m){
   m = m || {};
-  const ctx = {org: m.org || {}, accounts: {}, contacts: {}, taxes: {}, tds: {}, accLed: {}, conLed: {}, notes: []};
+  const ctx = {org: m.org || {}, accounts: {}, contacts: {}, taxes: {}, tds: {}, accLed: {}, conLed: {}, notes: [], miss: {acc: new Set(), con: new Set()}};
   ctx.cmp = String((m.org && (m.org.gst_no || m.org.tax_reg_no || m.org.gstin)) || m.cmpGstin || "").toUpperCase().trim();
   ctx.orgState = (posName((m.org && (m.org.place_of_supply || m.org.state_code)) || "") || (STATE_NO[(m.org && m.org.state) || ""] ? m.org.state : "")) || stateOfGstin(ctx.cmp);
   (m.taxes || []).forEach(t => { if (t && t.tax_id) ctx.taxes[String(t.tax_id)] = t; });
@@ -126,13 +126,24 @@ export function makeCtx(m){
   return ctx;
 }
 function stateOfGstin(g){ const c = String(g || "").slice(0, 2); return Object.keys(STATE_NO).find(k => STATE_NO[k] === c) || ""; }
+// an account or contact a document names that the masters held do not have (made in Zoho since they were read) is
+// noted in ctx.miss, so the sync reads it and maps the document again
 export function accLedger(ctx, id, fallbackName){
   if (id != null && ctx.accLed[String(id)]) return ctx.accLed[String(id)];
+  if (id != null && String(id) !== "" && ctx.miss) ctx.miss.acc.add(String(id));
   return str(fallbackName) || "Suspense A/c";
 }
 export function conLedger(ctx, id, fallbackName){
   if (id != null && ctx.conLed[String(id)]) return ctx.conLed[String(id)];
+  if (id != null && String(id) !== "" && ctx.miss) ctx.miss.con.add(String(id));
   return str(fallbackName) || "";
+}
+// the names every account and contact has now, to keep them when the masters are read again
+export function knownOf(ctx){
+  const k = {};
+  Object.entries(ctx.accLed || {}).forEach(([id, n]) => { k["a" + id] = n; });
+  Object.entries(ctx.conLed || {}).forEach(([id, n]) => { k["c" + id] = n; });
+  return k;
 }
 function contactOf(ctx, id){ return (id != null && ctx.contacts[String(id)]) || {}; }
 const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/, GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;

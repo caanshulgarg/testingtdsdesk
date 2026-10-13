@@ -104,10 +104,22 @@ try:
     ok(float(db.one("select sum(amount) from tally_ledger_day where book_id = %s and ledger = 'Sales'" % q(L["book"]))) == 1200, "the ready totals made for their days")
     try: db.sql("select public.zoho_ingest(%s, '[{\"guid\": \"tally-guid-1\", \"day\": \"2026-05-01\"}]'::jsonb, '[]'::jsonb, '[]'::jsonb)" % q(C)); ok(False, "a non-Zoho entry id is refused")
     except RuntimeError as e: ok("not a Zoho entry id" in str(e), "an entry id that is not zoho-<kind>-<id> is refused (never touches a Tally entry)")
-    g = json.loads(db.one("select public.zoho_gone(%s, 'invoices', %s::jsonb, false)::text" % (q(C), q(json.dumps([str(i) for i in range(11)])))))
+    # a month the owner locked takes nothing: the others go in, the locked one is held (asked again daily), never forced
+    db.sql("insert into tally_month_locks (firm_id, client_id, book_id, month) values (%s, 'c1', %s, '2026-06-01')" % (q(F), q(L["book"])))
+    V2 = [dict(V[0], guid="zoho-invoice-90", no="INV-90", day="2026-06-03", alter=900), dict(V[0], guid="zoho-invoice-91", no="INV-91", day="2026-05-20", alter=901)]
+    L2 = [["zoho-invoice-90", "Sales", 50, "", None, []], ["zoho-invoice-90", "Alpha", -50, "", None, []], ["zoho-invoice-91", "Sales", 70, "", None, []], ["zoho-invoice-91", "Alpha", -70, "", None, []]]
+    r = json.loads(db.one("select public.zoho_ingest(%s, %s::jsonb, %s::jsonb, %s::jsonb)::text" % (q(C), q(json.dumps(V2)), q(json.dumps(L2)), q(json.dumps([["invoices", "90", "zoho-invoice-90", 900, None], ["invoices", "91", "zoho-invoice-91", 901, None]])))))
+    have = {x["guid"] for x in db.rows("select guid from tally_vouchers where guid in ('zoho-invoice-90', 'zoho-invoice-91')")}
+    held = db.one("select skipped from zoho_seen where zoho_id = '90'")
+    ok(have == {"zoho-invoice-91"} and (held or "").startswith("month locked") and r.get("sent") == 1, "a locked month (June): May's invoice goes in, June's is held as '%s', nothing forced" % held)
+    ch = json.loads(db.one("select public.zoho_changed(%s, 'invoices', '[[\"90\", 900], [\"91\", 901]]'::jsonb)::text" % q(C)))
+    db.sql("update zoho_seen set seen_at = now() - interval '25 hours' where zoho_id = '90'")
+    ch2 = json.loads(db.one("select public.zoho_changed(%s, 'invoices', '[[\"90\", 900], [\"91\", 901]]'::jsonb)::text" % q(C)))
+    ok(ch == [] and ch2 == ["90"], "the held one is asked of Zoho again a day later, the stored one not (%s, %s)" % (ch, ch2))
+    g = json.loads(db.one("select public.zoho_gone(%s, 'invoices', %s::jsonb, false)::text" % (q(C), q(json.dumps([str(i) for i in range(11)] + ["90", "91"])))))
     ok(g.get("gone") == 1 and db.one("select deleted_at is not null from tally_vouchers where guid = 'zoho-invoice-11'") == "t", "one invoice no longer listed: its entry marked deleted (kept)")
     g = json.loads(db.one("select public.zoho_gone(%s, 'invoices', %s::jsonb, false)::text" % (q(C), q(json.dumps([str(i) for i in range(6)])))))
-    ok(g.get("refused") and db.one("select count(*) from tally_vouchers where book_id = %s and deleted_at is null" % q(L["book"])) == "11", "five of eleven at once: held, nothing marked (%s)" % g)
+    ok(g.get("refused") and db.one("select count(*) from tally_vouchers where book_id = %s and deleted_at is null" % q(L["book"])) == "12", "seven of thirteen at once: held, nothing marked (%s)" % g)
     g = json.loads(db.one("select public.zoho_gone(%s, 'invoices', '[]'::jsonb, false)::text" % q(C)))
     ok(g.get("refused"), "an empty list while entries are held: held")
     ok(db.one("select count(*) from zoho_log where kind = 'error' and message like '%%no longer listed%%'") == "2", "and said in the log, twice")

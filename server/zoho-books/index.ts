@@ -158,6 +158,22 @@ async function listAll(c: Conn, path: string, key: string, query: Record<string,
   return { rows: out, complete: false };
 }
 
+// a kind's list; bank transactions per bank, cash or card account when Zoho asks for the account (account_id)
+async function listKind(c: Conn, ent: string, query: Record<string, string | number>, stop: ((rows: any[]) => boolean) | undefined, deadline: number, accounts: any[]) {
+  const E = (Z.ENTITIES as any)[ent];
+  try { return await listAll(c, E.path, E.list, query, stop, deadline); }
+  catch (e) {
+    const ze = e as ZohoError;
+    if (ent !== "banktransactions" || !(ze.status >= 400 && ze.status < 500 && ze.status !== 401 && ze.status !== 429)) throw e;
+    const out: any[] = []; let complete = true;
+    for (const a of accounts.filter((x: any) => /^(bank|cash|credit_card|prepaid_card|payment_clearing)$/.test(String(x.account_type || "")))) {
+      const l = await listAll(c, E.path, E.list, Object.assign({ account_id: a.account_id }, query), stop, deadline);
+      out.push(...l.rows); complete = complete && l.complete;
+    }
+    return { rows: out, complete };
+  }
+}
+
 // ---------------------------------------------------------------- the sync of one organisation
 const MASTERS_EVERY_MS = 6 * 3600 * 1000, FULL_EVERY_MS = 24 * 3600 * 1000, OVERLAP = 600;
 async function syncOne(c: Conn, deadline: number) {
@@ -191,19 +207,40 @@ async function syncOne(c: Conn, deadline: number) {
       byId.set(String(r.contact_id), d); mastersChanged = true;
     }
     m.contacts = Array.from(byId.values());
-    const ctx = Z.makeCtx({ org: { gst_no: c.org_gstin }, accounts: m.accounts, contacts: m.contacts, taxes: m.taxes, tdsTaxes: m.tdsTaxes, known: m.known });
+    let ctx = Z.makeCtx({ org: { gst_no: c.org_gstin }, accounts: m.accounts, contacts: m.contacts, taxes: m.taxes, tdsTaxes: m.tdsTaxes, known: m.known });
+    const pushMasters = async (withOpening: any) => {
+      const L = Z.orgLedgers(ctx, withOpening);
+      await rpc("zoho_masters", { p_conn: c.id, p_ledgers: L.ledgers.map((l: any) => withOpening ? l : Object.assign({}, l, { open: null })), p_groups: L.groups, p_objects: L.objects });
+    };
     if (mastersChanged) {
-      const L = Z.orgLedgers(ctx, opening);
-      if (!opening) L.ledgers.forEach((l: any) => { delete l.open; });
-      await rpc("zoho_masters", { p_conn: c.id, p_ledgers: L.ledgers.map((l: any) => l.open === undefined ? Object.assign({}, l, { open: null }) : l), p_groups: L.groups, p_objects: L.objects });
+      await pushMasters(opening);
       if (mastersDue) await rpc("zoho_cursor_set", { p_conn: c.id, p_entity: "__masters", p_cursor: Math.floor(Date.now() / 1000), p_listed: m.accounts.length, p_fetched: 0 });
       await rpc("zoho_cursor_set", { p_conn: c.id, p_entity: "contacts", p_cursor: cmax, p_listed: cl.rows.length, p_fetched: 0 });
     }
+    // an account or contact made in Zoho since the masters were read: read it now (the accounts once a run, a contact by
+    // its id), the masters kept, and the documents mapped again, so no entry lands on a ledger FinCom does not know
+    let accountsAgain = mastersDue;
+    const tried = new Set<string>();
+    const mapWithMasters = async (ent: string, docs: any[]) => {
+      ctx.miss = { acc: new Set(), con: new Set() };
+      let out = Z.mapDocs(ent, docs, ctx);
+      const acc = [...ctx.miss.acc].filter((x) => !tried.has("a" + x)), con = [...ctx.miss.con].filter((x) => !tried.has("c" + x)).slice(0, 20);
+      if (!acc.length && !con.length) return out;
+      acc.forEach((x) => tried.add("a" + x)); con.forEach((x) => tried.add("c" + x));
+      if (acc.length && !accountsAgain) { m.accounts = (await listAll(c, "chartofaccounts", "chartofaccounts", {}, undefined, deadline)).rows; accountsAgain = true; }
+      for (const id of con) { const d = Z.oneOf(await zoho(c, "GET", "contacts/" + id, {}, undefined, deadline), "contact"); if (d) byId.set(String(id), d); }
+      m.contacts = Array.from(byId.values());
+      ctx = Z.makeCtx({ org: { gst_no: c.org_gstin }, accounts: m.accounts, contacts: m.contacts, taxes: m.taxes, tdsTaxes: m.tdsTaxes, known: Z.knownOf(ctx) });
+      await pushMasters(null);
+      counts.masters = (counts.masters || 0) + acc.length + con.length;
+      out = Z.mapDocs(ent, docs, ctx);
+      return out;
+    };
     // the documents of each kind that changed
     const from = String(c.sync_from || "").slice(0, 10);
     for (const ent of Z.ENTITY_ORDER) {
       const E = (Z.ENTITIES as any)[ent], since = Number(cur[ent] || 0);
-      const l = await listAll(c, E.path, E.list, { sort_column: "last_modified_time", sort_order: "D" }, (rows) => rows.some((r: any) => Z.modSec(r.last_modified_time) && Z.modSec(r.last_modified_time) < since - OVERLAP), deadline);
+      const l = await listKind(c, ent, { sort_column: "last_modified_time", sort_order: "D" }, (rows) => rows.some((r: any) => Z.modSec(r.last_modified_time) && Z.modSec(r.last_modified_time) < since - OVERLAP), deadline, m.accounts);
       const rows = l.rows.filter((r: any) => r && r[E.id]);
       const want: string[] = (await rpc("zoho_changed", { p_conn: c.id, p_entity: ent, p_docs: rows.map((r: any) => [String(r[E.id]), Z.modSec(r.last_modified_time)]) })) || [];
       const wantSet = new Set(want.map(String));
@@ -211,13 +248,15 @@ async function syncOne(c: Conn, deadline: number) {
       let batch: any[] = [], seen: any[] = [];
       const flush = async () => {
         if (!batch.length && !seen.length) return;
-        const out = Z.mapDocs(ent, batch, ctx);
+        const out = await mapWithMasters(ent, batch);
         await rpc("zoho_ingest", { p_conn: c.id, p_vouchers: out.vouchers, p_lines: out.lines, p_seen: seen });
         counts.entries += out.vouchers.length; counts.skipped += out.skipped.length;
         if (out.notes.length) counts.notes = (counts.notes || []).concat(out.notes.slice(0, 5));
         batch = []; seen = [];
       };
       for (const r of todo) {
+        // the run's time is up (an edge function has about two and a half minutes): what is stored stays, the rest next run
+        if (Date.now() > deadline - 8000) { await flush(); throw new ZohoError("This run's time is up; the rest is read in a minute.", "time"); }
         const id = String(r[E.id]), ms = Z.modSec(r.last_modified_time), guid = Z.guidOf(ent, id);
         const day = String(r[E.date] || r.date || "").slice(0, 10);
         if (day && from && day < from) { seen.push([ent, id, guid, ms, "before the books begin"]); continue; }
@@ -240,8 +279,9 @@ async function syncOne(c: Conn, deadline: number) {
     if (!c.full_check_at || Date.now() - Date.parse(String(c.full_check_at)) > FULL_EVERY_MS) {
       full = true;
       for (const ent of Z.ENTITY_ORDER) {
+        if (Date.now() > deadline - 15000) { full = false; break; }     // not finished: tried again next run
         const E = (Z.ENTITIES as any)[ent];
-        const l = await listAll(c, E.path, E.list, {}, undefined, deadline);
+        const l = await listKind(c, ent, {}, undefined, deadline, m.accounts);
         if (!l.complete) { full = false; continue; }
         const g = await rpc("zoho_gone", { p_conn: c.id, p_entity: ent, p_alive: l.rows.map((r: any) => String(r[E.id])), p_confirm: false });
         counts.gone += Number(g?.gone || 0);
@@ -251,7 +291,7 @@ async function syncOne(c: Conn, deadline: number) {
   } catch (e) {
     const ze = e as ZohoError;
     err = ze.message;
-    if (ze.code === "minute") { err = null; nextMin = 1; counts.paused = "minute limit"; }
+    if (ze.code === "minute" || ze.code === "time") { err = null; nextMin = 1; counts.paused = ze.code === "time" ? "time up" : "minute limit"; }
     else if (ze.code === "daily") {
       // after midnight IST (18:30 UTC), when Zoho's day starts again
       let m = Math.ceil((new Date(new Date().toISOString().slice(0, 10) + "T18:31:00Z").getTime() - Date.now()) / 60000);

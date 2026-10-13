@@ -259,6 +259,30 @@ try:
     b2 = next((i for x in P2["gstr1"]["202605"]["b2b"] if x["ctin"] == "07AAACB2222B1ZL" for i in x["inv"]), {})
     ok(eq(b2.get("val"), 247800) and eq(b2["itms"][0]["itm_det"]["iamt"], 37800) and eq(P2["gstr3b"]["202605"]["sup_details"]["osup_det"]["txval"], 500000), "GSTR-1 and 3B follow the change (2,10,000, IGST 37,800; 3.1(a) 5,00,000)")
 
+    # an account and a customer made in Zoho after the masters were read, used by a new invoice at once
+    FZ.STORE["chartofaccounts"].append({"account_id": "470000000080001", "account_name": "Sales - Exports Desk", "account_type": "income", "is_active": True, "last_modified_time": FZ.now_mod()})
+    FZ.STORE["contacts"].append({"contact_id": "470000000080002", "contact_name": "Zeta New Buyer", "contact_type": "customer", "gst_treatment": "business_gst", "gst_no": "27AAAFA1111A1ZM", "place_of_contact": "MH", "last_modified_time": FZ.now_mod()})
+    FZ.STORE["invoices"].append(dict(FZ.find("invoices", invoice_number="INV-001")[0], invoice_id="470000000080003", invoice_number="INV-009", date="2026-05-30", customer_id="470000000080002", customer_name="Zeta New Buyer",
+        line_items=[dict(FZ.find("invoices", invoice_number="INV-001")[0]["line_items"][0], account_id="470000000080001", account_name="Sales - Exports Desk")], last_modified_time=FZ.now_mod()))
+    db.sql("update zoho_sync_state set cursor_sec = cursor_sec where false")
+    c, r, _ = call({"kind": "sync_now", "connection": conn_row()["id"]})
+    L9 = {x["ledger"] for x in db.rows("select l.ledger from tally_lines l join tally_vouchers v using (book_id, guid) where v.book_id = %s and v.vno = 'INV-009'" % q(BOOK))}
+    led9 = {x["name"]: x["parent"] for x in db.rows("select name, parent from tally_ledgers where book_id = %s and name in ('Sales - Exports Desk', 'Zeta New Buyer')" % q(BOOK))}
+    ok(r.get("ok") and L9 >= {"Sales - Exports Desk", "Zeta New Buyer"} and led9 == {"Sales - Exports Desk": "Sales Accounts", "Zeta New Buyer": "Sundry Debtors"},
+       "an account and a customer made in Zoho since the masters were read: read at once, the invoice on their own ledgers (%s, %s)" % (sorted(L9), r.get("counts")))
+    FZ.remove("invoices", "470000000080003")
+    db.sql("update zoho_connections set full_check_at = now() - interval '25 hours'")
+    c, r, _ = call({"kind": "sync_now", "connection": conn_row()["id"]})
+    ok(db.one("select deleted_at is not null from tally_vouchers where book_id = %s and vno = 'INV-009'" % q(BOOK)) == "t", "(and removed again in Zoho: marked deleted, so the answer key's figures stand)")
+
+    # a Zoho that wants the bank account for its bank transactions: listed account by account (a transfer is in two, read once)
+    FZ.BANK_NEEDS_ACCOUNT[0] = True
+    trf = FZ.find("banktransactions", transaction_type="transfer_fund")[0]
+    FZ.touch("banktransactions", trf["transaction_id"], description="to ICICI, checked")
+    c, r, _ = call({"kind": "sync_now", "connection": conn_row()["id"]})
+    ok(r.get("ok") and r["counts"]["fetched"] == 1 and any(x["query"].get("account_id") for x in FZ.LOG if x["path"] == "/books/v3/banktransactions"), "bank transactions listed per bank account when Zoho asks for one; the transfer read once (%s)" % r.get("counts"))
+    FZ.BANK_NEEDS_ACCOUNT[0] = False
+
     # ================================================================ 5. deletions
     print("== 5. deletions, by the daily id comparison")
     oc = FZ.find("bills", bill_number="PC/9")[0]

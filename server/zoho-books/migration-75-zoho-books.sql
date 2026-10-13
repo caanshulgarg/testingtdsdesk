@@ -448,6 +448,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(jsonb_agg(x->>0), '[]'::jsonb) from jsonb_array_elements(coalesce(p_docs, '[]'::jsonb)) x
     left join zoho_seen s on s.connection_id = p_conn and s.entity = p_entity and s.zoho_id = x->>0
    where s.zoho_id is null or s.gone_at is not null or coalesce((x->>1)::bigint, 0) = 0 or s.modified_sec <> coalesce((x->>1)::bigint, 0)
+      or (s.skipped like 'month locked%' and s.seen_at < now() - interval '1 day')     -- held by a locked month: asked again daily
 $$;
 -- the organisation's masters: ledgers (added or brought up to date, never removed), groups, and the Zoho objects posting
 -- looks up. ledgers: [{name, parent, open, gstin, pan, tds_nature, zoho_id, kind}]; groups [[name, parent]]
@@ -484,10 +485,13 @@ begin
   return jsonb_build_object('ok', true, 'ledgers', nl, 'groups', ng, 'objects', no);
 end $$;
 -- documents into the cloud copy through the one entry path (tally_ingest_entries: entries, lines, bills, the ready totals,
--- the GST type), marked source 'zoho'; zoho_seen kept. p_seen: [[entity, zoho_id, guid, modified_sec, skipped why|null]]
+-- the GST type), marked source 'zoho'; zoho_seen kept. p_seen: [[entity, zoho_id, guid, modified_sec, skipped why|null]].
+-- A month the owner locked takes nothing (tally_month_locked, migration 44): the call is then made entry by entry, so the
+-- others go in, and each refused one is held in zoho_seen as 'month locked: <month>' (asked of Zoho again once a day,
+-- zoho_changed), never lost and never forced in
 create or replace function public.zoho_ingest(p_conn uuid, p_vouchers jsonb, p_lines jsonb, p_seen jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
-declare c zoho_connections%rowtype; res jsonb := '{"ok": true, "sent": 0}'::jsonb; sent text[]; back text[];
+declare c zoho_connections%rowtype; res jsonb := '{"ok": true, "sent": 0}'::jsonb; one jsonb; sent text[]; back text[]; held jsonb := '{}'::jsonb; v jsonb; n int := 0;
 begin
   select * into c from zoho_connections where id = p_conn;
   if c.book_id is null or c.status <> 'connected' then raise exception 'not connected'; end if;
@@ -496,16 +500,25 @@ begin
     if exists (select 1 from unnest(sent) g where g !~ '^zoho-[a-z]+-[0-9A-Za-z_-]{1,40}$') then raise exception 'not a Zoho entry id'; end if;
     -- an entry from the Tally bridge is never touched here (another book), and a Zoho id is never another book's
     res := tally_ingest_entries(c.book_id, p_vouchers, coalesce(p_lines, '[]'::jsonb), true, false);
+    if coalesce((res->>'locked')::boolean, false) then
+      for v in select x from jsonb_array_elements(p_vouchers) x loop
+        one := tally_ingest_entries(c.book_id, jsonb_build_array(v),
+                 coalesce((select jsonb_agg(l) from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) l where l->>0 = v->>'guid'), '[]'::jsonb), true, false);
+        if coalesce((one->>'locked')::boolean, false) then held := held || jsonb_build_object(v->>'guid', coalesce(one->>'refused', 'month locked'));
+        else n := n + 1; end if;
+      end loop;
+      res := jsonb_build_object('ok', true, 'sent', n, 'held', held);
+    end if;
     -- (origin stays as the entry path sets it: 'fincom' for an entry FinCom posted, by its FinCom id; source says Zoho)
     update tally_vouchers set source = 'zoho' where book_id = c.book_id and guid = any(sent) and source is distinct from 'zoho';
     update tally_books set days_at = now() where book_id = c.book_id;     -- the app reads the entries again when this moves
   end if;
   -- an entry deleted earlier and back in Zoho (restored) is live again (tally_ingest_entries clears deleted_at)
   insert into zoho_seen as s (connection_id, entity, zoho_id, guid, modified_sec, seen_at, gone_at, skipped)
-  select distinct on (y->>0, y->>1) p_conn, y->>0, y->>1, y->>2, coalesce(nullif(y->>3, '')::bigint, 0), now(), null, nullif(y->>4, '')
+  select distinct on (y->>0, y->>1) p_conn, y->>0, y->>1, y->>2, coalesce(nullif(y->>3, '')::bigint, 0), now(), null, coalesce(nullif(y->>4, ''), held->>(y->>2))
     from jsonb_array_elements(coalesce(p_seen, '[]'::jsonb)) y where coalesce(y->>1, '') <> ''
   on conflict (connection_id, entity, zoho_id) do update set guid = excluded.guid, modified_sec = excluded.modified_sec, seen_at = now(), gone_at = null, skipped = excluded.skipped;
-  -- a document now a draft (skipped) that was in the books leaves them, marked (never removed)
+  -- a document now a draft (skipped) that was in the books leaves them, marked (never removed); one held by a locked month stays as it was
   select coalesce(array_agg(y->>2), '{}') into back from jsonb_array_elements(coalesce(p_seen, '[]'::jsonb)) y where nullif(y->>4, '') is not null;
   if cardinality(back) > 0 then perform zoho_mark_gone(c.book_id, back); end if;
   return res;

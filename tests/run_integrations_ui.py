@@ -167,6 +167,37 @@ def main():
         ok(E("() => (document.querySelector('[data-books-source]') || {getAttribute: () => ''}).getAttribute('data-books-source')") == "tally" and "Tally company TALLY CO" in txt('[data-books-source]') and pg.locator('#app [data-tally-link]').count() == 1,
            "a Tally client: Books source Tally company TALLY CO, with the Link to Tally card (%r)" % txt('[data-books-source]')[:120])
         no_secrets("Client setup")
+
+        # ---------------------------------------------------------------- 8. a Zoho client's books, as a Tally client's
+        print("== 8. a Zoho client's books in FinCom, from the cloud copy, as a Tally client's")
+        copy = json.load(open(os.path.join(HERE, "fixtures", "zoho", "copy-snapshot.json")))
+        stub = open(os.path.join(HERE, "copy_rest_stub.js")).read().replace("module.exports = {restStub};", "window.__restStub = restStub;")
+        E("(src) => { (0, eval)(src); }", stub)
+        E("""([copy, cid]) => {
+          const st = window.__restStub(copy.tables);
+          const bk = {book: copy.book, company: "Zoho Books · FinCom Zoho Test Pvt Ltd", from: "2026-04-01", openAsOn: "2026-03-31", ledgersAt: "2026-10-13T05:00:00Z", daysAt: "2026-10-13T05:30:00Z", entries: 0, days: 0, to: null, state: {}, stateAt: null};
+          Cloud.api = async (path) => (/^rpc\\/zoho_status/.test(path) ? {grants: [], connections: []} : st.api(path));
+          TCloud.restAll = async (u) => st.api(u + (u.includes("limit=") ? "" : ""));
+          TCloud.restPages = async (u) => st.api(u);
+          TCloud.rpc = async (fn) => fn === "tally_status" ? [bk] : fn === "tally_days_list" ? [] : {ok: true};
+          TCloud.rpcAll = async (fn) => fn === "tally_days_list" ? [] : [];
+          TCloud.st[cid] = {};
+          const c = S.companies[cid]; c.tan = "MUMF01234E";
+        }""", [copy, zid])
+        E("(c) => { S.books = null; return openCompany(c); }", zid); pg.wait_for_timeout(1500)
+        E("(c) => TCloud.openLoad(c)", zid); pg.wait_for_timeout(2500)
+        nb = E("() => S.books && S.books.vouchers ? S.books.vouchers.length : -1")
+        ok(nb == 18 and E("() => (S.books.vouchers || []).every(v => v.src === 'bridge')"), "the Zoho client's books come in from the cloud copy as a Tally client's (%s entries)" % nb)
+        go("#/c/%s/books/gst/27/202605/r3b" % zid); pg.wait_for_timeout(2500)
+        t3 = txt("#app")
+        ok("4,90,000" in t3 and "63,000" in t3 and "11,950" in t3, "the GST page: GSTR-3B May 2026, 3.1(a) 4,90,000 · IGST 63,000 · CGST 11,950 (as the answer key)")
+        go("#/c/%s/books/gst/27/202605/r1" % zid); pg.wait_for_timeout(2000)
+        t1 = txt("#app")
+        ok("INV-002" in t1 and "Beta Industries Delhi" in t1, "the GST page: GSTR-1 May 2026 lists the Zoho invoices")
+        go("#/c/%s/books/tds/2026-27/Q1/26Q" % zid); pg.wait_for_timeout(2500)
+        tt = txt("#app")
+        ok("Omicron Contractors" in tt and "Pi Consultants" in tt, "the TDS page: Q1 2026-27 26Q has the Zoho bills' deductees")
+        no_secrets("a Zoho client's books")
         br.close()
     # ---------------------------------------------------------------- 7. TaxPro and ASP never reach a user
     print("== 7. the GSP's name in the app's built files")

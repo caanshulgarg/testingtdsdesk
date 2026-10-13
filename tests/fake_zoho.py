@@ -24,6 +24,7 @@ ACCESS, REFRESH = {}, {}            # token -> {until}; refresh token -> {revoke
 REFRESH_OK = [True]
 FAIL_429 = {"n": 0, "daily": False, "retry": 1}
 HIDE = set()
+BANK_NEEDS_ACCOUNT = [False]   # True: the bank transactions list wants account_id (Zoho may ask for it)
 EXPIRES_IN = [3600]
 STORE = {}
 ids = itertools.count(470000000090001)
@@ -117,7 +118,9 @@ class H(http.server.BaseHTTPRequestHandler):
                     d = next((x for x in STORE[parts[0]] if str(x[idf]) == parts[1]), None)
                     if not d: return self.send(404, {"code": 1002, "message": "The record does not exist."})
                     return self.send(200, {"code": 0, "message": "success", one: copy.deepcopy(d)})
+                if parts[0] == "banktransactions" and BANK_NEEDS_ACCOUNT[0] and not q.get("account_id"): return self.send(400, {"code": 2, "message": "Invalid value passed for account_id"})
                 rows = [x for x in STORE[parts[0]] if str(x[idf]) not in HIDE]
+                if parts[0] == "banktransactions" and q.get("account_id"): rows = [x for x in rows if q["account_id"] in (str(x.get("from_account_id")), str(x.get("to_account_id")), str(x.get("account_id")))]
                 if q.get("reference_number") is not None: rows = [x for x in rows if str(x.get("reference_number") or "") == q["reference_number"]]
                 if q.get("sort_column") == "last_modified_time": rows = sorted(rows, key=lambda x: x.get("last_modified_time") or "", reverse=q.get("sort_order", "A") == "D")
                 page, per = int(q.get("page", 1)), int(q.get("per_page", 200))
