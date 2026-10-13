@@ -193,7 +193,7 @@ def main():
         ok("4,90,000" in t3 and "63,000" in t3 and "11,950" in t3, "the GST page: GSTR-3B May 2026, 3.1(a) 4,90,000 · IGST 63,000 · CGST 11,950 (as the answer key)")
         go("#/c/%s/books/gst/27/202605/r1" % zid); pg.wait_for_timeout(2000)
         t1 = txt("#app")
-        ok("INV-002" in t1 and "Beta Industries Delhi" in t1, "the GST page: GSTR-1 May 2026 lists the Zoho invoices")
+        ok("4,50,000" in t1 and "2,50,000" in t1 and "1,50,000" in t1, "the GST page: GSTR-1 May 2026 from the Zoho invoices: B2B 4,50,000, exports 2,50,000, B2C large 1,50,000")
         go("#/c/%s/books/tds/2026-27/Q1/26Q" % zid); pg.wait_for_timeout(2500)
         tt = txt("#app")
         ok("Omicron Contractors" in tt and "Pi Consultants" in tt, "the TDS page: Q1 2026-27 26Q has the Zoho bills' deductees")
@@ -208,15 +208,15 @@ def main():
         for m in re.finditer(r"TaxPro|\bASP\b", s):
             ctx = s[max(0, m.start() - 400): m.end() + 80]
             # allowed: the e-invoice set-up's own step, and the code that says a server message in FinCom's words
-            allowed = ("In the list of GSPs" in ctx and "e-invoice portal" in s[max(0, m.start() - 1500): m.start()]) or "FinCom's GST connection" in s[m.start(): m.end() + 120] and ".replace(/TaxPro" in s[max(0, m.start() - 30): m.end()]
+            allowed = ("In the list of GSPs" in ctx and "e-invoice portal" in s[max(0, m.start() - 1500): m.start()]) or "function gstWords(" in s[max(0, m.start() - 120): m.start()]
             if not allowed: hits.append(os.path.basename(f) + ": " + ctx[-160:].replace("\n", " "))
     ok(files and not hits, "the GSP's name only in the e-invoice set-up step (%d files; %s)" % (len(files), hits[:3]))
     steps = [f for f in files if "In the list of GSPs" in open(f, encoding="utf-8", errors="replace").read()]
     ok(len(steps) == 1, "the e-invoice set-up steps are there (einvoice1.gst.gov.in, Create API User, Through GSP)")
     src = os.path.join(HERE, "..")
     for rel in ("app/src/screens/GstApiAll.jsx", "app/src/screens/gst/SupplierHealth.jsx"):
-        t = open(os.path.join(src, rel)).read()
-        ok("TaxPro" not in t and "FinCom" in t, "%s says FinCom's GST connection, never the GSP" % rel)
+        t = "\n".join(l for l in open(os.path.join(src, rel)).read().splitlines() if not l.lstrip().startswith("//"))     # (comments are never shown)
+        ok("TaxPro" not in t and "FinCom" in t and "GST connection" in t, "%s says FinCom's GST connection, never the GSP" % rel)
     import subprocess
     r = subprocess.run(["node", "-e", """const {load, HTML} = require('./harness'); const {x} = load(HTML, ['gstWords']);
       console.log(JSON.stringify([x.gstWords("TaxPro's ASP id and password are not in Vault"), x.gstWords("TaxPro GSP: session ended"), x.gstWords("OTP wrong")]))"""], capture_output=True, text=True, cwd=HERE)

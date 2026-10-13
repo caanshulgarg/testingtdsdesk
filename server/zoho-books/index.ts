@@ -170,7 +170,9 @@ async function listKind(c: Conn, ent: string, query: Record<string, string | num
       const l = await listAll(c, E.path, E.list, Object.assign({ account_id: a.account_id }, query), stop, deadline);
       out.push(...l.rows); complete = complete && l.complete;
     }
-    return { rows: out, complete };
+    // a transfer is in both its accounts' lists: once
+    const once = new Map(out.map((r: any) => [String(r[E.id]), r]));
+    return { rows: Array.from(once.values()), complete };
   }
 }
 
