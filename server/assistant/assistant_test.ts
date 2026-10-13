@@ -229,7 +229,7 @@ Deno.test("files: an Excel whose cells are the tool's figures to the paisa (tota
   const files = ofType(r.events, "file");
   eq(files.map((f) => f.kind), ["xlsx", "docx", "pdf"], "three files");
   const get = async (p: string) => new Uint8Array(await (await fetch(STAND + "/storage/v1/object/authenticated/assistant-files/" + p, { headers: { Authorization: "Bearer tok-" + ME } })).arrayBuffer());
-  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await get(files[0].path));
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load((await get(files[0].path)) as any);
   const ws = wb.worksheets[0];
   const head = (ws.getRow(4).values as unknown[]).slice(1);
   eq(head, ["Deductee", "PAN", "Section", "TDS ledger", "Amount paid or credited", "TDS", "Entries"], "header row");
@@ -266,7 +266,7 @@ async function unzip(bytes: Uint8Array): Promise<Record<string, Uint8Array>> {
 }
 const getFile = async (p: string) => new Uint8Array(await (await fetch(STAND + "/storage/v1/object/authenticated/assistant-files/" + p, { headers: { Authorization: "Bearer tok-" + ME } })).arrayBuffer());
 async function sheetRows(bytes: Uint8Array, sheet = 0): Promise<unknown[][]> {
-  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(bytes);
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(bytes as any);
   const ws = wb.worksheets[sheet]; const out: unknown[][] = [];
   ws.eachRow((row) => out.push((row.values as unknown[]).slice(1).map((v: any) => v && typeof v === "object" && "result" in v ? v.result : v)));
   return out;

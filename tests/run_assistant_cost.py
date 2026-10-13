@@ -19,7 +19,7 @@ try:
     db.sql("insert into assistant_settings (firm_id, enabled, consent) values ('%s', true, true);" % A.FIRM)
     SUPA.start(db, 9488)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:9488", NO_COLOR="1")
-    r = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "tests/assistant_cost.ts"], cwd=os.path.join(HERE, ".."), env=env, capture_output=True, text=True, timeout=600)
+    r = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "tests/assistant_cost.ts"], cwd=os.path.join(HERE, ".."), env=env, capture_output=True, text=True, timeout=600)
     if r.returncode: print(r.stdout[-3000:] + r.stderr[-3000:])
     rows = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else []
     print("\n  %-44s %9s %9s %9s %9s   %-26s %s" % ("question (Rs)", "cold bef", "cold aft", "warm bef", "warm aft", "before", "after"))
