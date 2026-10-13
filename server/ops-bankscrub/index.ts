@@ -41,10 +41,41 @@ async function decode(buf: Uint8Array): Promise<{ meta: Meta; text: string } | n
 }
 async function encode(meta: Meta, text: string) {
   let body: Uint8Array;
-  if (meta.enc === "utf-16le") { const w = new Uint16Array(text.length); for (let i = 0; i < text.length; i++) w[i] = text.charCodeAt(i); body = new Uint8Array(w.buffer); } // little-endian host
-  else body = new TextEncoder().encode(text);
-  if (meta.bom) { const p = meta.enc === "utf-16le" ? [0xff, 0xfe] : [0xef, 0xbb, 0xbf]; const b = new Uint8Array(p.length + body.length); b.set(p); b.set(body, p.length); body = b; }
+  if (meta.enc === "utf-16le") { // one buffer, BOM included (little-endian host)
+    const pre = meta.bom ? 2 : 0; body = new Uint8Array(pre + text.length * 2); if (pre) { body[0] = 0xff; body[1] = 0xfe; }
+    const w = new Uint16Array(body.buffer, pre, text.length); for (let i = 0; i < text.length; i++) w[i] = text.charCodeAt(i);
+  } else {
+    body = new TextEncoder().encode(text);
+    if (meta.bom) { const b = new Uint8Array(3 + body.length); b.set([0xef, 0xbb, 0xbf]); b.set(body, 3); body = b; }
+  }
   return meta.gz ? await gzip(body) : body;
+}
+// the bytes to be written read back the same way, compared with the text a piece at a time (no second whole copy)
+async function sameWhenRead(out: Uint8Array, meta: Meta, text: string) {
+  if (meta.gz) { const back = await decode(out); return !!back && back.text === text && JSON.stringify(back.meta) === JSON.stringify(meta); }
+  const pre = meta.bom ? (meta.enc === "utf-16le" ? 2 : 3) : 0;
+  if (meta.bom && !(meta.enc === "utf-16le" ? out[0] === 0xff && out[1] === 0xfe : out[0] === 0xef && out[1] === 0xbb && out[2] === 0xbf)) return false;
+  const dec = new TextDecoder(meta.enc, { ignoreBOM: true, fatal: true }); let pos = 0;
+  try {
+    for (let o = pre; o < out.length; o += 1 << 21) {
+      const piece = dec.decode(out.subarray(o, Math.min(out.length, o + (1 << 21))), { stream: true });
+      if (text.slice(pos, pos + piece.length) !== piece) return false; pos += piece.length;
+    }
+    const last = dec.decode(); if (text.slice(pos, pos + last.length) !== last) return false; pos += last.length;
+  } catch { return false; }
+  return pos === text.length;
+}
+// Storage directly (one copy of the bytes, not the client's Blob wrappers)
+const SURL = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, ""), SKEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const opath = (bucket: string, name: string) => SURL + "/storage/v1/object/" + bucket + "/" + name.split("/").map(encodeURIComponent).join("/");
+async function getBytes(bucket: string, name: string) {
+  const r = await fetch(opath(bucket, name).replace("/object/", "/object/authenticated/"), { headers: { Authorization: "Bearer " + SKEY, apikey: SKEY } });
+  if (!r.ok) { await r.body?.cancel(); return null; }
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function putBytes(bucket: string, name: string, body: Uint8Array, mime: string) {
+  const r = await fetch(opath(bucket, name), { method: "POST", headers: { Authorization: "Bearer " + SKEY, apikey: SKEY, "x-upsert": "true", "Content-Type": mime }, body });
+  await r.body?.cancel(); return r.ok;
 }
 
 // ---------- the checks
@@ -125,36 +156,35 @@ async function shaHex(u: Uint8Array) { return [...new Uint8Array(await crypto.su
 async function doObject(bucket: string, name: string, apply: boolean, tot: any, trustSha = "") {
   const [o] = await sql`select (metadata->>'mimetype') mime, updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
   if (!o) { tot.missing.push(name); return; }
-  const { data, error } = await db.storage.from(bucket).download(name);
-  if (error || !data) { tot.unread.push(name); return; }
-  const buf = new Uint8Array(await data.arrayBuffer());
-  const d = await decode(buf);
+  const mime = o.mime || "application/octet-stream";
+  let buf: Uint8Array | null = await getBytes(bucket, name);
+  if (!buf) { tot.unread.push(name); return; }
+  let d: { meta: Meta; text: string } | null = await decode(buf);
+  buf = null;                                                                     // the bytes are not needed again
   if (!d) { tot.notText.push(name); return; }
+  const meta = d.meta;
   tot.read++;
+  const unchangedSince = async () => { const [o2] = await sql`select updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`; return !!o2 && +o2.updated_at === +o.updated_at; };
   if (trustSha && apply) {
-    const out = await encode(d.meta, dropBankDetails(d.text) as string);
+    let clean: string | null = dropBankDetails(d.text) as string; d = null;
+    const out = await encode(meta, clean); clean = null;
     if (await shaHex(out) !== trustSha) { tot.failed.push({ name, checks: { sameAsDryRun: false } }); return; }
     tot.withTags++; tot.passed++; tot.mode = "write-checked-bytes";
-    const [o2] = await sql`select updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
-    if (!o2 || +o2.updated_at !== +o.updated_at) { tot.changedMeanwhile.push(name); return; }
-    const up = await db.storage.from(bucket).upload(name, out, { upsert: true, contentType: o.mime || "application/octet-stream" });
-    if (up.error) { tot.failed.push({ name, checks: { upload: false } }); return; }
+    if (!(await unchangedSince())) { tot.changedMeanwhile.push(name); return; }   // a newer write (2.4.4, clean) wins
+    if (!(await putBytes(bucket, name, out, mime))) { tot.failed.push({ name, checks: { upload: false } }); return; }
     tot.written.push(name); return;
   }
-  const r = scrubText(d.text);
+  const r = scrubText(d.text); d = null;
   if (!r.changed) { tot.clean++; return; }
   tot.withTags++; addTo(tot.removed, r.removed); tot.vouchersInChanged += r.vouchers;
   if (!r.ok) { tot.failed.push({ name, checks: r.checks, left: r.left }); return; }
-  const out = await encode(d.meta, r.clean);
-  const back = await decode(out);                                                // written bytes read back the same way
-  if (!back || back.text !== r.clean || JSON.stringify(back.meta) !== JSON.stringify(d.meta)) { tot.failed.push({ name, checks: { encoding: false } }); return; }
+  const out = await encode(meta, r.clean);
+  if (!(await sameWhenRead(out, meta, r.clean))) { tot.failed.push({ name, checks: { encoding: false } }); return; }
   tot.passed++; tot.mode = r.mode;
   if (bucket === "tally-uploads") tot.outSha = await shaHex(out);
   if (!apply) return;
-  const [o2] = await sql`select updated_at from storage.objects where bucket_id = ${bucket} and name = ${name}`;
-  if (!o2 || +o2.updated_at !== +o.updated_at) { tot.changedMeanwhile.push(name); return; }   // a newer write (2.4.4, clean) wins
-  const up = await db.storage.from(bucket).upload(name, out, { upsert: true, contentType: o.mime || "application/octet-stream" });
-  if (up.error) { tot.failed.push({ name, checks: { upload: false } }); return; }
+  if (!(await unchangedSince())) { tot.changedMeanwhile.push(name); return; }
+  if (!(await putBytes(bucket, name, out, mime))) { tot.failed.push({ name, checks: { upload: false } }); return; }
   tot.written.push(name);
 }
 const newTot = () => ({ read: 0, clean: 0, withTags: 0, passed: 0, vouchersInChanged: 0, removed: {} as Record<string, number>, written: [] as string[],
