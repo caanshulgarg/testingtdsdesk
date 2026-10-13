@@ -2030,7 +2030,7 @@ const FSX = (() => {
     (inp.fromBooks || []).forEach(c => { books[c.no] = c; });
     const kind = X.KINDS[e.kind] || e.kind || "";
     const C2 = X.CLAUSES_3CD.map(([no, title, src]) => {
-      const b = books[no] || books[no.replace(/\(.*$/, "")] || Object.values(books).find(z => String(z.no).split(/,\s*/).includes(no));
+      const b = books[no] || Object.values(books).find(z => String(z.no).split(/,\s*/).includes(no)) || Object.values(books).find(z => String(z.no).startsWith(no + "("));
       if (src === "entity"){ const v = {"1": e.name, "2": e.address, "3": e.pan, "5": kind, "6": "1 April " + fy + " to 31 March " + (Number(fy) + 1), "7": (Number(fy) + 1) + "-" + String(Number(fy) + 2).slice(2)}[no] || "";
         return {no, title, src: v ? "books" : "you", head: ["Answer"], rows: v ? [[v]] : [], note: v ? "" : "To be given."}; }
       if (b) return Object.assign({no, title, src: src === "confirm" ? "confirm" : "books"}, {head: b.head, rows: b.rows || [], note: b.note || "", count: b.count != null ? b.count : (b.rows || []).length, amount: b.amount});
@@ -2244,17 +2244,35 @@ const FSX = (() => {
     const stock = det.stock && det.stock.cy && to === String(Number(fy) + 1) + "0331" ? {open: stockOpen, close: Object.values(det.stock.cy).reduce((a, v) => a + (Number(v) || 0), 0)} : null;
     return {entity: {name: (typeof CO === "function" ? CO() || {} : {}).name || ""}, from: iso(from), to: iso(to), tb, vouchers: vs, map: mp, stock};
   };
-  // the Form 3CD draft from the shared audit functions (src/js/77-audit.js when present, else the audit's own checks in
-  // 06-audit.js / 07-mis.js through Audit.runNow and Audit.form3cd): the same computation the audit shows, never a second one
-  X.shared = function(){ return typeof AuditX === "object" && AuditX && AuditX.form3cd ? {src: "77-audit.js", A: AuditX} : {src: "06-audit.js / 07-mis.js (thin shared layer; to merge with 77-audit.js)", A: Audit}; };
+  // the Form 3CD draft from the shared audit functions: AuditWP (src/js/77-audit.js, the audit helper) when the program has
+  // it, for 40A(3), 269SS / 269T / 269ST, 43B(h) and the TDS defaults; the other clauses from Audit.form3cd (06-audit.js /
+  // 07-mis.js). AuditWP itself calls Audit.checks, so each check is computed one way only. Without 77-audit.js the thin
+  // shared layer is Audit.runNow / Audit.form3cd (to merge into 77-audit.js later).
+  X.shared = function(){ const wp = typeof AuditWP === "object" && AuditWP && typeof AuditWP.check === "function" ? AuditWP : null;
+    return wp ? {src: "77-audit.js (AuditWP)", wp} : {src: "06-audit.js / 07-mis.js (Audit.runNow; to merge with 77-audit.js)", wp: null}; };
   X.taxAuditFromBooks = function(fy){
     const sh = X.shared(), from = fy + "0401", to = String(Number(fy) + 1) + "0331";
-    const run = sh.A.runNow(from, to, "3CD draft");
-    const d = sh.A.form3cd(run);
-    const counts = {}; run.findings.forEach(f => { counts[f.id] = f.count; });
+    const run = Audit.runNow(from, to, "3CD draft"), d = Audit.form3cd(run), counts = {};
+    run.findings.forEach(f => { counts[f.id] = f.count; });
+    const dt = x => typeof fmtDate === "function" && typeof tallyDate === "function" ? fmtDate(tallyDate(x)) : x;
+    const clauses = d.clauses.map(c => ({no: c.no, title: c.title, head: c.head, rows: c.rows, note: c.note}));
+    if (sh.wp){
+      const C3 = id => sh.wp.check(id, from, to) || {entries: [], count: 0, status: "ok"};
+      const c40 = C3("cash40A3"), cst = C3("cash269ST"), cl = C3("cashLoans"), td = C3("tds"), ms = C3("msme43Bh");
+      Object.assign(counts, {wp_cash40A3: c40.count, wp_cash269ST: cst.count, wp_cashLoans: cl.count, wp_tds: td.count, wp_msme43Bh: ms.count});
+      const put = (no, head, rows, note) => { const c = clauses.find(z => z.no === no); if (c) Object.assign(c, {head, rows, note: note != null ? note : (rows.length ? "" : "None found.")}); };
+      put("21(d)(A)", ["Date", "Party or ledger", "Amount"], c40.entries.map(e => [dt(e.date), e.party, e.amount]));
+      put("31(a)", ["Date", "Lender", "Amount"], cl.entries.filter(e => /^269SS/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
+      put("31(b), 31(c)", ["Date", "To", "Amount"], cl.entries.filter(e => /^269T/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
+      put("31(ba)", ["Date", "From", "Amount"], cst.entries.map(e => [dt(e.date), e.party, e.amount]));
+      put("21(b)(ii)(A)", ["Party", "Amount", "Detail"], td.entries.filter(e => /^not deducted/.test(e.note)).map(e => [e.party, e.amount, e.note]));
+      put("34(c)", ["Deductee", "Interest", "Detail"], td.entries.filter(e => /^interest/.test(e.note)).map(e => [e.party, e.amount, e.note]));
+      if (ms.status !== "na") put("22", ["Supplier", "Bill", "Outstanding", "Days"], ms.entries.map(e => [e.party, e.no, e.amount, e.note]), "The interest itself is not in the books; work it out on these bills at three times the bank rate.");
+      const c26 = clauses.find(z => z.no === "26"); if (c26 && ms.status !== "na") c26.rows = c26.rows.filter(r => r[2] !== "43B(h) MSME").concat(ms.entries.map(e => [e.party, e.amount, "43B(h) MSME"]));
+    }
     const co = typeof CO === "function" ? CO() || {} : {}, st = X.store(S.books), det = (st.det || {})[fy] || {};
-    const fromBooks = d.clauses.map(c => ({no: c.no, title: c.title, head: c.head, rows: c.rows, note: c.note, count: c.rows.length}));
-    const hasStock = Object.keys((S.books || {}).groupInfo || {}).length && (S.books.vouchers || []).some(v => (v.inv || []).length);
+    const fromBooks = clauses.map(c => Object.assign({}, c, {count: c.rows.length}));
+    const hasStock = (S.books.vouchers || []).some(v => (v.inv || []).length);
     return {run, counts, src: sh.src, d3: X.form3cd({entity: Object.assign({name: co.name, pan: co.pan, address: co.address, kind: X.kindOf(S.books)}, det.entity || {}), fy, fromBooks, partners: det.partners, hasStock, answers: det.answers3cd})};
   };
   return X;
