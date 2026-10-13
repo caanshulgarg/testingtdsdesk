@@ -163,7 +163,14 @@ export function FootLine() {
     const st = Cloud.st || {}, sv = (typeof Live === "object" && Live.sv) || {};
     t = sv.state === "offline" || (typeof navigator === "object" && navigator.onLine === false) ? "No internet · work kept on this computer"
       : st.lastSync ? "Synced " + fmtTime(st.lastSync) + " · saved on this computer" : "Saved on this computer · syncing";
-  } else t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
+  } else {
+    // not signed in: the work stays here; one line under it says so and leads to signing in (it was a floating box,
+    // "Working on this computer only…", over the sidebar; the coordinator's screenshot review, 14-Oct-2026)
+    t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
+    const signIn = () => { S.view = "home"; S.homeTab = "rules"; S.settingsTab = "account"; render(); };
+    return <><span className="side-quiet side-one" data-trust-line="" title={t}>{t}</span>
+      <span className="side-quiet side-one" data-local-only="" title="Working on this computer only. Sign in from Settings to share with the firm.">Not shared · <button type="button" className="linkbtn side-data" onClick={signIn}>Sign in</button></span></>;
+  }
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }
 

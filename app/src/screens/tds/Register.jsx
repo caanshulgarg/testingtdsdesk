@@ -15,7 +15,8 @@ import { Lock as LockIcon } from "lucide-react";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
-export const SrcBadge = ({ c }) => <span className={"tag" + (TDSReg.srcOf(c) === "tally" ? " info" : "")} data-ch-src={TDSReg.srcOf(c)}>{TDSReg.srcWords(c)}</span>;
+// where a challan came from, in small grey words beside its number ("Entered by hand", "From Tally")
+export const SrcBadge = ({ c }) => <span className="ch-src" data-ch-src={TDSReg.srcOf(c)}>{TDSReg.srcWords(c)}</span>;
 export const Notes = ({ list }) => (list && list.length ? <>{list.map((n) => <span key={n} className="tag" data-note={n} style={{ fontWeight: 400 }}>{n}</span>)}</> : null);
 const Lock = () => <span className="tag" data-lock="" title="The return is marked filed: change only through a correction"><LockIcon width={11} height={11} aria-hidden="true" /> filed</span>;
 // the page's own line for a result longer than a toast can hold (S.tdsSaid: {at, words}); kept for two minutes or until closed
@@ -227,8 +228,8 @@ export default function Register() {
       after={(x) => (S.regAddTo === x.c.id || S.regOpen === x.c.id) && <>{S.regAddTo === x.c.id && <UseBalance c={x.c} onDone={() => { S.regAddTo = ""; render(); }} />}{S.regOpen === x.c.id && <Opened x={x} cx={cx} />}</>}
       cols={[
         { k: "date", role: "date", label: "Deposited", cls: "dt", v: (x) => TDS.ymd(x.c.date), cell: (x) => day(x.c.date) },
-        { k: "no", role: "number", label: "BSR code / serial", v: (x) => x.c.bsr + x.c.serial, cell: (x) => <><button className="linkbtn" onClick={() => tdsToggle("regOpen", x.c.id)}>{S.regOpen === x.c.id ? "▾ " : "▸ "}{x.c.bsr} / {x.c.serial}</button>
-          {" "}<SrcBadge c={x.c} />{!TDSReg.homeForm(x.c) && <> <span className="tag warn" data-type-unknown="">Type unknown</span></>}</> },
+        { k: "no", role: "number", label: "BSR code / serial", v: (x) => x.c.bsr + x.c.serial, cell: (x) => <><span className="reg-no"><button className="linkbtn" onClick={() => tdsToggle("regOpen", x.c.id)}>{S.regOpen === x.c.id ? "▾ " : "▸ "}{x.c.bsr} / {x.c.serial}</button>
+          {" "}<SrcBadge c={x.c} /></span>{!TDSReg.homeForm(x.c) && <> <span className="tag warn" data-type-unknown="">Type unknown</span></>}</> },
         { k: "total", role: "amount", label: "Total challan", cls: "n", v: (x) => TDSReg.split(x.c).total, fmt: money, cell: (x) => <Split c={x.c} kind="total" cx={cx} /> },
         { k: "left", role: "status", label: "Balance left", cls: "n", v: (x) => x.bal.total, fmt: money, sum: true, td: (x) => ({ "data-reg-left": x.c.id }), cell: (x) => <Split c={x.c} kind="left" cx={cx} /> },
         { k: "ac", role: "act", cls: "ac", cell: (x) => <button className="btn small" data-reg-addto={x.c.id} onClick={() => { S.regAddTo = S.regAddTo === x.c.id ? "" : x.c.id; render(); }}>Use…</button> },

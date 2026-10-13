@@ -127,7 +127,7 @@ function Years({ rows, fys }) {
 
 // one cell of the grid: the status in words and colour, then the counts and amounts as the year's table had them
 function Cell({ fy, q, form, st, n, lines, amount, corr }) {
-  const label = st === "none" ? "Not started" : st === "bad" ? (corr ? "Correction " + corr : "Errors " + n) : st === "filed" ? "Filed" + (n ? " " + n : "") : "Ready";
+  const label = st === "none" ? "Not started" : st === "bad" ? (corr ? "Correction " + corr : "To fix " + n) : st === "filed" ? "Filed" + (n ? " " + n : "") : "Ready";
   return <td><button className={"rp-cell st-" + st} data-cell={form + "|" + q} data-status={st}
     aria-label={TDS.formShort(form, fy) + " " + q + ": " + label} onClick={() => tdsGo(fy, q, form)}>
     <span className="rp-s">{label}</span>

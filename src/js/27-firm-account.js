@@ -1415,7 +1415,8 @@ function doAct(act, t){
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
-    case "useOffline": Cloud.setCfg({gate: false}); toast("Working on this computer only. Sign in later from Settings to share with the firm."); render(); break;
+    // the coordinator's screenshot review (14-Oct-2026): no floating box; the sidebar's foot says it (Side.jsx FootLine)
+    case "useOffline": Cloud.setCfg({gate: false}); render(); break;
     case "docqReadAll": { const ids = docqFor(S.view === "company" ? S.coId : "").filter(d => d.status === "waiting").map(d => d.id); readDocq(ids, S.view === "company" ? S.coId : ""); break; }
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {

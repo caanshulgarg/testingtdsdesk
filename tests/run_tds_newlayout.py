@@ -55,6 +55,11 @@ try:
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
         pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
+        # the coordinator's screenshot review (14-Oct-2026): working on this computer only is a line at the sidebar's foot, not
+        # a floating box
+        ok(pg.evaluate("() => { const t = document.getElementById('toast'); return !t || t.classList.contains('hidden') || !/Working on this computer only/.test(t.textContent); }"), "0. no floating box for working on this computer only")
+        lo = pg.evaluate("() => { const e = document.querySelector('#side [data-local-only]'), f = document.querySelector('#side [data-trust-line]'); return e && f && {text: e.textContent, h: Math.round(e.getBoundingClientRect().height), trust: f.textContent, near: Math.abs(e.getBoundingClientRect().top - f.getBoundingClientRect().bottom) < 8}; }")
+        ok(lo and "Sign in" in lo["text"] and lo["h"] <= 20 and lo["trust"].startswith("Saved on this computer only") and lo["near"], "0. the sidebar's foot: one line under Saved on this computer only, with Sign in (%s)" % lo)
         J = lambda e, a=None: pg.evaluate(e, a)
         fy = J("tdsYears(S.books, TDS.rows())[0]")
         J("(fy) => { S.booksTab = 'tds'; S.tdsFy = fy; S.tdsView = 'year'; S.tdsQ = ''; S.tdsPickForm = ''; render(); }", fy); pg.wait_for_timeout(500)
@@ -68,6 +73,8 @@ try:
         qt = [INR(pg.locator('[data-q-total="%s"]' % q).inner_text()) for q in ["Q1", "Q2", "Q3", "Q4"]]
         yt = INR(pg.locator('[data-year-total]').inner_text())
         ok(yt > 0 and abs(sum(qt) - yt) < 1, "1. the year's totals in the header row: the quarters %s add up to the year %s" % (qt, yt))
+        cells = pg.locator('[data-tds-grid] [data-cell]').all_inner_texts()
+        ok(not any("Errors" in c for c in cells) and any(re.search(r"To fix \d", c) for c in cells) and "To fix" in pg.locator('[data-tds-page] .rp-key').inner_text(), "1. a cell with something to fix says \"To fix N\", as the legend (%s)" % [c.split("\n")[0] for c in cells][:5])
         rowsum = sum(INR(t) for t in pg.locator('[data-tds-grid] tbody td.n b').all_inner_texts())
         ok(abs(rowsum - yt) < 1, "1. and agree with the forms' Year column (%s)" % rowsum)
         led = pg.locator('[data-ledger-banner]')

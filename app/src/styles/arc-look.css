@@ -211,3 +211,13 @@ body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- a sortable heading with its column filter (31-grid-filters.js adds .gff to a table of 4 rows or more) ----------
+   The coordinator's screenshot review (14-Oct-2026): the sort button took the whole width, so the filter fell to a line of
+   its own and the amounts' headings sat off their columns. Both on one line now: the filter after a heading, before an
+   amount's (whose heading stays right-aligned over its figures). */
+#app table.lt.lt thead th:has(> .gff) { white-space: nowrap; }
+#app table.lt.lt thead th:has(> .gff) > .lt-sort { display: inline-flex; width: auto; vertical-align: middle; }
+#app table.lt.lt thead th.n:has(> .gff), #app table.lt.lt thead th[data-numeric]:has(> .gff) { text-align: right; }
+/* an amount's heading ends where its figures end: the sort arrow's empty place (shown only once sorted) takes no room */
+#app table.lt.lt thead th.n .lt-ar:empty, #app table.lt.lt thead th[data-numeric] .lt-ar:empty { display: none; }

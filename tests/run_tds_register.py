@@ -250,6 +250,21 @@ try:
         heads = [h.strip().lower() for h in pg.locator('#tdsRegTable thead th').all_inner_texts()]
         ok("total challan" in heads and "balance left" in heads and not any(h in heads for h in ("used in", "paid for", "home form", "used")), "C8. two figures a row, no Used-in or Paid-for columns (%s)" % heads)
         ok(pg.locator('[data-reg-filter]').count() == 1 and pg.locator('[data-reg-filter="needs"]').count() == 1, "C8. one filter: Needs a return")
+        # the coordinator's screenshot review (14-Oct-2026): the head row on one line, the filter beside each heading (the shared
+        # table, with the column filters a table of 4 rows or more gets), the amounts right-aligned under their headings; the
+        # source in small grey words on the BSR/serial's line ("Type unknown" stays a badge)
+        J("""() => { for (let i = 0; i < 4; i++) S.books.challans.push({id: 'chRow' + i, bsr: '0240020', date: '2026050' + (i + 1), serial: '0090' + i, tax: 100 + i, interest: 0, section: '194C', minorHead: '200', from: 'hand'}); render(); }"""); pg.wait_for_timeout(600)
+        hd = J("""() => { const t = document.getElementById('tdsRegTable'), ths = [...t.tHead.rows[t.tHead.rows.length - 1].cells], row = t.tBodies[0].rows[0];
+          return {funnels: t.querySelectorAll('.gff').length, ths: ths.map((th, i) => { const r = th.getBoundingClientRect(), kids = [...th.querySelectorAll('.gfl, .gff')].map(e => e.getBoundingClientRect());
+            const lab = th.querySelector('.gfl'), lr = lab ? lab.getBoundingClientRect() : null, td = row.cells[i], last = td && td.lastElementChild ? td.lastElementChild.getBoundingClientRect() : null;
+            return {label: (lab ? lab.textContent : th.textContent).trim(), h: Math.round(r.height), oneLine: kids.length < 2 || Math.max(...kids.map(k => k.top)) - Math.min(...kids.map(k => k.top)) < 6,
+              n: th.classList.contains('n'), right: lr && last ? Math.round(lr.right - last.right) : null}; })}; }""")
+        ok(hd["funnels"] >= 4 and all(h["oneLine"] and h["h"] <= 48 for h in hd["ths"]), "C8. the head row on one line, each filter beside its heading (%s)" % [(h["label"], h["h"], h["oneLine"]) for h in hd["ths"]])
+        ok(all(abs(h["right"]) <= 6 for h in hd["ths"] if h["n"] and h["right"] is not None) and sum(1 for h in hd["ths"] if h["n"]) >= 2, "C8. Total challan and Balance left: the amounts right-aligned under their headings (%s)" % [(h["label"], h["right"]) for h in hd["ths"] if h["n"]])
+        src = J("""() => { const td = document.querySelector('#tdsRegTable tr[data-reg-row="chRow0"] td:nth-child(2)'), b = td.querySelector('button'), s = td.querySelector('[data-ch-src]');
+          return s && {text: s.textContent, tag: s.classList.contains('tag'), dy: Math.abs(s.getBoundingClientRect().top - b.getBoundingClientRect().top), size: parseFloat(getComputedStyle(s).fontSize), grey: getComputedStyle(s).color !== getComputedStyle(b).color}; }""")
+        ok(src and src["text"] == "Entered by hand" and not src["tag"] and src["dy"] < 6 and src["size"] <= 12.5 and src["grey"], "C8. the source in small grey words on the BSR/serial's line (%s)" % src)
+        J("() => { S.books.challans = S.books.challans.filter(c => !/^chRow/.test(c.id)); render(); }"); pg.wait_for_timeout(300)
         tot = pg.locator('[data-split="total"][data-split-of="%s"]' % ch)
         ok("Tax ₹26,520" in (tot.get_attribute("title") or "") and "Interest" in tot.get_attribute("title"), "C9. hovering the total shows the split: %s" % tot.get_attribute("title"))
         tot.click(); pg.wait_for_timeout(200)
