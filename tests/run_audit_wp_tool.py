@@ -1,7 +1,7 @@
 """python3 run_audit_wp_tool.py - the Assistant's audit tools end to end, from the browser's run to the chat's table:
   1. node run_audit_wp.js: the audit on the made-up book (tests/audit_fixture.js), kept with the books as items
      (tests/out/audit-wp-items.json);
-  2. migration-78-audit.sql on a throwaway PostgreSQL (assistant_stand.py, row-level security as on staging): add-only, runs
+  2. migration-78-audit.sql on a throwaway PostgreSQL (pg_stand.py through assistant_stand.py, row-level security as on staging): add-only, runs
      twice; asst_audit_wp is STABLE and SECURITY INVOKER; the items stored as BookItems keeps them (client_book_items,
      '#<id>' rows), read back as the firm's member equal what the browser kept, to the paisa; a member of another firm and
      the anon role get nothing; the client_books blob is read when there are no items;
