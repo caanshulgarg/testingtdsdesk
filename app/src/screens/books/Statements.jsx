@@ -10,6 +10,8 @@
 // No AI in any figure. Nothing here writes to the books: the mapping and the details are kept with the client (b.fs.rx).
 // State: S.rxView, S.rxFy, S.rxTab.
 import { useState } from "react";
+// FSX (src/js/78-reports.js) comes with this screen, not in legacy.js (build.py react_parts): it sets globalThis.FSX
+import "../../../../src/js/78-reports.js";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const xlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

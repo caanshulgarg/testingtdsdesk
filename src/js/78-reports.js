@@ -1,3 +1,4 @@
+/* @react-lazy: begin 78-reports.js (the React app loads this file with its Statements screen: build.py react_parts) */
 /* ================================================================== */
 /* Reports, Step 3 of the FinCom Assistant: Schedule III financial     */
 /* statements in the firm's format (company, firm, LLP, proprietor),  */
@@ -2279,3 +2280,4 @@ const FSX = (() => {
   return X;
 })();
 if (typeof globalThis === "object") globalThis.FSX = FSX;
+/* @react-lazy: end */

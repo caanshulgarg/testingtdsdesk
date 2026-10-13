@@ -42,7 +42,7 @@ LOAD = """(B) => {
   const b = {loading: false, cid: c.id, challans: [], alloc: {}, vouchers: B.vouchers, under: B.under, groups: B.groups, ledInfo: {}, gstins: {}, pans: {}, states: {},
     meta: {from: "20240401", to: "20260331"}, tb: {from: "20240401", to: "20260331", led: B.led, src: "copy", at: "2026-10-13"}, misCfg: {freq: "off"}, auditCfg: {freq: "off"}};
   b.map = Books.mapLedgers(b.vouchers, {}); b.msme = {"Alder Components": "small"};
-  const st = FSX.store(b); st.kind = "company"; st.det["2025"] = JSON.parse(JSON.stringify(B.det)); st.det["2025"].entity = Object.assign({}, B.ent); st.det["2025"].stock.py = {"Finished Goods": 300000, "Raw Materials": 200000};
+  b.fs = {rx: {map: {versions: [], draft: {}}, det: {}, opts: {}}}; const st = b.fs.rx; st.kind = "company"; st.det["2025"] = JSON.parse(JSON.stringify(B.det)); st.det["2025"].entity = Object.assign({}, B.ent); st.det["2025"].stock.py = {"Finished Goods": 300000, "Raw Materials": 200000};
   S.books = b; window.__bk = b; S.booksTab = "reports"; S.rxView = null; S.rxTab = null; S.rxFy = "2025"; render();
 }"""
 with sync_playwright() as p:
