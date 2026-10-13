@@ -11,17 +11,17 @@ Every build is checked three ways before it goes to the test site:
 | | |
 |---|---|
 | Node 20 or later | rule tests |
-| Python 3.10+, `pip install playwright`, `python -m playwright install chromium` | screen tests |
+| Python 3.10+, `pip install -r tests/requirements.txt` (Playwright, reportlab), `python -m playwright install chromium` | screen tests |
 | PowerShell 7 (`pwsh`) | bridge tests; the bridge itself runs on Windows PowerShell 5.1 |
 | A JDK (only for the stand-in FVU) | `python tests/make_fake_fvu.py` |
-| A client's `DayBook.xml` and `Master.xml` | exported from Tally; kept out of the repository |
+| A client's `DayBook.xml` and `Master.xml` | exported from Tally; kept out of the repository. Without them the tests read the made-up books in `tests/fixtures/books` and check the figures worked out by hand in its `EXPECTED.md` |
 
 ## Settings
 
 | Variable | Default | What |
 |---|---|---|
-| `TDSDESK_DATA` | `tests/data` | the folder with `DayBook.xml`, `Master.xml`, and any 2B JSON |
-| `TDSDESK_CACHE` | `tests/data/books-cache.json` | the day book read once and kept, so tests start in seconds |
+| `TDSDESK_DATA` | `tests/data`, else `tests/fixtures/books` | the folder with `DayBook.xml`, `Master.xml`, and any 2B JSON |
+| `TDSDESK_CACHE` | `tests/data/books-cache.json`; for the fixture `tests/out/fixture-books-cache.json`, made by `fixture_cache.js` | the day book read once and kept, so tests start in seconds |
 | `TDSDESK_HTML` | `site-test/index.html` | the build under test |
 | `TDSDESK_OLD_HTML` | same | an older build, for `run_regress.js` |
 | `TDSDESK_SITE` | `site-test` | the folder the screen tests serve |

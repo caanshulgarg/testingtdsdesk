@@ -1,0 +1,35 @@
+{
+ "chksum": "",
+ "data": {
+  "gstin": "07AAGCL4827M1Z3",
+  "rtnprd": "022026",
+  "version": "1.0",
+  "gendt": "14-02-2026",
+  "docdata": {
+   "b2b": [
+    {
+     "ctin": "07AAHFJ6012N1Z7",
+     "trdnm": "JUNIPER LEGAL ASSOCIATES",
+     "supfildt": "",
+     "supprd": "022026",
+     "inv": [
+      {
+       "inum": "JLA/388",
+       "dt": "25-02-2026",
+       "val": 35400,
+       "txval": 30000,
+       "igst": 0,
+       "cgst": 2700,
+       "sgst": 2700,
+       "cess": 0,
+       "pos": "07",
+       "rev": "N",
+       "itcavl": "Y",
+       "typ": "R"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

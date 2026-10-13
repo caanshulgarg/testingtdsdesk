@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -92,7 +93,9 @@ func netState() (bool, []proc, []listener) {
 	return platNetState()
 }
 
-var reTally = regexp.MustCompile(`(?i)^tally`)
+// review L2 (06-Oct-2026): the Tally program alone (tally, TallyPrime; with or without .exe), never tallyscheduler or another
+// helper TallyPrime 7.1 runs from its install folder (as tallyProgram, recorder_probes.go)
+var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
 
 // TallyPrime programs that are listening, with the Windows session they run in; nil when Windows cannot tell
 func tallyListeners() []M {
@@ -140,6 +143,10 @@ func tallyIni(exe string) M {
 	}
 	if m := group(`(?im)^\s*server\s*port\s*=\s*(\d+)`, t, 1); m != "" {
 		info["port"] = toInt(m)
+	}
+	// 2.3.0: the data folder (Data = ...), for FinCom's Tally page: which Tally, which books
+	if m := group(`(?im)^\s*data\s*=\s*(.+?)\s*$`, t, 1); m != "" {
+		info["data"] = m
 	}
 	return info
 }
@@ -263,19 +270,36 @@ func diagnosis() M {
 
 // the ports to try: from the settings, else your own Tally's (auto), else the usual ones (fallback)
 func portPlan() (string, []M) {
-	tp := cfg("TallyPorts")
-	if _, isStr := tp.(string); tp != nil && !isStr {
+	// ports set in the settings are tried first, then any other Tally of yours found now (it may have moved to another
+	// port since): a port is never only remembered. A 0 or an empty list means "find it"
+	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
+		// 2.3.0: a port set by hand that Windows shows as another user's Tally (another session) is that user's: it is
+		// marked so, and skipped with OnlyMySession like any other user's Tally
+		found := map[int]M{}
+		for _, f := range tallyListeners() {
+			found[toInt(f["port"])] = f
+		}
 		var l []M
-		for _, p := range arr(tp) {
-			l = append(l, M{"port": toInt(p), "pid": nil, "session": nil, "mine": nil, "program": ""})
+		for _, p := range ports {
+			if f, ok := found[p]; ok {
+				l = append(l, f)
+				continue
+			}
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+		}
+		for _, f := range tallyListeners() {
+			if !containsInt(ports, toInt(f["port"])) && f["mine"] == true {
+				l = append(l, f)
+			}
 		}
 		return "config", l
 	}
 	found := tallyListeners()
 	if found == nil {
 		var l []M
-		for _, p := range arr(cfg("FallbackPorts")) {
-			l = append(l, M{"port": toInt(p), "pid": nil, "session": nil, "mine": nil, "program": ""})
+		ports, _ := cleanPorts(cfg("FallbackPorts"))
+		for _, p := range ports {
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
 		}
 		return "fallback", l
 	}
@@ -284,18 +308,31 @@ func portPlan() (string, []M) {
 
 // --- which companies are open: shared through a file and kept 30 s, so status checks cost Tally nothing
 var (
-	coMu       sync.Mutex
-	coCache    []M
-	coCacheAt  time.Time
-	planMode   string
-	coInfo     M
-	emptyAskAt time.Time
+	coMu      sync.Mutex
+	coCache   []M
+	coCacheAt time.Time
+	planMode  string
+	coInfo    M
 )
 
 func coInfoFile() string { return filepath.Join(syncDir(), "company-info.json") }
 
+// round 22 (the 2.1.10 reviews' Medium 4 / S4): coInfo (and its file) only under coInfoMu: the company list is asked
+// from /status, Test connection, the keeper, note change numbers and the light check's own goroutine at once, and a
+// map read and written together ends the process. The lock is never held while Tally is asked (look up, let go, ask,
+// take it again, store); a stored entry is never changed afterwards, so callers may read it without the lock
+var coInfoMu sync.Mutex
+
+// for the tests: forget what is held in memory
+func resetCoInfo() {
+	coInfoMu.Lock()
+	coInfo = nil
+	coInfoMu.Unlock()
+}
+
 // a company's GSTIN and PAN: asked once, when it is first seen, and remembered
-func getCoInfo(name string, port int) M {
+func getCoInfo(tc *TC, name string, port int) M {
+	coInfoMu.Lock()
 	if coInfo == nil {
 		coInfo = readObjFile(coInfoFile())
 		if coInfo == nil {
@@ -305,12 +342,13 @@ func getCoInfo(name string, port int) M {
 	if x := obj(coInfo[name]); x != nil {
 		at, _ := parseTime(str(x["at"]))
 		if str(x["gstin"]) != "" || str(x["pan"]) != "" || time.Since(at) < 6*time.Hour {
+			coInfoMu.Unlock()
 			return x
 		}
 	}
+	coInfoMu.Unlock()
 	g, pan := "", ""
-	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
-	if raw, err := invokeTally(fin, port, collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST", "", extra), 15); err == nil {
+	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil {
 		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
 			g = nt(c[0], "GSTREGISTRATIONNUMBER")
 			if g == "" {
@@ -320,6 +358,11 @@ func getCoInfo(name string, port int) M {
 		}
 	}
 	x := M{"gstin": g, "pan": pan, "at": nowS()}
+	coInfoMu.Lock()
+	defer coInfoMu.Unlock()
+	if coInfo == nil { // forgotten meanwhile (a test)
+		coInfo = M{}
+	}
 	coInfo[name] = x
 	_ = saveFile(coInfoFile(), jsonText(coInfo))
 	return x
@@ -337,8 +380,18 @@ func copySessions(l []M) []M {
 	return o
 }
 
-// Get-OpenCompanies: asks each of your Tallys which companies are open (fresh: always asks)
-func openCompanies(fresh bool) []M {
+// Get-OpenCompanies: asks each of your Tallys which companies are open (fresh: always asks). Only after an event (a
+// posting, Update now, a client opened in FinCom, the nightly catch-up) or a person's request: never on a timer
+func openCompanies(fresh bool) []M { return openCompaniesWith(fin, fresh) }
+
+func openCompaniesWith(tc *TC, fresh bool) []M {
+	l, _ := openCompaniesAsk(tc, fresh)
+	return l
+}
+
+// round 22 (the 2.1.10 code review's Low 7): also whether Tally was asked and every Tally that is open and not skipped
+// gave its list afresh (false: a list held from before stands for one, or one did not answer, or nothing was asked)
+func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	cacheSec := toInt(cfg("StatusCacheSec"))
 	if cacheSec < 30 {
 		cacheSec = 30
@@ -347,7 +400,7 @@ func openCompanies(fresh bool) []M {
 	if !fresh && coCache != nil && time.Since(coCacheAt).Seconds() < float64(cacheSec) {
 		c := copySessions(coCache)
 		coMu.Unlock()
-		return c
+		return c, false
 	}
 	coMu.Unlock()
 	shared := filepath.Join(syncDir(), "open-companies.json")
@@ -357,12 +410,16 @@ func openCompanies(fresh bool) []M {
 				coMu.Lock()
 				coCache, coCacheAt = l, t
 				coMu.Unlock()
-				return copySessions(l)
+				return copySessions(l), false
 			}
 		}
 	}
 	mode, plan := portPlan()
 	sessions := []M{}
+	allFresh := true
+	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
+	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
+	ownOpen, ownAll := map[string]string{}, true
 	for _, pp := range plan {
 		e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 		if cfgB("OnlyMySession") && pp["mine"] == false {
@@ -375,8 +432,25 @@ func openCompanies(fresh bool) []M {
 			sessions = append(sessions, e)
 			continue
 		}
-		raw, err := invokeTally(fin, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
-		if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
+		if !tallyRunning() || !tallyPortOpen(toInt(pp["port"])) {
+			// closed: nothing is sent to it
+			e["error"], e["tallyState"] = "Tally is not open (nothing listens on this port)", "closed"
+			sessions = append(sessions, e)
+			continue
+		}
+		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go)
+		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
+		if err != nil {
+			allFresh = false
+			if pp["mine"] != false {
+				ownAll = false
+			}
+		}
+		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop) || errors.Is(err, errRetryWait)) && prevCompanies(toInt(pp["port"])) != nil {
+			// a background read stopped or held back (2.3.1: or stopped at its 2 s hard stop): the companies named last time
+			// stand, nothing new is known
+			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
+		} else if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
 			// a busy Tally is still open: the companies it named last time stay, marked busy
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
@@ -388,7 +462,11 @@ func openCompanies(fresh bool) []M {
 				if name == "" {
 					continue
 				}
-				inf := getCoInfo(name, toInt(pp["port"]))
+				inf := getCoInfo(tc, name, toInt(pp["port"]))
+				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
+				if pp["mine"] != false {
+					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
+				}
 				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
 			}
 			e["ok"] = true
@@ -402,7 +480,8 @@ func openCompanies(fresh bool) []M {
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
-	return copySessions(sessions)
+	liveNoteOwnTally(ownOpen, ownAll)
+	return copySessions(sessions), allFresh
 }
 
 // the companies a Tally named the last time it answered
@@ -454,148 +533,222 @@ func sessCompanies(s M) []M {
 	return o
 }
 
+// --- "Is Tally open?" (2.1.3), answered without sending Tally a request: the Tally program is running (Windows: its
+// process, tally.exe, in the list of programs) and its port takes a connection, which is closed at once. Kept a few
+// seconds, so the tray and the heartbeat asking often cost nothing
+var (
+	openMu    sync.Mutex
+	portSeen  = map[int][2]any{} // port -> {time, open}
+	runSeen   time.Time
+	runCached bool
+)
+
+// the tests: Tally's program "closed"
+var tallyStandInClosed bool
+
+func tallyRunning() bool {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if time.Since(runSeen) < 5*time.Second {
+		return runCached
+	}
+	runCached, runSeen = platTallyRunning() && !tallyStandInClosed, time.Now()
+	return runCached
+}
+
 // a connection opened and closed; Tally is asked nothing
 func tallyPortOpen(port int) bool {
+	openMu.Lock()
+	if v, ok := portSeen[port]; ok && time.Since(v[0].(time.Time)) < 5*time.Second {
+		openMu.Unlock()
+		return v[1].(bool)
+	}
+	openMu.Unlock()
 	host := cfgS("TallyHost")
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 500*time.Millisecond)
-	if err != nil {
-		return false
+	open := false
+	if c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 500*time.Millisecond); err == nil {
+		c.Close()
+		open = true
 	}
-	c.Close()
-	return true
+	openMu.Lock()
+	portSeen[port] = [2]any{time.Now(), open}
+	openMu.Unlock()
+	return open
+}
+func forgetTallyOpen() {
+	openMu.Lock()
+	portSeen, runSeen = map[int][2]any{}, time.Time{}
+	openMu.Unlock()
 }
 
-// Get-OpenCompaniesCached (1.14.0): status checks never ask Tally; they get the companies Tally named the last time it
-// was asked, and whether Tally's port takes connections
+// Tally open on any of your ports (the program running, the port taking a connection): the port, or 0
+func tallyOpenNow() int {
+	if !tallyRunning() {
+		return 0
+	}
+	_, plan := portPlan()
+	for _, pp := range plan {
+		if cfgB("OnlyMySession") && pp["mine"] == false {
+			continue
+		}
+		if tallyPortOpen(toInt(pp["port"])) {
+			return toInt(pp["port"])
+		}
+	}
+	return 0
+}
+
+// Get-OpenCompaniesCached (1.14.0; 2.1.3 never asks Tally at all): the companies Tally named the last time it was asked
+// after an event, and whether Tally is open now (the program running and its port taking a connection)
 func openCompaniesCached() []M {
 	shared := filepath.Join(syncDir(), "open-companies.json")
 	list := sessionsFromFile(shared)
-	stale, newPort := false, false
-	if list != nil {
-		for _, e := range list {
-			if e["skipped"] == true {
-				continue
-			}
-			st := tallyState(toInt(e["port"]))
-			open := st != "closed"
-			if open && (e["ok"] != true || len(sessCompanies(e)) == 0) {
-				stale = true // Tally opened since it was last asked
-			}
-			e["ok"] = open
-			e["tallyState"], e["busy"] = st, st == "busy"
-			if !open {
-				e["companies"] = []any{}
-			}
-		}
-		// Tally reopened on another port of this session
+	if list == nil {
+		// nothing asked yet: each of your ports as it stands, without companies
+		list = []M{}
 		_, plan := portPlan()
 		for _, pp := range plan {
+			e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 			if cfgB("OnlyMySession") && pp["mine"] == false {
-				continue
+				e["skipped"] = true
 			}
-			in := false
-			for _, e := range list {
-				if toInt(e["port"]) == toInt(pp["port"]) {
-					in = true
-				}
-			}
-			if !in && tallyPortOpen(toInt(pp["port"])) {
-				stale, newPort = true, true
-			}
+			list = append(list, e)
 		}
 	}
-	coMu.Lock()
-	ask := (list == nil || stale) && time.Since(emptyAskAt).Minutes() >= 10
-	coMu.Unlock()
-	if ask && (newPort || list == nil || !keepUserInTally()) {
-		coMu.Lock()
-		emptyAskAt = time.Now()
-		coMu.Unlock()
-		if list == nil {
-			return openCompanies(false) // nothing known at all yet: asked now (the bridge's first minute)
+	for _, e := range list {
+		if e["skipped"] == true {
+			continue
 		}
-		// asked in the background: a status check or the heartbeat never waits for Tally
-		go func() {
-			defer func() { recover() }()
-			openCompanies(false)
-		}()
-	}
-	if list == nil {
-		return []M{}
+		st := tallyState(toInt(e["port"]))
+		open := st != "closed"
+		e["ok"] = open
+		e["tallyState"], e["busy"] = st, st == "busy"
+		if !open {
+			e["companies"] = []any{}
+		}
 	}
 	return list
 }
 
-// the Tally to use for a company: a port chosen in FinCom wins; otherwise the company must be open in exactly one Tally
-// (your own session first) - the bridge never guesses between two
-func findCompanyPort(company string, preferred int) (int, error) {
-	for _, fresh := range []bool{false, true} {
-		sessions := openCompanies(fresh)
+// findCompany: the Tally (port) where the company is open, and its name as Tally writes it, found now: the cached list
+// first, then Tally asked afresh. The company is the exact one asked for (spaces, line breaks and capitals aside), never
+// another that happens to be open. preferred (the Tally chosen in FinCom, or where it was found last) is only a hint:
+// Tally may have been started again on another port. The error says why it cannot be posted to now (*tallyWait).
+func findCompany(company string, preferred int) (int, string, error) {
+	return findCompanyIn(company, preferred, []bool{false, true})
+}
+
+// review M1 (06-Oct-2026): the same for a BACKGROUND read (the ledger changes, the recorder's body fetch, its resolve of
+// held lines, its GUID ask): the company list asked under the 2-second hard stop (bgCompaniesTC) and never while the
+// shared retry schedule waits (retryHeld, retry.go): then the companies named last time stand. A person's request and a posting use findCompany /
+// findCompanyNow, unchanged
+func findCompanyPortBg(company string, preferred int) (int, error) {
+	p, _, err := findCompanyWith(company, preferred, []bool{false, true}, func(fresh bool) []M {
+		if retryHeld() {
+			return openCompaniesCached()
+		}
+		l, _ := openCompaniesAsk(bgCompaniesTC(), fresh)
+		return l
+	})
+	return p, err
+}
+
+// for a posting: Tally asked now, every time (a list even 30 seconds old may name a company closed since)
+func findCompanyNow(company string, preferred int) (int, string, error) {
+	return findCompanyIn(company, preferred, []bool{true})
+}
+
+func findCompanyIn(company string, preferred int, passes []bool) (int, string, error) {
+	return findCompanyWith(company, preferred, passes, openCompanies)
+}
+
+func findCompanyWith(company string, preferred int, passes []bool, list func(fresh bool) []M) (int, string, error) {
+	var last error
+	for _, fresh := range passes {
+		last = nil
 		var usable []M
-		for _, s := range sessions {
-			if s["skipped"] != true && s["ok"] == true {
+		answered, busy := false, false
+		for _, s := range list(fresh) {
+			if s["skipped"] == true {
+				continue
+			}
+			if s["ok"] == true {
 				usable = append(usable, s)
+				answered = true
+				if s["busy"] == true {
+					busy = true
+				}
+			} else if re(`(?i)timed out|timeout|busy`).MatchString(str(s["error"])) {
+				busy = true
 			}
 		}
-		has := func(s M) bool {
-			for _, c := range sessCompanies(s) {
-				if str(c["name"]) == company {
-					return true
-				}
+		type hit struct {
+			port int
+			name string
+			mine bool
+		}
+		var hits []hit
+		for _, u := range usable {
+			var names []string
+			for _, c := range sessCompanies(u) {
+				names = append(names, str(c["name"]))
 			}
-			return false
+			name, n := matchCompany(company, names)
+			if n > 1 {
+				last = &tallyWait{"many", fmt.Sprintf("Tally on port %d has more than one company named like '%s'; it is not known which one is meant.", toInt(u["port"]), company)}
+				continue
+			}
+			if n == 1 {
+				hits = append(hits, hit{toInt(u["port"]), name, u["mine"] == true})
+			}
 		}
 		if preferred > 0 {
-			var s M
-			for _, u := range usable {
-				if toInt(u["port"]) == preferred {
-					s = u
-					break
+			for _, h := range hits {
+				if h.port == preferred {
+					return h.port, h.name, nil
 				}
 			}
-			if s != nil && has(s) {
-				return preferred, nil
-			}
-			if fresh {
-				if s == nil {
-					return 0, fmt.Errorf("The Tally chosen in FinCom (port %d) is not running in your Windows session. Start it, or choose another Tally in FinCom > Settings > Tally Bridge.", preferred)
-				}
-				return 0, fmt.Errorf("Company '%s' is not open in the Tally chosen in FinCom (port %d). Open it there.", company, preferred)
-			}
-			continue
 		}
-		var with []M
-		for _, u := range usable {
-			if has(u) {
-				with = append(with, u)
-			}
+		if len(hits) == 1 {
+			return hits[0].port, hits[0].name, nil
 		}
-		if len(with) == 1 {
-			return toInt(with[0]["port"]), nil
-		}
-		if len(with) > 1 {
-			var mine []M
-			for _, w := range with {
-				if w["mine"] == true {
-					mine = append(mine, w)
+		if len(hits) > 1 {
+			var mine []hit
+			for _, h := range hits {
+				if h.mine {
+					mine = append(mine, h)
 				}
 			}
 			if len(mine) == 1 {
-				return toInt(mine[0]["port"]), nil
+				return mine[0].port, mine[0].name, nil
 			}
-			if fresh {
-				var p []string
-				for _, w := range with {
-					p = append(p, fmt.Sprint(w["port"]))
-				}
-				return 0, fmt.Errorf("Company '%s' is open in more than one Tally (ports %s). Choose your Tally in FinCom > Settings > Tally Bridge.", company, strings.Join(p, ", "))
+			var p []string
+			for _, h := range hits {
+				p = append(p, fmt.Sprint(h.port))
 			}
+			last = &tallyWait{"many", fmt.Sprintf("Company '%s' is open in more than one Tally (ports %s). Choose your Tally in FinCom > Settings > Tally Bridge.", company, strings.Join(p, ", "))}
+			continue
+		}
+		switch {
+		case last != nil:
+		case busy && !answered:
+			last = &tallyWait{"busy", "Tally is busy and did not answer in time."}
+		case !answered:
+			last = &tallyWait{"closed", "TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both)."}
+		default:
+			last = &tallyWait{"notopen", fmt.Sprintf("Company '%s' is not open in Tally. Open it in TallyPrime on this computer and try again.", company)}
 		}
 	}
-	return 0, fmt.Errorf("Company '%s' is not open in Tally. Open it in TallyPrime on this computer and try again.", company)
+	return 0, "", last
+}
+
+// the port only (the readers): see findCompany
+func findCompanyPort(company string, preferred int) (int, error) {
+	p, _, err := findCompany(company, preferred)
+	return p, err
 }
 
 // --- the person at the computer (Tally comes first: the copier does not read while someone works in Tally)
@@ -617,3 +770,68 @@ func keepUserInTally() bool {
 	}
 	return platFrontIsTally()
 }
+
+func containsInt(a []int, x int) bool {
+	for _, v := range a {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// the list of companies loaded in Tally (name, books' period, GUID)
+func companiesRequest() string {
+	return collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", "")
+}
+
+// one company's GSTIN and PAN (the company's own master fields)
+func coInfoRequest(name string) string {
+	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
+	return collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra)
+}
+
+// 2.3.0: the Tally this bridge works with, for the heartbeat: the port of the first of the owner's Tallys that answered
+// (from the sessions the beat is made of), and the data folder its tally.ini names (when Windows says which program it is)
+func myTallyFor(ports []any) (int, string) {
+	port := 0
+	for _, x := range ports {
+		if o := obj(x); o != nil && o["ok"] == true && o["skipped"] != true {
+			port = toInt(o["port"])
+			break
+		}
+	}
+	myTallyMu.Lock()
+	defer myTallyMu.Unlock()
+	if !isFake() && myTallyPort == port && port != 0 && time.Since(myTallyAt) < 5*time.Minute {
+		return port, myTallyData // Windows' process list is read at most every 5 minutes for this
+	}
+	data := ""
+	ok, procs, lis := netState()
+	if ok {
+		byID := map[int]proc{}
+		for _, p := range procs {
+			if reTally.MatchString(p.Name) && isMine(p.Session) {
+				byID[p.ID] = p
+			}
+		}
+		for _, l := range lis {
+			if p, hit := byID[l.Pid]; hit && (port == 0 || l.Port == port) {
+				if port == 0 {
+					port = l.Port
+				}
+				data = str(tallyIni(p.Path)["data"])
+				break
+			}
+		}
+	}
+	myTallyAt, myTallyPort, myTallyData = time.Now(), port, data
+	return port, data
+}
+
+var (
+	myTallyMu   sync.Mutex
+	myTallyAt   time.Time
+	myTallyPort int
+	myTallyData string
+)

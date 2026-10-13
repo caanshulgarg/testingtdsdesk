@@ -134,7 +134,8 @@ with sync_playwright() as p:
     A.evaluate("(n) => lmConfirmToggle(n)", led); t = wait_for(B, "!!(S.books.map[%s] || {}).ok" % json.dumps(led), 5)
     ok(t is not None and t < 2, "1. %s confirmed on A: confirmed on B in %.2f s, no refresh" % (led, t or 99))
     ok(wait_for(B, "document.body.innerText.includes('Updated by Asha at')", 2) is not None, "and B says “Updated by Asha at …”, not an error")
-    ok(wait_for(A, "document.querySelector('[data-save=\"saved\"]')", 3) is not None and "Saved" in A.inner_text("header"), "A's top bar says Saved: " + re.sub(r"\s+", " ", A.inner_text(".tchip.ok") if A.locator(".tchip.ok").count() else "")[:40])
+    # owner's spec H3 (04-Oct-2026): saving shows only when it matters; nothing once all is saved (no "Saved", no "live")
+    ok(wait_for(A, "!document.querySelector('#cobar [data-save]') && Live.sv.state === 'saved'", 3) is not None and "Saved" not in A.inner_text("header") and "live" not in A.inner_text("header").lower().split(), "A's top bar: all saved, so nothing is shown")
     # four at once on A, as in the review
     A.evaluate("(ns) => { LedMaster.confirm(S.books, ns, true); saveBooks(); render(); }", LEDS[1:4])
     t = wait_for(B, " && ".join("!!(S.books.map[%s] || {}).ok" % json.dumps(n) for n in LEDS[1:4]), 5)

@@ -7,14 +7,9 @@ const GSTAdv = {
   nearRate(x){ let best = 18, d = 1e9; this.RATES.forEach(r => { if (Math.abs(r - x) < d){ d = Math.abs(r - x); best = r; } }); return d < 0.6 ? best : r2(x); },
   // a ledger is a customer when it sits under Sundry Debtors; without the masters, when it was billed
   isCustomer(name, billed){
-    const b = S.books, under = b.under || {}, groups = b.groups || {};
-    let p = under[name];
-    if (p == null) return billed.has(name);
-    for (let i = 0; p && i < 15; i++){
-      if (/^sundry\s+debtors$/i.test(p.trim())) return true;
-      p = groups[p];
-    }
-    return false;
+    const b = S.books;
+    if (ledUnder(b, name) == null) return billed.has(name);
+    return ledGroupPath(b, name).some(g => /^sundry\s+debtors$/i.test(String(g).trim()));
   },
   stateCode(name){ return STATE_CODES[String(name || "").toUpperCase().trim()] || ""; },
   _memo: null,
@@ -123,10 +118,18 @@ const GSTAdv = {
   // one month: 11A is what came in and was not billed in the same month; 11B is an earlier advance billed now
   month(ym, reg){
     const zero = {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, received: 0};
-    if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: []};
+    if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: [], unmatched: [], unmatchedSum: zero};
     const months = ym ? GSTR.expand(ym) : GSTR.months();
-    const {pieces} = this.build();
-    const at = [], txpd = [], untaxed = [];
+    const {pieces, billed} = this.build();
+    const at = [], txpd = [], untaxed = [], unmatched = [];
+    // review of 02-Oct-2026: an advance is adjusted in 11B only against an invoice to that customer in the same return
+    // period (the month, or the quarter for a QRMP filer). One marked as adjusted by hand in a period with no invoice
+    // to the customer (Testing AAD: receipt 13 of 15-Apr-2025 from LEADS INSURANCE BROKERS, 27,000 against bill
+    // 2023-24/GST/591, marked as adjusted in Sep-2026, where there is no invoice) would make GSTR-1's taxable value
+    // negative (-22,881.36): it is listed on its own, with what is missing, and left out of 11B and 3.1(a)
+    const periodOf = m => { try { if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg || p0reg) === "qrmp") return GSTR.expand(GSTSet.qStart(m) + "-" + GSTSet.qEnd(m)); } catch (e){} return [m]; };
+    const p0reg = reg || ((GSTR.gstins(S.books) || [])[0] || "").slice(0, 2);
+    const invoiced = (party, m) => { const ms = periodOf(m); return (billed.get(party) || []).some(h => ms.includes(GSTR.ym(h.date))); };
     pieces.forEach(p => {
       if (reg && p.reg !== reg) return;
       months.forEach(m => {
@@ -139,7 +142,13 @@ const GSTAdv = {
           }
         }
         p.adj.forEach(a => {
-          if (a.ym === m && p.ym < m && p.taxed) txpd.push(this.row(p, a.amount, {receivedYm: p.ym, adjDate: a.date, by: a.by, how: a.how}));
+          if (!(a.ym === m && p.ym < m && p.taxed)) return;
+          if (a.how === "marked" && !invoiced(p.party, m)){
+            const per = periodOf(m), lab = per.length > 1 ? GSTSet.qLabel(per[per.length - 1]) : GSTR.label(m);
+            unmatched.push(this.row(p, a.amount, {receivedYm: p.ym, adjDate: a.date, by: a.by, how: a.how, missing: "no invoice to " + p.party + " in " + lab + ": raise the invoice, or mark the advance as adjusted in the month of its invoice"}));
+            return;
+          }
+          txpd.push(this.row(p, a.amount, {receivedYm: p.ym, adjDate: a.date, by: a.by, how: a.how}));
         });
       });
     });
@@ -150,7 +159,7 @@ const GSTAdv = {
       cgst: r2(atSum.cgst - txpdSum.cgst), sgst: r2(atSum.sgst - txpdSum.sgst), cess: r2(atSum.cess - txpdSum.cess)};
     const last = months[months.length - 1] || "";
     const open = pieces.filter(p => (!reg || p.reg === reg) && p.taxed && p.ym <= last && r2(p.amount - p.adj.filter(a => a.ym <= last).reduce((s, a) => s + a.amount, 0)) > 0.004);
-    return {ready: true, at, txpd, atSum, txpdSum, net, untaxed, open};
+    return {ready: true, at, txpd, atSum, txpdSum, net, untaxed, open, unmatched, unmatchedSum: sum(unmatched)};
   },
   // GSTR-1 JSON parts: grouped by place of supply and rate, the advance shown without its tax
   json(rows){

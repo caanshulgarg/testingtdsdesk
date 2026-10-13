@@ -6,20 +6,32 @@
 // read from their boxes (data-sug) by ruleMakeSug, as before.
 
 import LedgerSelect from "./LedgerSelect.jsx";
+import Confirm, { BankLedger } from "./Confirm.jsx";
+import Loading from "./Loading.jsx";
 
 const Btn = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => bankAct(act)}>{children}</button>;
 
-function Panel() {
+// over the bank page, the panel is a section of its own (its Save at the foot); in Client setup the page's section holds it
+const BANK_SET_ID = "bank:settings";
+const closeSettings = () => Drafts.guard(BANK_SET_ID, () => bankSettingsShow(false));
+function Panel({ inline }) {
   const b = B(), co = CO(), std = Object.keys(BANK_LEDGER_DEFAULTS), pendingNew = b.newLed.filter((l) => !l.sent).length, nh = Object.keys(b.hist.rows).length;
-  return <div className="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div className="bk-panel-head"><h2 id="bkSetT">{"Bank settings — " + co.name}</h2><button className="icon" aria-label="Close" onClick={() => bankSettingsShow(false)}>✕</button></div>
+  const body = <PanelBody b={b} co={co} std={std} pendingNew={pendingNew} nh={nh} />;
+  return <div className="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div className="bk-panel-head"><h2 id="bkSetT">{"Bank settings — " + co.name}</h2><button className="icon" aria-label="Close" onClick={closeSettings}>✕</button></div>
+    {inline ? body : <Confirm id={BANK_SET_ID} label="Bank settings" stores={["client"]}>{body}</Confirm>}
+  </div>;
+}
+function PanelBody({ b, co, std, pendingNew, nh }) {
+  return <>
     <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? fmtDateTime(b.ledgers.importedAt) : "—") + "."}</p><Btn act="bankSync">Refresh from Tally</Btn></>
       : <>{hasLedgerList() ? <p className="note">{b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + (b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "")}</p>
         : <p className="note">Not imported yet. In Tally: Display More Reports → List of Accounts → Export (Excel or XML).</p>}
         <Btn act="ledPick">{hasLedgerList() ? "Update ledger list" : "Import ledger list"}</Btn>
         {pendingNew > 0 && <p className="note">{plural(pendingNew, "new ledger") + " will be created in Tally with the next Tally file."}</p>}</>}</section>
-    <section><h3>Bank accounts</h3>{(co.bankAccounts || []).length ? <div className="bk-form">{co.bankAccounts.map((a) =>
-      <label key={a.id}><span>{a.bank + (a.last4 ? " ··" + a.last4 : "") + (a.ifsc ? " · " + a.ifsc : "")}</span><LedgerSelect aria-label={"Ledger for " + a.bank} selected={exactLedger(a.ledger)} prefer={BANK_GROUPS} onPick={(v) => bankSetAccLedger(a.id, v)} /></label>)}</div>
-      : <p className="note">Bank accounts are added when you upload their statements.</p>}</section>
+    <section><h3>Bank accounts</h3>{(co.bankAccounts || []).length ? <div className="bk-accs">{co.bankAccounts.map((a) =>
+      <div key={a.id} className="bk-acc"><span className="note">{a.bank + (a.last4 ? " ··" + a.last4 : "") + (a.ifsc ? " · " + a.ifsc : "")}</span><BankLedger co={co} acc={a} compact /></div>)}</div>
+      : <p className="note">Bank accounts are added when you upload their statements.</p>}
+      <p className="note">Each account’s ledger is confirmed on its own (Confirm beside it), and kept for every computer.</p></section>
     <section><h3>Ledgers for standard entries</h3><p className="note">Found automatically in the ledger list; change them if this client uses different ledgers.</p><div className="bk-form">{std.map((k) =>
       <label key={k}><span>{BANK_LEDGER_LABELS[k]}</span><LedgerSelect aria-label={BANK_LEDGER_LABELS[k]} selected={stdLedger(co, k)} onPick={(v) => bankStdLedger(k, v)} /></label>)}</div></section>
     <section><h3>Automation</h3>
@@ -28,13 +40,13 @@ function Panel() {
       <label className="chk"><input type="checkbox" checked={co.bankAutoApply !== false} onChange={(ev) => bankOptSet("bankAutoApply", ev.target.checked)} /> When I choose a ledger for an entry, use it for every entry of the same party and remember it</label></section>
     <section><h3>Clean up</h3><p className="note">{b.rules.length + " saved rules · " + nh + " remembered decisions · " + b.stmts.length + " statements"}</p><div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
       <Btn act="bankClearRules" disabled={!b.rules.length}>Forget saved rules</Btn><Btn act="bankClearHist" disabled={!nh}>Forget remembered decisions</Btn><Btn act="bankDelAll" className="btn small danger" disabled={!b.stmts.length}>Delete all statements</Btn></div></section>
-  </div>;
+  </>;
 }
 
 // over the bank screen (a click outside closes it), or inline in Client setup
 export function BankSettings({ inline }) {
-  if (inline) return <div className="setup-inline"><div className="bk-overlay"><Panel /></div></div>;
-  return <div className="bk-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget) bankSettingsShow(false); }}><Panel /></div>;
+  if (inline) return <div className="setup-inline"><div className="bk-overlay"><Panel inline /></div></div>;
+  return <div className="bk-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget) closeSettings(); }}><Panel /></div>;
 }
 
 function Suggestions() {
@@ -43,7 +55,7 @@ function Suggestions() {
   if (!list.length) return <p className="note" style={{ marginTop: 10 }}>Nothing worth a rule yet — the same wording has to be booked to the same ledger at least three times. <Btn act="ruleFindClose" className="linkbtn">Hide</Btn></p>;
   const all = (ev) => document.querySelectorAll("[data-sug]").forEach((x) => { x.checked = ev.target.checked; });
   return <div className="bdiag" style={{ marginTop: 12 }}><b>{list.length + " rule" + (list.length === 1 ? "" : "s") + " we can make from what you have already done"}</b>
-    <div className="tblwrap" style={{ marginTop: 6 }}><table className="data"><thead><tr><th className="ck"><input type="checkbox" aria-label="Tick all" defaultChecked onClick={all} /></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th className="n">Done before</th></tr></thead><tbody>
+    <div className="tblwrap" style={{ marginTop: 6 }}><table className="data" data-statement=""><thead><tr><th className="ck"><input type="checkbox" aria-label="Tick all" defaultChecked onClick={all} /></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th className="n">Done before</th></tr></thead><tbody>
       {list.map((s, i) => <tr key={i}><td className="ck"><input type="checkbox" data-sug={i} aria-label={"Make: " + s.text} defaultChecked={!s.off} /></td><td><b>{s.text}</b><div className="nr">{String(s.sample).slice(0, 60)}</div></td>
         <td>{s.dir === "out" ? "going out" : s.dir === "in" ? "coming in" : "either"}</td><td>{s.ledger}</td><td className="n">{s.n + " times"}{s.agree < 100 && <div className="nr">{s.agree + "% the same"}</div>}</td></tr>)}</tbody></table></div>
     <div className="row" style={{ marginTop: 8 }}><Btn act="ruleMakeSug" className="btn small primary">Make the ticked rules</Btn><Btn act="ruleFindClose">Not now</Btn></div></div>;
@@ -66,7 +78,7 @@ export function RulesPanel() {
   return <section className="pane"><div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h2 style={{ margin: 0 }}>Rules</h2>
     <div><Btn act="ruleNew" className="btn small primary">New rule</Btn><Btn act="ruleRunNow">Apply to this statement</Btn>{mine.length > 0 && <Btn act="ruleCopyAll">Copy to other clients</Btn>}</div></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Rules are read from the top down; the first one that fits wins. Your own choices are never overwritten by a rule.</p>
-    <div className="tblwrap"><table className="data"><thead><tr><th></th><th>Rule</th><th>Does</th><th className="n">Matches</th><th className="n">Used</th><th></th></tr></thead><tbody>
+    <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th></th><th>Rule</th><th>Does</th><th className="n">Matches</th><th className="n">Used</th><th></th></tr></thead><tbody>
       {mine.length ? mine.map((r) => <RuleRow key={r.id} r={r} scope="client" co={co} />) : <tr><td colSpan={6} className="nr">{"No rules for " + co.name + " yet. Make one from any line, or press New rule."}</td></tr>}
       {firm.length > 0 && <><tr><td colSpan={6} style={{ background: "var(--paper)" }}><b>Firm-wide rules</b> — used for every client, after this client’s own rules</td></tr>{firm.map((r) => <RuleRow key={r.id} r={r} scope="firm" co={co} />)}</>}
     </tbody></table></div>
@@ -80,7 +92,7 @@ export function BankSetup({ which }) {
   const co = CO();
   if (!S.bank || S.bank.cid !== co.id || S.bank.loading) {
     if (!S.bank || S.bank.cid !== co.id) loadBank(co.id).then(() => render());
-    return <p className="note">Loading this client’s bank details…</p>;
+    return <Loading what="this client’s bank details" lines={3} />;
   }
   return which === "rules" ? <RulesPanel /> : <BankSettings inline />;
 }

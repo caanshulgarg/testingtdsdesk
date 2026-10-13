@@ -1,0 +1,65 @@
+FINCOM 2.4.3 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.3.exe
+Fingerprint: SHA-256 374bf99fdb6021a04c4403cd9d52016e5064d871f9f12bc6422709584913307a (FinComBridge-Setup-2.4.3.exe, built 12-Oct-2026 11:00 IST; compare with the .sha256 file next to the setup)
+
+What 2.4.3 changes (the full notes: docs/bridge-2.4.3-notes.md):
+1. A TDS payment's challan as Tally keeps it reaches FinCom: BSR code, challan number and date (with the cheque, bank
+   and branch), and what each line of the payment pays (tax, interest, late fee). FinCom makes the challan from it,
+   marked "From Tally", with the interest and the fee in their own columns of the FVU file.
+2. The deductions Tally says a payment pays are tagged to that payment's challan in FinCom ("From Tally"). A deduction
+   FinCom already has on another challan is never moved: the difference is shown on the Challans tab.
+3. From Tally's masters: a TDS ledger's nature of payment (its section is taken from it, before the one in the ledger's
+   name), a party's lower-deduction certificate (it appears in FinCom's certificate list, marked "From Tally"), and each
+   nature's thresholds (the limits tracker uses them).
+4. The bridge asks Tally a little more with its ledger list (the ledgers' TDS settings) and the natures of payment once a
+   round (a few dozen masters); one request at a time, never while a posting runs. Entries are asked exactly as in 2.4.2.
+5. FinCom's cloud stores these (migration 73, run on staging before the tally-ingest of 2.4.3).
+The add-on is 2.4.2's. The two data locations (one company in two places) move to 2.4.4.
+
+WHAT YOUR STAFF DO IN TALLY (so the challan reaches FinCom)
+   a. Pay the TDS with Tally's Stat Payment: Payment voucher (F5), the bank, then Ctrl+F (Autofill) > Stat Payment,
+      Type of duty/tax TDS, the period, the nature (or all), Cash/Bank: Tally fills the TDS lines and links them to the
+      deductions they pay. Accept.
+   b. After the bank's challan: Display More Reports > Statutory Reports > TDS Reports > Challan Reconciliation, the
+      period, select the payment (Space), then Reconcile: type the BSR code, the challan number and the challan date
+      (and the cheque or DD number and date, the bank). Accept. (The owner checked on a licensed Tally that these stay
+      saved; the test machines run Tally's Educational mode, where the keys did not save them.)
+   c. Interest or late fee paid with the tax: give each its own line in the Stat Payment with Type of payment Interest or
+      Late Fee (Tally's own field), not added into the tax line.
+   d. A lower-deduction certificate: on the party ledger, the TDS details' lower deduction (certificate number, section
+      197, from, to, rate, limit) for the nature of payment it covers.
+
+Before you start: migration 73 has run on staging and the tally-ingest of 2.4.3 is deployed; you are signed in to FinCom as
+the owner; TallyPrime 7.1 is open on NWS144 with GARG SHEKHAR & COMPANY. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.4.3.exe and compare its fingerprint. The add-on is unchanged: nothing to reload.
+   You should see: the tray says FinCom Bridge 2.4.3; FinCom's Tally page shows version 2.4.3.
+
+CHECK 2 - THE FIRST REAL CHALLAN (the live confirmation)
+   Do a. and b. above for the next real TDS payment (or a TRIAL one of Rs 1, narration "TRIAL 243 challan").
+   You should see: on the TDS page, Challans tab, a challan with that BSR code, number and date, marked "From Tally"; the
+   deductions the payment pays tagged to it ("From Tally" beside their TDS). If the payment had an Interest or Late Fee
+   line, the challan's interest and fee show them. Write down the challan's BSR code and number: this is the first real
+   Challan Reconciliation entry and confirms that Tally's TAX* tags carry it.
+
+CHECK 3 - A NATURE OF PAYMENT AND A CERTIFICATE
+   Press Update now on the Tally page (the ledger list is read again).
+   You should see: on the Certificates tab, any lower-deduction certificate the parties carry in Tally, marked "From
+   Tally"; a certificate already typed in FinCom stays as typed, and where Tally says otherwise the difference is listed.
+
+CHECK 4 - NOTHING SLOWER
+   Save an ordinary Journal of Rs 1, narration "TRIAL 243 speed".
+   You should see: it is in FinCom's books as fast as with 2.4.2 (a few seconds); the log shows the entry request
+   answered in well under 2 seconds, and after Update now a line "natures of payment ... (0.0s)".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.2)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.2). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.2 for your line. Entries 2.4.2 sends carry no
+   challan details; the ones 2.4.3 sent keep theirs. Automatic updates stay off on this computer until FinCom turns them on again.

@@ -58,19 +58,25 @@ const GSTQ = {
     (j.b2b || []).forEach(g => (g.inv || []).forEach(i => docs.push({sec: "b2b", ctin: g.ctin, g, x: i, num: i.inum, d: dt(i.idt), val: num(i.val)})));
     (j.cdnr || []).forEach(g => (g.nt || []).forEach(i => docs.push({sec: "cdnr", ctin: g.ctin, g, x: i, num: i.nt_num, d: dt(i.nt_dt), val: num(i.val)})));
     docs.sort((a, c) => a.d.localeCompare(c.d) || String(a.num).localeCompare(String(c.num)));
-    let run = 0; const inc = [], left = [];
-    docs.forEach(x => { if (run + x.val <= this.LIMIT){ run += x.val; inc.push(x); } else left.push(x); });
+    // request of 02-Oct-2026: no longer cut at Rs 50 lakh (the Jan-2026 IFF of Testing AAD went through at 55,53,800 of
+    // taxable value); above the limit the screen warns, and the documents can still go in the quarter's GSTR-1 instead
+    const sg = x => x.sec === "cdnr" && String(x.x.ntty || "C").toUpperCase() === "C" ? -1 : 1;
+    docs.forEach(x => { x.txval = r2((x.x.itms || []).reduce((a, it) => a + num((it.itm_det || {}).txval), 0)); x.s = sg(x); });
+    let run = 0; const inc = docs.slice(), left = [];
+    inc.forEach(x => { run += x.val; });
     const group = (sec, inner) => { const m = new Map(); inc.filter(x => x.sec === sec).forEach(x => { const o = m.get(x.ctin) || Object.assign({}, x.g, {[inner]: []}); o[inner].push(x.x); m.set(x.ctin, o); }); return Array.from(m.values()); };
     const b2b = group("b2b", "inv"), cdnr = group("cdnr", "nt"); if (b2b.length) out.b2b = b2b; if (cdnr.length) out.cdnr = cdnr;
     const taxOf = x => (x.x.itms || []).reduce((a, it) => { const d = it.itm_det || {}; return a + num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt); }, 0);
+    const taxable = r2(inc.reduce((a, x) => a + x.s * x.txval, 0));
     return {json: out, keys: inc.map(x => this.key(x.ctin, x.num)), n: inc.filter(x => x.sec === "b2b").length, notes: inc.filter(x => x.sec === "cdnr").length,
-      val: r2(run), tax: r2(inc.reduce((a, x) => a + taxOf(x), 0)), all: docs.length, allVal: r2(docs.reduce((a, x) => a + x.val, 0)), left: left.length, over: left.length > 0};
+      val: r2(run), taxable, tax: r2(inc.reduce((a, x) => a + x.s * taxOf(x), 0)), all: docs.length, allVal: r2(docs.reduce((a, x) => a + x.val, 0)), left: left.length,
+      over: taxable > this.LIMIT, docs: inc.map(x => ({key: this.key(x.ctin, x.num), sec: x.sec, ctin: x.ctin, num: x.num, d: x.d, val: r2(x.val), txval: x.txval, tax: r2(taxOf(x))}))};
   },
   // GSTR-1 for the quarter: everything in it, less the invoices and notes already sent in an IFF
   r1Q(qEnd, reg){
     // the documents sent in each IFF filed: as recorded when it was downloaded, else worked out again the same way
     const qs = GSTSet.qStart(qEnd), j = GSTR.toJson(qs + "-" + qEnd, reg), skip = new Set(GSTR.expand(qs + "-" + qEnd).filter(m => m !== qEnd && this.iffFiled(m, reg)));
-    const sent = new Set(); skip.forEach(m => { (GSTF.peek(m, reg).iffKeys || this.iff(m, reg).keys).forEach(k => sent.add(k)); });
+    const sent = new Set(); skip.forEach(m => { const r = GSTF.peek(m, reg); (r.iffDocs ? Object.keys(r.iffDocs) : r.iffKeys || this.iff(m, reg).keys).forEach(k => sent.add(k)); });
     if (sent.size){
       if (j.b2b) j.b2b = j.b2b.map(g => Object.assign({}, g, {inv: g.inv.filter(i => !sent.has(this.key(g.ctin, i.inum)))})).filter(g => g.inv.length);
       if (j.cdnr) j.cdnr = j.cdnr.map(g => Object.assign({}, g, {nt: g.nt.filter(i => !sent.has(this.key(g.ctin, i.nt_num)))})).filter(g => g.nt.length);
@@ -78,8 +84,77 @@ const GSTQ = {
     }
     return {json: j, skipped: Array.from(skip)};
   },
-  // an IFF counts only if filed by its due date: the portal closes it after the 13th
-  iffFiled(ym, reg){ const d = GSTF.peek(ym, reg).iff; return !!d && d <= GSTF.due(ym, "iff", reg); },
+  // an IFF counts only when it was filed (a filing date or its ARN) by its due date: the portal closes it after the 13th.
+  // "IFF not filed" (iffSkip) says so on purpose: its documents go in the quarter's GSTR-1
+  iffFiled(ym, reg){ return this.iffState(ym, reg).s === "filed"; },
+  iffState(ym, reg){
+    const r = GSTF.peek(ym, reg), due = GSTF.due(ym, "iff", reg), v = typeof GSTV === "object" ? GSTV.copies(reg, "iff", ym)[0] : null;
+    const on = r.iff || (v && v.arnDate) || "", arn = r.iffArn || (v && v.arn) || "";
+    if (r.iffSkip) return {s: "skipped", due, on: "", arn: ""};
+    if (on && on > due) return {s: "late", due, on, arn};
+    if (on || arn) return {s: "filed", due, on, arn};
+    return {s: GSTF.today() > due ? "missed" : "open", due, on: "", arn: ""};
+  },
+  // the documents of a filed IFF, as they were when it was filed, against the books now: a document changed or gone
+  // since needs an amendment in a later GSTR-1 (table 9A for an invoice, 9C for a note); one added since goes in the
+  // quarter's GSTR-1 as a new document
+  iffChanges(ym, reg){
+    const was = GSTF.peek(ym, reg).iffDocs; if (!was) return null;
+    const now = new Map(this.iff(ym, reg).docs.map(x => [x.key, x])), changed = [], gone = [], added = [];
+    Object.entries(was).forEach(([k, x]) => { const n = now.get(k); if (!n) gone.push(Object.assign({key: k}, x));
+      else if (Math.abs(num(n.txval) - num(x.txval)) >= 0.5 || Math.abs(num(n.tax) - num(x.tax)) >= 0.5) changed.push(Object.assign({key: k, was: x}, n)); });
+    now.forEach((n, k) => { if (!was[k]) added.push(n); });
+    return {changed, gone, added, n: changed.length + gone.length};
+  },
+  // the documents of the IFF recorded when it is marked filed (a date or ARN typed, or the PDF kept)
+  iffSnap(ym, reg){ const r = GSTF.rec(ym, reg); if (r.iffDocs) return false; const f = this.iff(ym, reg); r.iffDocs = {}; f.docs.forEach(x => { r.iffDocs[x.key] = {sec: x.sec, num: x.num, d: x.d, txval: x.txval, tax: x.tax}; }); r.iffSnapAt = new Date().toISOString(); return true; },
+  // the quarter on one page (request of 02-Oct-2026): the first and second months' IFF, the third month's GSTR-1 for the
+  // quarter (what the IFFs did not carry), and the quarter: counts, taxable value net of notes, tax, status, the figures as
+  // filed (the PDFs, or typed), PMT-06; and the check that the quarter's total is 3B 3.1(a)
+  quarter(qEnd, reg){
+    const qs = GSTSet.qStart(qEnd), ms = GSTR.expand(qs + "-" + qEnd), fx = (f, per) => typeof GSTX === "object" ? GSTX.fig(reg, f, per) : null;
+    const cols = ms.filter(m => m !== qEnd).map(m => {
+      const f = this.iff(m, reg), st = this.iffState(m, reg), fig = fx("iff", m), p = this.pmt06(m, reg), sent = st.s === "filed";
+      return {m, kind: "iff", label: "IFF " + GSTR.label(m), due: st.due, state: st, n: f.n, notes: f.notes, b2c: 0, taxable: f.taxable, tax: f.tax, over: f.over,
+        inFile: sent || st.s === "open", toQuarter: !sent && st.s !== "open", filed: fig && fig.tl ? fig.tl.taxable : null, filedSrc: fig ? fig.source : "",
+        pmt: p, changes: this.iffChanges(m, reg), file: "IFF_" + (f.json.gstin || "") + "_" + f.json.fp + ".json"};
+    });
+    // the third month: the quarter's GSTR-1 less what the filed IFFs carried
+    const r1 = this.r1Q(qEnd, reg), j = r1.json, cnt = k => (j[k] || []).reduce((a, g) => a + (g.inv || g.nt || []).length, 0);
+    const tx = k => (j[k] || []).reduce((a, g) => a + (g.inv || g.nt || []).reduce((b, i) => b + (k === "cdnr" && String(i.ntty || "C").toUpperCase() === "C" ? -1 : 1) * (i.itms || []).reduce((c, it) => c + num((it.itm_det || {}).txval), 0), 0), 0);
+    const b2cs = (j.b2cs || []).reduce((a, x) => a + num(x.txval), 0), b2cl = tx("b2cl"), exp = (j.exp || []).reduce((a, g) => a + (g.inv || []).reduce((b, i) => b + (i.itms || []).reduce((c, it) => c + num(it.txval), 0), 0), 0);
+    const tax = k => (j[k] || []).reduce((a, g) => a + (g.inv || g.nt || []).reduce((b, i) => b + (k === "cdnr" && String(i.ntty || "C").toUpperCase() === "C" ? -1 : 1) * (i.itms || []).reduce((c, it) => { const d = it.itm_det || {}; return c + num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt); }, 0), 0), 0);
+    const b2csTax = (j.b2cs || []).reduce((a, x) => a + num(x.iamt) + num(x.camt) + num(x.samt) + num(x.csamt), 0);
+    // advances received and not yet invoiced (table 11A) less those adjusted against invoices (11B): in 3.1(a) too
+    const advOf = k => (j[k] || []).reduce((a, g) => a + (g.itms || []).reduce((b, it) => b + num(it.ad_amt), 0), 0);
+    // advances marked as adjusted with no invoice to the customer in the quarter: not in 11B (GSTAdv.month), listed apart
+    let um = []; try { um = GSTAdv.ready() ? GSTAdv.month(qs + "-" + qEnd, reg).unmatched : []; } catch (e){ um = []; }
+    const st3 = GSTF.peek(qEnd, reg), fig3 = fx("r1", qEnd);
+    const m3 = {m: qEnd, kind: "r1", label: "GSTR-1 " + GSTSet.qLabel(qEnd), due: GSTF.due(qEnd, "r1", reg), state: {s: st3.r1 ? "filed" : GSTF.today() > GSTF.due(qEnd, "r1", reg) ? "missed" : "open", on: st3.r1 || "", arn: st3.r1Arn || ""},
+      n: cnt("b2b"), notes: cnt("cdnr"), b2b: r2(tx("b2b")), cdnr: r2(tx("cdnr")), b2cs: r2(b2cs), b2cl: r2(b2cl), exp: r2(exp), b2c: r2(b2cs + b2cl),
+      adv: r2(advOf("at") - advOf("txpd")), advAt: r2(advOf("at")), advTxpd: r2(advOf("txpd")), advUnmatched: um,
+      taxable: r2(tx("b2b") + tx("cdnr") + b2cs + b2cl + exp + advOf("at") - advOf("txpd")), tax: r2(tax("b2b") + tax("cdnr") + tax("b2cl") + b2csTax), skipped: r1.skipped,
+      filed: fig3 && fig3.tl ? fig3.tl.taxable : null, filedSrc: fig3 ? fig3.source : "", file: "GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json"};
+    // FinCom's total: the IFFs that carry their documents and the GSTR-1; 3B 3.1(a) worked out for the quarter
+    const t = GSTR.threeB(qEnd, reg), fig3b = fx("r3b", qEnd);
+    const total = r2(cols.filter(c => c.inFile).reduce((a, c) => a + c.taxable, 0) + m3.taxable);
+    const filedParts = cols.map(c => c.filed).concat([m3.filed]), filedAll = filedParts.every(v => v != null);
+    const filedTotal = filedAll ? r2(filedParts.reduce((a, v) => a + num(v), 0)) : null;
+    const r3a = r2(t.net.taxable), r3aFiled = fig3b && fig3b.a ? num(fig3b.a.taxable) : null;
+    return {qEnd, qs, label: GSTSet.qLabel(qEnd), cols, m3, total, r3a, diff: r2(total - r3a), filedTotal, r3aFiled, filedDiff: filedTotal != null && r3aFiled != null ? r2(filedTotal - r3aFiled) : null,
+      threeB: t, pmtPaid: t.pmt, payable: t.payable, due3b: GSTF.due(qEnd, "r3b", reg), r3bOn: st3.r3b || "", file3b: "GSTR3B_" + ((GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "") + "_" + qEnd.slice(4, 6) + qEnd.slice(0, 4) + ".json"};
+  },
+  // the filing type of one quarter only (request of 02-Oct-2026): the quarter's own line in the filing history, and the
+  // type before it put back from the next quarter on
+  setQuarterType(ym, reg, type){
+    const qs = GSTSet.qStart(ym), next = this.nextYm(GSTSet.qEnd(ym)), before = GSTSet.typeOf(next, reg), st = GSTSet.store(reg);
+    let h = (st.filing || []).filter(x => x.from !== qs);
+    h.push({from: qs, type});
+    if (!h.some(x => x.from === next)) h.push({from: next, type: before});
+    h = h.sort((a, c) => a.from.localeCompare(c.from)).filter((x, i, a) => i === 0 || x.type !== a[i - 1].type);
+    st.filing = h; GSTR._carry = null;
+  },
+  nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
   // ---- Composition ----
   RATES: {mfr: {l: "Manufacturer: 1% of turnover", r: 1, base: "all"}, trader: {l: "Trader: 1% of turnover of taxable supplies", r: 1, base: "taxable"}, rest: {l: "Restaurant: 5% of turnover", r: 5, base: "all"}, serv: {l: "Services (notification 2/2019): 6% of turnover", r: 6, base: "all"}},
   compCat(reg){ return GSTSet.peek(reg).comp || "trader"; },
@@ -116,3 +191,8 @@ function gqIffJson(){
   try { GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true}); } catch (e2){}
   saveBooks(); saveFile("IFF_" + f.json.gstin + "_" + f.json.fp + ".json", new Blob([JSON.stringify(f.json)], {type: "application/json"}));
 }
+
+// IFF: filed (a date or ARN: its documents are recorded then), or not filed on purpose (they go in the quarter's GSTR-1)
+function gqIffFiled(ym, k, v){ const reg = S.gstReg || "", r = GSTF.rec(ym, reg); if (v === "") delete r[k]; else { r[k] = v; delete r.iffSkip; GSTQ.iffSnap(ym, reg); } GSTR._carry = null; saveBooks(); render(); }
+function gqIffSkip(ym, on){ const r = GSTF.rec(ym, S.gstReg || ""); if (on){ r.iffSkip = new Date().toISOString(); delete r.iff; delete r.iffArn; delete r.iffDocs; } else delete r.iffSkip; GSTR._carry = null; saveBooks(); render(); }
+function gqQuarterType(type){ GSTQ.setQuarterType(S.gstYm || "", S.gstReg || "", type); saveBooks(); render(); }

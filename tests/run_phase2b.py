@@ -36,8 +36,9 @@ with sync_playwright() as p:
         pg.evaluate("() => { " + js + " }"); pg.wait_for_timeout(600)
         bad += [js + ": " + x for x in pg.evaluate(CONTRAST) if "bk-empty-ic" not in x]   # the empty-page icon is a mask image, not text
     ok(not bad, "34. text contrast at least 4.5:1 (3:1 for large text) on nine screens" + ("" if not bad else ": " + "; ".join(bad[:4])))
-    ok(pg.evaluate("(() => { const k = [0.2126, 0.7152, 0.0722], L = h => h.match(/../g).map(x => parseInt(x, 16) / 255).map(x => x <= .03928 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4)).reduce((a, x, i) => a + k[i] * x, 0); return (L('FBF1DE') + .05) / (L('7A4E0E') + .05); })()") >= 4.5
-       and pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--flag').trim().toUpperCase()") == "#7A4E0E", "34. amber text on light amber: #7A4E0E on #FBF1DE, 6.4:1")
+    # the colour scheme of 02-Oct-2026 (379ff74) took amber from its tokens: --flag is --warn, on --flag-soft (--warn-soft)
+    fl = pg.evaluate("(() => { const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim().replace('#', '').toUpperCase(); const k = [0.2126, 0.7152, 0.0722], L = h => h.match(/../g).map(x => parseInt(x, 16) / 255).map(x => x <= .03928 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4)).reduce((a, x, i) => a + k[i] * x, 0); const f = g('--flag'), b = g('--flag-soft'); return [f, b, Math.round((L(b) + .05) / (L(f) + .05) * 100) / 100]; })()")
+    ok(fl[2] >= 4.5, "34. amber text on light amber: #%s on #%s, %s:1" % tuple(fl))
     pg.evaluate("() => goClient('bills')"); pg.wait_for_timeout(500)
     names = pg.evaluate("[...document.querySelectorAll('#side button')].map(b => b.getAttribute('aria-label') || '')")
     ok(names and all(names) and any(n.startswith("Purchase") and "4 waiting" in n for n in names) and any(n.startswith("Client: ZZ Phase Two B") for n in names), "34. every sidebar button has a name read out (" + names[1] + ")")

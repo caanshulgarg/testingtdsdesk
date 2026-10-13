@@ -1,0 +1,198 @@
+# Checks on every push to tax-accuracy (and by hand from the Actions tab):
+#   bridge-linux: the Go bridge vetted for Linux and Windows, its tests, and go.mod/go.sum exactly as `go mod tidy` leaves them
+#   bridge-linux-typed: the bridge's tests again, the stand Tally answering as a real TallyPrime 7.1 (STAND_TALLY_TYPED=1)
+#   app:          the legacy program (build.py) and the React test build (app/dist-test), kept for the tests
+#   tests:        the tests in tests/ci/tests.txt (those that pass without a client's books in tests/data, which is never in
+#                 git; they read the made-up books in tests/fixtures/books), in parallel shares, by tests/ci/run_ci.sh
+# Tests left out, and why, are in tests/ci/manual.txt. Nothing here publishes anything.
+name: CI
+
+on:
+  push:
+    branches: [tax-accuracy]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Owner's rule (05-Oct-2026): a push never cancels a running CI run; each commit gets its own run to the end
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  bridge-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bridge-go
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: go.mod and go.sum as `go mod tidy` leaves them
+        run: |
+          go mod verify
+          go mod tidy -diff || { echo "::error file=bridge-go/go.mod::go.mod/go.sum differ from what 'go mod tidy' makes (the diff above): run 'cd bridge-go && go mod tidy' and commit"; exit 1; }
+      - name: go vet (Linux)
+        run: go vet ./...
+      - name: go vet (Windows)
+        run: GOOS=windows go vet ./...
+      - name: go test
+        # the suite takes about 12 minutes (2.3.0, 05-Oct-2026; 9.5 at 2.2.4): go test's own 10-minute default is too close.
+        # The whole output kept as go-test.log (uploaded below even on failure): run 37391306886 failed with the failing
+        # test's name lost to the truncated log
+        shell: bash
+        run: |
+          go test -count=1 -timeout 25m ./... 2>&1 | tee go-test.log; exit ${PIPESTATUS[0]}
+      - name: go test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-log
+          path: bridge-go/go-test.log
+          if-no-files-found: warn
+      - name: Size and allow-list tests, by name (docs/RELEASE-CHECKLIST.md)
+        # Until size_test.go is in git this step only says so: the tests are being written, and a vacuous "ok" (no test
+        # matched) must not pass for them. Once it is there, the size test (and, with allowlist_test.go, the allow-list
+        # tests) must each print "--- PASS"; a missing or skipped one fails the job.
+        run: |
+          if [ ! -f size_test.go ]; then echo "::notice::bridge-go/size_test.go not in git yet: size and allow-list tests not required"; exit 0; fi
+          go test -count=1 -run 'Size|AllowList|NoComputedFigure|EveryRequestOnList|UnknownRequest|02Oct' -v ./... 2>&1 | tee /tmp/named.log
+          [ "${PIPESTATUS[0]}" = 0 ] || exit 1
+          grep -qE '^ok ' /tmp/named.log || { echo "::error::no 'ok' from go test"; exit 1; }
+          need="TestSize"
+          [ -f allowlist_test.go ] && need="$need TestAllowList TestNoComputedFigure TestEveryRequestOnList TestUnknownRequest"
+          for t in $need; do grep -qE "^--- PASS: $t" /tmp/named.log || { echo "::error::missing test $t (no '--- PASS: $t')"; exit 1; }; done
+      - name: release-check.sh self-test
+        run: bash release_check_test.sh
+
+  # the same tests with the stand Tally answering as a real TallyPrime 7.1 does (05-Oct-2026, run 37301813638): typed
+  # fields with their TYPE attribute and padded numbers (<MASTERID TYPE="Number"> 2</MASTERID>) and CMPINFO's counters
+  # ahead of the data. An attribute-free read of Tally's answer (the cause of NWS144's "the entry fetch finds nothing")
+  # fails here even when the plain run passes
+  bridge-linux-typed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bridge-go
+    env:
+      GOTOOLCHAIN: local
+      STAND_TALLY_TYPED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: go test, the stand Tally typed as TallyPrime 7.1
+        shell: bash
+        run: |
+          go test -count=1 -timeout 25m ./... 2>&1 | tee go-test.log; exit ${PIPESTATUS[0]}
+      - name: go test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-log-typed
+          path: bridge-go/go-test.log
+          if-no-files-found: warn
+
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: npm ci
+        working-directory: app
+        run: npm ci
+      - name: Legacy program for the React app (build.py --react)
+        working-directory: app
+        run: npm run legacy
+      - name: React test build (app/dist-test)
+        working-directory: app
+        run: npm run build:test
+      - name: Single-page builds (site/, site-test/) the rule and older screen tests read
+        run: python3 build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: builds
+          path: |
+            site/
+            site-test/
+            app/legacy/
+            app/public/assets/
+            app/dist-test/
+          if-no-files-found: error
+          retention-days: 3
+
+  tests:
+    needs: app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # the tests default to /opt/pw-browsers (the cloud sessions' copy) when this is not set; here Chromium is
+      # installed into, and found in, the runner's own folder
+      PLAYWRIGHT_BROWSERS_PATH: /home/runner/pw-browsers
+    strategy:
+      fail-fast: false
+      matrix:
+        # 100 tests, about 50 minutes one after another; six shares of 7 to 11 minutes each (run_ci.sh deals them out)
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+      - uses: denoland/setup-deno@v2
+        # the Supabase function tests (run_*_server.py, run_beat_history.py) run the functions under Deno; without it
+        # they print "skipped" and pass, so it is installed
+        with:
+          deno-version: v2.x
+      - name: Python packages and Chromium
+        run: |
+          python -m pip install -r tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: PostgreSQL 16 binaries (tests/pg_stand.py starts its own throwaway server from /usr/lib/postgresql/16/bin)
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update -q && sudo apt-get install -y -q postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/postgres --version
+          id postgres
+      - name: Tests (share ${{ matrix.shard }} of 6)
+        run: |
+          # PowerShell 7 comes with GitHub's Ubuntu machines; the bridge tests (run_keep_*.py, run_bridge_fast.py, ...)
+          # run bridge/TDSBridge.ps1 with it
+          export PWSH="$(command -v pwsh)"
+          "$PWSH" -Version
+          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/6
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-logs-${{ matrix.shard }}
+          path: tests/out/
+          if-no-files-found: ignore
+          retention-days: 7

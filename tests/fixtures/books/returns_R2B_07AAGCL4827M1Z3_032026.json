@@ -1,0 +1,35 @@
+{
+ "chksum": "",
+ "data": {
+  "gstin": "07AAGCL4827M1Z3",
+  "rtnprd": "032026",
+  "version": "1.0",
+  "gendt": "14-03-2026",
+  "docdata": {
+   "b2b": [
+    {
+     "ctin": "07AAKFN4416E1ZF",
+     "trdnm": "NIGHTJAR SOUND & LIGHT CO",
+     "supfildt": "",
+     "supprd": "012026",
+     "inv": [
+      {
+       "inum": "NSL/140",
+       "dt": "15-01-2026",
+       "val": 177000,
+       "txval": 150000,
+       "igst": 0,
+       "cgst": 13500,
+       "sgst": 13500,
+       "cess": 0,
+       "pos": "07",
+       "rev": "N",
+       "itcavl": "Y",
+       "typ": "R"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

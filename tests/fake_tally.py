@@ -1,14 +1,18 @@
 """A stand-in for TallyPrime on port 9000: answers the bridge's requests from the real VMS files."""
 import re, threading, http.server, pickle, os, bisect
 import os
-_DATA = os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import books_data as _bd     # TDSDESK_DATA, else a real export in tests/data, else the made-up books in tests/fixtures/books
+_DATA = _bd.DATA
 DAYBOOK = os.path.join(_DATA, "DayBook.xml")
-MASTER = os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")
-COMPANY = "VMS EVENTS PRIVATE LIMITED (2024-25)"
+MASTER = os.path.join(_DATA, "Master.xml")
+COMPANY = (_bd.COMPANY if _bd.FIXTURE else "VMS EVENTS PRIVATE LIMITED") + " (2024-25)"
 # one cache per data folder (the made-up books of make_fake_books.py and a real export are kept apart)
 cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "fake-tally-%08x.pkl" % (__import__("zlib").crc32(os.path.abspath(_DATA).encode()) & 0xffffffff))
 os.makedirs(os.path.dirname(cache), exist_ok=True)
-if os.path.exists(cache):
+# read again when the books are newer than the cache (the fixture is written again by tests/fixtures/books/make_books.py)
+if os.path.exists(cache) and os.path.getmtime(cache) >= max(os.path.getmtime(DAYBOOK), os.path.getmtime(MASTER)):
     V, L, G = pickle.load(open(cache, "rb"))
 else:
     V = []  # (date, xml of one voucher)

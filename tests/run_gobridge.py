@@ -116,7 +116,7 @@ try:
     ps_last = json.load(open(keepf, encoding="utf-8-sig")).get("last")
     n_daybook = sum(1 for x in fake_tally.LOG if x[0] == "DayBook")
     run_go(PSCFG)
-    ok(until(ps_up, 30) and "2.0.0" in json.dumps(call(9100, PSCFG, "/status")), "it answers FinCom on port 9100 with 1.15.0's key: FinCom stays connected")
+    ok(until(ps_up, 30) and re.search(r'"version": "2\.\d+\.\d+"', json.dumps(call(9100, PSCFG, "/status"))), "it answers FinCom on port 9100 with 1.15.0's key: FinCom stays connected")
     st = call(9100, PSCFG, "/status")
     ok(st.get("allowImport") is True and not st.get("readOnly"), "it posts (the only bridge)")
     time.sleep(8)

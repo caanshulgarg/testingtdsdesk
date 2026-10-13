@@ -74,16 +74,39 @@ with sync_playwright() as p:
     pg.click('#app .queue button:has-text("ZZ Consulting LLP")'); pg.wait_for_timeout(500)
     ok(pg.locator("#app .detail h2").inner_text() == "ZZ Consulting LLP" and pg.get_attribute('#app .queue button:has-text("ZZ Consulting LLP")', "aria-current") == "true", "a click on the list opens that bill")
     ok(pg.locator('#app button:has-text("Review all 2 in a table")').count() == 1, "“Review all 2 in a table”")
-    pg.click('#app .filters button:has-text("Approved")'); pg.wait_for_timeout(500)
+    pg.evaluate("S.filter = 'approved'; S.selected = null; render()"); pg.wait_for_timeout(500)
     ok("Nothing approved yet." in app() and "Select an invoice" in app(), "Approved: nothing yet")
-    pg.click('#app .filters button:has-text("To review")'); pg.wait_for_timeout(500)
+    pg.evaluate("S.filter = 'draft'; S.selected = null; render()"); pg.wait_for_timeout(500)
     # approve (the bar at the bottom, still an old screen) and see it read-only
     pg.click('#app .queue button:has-text("ZZ Consulting LLP")'); pg.wait_for_timeout(400)
     pg.evaluate("approve(D().entries[S.selected]); refreshStats(S.coId); render()"); pg.wait_for_timeout(600)
-    pg.click('#app .filters button:has-text("Approved")'); pg.wait_for_timeout(500)
+    pg.evaluate("S.filter = 'approved'; S.selected = null; render()"); pg.wait_for_timeout(500)
     ok("Approved" in pg.inner_text("#app .stampmark") and pg.locator('#app label:has-text("Supplier name") input').get_attribute("readonly") is not None, "approved: stamped, and the fields are read-only")
     ok(pg.locator('#app input[aria-label="Expense ledger"]').count() == 0 and "Legal and Professional Charges" in pg.inner_text("#app table.vtbl"), "the ledgers are shown, not editable")
     ok(pg.locator('#app label:has-text("Payment type") select').is_disabled(), "the payment type is locked")
+    # round 15 (B1): the bill drawer says what Tally confirmed, from the mark kept on the entry when the result arrived
+    # (e.tally.vch: the exact voucher id; e.tally.batchEnd: the last Tally id of a batch, never an inferred id), with the
+    # company, the time in IST and who pressed Post; an older posting (no mark) shows as before
+    pg.evaluate("""() => { const e = Object.values(D().entries).find(x => x.status === "approved"); S.selected = e.id; e.exportedAt = "2026-10-03T08:35:10Z"; e.postedVia = "bridge"; e.postVerified = true;
+      e.tally = {guid: "g-1", vchType: "Journal", vchDate: "20260910", company: "ZZ TEST", at: "2026-10-03T08:35:00Z", by: "Anshul"}; render(); }"""); pg.wait_for_timeout(500)
+    ok("Sent to Tally" in pg.inner_text("#app .stampmark") and pg.locator("#app [data-posted-line]").count() == 0, "an older posting (no voucher id from Tally's reply): the stamp alone, no invented id")
+    pg.evaluate("""() => { const e = D().entries[S.selected]; e.tally.vch = 1234; render(); }"""); pg.wait_for_timeout(500)
+    line = pg.inner_text("#app [data-posted-line]").replace("\n", " ") if pg.locator("#app [data-posted-line]").count() else ""
+    ok(line.startswith("Posted to Tally: voucher id 1234") and "· ZZ TEST ·" in line and "03-Oct-2026 14:05 IST" in line and "· by Anshul" in line,
+       "B1. the drawer: 'Posted to Tally: voucher id 1234 · ZZ TEST · 03-Oct-2026 14:05 IST · by Anshul' (%s)" % line)
+    pg.evaluate("""() => { const e = D().entries[S.selected]; delete e.tally.vch; e.tally.batchEnd = 1300; e.tally.batchN = 5; render(); }"""); pg.wait_for_timeout(500)
+    line = pg.inner_text("#app [data-posted-line]").replace("\n", " ")
+    ok(line.startswith("Posted to Tally, batch ending Tally id 1300") and "voucher id" not in line and "1296" not in line and "· ZZ TEST ·" in line and "IST" in line,
+       "B1. a batch: 'Posted to Tally, batch ending Tally id 1300 · …', no id inferred for the bill (%s)" % line)
+    # round 17a (owner, 04-Oct-2026): a bill FinCom Bridge 2.1.8 posted by Tally's reply (postByReply, never read back):
+    # stamped "Sent to Tally", in Tally (billInTally, "In Tally"), with the batch's mark
+    pg.evaluate("() => { const e = D().entries[S.selected]; e.postVerified = false; e.postByReply = true; render(); }"); pg.wait_for_timeout(400)
+    st = pg.evaluate("(() => { const e = D().entries[S.selected]; return [billInTally(e), tallyStateOf(e)[1]]; })()")
+    ok("Sent to Tally" in pg.inner_text("#app .stampmark") and st == [True, "In Tally"] and pg.inner_text("#app [data-posted-line]").startswith("Posted to Tally, batch ending Tally id 1300"),
+       "17a. posted by Tally's reply: 'Sent to Tally', billInTally, 'In Tally', the batch's mark (%s)" % st)
+    ok("Matched with Tally" not in pg.inner_text("#app .detail"), "B5. not matched: the words are nowhere")
+    pg.evaluate("""() => { PostIds.readable = true; PostIds.by[S.coId] = {at: Date.now(), key: "x", held: new Map(), matched: new Map([[S.selected, {at: "2026-10-03T09:00:00Z", vch: "1300"}]]), sig: "m"}; render(); }"""); pg.wait_for_timeout(400)
+    ok(pg.locator("#app [data-posted-line] [data-matched]").count() == 1 and "Matched with Tally" in pg.inner_text("#app [data-posted-line]"), "B5. tally_post_ids.matched_at on it: 'Matched with Tally' beside the line")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

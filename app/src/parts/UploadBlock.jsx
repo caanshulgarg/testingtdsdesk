@@ -9,7 +9,7 @@ export default function UploadBlock() {
   const [paste, setPaste] = useState("");
   return <>
     <DropZone mode="company" label={"Upload invoices for " + co.name}>
-      <strong>Upload for {co.name}</strong><div className="note">Drop any number of PDFs, JPGs or photos here, or click to choose</div>
+      <strong>Drop {co.name}’s bills here</strong><div className="note">Any number of PDFs, JPGs or photos; or use <b>Upload bills</b> at the top right</div>
     </DropZone>
     <ReadingCheck />
     {f && <p className="note" style={{ margin: "6px 0 0" }}>Read free for this client: <b>{f.pct}%</b> of {f.n} bills ({f.google} by Google OCR, {f.claude} by Claude)</p>}

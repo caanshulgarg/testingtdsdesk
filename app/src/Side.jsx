@@ -30,12 +30,6 @@ function Item({ icon, label, on, count, onClick, title }) {
   );
 }
 
-// the build's date from APP_VERSION ("TEST · 30 Sep 2026 · build …") in the app's one format: 30-Sep-2026 (review item 31)
-function buildDate(v) {
-  const part = String(v).split("·").map((x) => x.trim()).find((x) => /\d{1,2} [A-Za-z]{3,4} \d{4}/.test(x)) || String(v).split("·")[1] || v;
-  const m = String(part).match(/(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4})/);
-  return m ? m[1].padStart(2, "0") + "-" + m[2] + "-" + m[3] : part;
-}
 
 export default function Side() {
   const hide = signInNeeded();
@@ -89,7 +83,9 @@ export default function Side() {
       {!home && <Item icon="clients" label="All clients" on={false} onClick={() => navHome("clients")} />}
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
-      <div className="side-ver">{buildDate(APP_VERSION)}<br />{__REACT_BUILD__}</div>
+      {/* review of 01-Oct-2026: the date here was the build's, read as today's; now each says what it is */}
+      {/* the build stamp moved to the About line in Settings (owner's spec K1, 04-Oct-2026) */}
+      <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span></div>
     </>
   );
 }

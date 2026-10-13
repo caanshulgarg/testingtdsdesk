@@ -21,10 +21,10 @@ const LTR = {
     const b = S.books, own = (this.store().contacts || {})[party] || {}, g = String((b.gstins || {})[party] || "").toUpperCase(), gc = ((b.gstContacts || {})[g]) || {}, i = (b.ledInfo || {})[party] || {};
     return {email: own.email != null ? own.email : (gc.email || i.email || ""), phone: own.phone != null ? own.phone : (gc.phone || i.phone || i.mobile || ""), addr: own.addr != null ? own.addr : (i.addr || "")};
   },
-  // ---------- balances on a date: from the books, or read from Tally
+  // ---------- balances on a date: from the books, or from FinCom's copy (Tally is never asked for a balance)
   balances(asOn){
     const x = this.st();
-    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: (x.tally.cloud ? "the books in the cloud, " : "Tally, read ") + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
+    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: x.tally.line || "FinCom's copy", bal: x.tally.bal};
     const B = LK.bal(Audit.fyStart(asOn), asOn);
     if (!B.ok) return {ok: false, why: B.why};
     const at = B.at(asOn), bal = {};
@@ -33,11 +33,10 @@ const LTR = {
   },
   async readTally(asOn){
     const x = this.st();
-    // build 194: from the books in the cloud when there are any (worked out there in a moment); Tally only without them
-    const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(S.coId);
-    x.busy = cloud ? "Working out every ledger\u2019s balance\u2026" : "Reading every ledger\u2019s balance from Tally\u2026"; render();
-    try { const r = cloud ? await TCloud.tb(S.coId, asOn) : (await LK.loadNames(), await LK.tbTally(asOn)); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud}; }
-    catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
+    // from FinCom's copy in the cloud (worked out there in a moment); FinCom Bridge 2.1.4 asks Tally for no balance
+    x.busy = "Working out every ledger\u2019s balance from FinCom\u2019s copy\u2026"; render();
+    try { const r = await TCloud.tb(S.coId, asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud: true, line: copyLine(S.coId)}; }
+    catch (e){ toast("FinCom\u2019s copy has no balances for " + fmtDate(Audit.iso(asOn)) + " yet; the books read here are used."); }
     x.busy = ""; render();
   },
   // which side a party is on, from Tally's groups when they have been read, else the books'
@@ -122,7 +121,7 @@ const LTR = {
       '<p class="sig">For ' + esc(this.whoWrites().name) + "<br><br><br>" + (this.whoWrites().signer ? esc(this.whoWrites().signer) + "<br>" : "") + "Authorised signatory</p></div>";
   },
   STYLE: "<style>@page{size:A4 portrait;margin:16mm}body{padding:0;font:12.5px/1.55 Georgia,'Times New Roman',serif;color:#111}.page{page-break-after:always;max-width:720px;margin:0 auto}.page:last-child{page-break-after:auto}" +
-    ".lh{border-bottom:2px solid #047857;padding-bottom:8px;margin-bottom:14px}.lhn{font-size:20px;font-weight:700;color:#064e3b}.lhs{font-size:11px;color:#444}.dt{text-align:right;margin-bottom:10px}.to{margin-bottom:14px}.sub{font-weight:700;text-decoration:underline}" +
+    ".lh{border-bottom:2px solid #4338CA;padding-bottom:8px;margin-bottom:14px}.lhn{font-size:20px;font-weight:700;color:#312E81}.lhs{font-size:11px;color:#444}.dt{text-align:right;margin-bottom:10px}.to{margin-bottom:14px}.sub{font-weight:700;text-decoration:underline}" +
     ".sig{margin-top:22px}.ann{margin-top:16px}.ann h3{font-size:13px;margin:0 0 6px}table{border-collapse:collapse;width:100%;font:11px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:8px 0}th,td{border:1px solid #cfd8d3;padding:3px 6px;text-align:left}th{background:#ecfdf5}td.n,th.n{text-align:right}" +
     ".slip{margin-top:26px;border:1px dashed #777;padding:10px 14px}.cut{text-align:center;font-size:10px;color:#666;margin:-4px 0 8px}.sg{display:flex;justify-content:space-between;margin-top:34px;font-size:11px;color:#444}.sg span{border-top:1px solid #999;padding-top:3px;width:30%}.small{font-size:11px;color:#444}</style>",
   print(kind, rows){

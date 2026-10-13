@@ -58,7 +58,7 @@ try:
         ok(len(names) == len(fake_tally.L), "asked for (refresh), the ledger names while typing come from Tally: %d of %d" % (len(names), len(fake_tally.L)))
         ok("OLD LEDGER FROM LAST YEAR" not in names, "the old ledger from the books read earlier is not offered")
         ok(pg.locator("#lkLeds option").count() == len(fake_tally.L), "the list under the ledger box is Tally's")
-        ok(not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'tb'}), 'auto')") and not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'group', grp: 'Sundry Debtors'}), 'auto')"), "the trial balance and groups are never read live from Tally")
+        ok(not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'tb'}), 'auto')") and not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'group', grp: 'Sundry Debtors'}), 'auto')"), "the trial balance and groups are never read live from Tally (without FinCom's copy in the cloud: the books read here)")
         # the nightly copy, made here once (in real use the bridge makes it at 2 am): then totals never ask Tally
         pg.evaluate("S.lkFr.at = 0");
         t0 = time.time()
@@ -103,21 +103,16 @@ try:
         pg.click('button:text-is("Bring in today’s entries")'); wait_for(pg, "!S.lkFr.busy && S.books.meta.to === '20260331'", 120)
         ok(set(fake_tally.REQS) <= {"DayBook", "TDSDeskCompanies"} and fake_tally.REQS.get("DayBook", 0) == 1, "today's entries: one small day book read, nothing else: " + json.dumps(fake_tally.REQS))
         ok(pg.evaluate("S.books.tb.to") >= "20260331", "balances carry on from the entries brought in")
-        # a ledger straight from Tally
+        # a ledger: never straight from Tally
         bank = "ICICI BANK ACCOUNT-3812"
         fake_tally.REQS.clear()
         pg.fill("#lkAsk", bank.lower() + " for august 2025"); pg.keyboard.press("Enter")
         wait_for(pg, "S.lk.res && S.lk.res.kind === 'ledger' && !S.lk.busy")
         ok(pg.evaluate("S.lk.res.src") == "books" and sum(fake_tally.REQS.values()) == 0, "a ledger inside the copy comes from the copy at once")
-        pg.click('.lk-src button:text-is("Tally, live")'); pg.click('button:text-is("Show")')
-        wait_for(pg, "S.lk.res && S.lk.res.kind === 'ledger' && S.lk.res.src === 'tally' && !S.lk.busy")
-        lr = pg.evaluate("({src: S.lk.res.src, led: S.lk.res.led, from: S.lk.res.from, rows: S.lk.res.rows.length, open: S.lk.res.open, close: S.lk.res.close, dr: S.lk.res.dr, cr: S.lk.res.cr})")
-        ok(lr["src"] == "tally" and lr["led"] == bank and lr["from"] == "20250801" and lr["rows"] > 10, "the ledger is read from Tally, with its entries: " + json.dumps({k: lr[k] for k in ("led", "rows")}))
-        ok(abs(lr["open"] + lr["dr"] - lr["cr"] - lr["close"]) < 1, "opening plus entries is Tally's closing")
-        ok(not fake_tally.REQS.get("DayBook") and not fake_tally.REQS.get("TDSDeskBalances"), "no day book and no full balances for one ledger: " + json.dumps(fake_tally.REQS))
-        # the books can still be chosen
-        pg.click('.lk-src button:has-text("The books read")'); pg.wait_for_timeout(200)
-        ok(pg.evaluate("S.lk.src") == "books", "the books read into FinCom can be chosen instead")
+        # 02-Oct-2026 (owner's decision; FinCom Bridge 2.1.4 asks Tally for no balance): there is no "Tally, live" any more;
+        # a ledger comes from FinCom's copy (in the cloud) or the books read here, and Tally is never asked for its balance
+        ok(pg.locator('.lk-src button:text-is("Tally, live")').count() == 0 and "Tally, live" not in pg.inner_text("#app"), "no \"Tally, live\" choice")
+        ok(not fake_tally.REQS.get("TDSDeskOneLed") and not fake_tally.REQS.get("TDSDeskBalances"), "Tally is not asked for a balance: " + json.dumps(fake_tally.REQS))
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
         br.close()
 finally:

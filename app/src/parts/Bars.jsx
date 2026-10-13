@@ -10,7 +10,7 @@ export default function Bars({ labels, series, h = 120, label }) {
   return <figure className="fc-chart" aria-label={label}>
     <svg viewBox={"0 0 " + W + " " + H} preserveAspectRatio="none" role="img">
       {labels.flatMap((l, i) => series.map((s, j) => { const v = num(s.values[i]), hgt = Math.max(v ? 1.5 : 0, Math.abs(v) * scale), x = pad + i * gw + (gw - bw * series.length) / 2 + j * bw;
-        return <rect key={i + ":" + j} className={(s.cls || "c1") + (v < 0 ? " neg" : "")} x={x.toFixed(1)} y={(v >= 0 ? zero - hgt : zero).toFixed(1)} width={(bw - 1.5).toFixed(1)} height={hgt.toFixed(1)} rx="2"><title>{l + ": " + s.name + " " + INR0.format(v)}</title></rect>; }))}
+        return <rect key={i + ":" + j} className={(s.cls || "c1") + (v < 0 ? " neg" : "")} x={x.toFixed(1)} y={(v >= 0 ? zero - hgt : zero).toFixed(1)} width={(bw - 1.5).toFixed(1)} height={hgt.toFixed(1)} rx="2"><title>{l + ": " + s.name + " " + INR.format(v)}</title></rect>; }))}
       <line x1="0" x2={W} y1={zero.toFixed(1)} y2={zero.toFixed(1)} className="axis" />
     </svg>
     <div className="fc-xl" aria-hidden="true">{labels.map((l, i) => <span key={i}>{i % every === 0 ? String(l).slice(0, 8) : ""}</span>)}</div>

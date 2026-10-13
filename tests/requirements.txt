@@ -1,0 +1,3 @@
+# Python packages the tests need (pip install -r tests/requirements.txt; then python -m playwright install chromium)
+playwright          # the screen and bridge tests (run_*_ui.py, run_*_e2e.py)
+reportlab           # run_gstvault_ui.py makes portal-like PDFs with it

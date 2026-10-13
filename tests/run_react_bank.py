@@ -21,7 +21,7 @@ SETUP = """() => {
     bal += out ? -amt : amt;
     return {id: "r" + i, fp: "fp" + i, date: "2026-04-" + String(1 + i).padStart(2, "0"), debit: out ? r2(amt) : 0, credit: out ? 0 : r2(amt), bal: r2(bal),
       narr: (out ? "NEFT DR " : "NEFT CR ") + parties[i % 8] + " UTR" + (100000 + i), dec: {name: parties[i % 8], mode: "NEFT", utr: "UTR" + (100000 + i)},
-      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
+      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], tally: states[i % 8] === "sent" ? {guid: "g" + i} : undefined, balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
   S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-24", opening: 250000, closing: bal, totDr: 0, totCr: 0}], cur: "s1", rows, rules: [], wrules: [],
     ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "ICICI Bank", group: "Bank Accounts"}]), importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: "review", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
     createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
@@ -37,8 +37,8 @@ with sync_playwright() as p:
     ok(pg.inner_text("#app .bk-title") == "ICICI Bank" and "24 entries" in pg.inner_text("#app .bk-sub"), "the statement: its Tally ledger and 24 entries")
     ok("The statement adds up" in pg.inner_text("#app .bk-check"), "the running-balance check")
     ok(rows().count() == tc["review"] and ("%d to review" % tc["review"]) in bar().replace("\n", " "), "To review: %d lines, and the bar says so" % tc["review"])
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(400)
-    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Ready to post")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(400)
+    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Post to Tally")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
     # ticking, with Shift for a run of lines
     pg.click('#app table.bk-table tbody tr >> nth=0 >> input[type=checkbox]')
     pg.click('#app table.bk-table tbody tr >> nth=3 >> input[type=checkbox]', modifiers=["Shift"]); pg.wait_for_timeout(400)
@@ -69,13 +69,14 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table tr:has-text("Ignored") button:has-text("Restore")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("B().rows.filter(r => r.state === 'ignored').length") == 0, "Restore")
     # search, and give every line found one ledger
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(300)
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
     pg.fill('#app input[aria-label="Search the statement"]', "DIPTI"); pg.wait_for_timeout(600)
     n = pg.evaluate("bankVisibleRows().length")
     ok(n >= 1 and rows().count() == n and ("%d entr" % n) in pg.inner_text('#app .bk-found:has-text("match")').replace("\n", " ") and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Search the statement", "search “DIPTI”: %d lines, the cursor stays in the box" % n)
     pg.fill('#app input[aria-label="Ledger for all found"]', "BHARATKOSH"); pg.click('#app .bk-found:has-text("match") button:has-text("Set all")'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox .cbx").is_visible(), "“Set all” asks first")
-    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(500)
+    # spec K9 (round 2 of 04-Oct-2026): it can be undone, so it is done at once, with Undo in the bar
+    pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.evaluate("!!B().undo"), "“Set all” is done at once, and can be undone from the bar")
     ok(pg.evaluate("bankVisibleRows().every(r => r.ledger === 'BHARATKOSH' || r.state === 'sent' || r.state === 'intally')"), "and every line found gets that ledger")
     pg.click('#app .bk-found:has-text("match") button:has-text("Clear")'); pg.wait_for_timeout(400)
     ok(pg.input_value('#app input[aria-label="Search the statement"]') == "" and pg.locator('#app .bk-found:has-text("match")').count() == 0, "Clear empties the search")
@@ -97,6 +98,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().bankAuto") is False, "an automation choice is kept")
     pg.select_option('#app .bk-panel select[aria-label="Bank charges"]', "ICICI Bank"); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().bankLedgerNames.charges") == "ICICI Bank", "the ledger for bank charges chosen")
+    # review 18 (02-Oct-2026): the panel's changes are saved with Save at its foot
+    ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="bank:settings"]'), "review 18: not saved until Save")
+    pg.click('#app [data-confirm-foot="bank:settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     ok(pg.locator("#app .bk-panel").count() == 0, "Esc closes it")
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(300)
@@ -131,6 +135,24 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__rx") is True, "the reconciliation as Excel")
     pg.click('.recon button:text-is("Close")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.recon") is None, "and closed")
+    # round 15 (B1): a bank line posted by bridge 2.1.8 keeps Tally's confirmation (r.tally.vch, or batchEnd for a batch)
+    # and its posted state says it with the company, the time in IST and who pressed Post; an older line as before
+    pg.evaluate("""() => { const b = B(); const r5 = b.rows.find(r => r.id === "r5"), r13 = b.rows.find(r => r.id === "r13");
+      r5.tally = {guid: "g5", vch: 777, company: "ZZ TEST", at: "2026-10-03T08:35:00Z", by: "Anshul"}; r5.sentAt = "2026-10-03T08:35:10Z"; r5.postedVia = "bridge";
+      r13.tally = {guid: "g13", batchEnd: 900, batchN: 50, company: "ZZ TEST", at: "2026-10-03T08:40:00Z", by: "Anshul"}; r13.sentAt = "2026-10-03T08:40:10Z"; r13.postedVia = "bridge";
+      b.q = ""; b.filter = "done"; b.grouped = false; render(); }"""); pg.wait_for_timeout(500)
+    row = lambda utr: pg.inner_text('#app table.bk-table tbody tr:has-text("%s")' % utr).replace("\n", " ") if pg.locator('#app table.bk-table tbody tr:has-text("%s")' % utr).count() else ""
+    t5, t13, t21 = row("UTR100005"), row("UTR100013"), row("UTR100021")
+    ok("Posted to Tally: voucher id 777" in t5 and "· ZZ TEST ·" in t5 and "03-Oct-2026 14:05 IST" in t5 and "· by Anshul" in t5 and pg.locator('#app tr:has-text("UTR100005") [data-posted-line]').count() == 1,
+       "B1. a bank line with vchId: 'Posted to Tally: voucher id 777 · ZZ TEST · 03-Oct-2026 14:05 IST · by Anshul' (%s)" % t5[-150:])
+    ok("Posted to Tally, batch ending Tally id 900" in t13 and "voucher id" not in t13 and "14:10 IST" in t13, "B1. a line of a batch: 'Posted to Tally, batch ending Tally id 900', no inferred id (%s)" % t13[-150:])
+    ok("Posted to Tally" not in t21 and "In Tally" in t21 and pg.locator('#app tr:has-text("UTR100021") [data-posted-line]').count() == 0, "B1. an older posted line shows as before (%s)" % t21[-100:])
+    # round 17a (owner, 04-Oct-2026): a line FinCom Bridge 2.1.8 posted by Tally's reply (it never reads back) with no id from
+    # Tally: posted, never "not found in Tally yet"; round 17: bankMatched (src/js/22) takes postByReply, so it is under Done
+    pg.evaluate("""() => { const r5 = B().rows.find(r => r.id === "r5"); window.__r5 = JSON.stringify(r5); r5.tally = {guid: ""}; r5.postByReply = true; r5.postVerified = false; r5.checking = false; r5.state = "sent"; B().filter = "done"; render(); }""")
+    pg.wait_for_timeout(400); t5 = row("UTR100005")
+    ok(("Posted to Tally (Tally's reply)" in t5 or "In Tally" in t5) and "not found in Tally" not in t5, "17a. a line posted by Tally's reply, no id: under Done as posted ('In Tally'), never 'not found in Tally yet' (%s)" % t5[-120:])
+    pg.evaluate("() => { const b = B(), i = b.rows.findIndex(r => r.id === 'r5'); b.rows[i] = JSON.parse(window.__r5); b.filter = 'done'; render(); }"); pg.wait_for_timeout(300)
     # a second statement, and a bank account with no Tally ledger yet
     pg.evaluate("""() => { const b = B(); b.stmts.push({id: "s2", acctId: "a2", bank: "HDFC", acct: "9911", from: "2026-05-01", to: "2026-05-31", opening: 0, closing: 0});
       CO().bankAccounts.push({id: "a2", bank: "HDFC", last4: "9911", ledger: ""}); render(); }""")
@@ -139,10 +161,12 @@ with sync_playwright() as p:
     ok("Which Tally ledger is this bank account?" in app(), "a new account: which Tally ledger it is, asked")
     pg.evaluate("B().ledgers.list.push({name: 'HDFC Bank', group: 'Bank Accounts'}); render()"); pg.wait_for_timeout(200)
     pg.select_option('#app select[aria-label="Tally ledger for this bank account"]', "HDFC Bank"); pg.wait_for_timeout(400)
-    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app(), "chosen: kept, and the question goes")
+    # review 19 (02-Oct-2026): picked, then confirmed with Confirm; then one line instead of the question
+    pg.click("#app [data-bank-ledger-confirm]"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app() and "Tally ledger: HDFC Bank" in app(), "chosen and confirmed: kept, and the question goes")
     # no statement yet
     pg.evaluate("B().stmts = []; B().cur = null; render()"); pg.wait_for_timeout(300)
-    ok("Upload a bank statement" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")
+    ok("No bank statement yet" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

@@ -1,0 +1,102 @@
+FINCOM 2.4.0 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.0.exe
+Fingerprint: SHA-256 00ab8042dff1b1b508410632f832d20ee1169fcc71493f682af38a413ac416dc (FinComBridge-Setup-2.4.0.exe, built 09-Oct-2026 13:52 IST; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.4.0.exe
+
+What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md). ONE combined release: bridges go from 2.3.3 to 2.4.0
+(2.3.4 and 2.3.5 were not published), so this sheet includes their checks (part A and B), then 2.4.0's (part C).
+A (2.3.4). The fast entry request (FinComVoucherObject); no company marked slow, one more ask; a delete proven twice.
+B (2.3.5). The simpler Tally pages; Clear notifications in FinCom and the tray; held lines under FinCom's read stop.
+C (2.4.0).
+1. Each Windows user's own recorder file (|w= on every line).
+2. TDS details: the whole TDS list (the owner's decision of 07-Oct-2026; FinComVoucherByNumber changed, nothing added).
+3. Nothing lost between the bridge and FinCom; a repeat is not stored twice (migration 63); stuck saves under Needs you.
+4. Look up, the ledgers and Sync activity refresh by themselves (migration 64).
+5. The nightly self-check, existing requests only (migration 65).
+6. Master hooks: none shipped (Pay Head, Stock Item and Godown not proven on all five TallyPrime releases, run 37840646524; migration 66 stays, unused).
+7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
+8. Bank dates set in Bank Reconciliation reach FinCom (the nightly list stops at 10 s, outside office hours only; every other request 2 s; the night's work from 19:00).
+9. The simpler GST and TDS ledgers page and upload page.
+10. Sentry error reports, staging only, no business data.
+FinCom's cloud: migrations 68, 70 (2.3.5) and 62 to 67 (add-only; none run yet; the owner runs them), and tally-ingest.
+
+Migration files (md5):
+   migration-68-alert-dismissals.sql        184e795994242b41f4edbaaaa7d530f9
+   migration-70-alert-dismissals-tighten.sql3457411cc0bacfdbdc174191e0629b63
+   migration-62-tds-rate-worked-out.sql     bcdfd7b72b1d69b429e6b15a5e9652c6
+   migration-63-recorder-repeat.sql         ff8011351b8856025710b68bad0b690c
+   migration-64-pages-live.sql              0a91d37ab313331399dffdaf677de9e6
+   migration-65-selfchecks.sql              51a224cf8e00b7a46da42da4694e8993
+   migration-66-recorder-masters.sql        fea953435146ec8bdc3e77c5808e1714
+   migration-67-recorder-renumbered.sql     78676805ebdaf9b24e41bc2708ed0a90
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144, GARG SHEKHAR & COMPANY
+and IX DESIGNS open in the Tally of the Windows user whose bridge you check. In every entry you make for this sheet,
+start the narration with TRIAL. Write down the time (IST) of each check.
+
+PART A AND B - THE CHECKS OF 2.3.4 AND 2.3.5
+   Do CHECK 2 to CHECK 6 of docs/bridge-2.3.4-test-sheet.txt (a save in the large company enters at once; no company
+   marked; the held lines of 2.3.3 settle; nothing silent; a delete settles) and CHECK 2 to CHECK 6 of
+   docs/bridge-2.3.5-test-sheet.txt (the Tally page; Sync activity; Clear notifications in FinCom and in the tray; a
+   delete while reading is stopped), with FinComBridge-Setup-2.4.0.exe installed (CHECK 1 below) instead of their setup.
+
+CHECK 1 - THE VERSION AND THE ADD-ON
+   Install FinComBridge-Setup-2.4.0.exe and compare its fingerprint with the one above. In Tally load the new add-on
+   (C:\ProgramData\FinCom\addon\FinComRecorder.tdl; F1 > TDL & Add-On > reload).
+   You should see: the tray says FinCom Bridge 2.4.0; FinCom's Tally page shows version 2.4.0 for your computer.
+
+CHECK 2 - EACH WINDOWS USER'S OWN FILE
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 240 user 1".
+   You should see: in C:\ProgramData\FinCom\recorder a file named <company GUID>-<today>-<your Windows user>.txt with
+   the save's lines, each with |w=<your Windows user>; the entry in FinCom's books within a few seconds. A second
+   Windows user's saves go to that user's file and that user's bridge.
+
+CHECK 3 - TDS ON A PAYMENT
+   In IX DESIGNS make a Journal with TDS entered on Tally's screen (a contractor's bill, 2%), narration "TRIAL 240 tds".
+   You should see: in FinCom the entry's TDS details with the nature of payment, the party, the section, the assessable
+   amount, the tax and the rate (marked "worked out" where Tally stores 0, once migration 62 has run).
+
+CHECK 4 - NOTHING LOST ON A RESTART
+   Make a Journal of Rs 1, narration "TRIAL 240 outbox", and right away right-click the FinCom icon > Restart.
+   You should see: the entry in FinCom's books once, never twice.
+
+CHECK 5 - PAGES REFRESH BY THEMSELVES (after migration 64)
+   Open Look up on one ledger in FinCom. In Tally make a Journal of Rs 1 on that ledger, narration "TRIAL 240 live".
+   You should see: within a few seconds Look up shows the entry without reloading the page.
+
+CHECK 6 - THE NIGHTLY SELF-CHECK (after migration 65)
+   Leave Tally open with both companies overnight (no one using the computer after 22:00).
+   You should see: next morning, on FinCom's Tally page, the card of NWS144 has a line per company with last night's
+   check in plain words (green: every change in FinCom; red: what is missing).
+
+CHECK 7 - A STOCK ITEM, A PAY HEAD AND A GODOWN SEND NOTHING (no master hook in 2.4.0)
+   In IX DESIGNS alter a Stock Item's name (add " TRIAL"), then alter it back. Do the same for a Godown and a Pay Head.
+   You should see: each saves in Tally as usual; Sync activity lists no master change for them; nothing in the books
+   changes. Altering a Unit sends nothing either.
+
+CHECK 8 - RENUMBERING (after migration 67)
+   In GARG SHEKHAR make three Receipts of Rs 1 (narrations "TRIAL 240 r1", "r2", "r3"). Delete the first.
+   You should see: FinCom's books show the other two with Tally's new numbers ("renumbered in Tally" in Sync activity).
+
+CHECK 9 - A BANK DATE SET IN BANK RECONCILIATION
+   In GARG SHEKHAR open Banking > Bank Reconciliation for the bank ledger and set a bank date on one payment made for this
+   sheet ("TRIAL 240 bank"; make it first if needed). Wait 10 minutes (the light check).
+   You should see: the payment's bank date in FinCom. In IX DESIGNS (large): the same next morning after the nightly
+   check; if Tally took longer than 2 s for its list, Sync activity says so once with the Day Book to upload.
+
+CHECK 10 - THE LEDGERS AND UPLOAD PAGES
+   Open a client's Books > Tally ledgers, then Books > From Tally.
+   You should see: one status line on each, Needs you only when something must be done, one action a row; the upload
+   page has one "Upload Tally data" and the days that need a Day Book.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
+own FinCom icon and their own log: send the log of the Windows user named in the check.
+
+HOW TO ROLL BACK (go back to 2.3.3)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.3). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   4. In Tally load the add-on of 2.3.3 again if the per-user files are not wanted.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.3 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.
