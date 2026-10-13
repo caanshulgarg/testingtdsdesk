@@ -62,6 +62,9 @@ const amountIn = (s: string): number | null => {
 // a question this router must leave to the model: why, how, should, explain, advice, a draft, a notice, several things
 const NOT_MINE = /\b(why|how come|explain|should|could|would|advise|advice|suggest|draft|reply|letter|notice|compare .* with|and also|what if|is it|are they|can i|can we|reason|excel|xlsx|spreadsheet|word|docx|pdf|download|file of|confirmation)\b|\band (what|how|which|who|when|where|whether|the|its|their)\b|,\s*and\b/i;
 
+// two questions in one, or a question that is not one tool's table: never routed by words or by Haiku
+export const compound = (q: string) => NOT_MINE.test(String(q || ""));
+
 export function route(question: string, anchor: string): Route | null {
   const q = String(question || "").trim(), s = q.toLowerCase();
   if (!q || q.length > 240) return null;

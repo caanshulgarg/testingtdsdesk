@@ -112,10 +112,18 @@ const CASES: [string, string, string | null, B[]][] = [
   ["book: Day Book fallback (Sonnet)", Q.rukmini, "larkspur", []], ["general: TDS rate (Sonnet + web)", Q.rate, null, []], ["general: same question again (answer cache)", Q.rate, null, []],
   ["file: Excel of deductees (Sonnet)", Q.excel, "larkspur", []], ["notice: ASMT-10 reply pack (Opus high)", Q.notice, "larkspur", ATT],
 ];
+// cold: the first question of the hour (the prompt cache is written); warm: the same again within the hour (read). The
+// answer cache is off for the warm pass, so it measures the model's own cost.
 const out: Record<string, unknown>[] = [];
 for (const [what, q, client, att] of CASES) {
   const b = await run(BEFORE, q, client, att);
   const a = await run(AFTER, q, client, att);
   out.push({ what, before_inr: +(b.usd * 85).toFixed(2), after_inr: +(a.usd * 85).toFixed(2), before: b.models.join("+") + " x" + b.calls, after: (a.calls ? a.models.join("+") + " x" + a.calls : a.route) });
+}
+for (const [i, [what, q, client, att]] of CASES.entries()) {
+  if (/answer cache/.test(what)) continue;
+  const b = await run(BEFORE, q, client, att);
+  const a = await run({ ...AFTER, answerCache: false }, q, client, att);
+  Object.assign(out[i], { warm_before_inr: +(b.usd * 85).toFixed(2), warm_after_inr: +(a.usd * 85).toFixed(2) });
 }
 console.log(JSON.stringify(out));

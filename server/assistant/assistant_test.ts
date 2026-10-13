@@ -111,7 +111,7 @@ Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, str
   ]);
   const q = "Large bank payments in September 2025, and anyone past a TDS threshold " + crypto.randomUUID().slice(0, 6);
   const r = await ask(c, { question: q, client_id: CLIENT });
-  eq([c.routerCalls.length, c.calls.length], [1, 2], "Haiku said none; then the model");
+  eq([c.routerCalls.length, c.calls.length], [0, 2], "two questions in one: not routed (no Haiku); the model");
   const res = ofType(r.events, "result");
   eq(res.map((x) => x.tool), ["entries_filter", "tds_missed"], "the two tools ran");
   eq(res[0].rows.map((x: any) => [x.day, x.vno, x.amount]), [["2025-09-30", "31", 45000]], "September's bank payment over 10,000");
@@ -128,7 +128,7 @@ Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, str
   assert(!p.tools.some((t: any) => /post|delete|update|insert|write/i.test(t.name || "") && t.name !== "point_to_screen"), "no tool that writes");
   assert(p.max_tokens <= 6000, "chat capped at 6,000 tokens out");
   const lg = (await svc("/rest/v1/assistant_log?select=route,feature,fell_through,models,calls&question=eq." + encodeURIComponent(q)))[0];
-  eq([lg.route, lg.feature, lg.fell_through, lg.models, lg.calls], ["model", "book", true, ["claude-haiku-5-5", "claude-sonnet-5-5"], 3], "the log: fell through, models, calls");
+  eq([lg.route, lg.feature, lg.fell_through, lg.models, lg.calls], ["model", "book", true, ["claude-sonnet-5-5"], 2], "the log: fell through, models, calls");
 });
 
 Deno.test("prompt caching: the prefix (tools and system prompt) is byte-identical between questions; cache reads counted", async () => {

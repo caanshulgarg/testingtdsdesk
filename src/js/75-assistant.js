@@ -86,13 +86,16 @@ const ASST = {
     else if (e.t === "result") t.results.push(e);
     else if (e.t === "slice") t.slices.push(e);
     else if (e.t === "figures") t.verdicts = t.verdicts.concat(e.verdicts || []);
-    else if (e.t === "notice") t.notice = e.fields;
-    else if (e.t === "draft") t.drafts.push(e);
+    else if (e.t === "notice"){ t.notice = e.fields; t.noticeId = e.id || null; t.checklist = e.checklist || []; t.annexures = e.annexures || []; t.noticeStatus = "received"; }
+    else if (e.t === "notice_items") t.checklist = e.checklist || t.checklist;
+    else if (e.t === "cases") t.cases = (t.cases || []).filter(c => !(e.cases || []).some(x => x.n === c.n)).concat(e.cases || []);
+    else if (e.t === "warn") t.warn = e;
+    else if (e.t === "draft"){ t.drafts.push(e); if (e.kind === "notice_reply") t.noticeStatus = "drafted"; }
     else if (e.t === "file") t.files.push(e);
     else if (e.t === "screen"){ if (!t.screens.some(x => x.screen === e.screen)) t.screens.push(e); }
     else if (e.t === "error") t.error = {kind: e.kind, message: e.message};
     else if (e.t === "prefile"){ t.prefile = e; this.runPrefile(t); }
-    else if (e.t === "done"){ t.text = e.text || t.live; t.labels = e.labels || []; t.unchecked = e.unchecked || []; t.citations = e.citations || {ok: [], dropped: []}; t.links = e.links || []; t.verdicts = e.verdicts || t.verdicts; t.usage = e.usage; }
+    else if (e.t === "done"){ t.cached = e.cached || null; t.route = e.route || ""; if (e.cases) t.cases = e.cases; t.text = e.text || t.live; t.labels = e.labels || []; t.unchecked = e.unchecked || []; t.citations = e.citations || {ok: [], dropped: []}; t.links = e.links || []; t.verdicts = e.verdicts || t.verdicts; t.usage = e.usage; }
   },
   // "check my Q2 26Q": FinCom's own checklist (src/js/76-prefiling.js), here in the browser, on the client's books
   runPrefile(t){
@@ -211,7 +214,7 @@ const ASST = {
   async save(quiet){
     const a = this.st(), k = this.key(), cid = this.cid();
     const turns = this.turns().filter(t => t.done).map(t => ({q: t.q, at: t.at, text: t.text, labels: t.labels, results: t.results.map(r => ({tool: r.tool, title: r.title, columns: r.columns, rows: (r.rows || []).slice(0, 500), summary: r.summary, basis: r.basis, period: r.period, params: r.params})),
-      files: t.files, drafts: t.drafts, notice: t.notice, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, unchecked: t.unchecked, error: t.error}));
+      files: t.files, drafts: t.drafts, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, unchecked: t.unchecked, error: t.error}));
     if (!turns.length){ if (!quiet) toast("Nothing to save yet."); return; }
     const title = turns[0].q.slice(0, 120);
     try {
@@ -246,9 +249,23 @@ const ASST = {
     try { a.mismatches = await Cloud.rpc("asst_mismatches", {p_limit: 200}); } catch (e){ a.mismatches = null; }
     this.draw();
   },
-  async setCap(n){
-    try { await Cloud.rpc("asst_set_cap", {p_calls: Math.max(0, Math.min(100000, Math.round(num(n))))}); toast("Daily limit set to " + Math.round(num(n)) + "."); this.loadUsage(); }
+  // the firm's daily cap in rupees, and the rupees to a dollar (null keeps it)
+  async setCap(inr, rate){
+    const p = {p_inr: inr === "" || inr == null ? null : Math.max(0, Math.min(1000000, r2(num(inr)))), p_rate: rate === "" || rate == null ? null : Math.max(1, Math.min(1000, r2(num(rate))))};
+    try { const r = await Cloud.rpc("asst_set_cap", p); toast("Daily limit ₹" + INR.format(r.cap_inr) + " at ₹" + r.rate + " to the dollar."); this.loadUsage(); }
     catch (e){ toast("Could not set it: " + (e && e.message)); }
+  },
+  // a notice's documents: ticked as they are attached; its status, filed with the acknowledgement number (FinCom files nothing)
+  async tick(t, item, done){
+    if (!t.noticeId) return;
+    try { const r = await Cloud.rpc("asst_notice_tick", {p_id: t.noticeId, p_item: item, p_done: !!done}); t.checklist = (r && r.checklist) || t.checklist; this.draw(); }
+    catch (e){ toast("Could not change it: " + (e && e.message)); }
+  },
+  async noticeStatus(t, status, ack){
+    if (!t.noticeId) return;
+    if (status === "filed" && !String(ack || "").trim()){ toast("Type the acknowledgement number of the reply filed."); return; }
+    try { const r = await Cloud.rpc("asst_notice_status", {p_id: t.noticeId, p_status: status, p_ack: ack || null}); t.noticeStatus = r.status; t.noticeAck = r.ack_no; toast(status === "filed" ? "Marked filed (" + r.ack_no + ")." : "Status: " + status + "."); this.draw(); }
+    catch (e){ toast("Could not change it: " + (e && e.message)); }
   },
 };
 // the due list's tasks added from a notice (client_due_tasks), for app/src/parts/DueList.jsx and the client's due list

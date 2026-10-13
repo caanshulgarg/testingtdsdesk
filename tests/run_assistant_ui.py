@@ -54,6 +54,7 @@ SETUP = """async ([bk, master, twobs, me, firm, fn]) => {
   Cloud.fresh = async () => {}; Cloud.refreshToken = async () => {};
   Cloud.st.firm = firm; Cloud.st.role = "owner"; Cloud.st.state = "ok"; Cloud.st.members = [{user_id: me, firm_id: firm, name: "Owner", role: "owner"}];
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role: "owner"})});
+  S.firm.firmName = "Garg Shekhar & Company (test)"; S.firm.firmAddress = "Chartered Accountants, New Delhi";
   // only the Assistant's own calls reach the stand-in; the rest of the app's cloud traffic (sync, alerts) answers empty here
   const real = Cloud.api.bind(Cloud);
   Cloud.api = async (p, o, r) => { window.__api.push(p); return /^(rpc\\/asst_|client_due_tasks|assistant_)/.test(p) ? real(p, o, r) : []; };
@@ -79,11 +80,14 @@ def ask(pg, q):
         if pg.evaluate("() => { const t = ASST.turns(); const l = t[t.length - 1]; return !!(l && l.done && l.q === %s); }" % json.dumps(q)): break
         pg.wait_for_timeout(200)
     pg.wait_for_timeout(400)
-    return pg.evaluate(LAST)
+    t = pg.evaluate(LAST)
+    try: json.dump(t, open(os.path.join(OUT, "turn-%s.json" % "".join(ch for ch in q[:24] if ch.isalnum())), "w"), indent=1, default=str)
+    except Exception: pass
+    return t
 
 db = A.start(PG_PORT); fn = None
 try:
-    A.migrate(db); A.load_fixture(db)
+    A.migrate(db); A.load_fixture(db); A.add_notice_data(db)
     SUPA.start(db, SUPA_PORT)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:%d" % SUPA_PORT, NO_COLOR="1")
     if os.path.exists("/root/.ccr/ca-bundle.crt"): env.setdefault("DENO_CERT", "/root/.ccr/ca-bundle.crt")
@@ -113,9 +117,9 @@ try:
             pg.evaluate("goHome && goHome('settings')") if pg.evaluate("typeof goHome === 'function'") else None; pg.wait_for_timeout(500)
         ok(pg.locator("[data-asst-switch]").count() == 1, "Settings › AI help has the Assistant's switch")
         boxes = pg.locator("[data-asst-switch] input[type=checkbox]")
-        boxes.nth(0).check(); pg.wait_for_timeout(900)
+        boxes.nth(0).click(); pg.wait_for_timeout(1200)
         ok(pg.evaluate("ASST.st().settings.enabled && !ASST.on()"), "switched on, but not used until consent is recorded")
-        pg.locator("[data-asst-switch] input[type=checkbox]").nth(1).check(); pg.wait_for_timeout(900)
+        pg.locator("[data-asst-switch] input[type=checkbox]").nth(1).click(); pg.wait_for_timeout(1200)
         ok(pg.evaluate("ASST.on()") and db.one("select enabled and consent from assistant_settings where firm_id = '%s'" % A.FIRM) == "t", "consent recorded: on (assistant_settings in the database)")
         shot(pg, "08-settings-switch", "[data-asst-settings]")
         # ---------- the client's books: the launcher, Ctrl+J, the panel
@@ -133,8 +137,9 @@ try:
         ok(r.get("tool") == "tds_missed" and any("Ashvattha" in json.dumps(x) for x in rows) and any(abs(float(x.get(k) or 0) - 40000) < 0.005 for x in rows for k in x if isinstance(x.get(k), (int, float))), "the table: Ashvattha Transport Co, 40,000.00 (from the database)")
         al = pg.evaluate("() => { const td = [...document.querySelectorAll('.asst-turn.latest .asst-table td.n')]; return td.length ? getComputedStyle(td[0]).textAlign : ''; }")
         ok(al in ("right", "end"), "amounts right aligned (%s)" % al)
-        ok(pg.locator(".asst-turn.latest .asst-table button.linkbtn").count() >= 1, "dates are links to the entry")
         shot(pg, "02-green")
+        ask(pg, "Bank payments in September 2025")
+        ok(pg.locator(".asst-turn.latest .asst-table button.linkbtn").count() >= 1, "dates are links to the entry (bank payments, September 2025)")
         # ---------- amber: the Day Book slice, a made-up voucher removed, a wrong figure corrected
         t = ask(pg, "What did we pay Rukmini in March and what was the reverse charge?")
         ok("ai" in t["labels"] and "AI answer, not checked against the books" in pg.inner_text(".asst-turn.latest"), "amber: AI answer, not checked against the books")
@@ -164,10 +169,26 @@ try:
         n = t.get("notice") or {}
         ok(n.get("form") == "ASMT-10" and abs(float(n.get("amount") or 0) - 5600) < 0.005 and n.get("reply_by") == "2026-11-15", "notice: ASMT-10, 5,600.00, reply by 15-Nov-2026")
         ok(pg.locator("[data-asst-draft]").count() == 1 and "DRAFT" in pg.inner_text("[data-asst-draft]"), "the reply is a DRAFT, with Word and PDF")
+        items = pg.evaluate("() => { const t = ASST.turns().slice(-1)[0]; return (t.checklist || []).map(i => [i.id, i.status, i.annex || null]); }")
+        ok(["itc_recon", "ready", 1] in items and ["invoices", "attach", None] in items and len([i for i in items if i[1] == "ready"]) == 5, "the documents: 5 ready from FinCom as Annexures 1-5, the rest to attach (%d)" % len(items))
+        ok(pg.locator("[data-asst-checklist] li").count() == len(items), "the checklist is shown")
+        ok(pg.locator("[data-asst-cases] [data-case-ok]").count() == 1 and "Verify before filing" in pg.inner_text("[data-asst-cases]") and "indiankanoon.org" in pg.inner_text("[data-asst-cases]"), "the verified case, with its link and 'Verify before filing'")
+        ok(pg.locator('[data-asst-file="zip"]').count() == 1 and "Download reply pack" in pg.inner_text('[data-asst-file="zip"]'), "Download reply pack")
+        with pg.expect_download() as dl:
+            pg.click('[data-asst-file="zip"] button')
+        zp = os.path.join(OUT, "reply-pack.zip"); dl.value.save_as(zp)
+        import zipfile
+        names = sorted(zipfile.ZipFile(zp).namelist())
+        ok(names[:3] == ["00-Index.xlsx", "01-Reply-DRAFT.docx", "01-Reply-DRAFT.pdf"] and len([n for n in names if n.startswith("Annexure-")]) == 6, "the pack opens: index, reply, 5 annexures and the citations (%s)" % names)
         ok(db.one("select count(*) from client_due_tasks") == tasks0, "nothing on the due list until clicked")
         shot(pg, "05-notice")
+        pg.click('[data-asst-checklist] li[data-item="invoices"] input'); pg.wait_for_timeout(900)
+        ok(db.one("select (select x->>'done' from jsonb_array_elements(checklist) x where x->>'id' = 'invoices') from assistant_notices order by created_at desc limit 1") == "true", "a document ticked as attached is kept on the notice")
         pg.click('[data-asst-notice] button:has-text("Add to due list")'); pg.wait_for_timeout(1200)
         ok(db.one("select count(*) from client_due_tasks where client_id = 'larkspur' and due = '2026-11-15'") == "1", "Add to due list: the task is added on the click")
+        pg.fill(".asst-filed input", "AA0711260045678"); pg.click('.asst-filed button'); pg.wait_for_timeout(900)
+        ok(db.one("select status || ' ' || ack_no from assistant_notices order by created_at desc limit 1") == "filed AA0711260045678", "marked filed with the acknowledgement (FinCom filed nothing)")
+        shot(pg, "05b-notice-filed", "[data-asst-notice]")
         # ---------- a file
         t = ask(pg, "An Excel of TDS by deductee with PANs")
         ok(len(t["files"]) == 1 and t["files"][0]["kind"] == "xlsx" and pg.locator('[data-asst-file="xlsx"]').count() == 1, "the Excel file is listed in the chat")
@@ -191,6 +212,9 @@ try:
         pg.evaluate("S.view = 'home'; S.settingsTab = 'ai'; ASST.st().usage = undefined; render()"); pg.wait_for_timeout(1500)
         mm = pg.inner_text("[data-asst-mismatches]") if pg.locator("[data-asst-mismatches]").count() else ""
         ok("reverse charge on March's rent" in mm and "3,600.00" in mm and "4,000.00" in mm and "reported wrong" in mm, "Mismatches: the corrected figure and the report, with their status")
+        sp = pg.inner_text("[data-asst-spend]") if pg.locator("[data-asst-spend]").count() else ""
+        ok("₹" in sp and "150.00" in sp, "Settings: today's AI spend against the ₹150 cap (%s)" % sp[:80])
+        ok(pg.locator("[data-asst-features] tr").count() >= 2, "which features use the money")
         shot(pg, "09-mismatches", "[data-asst-settings]")
         # ---------- Ctrl+K: the switcher's last line
         pg.evaluate("S.view = 'company'; S.coId = 'larkspur'; S.books = window.__bk; render()"); pg.wait_for_timeout(500)

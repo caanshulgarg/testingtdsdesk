@@ -8,6 +8,10 @@
 # the CI jobs by it, the longest first. TDSDESK_SITE=../app/dist-test: an older screen test whose default (site-test/)
 # no longer shows the sign-in page's "Use it here without an account" since the sign-in page moved to React (53a7ccf).
 run_add_client_tally.py               120
+run_assistant_agent.py                300
+run_assistant_cost.py                 300
+run_assistant_sql.py                  300
+run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
@@ -89,6 +93,7 @@ run_post_tabs.py                      120
 run_post_testcopies.py                120
 run_post_queue.py                     180
 run_post_record_server.py             120
+run_prefiling.js                      120
 run_priority.py                       990
 run_queue_server.py                   120
 run_queue_ui.py                       120

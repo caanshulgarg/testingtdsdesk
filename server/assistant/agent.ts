@@ -17,7 +17,7 @@ import { actionAsked, checkCitations, Claim, compare, fieldOf, markFigures, unch
 import { DocSpec, Section, TableData } from "./files.ts";
 import { Masker } from "./mask.ts";
 import { costUsd, HAIKU, plan, Plan, SONNET, Task, taskOf, Usage } from "./models.ts";
-import { describe, route } from "./router.ts";
+import { compound, describe, route } from "./router.ts";
 import { applyCitations, Checked, Citation, LABEL as CITE_LABEL, NO_CASE, verify } from "./citations.ts";
 import { EXT_TOOLS } from "./tools/index.ts";
 import type { ExtCtx } from "./tools/types.ts";
@@ -220,7 +220,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const P0 = plan(task, ctx.chatEffort);
   const P: Plan = L.opusOnly ? { ...P0, model: "claude-opus-5-5", effort: "medium", maxTokens: 16000 } : P0;
   let fellThrough = false;
-  if (L.haiku && task === "book" && ctx.clientId && !ctx.firmWide && !WHY_Q.test(ctx.question) && !act) {
+  if (L.haiku && task === "book" && ctx.clientId && !ctx.firmWide && !WHY_Q.test(ctx.question) && !compound(ctx.question) && !act) {
     const pick = async (p: Plan): Promise<{ name: string, input: any } | null | "capped" | "none"> => {
       const msg = await call(p, { system: [{ type: "text", text: ROUTER_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }], tools: routerTools(ctx.strict !== false),
         messages: [{ role: "user", content: "[Today: " + anchor + " (periods are read against this date).]\n\n" + mk.text(ctx.question) }] });
@@ -243,8 +243,9 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         return finish(describe(x.r || {}, ""), ["books"], { route: models.includes(SONNET) ? "sonnet-route" : "haiku", feature: "book" });
       }
     }
-    fellThrough = true;
   }
+  // a book question that reached the model: no fixed question fitted it (logged for new intents)
+  if (task === "book" && ctx.clientId && !act) fellThrough = true;
 
   // ---------------------------------------------------------------- 3. the model with the tools
   if (ctx.clientId) {
@@ -383,7 +384,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         for (const a of made.annexures) for (const t of a.tables) results.push({ rows: t.rows, summary: t.summary });
         return okr(JSON.stringify({
           recorded: true, kind: KINDS[n.kind],
-          annexures: made.annexures.map((a) => ({ annexure: a.n, title: a.title, tables: a.tables.map((t) => ({ tool: t.tool, params: t.params, summary: t.summary || null, rows: t.rows.slice(0, 10).map(({ guid: _g, ...r }: any) => r), rowsInAll: t.rows.length })) })),
+          annexures: made.annexures.map((a) => ({ annexure: a.n, title: a.title, tables: a.tables.map((t) => ({ tool: t.tool, params: t.params, summary: t.summary || null, rows: t.rows.slice(0, 5).map(({ guid: _g, ...r }: any) => r), rowsInAll: t.rows.length })) })),
           you_must_attach: made.items.filter((i) => i.status === "attach").map((i) => i.name),
           not_applicable: made.items.filter((i) => i.status === "na").map((i) => i.name + " (" + (i.note || "") + ")"),
           next: "Check the notice's claims against these annexures (and other book tools if needed); add any document an official page requires with add_documents; then call draft (kind notice_reply) citing every annexure as 'Annexure N'.",
