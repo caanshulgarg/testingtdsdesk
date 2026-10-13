@@ -29,6 +29,7 @@ for _k, _o in ORDERS.items():
     _o.append((72, "migration-72-gst-type.sql"))   # bridge 2.4.2 (round 44 part B): each entry's GST type, after 62
     _o.append((73, "migration-73-tds-fields.sql"))   # bridge 2.4.3: TDS challans and TDS master settings, after 72
     _o.append((74, "migration-74-payroll.sql"))   # bridge 2.4.4: payroll (employees, pay-head fields, salary paid), after 73
+    _o.append((76, "migration-76-db-speed.sql"))   # db-speed (13-Oct-2026): foreign-key indexes, six policies with (select auth.uid()), ids for tally_lines / tally_bills; after 74 (and 75)
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
@@ -72,6 +73,7 @@ SCHEMA33 = part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")
 SCHEMA35 = part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")
 SCHEMA37 = part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X")      # what 37's functions need beyond the two (tally_bills, tally_d8, …)
 SCHEMA47 = part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47")      # pgmq, pg_cron, Storage and migration 13's tally_jobs, as 47 needs them
+PLATFORM = part(os.path.join(HERE, "run_migration76.py"), "PLATFORM")    # the platform tables 76 indexes and the members / activity policies, as on staging
 BILLS = """create table if not exists tally_bills (book_id uuid not null references tally_books (book_id) on delete cascade, firm_id uuid not null, guid text not null, day date not null,
   ledger text not null, name text not null default '', type text not null default '', amount numeric not null, bill_date date, credit_days integer, due date);"""
 F, U, B, DEV = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "11111111-1111-1111-1111-111111111111", "d1000000-0000-0000-0000-000000000001"
@@ -86,7 +88,7 @@ def run_order(label, ORDER):
         """the text of a function; args (a type list) when the name is overloaded"""
         return db.one("select pg_get_functiondef(%s::%s)" % (q("public." + fn + ("(" + args + ")" if args else "")), "regprocedure" if args else "regproc")) or ""
     try:
-        db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS); db.sql(SCHEMA37); db.sql(SCHEMA47)
+        db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS); db.sql(SCHEMA37); db.sql(SCHEMA47); db.sql(PLATFORM)
         db.sql("insert into firms values (%s, 'Firm') on conflict do nothing; insert into members values (%s, %s, 'Me', 'owner', true);" % (q(F), q(U), q(F)))
         db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');" % (q(B), q(F)))
         db.sql("insert into tally_devices (id, firm_id, name, key_hash, version) values (%s, %s, 'NWS144', 'h1', '2.1.5');" % (q(DEV), q(F)))

@@ -211,6 +211,7 @@ run_parse_gsttype.mjs                 120
 run_migration73.py                    120
 run_parse_tdsfields.mjs               120
 run_migration74.py                    120
+run_migration76.py                    120
 run_parse_payroll.mjs                 120
 run_payroll_ingest.py                 120
 run_e2e_payroll.py                    120
