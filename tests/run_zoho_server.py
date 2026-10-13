@@ -28,7 +28,7 @@ Needs Deno (DENO, else /opt/deno/deno) and the app's test build (site-test/: pyt
 import os, sys, json, time, subprocess, threading, tempfile, shutil, urllib.request, urllib.error, hashlib, re
 from urllib.parse import urlparse, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-import fake_supabase as FS, fake_zoho as FZ, zoho_stand
+import fake_supabase as FS, fake_zoho as FZ, zoho_stand, pg_stand   # pg_stand (via zoho_stand): run_ci.sh runs this as root
 DENO = os.environ.get("DENO") or shutil.which("deno") or ("/opt/deno/deno" if os.path.exists("/opt/deno/deno") else None)
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
 FX = os.path.join(HERE, "fixtures", "zoho"); EXP = json.load(open(os.path.join(FX, "expected.json"))); SETUP = json.load(open(os.path.join(FX, "setup.json")))
