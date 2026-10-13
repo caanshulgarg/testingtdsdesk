@@ -319,7 +319,8 @@ begin
   -- how often it is read follows the plan's daily cap (a run costs about a dozen calls when little changed): Free (1,000)
   -- every 35 minutes, Standard (2,000) every 20, Professional and above every 15; a Zoho webhook brings a read forward
   insert into zoho_connections (firm_id, grant_id, org_id, org_name, org_gstin, client_id, book_id, status, linked_by, linked_at, sync_from, next_sync_at, daily_cap, sync_every_min)
-  values (f, p_grant, p_org, coalesce(o->>'name', ''), upper(coalesce(o->>'gstin', '')), p_client, bk, 'connected', p_user, now(), fr, now(),
+  -- the organisation's GSTIN (each entry's registration); when Zoho's list does not give it, the client's own
+  values (f, p_grant, p_org, coalesce(o->>'name', ''), upper(coalesce(nullif(o->>'gstin', ''), cg, '')), p_client, bk, 'connected', p_user, now(), fr, now(),
           case when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' then (o->>'cap')::int else 1000 end,
           case when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' and (o->>'cap')::int >= 5000 then 15 when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' and (o->>'cap')::int >= 2000 then 20 else 35 end)
   on conflict (firm_id, org_id) do update set grant_id = excluded.grant_id, org_name = excluded.org_name, org_gstin = excluded.org_gstin, client_id = excluded.client_id,
@@ -497,6 +498,7 @@ begin
     res := tally_ingest_entries(c.book_id, p_vouchers, coalesce(p_lines, '[]'::jsonb), true, false);
     -- (origin stays as the entry path sets it: 'fincom' for an entry FinCom posted, by its FinCom id; source says Zoho)
     update tally_vouchers set source = 'zoho' where book_id = c.book_id and guid = any(sent) and source is distinct from 'zoho';
+    update tally_books set days_at = now() where book_id = c.book_id;     -- the app reads the entries again when this moves
   end if;
   -- an entry deleted earlier and back in Zoho (restored) is live again (tally_ingest_entries clears deleted_at)
   insert into zoho_seen as s (connection_id, entity, zoho_id, guid, modified_sec, seen_at, gone_at, skipped)
@@ -516,7 +518,7 @@ begin
   select coalesce(array_agg(distinct day), '{}') into ds from tally_vouchers where book_id = p_book and guid = any(p_guids) and source = 'zoho' and deleted_at is null;
   update tally_vouchers set deleted_at = now() where book_id = p_book and guid = any(p_guids) and source = 'zoho' and deleted_at is null;
   get diagnostics n = row_count;
-  if n > 0 then perform tally_ledger_day_rebuild(p_book, ds); end if;
+  if n > 0 then perform tally_ledger_day_rebuild(p_book, ds); update tally_books set days_at = now() where book_id = p_book; end if;
   return n;
 end $$;
 -- the periodic id comparison: every id of one kind Zoho lists now (a COMPLETE list) against those held; the ones Zoho no

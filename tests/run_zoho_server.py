@@ -226,6 +226,9 @@ try:
         dd = P["tds"]["files"]["26Q"].get("dd") or []
         ok(sorted((d["pan"], d["paid"], d["tds"]) for d in dd) == sorted((w["pan"], "%.2f" % w["paid"], "%.2f" % w["tds"]) for w in exp["tds26q"]), "%sthe 26Q text file's deductee lines (%d)" % (tag, len(dd)))
     P = run_app("first")
+    # the cloud copy as the app's REST reads answer it, kept for the page test (run_integrations_ui.py reads the committed
+    # copy, tests/fixtures/zoho/copy-snapshot.json, made from this file)
+    json.dump(snapshot(), open(os.path.join(OUT, "zoho-copy-snapshot.json"), "w"), indent=0)
     ok(P["sources"]["bridge"] == EXP["entries"]["live"] + EXP["entries"]["cancelled"], "the app brought in %s entries from the cloud copy (%s)" % (P["sources"]["bridge"], P["copyRead"]))
     for n, s in SETUP["ledgers"].items():
         p = P["proposals"].get(n, {})
