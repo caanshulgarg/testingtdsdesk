@@ -1,117 +1,171 @@
-"""python3 run_reports_ui.py - Step 3's screens under the client's Reports tab (app/src/screens/books/Statements.jsx; FSX,
-src/js/78-reports.js), on the React build (app/dist-test, or TDSDESK_SITE), with the made-up company of
-tests/reports_fixtures.js loaded as the client's books (two years of vouchers, the opening balances as FinCom's copy holds
-them). Test data only.
-  1. Reports lists "Financial statements and reports": Schedule III, cash MIS, 3CD, DCF
-  2. the statements: the summary, the preview in the firm's format, Print / Excel / Word / TB downloads
-  3. the mapping: suggested by rule, confirmed (version 1); a ledger moved by hand is "to confirm"; confirmed again (version 2)
-  4. the details for you: typed in, kept with the client for the year (b.fs.rx.det)
-  5. the checks: all 27 listed, failures with what to look at
-  6. the cash-basis MIS: receipts and payments, and it agrees with the books
-  7. the Form 3CD draft from the audit's checks, with the questions for you
-  8. the DCF: refuses without the assumptions; with them, a value per share
-Run one at a time (flock /tmp/fincom-app.lock)."""
-import os, sys, json, subprocess, threading, functools, http.server
+"""python3 run_reports_ui.py - Reports, Look up, Letters, closed periods and getting started, in a browser, on made-up books."""
+import json, os, sys, subprocess, tempfile, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
-HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from playwright.sync_api import sync_playwright
-SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
-PORT = int(os.environ.get("RX_PORT") or 8341)
-OUT = os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")); os.makedirs(OUT, exist_ok=True)
+HERE = os.path.dirname(os.path.abspath(__file__))
+H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "site-test"))); H.log_message = lambda *a: None
+srv = http.server.ThreadingHTTPServer(("localhost", 8141), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+tmp = os.path.join(tempfile.gettempdir(), "fincom-demo-books.json")
+subprocess.run([sys.executable, os.path.join(HERE, "..", "build", "landing", "demo", "make_demo_books.py"), tmp], check=True, capture_output=True)
+books = json.load(open(tmp))
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-class Quiet(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, *a): pass
-srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
-
-# the made-up company as FinCom holds books: vouchers in Tally's sign (a debit negative), dates YYYYMMDD, the ledgers' groups,
-# and the opening balances of 1 April 2024 as FinCom's copy gives them
-B = json.loads(subprocess.check_output(["node", "-e", """
-const F=require('./reports_fixtures'); const c=F.company();
-const t=s=>s.replace(/-/g,''); let id=0;
-const conv=v=>({id:'rx'+(++id),date:t(v.date),no:v.no,type:v.type,party:'',narr:'',ent:v.ent.map(e=>({l:e.l,a:-e.a})),cmp:'',gstin:'',pos:'',hsn:[]});
-const under={}, groups={}; c.tb.forEach(x=>{ if(x.g.length){ under[x.l]=x.g[0]; groups[x.g[0]]=''; } });
-const led={}; c.tb.forEach(x=>{ led[x.l]={open:-x.po}; });
-const vouchers=(c.vouchersPy||[]).concat(c.vouchers).map(conv);
-process.stdout.write(JSON.stringify({vouchers, under, groups, led, det:Object.assign({}, c.det, {age: c.age}), ent:c.entity}));"""], cwd=HERE))
-
-LOAD = """(B) => {
-  const c = newCompany({name: "ZZ Kestrel Widgets (made-up)", gstin: "27AAACK1234K1Z5"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-  const b = {loading: false, cid: c.id, challans: [], alloc: {}, vouchers: B.vouchers, under: B.under, groups: B.groups, ledInfo: {}, gstins: {}, pans: {}, states: {},
-    meta: {from: "20240401", to: "20260331"}, tb: {from: "20240401", to: "20260331", led: B.led, src: "copy", at: "2026-10-13"}, misCfg: {freq: "off"}, auditCfg: {freq: "off"}};
-  b.map = Books.mapLedgers(b.vouchers, {}); b.msme = {"Alder Components": "small"};
-  const st = FSX.store(b); st.kind = "company"; st.det["2025"] = JSON.parse(JSON.stringify(B.det)); st.det["2025"].entity = Object.assign({}, B.ent); st.det["2025"].stock.py = {"Finished Goods": 300000, "Raw Materials": 200000};
-  S.books = b; window.__bk = b; S.booksTab = "reports"; S.rxView = null; S.rxTab = null; S.rxFy = "2025"; render();
-}"""
+SETUP = """(bk) => {
+  S.storeKind = "db";
+  const c = newCompany({name: "Aarohi Textiles Pvt Ltd", gstin: "09AAHCA7732L1Z4"}); c.id = "c_demo"; c.tallyName = "Aarohi Textiles Pvt Ltd"; c.postTo = "Aarohi Textiles Pvt Ltd"; S.companies[c.id] = c;
+  S.data[c.id] = {parties: {}, entries: {}, loaded: true};
+  S.coId = c.id; S.view = "company"; S.tab = "dash"; S.loadingCo = false;
+  S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id});
+  S.books.map = Books.mapLedgers(bk.vouchers, {});
+  // opening balances as Tally would give them: nothing before the year, so every ledger opens at zero
+  const led = {}; Object.keys(bk.under).forEach(n => { led[n] = {open: 0, close: 0, parent: bk.under[n]}; });
+  S.books.tb = {from: "20250401", to: "20260331", at: new Date().toISOString(), led};
+  window.__bk = S.books; render(); }"""
 with sync_playwright() as p:
-    br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}, accept_downloads=True); pg = ctx.new_page()
+    br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
-    pg.evaluate(LOAD, B); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; S.booksTab = 'reports'; render();"); pg.wait_for_timeout(800)
-    pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => { window.__saved.push([n, blob ? blob.size : 0]); }; }")
-    # 1
+    pg.add_init_script("window.open = (u) => { window.__opened = (window.__opened || []).concat([String(u)]); return {document: {write(){}, close(){}}, focus(){}, print(){}}; };")
+    pg.goto("http://localhost:8141/"); pg.wait_for_timeout(2000)
+    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate(SETUP, books); pg.wait_for_timeout(700)
+    pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(400)
     t = pg.inner_text("#app")
-    ok("Financial statements and reports" in t and pg.locator("[data-rx-entry]").count() == 4, "1. Reports lists Financial statements and reports (4: Schedule III, cash MIS, 3CD, DCF)")
-    pg.click('[data-rx-entry="fs"]'); pg.wait_for_timeout(1500)
-    # 2
-    s = pg.inner_text("[data-rx-summary]")
-    ok("ZZ Kestrel" not in s or "Company" in s, "2. the summary: " + s[:140])
-    fr = pg.frame_locator("[data-rx-preview]")
-    ft = fr.locator("body").inner_text()
-    ok("Balance Sheet as at March 31, 2026" in ft and "Statement of Profit and Loss for the year ended March 31, 2026" in ft and "Notes to the Financial Statements" in ft, "2. the preview: balance sheet, P&L and notes in the firm's format")
-    ok("For and on behalf of Board of Directors" in ft and "UDIN : 26234567ABCDEF1234" in ft and "(All amounts in ₹, unless otherwise stated)" in ft, "2. signatures and the units line")
-    pg.click("[data-rx-excel]"); pg.click("[data-rx-word]"); pg.wait_for_timeout(800)
-    pg.click(".rx details.more summary"); pg.click("[data-rx-tb]"); pg.wait_for_timeout(600)
-    sv = pg.evaluate("window.__saved")
-    ok(any(n.endswith("financial-statements-2025.xlsx") and z > 20000 for n, z in sv) and any(n.endswith(".docx") and z > 10000 for n, z in sv) and any("provisional-TB-2025.xlsx" in n for n, z in sv), "2. downloads: Excel, Word, the provisional TB " + str([n for n, z in sv]))
-    with ctx.expect_page() as pop:
-        pg.click("[data-rx-print]")
-    pw = pop.value; pw.wait_for_timeout(800); ok("Balance Sheet as at March 31, 2026" in pw.inner_text("body"), "2. Print / PDF opens the print view"); pw.pdf(path=os.path.join(OUT, "reports-ui-statements.pdf")); pw.close()
-    pg.screenshot(path=os.path.join(OUT, "reports-ui-statements.png"))
-    # 3 the mapping
-    pg.click('[data-rx-tab="mapping"]'); pg.wait_for_timeout(800)
-    ok("not confirmed" in pg.inner_text("[data-rx-statements]") if pg.locator("[data-rx-statements]").count() else True, "3. (statements say the mapping is not confirmed)")
-    ok("Suggested from the Tally groups" in pg.inner_text("[data-rx-map-version]") and pg.locator("[data-rx-led]").count() > 40, "3. every ledger listed, suggested by rule")
-    pg.click("[data-rx-confirm]"); pg.wait_for_timeout(700)
-    ok("Mapping version 1 confirmed" in pg.inner_text("[data-rx-map-version]"), "3. confirmed: version 1")
-    pg.select_option('select[aria-label="Line for Advertisement"]', "exc"); pg.wait_for_timeout(700)
-    ok("owner, to confirm" in pg.inner_text('[data-rx-led="Advertisement"]'), "3. a ledger moved by hand: to confirm")
-    pg.click("[data-rx-confirm]"); pg.wait_for_timeout(700)
-    ok("Mapping version 2 confirmed" in pg.inner_text("[data-rx-map-version]") and pg.evaluate("FSX.store(S.books).map.versions.length") == 2, "3. confirmed again: version 2 (version 1 kept)")
-    pg.select_option('select[aria-label="Line for Advertisement"]', "exp"); pg.wait_for_timeout(500); pg.click("[data-rx-confirm]"); pg.wait_for_timeout(500)
-    # 4 the details
-    pg.click('[data-rx-tab="details"]'); pg.wait_for_timeout(700)
-    pg.click('.rx-details summary:text-is("Signatures")'); pg.wait_for_timeout(300)
-    f = pg.locator('[data-rx-field="sign.auditor.frn"]'); f.fill("654321E"); f.blur(); pg.wait_for_timeout(500)
-    ok(pg.evaluate("FSX.store(S.books).det['2025'].sign.auditor.frn") == "654321E", "4. a detail typed is kept with the client for the year")
-    f = pg.locator('[data-rx-field="sign.auditor.frn"]'); f.fill("123456W"); f.blur(); pg.wait_for_timeout(400)
-    # 5 the checks
-    pg.click('[data-rx-tab="checks"]'); pg.wait_for_timeout(700)
-    ok(pg.locator("[data-rx-check]").count() == 27, "5. all 27 checks listed")
-    nf = pg.locator("[data-rx-check].bad").count()
-    ok(nf == 0, "5. no check fails on these books (as FinCom holds them, not rolled over, with last year's closing stock given)" + ("" if nf == 0 else ": " + "; ".join(pg.locator("[data-rx-check].bad").all_inner_texts())[:400]))
-    tot = pg.evaluate("(() => { const r = FSX.run(FSX.inputFromBooks('2025', {kind: 'company'})); return [r.model.nm.T_as_CY, r.model.nm.T_pat_CY]; })()")
-    ok(tot == [469886600, 25699900], "5. the same totals as the node test of the same books (assets 46,98,866; profit 2,56,999): " + str(tot))
-    pg.screenshot(path=os.path.join(OUT, "reports-ui-checks.png"))
-    # 6 the cash MIS
-    pg.click('[data-rx-open="mis"]'); pg.wait_for_timeout(1200)
-    s = pg.inner_text("[data-rx-mis-summary]")
-    ok("(agrees)" in s and "Received" in s, "6. cash-basis MIS: " + s)
-    pg.click("[data-rx-mis-excel]"); pg.wait_for_timeout(500)
-    ok(any("cash-MIS" in n for n, z in pg.evaluate("window.__saved")), "6. the MIS as Excel")
-    # 7 the 3CD draft
-    pg.click('[data-rx-open="3cd"]'); pg.wait_for_timeout(600); pg.click("[data-rx-3cd-make]"); pg.wait_for_timeout(4000)
-    n3 = pg.locator("[data-rx-clause]").count(); t3 = pg.inner_text("[data-rx-3cd]")
-    ok(n3 == pg.evaluate("FSX.CLAUSES_3CD.length") and "for you" in t3 and "books" in t3 and "21(d)" in t3, "7. the Form 3CD draft: %d clauses, from the books or for you" % n3)
-    # 8 the DCF
-    pg.click('[data-rx-open="dcf"]'); pg.wait_for_timeout(1500)
-    ok("never assumes" in pg.inner_text("[data-rx-dcf-missing]") if pg.locator("[data-rx-dcf-missing]").count() else False, "8. the DCF refuses without the assumptions")
-    pg.evaluate("""() => { Object.assign(FSX.store(S.books).dcf, {years: 3, revGrowth: [10, 10, 10], ebitdaMargin: [12, 12, 12], depPct: 3, capexPct: 4, nwcPct: 10, taxRate: 25, tg: 5, shares: 120000, valuationDate: "2026-03-31", method: "FCFF", wacc: 14, netDebt: 500000}); render(); }""")
-    pg.wait_for_timeout(1500)
-    ok(pg.locator("[data-rx-dcf-result]").count() == 1 and "Value per share" in pg.inner_text("[data-rx-dcf-result]"), "8. with the assumptions: " + (pg.inner_text("[data-rx-dcf-result]") if pg.locator("[data-rx-dcf-result]").count() else "no result"))
+    # ---------- getting started, and the question box
+    ok("Getting Aarohi Textiles Pvt Ltd ready" in t, "the dashboard shows the getting-started list")
+    ok("Bring in the books from Tally" in t and "done" in t, "steps done and to do are counted")
+    ok(pg.locator("#dashAsk").count() == 1, "the dashboard has the question box")
+    ok(pg.locator('#side .side-link:has-text("Reports")').count() == 1 and pg.locator('#side .side-link:has-text("Look up")').count() == 1 and pg.locator('#side .side-link:has-text("Letters")').count() == 1, "the side menu has Reports, Look up and Letters")
+    # ---------- Reports
+    pg.click('#side .side-link:has-text("Reports")'); pg.wait_for_timeout(800)
+    t = pg.inner_text("#app")
+    ok("How the business is doing" in t and "Customers and suppliers" in t and "Bank and cash" in t and "GST" in t and "Audit and accounts" in t, "Reports shows every area")
+    ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20, "the areas carry charts")
+    ok(pg.locator(".rpt-link").count() >= 30, "every report is listed")
+    ok("2025-26" in t, "the year is chosen from the books")
+    ok(pg.inner_text("#top") .find("Reports") >= 0 if pg.locator("#top").count() else True, "the page title says Reports")
+    pg.fill("#rptQ", "ageing"); pg.wait_for_timeout(500)
+    t = pg.inner_text("#app")
+    ok("Receivables ageing" in t and "Payables ageing" in t and "How the business is doing" not in t, "finding a report by name")
+    pg.fill("#rptQ", ""); pg.wait_for_timeout(400)
+    # ui-tidy (13-Oct-2026): the areas are sections folded but the first; Customers and suppliers opened first
+    if pg.locator('[data-rpt-group="parties"]:not([open]) > summary').count(): pg.click('[data-rpt-group="parties"] > summary'); pg.wait_for_timeout(300)
+    pg.click('.rpt-link:has(b:text-is("Receivables ageing"))'); pg.wait_for_timeout(1500)
+    ok(pg.evaluate("S.booksTab") == "mis" and pg.evaluate("S.misTab") == "recv" and pg.evaluate("!!(S.books.mis && S.books.mis.last)"), "a report opens its screen with the MIS worked out")
+    # ---------- Look up: a ledger
+    pg.click('#side .side-link:has-text("Look up")'); pg.wait_for_timeout(600)
+    ok(pg.evaluate("document.activeElement && document.activeElement.id") == "lkAsk", "the question box has the focus")
+    pg.fill("#lkAsk", "HDFC bank for August 2025"); pg.keyboard.press("Enter"); pg.wait_for_timeout(900)
+    r = pg.evaluate("({kind: S.lk.kind, led: S.lk.led, from: S.lk.from, to: S.lk.to, rows: S.lk.res && S.lk.res.rows.length, open: S.lk.res && S.lk.res.open, close: S.lk.res && S.lk.res.close})")
+    ok(r["kind"] == "ledger" and r["led"] == "HDFC Bank Current Account" and r["from"] == "20250801" and r["to"] == "20250831", "plain words understood: " + json.dumps(r))
+    ok(r["rows"] and r["rows"] > 5 and r["open"] is not None, "the bank account for August, with its opening balance")
+    # the running balance adds up
+    chk = pg.evaluate("""() => { const r = S.lk.res; let run = r.open; for (const v of r.rows) run = Math.round((run + v.dr - v.cr) * 100) / 100; return [run, r.close]; }""")
+    ok(abs(chk[0] - chk[1]) < 0.01, "opening plus debits less credits is the closing balance")
+    # the closing for August is the opening for September
+    pg.evaluate("S.lk.from = '20250901'; S.lk.to = '20250930';"); pg.click('button:text-is("Show")'); pg.wait_for_timeout(700)
+    ok(abs(pg.evaluate("S.lk.res.open") - chk[1]) < 0.01, "August's closing is September's opening")
+    t = pg.inner_text("#app")
+    ok("Opening balance" in t and "Total" in t, "the ledger shows opening, entries and totals")
+    pg.locator("tr.lk-v").first.click(); pg.wait_for_timeout(400)
+    ok(pg.locator("tr.lk-sub .lk-in tr").count() >= 2, "an entry opens to show both sides")
+    other = pg.locator("tr.lk-sub button.linkbtn").nth(1).inner_text()
+    pg.locator("tr.lk-sub button.linkbtn").nth(1).click(); pg.wait_for_timeout(700)
+    ok(pg.evaluate("S.lk.led") == other and pg.evaluate("S.lk.res.kind") == "ledger", "clicking a ledger in an entry opens that ledger (" + other + ")")
+    # a trial balance on a date, which must agree
+    pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter"); pg.wait_for_timeout(1000)
+    tb = pg.evaluate("({kind: S.lk.res.kind, dr: S.lk.res.dr, cr: S.lk.res.cr, n: S.lk.res.rows.length})")
+    ok(tb["kind"] == "tb" and tb["n"] > 20 and abs(tb["dr"] - tb["cr"]) < 1, "trial balance on 31 March 2026 agrees: " + json.dumps(tb))
+    # a party's open bills
+    pg.fill("#lkAsk", "Raj Fabrics open bills"); pg.keyboard.press("Enter"); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.lk.kind") == "bills" and pg.evaluate("S.lk.led") == "Raj Fabrics", "open bills of a named party")
+    # a group, month by month
+    pg.fill("#lkAsk", "sundry debtors month by month this year"); pg.keyboard.press("Enter"); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.lk.kind") == "monthly" and pg.evaluate("S.lk.grp") == "Sundry Debtors" and pg.locator(".lk-res .fc-chart rect").count() >= 12, "a group month by month, with a chart")
+    # find by amount
+    amt = pg.evaluate("Math.abs(S.books.vouchers.find(v => v.type === 'Sales').ent[0].a)")
+    pg.click('.lk-kinds button:text-is("Find entries")'); pg.wait_for_timeout(300)
+    pg.fill('input[aria-label="Words, a number or an amount"]', str(int(amt)) if amt == int(amt) else str(amt)); pg.evaluate("S.lk.from = '20250401'; S.lk.to = '20260331';"); pg.click('button:text-is("Show")'); pg.wait_for_timeout(600)
+    ok(pg.evaluate("S.lk.res.rows.length") >= 1, "finding an entry by its amount")
+    pg.click('.lk-res button:text-is("Excel")'); pg.wait_for_timeout(1500)
+    ok(not errors, "no page errors so far")
+    ok(len(pg.evaluate("LK.recent()")) >= 4, "look-ups are remembered")
+    # the / key opens Look up from anywhere in the client
+    pg.evaluate("S.tab = 'dash'; render();"); pg.wait_for_timeout(300); pg.locator("body").click(position={"x": 700, "y": 900}); pg.keyboard.press("/"); pg.wait_for_timeout(500)
+    ok(pg.evaluate("S.booksTab") == "lookup" and pg.evaluate("S.tab") == "books", "the / key opens Look up")
+    # ---------- Letters: confirmations
+    pg.click('#side .side-link:has-text("Letters")'); pg.wait_for_timeout(800)
+    t = pg.inner_text("#app")
+    ok("Balance confirmations" in t and "Dues reminders" in t, "the Letters page")
+    ok(pg.evaluate("S.ltr.asOn") == "20260331", "confirmations default to the year end")
+    n = pg.locator(".ltr-t tbody tr").count()
+    ok(n > 5, "parties with a balance on 31 March 2026: " + str(n))
+    pg.locator('.ltr-t input[type=email]').first.fill("accounts@party.example"); pg.wait_for_timeout(1000)
+    first = pg.locator(".ltr-t tbody tr").first.locator("button.linkbtn").inner_text()
+    ok(pg.evaluate("S.books.letters.contacts[%s].email" % json.dumps(first)) == "accounts@party.example", "an email typed is kept for the party")
+    pg.locator(".ltr-t tbody tr").first.locator('button:text-is("Email")').click(); pg.wait_for_timeout(400)
+    opened = pg.evaluate("window.__opened || []")
+    ok(any(u.startswith("mailto:accounts%40party.example") and "Confirmation%20of%20balance" in u for u in opened), "Email opens the user's own mail with the letter written")
+    ok(pg.evaluate("!!S.books.letters.conf['20260331'][%s].sentAt" % json.dumps(first)), "the letter is marked as sent")
+    pg.click('.ltr-bar button:nth-child(2)'); pg.wait_for_timeout(300)
+    html = pg.evaluate("LTR.confirmRows().rows.slice(0, 2).map(r => LTR.confirmHtml(r)).join('')")
+    ok("Confirmation of balance as on 31 Mar 2026" in html or "Confirmation of balance as on" in html, "the letter has its subject")
+    ok("please sign and return" in html and "Statement of your account" in html, "the letter carries the reply slip and the statement of account")
+    pg.click('.ltr-bar button.primary'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("Object.values(S.books.letters.conf['20260331']).filter(s => s.via === 'printed').length") >= n - 1, "printing marks each letter")
+    pg.locator('select[aria-label^="Reply from "]').first.select_option("differs"); pg.wait_for_timeout(400)
+    pg.locator('input[aria-label="Their balance"]').first.fill("1000"); pg.wait_for_timeout(1400)
+    ok("difference" in pg.inner_text(".ltr-t"), "a reply with a different figure shows the difference")
+    # ---------- reminders
+    pg.click('.lk-kinds button:text-is("Dues reminders")'); pg.wait_for_timeout(700)
+    rows = pg.locator(".ltr-t tbody tr").count()
+    ok(rows >= 1, "customers with overdue bills: " + str(rows))
+    pg.check('label.chk:has-text("MSMED") input'); pg.wait_for_timeout(400)
+    txt = pg.evaluate("LTR.remindText(LTR.remindRows()[0]).body")
+    ok("MSMED Act" in txt and "Total overdue" in txt, "the reminder lists the bills, and the MSMED Act line when asked")
+    pg.select_option('select[aria-label="Tone"]', "final"); pg.wait_for_timeout(300)
+    ok("Final reminder" in pg.evaluate("LTR.remindText(LTR.remindRows()[0]).subject"), "the tone changes the words")
+    # ---------- closed periods
+    pg.evaluate("S.tab = 'coclosed'; render();"); pg.wait_for_timeout(500)
+    ok("Closed periods" in pg.inner_text("#app"), "Client setup has closed periods")
+    pg.fill('input[aria-label="Books closed up to"]', "2025-06-30"); pg.wait_for_timeout(300)
+    # review 18 (02-Oct-2026): a section's changes are saved with Save at its foot
+    pg.click('#app [data-confirm-foot] [data-cfm="save"]'); pg.wait_for_timeout(300)
+    pg.evaluate("S.books.gstFiled = {'09': {'202508': {r1: '2025-09-11', r3b: '2025-09-20'}}}; ClosedP.set(CO(), 'tdsFiled', {'2025-26|Q2': '2025-10-30'});")
+    w = pg.evaluate("[ClosedP.note('2025-06-15'), ClosedP.note('2025-08-10'), ClosedP.note('2025-09-10', true), ClosedP.note('2025-09-10', false), ClosedP.note('2025-11-01')]")
+    ok(w[0] and "closed up to" in w[0][0], "a date in closed books: " + str(w[0]))
+    ok(w[1] and "GSTR-3B for" in w[1][0], "a month with 3B filed: " + str(w[1]))
+    ok(w[2] and "TDS return for Q2 2025-26" in w[2][0] and not w[3], "a TDS entry in a quarter filed, and not one without TDS")
+    ok(not w[4], "an open month is not flagged")
+    # posting: the warning, and holding back
+    res = pg.evaluate("""async () => {
+      Bridge.st.version = '1.12.9'; Bridge.st.open = [{name: 'Aarohi Textiles Pvt Ltd', from: '20250401'}];
+      let sent = null; Bridge.postChecked = async (pl) => { sent = pl; return {ok: true, results: pl.vouchers.map(v => ({id: v.id, ok: true}))}; };
+      const v = d => ({id: 'v' + d, xml: '<VOUCHER VCHTYPE="Purchase"><DATE>' + d + '</DATE><VOUCHERNUMBER>' + d + '</VOUCHERNUMBER></VOUCHER>'});
+      const p = Bridge.post({company: 'Aarohi Textiles Pvt Ltd', masters: [], vouchers: [v('20250610'), v('20251105')]});
+      await new Promise(r => setTimeout(r, 400));
+      const box = document.getElementById('confirmBox'), shown = box && box.style.display === 'flex' ? box.innerText : '';
+      box.querySelector('[data-cbx="no"]').click();
+      const out = await p;
+      return {shown, sent: sent ? sent.vouchers.map(x => x.id) : [], results: out.results.map(r => [r.id, r.ok, r.held || false])};
+    }""")
+    ok("Post into a closed period?" in res["shown"] and "closed up to" in res["shown"], "posting into a closed period asks first")
+    ok(res["sent"] == ["v20251105"] and ["v20250610", False, True] in res["results"], "holding back sends only the open-period entry: " + json.dumps(res))
+    res2 = pg.evaluate("""async () => {
+      let sent = null; Bridge.postChecked = async (pl) => { sent = pl; return {ok: true, results: pl.vouchers.map(v => ({id: v.id, ok: true}))}; };
+      const p = Bridge.post({company: 'Aarohi Textiles Pvt Ltd', masters: [], vouchers: [{id: 'a', xml: '<VOUCHER VCHTYPE="Purchase"><DATE>20250610</DATE></VOUCHER>'}]});
+      await new Promise(r => setTimeout(r, 400)); document.querySelector('#confirmBox [data-cbx="yes"]').click(); await p;
+      return sent ? sent.vouchers.length : 0; }""")
+    ok(res2 == 1, "choosing to post sends it")
+    # ---------- keyboard shortcuts
+    pg.evaluate("S.tab = 'dash'; render();"); pg.wait_for_timeout(300); pg.locator("body").click(position={"x": 700, "y": 900}); pg.keyboard.press("?"); pg.wait_for_timeout(300)
+    ok("Keyboard shortcuts" in pg.inner_text("#confirmBox"), "? shows the shortcuts")
+    pg.keyboard.press("Escape")
+    # ---------- phone width: nothing runs off the side
+    pg.set_viewport_size({"width": 390, "height": 900}); pg.evaluate("S.tab = 'books'; S.booksTab = 'reports'; render();"); pg.wait_for_timeout(600)
+    ok(pg.evaluate("document.documentElement.scrollWidth") <= 392, "Reports fits a phone")
+    ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
     br.close()
-errs = [e for e in errors if "supabase" not in e.lower() and "Failed to load" not in e]
-ok(not errs, "no page errors" + ("" if not errs else ": " + " | ".join(errs[:4])))
-print("\n" + ("%d FAILED" % len(fails) if fails else "all passed")); sys.exit(1 if fails else 0)
+print("all passed" if not fails else str(len(fails)) + " FAILED")
+sys.exit(1 if fails else 0)

@@ -266,4 +266,4 @@ run_reports_cash.js                   240
 run_reports_3cd.js                    180
 run_reports_dcf.py                    300
 run_reports_server.py                 180
-run_reports_ui.py                     300  TDSDESK_SITE=../app/dist-test
+run_reports_step3_ui.py               300  TDSDESK_SITE=../app/dist-test
