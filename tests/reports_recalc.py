@@ -101,7 +101,7 @@ def recalc_python(path):
         return rng(sh, a, b) if b else cell_value(sh, a)
 
     def evaluate(f, sheet):
-        toks = re.findall(r'"(?:[^"]|"")*"|\d+\.?\d*(?:[eE]-?\d+)?|\$?[A-Z]+\$?\d+:\$?[A-Z]+\$?\d+|[A-Za-z_][A-Za-z0-9_.]*|<=|>=|<>|[-+*/^(),=<>]', f)
+        toks = re.findall(r'"(?:[^"]|"")*"|(?:\'[^\']+\'|[A-Za-z_][A-Za-z0-9_]*)!\$?[A-Z]+\$?\d+(?::\$?[A-Z]+\$?\d+)?|\d+\.?\d*(?:[eE]-?\d+)?|\$?[A-Z]+\$?\d+:\$?[A-Z]+\$?\d+|\$?[A-Z]{1,3}\$?\d+(?![A-Za-z0-9_])|[A-Za-z_][A-Za-z0-9_.]*|<=|>=|<>|[-+*/^(),=<>]', f)
         pos = [0]
 
         def peek():
@@ -172,6 +172,9 @@ def recalc_python(path):
             t = take()
             if t == "(":
                 v = cmp_(); take(); return v
+            if "!" in t and not t.startswith('"'):
+                sh, a, b = ref_of(t)
+                return rng(sh, a, b) if b else cell_value(sh, a)
             if t.startswith('"'):
                 return t[1:-1].replace('""', '"')
             if re.match(r"^\d", t):
@@ -227,6 +230,7 @@ def recalc_python(path):
 
 def recalc(path, prefer="libreoffice"):
     """{(sheet, cell): value} worked out independently, and which calculator did it."""
+    prefer = os.environ.get("RX_RECALC", prefer)
     if prefer == "libreoffice":
         try:
             v = recalc_libreoffice(path)

@@ -2164,8 +2164,9 @@ const FSX = (() => {
     return X.docx([{section: {head: ["DRAFT", String((ent || {}).name || "").toUpperCase(), "Valuation of equity shares (DCF) - draft working"]}, items}], {footerNote: "DRAFT - must be issued by a registered valuer / merchant banker"});
   };
   // the history for the DCF from the statements of several years
-  X.histFrom = function(models){
-    return models.map(M => { const V = n => (M.nm[n] || 0) / 100;
+  X.histFrom = function(models, o){
+    const out = (o && o.withPy && models.length ? [Object.assign({py: true}, models[0])] : []).concat(models);
+    return out.map(M0 => { const y = M0.py ? "PY" : "CY", M = M0.py ? Object.assign({}, M0, {fy: String(Number(M0.fy) - 1)}) : M0, V = n => (M.nm[n.replace(/_CY$/, "_" + y)] || 0) / 100;
       return {fy: M.fy, rev: V("L_rev_CY"), ebitda: V("T_pbt_CY") + V("L_fin_CY") + V("L_dep_CY"), dep: V("L_dep_CY"), ebit: V("T_pbt_CY") + V("L_fin_CY"), fin: V("L_fin_CY"), pbt: V("T_pbt_CY"), tax: V("L_tax_CY"), pat: V("T_pat_CY"),
         nwc: V("L_inv_CY") + V("L_tr_CY") + V("L_stla_CY") + V("L_oca_CY") - V("L_tp_CY") - V("L_ocl_CY") - V("L_stp_CY")}; });
   };

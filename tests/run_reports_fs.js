@@ -125,6 +125,10 @@ for (const which of ["company", "firm"]){
   const faceNum = ["Balance Sheet", "Profit and Loss", "Notes"].map(sx).flatMap(numCells), noF = faceNum.filter(m => !/<f>/.test(m[4]));
   ok(faceNum.length > (co ? 400 : 250) && noF.length === 0, "11. Excel: every one of " + faceNum.length + " figures on the statements and notes is a live formula" + (noF.length ? " (" + noF.length + " are not, e.g. " + noF.slice(0, 3).map(m => m[1] + m[2]).join(", ") + ")" : ""));
   ok(/TB_CY/.test(wbx) && /SUMIFS\(TB_CY,TB_LINE/.test(sx("Balance Sheet")), "11. the face goes back to the TB sheet (SUMIFS over TB_CY by line)");
+  // recalculated apart from FinCom (LibreOffice headless when installed, else the Python evaluator; cached values removed)
+  let rcx = ""; try { rcx = require("child_process").execFileSync("python3", ["-W", "ignore", path.join(__dirname, "reports_recalc.py"), path.join(OUT, "reports-" + which + ".xlsx")], {encoding: "utf8", timeout: 300000}); } catch (e){ rcx = String(e.stdout || e.message); }
+  const rcs = [...rcx.matchAll(/(\S+(?: evaluator)?) (\d+) formulas, (\d+) differ/g)];
+  ok(rcs.length >= 1 && rcs.every(m => Number(m[2]) > 200 && m[3] === "0"), "11. the workbook recalculated independently equals FinCom's figures: " + rcs.map(m => m[1] + " " + m[2] + " formulas, " + m[3] + " differ").join("; "));
   const d = unzip(r.files.docx);
   ok(/PAGE/.test(d["word/footer1.xml"]) && /NUMPAGES/.test(d["word/footer1.xml"]) && / \/ /.test(d["word/footer1.xml"]), "11. Word: the footer is PAGE / NUMPAGES");
   ok(/w:orient="landscape"/.test(d["word/document.xml"]) && Object.keys(d).filter(k => /^word\/header\d+\.xml$/.test(k)).length === M.pages.length, "11. Word: a landscape section for the fixed-asset note, a header for every page group");
