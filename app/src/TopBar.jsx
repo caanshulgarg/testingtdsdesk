@@ -21,7 +21,7 @@ import { goTallyPage } from "./parts/HomeLink.jsx";
 import { FinComNav } from "./nav.js";
 import { goTallyCard } from "./parts/TallyChip.jsx";
 
-const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
+const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
 // the Tally ledgers as its tab, and Audit the tie-out with Tally
 const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "From Tally", tieout: "Audit", reports: "Reports", lookup: "Look up",

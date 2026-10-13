@@ -1,0 +1,26 @@
+[
+ {
+  "tax_id": "460000000010030",
+  "tax_name": "Payment to Contractors (Others)",
+  "tax_percentage": 2,
+  "tax_type": "tax",
+  "tax_specific_type": "tds",
+  "tds_section": "Section 194C"
+ },
+ {
+  "tax_id": "460000000010031",
+  "tax_name": "Professional Fees",
+  "tax_percentage": 10,
+  "tax_type": "tax",
+  "tax_specific_type": "tds",
+  "tds_section": "Section 194J"
+ },
+ {
+  "tax_id": "460000000010032",
+  "tax_name": "Rent on Land and Building",
+  "tax_percentage": 10,
+  "tax_type": "tax",
+  "tax_specific_type": "tds",
+  "tds_section": "Section 194I"
+ }
+]

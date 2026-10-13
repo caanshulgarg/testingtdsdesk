@@ -16,6 +16,8 @@ const Route = {
       // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
       if (S.homeTab !== "tally") S.tallyOld = false;
       else if (S.tallyOld) return "#/tally/bridge-1.15";
+      // zoho-books (13-Oct-2026): the Integrations page and each integration's own page (#/integrations/zoho)
+      if (S.homeTab === "integrations") return "#/integrations" + (S.integPage ? "/" + encodeURIComponent(S.integPage) : "");
       return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
@@ -153,6 +155,15 @@ const Route = {
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
       // People and Plan and credit are sections of Settings (clean-up batch 1): their own addresses open them there
       else if (p[0] === "people" || p[0] === "plan"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[0] === "people" ? "account" : "plan"; }
+      else if (p[0] === "integrations"){
+        S.view = "home"; S.homeTab = "integrations"; S.step = null;
+        const sub = String(p[1] || "").split("?")[0];
+        S.integPage = ["zoho"].includes(sub) ? sub : "";
+        // Zoho's sign-in comes back as #/integrations/zoho?grant=<id> (pick the organisation) or ?zoho=<why it stopped>
+        const qs = new URLSearchParams(String(h || "").split("?")[1] || "");
+        if (qs.get("grant")) S.zohoGrant = qs.get("grant");
+        if (qs.get("zoho")) S.zohoBack = qs.get("zoho");
+      }
       else if (["clients", "today", "compliance", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;

@@ -1,0 +1,53 @@
+[
+ {
+  "vendor_credit_id": "460000000010071",
+  "vendor_credit_number": "VC-001",
+  "date": "2026-05-20",
+  "status": "closed",
+  "vendor_id": "460000000010039",
+  "vendor_name": "Kappa Suppliers Pune",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAACK4444K1ZF",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "line_items": [
+   {
+    "line_item_id": "460000000010072",
+    "account_id": "460000000010003",
+    "account_name": "Purchases",
+    "name": "Purchases",
+    "rate": 5000,
+    "quantity": 1,
+    "item_total": 5000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 450
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 450
+   }
+  ],
+  "sub_total": 5000,
+  "total": 5900,
+  "reference_number": "KS/101",
+  "bills": [
+   {
+    "bill_id": "460000000010064",
+    "bill_number": "KS/101",
+    "amount_applied": 5900
+   }
+  ],
+  "last_modified_time": "2026-05-20T10:00:00+0530"
+ }
+]

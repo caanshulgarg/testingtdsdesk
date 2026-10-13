@@ -1,0 +1,19 @@
+{
+ "opening_balance": {
+  "date": "2026-04-01",
+  "accounts": [
+   {
+    "account_id": "460000000010009",
+    "account_name": "HDFC Bank",
+    "debit_or_credit": "debit",
+    "bcy_amount": 500000
+   },
+   {
+    "account_id": "460000000010021",
+    "account_name": "Owner's Capital",
+    "debit_or_credit": "credit",
+    "bcy_amount": 500000
+   }
+  ]
+ }
+}

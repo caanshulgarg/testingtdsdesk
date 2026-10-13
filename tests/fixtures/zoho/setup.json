@@ -1,0 +1,21 @@
+{
+ "_about": "What the CA does in FinCom for the Zoho test organisation (tests/fixtures/zoho), as a person would on its pages: the client's details, what each tax ledger is (the ledger list, Settings -> GST and TDS ledgers), the challan the TDS was paid with. The test applies exactly this; FinCom's own proposals for the same ledgers are reported beside it and must agree.",
+ "client": {"id": "zt", "name": "FinCom Zoho Test Pvt Ltd", "tallyName": "Zoho Books · FinCom Zoho Test Pvt Ltd", "gstin": "27AAACZ1234Z1ZG", "pan": "AAACZ1234Z", "tan": "MUMF01234E"},
+ "ledgers": {
+  "Output CGST": {"what": "gst", "tax": "CGST", "side": "output", "reg": "27"},
+  "Output SGST": {"what": "gst", "tax": "SGST", "side": "output", "reg": "27"},
+  "Output IGST": {"what": "gst", "tax": "IGST", "side": "output", "reg": "27"},
+  "Input CGST": {"what": "gst", "tax": "CGST", "side": "input", "reg": "27"},
+  "Input SGST": {"what": "gst", "tax": "SGST", "side": "input", "reg": "27"},
+  "CGST RCM Payable": {"what": "gst_rcm", "tax": "CGST", "side": "output", "reg": "27"},
+  "SGST RCM Payable": {"what": "gst_rcm", "tax": "SGST", "side": "output", "reg": "27"},
+  "TDS Payable 194C": {"what": "tds_payable", "section": "194C"},
+  "TDS Payable 194J": {"what": "tds_payable", "section": "194J"},
+  "HDFC Bank": {"what": "bank"},
+  "ICICI Bank": {"what": "bank"}
+ },
+ "certs": [],
+ "challans": [
+  {"id": "ch-z1", "form": "26Q", "bsr": "0510308", "serial": "00011", "date": "20260607", "tax": 8000, "interest": 0}
+ ]
+}

@@ -1,0 +1,32 @@
+{
+ "_about": "The answer key for the Zoho test organisation (org/, make_org.py), worked out by hand from the documents (EXPECTED.md shows the sums), not by FinCom's code. GSTR-1 and GSTR-3B for May 2026 (registration 27), 26Q for Q1 of 2026-27, HDFC Bank's balance on 31-May-2026.",
+ "gstr1": {
+  "b2b": [
+   {"ctin": "27AAAFA1111A1ZM", "inum": "INV-001", "val": 118000, "pos": "27", "inv_typ": "R", "rt": 18, "txval": 100000, "iamt": 0, "camt": 9000, "samt": 9000},
+   {"ctin": "07AAACB2222B1ZL", "inum": "INV-002", "val": 236000, "pos": "07", "inv_typ": "R", "rt": 18, "txval": 200000, "iamt": 36000, "camt": 0, "samt": 0},
+   {"ctin": "27AAACG3333G1ZY", "inum": "INV-003", "val": 177000, "pos": "27", "inv_typ": "SEWP", "rt": 18, "txval": 150000, "iamt": 27000, "camt": 0, "samt": 0}
+  ],
+  "b2cl": [{"pos": "24", "inum": "INV-005", "val": 177000, "rt": 18, "txval": 150000, "iamt": 27000}],
+  "b2cs": [
+   {"sply_ty": "INTRA", "pos": "27", "rt": 18, "txval": 40000, "iamt": 0, "camt": 3600, "samt": 3600},
+   {"sply_ty": "INTRA", "pos": "27", "rt": 5, "txval": 10000, "iamt": 0, "camt": 250, "samt": 250}
+  ],
+  "cdnr": [{"ctin": "27AAAFA1111A1ZM", "ntty": "C", "nt_num": "CN-001", "val": 11800, "rt": 18, "txval": 10000, "iamt": 0, "camt": 900, "samt": 900}],
+  "exp": [{"exp_typ": "WOPAY", "inum": "INV-004", "val": 250000, "rt": 0, "txval": 250000}],
+  "doc_issue": [{"doc_num": 1, "from": "INV-001", "to": "INV-008", "totnum": 7, "cancel": 1, "net_issue": 6}, {"doc_num": 5, "from": "CN-001", "to": "CN-001", "totnum": 1, "cancel": 0, "net_issue": 1}]
+ },
+ "gstr3b": {
+  "osup_det": {"txval": 490000, "iamt": 63000, "camt": 11950, "samt": 11950},
+  "osup_zero": {"txval": 400000, "iamt": 27000, "camt": 0, "samt": 0},
+  "isup_rev": {"txval": 50000, "iamt": 0, "camt": 4500, "samt": 4500},
+  "itc_ISRC": {"iamt": 0, "camt": 4500, "samt": 4500},
+  "itc_OTH": {"iamt": 0, "camt": 13140, "samt": 13140},
+  "unreg_details": [{"pos": "24", "txval": 150000, "iamt": 27000}]
+ },
+ "tds26q": [
+  {"party": "Pi Consultants", "pan": "AAAPP7777P", "section": "194J", "date": "20260420", "paid": 60000, "tds": 6000, "rate": 10},
+  {"party": "Omicron Contractors", "pan": "AAACO5555O", "section": "194C", "date": "20260506", "paid": 100000, "tds": 2000, "rate": 2}
+ ],
+ "balances": {"HDFC Bank": -501100, "ICICI Bank": -50000, "Petty Cash": 1180, "TDS Receivable": -2000, "Kappa Suppliers Pune": 0, "Alpha Traders Mumbai": 0},
+ "entries": {"live": 17, "cancelled": 1, "skipped_draft": 1, "skipped_bank_own_document": 1}
+}

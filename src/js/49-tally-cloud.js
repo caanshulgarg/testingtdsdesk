@@ -220,7 +220,7 @@ const TCloud = {
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + fmtDateTime(at) : "not updated yet";
+    return at ? "in step with " + (/^Zoho Books · /.test(String(bk.company || "")) ? "Zoho Books" : "Tally") + " as of " + fmtDateTime(at) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -279,7 +279,7 @@ const TCloud = {
     // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
     let copy = null;
     try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
-    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
     if (!todo.length && !ledNew && !(copy && (copy.changes || !same))) return true;
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
     const say = t => { f.busy = b.busy = t; render(); };
@@ -350,6 +350,12 @@ const TCloud = {
       }
     };
     let seen = c ? c.seen || "" : "", heads;
+    // zoho-books (src/js/74): a Zoho client's copy has no bridge lines to follow; its entries are read again whenever the
+    // cloud says its book changed (tally_books.days_at, moved by every read from Zoho)
+    if (/^Zoho Books · /.test(String(bk.company || ""))){
+      if (!full && c && c.daysAt === (bk.daysAt || "")) return {heads: [], seen, changes: false, daysAt: bk.daysAt || ""};
+      full = true;
+    }
     // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)
     let last = [];
     try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
@@ -365,7 +371,7 @@ const TCloud = {
     // changes: a deleted entry held here, a new entry, a later version (a client opened afresh: all of them)
     const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
     const changes = heads.some(h => h && h.guid && (h.deleted_at ? by.has(h.guid) : BookSrc.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)));
-    return {heads, seen: newest, changes};
+    return {heads, seen: newest, changes, daysAt: bk.daysAt || ""};
   },
   // bridge 2.4.3 (migration 73): the natures of payment Tally keeps (their section, rates and thresholds by date); a cloud
   // without the table leaves what is held
@@ -387,7 +393,7 @@ const TCloud = {
     }
     const n = BookSrc.apply(b, copy.heads, lines, bills);
     const meta = b.meta = b.meta || {};
-    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString()};
+    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
     return n;
   },
   // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload

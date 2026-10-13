@@ -98,7 +98,13 @@ function EinvLogin({ gstin }) {
   return <div data-einv-login={gstin}>
     <H4>E-invoice and e-way bill API user</H4>
     {a ? <p className="note">{gstin}: user <b>{a.username}</b>{a.last_error ? <> · <span className="bad">sign-in failed: {a.last_error}</span></> : a.token_until ? " · signed in" : ""}. Give it again to change it.</p>
-      : <p className="note">Made by the taxpayer on the e-invoice portal (API registration → through GSP → TaxPro). FinCom keeps the password on the firm's server, in Vault.</p>}
+      : <div className="note" data-einv-steps="">The taxpayer makes this user once, on the e-invoice portal:
+        <ol style={{ margin: "4px 0 4px 18px", padding: 0 }}>
+          <li>On einvoice1.gst.gov.in, sign in and go to API Registration → User Credentials → Create API User → Through GSP (an OTP comes to the registered mobile).</li>
+          <li>In the list of GSPs, choose <b>TaxPro</b>, the GSP FinCom uses (the portal names each GSP as it is registered; pick the one for TaxPro).</li>
+          <li>Set a username and a password for the API user.</li>
+          <li>Enter them here. FinCom keeps the password on the firm's server, in Vault.</li>
+        </ol></div>}
     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
       <input type="text" placeholder="API username" aria-label="E-invoice API username" value={u} autoComplete="off" style={{ width: 200 }} onChange={(ev) => setU(ev.target.value)} />
       <input type="password" placeholder="API password" aria-label="E-invoice API password" value={p} autoComplete="new-password" style={{ width: 200 }} onChange={(ev) => setP(ev.target.value)} />
