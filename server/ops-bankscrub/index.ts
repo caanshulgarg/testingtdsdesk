@@ -10,7 +10,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import postgres from "npm:postgres@3.4.4";
 import { unzipSync } from "npm:fflate@0.8.2";
-import { Buffer } from "node:buffer";
 import { parseDay, dropBankDetails } from "../tally-cloud/parse.js";
 
 const ALWAYS = ["ACCOUNTNUMBER", "IFSCODE", "PAYMENTFAVOURING"];
@@ -38,16 +37,11 @@ async function decode(buf: Uint8Array): Promise<{ meta: Meta; text: string } | n
   else if (raw[0] === 0xfe && raw[1] === 0xff) return null;
   else if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) { enc = "utf-8"; bom = true; }
   else enc = raw.length > 1 && raw[1] === 0 && raw[0] !== 0 ? "utf-16le" : "utf-8";
-  if (enc === "utf-16le") { // code units kept exactly (no replacement), BOM taken off
-    const o = raw.byteOffset + (bom ? 2 : 0), n = raw.length - (bom ? 2 : 0);
-    if (n % 2) return null;
-    return { meta: { gz, enc, bom }, text: Buffer.from(raw.buffer, o, n).toString("utf16le") };
-  }
   try { return { meta: { gz, enc, bom }, text: new TextDecoder(enc, { ignoreBOM: false, fatal: true }).decode(raw) }; } catch { return null; }
 }
 async function encode(meta: Meta, text: string) {
   let body: Uint8Array;
-  if (meta.enc === "utf-16le") body = new Uint8Array(Buffer.from(text, "utf16le"));
+  if (meta.enc === "utf-16le") { const w = new Uint16Array(text.length); for (let i = 0; i < text.length; i++) w[i] = text.charCodeAt(i); body = new Uint8Array(w.buffer); } // little-endian host
   else body = new TextEncoder().encode(text);
   if (meta.bom) { const p = meta.enc === "utf-16le" ? [0xff, 0xfe] : [0xef, 0xbb, 0xbf]; const b = new Uint8Array(p.length + body.length); b.set(p); b.set(body, p.length); body = b; }
   return meta.gz ? await gzip(body) : body;
