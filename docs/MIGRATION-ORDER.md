@@ -410,3 +410,12 @@ rate_worked_out and exempt false until their entry is read again). **L3, timing:
 (ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, .SUBCATEGORYALLOCATION.*) on FinComVoucherByNumber and the time 62's
 `tally_ingest_details` adds per entry are NOT measured here; both are to be measured in the 2.4.0 gate (real Tally, and
 staging after 62), the allow-list rows staying "not yet measured" until then.
+
+zoho-books (13-Oct-2026, the owner's "Zoho first, then Busy"; FinCom reads and posts): `server/zoho-books/migration-75-zoho-books.sql`
+runs after 74 (staging ... -> 72 -> 73 -> 74 -> 75; a fresh database the same). Add-only, one transaction, `lock_timeout` 10 s, no
+"delete from", nothing dropped, safe twice; every function new (zoho_*), none replacing another; the three `source` columns
+(tally_books, tally_vouchers, tally_ledgers) default 'tally'. It calls 48/56/57's `tally_ingest_entries` (5 arguments) and 44's
+`tally_ledger_day_rebuild`, and needs Vault (`vault.create_secret`) and pgcrypto in `extensions`. Then
+`migration-75b-zoho-cron-staging.sql` (staging only: the pg_cron job `zoho-books-sync`, every 5 minutes, posting only when an
+organisation is due; live needs its own URL). Deploy order: 75, then the zoho-books function, then 75b. Tested on pg_stand:
+`tests/run_migration75.py`, `tests/run_zoho_server.py`.

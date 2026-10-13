@@ -26,10 +26,10 @@ select id from storage.buckets order by 1;
 ```
 
 The list below starts after Build 199. It follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which
-`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **66 files to run; 31 is listed but skipped (the owner's decision of 10-Oct-2026)**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
+`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files to run (76 added 13-Oct-2026); 31 is listed but skipped (the owner's decision of 10-Oct-2026)**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
 `gst-taxpro/schema.sql`, 1.1.1) if live has no `gst_sessions` table: its header says "apply the same on live before
 gst-taxpro goes there". Run it before step 13 (16 alters `gst_sessions`).
-Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's is the same on tax-accuracy and on branch `perms-61`.
+Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's is the same on tax-accuracy and on branch `perms-61`; 76's is the file on branch `db-speed` (commit 76c65c4b0).
 Folders are under `server/`. "GO-LIVE COPY" means the original names staging's web address in a pg_cron job, so live
 runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DATA": see the dry runs in 1.1.2.
 
@@ -102,6 +102,7 @@ runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DA
 | 65 | 64 | `tally-cloud/migration-64-pages-live.sql` | `0a91d37ab313331399dffdaf677de9e6` |  |
 | 66 | 65 | `tally-cloud/migration-65-selfchecks.sql` | `51a224cf8e00b7a46da42da4694e8993` |  |
 | 67 | 66 | `tally-cloud/migration-66-recorder-masters.sql` | `fea953435146ec8bdc3e77c5808e1714` |  |
+| 68 | 76 | `tally-cloud/migration-76-db-speed.sql` | `20b9530ee8d84c627ae2d905cb97ff8b` | from branch `db-speed` (commit 76c65c4b0; the md5 is that file's, the same text staging ran on 13-Oct-2026 18:18 UTC). Speed only: an index on each unindexed foreign key, the six policies of auth_rls_initplan made again with `(select auth.uid())` (otherwise identical), `id` primary keys on `tally_lines` / `tally_bills`. Drops nothing but those six policies, which it makes again in the same transaction. Needs the tables of steps up to 59 (68) only. If 72-75 join this list, run it after them, as on staging. Read back on live: the 16 indexes (18 where 75 has run), the six policies' text, the two primary keys; the performance advisor then shows 0 unindexed_foreign_keys and 0 auth_rls_initplan |
 
 - Some files contain the words "delete from". In 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the
 migration itself removes no rows. Only 23 deletes rows when it runs: it deletes `tally_ledger_day` rows and builds the

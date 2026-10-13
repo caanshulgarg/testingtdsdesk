@@ -15,16 +15,16 @@ import { FinComNav } from "./nav.js";
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
 import { ArrowLeftRight, BookOpen, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
-  Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
+  Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
   TrendingUp, Users, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis };
+  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate" };
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal" };
 
 function Item({ icon, label, on, count, onClick, title, bar }) {
   const Icon = ICONS[icon] || LayoutDashboard;
@@ -57,14 +57,19 @@ function tree() {
       { icon: "compliance", label: "Compliance", on: t === "compliance", go: () => navHome("compliance"), bar: true, title: "Returns and payments due, every client" },
       { icon: "clients", label: "Clients", on: t === "clients", go: () => navHome("clients"), bar: true },
       { icon: "books", label: "Tally", on: t === "tally", go: () => { S.tallyFocus = ""; navHome("tally"); }, bar: true },
+      // zoho-books (13-Oct-2026): Tally, Zoho Books and what comes next, one page (src/js/74, screens/Integrations.jsx)
+      { icon: "integrations", label: "Integrations", on: t === "integrations", go: () => goIntegrations(""), title: "Tally, Zoho Books and other books" },
       // People and Plan and credit are sections of Settings (and the firm menu's own items)
       { icon: "settings", label: "Settings", on: t === "rules", go: () => goSettings(null), title: "The firm's settings, people, plan and credit" },
     ]], ["sep", [help]]];
   }
   const st = open.stats || {}, mod = inCo ? docType() : "", setup = inCo && isSetupTab(S.tab), bt = inCo && S.tab === "books" ? booksTab() : "";
   const work = inCo && !setup && !["dash", "clientInbox", "txn", "books"].includes(S.tab);
+  // ui-tidy (13-Oct-2026; the owner: "still it is very confusing where is the client"): Clients first, in the sidebar and
+  // the phone's bar, from inside a client too (was "All clients" at the foot)
   return [
-    [null, [{ icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
+    [null, [{ icon: "clients", label: "Clients", on: false, go: () => navHome("clients"), bar: true, title: "Every client: find one, open it" },
+      { icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
     ["Bring in", [
       { icon: "inbox", label: "Inbox", on: inCo && S.tab === "clientInbox", count: docqCount(open.id), go: () => goClient("inbox"), title: "Documents that arrived for this client" },
       // the client's Tally data (Day Book, masters, balances) and its Tally ledgers, a tab of the same page
@@ -74,7 +79,7 @@ function tree() {
       { icon: "bills", label: "Purchase", count: st.drafts || 0, go: () => goClient("bills"), bar: true, on: work && mod === "bills" },
       { icon: "bank", label: "Bank", on: work && mod === "bank", go: () => goClient("bank"), bar: true,
         count: S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0 },
-      { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales"), bar: true },
+      { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales") },
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
     ]],
     ["Returns", [
@@ -92,7 +97,6 @@ function tree() {
     ]],
     ["sep", [
       { icon: "setup", label: "Client setup", on: setup, go: () => { if (!setup) toggleSetup(); }, title: "This client's company, suppliers, Tally and ledgers" },
-      { icon: "clients", label: "All clients", on: false, go: () => navHome("clients") },
       help,
     ]],
   ];

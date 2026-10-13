@@ -1,0 +1,25 @@
+[
+ {
+  "payment_id": "460000000010073",
+  "payment_number": "RCPT-1",
+  "date": "2026-05-25",
+  "customer_id": "460000000010033",
+  "customer_name": "Alpha Traders Mumbai",
+  "amount": 104200,
+  "bank_charges": 0,
+  "tax_amount_withheld": 2000,
+  "account_id": "460000000010009",
+  "account_name": "HDFC Bank",
+  "payment_mode": "banktransfer",
+  "reference_number": "UTR123",
+  "invoices": [
+   {
+    "invoice_id": "460000000010045",
+    "invoice_number": "INV-001",
+    "amount_applied": 104200,
+    "tax_amount_withheld": 2000
+   }
+  ],
+  "last_modified_time": "2026-05-25T10:00:00+0530"
+ }
+]

@@ -1,0 +1,21 @@
+[
+ {
+  "payment_id": "460000000010074",
+  "payment_number": "PAY-1",
+  "date": "2026-05-26",
+  "vendor_id": "460000000010039",
+  "vendor_name": "Kappa Suppliers Pune",
+  "amount": 53100,
+  "paid_through_account_id": "460000000010009",
+  "paid_through_account_name": "HDFC Bank",
+  "reference_number": "UTR456",
+  "bills": [
+   {
+    "bill_id": "460000000010064",
+    "bill_number": "KS/101",
+    "amount_applied": 53100
+   }
+  ],
+  "last_modified_time": "2026-05-26T10:00:00+0530"
+ }
+]

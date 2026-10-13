@@ -1,0 +1,170 @@
+[
+ {
+  "account_id": "460000000010001",
+  "account_name": "Sales",
+  "account_type": "income",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010002",
+  "account_name": "Sales - Services",
+  "account_type": "income",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010003",
+  "account_name": "Purchases",
+  "account_type": "cost_of_goods_sold",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010004",
+  "account_name": "Professional Fees",
+  "account_type": "expense",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010005",
+  "account_name": "Contract Charges",
+  "account_type": "expense",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010006",
+  "account_name": "Rent",
+  "account_type": "expense",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010007",
+  "account_name": "Legal Fees",
+  "account_type": "expense",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010008",
+  "account_name": "Office Expenses",
+  "account_type": "expense",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010009",
+  "account_name": "HDFC Bank",
+  "account_type": "bank",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010010",
+  "account_name": "ICICI Bank",
+  "account_type": "bank",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010011",
+  "account_name": "Petty Cash",
+  "account_type": "cash",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010012",
+  "account_name": "Accounts Receivable",
+  "account_type": "accounts_receivable",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010013",
+  "account_name": "Accounts Payable",
+  "account_type": "accounts_payable",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010014",
+  "account_name": "Output CGST",
+  "account_type": "other_current_liability",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010015",
+  "account_name": "Output SGST",
+  "account_type": "other_current_liability",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010016",
+  "account_name": "Output IGST",
+  "account_type": "other_current_liability",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010017",
+  "account_name": "Input CGST",
+  "account_type": "other_current_asset",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010018",
+  "account_name": "Input SGST",
+  "account_type": "other_current_asset",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010019",
+  "account_name": "Input IGST",
+  "account_type": "other_current_asset",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010020",
+  "account_name": "TDS Receivable",
+  "account_type": "other_current_asset",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ },
+ {
+  "account_id": "460000000010021",
+  "account_name": "Owner's Capital",
+  "account_type": "equity",
+  "is_active": true,
+  "account_code": "",
+  "last_modified_time": "2026-03-31T10:00:00+0530"
+ }
+]

@@ -46,6 +46,9 @@ with sync_playwright() as p:
     pg.locator("#misPl button.linkbtn").filter(has_text=led).first.click(); pg.wait_for_timeout(500)
     ok(led in pg.inner_text("#app") and "Narration" in pg.inner_text("#app").title(), "a ledger opens to its vouchers: " + led)
     pg.screenshot(path=OUT + "/mis-pl.png", full_page=False)
+    # ui-tidy (13-Oct-2026): the ledger's entries open in the drawer beside the profit and loss; Esc closes it
+    ok(pg.locator('[data-detail="misLed"]').count() == 1, "a ledger's entries open in the drawer beside the profit and loss")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
     pg.click('nav[aria-label="MIS"] button:text-is("Receivables")'); pg.wait_for_timeout(500)
     pg.select_option('select[aria-label="Which parties"]', "90"); pg.wait_for_timeout(400)
     rows = pg.locator("#misAge > tbody > tr").count()

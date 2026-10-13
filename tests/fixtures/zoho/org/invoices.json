@@ -1,0 +1,404 @@
+[
+ {
+  "invoice_id": "460000000010045",
+  "invoice_number": "INV-001",
+  "date": "2026-05-02",
+  "due_date": "2026-05-17",
+  "status": "sent",
+  "customer_id": "460000000010033",
+  "customer_name": "Alpha Traders Mumbai",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAAFA1111A1ZM",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010044",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 100000,
+    "quantity": 1,
+    "item_total": 100000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 9000
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 9000
+   }
+  ],
+  "sub_total": 100000,
+  "tax_total": 18000,
+  "total": 118000,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-02T10:00:00+0530",
+  "created_time": "2026-05-02T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010047",
+  "invoice_number": "INV-002",
+  "date": "2026-05-03",
+  "due_date": "2026-05-18",
+  "status": "sent",
+  "customer_id": "460000000010034",
+  "customer_name": "Beta Industries Delhi",
+  "gst_treatment": "business_gst",
+  "gst_no": "07AAACB2222B1ZL",
+  "place_of_supply": "DL",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010046",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 200000,
+    "quantity": 1,
+    "item_total": 200000,
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_amount": 36000
+   }
+  ],
+  "sub_total": 200000,
+  "tax_total": 36000,
+  "total": 236000,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-03T10:00:00+0530",
+  "created_time": "2026-05-03T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010049",
+  "invoice_number": "INV-003",
+  "date": "2026-05-05",
+  "due_date": "2026-05-20",
+  "status": "sent",
+  "customer_id": "460000000010035",
+  "customer_name": "Gamma SEZ Unit",
+  "gst_treatment": "business_sez",
+  "gst_no": "27AAACG3333G1ZY",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010048",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 150000,
+    "quantity": 1,
+    "item_total": 150000,
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_amount": 27000
+   }
+  ],
+  "sub_total": 150000,
+  "tax_total": 27000,
+  "total": 177000,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-05T10:00:00+0530",
+  "created_time": "2026-05-05T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010051",
+  "invoice_number": "INV-004",
+  "date": "2026-05-06",
+  "due_date": "2026-05-21",
+  "status": "sent",
+  "customer_id": "460000000010036",
+  "customer_name": "Euro Imports GmbH",
+  "gst_treatment": "overseas",
+  "gst_no": "",
+  "place_of_supply": "",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010050",
+    "account_id": "460000000010002",
+    "account_name": "Sales - Services",
+    "name": "Sales - Services",
+    "rate": 250000,
+    "quantity": 1,
+    "item_total": 250000,
+    "tax_id": "",
+    "tax_name": "",
+    "tax_percentage": 0,
+    "hsn_or_sac": "998314",
+    "product_type": "service",
+    "tax_exemption_code": "export"
+   }
+  ],
+  "taxes": [],
+  "sub_total": 250000,
+  "tax_total": 0,
+  "total": 250000,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-06T10:00:00+0530",
+  "created_time": "2026-05-06T09:00:00+0530",
+  "billing_address": {
+   "country": "Germany"
+  }
+ },
+ {
+  "invoice_id": "460000000010053",
+  "invoice_number": "INV-005",
+  "date": "2026-05-07",
+  "due_date": "2026-05-22",
+  "status": "sent",
+  "customer_id": "460000000010037",
+  "customer_name": "Retail Customer Gujarat",
+  "gst_treatment": "consumer",
+  "gst_no": "",
+  "place_of_supply": "GJ",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010052",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 150000,
+    "quantity": 1,
+    "item_total": 150000,
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010024",
+    "tax_name": "IGST18",
+    "tax_amount": 27000
+   }
+  ],
+  "sub_total": 150000,
+  "tax_total": 27000,
+  "total": 177000,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-07T10:00:00+0530",
+  "created_time": "2026-05-07T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010056",
+  "invoice_number": "INV-006",
+  "date": "2026-05-08",
+  "due_date": "2026-05-23",
+  "status": "sent",
+  "customer_id": "460000000010038",
+  "customer_name": "Walkin Pune",
+  "gst_treatment": "consumer",
+  "gst_no": "",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010054",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 40000,
+    "quantity": 1,
+    "item_total": 40000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   },
+   {
+    "line_item_id": "460000000010055",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 10000,
+    "quantity": 1,
+    "item_total": 10000,
+    "tax_id": "460000000010029",
+    "tax_name": "GST5",
+    "tax_percentage": 5,
+    "hsn_or_sac": "1006",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 3600
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 3600
+   },
+   {
+    "tax_id": "460000000010025",
+    "tax_name": "CGST2.5",
+    "tax_amount": 250
+   },
+   {
+    "tax_id": "460000000010026",
+    "tax_name": "SGST2.5",
+    "tax_amount": 250
+   }
+  ],
+  "sub_total": 50000,
+  "tax_total": 7700,
+  "total": 57700,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-08T10:00:00+0530",
+  "created_time": "2026-05-08T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010058",
+  "invoice_number": "INV-007",
+  "date": "2026-05-09",
+  "due_date": "2026-05-24",
+  "status": "draft",
+  "customer_id": "460000000010033",
+  "customer_name": "Alpha Traders Mumbai",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAAFA1111A1ZM",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010057",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 5000,
+    "quantity": 1,
+    "item_total": 5000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 450
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 450
+   }
+  ],
+  "sub_total": 5000,
+  "tax_total": 900,
+  "total": 5900,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-09T10:00:00+0530",
+  "created_time": "2026-05-09T09:00:00+0530"
+ },
+ {
+  "invoice_id": "460000000010060",
+  "invoice_number": "INV-008",
+  "date": "2026-05-10",
+  "due_date": "2026-05-25",
+  "status": "void",
+  "customer_id": "460000000010033",
+  "customer_name": "Alpha Traders Mumbai",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAAFA1111A1ZM",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010059",
+    "account_id": "460000000010001",
+    "account_name": "Sales",
+    "name": "Sales",
+    "rate": 7000,
+    "quantity": 1,
+    "item_total": 7000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 630
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 630
+   }
+  ],
+  "sub_total": 7000,
+  "tax_total": 1260,
+  "total": 8260,
+  "reference_number": "",
+  "is_discount_before_tax": true,
+  "discount_amount": 0,
+  "adjustment": 0,
+  "last_modified_time": "2026-05-10T10:00:00+0530",
+  "created_time": "2026-05-10T09:00:00+0530"
+ }
+]

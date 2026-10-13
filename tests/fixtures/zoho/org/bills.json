@@ -1,0 +1,195 @@
+[
+ {
+  "bill_id": "460000000010064",
+  "bill_number": "KS/101",
+  "date": "2026-05-04",
+  "due_date": "2026-05-24",
+  "status": "open",
+  "vendor_id": "460000000010039",
+  "vendor_name": "Kappa Suppliers Pune",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAACK4444K1ZF",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010063",
+    "account_id": "460000000010003",
+    "account_name": "Purchases",
+    "name": "Purchases",
+    "rate": 50000,
+    "quantity": 1,
+    "item_total": 50000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "8471",
+    "product_type": "goods"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 4500
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 4500
+   }
+  ],
+  "sub_total": 50000,
+  "tax_total": 9000,
+  "total": 59000,
+  "reference_number": "",
+  "adjustment": 0,
+  "tds_tax_id": "",
+  "tds_amount": 0,
+  "last_modified_time": "2026-05-04T10:00:00+0530"
+ },
+ {
+  "bill_id": "460000000010066",
+  "bill_number": "MU/7",
+  "date": "2026-05-05",
+  "due_date": "2026-05-25",
+  "status": "open",
+  "vendor_id": "460000000010040",
+  "vendor_name": "Mu Advocates",
+  "gst_treatment": "business_none",
+  "gst_no": "",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": true,
+  "line_items": [
+   {
+    "line_item_id": "460000000010065",
+    "account_id": "460000000010007",
+    "account_name": "Legal Fees",
+    "name": "Legal Fees",
+    "rate": 50000,
+    "quantity": 1,
+    "item_total": 50000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "998212",
+    "product_type": "service"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 4500
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 4500
+   }
+  ],
+  "sub_total": 50000,
+  "tax_total": 9000,
+  "total": 50000,
+  "reference_number": "",
+  "adjustment": 0,
+  "tds_tax_id": "",
+  "tds_amount": 0,
+  "last_modified_time": "2026-05-05T10:00:00+0530"
+ },
+ {
+  "bill_id": "460000000010068",
+  "bill_number": "OC/55",
+  "date": "2026-05-06",
+  "due_date": "2026-05-26",
+  "status": "open",
+  "vendor_id": "460000000010041",
+  "vendor_name": "Omicron Contractors",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAACO5555O1ZX",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010067",
+    "account_id": "460000000010005",
+    "account_name": "Contract Charges",
+    "name": "Contract Charges",
+    "rate": 100000,
+    "quantity": 1,
+    "item_total": 100000,
+    "tax_id": "460000000010028",
+    "tax_name": "GST18",
+    "tax_percentage": 18,
+    "hsn_or_sac": "995411",
+    "product_type": "service"
+   }
+  ],
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9",
+    "tax_amount": 9000
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9",
+    "tax_amount": 9000
+   }
+  ],
+  "sub_total": 100000,
+  "tax_total": 18000,
+  "total": 116000,
+  "reference_number": "",
+  "adjustment": 0,
+  "tds_tax_id": "460000000010030",
+  "tds_amount": 2000,
+  "last_modified_time": "2026-05-06T10:00:00+0530"
+ },
+ {
+  "bill_id": "460000000010070",
+  "bill_number": "PC/9",
+  "date": "2026-04-20",
+  "due_date": "2026-04-28",
+  "status": "open",
+  "vendor_id": "460000000010042",
+  "vendor_name": "Pi Consultants",
+  "gst_treatment": "business_none",
+  "gst_no": "",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "place_of_supply": "MH",
+  "is_reverse_charge_applied": false,
+  "line_items": [
+   {
+    "line_item_id": "460000000010069",
+    "account_id": "460000000010004",
+    "account_name": "Professional Fees",
+    "name": "Professional Fees",
+    "rate": 60000,
+    "quantity": 1,
+    "item_total": 60000,
+    "tax_id": "",
+    "tax_name": "",
+    "tax_percentage": 0,
+    "hsn_or_sac": "998222",
+    "product_type": "service"
+   }
+  ],
+  "taxes": [],
+  "sub_total": 60000,
+  "tax_total": 0,
+  "total": 54000,
+  "reference_number": "",
+  "adjustment": 0,
+  "tds_tax_id": "460000000010031",
+  "tds_amount": 6000,
+  "last_modified_time": "2026-04-20T10:00:00+0530"
+ }
+]

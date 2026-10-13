@@ -19,6 +19,9 @@ import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults, F16Link } from "./tds/Files.jsx";
 import More from "../parts/More.jsx";
 import { Return24Tally } from "./tds/Payroll.jsx";
+import Filters, { Search } from "../parts/Filters.jsx";
+import { barSelects } from "../parts/FilterBar.jsx";
+import { Answer, Info } from "../parts/Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -42,23 +45,15 @@ function TallyDiffs({ kind }) {
     </ul></section>;
 }
 
-// the bar above a return's table: find, choices, how many shown, print, Excel
+// the bar above a return's table: the one filter bar (Filters.jsx): month, the other choices, find, Clear; then how many
+// are shown, print, Excel
 function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] }) {
   const f = (S.tdsFl || {})[tab] || {};
-  return (
-    <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }}>
-      <input type="search" value={f.q || ""} placeholder={placeholder} aria-label={placeholder} style={{ width: 260, flex: "0 0 auto" }} data-fk={"tdsf-" + tab}
-        onChange={(ev) => tdsFilter(tab, "q", ev.target.value, true)} />
-      {selects.map((sel) => (
-        <select key={sel.key} style={{ width: "auto", flex: "0 1 auto", maxWidth: "100%" }} aria-label={sel.label || sel.key} value={f[sel.key] || ""} onChange={(ev) => tdsFilter(tab, sel.key, ev.target.value)}>
-          {sel.options.map(([v, l], i) => <option key={i} value={v}>{l}</option>)}
-        </select>))}
-      <span className="note">{count || ""}</span>
-      {Object.keys(f).some((k) => f[k]) && <button className="linkbtn" onClick={() => tdsFilterClear(tab)}>Clear filters</button>}
-      <button className="btn small" onClick={() => printTable(table, title)}>Print or save as PDF</button>
-      {excel && <button className="btn small" onClick={() => doAct(excel)}>Excel</button>}
-    </div>
-  );
+  const { period, type } = barSelects(selects, f, (k, v) => tdsFilter(tab, k, v));
+  return <Filters className="revfilter" label={"Filter " + title} period={period} type={type}
+    search={<Search value={f.q} placeholder={placeholder} data-fk={"tdsf-" + tab} onChange={(v) => tdsFilter(tab, "q", v, true)} />}
+    onClear={() => tdsFilterClear(tab)} active={Object.keys(f).some((k) => f[k])} count={count || ""}
+    tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable(table, title)], excel && ["Excel", () => doAct(excel)]]} />} />;
 }
 
 function Tabs({ tabs }) {
@@ -106,8 +101,12 @@ export function YearChallans({ fy, q }) {
   const rows = TDS.rows().filter((r) => r.fy === fy && r.q === q), allRows = TDS.rows();
   const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
   const title = CO().name + " " + TDS.formName("26Q", fy) + " " + q + " " + fy;
+  // ui-tidy (13-Oct-2026): the answer first: the quarter's challans, what they paid, what is used and left (the same figures
+  // as the list's foot); then the one main button, Upload challans; the suggestions and the list below
+  const tax = r2(ch.reduce((a, c) => a + num(c.tax), 0)), used = r2(ch.reduce((a, c) => a + (use[c.id] || 0), 0));
   return <div data-year-challans={fy + "|" + q}>
-    <Upload />
+    <Answer label="Challans key figures" data-challans-answer="" figs={[["Challans, " + q, String(ch.length), fy], ["Tax paid", money(tax)], ["Used", money(used)], ["Left", money(r2(tax - used)), "", tax - used < -0.5 ? "bad" : ""]]} />
+    <Upload main={!TDSCH.proposals(fy, q, "26Q").some((p) => p.exact)} />
     <Suggest fy={fy} q={q} form="26Q" />
     <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
     <p className="note" style={{ marginTop: 10 }}>Salary, non-resident and TCS challans are tagged on {TDS.formShort("24Q", fy)}, {TDS.formShort("27Q", fy)} and {TDS.formShort("27EQ", fy)}’s own returns.</p>
@@ -163,8 +162,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
     .filter((p) => TDSTally.notChallan(p, allCh));
   return <>
     <TallyDiffs kind="challan" />
-    {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books</h3>
-      <p className="note">TDS payment vouchers in Tally for this quarter, proposed as challans. Give each its CIN (or BSR code and serial) to confirm it. Uploaded challans of the same date and amount are matched to them on their own.</p>
+    {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books <Info label="About these payments">TDS payment vouchers in Tally for this quarter, proposed as challans. Give each its CIN (or BSR code and serial) to confirm it. Uploaded challans of the same date and amount are matched to them on their own.</Info></h3>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="">
         <thead><tr><th>Date</th><th className="n">Tax</th><th className="n">Interest and fee</th><th>Sections</th><th>Voucher</th><th>BSR code or CIN</th><th>Serial</th><th className="ac"></th></tr></thead>
         <tbody>{pays.map((p) => <PayRow key={p.vid} p={p} />)}</tbody>
@@ -202,20 +200,21 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
 // The owner's choice: the challans read from the portal's Payment History or receipt PDFs (Upload challans), and the
 // tagging proposed from Tally's bill-wise details or by section and month, each confirmed by a person (TDSCH, src/js/65).
 // Nothing here works out a figure: the proposals, the amounts left and the refusals are TDSCH's.
-function Upload() {
+// main: the tab's one main button, unless a suggestion is ready to confirm (then that is)
+function Upload({ main = true }) {
   const ref = useRef(null);
   return <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }} data-challan-upload-bar="">
-    <button className="btn small primary" onClick={() => ref.current && ref.current.click()}>Upload challans</button>
+    <button className={"btn small" + (main ? " primary" : "")} onClick={() => ref.current && ref.current.click()}>Upload challans</button>
     <input ref={ref} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf"
       onChange={(ev) => { const f = Array.from(ev.target.files || []); ev.target.value = ""; TDSCH.upload(f); }} />
-    <span className="note">The e-filing portal’s Payment History (CSV or Excel) or challan receipt PDFs, many at once. Each challan’s CIN, section and amounts are read, and the tagging is suggested below.</span>
+    <Info label="What can be uploaded">The e-filing portal’s Payment History (CSV or Excel) or challan receipt PDFs, many at once. Each challan’s CIN, section and amounts are read, and the tagging is suggested below.</Info>
   </div>;
 }
 
 const gapTag = (p) => p.exact ? <span className="tag ok">Exact</span>
   : p.gap < 0 ? <span className="tag bad">{money(-p.gap)} short</span> : <span className="tag warn">{money(p.gap)} more on the challan</span>;
 
-function Proposal({ p, fy, open, setOpen }) {
+function Proposal({ p, fy, open, setOpen, main }) {
   const [off, setOff] = useState({});
   const ticked = p.rows.filter((r) => !off[r.id]), sum = r2(ticked.reduce((a, r) => a + r.tds, 0)), over = sum - p.avail > 0.005;
   const months = p.months.map((m) => monthName(m)).join(", "), n = p.rows.length, lab = TDSCH.label(p.challan);
@@ -227,7 +226,7 @@ function Proposal({ p, fy, open, setOpen }) {
       <span className="note">→ challan {lab} · {money(p.avail)} {p.avail === num(p.challan.tax) ? "" : "left "}{(p.interest || p.fee) ? "· interest " + money(p.interest) + (p.fee ? ", fee " + money(p.fee) : "") + " apart" : ""}</span>
       {gapTag(p)}
       <span className="tch-act">
-        {p.exact ? <button className="btn small primary" onClick={() => tdsConfirm(p.id)}>Confirm {n} deduction{n === 1 ? "" : "s"} to challan {lab}</button>
+        {p.exact ? <button className={"btn small" + (main ? " primary" : "")} onClick={() => tdsConfirm(p.id)}>Confirm {n} deduction{n === 1 ? "" : "s"} to challan {lab}</button>
           : <button className="btn small" aria-expanded={open} onClick={() => setOpen(open ? "" : p.id)}>{open ? "Close" : "Review"}</button>}
       </span>
     </div>
@@ -251,10 +250,10 @@ function Suggest({ fy, q, form }) {
   const props = TDSCH.proposals(fy, q, form), exact = props.filter((p) => p.exact).length, [open, setOpen] = useState("");
   return <section className="dash-card tch-card" style={{ marginBottom: 12 }} data-challan-suggest="">
     <div className="rp-title"><h3>Suggested tagging</h3>
-      <span className="note">From Tally’s bill-wise details where the TDS payment has them, else by section and month. Nothing is tagged until you confirm.</span></div>
+      <Info label="How tagging is suggested">From Tally’s bill-wise details where the TDS payment has them, else by section and month. Nothing is tagged until you confirm.</Info></div>
     {props.length ? <>
       {exact > 1 && <div className="row" style={{ marginBottom: 8 }}><button className="btn small primary" onClick={() => tdsConfirmAll()}>Confirm all exact ({exact})</button></div>}
-      <ul className="tch-list">{props.map((p) => <Proposal key={p.id} p={p} fy={fy} open={open === p.id} setOpen={setOpen} />)}</ul></>
+      <ul className="tch-list">{props.map((p) => <Proposal key={p.id} p={p} fy={fy} open={open === p.id} setOpen={setOpen} main={exact === 1 && p.exact} />)}</ul></>
       : <p className="note">No suggestion now: the deductions are against challans, or no challan fits them. Upload challans{form === "24Q" ? "" : ", or tick deductions under Entries and tag them"}.</p>}
   </section>;
 }

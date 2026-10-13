@@ -1,10 +1,11 @@
 """python3 run_nav_clean.py - clean-up batch 1, "Find your way" (11-Oct-2026; the owner: "clean… anyone would love to
 work in FinCom"), used as a person would, on the fixture books (tests/fixtures/books):
 
-  1. the firm's sidebar: Today · Compliance · Clients · Tally · Settings · Help, Today lit on Today (and on the firm's
+  1. the firm's sidebar: Today · Compliance · Clients · Tally · Integrations (zoho-books) · Settings · Help, Today lit on Today (and on the firm's
      Inbox, opened from Today), People and Plan and credit as Settings' sections (and the firm menu's items);
-  2. a client's sidebar: Overview / Bring in: Inbox · From Tally / Work: Purchase · Bank · Sales · Transactions /
-     Returns: TDS · GST / Books: Reports · MIS · Accounts · Audit · Look up · Letters / Client setup · All clients · Help;
+  2. a client's sidebar: Clients · Overview / Bring in: Inbox · From Tally / Work: Purchase · Bank · Sales · Transactions /
+     Returns: TDS · GST / Books: Reports · MIS · Accounts · Audit · Look up · Letters / Client setup · Help (ui-tidy,
+     13-Oct-2026: Clients first, from inside a client too, and in the phone's bar; was All clients at the foot);
   3. each page's title is its sidebar word (Overview, From Tally, TDS, GST, Audit, Tally, Settings, …); the Tally ledgers
      are a tab of From Tally, the tie-out a tab of Audit;
   4. old addresses still open their page: …/dash, …/books/import, …/books/ledgers, …/books/tieout, #/settings/account;
@@ -56,12 +57,12 @@ try:
 
         print("1. the firm's sidebar")
         E("navHome('today')"); W(1200)
-        ok(side() == ["Today", "Compliance", "Clients", "Tally", "Settings", "Help"], "firm: Today · Compliance · Clients · Tally · Settings · Help (%s)" % side())
+        ok(side() == ["Today", "Compliance", "Clients", "Tally", "Integrations", "Settings", "Help"], "firm: Today · Compliance · Clients · Tally · Integrations · Settings · Help (%s)" % side())
         ok(lit() == ["Today"] and title() == "Today", "Today is lit on Today, and titled Today (%s)" % lit())
         pg.screenshot(path=os.path.join(OUT, "desk-firm-today.png"))
         E("navHome('inbox')"); W(600)
         ok(lit() == ["Today"], "the firm's Inbox (opened from Today's To read) lights Today")
-        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
+        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Integrations", "#/integrations", "Integrations"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
             pg.click('#side .side-link[data-side="%s"]' % label); W(900)
             ok(E("location.hash") == want_hash and title() == want_title and lit() == [label], "%s: %s, titled %s, lit (%s, %s, %s)" % (label, want_hash, want_title, E("location.hash"), title(), lit()))
         # People and Plan and credit: Settings' sections, and the firm menu's
@@ -78,7 +79,8 @@ try:
 
         print("2. a client's sidebar and its titles")
         E("(c) => openCompany(c)", cid); W(800); E("() => { S.books = window.__bk; goClient('dash'); }"); W(1000)
-        want = ["Overview", "Inbox", "From Tally", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "All clients", "Help"]
+        # ui-tidy (13-Oct-2026): Clients first (was All clients at the foot)
+        want = ["Clients", "Overview", "Inbox", "From Tally", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"]
         ok(side() == want, "client: the tree in order (%s)" % side())
         ok(groups() == ["Bring in", "Work", "Returns", "Books"], "groups: Bring in · Work · Returns · Books (%s)" % groups())
         ok("TDS & GST" not in side() and "Dashboard" not in side(), "no TDS & GST, no Dashboard")
@@ -165,13 +167,14 @@ try:
         ok(bar() == ["Today", "Compliance", "Clients", "Tally", "More"], "firm bar: Today · Compliance · Clients · Tally · More (%s)" % bar())
         ph.screenshot(path=os.path.join(OUT, "phone-firm-today.png"))
         E2("(c) => openCompany(c).then(() => { S.books = window.__bk; goClient('dash'); })", cid); W2(1200)
-        ok(bar() == ["Overview", "Purchase", "Bank", "Sales", "More"], "client bar: Overview · Purchase · Bank · Sales · More (%s)" % bar())
+        # ui-tidy (13-Oct-2026): Clients in the client's bar too; Sales under More
+        ok(bar() == ["Clients", "Overview", "Purchase", "Bank", "More"], "client bar: Clients · Overview · Purchase · Bank · More (%s)" % bar())
         sw = E2("document.documentElement.scrollWidth - document.documentElement.clientWidth")
         ok(sw <= 0, "no sideways scroll (%s)" % sw)
         ph.screenshot(path=os.path.join(OUT, "phone-client-bar.png"))
         ph.click("#side .side-more"); W2(600)
         sheet = E2("[...document.querySelectorAll('[data-side-sheet] .side-link')].map(e => e.dataset.side)")
-        ok(sheet == ["Inbox", "From Tally", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "All clients", "Help"], "More: the rest, in order (%s)" % sheet)
+        ok(sheet == ["Inbox", "From Tally", "Sales", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"], "More: the rest, in order (%s)" % sheet)
         ph.screenshot(path=os.path.join(OUT, "phone-more-sheet.png"))
         ph.click('[data-side-sheet] .side-link[data-side="GST"]'); W2(1200)
         ok(E2("booksTab()") == "gst" and ph.locator("[data-side-sheet]").count() == 0, "a page from More opens, and the sheet closes")

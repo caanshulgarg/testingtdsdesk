@@ -28,6 +28,8 @@ import { TieOut, Limits, Correction } from "./tds/Smart.jsx";
 import { Recon26, TracesFiles, TracesDefaults } from "./tds/Files.jsx";
 import Salary from "./tds/Payroll.jsx";
 import "../parts/returns.css";
+import Filters, { Field } from "../parts/Filters.jsx";
+import { Answer } from "../parts/Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 export const Q_MONTHS = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -76,30 +78,29 @@ function Bar({ fys }) {
   const fy = S.tdsFy, v = S.tdsView, sec = tdsSecOf(v);
   const q = v === "return" || v === "year" || v === "challans" ? S.tdsQ || "" : "", form = v === "return" ? S.tdsForm || "26Q" : v === "year" ? S.tdsPickForm || "" : "";
   const setFy = (x) => { if (sec === "returns") tdsPick(x, q, form); else { S.tdsFy = x; Smart.keep("tds", { fy: x, q: S.tdsQ || "" }); render(); } };
-  return (
-    <div className="tg-bar" role="group" aria-label="Choose the return" data-tds-bar="">
-      <label className="rp-f">{TDS.yearWord(fy)}
+  // ui-tidy (13-Oct-2026): the one filter bar (parts/Filters.jsx): the year and quarter, then the form; More at its end
+  return <Filters className="tg-bar" label="Choose the return" data-tds-bar=""
+    period={<>
+      <Field label={TDS.yearWord(fy)}>
         <select aria-label="Year" value={fy} onChange={(ev) => setFy(ev.target.value)}>
-          {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></label>
-      {(sec === "returns" || sec === "challans") && <label className="rp-f">Quarter
+          {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></Field>
+      {(sec === "returns" || sec === "challans") && <Field label="Quarter">
         <select aria-label="Quarter" value={q} onChange={(ev) => (sec === "challans" ? (S.tdsQ = ev.target.value || "Q1", render()) : tdsPick(fy, ev.target.value, form))}>
           {sec === "returns" && <option value="">Every quarter</option>}
-          {["Q1", "Q2", "Q3", "Q4"].map((x) => <option key={x} value={x}>{x} · {Q_MONTHS[x]}</option>)}</select></label>}
-      {sec === "returns" && <label className="rp-f">Form
-        <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
-          <option value="">Every form</option>
-          {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></label>}
-      {sec === "returns" && v !== "return" && <span className="tg-right">
-        <More items={[
+          {["Q1", "Q2", "Q3", "Q4"].map((x) => <option key={x} value={x}>{x} · {Q_MONTHS[x]}</option>)}</select></Field>}
+    </>}
+    type={sec === "returns" ? <Field label="Form">
+      <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
+        <option value="">Every form</option>
+        {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></Field> : null}
+    onClear={sec === "returns" && v !== "return" ? () => tdsPick(fy, "", "") : null} active={!!(q || form)}
+    tools={sec === "returns" && v !== "return" ? <More items={[
           ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
           AIH.enabled("notices") && ["Notices", () => tdsNav("notices"), { "data-tds-more": "notices" }],
           ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
           ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24")],
           ["Download the whole year", () => doAct("yearExcelAll")],
-        ]} />
-      </span>}
-    </div>
-  );
+        ]} /> : null} />;
 }
 
 // every year with TDS in the books, a salary sheet or a challan
@@ -182,7 +183,13 @@ function Year() {
   const yearTotal = { "26Q": money(qs.reduce((a, x) => a + x.tds, 0)), "24Q": money(qs.reduce((a, x) => a + x.salaryTds, 0)),
     "27Q": money(qs.reduce((a, x) => a + x.nr.tds, 0)), "27EQ": money(qs.reduce((a, x) => a + x.tcs.tds, 0)) };
   const forms = S.tdsPickForm ? [S.tdsPickForm] : FORMS, quarters = S.tdsQ ? [S.tdsQ] : ["Q1", "Q2", "Q3", "Q4"];
-  return <section className="dash-card" data-tds-grid={fy}>
+  // ui-tidy (13-Oct-2026): the answer first: each form's year, its figure from the grid's Year column, and its returns by status
+  const says = (k) => { const n = { filed: 0, bad: 0, ready: 0 }; quarters.forEach((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; if (c && n[c.st] != null) n[c.st]++; });
+    return [n.bad && n.bad + " to fix", n.ready && n.ready + " ready", n.filed && n.filed + " filed"].filter(Boolean).join(" · ") || "nothing yet"; };
+  const tone = (k) => quarters.some((q) => (all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k] || {}).st === "bad") ? "warn" : "";
+  return <>
+  <Answer label={"TDS " + fy + " key figures"} data-tds-answer={fy} figs={forms.slice(0, 4).map((k) => [TDS.formShort(k, fy), yearTotal[k], says(k), tone(k)])} />
+  <section className="dash-card" data-tds-grid={fy}>
     <div className="rp-title"><h3>{TDS.yearWord(fy)} {fy}</h3>
       <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, the old form in brackets." : "Forms of the Income-tax Act, 1961."} Open a return from its cell.</span></div>
     <div className="bk-tablewrap"><table className="rp-grid gf-off">
@@ -197,7 +204,7 @@ function Year() {
     </table></div>
     <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready</span>
       <span style={{ "--k": "var(--bad)" }}>Errors to fix</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
-  </section>;
+  </section></>;
 }
 
 // the first day of a quarter of a year ("2026-27", "Q2" → 20260701), and of the year when no quarter is chosen
@@ -260,7 +267,7 @@ export default function Tds({ b }) {
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
   const none = !had.length && (sec === "returns" || sec === "challans" || sec === "checks") && v !== "notices" && !Payroll.has("");
-  return <>
+  return <div data-phone-scroll="" data-tds-page="">
     {/* the ledgers still to confirm: said once, on Returns (round 46), not on every tab */}
     {sec === "returns" && <LedgerBanner b={b} which="tds" />}
     <Head />
@@ -278,5 +285,5 @@ export default function Tds({ b }) {
       : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
       : notRead ? notRead
       : <Year />}
-  </>;
+  </div>;
 }

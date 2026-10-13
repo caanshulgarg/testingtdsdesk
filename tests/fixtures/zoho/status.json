@@ -1,0 +1,17 @@
+{
+ "_about": "zoho_status() as a member of the firm reads it (migration 75), for the Integrations page tests: the shape run_zoho_server.py checks on the stand database. CLIENT is replaced by the test's client id. The canary fields (token, refresh_token, client_secret) are NOT what zoho_status sends: they are planted here so the test proves the page never draws an unknown field.",
+ "grants": [
+  {"id": "g-0001", "at": "2026-10-13T05:00:00Z", "tokenUntil": "2026-10-13T06:00:00Z", "revoked": false, "error": null,
+   "orgs": [{"id": "60012345678", "name": "FinCom Zoho Test Pvt Ltd", "gstin": "27AAACZ1234Z1ZG", "plan": "Free", "cap": 1000},
+            {"id": "60099999999", "name": "Another Org of the same user", "gstin": "", "plan": "Standard", "cap": 2000}],
+   "token": "1000.canarycanarycanarycanary1234.abcdefabcdefabcdef0123", "refresh_token": "1000.refreshcanary00000000000000000.ffffeeeeddddcccc", "client_secret": "secret-canary-not-shown"}
+ ],
+ "connections": [
+  {"id": "c-0001", "org": "60012345678", "orgName": "FinCom Zoho Test Pvt Ltd", "gstin": "27AAACZ1234Z1ZG", "client": "CLIENT", "book": "b-0001", "status": "connected",
+   "linkedAt": "2026-10-13T05:01:00Z", "lastSync": "2026-10-13T05:30:00Z", "nextSync": "2026-10-13T05:45:00Z", "fullCheck": "2026-10-13T05:01:00Z",
+   "error": null, "errorAt": null, "cap": 1000, "from": "2025-04-01", "hook": false, "hookAt": null, "tokenUntil": "2026-10-13T06:00:00Z", "callsToday": 37, "entries": 17,
+   "posts": {"posted": 2, "errors": 1},
+   "log": [{"at": "2026-10-13T05:30:00Z", "kind": "sync", "message": "", "counts": {"entries": 3}}, {"at": "2026-10-13T05:01:00Z", "kind": "full", "message": "", "counts": {"entries": 17, "gone": 0}}],
+   "accessToken": "1000.accesscanary1111111111111111111.aaaabbbbccccdddd"}
+ ]
+}

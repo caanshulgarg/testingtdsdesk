@@ -12,9 +12,10 @@ import SCREENS from "./screens/index.js";
 import PageSkeleton from "./parts/PageSkeleton.jsx";
 import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
+import ClientStrip from "./parts/ClientStrip.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
-  Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
+  Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
 
 // something wrong with reading bills on this computer
 function ClientInbox() {
@@ -43,7 +44,7 @@ function Screen() {
     return <Export />;
   }
   const t = S.homeTab;
-  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "rules" ? <FirmSettings /> : <Clients />;
+  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "integrations" ? <Integrations /> : t === "rules" ? <FirmSettings /> : <Clients />;
 }
 
 // the bar at the foot of a client's bank, sales or bills
@@ -64,6 +65,8 @@ export default function Main({ v }) {
     {/* round 3 (05-Oct-2026): no warnings on the pages; the credit, the storage, the self-test and Tally's alerts are in
         the bell in the top bar (parts/Bell.jsx, AlertHub in src/js/63-alerts.js) */}
     {/* a client's status tabs, the first thing on the page (were a second row of the header: stability batch 1) */}
+    {/* ui-tidy: the client's own pages and its Tally chip, first on every page of a client */}
+    {company && <Guard name="the client strip" v={v} quiet><ClientStrip /></Guard>}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}

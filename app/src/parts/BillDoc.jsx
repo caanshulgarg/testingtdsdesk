@@ -26,33 +26,36 @@ export default function BillDoc({ e }) {
     return () => { gone = true; if (url) URL.revokeObjectURL(url); };
   }, [e.id, e.docPath]);
   const url = doc ? doc.url : prev, pdf = !!(doc && doc.pdf);
-  if (!url) {
-    if (state === "loading") return <div className="prevbox"><Loading what="the bill" lines={4} /></div>;
-    if (e.fileName === "Manual entry") return null;
-    return <div className="prevbox"><p className="note" style={{ margin: 0 }}>{e.docPath
+  if (!url && state !== "loading" && e.fileName === "Manual entry") return null;
+  // ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): the document's place is the same size
+  // from the first frame (its bar, then the page or image filling the rest), so nothing moves when the PDF arrives; the
+  // PDF viewer is drawn once and only changes on a zoom or a page turn
+  const z = (d) => setZoom((v) => Math.min(300, Math.max(50, v + d)));
+  const isPdf = pdf || (!url && /\.pdf$/i.test(e.fileName || ""));
+  const bar = <div className="row billdoc-bar" style={{ gap: 6, flexWrap: "wrap" }}>
+    <b style={{ fontSize: 13 }}>{isPdf ? "Bill (PDF)" : "Bill image"}</b>
+    <Button className="btn small" aria-label="Zoom out" disabled={!url} onClick={() => z(-25)}>−</Button>
+    <span className="note" style={{ minWidth: 40, textAlign: "center" }}>{zoom}%</span>
+    <Button className="btn small" aria-label="Zoom in" disabled={!url} onClick={() => z(25)}>+</Button>
+    {isPdf && <>
+      <Button className="btn small" aria-label="Previous page" disabled={!url || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Page</Button>
+      <span className="note">page {page}</span>
+      <Button className="btn small" aria-label="Next page" disabled={!url} onClick={() => setPage((p) => p + 1)}>Page ›</Button>
+    </>}
+    {url && <a className="linkbtn" href={url} target="_blank" rel="noopener">Open in a new tab</a>}
+  </div>;
+  let area;
+  if (!url) area = state === "loading" ? <div className="billdoc-wait"><Loading what="the bill" lines={4} /></div>
+    : <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>{e.docPath
       ? "The bill's document could not be opened from the firm account. Check you are signed in, then open the bill again."
       : "No copy of this bill is kept in the firm account (it was read before documents were kept, or the firm keeps documents off). Upload it again to keep it."}</p></div>;
-  }
-  const z = (d) => setZoom((v) => Math.min(300, Math.max(50, v + d)));
+  // an iframe, not <object>: the page's security policy has object-src 'none' and frame-src 'self' blob:
+  else if (pdf) area = <iframe key={page + ":" + zoom} src={url + "#page=" + page + "&zoom=" + zoom} title="The bill" />;
+  else area = <div className="billdoc-img"><img className="preview" src={url} alt="The bill" style={{ maxHeight: "none", maxWidth: "none", width: zoom + "%", border: 0 }} /></div>;
   return (
-    <div className="prevbox billdoc">
-      <div className="row" style={{ gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-        <b style={{ fontSize: 13 }}>{pdf ? "Bill (PDF)" : "Bill image"}</b>
-        <Button className="btn small" aria-label="Zoom out" onClick={() => z(-25)}>−</Button>
-        <span className="note" style={{ minWidth: 40, textAlign: "center" }}>{zoom}%</span>
-        <Button className="btn small" aria-label="Zoom in" onClick={() => z(25)}>+</Button>
-        {pdf && <>
-          <Button className="btn small" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Page</Button>
-          <span className="note">page {page}</span>
-          <Button className="btn small" aria-label="Next page" onClick={() => setPage((p) => p + 1)}>Page ›</Button>
-        </>}
-        <a className="linkbtn" href={url} target="_blank" rel="noopener">Open in a new tab</a>
-      </div>
-      {pdf
-        // an iframe, not <object>: the page's security policy has object-src 'none' and frame-src 'self' blob:
-        ? <iframe key={page + ":" + zoom} src={url + "#page=" + page + "&zoom=" + zoom} title="The bill" style={{ width: "100%", height: "75vh", border: "1px solid var(--rule)", borderRadius: 4 }} />
-        : <div style={{ overflow: "auto", maxHeight: "75vh", border: "1px solid var(--rule)", borderRadius: 4, background: "#fff" }}>
-            <img className="preview" src={url} alt="The bill" style={{ maxHeight: "none", maxWidth: "none", width: zoom + "%", border: 0 }} /></div>}
+    <div className="prevbox billdoc" data-bill-doc={url ? (pdf ? "pdf" : "image") : state || "none"}>
+      {bar}
+      <div className="billdoc-area">{area}</div>
     </div>
   );
 }
