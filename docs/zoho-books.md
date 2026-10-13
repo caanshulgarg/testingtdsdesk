@@ -19,6 +19,25 @@ Posting has the same safeguards as posting to Tally:
 - Each entry ends as Posted, or as an Error in Zoho's own words.
 - FinCom sends no PUT and no DELETE. It creates only bills, expenses, journals and parties.
 
+## On staging (13-Oct-2026)
+
+- **Migration 75** was run on staging on 13-Oct-2026. File md5 `8d97596410a732522de77bb8f75ce4a6`. It was run twice on
+  pg_stand first (`tests/run_migration75.py`).
+  - Method: the committed file at 5279ae45b was fetched into `fincom_migration_text` (key `75-8d975964`), its md5 checked,
+    and the file run as one transaction.
+  - Read back: all 31 `zoho_*` function bodies have the same fingerprint as on the test database
+    (`e2eba64b212875d826d0c9ff4706eb94`). There are 10 `zoho_*` tables, the `source` columns are there, and every existing
+    entry reads `tally`.
+- **zoho-books function, version 1.** It is a pinned import of `server/zoho-books/index.ts` at commit 5279ae45b, as
+  tally-ingest v51 is. `verify_jwt` is off, because the function checks every caller itself. Probes:
+  - no sign-in: 401;
+  - a wrong cron key: 401;
+  - an unknown OAuth state: back to `#/integrations/zoho?zoho=expired`;
+  - an unknown webhook token: 404;
+  - the cron key from Vault: `{"ok":true,"skipped":"not set up"}`, because the owner's Zoho client id and secret are not set yet.
+- **Migration 75b** (md5 `9192cadeac2fdafed375421d2d499b57`) was run on staging. The pg_cron job `zoho-books-sync` runs
+  every 5 minutes. It posts only when an organisation is due.
+
 ## For the owner: setting it up (about 15 minutes)
 
 ### 1. Make FinCom's Zoho API client (once, for the firm)
