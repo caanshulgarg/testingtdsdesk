@@ -160,7 +160,7 @@ export function handler(deps: Deps) {
     const upload = async (bytes: Uint8Array, fileName: string, kind: string) => {
       const id = crypto.randomUUID(), name = safeName(fileName).replace(/\.(xlsx|docx|pdf|zip)$/i, "") + "." + kind;
       const path = firm + "/" + (clientId ? clientId.replace(/[^A-Za-z0-9_-]/g, "_") : "_firm") + "/files/" + id + "." + kind;
-      const up = await doFetch(URL_ + "/storage/v1/object/" + BUCKET + "/" + path, { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": MIME[kind] || "application/octet-stream", "x-upsert": "true" }, body: bytes });
+      const up = await doFetch(URL_ + "/storage/v1/object/" + BUCKET + "/" + path, { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": MIME[kind] || "application/octet-stream", "x-upsert": "true" }, body: bytes as unknown as BodyInit });
       await up.text();
       if (!up.ok) return null;
       const row = (await rest("/rest/v1/assistant_files", SERVICE, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ id, firm_id: firm, client_id: clientId, path, name, kind, bytes: bytes.length, made_by: user.id }) })) as any[];

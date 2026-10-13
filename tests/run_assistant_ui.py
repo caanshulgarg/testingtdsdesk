@@ -95,7 +95,7 @@ try:
     # the function's npm packages are fetched first (on a fresh CI machine this takes a while), then it is started
     pre = subprocess.run([DENO, "cache", "tests/assistant_fnserve.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
     if pre.returncode: print(pre.stdout[-2000:] + pre.stderr[-2000:])
-    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "tests/assistant_fnserve.ts", str(FN_PORT)], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "tests/assistant_fnserve.ts", str(FN_PORT)], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     t0, line, seen = time.time(), "", []
     while time.time() - t0 < 300:
         line = fn.stdout.readline()

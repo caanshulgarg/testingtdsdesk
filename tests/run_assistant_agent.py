@@ -26,7 +26,7 @@ try:
     srv = SUPA.start(db, port)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:%d" % port, NO_COLOR="1")
     if os.path.exists("/root/.ccr/ca-bundle.crt"): env.setdefault("DENO_CERT", "/root/.ccr/ca-bundle.crt")
-    r = subprocess.run([DENO, "test", "--allow-net", "--allow-read", "--allow-env", "server/assistant/assistant_test.ts", "server/assistant/router_test.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+    r = subprocess.run([DENO, "test", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "server/assistant/assistant_test.ts", "server/assistant/router_test.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
     out = r.stdout + r.stderr
     for line in out.splitlines():
         if (" ... ok" in line or " ... FAILED" in line) and "=>" not in line: print("   ", line.strip())
@@ -44,7 +44,7 @@ const ev = (await res.text()).split("\n\n").filter((x) => x.startsWith("data: ")
 console.log(JSON.stringify({ called, err: ev.find((e) => e.t === "error"), done: ev.find((e) => e.t === "done") }));
 """
     p = os.path.join(ROOT, "tests", "out", "cap_check.ts"); os.makedirs(os.path.dirname(p), exist_ok=True); open(p, "w").write(capt.replace("./server/", "../../server/"))
-    r2 = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", p], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
+    r2 = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", p], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
     j = json.loads((r2.stdout.strip().splitlines() or ["{}"])[-1]) if r2.returncode == 0 else {}
     if r2.returncode: print(r2.stdout[-2000:] + r2.stderr[-3000:])
     ok(j.get("called") == 0 and (j.get("err") or {}).get("kind") == "cap" and "cap" not in str((j.get("err") or {}).get("message", "x")).lower().split("limit")[0][:0] and "₹150" in (j.get("err") or {}).get("message", ""),
