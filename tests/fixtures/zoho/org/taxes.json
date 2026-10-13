@@ -1,0 +1,82 @@
+[
+ {
+  "tax_id": "460000000010022",
+  "tax_name": "CGST9",
+  "tax_percentage": 9,
+  "tax_type": "tax",
+  "tax_specific_type": "cgst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010023",
+  "tax_name": "SGST9",
+  "tax_percentage": 9,
+  "tax_type": "tax",
+  "tax_specific_type": "sgst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010024",
+  "tax_name": "IGST18",
+  "tax_percentage": 18,
+  "tax_type": "tax",
+  "tax_specific_type": "igst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010025",
+  "tax_name": "CGST2.5",
+  "tax_percentage": 2.5,
+  "tax_type": "tax",
+  "tax_specific_type": "cgst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010026",
+  "tax_name": "SGST2.5",
+  "tax_percentage": 2.5,
+  "tax_type": "tax",
+  "tax_specific_type": "sgst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010027",
+  "tax_name": "IGST5",
+  "tax_percentage": 5,
+  "tax_type": "tax",
+  "tax_specific_type": "igst",
+  "is_value_added": false
+ },
+ {
+  "tax_id": "460000000010028",
+  "tax_name": "GST18",
+  "tax_percentage": 18,
+  "tax_type": "tax_group",
+  "taxes": [
+   {
+    "tax_id": "460000000010022",
+    "tax_name": "CGST9"
+   },
+   {
+    "tax_id": "460000000010023",
+    "tax_name": "SGST9"
+   }
+  ]
+ },
+ {
+  "tax_id": "460000000010029",
+  "tax_name": "GST5",
+  "tax_percentage": 5,
+  "tax_type": "tax_group",
+  "taxes": [
+   {
+    "tax_id": "460000000010025",
+    "tax_name": "CGST2.5"
+   },
+   {
+    "tax_id": "460000000010026",
+    "tax_name": "SGST2.5"
+   }
+  ]
+ }
+]

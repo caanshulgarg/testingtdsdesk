@@ -190,8 +190,11 @@ const Bridge = {
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     // build 199: Tally on another computer: through the queue in the cloud
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    // zoho-books (13-Oct-2026): a client whose books come from Zoho Books posts there (src/js/74), not to a Tally company
+    if (typeof ZohoB === "object" && coP && ZohoB.on() && !ZohoB.st.data) { try { await ZohoB.load(); } catch (e){} }
+    const viaZoho = typeof ZohoB === "object" && ZohoB.isZoho(coP);
     // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
-    const notAllowed = postToProblem(coP, payload.company);
+    const notAllowed = viaZoho ? "" : postToProblem(coP, payload.company);
     if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
     // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,
     // and nothing is sent until it is confirmed
@@ -203,6 +206,7 @@ const Bridge = {
       if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     }
     const words = o => { [].concat(o.results || []).forEach(x => { if (x && x.ok && postAltered(x)) x.altered = Math.max(1, num(x.altered)); if (x) x.word = postWord(x); }); return o; };
+    if (viaZoho){ const outZ = await ZohoB.post(coP, payload, onProgress); outZ.results = [].concat(outZ.results || []).concat(refused); return words(outZ); }
     // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
     // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
     // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards

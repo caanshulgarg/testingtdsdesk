@@ -173,7 +173,11 @@ const TAGS = {
   route: (v) => (scrubRoute(v) === v ? v : undefined),
   install: (v) => (/^[0-9a-f]{32}$/.test(v) ? v : undefined),       // the random per-install id
   firm: (v) => (/^[0-9a-f]{12}$/.test(v) ? v : undefined),          // a hash of the firm's id, never the id
-  kind: (v) => (/^[a-z][a-z_]{0,30}$/.test(v) ? v : undefined),     // tally-ingest's request kind (beat, posts_update, ...)
+  kind: (v) => (/^[a-z][a-z_]{0,30}$/.test(v) || v === "assistant-mismatch" || v === "user-report" ? v : undefined),     // tally-ingest's request kind (beat, posts_update, ...); FinCom Assistant's two
+  // FinCom Assistant's mismatch events (13-Oct-2026): the book tool (a code name) and the firm and client as hashes, never ids
+  tool: (v) => (/^[a-z][a-z0-9_]{0,40}$/.test(v) ? v : undefined),
+  firm_id: (v) => (/^[0-9a-f]{12}$/.test(v) ? v : undefined),
+  client_id: (v) => (/^[0-9a-f]{12}$/.test(v) ? v : undefined),
   // a fixed place in the code: a snake_case name (light_check, tally_ingest: set by the code, never data; release-240 M3
   // keeps snake_case out of free text only), or words the scrubber keeps
   where: (v) => (/^[a-z]+(?:_[a-z]+){0,3}$/.test(v) || (/^[a-z][a-z0-9_ .:-]{0,60}$/.test(v) && scrubText(v) === v) ? v : undefined),
@@ -226,6 +230,21 @@ export function scrubEvent(e) {
     if (Object.keys(x).length) ctx[k] = x;
   }
   if (Object.keys(ctx).length) o.contexts = ctx;
+  // FinCom Assistant's mismatch events only: their grouping (kind, the figure's key, the tool: code names) and, in extra,
+  // the mismatch row's id (a uuid) and the entries' ids (Tally GUIDs); nothing else of extra, ever
+  const ak = tags.kind === "assistant-mismatch" || tags.kind === "user-report";
+  if (ak && Array.isArray(e.fingerprint) && e.fingerprint.length === 3 && e.fingerprint.every((f) => typeof f === "string" && /^[a-z][a-z0-9_.\[\]-]{0,60}$/.test(f))) o.fingerprint = e.fingerprint.slice();
+  if (ak && e.extra && typeof e.extra === "object") {
+    const x = {};
+    if (typeof e.extra.mismatch_id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(e.extra.mismatch_id)) x.mismatch_id = e.extra.mismatch_id;
+    const ids = Array.isArray(e.extra.entry_ids) ? e.extra.entry_ids.filter((g) => typeof g === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-[0-9a-f]{8})?$/i.test(g)).slice(0, 50) : [];
+    if (ids.length) x.entry_ids = ids;
+    if (Object.keys(x).length) o.extra = x;
+  }
+  if (ak && typeof o.message === "string") {
+    const mm = typeof e.message === "string" ? e.message.match(/^(Assistant mismatch|Assistant answer reported wrong): ([a-z][a-z0-9_.\[\]]{0,60})$/) : null;
+    if (mm) o.message = mm[1] + ": " + mm[2];
+  }
   const sdk = e.sdk || {};
   o.sdk = { name: typeof sdk.name === "string" && /^sentry\.[a-z.]{1,40}$/.test(sdk.name) ? sdk.name : "sentry.javascript.fincom",
     version: typeof sdk.version === "string" && /^[0-9][0-9A-Za-z.+-]{0,30}$/.test(sdk.version) ? sdk.version : "0", settings: { infer_ip: "never" } };

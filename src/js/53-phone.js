@@ -8,7 +8,9 @@ const PHONE = typeof matchMedia === "function" ? matchMedia("(max-width:600px)")
 function cardLabels(root){
   if (!PHONE || !PHONE.matches || typeof document === "undefined") return;
   (root || document.getElementById("app") || document).querySelectorAll("table").forEach(t => {
-    if (t.classList.contains("nocards") || !t.tHead || !t.tHead.rows.length) return;
+    // ui-tidy (13-Oct-2026): on the TDS, GST, MIS, Reports and Compliance pages a table keeps its columns and scrolls
+    // sideways in its own box ([data-phone-scroll], app/src/styles/tidy.css)
+    if (t.classList.contains("nocards") || !t.tHead || !t.tHead.rows.length || t.closest("[data-phone-scroll]")){ if (t.classList.contains("cards") && t.closest("[data-phone-scroll]")) t.classList.remove("cards"); return; }
     const heads = []; [...t.tHead.rows[t.tHead.rows.length - 1].cells].forEach(c => { const n = c.colSpan || 1, txt = (c.getAttribute("aria-label") || c.textContent || "").replace(/[▲▼⇅↑↓]/g, "").trim(); for (let i = 0; i < n; i++) heads.push(txt); });
     [...t.tBodies].forEach(b => [...b.rows].forEach(r => { let i = 0; [...r.cells].forEach(c => { const want = c.colSpan > 1 ? "" : (heads[i] || ""); if (c.getAttribute("data-label") !== want) c.setAttribute("data-label", want); i += c.colSpan || 1; }); }));
     if (!t.classList.contains("cards")) t.classList.add("cards");

@@ -93,3 +93,19 @@ Deno.test("parseStack: V8 frames, oldest first, no folders", () => {
   const f = parseStack("Error: x\n    at a (file:///var/tmp/sb-compile-edge-runtime/tally-cloud/index.ts:10:5)\n    at file:///home/priya/x/parse.js:3:1\n    at new Foo (ext:core/01.ts:1:2)");
   assert(f.length === 3 && f[2].function === "a" && f[2].lineno === 10 && f[2].colno === 5 && f[0].function === "new Foo", JSON.stringify(f));
 });
+
+Deno.test("FinCom Assistant's mismatch: one event, grouped by figure and tool, ids only; nothing off staging", async () => {
+  const { r, sent, settle } = stand({ SUPABASE_URL: STAGING });
+  r.mismatch("assistant-mismatch", { figureKey: "rcm.summary.tax", tool: "rcm", id: "9a8b7c6d-1e2f-4a3b-8c4d-5e6f7a8b9c0d", entries: ["5f1c0d2a-7b3e-4c9a-9e21-3d8f6a0b4c71-00000060"], firm: FIRM, client: "alpha-traders" });
+  await settle();
+  assert(sent.length === 1, "one event (" + sent.length + ")");
+  const ev = items(sent[0].body)[2];
+  assert(ev.message === "Assistant mismatch: rcm.summary.tax" && JSON.stringify(ev.fingerprint) === '["assistant-mismatch","rcm.summary.tax","rcm"]', "title and grouping: " + JSON.stringify(ev));
+  assert(ev.tags.kind === "assistant-mismatch" && ev.tags.tool === "rcm" && /^[0-9a-f]{12}$/.test(ev.tags.firm_id) && /^[0-9a-f]{12}$/.test(ev.tags.client_id), "tags with hashes");
+  assert(JSON.stringify(Object.keys(ev.extra).sort()) === '["entry_ids","mismatch_id"]', "extra: ids only");
+  assert(leaks(sent[0].body).length === 0 && !sent[0].body.includes("alpha-traders"), "no business data, no client id");
+  const off = stand({ SUPABASE_URL: OTHER });
+  off.r.mismatch("assistant-mismatch", { figureKey: "rcm.summary.tax", tool: "rcm", id: "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab", entries: [] });
+  await off.settle();
+  assert(off.sent.length === 0, "nothing off staging");
+});

@@ -1,0 +1,30 @@
+[
+ {
+  "journal_id": "460000000010076",
+  "entry_number": "JV-1",
+  "journal_date": "2026-05-31",
+  "reference_number": "",
+  "notes": "May rent payable",
+  "status": "published",
+  "line_items": [
+   {
+    "line_id": "460000000010077",
+    "account_id": "460000000010006",
+    "account_name": "Rent",
+    "debit_or_credit": "debit",
+    "amount": 75000
+   },
+   {
+    "line_id": "460000000010078",
+    "account_id": "460000000010013",
+    "account_name": "Accounts Payable",
+    "debit_or_credit": "credit",
+    "amount": 75000,
+    "customer_id": "460000000010043",
+    "customer_name": "Sigma Landlord"
+   }
+  ],
+  "total": 75000,
+  "last_modified_time": "2026-05-31T10:00:00+0530"
+ }
+]

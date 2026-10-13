@@ -66,7 +66,7 @@ export function cloudReporter(o: Opts) {
   try { host = new URL(String(env("SUPABASE_URL") || "")).hostname; } catch { host = ""; }
   const on = host === STAGING_REF + ".supabase.co" && String(env("FINCOM_SENTRY") || "").toLowerCase() !== "off";
   const dsn = new URL(o.dsn || CLOUD_DSN);
-  const key = dsn.username, project = dsn.pathname.replace(/^\//, "");
+  const key = dsn.username, key_ = key, project = dsn.pathname.replace(/^\//, "");
   const ingest = dsn.protocol + "//" + dsn.host + "/api/" + project + "/envelope/";
   let minute = 0, sentThisMinute = 0;
   const lastSeen = new Map<string, number>();
@@ -108,6 +108,46 @@ export function cloudReporter(o: Opts) {
     } catch { /* never in the way of the function */ }
   }
 
+  // FinCom Assistant (13-Oct-2026): one event per mismatch between a figure the AI stated and the books, or per answer a
+  // user marked wrong. Only code names and ids go: the kind, the figure's key (tool.field, never its words), the tool,
+  // the firm and the client as hashes, and in extra the mismatch row's id and the entries' ids. Never an amount, a name
+  // or any text (the user's note stays in the database). Grouped by kind, figure key and tool.
+  function mismatch(kind: "assistant-mismatch" | "user-report", m: { figureKey: string, tool: string, id: string, entries: string[], firm?: string, client?: string }): void {
+    if (!on) return;
+    try {
+      const now = Date.now(), mm = Math.floor(now / 60000);
+      if (mm !== minute) { minute = mm; sentThisMinute = 0; }
+      if (sentThisMinute >= PER_MINUTE) return;
+      sentThisMinute++;
+      const code = (s: string) => (/^[a-z][a-z0-9_.\[\]]{0,60}$/.test(s) ? s : "other");
+      waitUntil((async () => {
+        const firm = typeof m.firm === "string" && /^[0-9a-f-]{36}$/.test(m.firm) ? await hash12(m.firm) : undefined;
+        const client = typeof m.client === "string" && m.client ? await hash12("client:" + m.client) : undefined;
+        const key = code(m.figureKey), tool = code(m.tool);
+        const raw = {
+          event_id: hex32(), timestamp: now / 1000, platform: "javascript", level: kind === "user-report" ? "warning" : "error", release: o.release, environment: SENTRY_ENVIRONMENT,
+          message: (kind === "user-report" ? "Assistant answer reported wrong: " : "Assistant mismatch: ") + key,
+          fingerprint: [kind, key, tool],
+          tags: { kind, tool, firm, firm_id: firm, client_id: client, where: "assistant" },
+          extra: { mismatch_id: m.id, entry_ids: (m.entries || []).slice(0, 50) },
+          contexts: { runtime: { name: "deno", version: String(deno?.version?.deno || "") } },
+          sdk: { name: "sentry.javascript.fincom-cloud", version: "1.0.0" },
+        };
+        const ev = scrubEvent(raw);
+        if (!ev) return;
+        const body = JSON.stringify({ event_id: ev.event_id, sent_at: new Date(now).toISOString(), dsn: o.dsn || CLOUD_DSN, sdk: { name: ev.sdk.name, version: ev.sdk.version } }) + "\n" +
+          JSON.stringify({ type: "event" }) + "\n" + JSON.stringify(ev) + "\n";
+        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 5000);
+        try {
+          await doFetch(ingest, { method: "POST", body, signal: ctl.signal, headers: {
+            "Content-Type": "application/x-sentry-envelope",
+            "X-Sentry-Auth": "Sentry sentry_version=7, sentry_key=" + key_ + ", sentry_client=fincom-cloud/1.0.0",
+          } });
+        } finally { clearTimeout(t); }
+      })().catch(() => { /* let go */ }));
+    } catch { /* never in the way */ }
+  }
+
   // the function's handler: an error it did not catch is reported and answered 500 in plain words
   function wrap(h: (req: Request) => Promise<Response> | Response) {
     return async (req: Request): Promise<Response> => {
@@ -126,5 +166,5 @@ export function cloudReporter(o: Opts) {
     globalThis.addEventListener("error", (e: any) => report("unhandled", e?.error ?? e?.message));
   }
 
-  return { report, wrap, listen, on };
+  return { report, wrap, listen, on, mismatch };
 }

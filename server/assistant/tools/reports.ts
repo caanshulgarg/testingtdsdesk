@@ -4,19 +4,10 @@
 // writes to the books. Each tool returns tables (label "books"), the files (Excel with live formulas, Word) and a short
 // summary for the model. Register in tools/index.ts: import { TOOLS as REPORTS } from "./reports.ts".
 //
-// The ExtTool shape of tools/types.ts (branch ask-fincom), written out here so this module stands alone until merged.
 import "../../../src/js/78-reports.js";
 
-type Col = { k: string, label: string, t?: "text" | "amount" | "int" | "date" | "pct" };
-type ToolTable = { tool: string, title: string, columns: Col[], rows: Record<string, unknown>[], summary?: Record<string, number | string | boolean | null>, basis?: string, period?: { from?: string | null, to?: string | null, as_on?: string | null } };
-type FileOut = { id: string, name: string, kind: string, path: string, expires: string, bytes?: number };
-type Ctx = { clientId: string | null, clientName: string, today: string, firm: { name: string, lines: string[] },
-  rpc: (fn: string, args: Record<string, unknown>) => Promise<any>, book: (tool: string, input: Record<string, unknown>) => Promise<any>,
-  makeFile: (spec: any, fileName: string) => Promise<FileOut | null>, uploadFile: (bytes: Uint8Array, fileName: string, kind: string) => Promise<FileOut | null>,
-  progress: (label: string) => void, aiText: (prompt: string, o?: { maxTokens?: number }) => Promise<string> };
-type Result = { tables?: ToolTable[], files?: FileOut[], forModel?: string, aiText?: string, error?: string };
-export type ReportTool = { name: string, description: string, input_schema: Record<string, unknown>, task: "heavy" | "book", label: "books" | "ai", words: RegExp, run: (input: Record<string, unknown>, ctx: Ctx) => Promise<Result> };
-
+import type { ExtCtx, ExtResult, ExtTool, ToolTable } from "./types.ts";
+type Ctx = ExtCtx; type Result = ExtResult; type ReportTool = ExtTool;
 // deno-lint-ignore no-explicit-any
 const FSX: any = (globalThis as any).FSX;
 const enc = new TextEncoder();

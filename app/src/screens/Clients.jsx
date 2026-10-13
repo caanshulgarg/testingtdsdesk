@@ -8,6 +8,8 @@ import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import More from "../parts/More.jsx";
+import { goTallyCard } from "../parts/TallyChip.jsx";
+import Filters, { Search } from "../parts/Filters.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
@@ -61,8 +63,10 @@ function TallyLight({ cid }) {
   // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
   // round 39: the chip says the client's link in the same four words as its Link to Tally card and the top bar's sign
   const l = typeof tallyLine === "function" ? tallyLine(co) : null, k = tallyLinkOf(co);
-  return <span className={"tag " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
-    data-tally={t.state} data-tally-link-chip={k.state} data-tally-line-tip={l ? l.state : ""}>{MARK[k.level] + k.word}</span>;
+  // ui-tidy (13-Oct-2026): the chip opens this client's Link to Tally card (parts/TallyChip.jsx), as every Tally chip does
+  return <button type="button" className={"tag tchip " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
+    data-tally={t.state} data-tally-link-chip={k.state} data-tally-chip={k.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
+    onClick={(ev) => { ev.stopPropagation(); goTallyCard(cid); }}>{MARK[k.level] + k.word}</button>;
 }
 
 // the panels under More, one at a time (S.clientsPanel); the Day Books panel stays while its files are being matched
@@ -88,21 +92,18 @@ export default function Clients() {
   // the search box: typed at once, the list follows a moment later (as before)
   const [q, setQ] = useState(S.homeQuery || "");
   const all = Object.values(S.companies), find = q.trim().toLowerCase();
-  const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));
+  const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.pan || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));
   const panel = S.multiUp ? "daybooks" : PANELS[S.clientsPanel] ? S.clientsPanel : "";
   const open = (id) => { S.clientsPanel = id; S.addingCo = false; render(); };
   return <>
-    {/* the page's one row: find a client, More, and Add client (the one main button) */}
-    <div className="row clients-head" data-clients-head="" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap", margin: "0 0 12px" }}>
-      {all.length > 0 && <label className="f" style={{ minWidth: 260, flex: "1 1 260px", margin: 0 }}><span>Find a client</span>
-        <input type="text" value={q} placeholder="Name, GSTIN or Tally name" onChange={(e) => { setQ(e.target.value); S.homeQuery = e.target.value; }} />
-      </label>}
-      <span style={{ flex: all.length ? "0 0 auto" : "1 1 auto" }} />
-      <More label="More" data-clients-more="" items={[[PANELS.upload, () => open("upload"), { "data-clients-open": "upload" }], [PANELS.daybooks, () => open("daybooks"), { "data-clients-open": "daybooks" }],
+    {/* the page's one row (ui-tidy: the one filter bar): find a client, Clear; More and Add client (the one main button) at its end */}
+    <Filters className="clients-head" label="Find a client" data-clients-head=""
+      search={all.length > 0 ? <Search value={q} placeholder="Name, GSTIN, PAN or Tally name" label="Find a client" onChange={(v) => { setQ(v); S.homeQuery = v; }} /> : null}
+      onClear={all.length > 0 ? () => { setQ(""); S.homeQuery = ""; } : null} active={!!q}
+      tools={<><More label="More" data-clients-more="" items={[[PANELS.upload, () => open("upload"), { "data-clients-open": "upload" }], [PANELS.daybooks, () => open("daybooks"), { "data-clients-open": "daybooks" }],
         [PANELS.reading, () => open("reading"), { "data-clients-open": "reading" }]]} />
       {/* while the Day Books' files are matched, their "Bring them in" is the main button */}
-      {!S.addingCo && <button className={"btn small" + (S.multiUp ? "" : " primary")} data-add-client="" onClick={() => doAct("addCo")}>Add client</button>}
-    </div>
+      {!S.addingCo && <button className={"btn small" + (S.multiUp ? "" : " primary")} data-add-client="" onClick={() => doAct("addCo")}>Add client</button>}</>} />
     {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
     {panel && <Panel id={panel} />}
     <Jobs which="auto" />
@@ -116,7 +117,7 @@ export default function Clients() {
             return <><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
               {c.tallyName && c.tallyName !== c.name && <div className="note">Tally: {c.tallyName}</div>}</>; } },
           { k: "tally", role: "status", label: "Tally", v: (c) => tallyStatus(c).label, cell: (c) => <TallyLight cid={c.id} /> },
-          { k: "gstin", label: "GSTIN", v: (c) => c.gstin || "", cell: (c) => c.gstin || "—" },
+          { k: "gstin", label: "GSTIN / PAN", v: (c) => c.gstin || c.pan || "", cell: (c) => <>{c.gstin || "—"}{c.pan && (!c.gstin || c.gstin.slice(2, 12) !== c.pan) ? <div className="nr">PAN {c.pan}</div> : null}</> },
           { k: "drafts", label: "To review", cls: "n", v: (c) => (c.stats || {}).drafts || 0, sum: true, fmt: String, cell: (c) => (c.stats || {}).drafts || "—" },
           // the count words of Today (clean-up batch 1): Ready to post, then Needs you (duplicates and bills to check, as Today counts them)
           { k: "waiting", label: "Ready to post", cls: "n", v: (c) => (c.stats || {}).waiting || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"; } },

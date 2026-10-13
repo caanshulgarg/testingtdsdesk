@@ -19,6 +19,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 | gateway | server/security/functions/gateway | index.ts, cors.ts, classify.ts, ../_shared/cors.ts | the list |
 | admin | server/security/functions/admin | index.ts, cors.ts, ../_shared/cors.ts | the list |
 | signin | server/security/functions/signin | index.ts, cors.ts, ../_shared/cors.ts | the list |
+| fincom-assistant | server/assistant | a one-line index.ts importing server/assistant/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./agent.ts, ./tools.ts, ./tools/*, ./checks.ts, ./files.ts, ./mask.ts, ./models.ts, ./router.ts, ./citations.ts, ./notices.ts, ../_shared/cors.ts, ../_shared/sentry.ts, ../_shared/sentry-scrub.js); verify_jwt off (it checks the user's token itself) | the list |
 | tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js, ../_shared/sentry.ts, ../_shared/sentry-scrub.js | `*` |
 | gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
 | gst-taxpro | server/gst-taxpro | index.ts, ../_shared/cors.ts | `*` |

@@ -12,9 +12,11 @@ import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
+import { AssistantSettings } from "../parts/Assistant.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import TallyLink from "../parts/TallyLink.jsx";
+import BooksSource from "../parts/BooksSource.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import { BankSetup } from "../parts/BankSettings.jsx";
@@ -157,7 +159,7 @@ export function FirmSettings() {
     gstapi: () => <GstApiAll />,
     rates: () => <Rates />,
     reading: () => <Reading />,
-    ai: () => <AiSettings />,
+    ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
     moves: () => <MoveSwitches />,
     platform: () => <Platform />,
   }[cur];
@@ -232,7 +234,8 @@ function TallySetup() {
   // round 39: the Link to Tally card says it all: the company (linked by a person's click), the client's Tally name (its
   // More: Name differs in Tally) and the one company entries are posted into (its tick)
   return <>
-    <TallyLink co={co} where="setup" />
+    {/* zoho-books: which integration feeds the client (Tally: the Link to Tally card inside it, as before) */}
+    <BooksSource co={co} where="setup" />
     <Card title="How purchase bills are entered">
       <VoucherType co={co} />
       <SupInvFrom co={co} />
