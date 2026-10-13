@@ -71,5 +71,6 @@
  "70-traces-files.js",
  "71-supplier-health.js",
  "72-tds-tally.js",
- "73-payroll.js"
+ "73-payroll.js",
+ "78-reports.js"
 ]
