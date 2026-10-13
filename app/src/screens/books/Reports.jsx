@@ -10,6 +10,7 @@ import NotRead from "../../parts/NotRead.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
+import Statements, { RX_VIEWS } from "./Statements.jsx";
 
 // two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));
@@ -122,13 +123,17 @@ export default function Reports({ b }) {
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {!have && <NoBooks what="Reports" />}
   </>;
+  // Step 3: the financial statements and reports (Statements.jsx, FSX in src/js/78-reports.js)
+  if (have && S.rxView) return <>{head}<Statements b={b} /></>;
+  const rx = have ? <section className="rpt-group rpt-g-rx" data-rpt-group="rx" style={{ marginBottom: 12 }}><header><h3>Financial statements and reports</h3><span className="note">Schedule III, cash MIS, 3CD, DCF</span></header>
+    <ul className="rpt-list">{RX_VIEWS.map(([k, l, w]) => <li key={k}><button className="rpt-link rpt-row" data-rx-entry={k} onClick={() => setAndShow("rxView", k)}><b>{l}</b><span>{w}</span></button></li>)}</ul></section> : null;
   if (q) {
     const hits = RPT.LIST.filter((r) => (r[2] + " " + r[3] + " " + RPT.AREAS.find((a) => a.id === r[1]).title).toLowerCase().includes(q));
     return <>{head}<section className="rpt-group" style={{ marginTop: 12 }}><header><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3></header>
       {hits.length ? <ul className="rpt-list">{hits.map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul> : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</section></>;
   }
   const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
-  return <>{head}
+  return <>{head}{rx}
     <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a) => { const h = heads(a.id, d);
       return <section key={a.id} className={"rpt-group rpt-g-" + a.id} data-rpt-group={a.id}><header><h3>{a.title}</h3>{yr && <span className="note">{yr}</span>}</header>
         {h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}

@@ -134,4 +134,19 @@ for (const which of ["company", "firm"]){
   const csv = X.tbExport(M, ["ledger", "closing", "line"], {csv: true}).split("\r\n");
   ok(csv[0] === '"Ledger Name","Closing (Dr +, Cr -)","Schedule III line"' && csv.length === M.L.length + 2 && Math.abs(Number(csv[csv.length - 1].split(",")[1])) < 0.005, "12. other columns on request (CSV); the closing column adds to nil");
 }
+// 13. the books as FinCom holds them: not rolled over at the year end (last year's profit still in the income and expense
+// ledgers, the stock ledgers at last year's opening, a firm's profit not in the partners' accounts), with last year's closing
+// stock given: the same statements as from books rolled over properly, figure for figure
+for (const which of ["company", "firm"]){
+  const fx = F[which](), rolled = run(fx).model, stale = F[which]();
+  const pyClose = t => F.r2(t.po + t.pd - t.pc), nominal = t => /^(Sales Accounts|Purchase Accounts|Direct Incomes|Indirect Incomes|Direct Expenses|Indirect Expenses)$/.test(t.g[t.g.length - 1] || "");
+  stale.tb = stale.tb.map(t => Object.assign({}, t, {o: nominal(t) || /Stock-in-Hand/.test(t.g.join()) || t.l === "Profit & Loss A/c" || /^Current A\/c/.test(t.l) ? (/Stock-in-Hand/.test(t.g.join()) ? t.po : pyClose(t)) : t.o}));
+  stale.det.stock.py = which === "company" ? {"Finished Goods": 300000, "Raw Materials": 200000} : {"Finished Goods": 270000, "Raw Materials": 140000};
+  const r2x = run(stale), S2 = r2x.model;
+  const names = Object.keys(rolled.nm).filter(n => /^(L|T|S)_/.test(n)), diff = names.filter(n => rolled.nm[n] !== S2.nm[n]);
+  ok(!S2.rolled && rolled.rolled && diff.length === 0, "13. " + which + ": books not rolled over + last year's closing stock = the same " + names.length + " figures as rolled-over books" + (diff.length ? " (differ: " + diff.slice(0, 6).map(n => n + " " + rolled.nm[n] + "/" + S2.nm[n]).join(", ") + ")" : ""));
+  ok(r2x.checks.every(c => c.ok), "13. " + which + ": all 27 checks pass on them" + (r2x.checks.every(c => c.ok) ? "" : ": " + r2x.checks.filter(c => !c.ok).map(c => c.id + " " + c.items[0]).join("; ")));
+  const nostock = F[which](); nostock.tb = stale.tb; const r3 = run(nostock);
+  ok(r3.checks.find(c => c.id === 13).items.some(x => /not rolled over/.test(x)), "13. " + which + ": without last year's closing stock, check 13 asks for it");
+}
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

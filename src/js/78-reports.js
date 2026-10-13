@@ -304,6 +304,10 @@ const FSX = (() => {
       const cy = pl ? d - c : o + d - c, py = pl ? pd - pc : (hasPy && line !== "inv" ? po + pd - pc : o);
       return {i, l: t.l, g: t.g || [], line, sub: m.sub || "", by: m.by || "", pl, o, d, c, po, pd, pc, hasPy, cy, py, msme: t.msme || ""};
     });
+    // books not rolled over at the year end (as FinCom holds them: Tally's balances moved by the vouchers): last year's
+    // profit is still in the income and expense ledgers, the closing stock is not in the stock ledgers, and a firm's
+    // profit is not yet in the partners' accounts. FSX carries all three into this year's openings itself.
+    const rolled = !L.some(x => x.pl && x.o);
     const unplaced = L.filter(x => !x.line && (x.o || x.d || x.c || x.po || x.pd || x.pc)).map(x => x.l);
     const nm = {}, cells = {};           // the defined names: name -> paise, and name -> the figure
 
@@ -331,13 +335,15 @@ const FSX = (() => {
     const lineHas = id => L.some(x => x.line === id && (x.cy || x.py || x.o));
 
     // ---------------------------------------------------------- inventories (closing as given in the details, else the ledgers)
-    const INV = X.SUBS.inv, stockCls = {};
+    const INV = X.SUBS.inv, stockCls = {}, carry = {v: 0, f: []};
     INV.forEach(k => {
       const open = tbSum("O", "inv", k), mv = tbSum("CY", "inv", k);  // mv: the ledgers' closing
       const ledClose = mv, ledMove = C(mv.v - open.v, "(" + mv.f + ")-(" + open.f + ")");
       const given = det.stock && det.stock.cy && det.stock.cy[k] != null ? din("stock_cy_" + k, "Closing stock " + k + " (" + D.cyAsAt + ")", det.stock.cy[k], "Inventories") : null;
       const givenPy = det.stock && det.stock.py && det.stock.py[k] != null ? din("stock_py_" + k, "Closing stock " + k + " (" + D.pyAsAt + ")", det.stock.py[k], "Inventories") : null;
       const close = given || ledClose, pyClose = givenPy || tbSum("PY", "inv", k);
+      // not rolled over: last year's closing stock (given) is this year's opening; the difference goes to the opening surplus
+      if (!rolled && givenPy){ carry.v += givenPy.v - open.v; carry.f.push("(" + givenPy.f + ")-(" + open.f + ")"); const pD = tbSum("PD", "inv", k), pC = tbSum("PC", "inv", k); stockCls[k] = {open: givenPy, ledMove, close, pyOpen: tbSum("PO", "inv", k), pyMove: C(pD.v - pC.v, "(" + pD.f + ")-(" + pC.f + ")"), pyClose, ledOpen: open}; return; }
       const pyOpen = tbSum("PO", "inv", k), pyD = tbSum("PD", "inv", k), pyC = tbSum("PC", "inv", k), pyMove = C(pyD.v - pyC.v, "(" + pyD.f + ")-(" + pyC.f + ")");
       stockCls[k] = {open, ledMove, close, pyOpen, pyMove, pyClose};
     });
@@ -376,7 +382,7 @@ const FSX = (() => {
     const partners = firm ? (det.partners || []) : [];
     const pAcc = {cap: [], cur: []};
     if (firm){
-      ["CY", "PY"].forEach(y => {
+      ["PY", "CY"].forEach(y => {
         const py = y === "PY", O = py ? "PO" : "O", Dc = py ? "PD" : "D", Cc = py ? "PC" : "C";
         let given = 0;
         partners.forEach((p, i) => {
@@ -387,7 +393,9 @@ const FSX = (() => {
           named(profit, "P_" + i + "_profit_" + y); given += profit.v;
           const mk = (ledger, withPl) => {
             const lg = ledger ? [ledger] : [];
-            const open = ledSum(O, lg, -1), cr = ledSum(Cc, lg, 1), dr = ledSum(Dc, lg, 1);
+            let open = ledSum(O, lg, -1); const cr = ledSum(Cc, lg, 1), dr = ledSum(Dc, lg, 1);
+            // not rolled over: last year's share of profit is part of this year's opening
+            if (!rolled && !py && withPl) open = C(open.v + nm["P_" + i + "_profit_PY"], "(" + open.f + ")+P_" + i + "_profit_PY");
             const r = withPl ? rem : C(0, "0"), n = withPl ? int : C(0, "0"), pr = withPl ? profit : C(0, "0");
             const intro = C(cr.v - r.v - n.v, "(" + cr.f + ")-(" + r.f + ")-(" + n.f + ")"), wd = C(-dr.v, "-(" + dr.f + ")");
             const close = C(open.v + intro.v + r.v + n.v + wd.v + pr.v, null);
@@ -431,7 +439,9 @@ const FSX = (() => {
       // surplus: the P&L ledger's opening, last year's profit still in income and expense ledgers, the profit, adjustments
       const so = tbSum(py ? "PO" : "O", "reserves", "Surplus"), nomO = C(-R0(sum(L.filter(x => x.pl), x => py ? x.po : x.o)),
         "-ROUND(ROUND(SUMIFS(TB_" + (py ? "PO" : "O") + ",TB_NATURE,\"PL\"),2),0)");
-      const sOpen = C(so.v + nomO.v, "(" + so.f + ")+(" + nomO.f + ")");
+      let sOpen = C(so.v + nomO.v, "(" + so.f + ")+(" + nomO.f + ")");
+      if (!py && carry.v) sOpen = C(sOpen.v + carry.v, sOpen.f + "+" + carry.f.join("+"));
+      if (!py && !rolled && firm && partners.length) sOpen = C(sOpen.v - nm.T_pat_PY, sOpen.f + "-T_pat_PY");
       const sAdjRaw = sum(L.filter(x => x.line === "reserves" && x.sub === "Surplus"), x => py ? x.pc - x.pd : x.c - x.d);
       const sAdj = C(R0(sAdjRaw), "ROUND(ROUND(SUMIFS(TB_" + (py ? "PC" : "C") + ",TB_LINE,\"reserves\",TB_SUB,\"Surplus\")-SUMIFS(TB_" + (py ? "PD" : "D") + ",TB_LINE,\"reserves\",TB_SUB,\"Surplus\"),2),0)");
       R.sOpen = sOpen; R.profit = ref("T_pat_" + y); R.adj = sAdj; R.adjCaption = ((det.reserves || {}).adjCaption || {})[y.toLowerCase()] || "";
@@ -455,7 +465,7 @@ const FSX = (() => {
     const tpMse = {CY: tbSum("CY", "tp", "Micro and Small Enterprises"), PY: tbSum("PY", "tp", "Micro and Small Enterprises")};
     ["CY", "PY"].forEach(y => { named(tpMse[y], "L_tpmse_" + y); named(C(face["tp_" + y].v - tpMse[y].v, "L_tp_" + y + "-L_tpmse_" + y), "L_tpoth_" + y); });
 
-    const model = {ent, kind, co, firm, fy, D, det, opts, L, nm, cellsByName: cells, age: inp.age || null, units: X.UNITS, inputs, unplaced, warn, face, pl, plPy, stockCls, pAcc, res, partners, tpMse, taxCur, taxDef, bsLines, notes: [], pages: []};
+    const model = {rolled, carry: carry.v, ent, kind, co, firm, fy, D, det, opts, L, nm, cellsByName: cells, age: inp.age || null, units: X.UNITS, inputs, unplaced, warn, face, pl, plPy, stockCls, pAcc, res, partners, tpMse, taxCur, taxDef, bsLines, notes: [], pages: []};
     X.notes(model);
     X.ratios(model);
     if (opts.cashflow) X.cashflow(model);
@@ -1343,9 +1353,9 @@ const FSX = (() => {
       M.L.filter(x => x.hasPy && !x.pl && !special(x) && x.po + x.pd - x.pc !== x.o).forEach(x => it.push(x.l + ": last year's closing " + rup(x.po + x.pd - x.pc) + " is not this year's opening " + rup(x.o)));
       if (M.L.some(x => x.hasPy)){
         const S2 = M.stockCls, pyPat = -sum(M.L.filter(x => x.pl), x => x.pd - x.pc) + sum(X.SUBS.inv, k => S2[k].pyClose.v - S2[k].pyOpen.v - S2[k].pyMove.v);
-        const sur = M.L.filter(x => x.line === "reserves" && x.sub === "Surplus"), dif = sum(sur, x => x.po + x.pd - x.pc) - (M.firm ? 0 : pyPat) - sum(sur, x => x.o);
-        if (sur.length && Math.abs(dif) > 1) it.push("Surplus: last year's closing plus last year's profit " + rup(sum(sur, x => x.po + x.pd - x.pc) - (M.firm ? 0 : pyPat)) + " is not this year's opening " + rup(sum(sur, x => x.o)));
-        if (M.firm) M.partners.forEach(p => [p.capital, p.current].filter(Boolean).forEach((l, j) => { const x = M.L.find(z => z.l === l); if (!x) return;
+        const RP = M.res.PY, pyClose = RP.sOpen.v + RP.profit.v + RP.adj.v + RP.transfer.v, cyOpen = M.res.CY.sOpen.v;
+        if (Math.abs(pyClose - cyOpen) > 500) it.push("Surplus: last year's closing " + rup(pyClose) + " is not this year's opening " + rup(cyOpen) + (M.rolled ? "" : " (the books are not rolled over: give last year's closing stock)"));
+        if (M.firm && M.rolled) M.partners.forEach(p => [p.capital, p.current].filter(Boolean).forEach((l, j) => { const x = M.L.find(z => z.l === l); if (!x) return;
           const share = (j === 1 || !p.current) ? pyPat * (Number(p.share) || 0) / 100 : 0, want = x.po + x.pd - x.pc - share;
           if (Math.abs(want - x.o) > 100) it.push(l + ": last year's closing with last year's profit share " + rup(want) + " is not this year's opening " + rup(x.o)); }));
       }
@@ -1460,6 +1470,7 @@ const FSX = (() => {
       if (V("L_inv_CY") || V("L_inv_PY")){
         const S = M.stockCls, cl = sum(X.SUBS.inv, k => S[k].close.v), op = sum(X.SUBS.inv, k => S[k].open.v), pyc = sum(X.SUBS.inv, k => S[k].pyClose.v);
         if (cl !== V("L_inv_CY")) it.push("The closing stock in the notes " + rup(cl) + " is not the face " + rup(V("L_inv_CY")));
+        if (!M.rolled && !(M.det.stock && M.det.stock.py) && op) it.push("The books are not rolled over to this year, so the stock ledgers still show last year's opening stock: give last year's closing stock (Details for you)");
         if (op !== pyc) it.push("The opening stock " + rup(op) + " (the stock ledgers at the start of the year) is not last year's closing " + rup(pyc));
         const ch = note("chg"); if (ch){ const t = ch.tables[0], c = t.rows[1].c[0].v, want = sum(["Work-in-progress", "Finished Goods", "Stock-in-trade"], k => S[k].close.v); if (c !== want) it.push("The change in inventories note's closing " + rup(c) + " is not the inventories note " + rup(want)); }
       }

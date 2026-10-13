@@ -141,7 +141,7 @@ function company(){
     sign: {auditor: {firm: "Made-Up & Associates", frn: "123456W", partner: "C Fernandes", mno: "234567", udin: "26234567ABCDEF1234", place: "Pune", date: "01-09-2026"}, directors: [{name: "A Rao", din: "01234567"}, {name: "B Iyer", din: "07654321"}], place: "Pune", date: "01-09-2026"}
   };
   return {entity: {name: "Kestrel Widgets Private Limited", kind: "company", cin: "U12345MH2015PTC123456", pan: "AAACK1234K", udyam: "UDYAM-MH-00-0000000", address: "Plot 1, Made-up Industrial Area, Pune 411001"},
-    fy: "2025", tb: B.tb, vouchers: B.vouchers, det, age, pyProfit: B.pyProfit};
+    fy: "2025", tb: B.tb, vouchers: B.vouchers, vouchersPy: B.vouchersPy, det, age, pyProfit: B.pyProfit};
 }
 
 // ---------------------------------------------------------------- the firm
@@ -213,7 +213,7 @@ function firm(){
     ratioExplain: {np: "Higher sales at stable costs.", gp: "Better prices on traded goods."},
     sign: {auditor: {firm: "Made-Up & Associates", frn: "123456W", partner: "C Fernandes", mno: "234567", udin: "26234567GHIJKL5678", place: "Pune", date: "01-09-2026"}, partners: partners.map(p => ({name: p.name, pan: p.pan})), place: "Pune", date: "01-09-2026"}
   };
-  return {entity: {name: "Heron Traders & Co.", kind: "firm", pan: "AAFFH1234H", address: "Shop 2, Made-up Market Road, Nashik 422001"}, fy: "2025", tb: B.tb, vouchers: B.vouchers, det, age: null, pyProfit: B.pyProfit};
+  return {entity: {name: "Heron Traders & Co.", kind: "firm", pan: "AAFFH1234H", address: "Shop 2, Made-up Market Road, Nashik 422001"}, fy: "2025", tb: B.tb, vouchers: B.vouchers, vouchersPy: B.vouchersPy, det, age: null, pyProfit: B.pyProfit};
 }
 // the confirmed mapping for a fixture: the rules' suggestion, confirmed once
 function confirmed(FSX, fx){ const st = FSX.confirm({versions: []}, FSX.mapping({versions: []}, fx.tb, fx.entity.kind).map, "test", "2026-10-13"); return st; }
