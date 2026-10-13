@@ -146,7 +146,7 @@ def policies():
             for r in db.rows("select tablename, policyname, cmd, roles::text as roles, permissive, qual, with_check from pg_policies where schemaname = 'public' and policyname in (%s)" % ",".join(q(p) for p in BEFORE))}
 try:
     for s in ("SCHEMA33", "SCHEMA35", "BILLS", "SCHEMA37", "SCHEMA47"): db.sql(ns[s])
-    for n, f in ns["ORDERS"]["fresh"]:
+    for n, f in [(n, f) for n, f in ns["ORDERS"]["fresh"] if n != 76]:     # the chain up to 74; 76 itself runs below
         r = psql(open(os.path.normpath(os.path.join(SQLDIR, f))).read())
         if r.returncode: ok(False, "setup: migration-%s runs %s" % (n, r.stderr[-300:])); raise SystemExit("cannot go on")
     db.sql(PLATFORM)
