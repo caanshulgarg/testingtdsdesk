@@ -30,7 +30,7 @@ body = re.sub(r"\b(revoke|grant)\b[^;]*;", "", re.sub(r"--[^\n]*", "", text).low
 ok(not re.search(r"\bdelete\s+from\b|\bdrop\s+(table|column|function|index|policy)\b|\btruncate\b|\balter\s+table\b|\bcreate\s+table\b|\binsert\s+into\b|\bupdate\s+\w+\s+set\b", body), "add-only: one function, no table touched")
 ok(body.count("begin;") == 1 and "commit;" in body and "lock_timeout" in body, "one transaction with a lock timeout")
 
-db = A.start(55479)
+db = A.start(55489)
 try:
     A.load_fixture(db)
     # the blob the books were kept in before client_book_items (BookSync), as on staging
