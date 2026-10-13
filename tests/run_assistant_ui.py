@@ -12,6 +12,7 @@ Checked, with a screenshot of each in tests/out/assistant/:
   asking the Assistant; "Check before filing" on the TDS return page; "Wrong answer?".
 Run under the lock: flock /tmp/fincom-app.lock python3 tests/run_assistant_ui.py
 Needs Deno (DENO, else on the PATH or /opt/deno/deno); without it: skipped (fails on CI)."""
+# The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
 import os, sys, json, shutil, subprocess, threading, functools, http.server, time
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)

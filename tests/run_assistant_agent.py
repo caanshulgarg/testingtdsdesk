@@ -6,6 +6,7 @@ citation check (a made-up voucher dropped), the cross-check of the AI's figures 
 event; a matching figure green), web links, the refusal to post or delete, files (Excel cells to the paisa, Word, PDF), a
 notice, RLS, the "Wrong answer?" button and the log. Then the cap, here: a firm at its cap gets the message, not Claude.
 Needs Deno (DENO, else on the PATH or /opt/deno/deno); without it the test says skipped (on CI it fails)."""
+# The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
 import os, sys, json, shutil, subprocess, uuid
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import assistant_stand as A, assistant_supa as SUPA
