@@ -42,19 +42,28 @@ LOAD = """(B) => {
   const b = {loading: false, cid: c.id, challans: [], alloc: {}, vouchers: B.vouchers, under: B.under, groups: B.groups, ledInfo: {}, gstins: {}, pans: {}, states: {},
     meta: {from: "20240401", to: "20260331"}, tb: {from: "20240401", to: "20260331", led: B.led, src: "copy", at: "2026-10-13"}, misCfg: {freq: "off"}, auditCfg: {freq: "off"}};
   b.map = Books.mapLedgers(b.vouchers, {}); b.msme = {"Alder Components": "small"};
-  const st = FSX.store(b); st.kind = "company"; st.det["2025"] = JSON.parse(JSON.stringify(B.det)); st.det["2025"].entity = Object.assign({}, B.ent); st.det["2025"].stock.py = {"Finished Goods": 300000, "Raw Materials": 200000};
+  b.fs = {rx: {map: {versions: [], draft: {}}, det: {}, opts: {}}}; const st = b.fs.rx; st.kind = "company"; st.det["2025"] = JSON.parse(JSON.stringify(B.det)); st.det["2025"].entity = Object.assign({}, B.ent); st.det["2025"].stock.py = {"Finished Goods": 300000, "Raw Materials": 200000};
   S.books = b; window.__bk = b; S.booksTab = "reports"; S.rxView = null; S.rxTab = null; S.rxFy = "2025"; render();
 }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}, accept_downloads=True); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
+    rx_fetch = []
+    pg.on("request", lambda r: rx_fetch.append(r.url) if "78-reports" in r.url else None)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
     pg.evaluate(LOAD, B); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; S.booksTab = 'reports'; render();"); pg.wait_for_timeout(800)
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => { window.__saved.push([n, blob ? blob.size : 0]); }; }")
     # 1
     t = pg.inner_text("#app")
     ok("Financial statements and reports" in t and pg.locator("[data-rx-entry]").count() == 4, "1. Reports lists Financial statements and reports (4: Schedule III, cash MIS, 3CD, DCF)")
-    pg.click('[data-rx-entry="fs"]'); pg.wait_for_timeout(1500)
+    # 0. the reports' code is its own file, fetched only when a report is first opened ("Preparing…" meanwhile)
+    pg.wait_for_timeout(2500)
+    ok(not rx_fetch and pg.evaluate("typeof globalThis.FSX") == "undefined", "0. opening FinCom and the Reports tab does not fetch the reports' code (FSX)")
+    pg.route("**/78-reports*", lambda route: (pg.wait_for_timeout(600), route.continue_()))
+    pg.click('[data-rx-entry="fs"]')
+    ok(pg.locator("[data-rx-preparing]").count() == 1 and "Preparing" in pg.inner_text("[data-rx-preparing]"), "0. opening a report shows Preparing… while its code comes")
+    pg.wait_for_selector("[data-rx-summary]", timeout=30000); pg.wait_for_timeout(800)
+    ok(len(rx_fetch) == 1 and pg.evaluate("typeof globalThis.FSX") == "object", "0. then fetched once (" + (rx_fetch[0].rsplit("/", 1)[-1] if rx_fetch else "none") + ") and the report is drawn")
     # 2
     s = pg.inner_text("[data-rx-summary]")
     ok("ZZ Kestrel" not in s or "Company" in s, "2. the summary: " + s[:140])

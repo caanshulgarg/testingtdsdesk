@@ -10,6 +10,14 @@
 // No AI in any figure. Nothing here writes to the books: the mapping and the details are kept with the client (b.fs.rx).
 // State: S.rxView, S.rxFy, S.rxTab.
 import { useState } from "react";
+// FSX (src/js/78-reports.js) is its own file, fetched the first time a report is opened (not in legacy.js, build.py
+// react_parts; not with the page): "Preparing…" meanwhile. It sets globalThis.FSX.
+let fsxLoad = null;
+export function loadFSX() {
+  if (globalThis.FSX) return Promise.resolve(globalThis.FSX);
+  return fsxLoad || (fsxLoad = import("../../../../src/js/78-reports.js").then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
+    (e) => { fsxLoad = null; S.rxLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const xlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -240,6 +248,12 @@ export const RX_VIEWS = [["fs", "Financial statements (Schedule III)", "Balance 
 
 export default function Statements({ b }) {
   const v = S.rxView;
+  if (!globalThis.FSX) {
+    loadFSX().catch(() => {});
+    return <div className="rx" data-rx-view={v}><button className="btn small" data-rx-back="" onClick={() => setAndShow("rxView", null)}>← All reports</button>
+      {S.rxLoadFailed ? <p className="note" data-rx-load-failed="">The reports could not be loaded. <button className="linkbtn" onClick={() => { S.rxLoadFailed = null; loadFSX().catch(() => {}); render(); }}>Try again</button></p>
+        : <p className="note" data-rx-preparing="">Preparing…</p>}</div>;
+  }
   return <div className="rx" data-rx-view={v}>
     <div className="row" style={{ gap: 8, alignItems: "center", marginBottom: 8 }}>
       <button className="btn small" data-rx-back="" onClick={() => setAndShow("rxView", null)}>← All reports</button>
