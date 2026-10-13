@@ -2,8 +2,8 @@
 // order the model sees (keep it fixed: the tool list is part of the cached prompt).
 import type { ExtTool } from "./types.ts";
 import { TOOLS as AUDIT } from "./audit.ts";
-// import { TOOLS as REPORTS } from "./reports.ts";
+import { TOOLS as REPORTS } from "./reports.ts";
 export const EXT_TOOLS: ExtTool[] = [
   ...AUDIT,
-  // ...REPORTS,
+  ...REPORTS,
 ];
