@@ -5,7 +5,8 @@
 // tally-support zip is only inspected. An object is saved back to the SAME path / row only when every check passes:
 // same entries (voucher count, every amount, ledger and date), same per-day trial balance (parse.js), and the new text is the
 // old text with only whole 2.4.4 tags cut out. Nothing is deleted. Replies carry counts, paths and ids only: never a value.
-// Access: verify_jwt, plus a one-time token whose SHA-256 is the function secret BANKSCRUB_TOKEN_SHA256; all else is refused.
+// Access: verify_jwt, plus a one-time token whose SHA-256 is given to start() by the deploy wrapper (the function secret
+// BANKSCRUB_TOKEN_SHA256 when set wins); everything else is refused. The token itself is never in the repo or the deploy.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import postgres from "npm:postgres@3.4.4";
 import { unzipSync } from "npm:fflate@0.8.2";
@@ -220,8 +221,8 @@ async function sha256hex(s: string) { return [...new Uint8Array(await crypto.sub
 function eq(a: string, b: string) { if (a.length !== b.length) return false; let x = 0; for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i); return x === 0; }
 const reply = (s: number, b: unknown) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
-  const want = Deno.env.get("BANKSCRUB_TOKEN_SHA256") || "";
+export function start(wantHash: string) { Deno.serve(async (req) => {
+  const want = Deno.env.get("BANKSCRUB_TOKEN_SHA256") || wantHash || "";
   const tok = req.headers.get("x-bankscrub-token") || "";
   if (req.method !== "POST" || !/^[0-9a-f]{64}$/.test(want) || tok.length < 32 || !eq(await sha256hex(tok), want)) return reply(403, { error: "refused" });
   let b: any; try { b = await req.json(); } catch { return reply(400, { error: "json" }); }
@@ -248,4 +249,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return reply(500, { error: String((e as Error)?.message || e).replace(/<[^>]*>[^<]*/g, "").slice(0, 200) });
   }
-});
+}); }
