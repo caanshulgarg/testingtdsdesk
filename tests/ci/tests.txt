@@ -259,3 +259,10 @@ run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
 run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test
 # stability (11-Oct-2026, the owner: "as stable and strong as Claude, anthropic.com, Microsoft"): the frame before the program, the FinCom loader's rules, one loading state, no layout shift on any page, the top bar's fixed places
 run_stability.py                      300  TDSDESK_SITE=../app/dist-test
+# zoho-books (13-Oct-2026, the owner: "Zoho first, then Busy"; FinCom reads and posts): Zoho's documents into the cloud copy (map.js),
+# migration 75 twice with its row-level security, the zoho-books function under Deno against a stand-in Zoho (fake_zoho.py):
+# GSTR-1, 3B and 26Q from a known Zoho organisation to the paisa, changes only, deletions, 429s, token renewal, posting; the Integrations page
+run_zoho_map.mjs                      120
+run_migration75.py                    180
+run_zoho_server.py                    900
+run_integrations_ui.py                300  TDSDESK_SITE=../app/dist-test

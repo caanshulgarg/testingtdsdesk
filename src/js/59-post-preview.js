@@ -100,6 +100,8 @@ function postAlready(x){ return !!x && (x.already === true || (x.ok === true && 
 function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^(Could not check Tally|Waiting for Tally)\b/i.test(String(x.message || ""))); }
 function postWord(x){
   if (!x) return "Failed: Tally did not answer for this entry";
+  // zoho-books (src/js/74): the answer of a client whose books are in Zoho Books
+  if (x.zoho && x.ok) return x.already ? "Already in Zoho Books (not sent again)" : "Posted to Zoho Books" + (x.zoho.number ? " (" + x.zoho.kind + " " + x.zoho.number + ")" : "");
   if (postAlready(x)) return plainMsg(x.message) || "Already in Tally (not sent again)";
   if (postCheckFail(x)) return plainMsg(x.message) || "Could not check Tally, not posted. Try again.";
   if (!x.ok) return "Failed: " + (plainMsg(x.message) || "Tally did not confirm it");

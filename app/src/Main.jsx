@@ -14,7 +14,7 @@ import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
-  Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
+  Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
 
 // something wrong with reading bills on this computer
 function ClientInbox() {
@@ -43,7 +43,7 @@ function Screen() {
     return <Export />;
   }
   const t = S.homeTab;
-  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "rules" ? <FirmSettings /> : <Clients />;
+  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "integrations" ? <Integrations /> : t === "rules" ? <FirmSettings /> : <Clients />;
 }
 
 // the bar at the foot of a client's bank, sales or bills

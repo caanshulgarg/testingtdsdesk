@@ -1,0 +1,31 @@
+[
+ {
+  "expense_id": "460000000010075",
+  "date": "2026-05-12",
+  "account_id": "460000000010008",
+  "account_name": "Office Expenses",
+  "paid_through_account_id": "460000000010011",
+  "paid_through_account_name": "Petty Cash",
+  "vendor_id": "460000000010039",
+  "vendor_name": "Kappa Suppliers Pune",
+  "gst_treatment": "business_gst",
+  "gst_no": "27AAACK4444K1ZF",
+  "source_of_supply": "MH",
+  "destination_of_supply": "MH",
+  "place_of_supply": "MH",
+  "reference_number": "KS/C-12",
+  "description": "stationery",
+  "tax_id": "460000000010028",
+  "tax_percentage": 18,
+  "tax_amount": 180,
+  "sub_total": 1000,
+  "total": 1180,
+  "amount": 1180,
+  "is_inclusive_tax": false,
+  "hsn_or_sac": "4820",
+  "product_type": "goods",
+  "is_reverse_charge_applied": false,
+  "status": "nonbillable",
+  "last_modified_time": "2026-05-12T10:00:00+0530"
+ }
+]

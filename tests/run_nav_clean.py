@@ -1,7 +1,7 @@
 """python3 run_nav_clean.py - clean-up batch 1, "Find your way" (11-Oct-2026; the owner: "clean… anyone would love to
 work in FinCom"), used as a person would, on the fixture books (tests/fixtures/books):
 
-  1. the firm's sidebar: Today · Compliance · Clients · Tally · Settings · Help, Today lit on Today (and on the firm's
+  1. the firm's sidebar: Today · Compliance · Clients · Tally · Integrations (zoho-books) · Settings · Help, Today lit on Today (and on the firm's
      Inbox, opened from Today), People and Plan and credit as Settings' sections (and the firm menu's items);
   2. a client's sidebar: Overview / Bring in: Inbox · From Tally / Work: Purchase · Bank · Sales · Transactions /
      Returns: TDS · GST / Books: Reports · MIS · Accounts · Audit · Look up · Letters / Client setup · All clients · Help;
@@ -56,12 +56,12 @@ try:
 
         print("1. the firm's sidebar")
         E("navHome('today')"); W(1200)
-        ok(side() == ["Today", "Compliance", "Clients", "Tally", "Settings", "Help"], "firm: Today · Compliance · Clients · Tally · Settings · Help (%s)" % side())
+        ok(side() == ["Today", "Compliance", "Clients", "Tally", "Integrations", "Settings", "Help"], "firm: Today · Compliance · Clients · Tally · Integrations · Settings · Help (%s)" % side())
         ok(lit() == ["Today"] and title() == "Today", "Today is lit on Today, and titled Today (%s)" % lit())
         pg.screenshot(path=os.path.join(OUT, "desk-firm-today.png"))
         E("navHome('inbox')"); W(600)
         ok(lit() == ["Today"], "the firm's Inbox (opened from Today's To read) lights Today")
-        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
+        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Integrations", "#/integrations", "Integrations"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
             pg.click('#side .side-link[data-side="%s"]' % label); W(900)
             ok(E("location.hash") == want_hash and title() == want_title and lit() == [label], "%s: %s, titled %s, lit (%s, %s, %s)" % (label, want_hash, want_title, E("location.hash"), title(), lit()))
         # People and Plan and credit: Settings' sections, and the firm menu's
