@@ -1,6 +1,6 @@
 """python3 run_assistant_ui.py - FinCom Assistant on the React build (app/dist-test), end to end except Claude:
   the page -> the fincom-assistant function (server/assistant/index.ts under Deno, tests/assistant_fnserve.ts, Claude MOCKED
-  by fixed transcripts) -> the Supabase stand-in (assistant_supa.py) -> a throwaway PostgreSQL with migration 76 and the
+  by fixed transcripts) -> the Supabase stand-in (assistant_supa.py) -> a throwaway PostgreSQL with migration 77 and the
   made-up books of tests/fixtures/books (assistant_stand.py). The figures shown come from the book tools on the database.
 Checked, with a screenshot of each in tests/out/assistant/:
   off by default (no launcher; Ctrl+J says it is off); the owner switches it on and records consent in Settings › AI help;

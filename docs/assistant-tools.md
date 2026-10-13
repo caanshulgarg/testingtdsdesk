@@ -35,7 +35,7 @@ Then register it in `server/assistant/tools/index.ts` (one import, one spread; k
 - **Nothing writes to the books, returns or postings.** `ctx.rpc` runs SQL functions as the signed-in user under RLS:
   only `SECURITY INVOKER` and `STABLE` functions. A table of your own (working papers, the Schedule III mapping, the
   "details for you" form) goes in your own add-only migration with RLS `firm_id = my_firm()` and writes through
-  `can_write()`; tell me its number before you use it (76 is the Assistant's; take 77 for audit, 78 for reports).
+  `can_write()`; its number: 77 is the Assistant's (76 is db-speed's, already on staging); take **78 for the audit and 79 for the reports**.
 - Files: `ctx.makeFile(spec, name)` (xlsx with formulas and ₹ format, docx with letterhead, pdf on A4: `files.ts`), or
   `ctx.uploadFile(bytes, name, kind)` for your own bytes. Kept 30 days, private to the firm, listed in the chat.
 - Long work: call `ctx.progress("Benford: done")` as each check finishes (the panel shows it). The checks are SQL/JS and

@@ -1,4 +1,4 @@
--- Migration 76 (13-Oct-2026, FinCom Assistant, branch ask-fincom; the owner's approval of AI in the app, 13-Oct-2026: "Start
+-- Migration 77 (13-Oct-2026, FinCom Assistant, branch ask-fincom; the owner's approval of AI in the app, 13-Oct-2026: "Start
 -- now"). AI is still never allowed in the bridge or the Tally add-on; nothing here is called by either.
 --
 -- What it adds:

@@ -1,6 +1,6 @@
 # FinCom Assistant (step 1): notes
 
-Branch `ask-fincom`. Function `fincom-assistant` (`server/assistant/`), migration 76, panel `app/src/parts/Assistant.jsx`
+Branch `ask-fincom`. Function `fincom-assistant` (`server/assistant/`), migration 77, panel `app/src/parts/Assistant.jsx`
 with `src/js/75-assistant.js`, "Check before filing" `src/js/76-prefiling.js` with `app/src/parts/PreFile.jsx`.
 Tool modules for the audit and the reports: `docs/assistant-tools.md`.
 

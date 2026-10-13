@@ -1,4 +1,4 @@
-// FinCom Assistant's tools: the fixed, parameterised questions over the books (each a read-only SQL function of migration 76,
+// FinCom Assistant's tools: the fixed, parameterised questions over the books (each a read-only SQL function of migration 77,
 // run as the signed-in user under row-level security), and the few others the assistant has (the Day Book slice for the AI
 // fallback, figures to check, a notice's fields, a draft, a file, a screen to point to). Claude only chooses a tool and fills
 // its parameters; every figure of the books comes from the database.

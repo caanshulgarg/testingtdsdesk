@@ -1,4 +1,4 @@
-// deno test (run by tests/run_assistant_agent.py, which starts the stand: a throwaway PostgreSQL with migration 76 and the
+// deno test (run by tests/run_assistant_agent.py, which starts the stand: a throwaway PostgreSQL with migration 77 and the
 // fixture books, and a Supabase stand-in in front of it at STAND_URL). The fincom-assistant function end to end, with Claude
 // MOCKED: each test gives the fixed transcript of what Claude does (its tool calls and its text), and checks what FinCom
 // does with it: the book tools' figures to the paisa, the labels, the citation check, the cross-check of the AI's figures

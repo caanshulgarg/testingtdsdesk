@@ -1,4 +1,4 @@
-"""python3 run_assistant_sql.py - migration 76 (FinCom Assistant's book tools, cap, log, mismatches) on a throwaway PostgreSQL
+"""python3 run_assistant_sql.py - migration 77 (FinCom Assistant's book tools, cap, log, mismatches) on a throwaway PostgreSQL
 (assistant_stand.py: the cloud copy's tables as on staging, the report functions it reuses from the repository's
 migrations, the made-up books of tests/fixtures/books loaded as the bridge and the app keep them).
 Checks, each against figures worked out by hand (tests/fixtures/books/EXPECTED.md) or a second route here in Python:
@@ -16,9 +16,9 @@ fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-MIG = A.MIG76
+MIG = A.MIG77
 text = open(MIG).read()
-print("migration-76 md5 " + hashlib.md5(open(MIG, "rb").read()).hexdigest())
+print("migration-77 md5 " + hashlib.md5(open(MIG, "rb").read()).hexdigest())
 body = re.sub(r"\b(revoke|grant)\b[^;]*;", "", re.sub(r"--[^\n]*", "", text).lower())   # privileges named in a grant or revoke are not statements
 ok(not re.search(r"\bdelete\s+from\b|\bdrop\s+(table|column|function|index|policy)\b|\btruncate\b|\balter\s+table\s+\S+\s+drop\b", body), "add-only: no delete, drop or truncate in the file")
 ok(body.count("begin;") == 1 and "commit;" in body and "lock_timeout" in body, "one transaction with a lock timeout")
@@ -27,7 +27,7 @@ db = A.start(55478)
 try:
     A.migrate(db)
     A.migrate(db)
-    ok(True, "migration 76 runs twice")
+    ok(True, "migration 77 runs twice")
     b = A.load_fixture(db)
     J = lambda q, uid=A.ME: A.askj(db, q, uid)
     C = "'larkspur'"

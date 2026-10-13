@@ -1,5 +1,5 @@
 """python3 run_assistant_agent.py - FinCom Assistant's function end to end with Claude mocked (server/assistant/assistant_test.ts
-under Deno): a throwaway PostgreSQL with migration 76 and the fixture books (assistant_stand.py), a Supabase stand-in in
+under Deno): a throwaway PostgreSQL with migration 77 and the fixture books (assistant_stand.py), a Supabase stand-in in
 front of it (assistant_supa.py), and the function's handler called as the app calls it. What is checked is listed in the
 test file: routing by a fixed transcript of tool calls with the figures to the paisa, the fallback and its amber label, the
 citation check (a made-up voucher dropped), the cross-check of the AI's figures (a mismatch row and one scrubbed Sentry

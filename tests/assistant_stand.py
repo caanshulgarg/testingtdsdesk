@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 import pg_stand
 ROOT = os.path.join(HERE, "..")
 SQL = os.path.join(ROOT, "server", "tally-cloud")
-MIG76 = os.path.join(ROOT, "server", "assistant", "migration-76-assistant.sql")
+MIG77 = os.path.join(ROOT, "server", "assistant", "migration-77-assistant.sql")
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -101,7 +101,7 @@ def start(port):
         db.sql(t)
     return db
 
-def migrate(db, path=MIG76):
+def migrate(db, path=MIG77):
     return db.sql(open(path).read())
 
 def ask(db, query, uid=ME):
