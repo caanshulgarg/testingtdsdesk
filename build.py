@@ -109,6 +109,10 @@ def react_parts():
     out = os.path.join(ROOT, "app", "legacy"); os.makedirs(out, exist_ok=True)
     for name, h in [("live", html), ("test", to_test(html))]:
         js = re.search(r'<script id="app-main">(.*?)</script>', h, re.S).group(1)
+        # a module the React app loads with its own screen (its lazy chunk), kept out of legacy.js and its size budget:
+        # src/js/78-reports.js (FSX), imported by app/src/screens/books/Statements.jsx
+        js, n = re.subn(r"/\* @react-lazy: begin .*?/\* @react-lazy: end \*/\n?", "", js, flags=re.S)
+        if n != 1: sys.exit("expected one @react-lazy block (src/js/78-reports.js), found %d" % n)
         open(os.path.join(out, name + ".js"), "w", encoding="utf-8").write(js)
     open(os.path.join(out, "app.css"), "w", encoding="utf-8").write(read("src/css/app.css"))
     open(os.path.join(out, "test-style.html"), "w", encoding="utf-8").write(read("build/test-style.html"))

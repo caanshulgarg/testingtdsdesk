@@ -16,6 +16,7 @@ import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import Filters, { Field, Search } from "../../parts/Filters.jsx";
 import { Answer, Fold } from "../../parts/Answer.jsx";
+import Statements, { RX_VIEWS } from "./Statements.jsx";
 
 // two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));
@@ -130,6 +131,10 @@ export default function Reports({ b }) {
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {!have && <NoBooks what="Reports" />}
   </>;
+  // Step 3: the financial statements and reports (Statements.jsx, FSX in src/js/78-reports.js)
+  if (have && S.rxView) return <div data-phone-scroll="">{head}<Statements b={b} /></div>;
+  const rx = have ? <section className="rpt-group rpt-g-rx" data-rpt-group="rx" style={{ margin: "8px 0 12px" }}><header><h3>Financial statements and reports</h3><span className="note">Schedule III, cash MIS, 3CD, DCF</span></header>
+    <ul className="rpt-list">{RX_VIEWS.map(([k, l, w]) => <li key={k}><button className="rpt-link rpt-row" data-rx-entry={k} onClick={() => setAndShow("rxView", k)}><b>{l}</b><span>{w}</span></button></li>)}</ul></section> : null;
   if (q) {
     const hits = RPT.LIST.filter((r) => (r[2] + " " + r[3] + " " + RPT.AREAS.find((a) => a.id === r[1]).title).toLowerCase().includes(q));
     return <div data-phone-scroll="">{head}<section className="rpt-group" style={{ marginTop: 12 }}><header><h3>{hits.length + " report" + (hits.length === 1 ? "" : "s") + " found"}</h3></header>
@@ -139,6 +144,7 @@ export default function Reports({ b }) {
   const top = d ? heads("overview", d).concat(heads("parties", d)).map(([l, v], i) => [l, v, i === 0 ? yr : ""]) : [];
   return <div data-phone-scroll="">{head}
     <Answer label="Reports key figures" figs={top} />
+    {rx}
     <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a, i) => { const h = heads(a.id, d), n = RPT.LIST.filter((r) => r[1] === a.id).length;
       return <Fold key={a.id} id={"rpt:" + a.id} first={i === 0} className={"fold rpt-group rpt-g-" + a.id} data-rpt-group={a.id} title={a.title}
         sub={<>{h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}<span className="rpt-n">{n + " reports"}</span></>}>

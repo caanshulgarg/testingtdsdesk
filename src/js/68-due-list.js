@@ -107,6 +107,8 @@ const DueList = {
       keep({kind: "tdspay", tax: "TDS", what: "TDS and TCS deposit", per: GSTR.label(m), fy, q, due, on: paidOn, tds: total, unpaid: unpaid >= 1 ? unpaid : 0,
         go: {tab: "tds", fy, q, form: "26Q", sub: "challans"}});
     });
+    // ---- tasks added from a notice by FinCom Assistant (src/js/75-assistant.js; client_due_tasks), only when the user clicked "Add to due list"
+    if (typeof AsstTasks === "object") AsstTasks.dueItems(co).forEach(keep);
     return out;
   },
   // ---- every client: the open one from S.books, the others from their copy on this computer
@@ -150,6 +152,7 @@ const DueList = {
   async open(x){
     if (!x || !S.companies[x.cid]) return;
     await openCompany(x.cid);
+    if (x.kind === "task") return;          // a task from a notice (FinCom Assistant): the client, nothing more
     S.tab = "books"; S.step = null; const g = x.go || {};
     try { await openBooks(x.cid); } catch (e){}
     if (S.coId !== x.cid) return;

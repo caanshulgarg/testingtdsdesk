@@ -8,9 +8,16 @@
 # the CI jobs by it, the longest first. TDSDESK_SITE=../app/dist-test: an older screen test whose default (site-test/)
 # no longer shows the sign-in page's "Use it here without an account" since the sign-in page moved to React (53a7ccf).
 run_add_client_tally.py               120
+run_assistant_agent.py                300
+run_assistant_cost.py                 300
+run_assistant_sql.py                  300
+run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
+run_audit_wp.js                       120
+run_audit_wp_tool.py                  300
+run_audit_wp_ui.py                    120  TDSDESK_SITE=../app/dist-test
 run_backup_history_server.py          120
 run_balances_copy.py                  120  TDSDESK_SITE=../app/dist-test
 run_bankpost_e2e.py                   300  TDSDESK_SITE=../app/dist-test
@@ -89,6 +96,7 @@ run_post_tabs.py                      120
 run_post_testcopies.py                120
 run_post_queue.py                     180
 run_post_record_server.py             120
+run_prefiling.js                      120
 run_priority.py                       990
 run_queue_server.py                   120
 run_queue_ui.py                       120
@@ -259,6 +267,14 @@ run_clean_b2.py                       300  TDSDESK_SITE=../app/dist-test
 run_clean_b3.py                       600  TDSDESK_SITE=../app/dist-test
 # stability (11-Oct-2026, the owner: "as stable and strong as Claude, anthropic.com, Microsoft"): the frame before the program, the FinCom loader's rules, one loading state, no layout shift on any page, the top bar's fixed places
 run_stability.py                      300  TDSDESK_SITE=../app/dist-test
+# Step 3 of the FinCom Assistant (reports, 13-Oct-2026): Schedule III in the firm's format, the 27 checks, cash MIS, 3CD draft, DCF, the report tools
+run_reports_fs.js                     240
+run_reports_checks.js                 180
+run_reports_cash.js                   240
+run_reports_3cd.js                    180
+run_reports_dcf.py                    300
+run_reports_server.py                 180
+run_reports_step3_ui.py               300  TDSDESK_SITE=../app/dist-test
 # ui-tidy (13-Oct-2026): details beside the row, one filter bar, one table, the answer first, the client and its Tally link, the bill drawer
 run_ui_tidy.py                        420  TDSDESK_SITE=../app/dist-test
 # zoho-books (13-Oct-2026, the owner: "Zoho first, then Busy"; FinCom reads and posts): Zoho's documents into the cloud copy (map.js),

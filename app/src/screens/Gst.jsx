@@ -19,6 +19,7 @@
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstView (year | return), S.gstPart,
 // S.gstSub (the tab of GSTR-1 or 3B), all kept in the address (Route.booksMore, src/js/52); a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
+import { PreFileButton } from "../parts/PreFile.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
@@ -233,6 +234,7 @@ export default function Gst() {
       {subParts.map(([id, l]) => <button key={id} data-part={id} aria-selected={S.gstView === "return" && part === id} onClick={() => gstPartGo(id)}>{l}</button>)}</nav>}
     {S.gstView === "year" ? <Grid months={months} reg={S.gstReg || ""} /> : <>
     {subs && <GstCard part={part} months={months} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} />}
+    {!noBooks && S.gstYm && <div className="revfilter" data-prefile-bar=""><PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /></div>}
     {part === "amend" && ftype === "monthly" && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON with these</button></div>}
     {!subs && part === "r1" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button></div>}
     {!subs && part === "r3b" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button></div>}

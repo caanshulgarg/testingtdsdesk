@@ -12,6 +12,8 @@ import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import More from "../../parts/More.jsx";
+// FinCom Assistant step 2: the working papers (AuditWP, src/js/77-audit.js)
+import WorkingPapers from "./AuditWP.jsx";
 
 // ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));
@@ -27,7 +29,7 @@ const Act = ({ act, className = "btn small", children, title }) => <button class
 export function Tabs() {
   const tie = booksTab() === "tieout", t = tie ? "tieout" : S.auditTab || "find";
   const go = (id) => { if (id === "tieout") { goClient("books:tieout"); return; } if (tie) S.booksTab = "audit"; setAndShow("auditTab", id); };
-  return <nav className="sbar" aria-label="Audit" style={{ marginBottom: 10 }}>{[["find", "Findings"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"], ["tieout", "Tie-out with Tally"]].map(([id, l]) =>
+  return <nav className="sbar" aria-label="Audit" style={{ marginBottom: 10 }}>{[["find", "Findings"], ["wp", "Working papers"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"], ["tieout", "Tie-out with Tally"]].map(([id, l]) =>
     <button key={id} data-audit-tab={id} aria-selected={t === id} onClick={() => go(id)}>{l}</button>)}</nav>;
 }
 
@@ -199,5 +201,5 @@ export default function Audit_({ b }) {
   const catchUp = TallyRead.catchUp(b, "audit");
   if (catchUp) return <CatchUp text={catchUp} />;
   const t = S.auditTab || "find";
-  return <><Tabs />{t === "rel" ? <Related b={b} /> : t === "3cd" ? <Form3cd b={b} /> : <Findings b={b} />}</>;
+  return <><Tabs />{t === "rel" ? <Related b={b} /> : t === "3cd" ? <Form3cd b={b} /> : t === "wp" ? <WorkingPapers b={b} /> : <Findings b={b} />}</>;
 }

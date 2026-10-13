@@ -12,6 +12,7 @@ import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
+import { AssistantSettings } from "../parts/Assistant.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import TallyLink from "../parts/TallyLink.jsx";
@@ -158,7 +159,7 @@ export function FirmSettings() {
     gstapi: () => <GstApiAll />,
     rates: () => <Rates />,
     reading: () => <Reading />,
-    ai: () => <AiSettings />,
+    ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
     moves: () => <MoveSwitches />,
     platform: () => <Platform />,
   }[cur];
