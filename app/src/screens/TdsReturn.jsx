@@ -10,6 +10,7 @@
 // "393(1) Sl. 6(i) [old 194C]"; the section filter and the find box take either.
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
+import { PreFileButton } from "../parts/PreFile.jsx";
 import SrcTag, { srcWords } from "../parts/SrcTag.jsx";
 import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
@@ -90,6 +91,7 @@ function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, mo
         {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft, not yet validated</span>}
         {errN && !filed ? <button className="tag bad" style={{ cursor: "pointer", border: 0 }} data-status-tag="" onClick={() => tdsTabGo("checks")}>{st[1]}</button>
           : <span className={"tag " + st[0]} data-status-tag="">{st[1]}</span>}
+        <PreFileButton kind="tds" form={form} fy={fy} q={q} />
         <More items={more} label="More">{words}</More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
       </div>

@@ -1,0 +1,20 @@
+{
+ "form": "143(1)(a)",
+ "law": "Income tax",
+ "kind": "it_143_1a",
+ "pan": "AAGCL4827M",
+ "ay": "2026-27",
+ "fy": "2025-26",
+ "din": "CPC/2627/G22/9876543210",
+ "reference": "CPC/2627/A1/123456789",
+ "amount": 2000,
+ "reply_by": "2026-11-04",
+ "notice_date": "2026-10-05",
+ "check": {
+  "tool": "tds_vs_26as",
+  "books": 15000,
+  "in26as": 13000,
+  "diff": -2000,
+  "missing_party": "Vellichor Learning Foundation"
+ }
+}
