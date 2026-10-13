@@ -53,6 +53,17 @@ try:
     src = db.rows("select (select string_agg(distinct source, ',') from tally_books) as b, (select string_agg(distinct source, ',') from tally_vouchers) as v, (select string_agg(distinct source, ',') from tally_ledgers) as l")[0]
     ok(src == {"b": "tally", "v": "tally", "l": "tally"}, "every existing row reads source 'tally' (%s)" % src)
     ok(db.one("select count(*) from cron.job where jobname like 'zoho%'") == "0", "the schedule is not in this file (75b, staging only)")
+    M75B = os.path.join(os.path.dirname(M75), "migration-75b-zoho-cron-staging.sql")
+    tb = open(M75B).read()
+    print("   75b md5 %s" % hashlib.md5(tb.encode()).hexdigest())
+    urls = set(re.findall(r"https://([a-z0-9]+)\.supabase\.co", tb))
+    ok(urls == {"qbocskaiewaxqcvaunzc"} and not re.search(r"\bdelete\s+from\b|unschedule|\bdrop\b", tb, re.I), "75b: staging's URL only (%s); nothing removed or unscheduled" % sorted(urls))
+    for i in (1, 2):
+        rc, err = zoho_stand.psql_file(db, M75B)
+        ok(rc == 0, "75b run %d: no error %s" % (i, err[-200:] if rc else ""))
+    job = db.rows("select schedule, command from cron.job where jobname = 'zoho-books-sync'")
+    ok(len(job) == 1 and job[0]["schedule"] == "*/5 * * * *" and "x-fincom-zoho-cron" in job[0]["command"] and "zoho_cron_key" in job[0]["command"] and "next_sync_at, now()) <= now()" in job[0]["command"],
+       "75b: one job, every 5 minutes, the key from Vault, only when an organisation is due")
     print("== 2. row-level security")
     G = db.one("select public.zoho_grant_save(%s, %s, 'x', '[{\"id\": \"o1\", \"name\": \"Org\", \"gstin\": \"27AAACZ1234Z1ZG\"}, {\"id\": \"o2\", \"name\": \"Other\", \"gstin\": \"27AAACX1111X1ZA\"}]'::jsonb, now() + interval '1 hour')" % (q(F), q(OWN)))
     L = json.loads(db.one("select public.zoho_link(%s, %s, 'o1', 'c1', '2026-04-01')::text" % (q(OWN), q(G))))
