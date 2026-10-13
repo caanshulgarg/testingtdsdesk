@@ -27,7 +27,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("document.activeElement.placeholder") == "Type a client name or GSTIN", "the search box has the cursor")
     ok(pg.locator("#modal li[role=option]").count() == 2, "both clients are listed")
     pg.keyboard.type("beta"); pg.wait_for_timeout(300)
-    ok(pg.locator("#modal li[role=option]").count() == 1 and "ZZ Beta Works" in pg.inner_text("#modal"), "typing narrows the list")
+    ok(pg.locator("#modal li[role=option]:not([data-sw-ask])").count() == 1 and "ZZ Beta Works" in pg.inner_text("#modal"), "typing narrows the list")
     pg.keyboard.press("Backspace", delay=10); [pg.keyboard.press("Backspace") for _ in range(3)]; pg.wait_for_timeout(300)
     pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(200)
     sel = pg.inner_text('#modal li[aria-selected="true"]')

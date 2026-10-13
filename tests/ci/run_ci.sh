@@ -76,6 +76,17 @@ if [ -n "$DENO_BIN" ] && [ -x "$DENO_BIN" ]; then
   "$DENO_BIN" cache "$TESTS/../server/tally-cloud/index.ts" "$TESTS/../server/zoho-books/index.ts" >"$LOGS/_deno_cache.log" 2>&1 || { echo "deno cache failed (tests go on):"; tail -5 "$LOGS/_deno_cache.log"; }
 fi
 
+# a test that starts pg_stand.py runs as root: it names pg_stand itself, or imports a stand module that does
+# (run_assistant_*.py import assistant_stand.py; CI run 38448880914: four of them failed chown'ing /tmp/fincom-pg-*)
+needs_root(){
+  grep -q "pg_stand" "$1" && return 0
+  local m
+  for m in $(grep -oE "^[[:space:]]*(import|from)[[:space:]]+[A-Za-z_]+_stand\b" "$1" | awk '{print $2}'); do
+    grep -q "pg_stand" "$(dirname "$1")/$m.py" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 declare -a R S
 fails=0
 start_all=$(date +%s)
@@ -89,7 +100,7 @@ for i in "${!T[@]}"; do
     *) R+=("UNKNOWN"); S+=(0); fails=$((fails+1)); echo "UNKNOWN $t"; continue ;;
   esac
   pre=()
-  grep -q "pg_stand" "$t" && pre=("${SUDO[@]}")
+  needs_root "$t" && pre=("${SUDO[@]}")
   echo "::group::$t"
   s0=$(date +%s)
   read -r -a envs <<<"${E[$i]}"
