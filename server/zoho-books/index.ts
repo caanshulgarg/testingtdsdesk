@@ -105,11 +105,13 @@ class ZohoError extends Error { code: string; status: number; constructor(m: str
 
 // ---------------------------------------------------------------- one call to Zoho, within its limits
 let lastCall = 0;
+const usedToday: Record<string, { used: number, cap: number }> = {};
 async function zoho(c: Conn, method: "GET" | "POST", path: string, query: Record<string, string | number> = {}, body?: unknown, deadline = Date.now() + RUN_MS): Promise<any> {
   if (method !== "GET" && !(method === "POST" && /^(bills|expenses|journals|contacts)$/.test(path))) throw new ZohoError("FinCom does not change anything in Zoho except creating its own entries (" + method + " " + path + ")");
   for (let attempt = 0; ; attempt++) {
     // the count in the database: 90 a minute, 95% of the day's cap
     const t = await rpc("zoho_api_take", { p_conn: c.id, p_n: 1, p_minute: MINUTE_MAX });
+    if (t.used != null) usedToday[c.id] = { used: Number(t.used), cap: Number(t.cap) };
     if (!t.ok) {
       if (t.daily) throw new ZohoError("Zoho's daily limit for this organisation is nearly used (" + t.used + " of " + t.cap + " calls today); FinCom goes on after midnight.", "daily", 429);
       const wait = Math.max(1, Number(t.wait || 60)) * 1000;
@@ -258,6 +260,10 @@ async function syncOne(c: Conn, deadline: number) {
     }
     else nextMin = 15;
   }
+  // past half of the day's cap, the reads slow down (twice the interval; three times past three quarters)
+  const u = usedToday[c.id];
+  if (!err && u && u.cap) nextMin = nextMin * (u.used > u.cap * 0.75 ? 3 : u.used > u.cap * 0.5 ? 2 : 1);
+  counts.calls = u ? u.used : undefined;
   await rpc("zoho_sync_end", { p_conn: c.id, p_next_min: nextMin, p_error: err, p_full: full && !err, p_counts: counts });
   return { error: err, counts, full };
 }

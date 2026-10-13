@@ -379,6 +379,28 @@ try:
     fb = db.rows("select origin, fincom_id from tally_vouchers where book_id = %s and ref = 'OC/77'" % q(BOOK))
     ok(fb and fb[0]["fincom_id"] == "e_b1" and fb[0]["origin"] == "fincom", "the posted bill comes back with the next read, as FinCom's own (fincom_id e_b1, origin fincom)")
 
+    # the app's own way in: what Bridge.post would send to Tally (the purchase voucher's XML, as fixtures/post-shapes/purchase-bill.xml
+    # is made), read by the app's voucherPreview into the entry ZohoB.post sends (src/js/74)
+    XML = """<VOUCHER VCHTYPE="Purchase" ACTION="Create" OBJVIEW="Accounting Voucher View">
+<DATE>20260522</DATE><EFFECTIVEDATE>20260522</EFFECTIVEDATE><VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME><VOUCHERNUMBER>OC/90</VOUCHERNUMBER><REFERENCE>OC/90</REFERENCE>
+<REFERENCEDATE>20260522</REFERENCEDATE><PARTYLEDGERNAME>Omicron Contractors</PARTYLEDGERNAME><NARRATION>Bill OC/90 from Omicron Contractors | TDSDesk:pb90</NARRATION>
+<ISINVOICE>No</ISINVOICE><ISOPTIONAL>No</ISOPTIONAL>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Contract Charges</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-20000.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Input CGST</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-1800.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Input SGST</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-1800.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>TDS Payable 194C</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>400.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Omicron Contractors</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>23200.00</AMOUNT>
+<BILLALLOCATIONS.LIST><NAME>OC/90</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>23200.00</AMOUNT></BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>
+</VOUCHER>"""
+    conv = subprocess.run(["node", "-e", """const {load, HTML} = require('./harness'); const {x} = load(HTML, ['r2', 'pvText', 'voucherPreview']);
+      const v = {id: 'pb90', xml: process.argv[1]}, p = x.voucherPreview(v.xml);
+      console.log(JSON.stringify({id: v.id, type: p.type, date: p.date, no: p.number, ref: p.ref, party: p.party, narration: p.narration, lines: p.lines.map(l => ({ledger: l.ledger, dr: !!l.dr, amount: l.amount}))}));""", XML],
+      capture_output=True, text=True, cwd=HERE)
+    ent = json.loads(conv.stdout.strip().splitlines()[-1]) if conv.returncode == 0 else {}
+    ok(ent.get("date") == "2026-05-22" and len(ent.get("lines", [])) == 5, "the app's voucherPreview reads the purchase voucher FinCom would send to Tally (%s)" % (conv.stderr[-200:] if conv.returncode else ent.get("ref")))
+    c, r, _ = call({"kind": "post", "client": CID, "entries": [ent]})
+    zb = FZ.find("bills", reference_number="FC:pb90")
+    ok(r.get("results", [{}])[0].get("ok") and zb and zb[0]["bill_number"] == "OC/90" and zb[0]["total"] == 23200 and zb[0]["tds_amount"] == 400, "that same voucher posted as a Zoho bill: OC/90, payable 23,200 after TDS 400, as FinCom worked it out")
     # ================================================================ the webhook and the scheduled run
     print("== 8b. the webhook and the scheduled run")
     c, r, _ = call({"kind": "hook_new", "connection": conn_row()["id"]}, tok="tok-staff")

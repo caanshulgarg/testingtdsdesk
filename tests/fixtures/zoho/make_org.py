@@ -3,8 +3,8 @@
 The shapes are Zoho Books API v3 (India edition) as its published reference describes them (www.zoho.com/books/api/v3:
 organizations, chartofaccounts, contacts, settings/taxes, invoices, creditnotes, bills, vendorcredits, customerpayments,
 vendorpayments, expenses, journals, banktransactions, settings/openingbalances). This sandbox cannot reach zoho.com or
-zohoapis.in, so the field names are as documented, written by hand; every field the mapping reads is listed in
-FIELDS.md with what a real trial organisation must confirm. The answer key (expected.json, EXPECTED.md) is worked out by
+zohoapis.in, so the field names are as documented, written by hand; every field the mapping reads, and what a real trial organisation must confirm, is in
+docs/zoho-books.md ("What only a real Zoho organisation can prove"). The answer key (expected.json, EXPECTED.md) is worked out by
 hand from these documents, not by FinCom's code.
 
 The organisation: FinCom Zoho Test Pvt Ltd, Maharashtra, GSTIN 27AAACZ1234Z1ZG, FY 2026-27. Documents in April and May

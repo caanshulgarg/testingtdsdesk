@@ -316,9 +316,12 @@ begin
   insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on, source)
   values (bk, f, p_client, left('Zoho Books · ' || coalesce(o->>'name', p_org), 200), fr, fr - 1, 'zoho')
   on conflict (book_id) do update set client_id = excluded.client_id, source = 'zoho';
-  insert into zoho_connections (firm_id, grant_id, org_id, org_name, org_gstin, client_id, book_id, status, linked_by, linked_at, sync_from, next_sync_at, daily_cap)
+  -- how often it is read follows the plan's daily cap (a run costs about a dozen calls when little changed): Free (1,000)
+  -- every 35 minutes, Standard (2,000) every 20, Professional and above every 15; a Zoho webhook brings a read forward
+  insert into zoho_connections (firm_id, grant_id, org_id, org_name, org_gstin, client_id, book_id, status, linked_by, linked_at, sync_from, next_sync_at, daily_cap, sync_every_min)
   values (f, p_grant, p_org, coalesce(o->>'name', ''), upper(coalesce(o->>'gstin', '')), p_client, bk, 'connected', p_user, now(), fr, now(),
-          case when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' then (o->>'cap')::int else 1000 end)
+          case when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' then (o->>'cap')::int else 1000 end,
+          case when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' and (o->>'cap')::int >= 5000 then 15 when coalesce(o->>'cap', '') ~ '^[0-9]{3,6}$' and (o->>'cap')::int >= 2000 then 20 else 35 end)
   on conflict (firm_id, org_id) do update set grant_id = excluded.grant_id, org_name = excluded.org_name, org_gstin = excluded.org_gstin, client_id = excluded.client_id,
      status = 'connected', linked_by = p_user, linked_at = now(), disconnected_at = null, disconnected_by = null, next_sync_at = now(), last_error = null
   returning * into c;
