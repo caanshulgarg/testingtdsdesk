@@ -2,6 +2,7 @@
 through the real function before (Opus for everything, no router, no Haiku, 40 rows, 5-minute prompt cache, no answer
 cache) and after (the levers on), with the model mocked and the tokens ESTIMATED from what is sent. Prints the table in
 rupees; fails if any question costs more after than before, or if a keyword question costs anything after."""
+# The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
 import os, sys, json, shutil, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import assistant_stand as A, assistant_supa as SUPA

@@ -9,6 +9,7 @@ Checks, each against figures worked out by hand (tests/fixtures/books/EXPECTED.m
   - the cap: asst_cap_take takes calls only under the cap, atomically; the log keeps the question, the tools, the tokens and
     the time only; the owner sees the days and questions, staff only today's count;
   - mismatches: add-only (the service role cannot change or remove a row), read by the owner only."""
+# The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
 import os, sys, json, re, hashlib, datetime, collections
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import assistant_stand as A
