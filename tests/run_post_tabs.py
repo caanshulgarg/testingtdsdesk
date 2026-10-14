@@ -239,7 +239,7 @@ with sync_playwright() as p:
       refreshStats(S.coId); render(); }""")
     pg.wait_for_timeout(500)
     tab("topost")
-    ok(pg.locator('#app [data-post-panel="errors"], #app [data-post-tabs] [data-post-tab="errors"].bad').count() >= 1 and badge("errors") >= 1 and badge("topost") == 3, "an earlier failed posting is on the list (Errors %d) and three new bills are ready" % badge("errors"))
+    ok(pg.locator('#app [data-post-panel="errors"], #app [data-post-tabs] [data-post-tab="errors"].st-errors').count() >= 1 and badge("errors") >= 1 and badge("topost") == 3, "an earlier failed posting is on the list (Errors %d) and three new bills are ready" % badge("errors"))
     def press_post(sel="#app [data-post-main]"):
         pg.click(sel); pg.wait_for_timeout(700)
         if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]')

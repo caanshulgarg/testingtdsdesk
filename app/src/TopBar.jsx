@@ -58,7 +58,8 @@ export function uploadKind() {
 // To review's Approve, and Post to Tally's "Post N to Tally" (its To post tab, with bills ready)
 export function pageOwnsPrimary() {
   const up = uploadKind();
-  if (up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft") return true;
+  // (upload-pages: only while there are bills to approve; with none, Upload is the page's one next step)
+  if (up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft") return typeof draftRows === "function" && draftRows().length > 0;
   if (up === "bills" && S.tab === "export") {
     const co = CO(); if (!co) return false;
     let ready = 0, errors = 0;

@@ -94,7 +94,8 @@ with sync_playwright() as p:
     ok(not re.search(r"\b\d+ to review", bar), "the bar at the foot does not count the bills to review again (%s)" % bar.replace("\n", " ")[:120])
     # ---- 4. an upload going on, and a file not read
     E(BK.UPLOADING); pg.wait_for_timeout(500)
-    ok(pg.inner_text("#app [data-upload-progress]") == "Reading 3 of 5…", "upload progress inline: “Reading 3 of 5…” (%s)" % (pg.inner_text("#app [data-upload-progress]") if E("!!document.querySelector('#app [data-upload-progress]')") else "none"))
+    # five files: two read, one not read, one being read (the fourth), one waiting
+    ok(pg.inner_text("#app [data-upload-progress]") == "Reading 4 of 5…", "upload progress inline: “Reading 4 of 5…” (%s)" % (pg.inner_text("#app [data-upload-progress]") if E("!!document.querySelector('#app [data-upload-progress]')") else "none"))
     ok(E("document.querySelectorAll('#app .busycard').length") == 0, "said once (no second reading card)")
     f = '#app [data-upload-failed] [data-failed-file="bill-5.jpg"]'
     ok(pg.locator(f).count() == 1 and "not a PDF or a photo" in pg.inner_text(f + " [data-failed-why]") and pg.locator(f + " [data-retry-read]").count() == 1,
@@ -131,7 +132,8 @@ with sync_playwright() as p:
     ok(E("document.querySelectorAll('#app nav.statebar [data-state]').length") == 0 and "No sales invoices yet" in pg.inner_text("#app"), "Sales, empty: no row of noughts, “No sales invoices yet”")
     # ---- the top bar on another client page still says Tally's errors, in the same word
     E("() => goClient('dash')"); pg.wait_for_timeout(800)
-    ok(re.search(r"\b3 Tally errors\b", TOP(pg)) is not None, "elsewhere the top bar's link says “3 Tally errors” (%s)" % TOP(pg)[:160])
+    n = E("postTabCounts(S.coId).errors")
+    ok(n > 0 and re.search(r"\b%d Tally errors\b" % n, TOP(pg)) is not None, "elsewhere the top bar's link counts the same errors, in the same word: “%d Tally errors” (%s)" % (n, TOP(pg)[:160]))
     br.close()
     # ---- 5. a phone
     br, pg = start(p, 390, 844)

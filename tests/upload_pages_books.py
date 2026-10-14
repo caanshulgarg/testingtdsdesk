@@ -5,50 +5,68 @@ sales invoices. Used by run_upload_pages.py and the screenshots of the pages (of
 
 Each is a JS function for page.evaluate; PURCHASE first (it opens the client), the others after it."""
 
+# the stand of run_post_tabs.py (FinCom's cloud, its postings and the bridge faked), with the owner's counts
 PURCHASE = """async () => {
   const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); c.tallyName = "GARG SHEKHAR & COMPANY";
+  S.firm.firmName = "ABC"; S.account = {firm: {balance: 499999912, plan: {name: "Firm"}}, me: {email: "owner@abc.in", role: "owner"}};
   S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
   choiceConfirm(c, "tds:professional", "TDS Payable - Professional"); choiceConfirm(c, "postTo", "GARG SHEKHAR & COMPANY");
-  S.firm.firmName = "ABC"; S.account = {firm: {balance: 499999912, plan: {name: "Firm"}}, me: {email: "owner@abc.in", role: "owner"}};
+  const c2 = newCompany({name: "Other Client", gstin: "09AAAPZ1234A1Z5"}); S.companies[c2.id] = c2; S.data[c2.id] = {parties: {}, entries: {}, loaded: true}; c2.stats = {};
+  window.__c2 = c2.id;
   const t = (m) => new Date(Date.now() - m * 60000).toISOString();
+  window.__t = t;
   Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = [{user_id: "u-1", name: "Anshul"}];
+  TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: "GARG SHEKHAR & COMPANY", daysAt: new Date().toISOString(), state: {doneTo: "20261001", skipped: []}}]};
   const G = "GARG SHEKHAR & COMPANY";
-  TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: G, daysAt: new Date().toISOString(), state: {doneTo: "20261001", skipped: []}}]};
+  // the postings in FinCom's cloud:
+  //   jC done (old2 in Tally): Posted; jD failed, nothing of it here: Errors (Retry, Dismiss);
+  //   jU still running, u1 sent when Tally stopped answering (state unknown): Errors, "Checking whether it reached Tally";
+  //   jX done, x1 refused by Tally (item failed): Errors
   window.__jobs = [
+    {id: "jC", client_id: c.id, company: G, status: "done", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: t(300), updated_at: t(299), entry_ids: ["old2"], results: [{id: "old2", ok: true, verified: true}], items: [{id: "old2", state: "in_tally"}]},
     {id: "jU", client_id: c.id, company: G, status: "running", done: 0, n: 1, message: "Checking whether it reached Tally", created_at: t(6), updated_at: t(5), entry_ids: ["u1"],
       results: [{id: "u1", ok: false, outcomeUnknown: true, state: "unknown", message: "Checking whether it reached Tally"}], items: [{id: "u1", state: "unknown", reason: "Checking whether it reached Tally", outcomeUnknown: true}]},
     {id: "jX", client_id: c.id, company: G, status: "done", done: 0, n: 1, message: "0 of 1 sent to Tally", created_at: t(30), updated_at: t(29), entry_ids: ["x1"],
       results: [{id: "x1", ok: false, message: "Voucher date is outside the period of the company"}], items: [{id: "x1", state: "failed", reason: "Voucher date is outside the period of the company"}]}];
-  window.__postIds = [{job_id: "jX", fincom_id: "x1", entry_id: "x1", live: false, released_at: t(28), released_why: "refused"}];
-  TCloud.restAll = async (u) => /^tally_post_ids/.test(u) ? JSON.parse(JSON.stringify(window.__postIds)) : /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : [];
-  TCloud.rpc = async (fn, a) => fn === "tally_status" ? (TCloud.st[a.p_client] ? TCloud.st[a.p_client].books : []) : (/^tally_/.test(fn) ? {ok: true} : null);
+  // tally_post_ids (migration-32; released_at from migration-37): the FinCom ids the cloud holds for the client's postings.
+  // jD's old3 and jX's x1 were released (the job failed / the bridge said not in Tally); a row with live=true is still held
+  window.__postIds = [{job_id: "jX", fincom_id: "x1", entry_id: "x1", live: false, released_at: t(28), released_why: "refused: Voucher date is outside the period of the company"}];
+  window.__postIdsFail = "";
+  TCloud.restAll = async (u) => { if (/^tally_post_ids/.test(u)){ if (window.__postIdsFail) throw new Error(window.__postIdsFail); window.__idsAsked = (window.__idsAsked || []).concat([u]); return JSON.parse(JSON.stringify(window.__postIds)); }
+    return /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : []; };
+  window.__rpc = [];
+  TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a || {}))]); if (fn === "tally_status") return TCloud.st[a.p_client] ? TCloud.st[a.p_client].books : [];
+    return /^tally_(want_update|post_enqueue|post_dismiss|post_undismiss|post_record)$/.test(fn) ? {ok: true} : null; };
   Cloud.api = async () => [];
   CloudJobs.list = null; CloudJobs.at = 0; CloudJobs.tried = {};
+  window.__dev = {id: "d-1", name: "NWS144", revoked: false, last_seen: new Date().toISOString(), info: {computer: "NWS144", beat: {at: new Date().toISOString(), every: 30, tally: true, tallyState: "open",
+    paused: false, notAnsweringSince: "", updating: false, lastRead: t(10), open: [G], companies: [{name: G, open: true, at: t(10), lastRead: t(10)}]}}};
   TLight.refresh = function(){ return Promise.resolve(); };
-  TLight.st = {at: Date.now(), busy: false, by: {}, devs: [], cos: []};
+  TLight.st = {at: Date.now(), busy: false, by: {}, devs: [window.__dev], cos: [{company: G, client_id: c.id, device_id: "d-1"}]};
   PostCheck.due = () => false;
   await openCompany(c.id);
   const mk = (id, n, no, amt, extra) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
     e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[c.id].entries[e.id] = e; approve(e); Object.assign(e, extra || {}); return e; };
+  // approved a while ago (before the postings of the cloud that name them)
   const old = {approvedAt: t(400)};
-  // three Tally did not take: one with no answer, one refused, one posted and gone from Tally since
   mk("u1", "Unknown Outcome Co", "U/1", 5000, old); mk("x1", "Refused Co", "X/1", 7000, old);
+  // FA/ELEC/013: posted, then not found in the cloud copy: needs attention
   mk("fa", "FINGATE ADVISORY", "FA/ELEC/013", 25535, {approvedAt: t(400), exportedAt: "2026-09-29T03:58:55Z", postVerified: true, postedVia: "bridge", goneFromTally: "2026-10-02T10:04:00Z",
     tally: {at: "2026-09-29T03:58:55Z", guid: "g-66b4", vchDate: "20260701", vchType: "Journal", company: G}});
-  // twelve in Tally
-  for (let i = 1; i <= 12; i++) mk("in" + i, ["Kashi IT Solutions", "Alpha Consultants", "Delta Legal LLP"][i % 3], "IN/" + i, 10000 + i * 1250,
+  // in Tally already: on no tab
+  for (let i = 1; i <= 11; i++) mk("in" + i, ["Kashi IT Solutions", "Alpha Consultants", "Delta Legal LLP"][i % 3], "IN/" + i, 10000 + i * 1250,
     {approvedAt: t(900), exportedAt: "2026-09-" + String(10 + i).padStart(2, "0") + "T03:00:00Z", postVerified: true, postedVia: "bridge", tally: {at: "2026-09-20T03:00:00Z", guid: "g-in" + i, vchDate: "20260701"}});
-  // two duplicates, three deleted
   const raw = (id, n, no, amt, extra) => { const e = newEntry(n + ".pdf"); e.id = id; Object.assign(e.x, {vendorName: n, invoiceNo: no, invoiceDate: "2026-08-04", taxable: amt, total: amt}); Object.assign(e, extra); S.data[c.id].entries[id] = e; return e; };
   raw("d1", "Kashi IT Solutions", "IN/2", 12500, {status: "duplicate", dupOf: {entryId: "in2", msg: "Duplicate of Kashi IT Solutions IN/2"}});
   raw("d2", "Alpha Consultants", "IN/4", 15000, {status: "duplicate", dupOf: {entryId: "in4", msg: "Duplicate of Alpha Consultants IN/4"}});
   for (let i = 1; i <= 3; i++) raw("del" + i, "Old Vendor " + i, "OV/" + i, 3000 * i, {status: "deleted", deleted: {at: t(2000 + i), by: "Anshul", reason: "uploaded by mistake"}});
-  TallyProof.at[c.id] = Date.now(); TallyProof.check = async () => 0; TallyProof.checkBank = async () => 0;
-  refreshStats(c.id);
-  S.bank = S.bank && S.bank.cid === c.id ? S.bank : S.bank; window.autoPostTo = async () => {};
+  TallyProof.at[c.id] = Date.now(); TallyProof.check = async () => 0;
+  refreshStats(c.id); goStep("post", "bills");
+  await new Promise(r => setTimeout(r, 500));
+  S.bank.loading = false;
+  window.autoPostTo = async () => {};
   await CloudJobs.load(true);
   goStep("review", "bills");
-  await new Promise(r => setTimeout(r, 300));
   render();
   return c.id;
 }"""
