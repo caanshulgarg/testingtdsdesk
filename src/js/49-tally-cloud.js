@@ -1343,12 +1343,26 @@ const TLight = {
         // the top bar follows a change of state at once; nothing else is redrawn while someone types. The open client's
         // last read and "reading now" are part of it (review of 02-Oct-2026: the Post page said "last read 15:34" at
         // 17:43 because a new read time alone never drew the page again)
-        const co = typeof CO === "function" && S.view === "company" ? CO() : null, l = co ? tallyLine(co) : null;
-        const h = tallyHere(co), sig = JSON.stringify([tallyStatus(co).parts || {}, l ? [l.state, l.read, l.reading] : null, h.code, h.label, (h.other || "")]);
+        // quiet refresh (14-Oct-2026): Home too is drawn only when what it shows changed (it was drawn at every look, every
+        // 30 s); the Clients page's Tally column (st.by) is part of what is compared
+        const sig = this.sigNow();
         const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-        if (S.view === "home" || (sig !== this.sig && !typing)) render();
-        this.sig = sig;
+        if (sig !== this.sig && !typing){ this.sig = sig; quietRender(); }
       });
+  },
+  // what the page shows from the heartbeats, as one string: the top bar's sign, the open client's last read and "reading
+  // now", the Tally sign here, the Clients page's Tally column, and on the Tally page or panel each computer's state (its
+  // times to the minute, as shown). A heartbeat that changes none of it draws nothing
+  sigNow(){
+    try {
+      const co = typeof CO === "function" && S.view === "company" ? CO() : null, l = co ? tallyLine(co) : null, h = tallyHere(co), t = tallyStatus(co);
+      const tallyPage = !!S.tallyPanel || (S.view === "home" && S.homeTab === "tally") || (S.view === "company" && S.tab === "export");
+      // on the Tally page or panel everything a computer sent is shown (its bridges, their words, the requests), so all of
+      // it is compared; a time is compared to the minute (as shown), so a beat whose times alone moved draws nothing
+      const minute = (k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) ? v.slice(0, 16) : v);
+      const devs = tallyPage ? JSON.stringify((this.st.devs || []).map(d => [d.id, d.name, d.last_seen, d.info]), minute) : null;
+      return JSON.stringify([t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, (h.other || ""), S.view === "home" ? this.st.by : null, devs]);
+    } catch (e){ return String(Date.now()); }
   },
   // client id -> {level: ok | warn | bad, short, say}
   work(cos, devs, now){
@@ -1465,6 +1479,7 @@ Object.assign(TLight, {
   beatIn(m){
     if (!m || !m.device || !m.beat || typeof m.beat !== "object") return false;
     let hit = false;
+    const was = this.sigNow();
     [].concat(this.st.devs || [], (TCloud.pane && TCloud.pane.devices) || []).forEach(d => {
       if (!d || d.id !== m.device) return;
       d.info = Object.assign({}, d.info || {}); d.info.beat = Object.assign({}, d.info.beat || {}, m.beat); hit = true;
@@ -1478,7 +1493,9 @@ Object.assign(TLight, {
       }
       if (m.beat.readStop !== undefined) d.info.readStop = m.beat.readStop;
     });
-    if (hit) render();
+    // quiet refresh (14-Oct-2026): a beat comes every 30 s from each bridge (every 10 s with three); the page is drawn
+    // only when the beat changed something it shows (a new last read, a read going on, Tally's state), never for its time alone
+    if (hit){ const now = this.sigNow(); if (now !== was){ this.sig = now; quietRender(); } }
     else { this.st.at = 0; this.refresh(); }
     return hit;
   },
