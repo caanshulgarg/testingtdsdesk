@@ -2,7 +2,7 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
-import TallyLine from "./parts/TallyLine.jsx";
+import TallyLine, { PanelBooks, panelBooksShown } from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
@@ -144,8 +144,8 @@ export function StatusTabs() {
   </nav></div>;
 }
 
-// Saving shows only when it matters (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click
-// opens Settings → Sign-in), nothing when all is saved. No cloud sign and no "live" (54-live-sync.js keeps doing its work).
+// Saving (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click opens Settings → Sign-in),
+// and since round 3 A a quiet "Saved 08:07" once saved, the rest in its tooltip. No cloud sign and no "live" (54-live-sync.js keeps doing its work).
 function saveWhy(err, fallback) { const p = typeof plainError === "function" ? plainError(err) : null; return p ? p.text : String(err || "").trim() || fallback; }
 function SaveState() {
   if (!Cloud.on()) return null;
@@ -156,6 +156,10 @@ function SaveState() {
   if (sv.state === "error") return bad("error", saveWhy(sv.err, "the server did not take the change. It is kept here and sent again on its own."), sv.err || "");
   if (st.error) return bad("error", saveWhy(st.error, "the firm account could not be reached."), st.error);
   if (sv.state === "saving" || st.busy) return <span className="tsave" data-save="saving">Saving…</span>;
+  // round 3 A (the owner, 14-Oct-2026): the page's "Saved 08:07 · changes by others appear here at once" moved here: the
+  // time on the chip, the rest in its tooltip
+  if (sv.at) return <span className="tsave ok" data-save="saved" tabIndex={0}
+    title={"Saved to the firm account at " + fmtTime(sv.at) + (Live.st === "live" ? ". Changes by others appear here at once." : ".")}>{"Saved " + fmtTime(sv.at)}</span>;
   return null;
 }
 
@@ -270,7 +274,9 @@ function TallyPanel({ open }) {
         <HereCard h={tallyHere(co)} link={co ? tallyLinkOf(co) : null} />
         <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
-        <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
+        <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} update={!panelBooksShown(co.id)} /></p>}
+        {/* round 3 A: the client's books, Books up to … · read …, Update now; the rest under Details */}
+        {co && <PanelBooks cid={co.id} />}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
           <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>

@@ -111,7 +111,11 @@ with sync_playwright() as p:
     ok(alltxt('#app .lk-res [data-books-held-led="unknown"]') == [UNKNOWN] and alltxt('#app .lk-res [data-books-held-led="known"]') == [], "2. the ledger is not known: '%s' (%s)" % (UNKNOWN, alltxt('#app .lk-res [data-books-held-led]')))
     hm = E("tallyHm(window.__readAt)")
     ok(r["line"] == "Balance from FinCom's copy · books as of %s %s" % (hm, ASOF_WHY) and txt("#app .lk-res [data-copy-line]") == r["line"], "3. the header: 'books as of %s %s' (%s)" % (hm, ASOF_WHY, r["line"]))
-    ok(E("booksAsOf(S.coId).text") == "Books as of %s %s" % (hm, ASOF_WHY) and ("Books as of %s %s" % (hm, ASOF_WHY)) in app(), "3. 'Books as of' on the page says what the time is (%s)" % E("booksAsOf(S.coId).text"))
+    # round 3 A (14-Oct-2026): "Books as of" is in the Tally panel's Details now, not on the page
+    E("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(700)
+    pnl = pg.inner_text('[data-overlay="tallypanel"] [data-panel-books] [data-books-asof]') if pg.locator('[data-overlay="tallypanel"] [data-panel-books] [data-books-asof]').count() else ""
+    ok(E("booksAsOf(S.coId).text") == "Books as of %s %s" % (hm, ASOF_WHY) and ("Books as of %s %s" % (hm, ASOF_WHY)) in pnl and "Books as of" not in app(), "3. 'Books as of' (Tally panel, Details) says what the time is (%s)" % E("booksAsOf(S.coId).text"))
+    E("() => { S.tallyPanel = false; render(); }"); pg.wait_for_timeout(400)
     ok(not INSTEP.search(app()) and len(alltxt("#app [data-books-held]")) == 1, "1. Look up page: no 'in step with Tally' anywhere; the held line once (%d)" % len(alltxt("#app [data-books-held]")))
     # ---- 4. print and Excel of the ledger
     E("() => lkAct('print')"); E("() => lkAct('excel')"); pg.wait_for_timeout(300)
