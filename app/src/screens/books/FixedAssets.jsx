@@ -69,7 +69,7 @@ function AssetDrawer({ b, fy, reg, a, c, res }) {
     // the drawer goes without a step back in the browser's history (that would undo the move to Look up)
     S.detail = null; goClient("books:lookup"); setTimeout(() => { try { LK.run("auto"); } catch (er) { /* Look up runs it itself */ } }, 80); };
   return <div className="far-form" data-far-form={a.id}>
-    <p className="note">{"Ledger “" + a.ledger + "”" + (a.group ? " in “" + a.group + "”" : "") + " · " + (it ? (FAR.block(a.block) || {}).name || "block to be chosen" : c.clsName + (c.life ? ", " + c.life + " years" : "")) + "."}</p>
+    <p className="note" data-far-drawer-head="">{"Ledger “" + a.ledger + "”" + (a.group ? " in “" + a.group + "”" : "") + (c.firstAdd ? " · bought " + dt(c.firstAdd.date) + " from " + (c.firstAdd.party || c.firstAdd.with || "") + " (" + c.firstAdd.vtype + " " + c.firstAdd.vno + ")" : "") + " · " + (it ? (FAR.block(a.block) || {}).name || "block to be chosen" : c.clsName + (c.life ? ", " + c.life + " years" : "")) + "."}</p>
     <h4>The ledger in the books, {FAR.fyLabel(fy)}</h4>
     <div className="bk-tablewrap"><table className="tbl small gf-off" data-far-ledger={a.id}><thead><tr><th>Date</th><th>Voucher</th><th>Particulars</th><th className="n">Debit</th><th className="n">Credit</th><th className="n">Balance</th><th></th></tr></thead><tbody>
       {led.map((e, i) => <tr key={i} data-far-entry={e.key || "open"}><td>{dt(e.date)}</td><td>{e.vtype ? e.vtype + " " + e.vno : ""}</td><td>{e.particulars}{e.taken && <span className="note">{" · taken as " + e.taken}</span>}</td>
@@ -141,11 +141,12 @@ function Register({ res, conf, open }) {
     { k: "group", label: R.by === "block" ? "Block" : "Group / class", sort: false, cell: txt((r) => <span className="note">{r.groupShort || r.group}</span>) },
     { k: "purchased", label: "Date of purchase", sort: false, cell: txt((r) => (r.purchased === "opening" ? "opening" : dt(r.purchased))) },
     { k: "put", label: "Put to use", sort: false, cell: txt((r) => dt(r.putToUse)) },
-    { k: "supplier", label: "Supplier / voucher no.", sort: false, cell: txt((r) => <span className="note">{r.supplier}</span>) },
+    { k: "supplier", label: "Supplier / voucher no.", sort: false, cls: "far-sup", thCls: "far-sup", cell: txt((r) => <span className="note">{r.supplier}</span>) },
   ].concat(RCOLS.map(([k, l]) => ({ k, label: l, cls: "n", sort: false, sum: false, cell: (r) => (r.kind === "g" ? "" : r.kind === "s" ? <b>{m(r[k])}</b> : <>{m(r[k])}{k === "dep" && r.override && <>{" "}<span className="tag warn">by hand</span></>}</>) })))
     .concat([{ k: "block", label: "Income-tax block", sort: false, cell: txt((r) => <span className="note">{r.block}</span>) }, { k: "rate", label: "Rate %", cls: "n", sort: false, sum: false, cell: txt((r) => (r.rate == null ? "" : r.rate)) }]);
-  const tail = rows.length ? <tr className="far-gt" data-far-total=""><td><b>Grand total</b></td><td></td><td></td><td></td><td></td>{RCOLS.map(([k]) => <td key={k} className="n"><b>{m(tot[k])}</b></td>)}<td></td><td></td></tr> : null;
+  const tail = rows.length ? <tr className="far-gt" data-far-total=""><td><b>Grand total</b></td><td></td><td></td><td></td><td className="far-sup"></td>{RCOLS.map(([k]) => <td key={k} className="n"><b>{m(tot[k])}</b></td>)}<td></td><td></td></tr> : null;
   return <div className="far-reg" data-phone-scroll="">
+    <p className="note far-scroll" data-far-scroll="">{"Scroll sideways for every column (cost, depreciation, net block, income-tax block) \u2192"}</p>
     <ListTable name="farRegister" id="farRegisterTable" cols={cols} rows={rows} rowKey={(r) => r.id} foot={false} tail={tail} className="bk-table far-regt gf-off"
       rowProps={(r) => ({ className: r.kind === "g" ? "far-grow" : r.kind === "s" ? "far-srow" : undefined, "data-far-kind": r.kind })}
       empty={all ? "No asset matches the filter." : "No ledger under Fixed Assets in these books."} />
@@ -180,7 +181,9 @@ function Page({ b, fy: fyBooks }) {
   const opts = FAR.optsFor(b, fy), res = FAR.compute(reg, regOf(b, Number(fy) - 1), opts), sett = res.settings, T = FAR.tables(res), tab = (id) => T.find((t) => t.id === id), W = FAR.words(res);
   const conf = res.confirm, openId = detailOpen("farAsset"), oa = openId ? (reg.assets || []).find((a) => a.id === openId) : null, oc = oa ? res.assets.find((z) => z.id === oa.id) : null;
   const setS = (k, v, keys) => { reg.settings = Object.assign({}, reg.settings, { [k]: v }); keep(b, fy, reg, keys); };
-  const confirmOne = (it) => { if (it.acc) { const x = (reg.accDep || []).find((z) => z.ledger === it.acc); if (x) x.byHand = true; } if (it.asset && /^(cls|block):/.test(it.key)) { const a = (reg.assets || []).find((z) => z.id === it.asset); if (a) a[it.key.startsWith("cls") ? "clsSure" : "blockSure"] = true; } keep(b, fy, reg, [it.key]); };
+  // many: mark each (who and when) and save once
+  const confirmOne = (it, many) => { if (it.acc) { const x = (reg.accDep || []).find((z) => z.ledger === it.acc); if (x) x.byHand = true; } if (it.asset && /^(cls|block):/.test(it.key)) { const a = (reg.assets || []).find((z) => z.id === it.asset); if (a) a[it.key.startsWith("cls") ? "clsSure" : "blockSure"] = true; }
+    if (many) FAR.okSet(reg, it.key, who()); else keep(b, fy, reg, [it.key]); };
   const exportIt = (which, kind) => {
     const base = fileName(({ register: "fixed-asset-register", books: "depreciation-books", it: "income-tax-blocks", dt: "deferred-tax", all: "fixed-assets" })[which] + "-" + fy);
     if (kind === "pdf") return printHtml(FAR.html(res, ent(), which));
@@ -247,9 +250,13 @@ function Page({ b, fy: fyBooks }) {
     {conf.length > 0 && <section className="dash-card far-confirm" data-far-confirm="" style={{ marginTop: 10 }}>
       <h3>{"To confirm: " + conf.length}</h3>
       <p className="note">The figures use these proposals until you confirm or change them. Nothing is applied silently.</p>
-      <ul>{conf.map((it) => <li key={it.key} data-far-item={it.key}>{it.text}{" "}
+      {(() => { const shown = S.farConfAll ? conf : conf.slice(0, 3), can = shown.filter((it) => !/^need:/.test(it.key));
+        return <><ul>{shown.map((it) => <li key={it.key} data-far-item={it.key}>{it.text}{" "}
         {!/^need:/.test(it.key) && <button className="btn small" data-far-ok={it.key} onClick={() => confirmOne(it)}>Confirm</button>}
         {it.asset && <>{" "}<button className="linkbtn" onClick={() => openDetail("farAsset", it.asset)}>Open</button></>}</li>)}</ul>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          {conf.length > 3 && <button className="linkbtn" data-far-conf-more="" onClick={() => setAndShow("farConfAll", !S.farConfAll)}>{S.farConfAll ? "Show fewer" : "Show " + (conf.length - 3) + " more"}</button>}
+          {can.length > 1 && <button className="btn small" data-far-ok-all="" onClick={() => { can.forEach((it) => confirmOne(it, true)); keep(b, fy, reg); toast(can.length + " points confirmed."); }}>{"Confirm all shown (" + can.length + ")"}</button>}</div></>; })()}
     </section>}
     <div style={{ marginTop: 10 }}><PageTabs label="Fixed assets" attr="data-far-tab" tabs={tabs} value={cur} onPick={(k) => setAndShow("farTab", k)} /></div>
     {cur === "reg" && <>
@@ -280,7 +287,7 @@ function Page({ b, fy: fyBooks }) {
       + ".far-confirm ul{margin:6px 0 0 18px;padding:0}.far-confirm li{margin:4px 0}.far-form h4{margin:14px 0 4px}.far-sec{display:block;margin:8px 0;padding:6px 10px;border:1px solid var(--line,#ddd);border-radius:8px}.far-sec>summary{font-weight:600;cursor:pointer}"
       + ".far-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 4px}.far-tile{cursor:default}.far-tile b{font-size:22px}@media (max-width:720px){.far-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}"
       + ".far-tie{margin:8px 0;padding:8px 10px;border:1px solid var(--bad,#b42318);border-radius:8px;background:rgba(180,35,24,.05)}.far-tie table{margin-top:6px}"
-      + ".far-reg .lt-wrap,.far-reg .bk-tablewrap{overflow:auto;max-width:100%}.far-regt{min-width:1700px}.far-regt td:first-child,.far-regt th:first-child{min-width:190px}.far-regt td{white-space:nowrap}.far-regt th:first-child,.far-regt td:first-child{position:sticky;left:0;z-index:2;background:var(--sheet,#fff)}.far-regt thead th{position:sticky;top:0;z-index:3}.far-regt thead th:first-child{z-index:4}"
+      + ".far-reg .lt-wrap,.far-reg .bk-tablewrap{overflow:auto;max-width:100%}.far-regt{min-width:1500px}.far-reg .lt-wrap{overflow-x:scroll}.far-scroll{margin:4px 0}@media (max-width:1599px){.far-regt .far-sup{display:none}}.far-regt td:first-child,.far-regt th:first-child{min-width:190px}.far-regt td,.far-regt td .note{white-space:nowrap}.far-regt td:first-child{white-space:normal;max-width:260px}.far-regt th:first-child,.far-regt td:first-child{position:sticky;left:0;z-index:2;background:var(--sheet,#fff)}.far-regt thead th{position:sticky;top:0;z-index:3}.far-regt thead th:first-child{z-index:4}"
       + ".far-regt tr.far-grow td{background:var(--paper,#f7f7f5);font-weight:600}.far-regt tr.far-srow td{border-top:1px solid var(--rule,#ccc)}.far-regt tr.far-gt td{border-top:2px solid var(--ink,#222);font-weight:700}"}</style>
   </div>;
 }
