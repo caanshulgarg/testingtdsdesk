@@ -64,6 +64,15 @@ export type TurnCtx = {
   certStore?: unknown,
   // for measuring the cost levers only (tests/assistant_cost.ts): each lever can be switched off to price "before"
   levers?: { router?: boolean, haiku?: boolean, slim?: boolean, promptCache?: boolean, opusOnly?: boolean },
+  // filled in as the turn goes (Sentry FINCOM-CLOUD-STAGING-1): where it is, the model it called last, and the last book
+  // tool that failed with the database's error code; the caller reports these codes when the turn fails, nothing else
+  trace?: TurnTrace,
+};
+export type TurnTrace = { step: string, model?: string, tool?: string, dbCode?: string };
+// the database's error code of a failed book tool: PostgREST passes Postgres's SQLSTATE (42501: permission denied) or its own
+export const dbCodeOf = (e: unknown): string | undefined => {
+  const c = (e as any)?.code;
+  return typeof c === "string" && /^([0-9A-Z]{5}|PGRST[0-9]{3})$/.test(c) ? c : undefined;
 };
 export type TurnResult = { text: string, labels: string[], tools: string[], usage: { input: number, output: number, cacheRead: number, cacheWrite: number }, calls: number, stopped?: string,
   route: string, models: string[], costUsd: number, feature: string, fellThrough: boolean, cacheable: boolean };
@@ -153,13 +162,16 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     emit({ t: "done", text, labels, unchecked: [], verdicts: [], citations: { ok: [], dropped: [] }, links: [], cases: [], usage: { ...usage, calls }, route: o.route, models, stopped: o.stopped || null });
     return { text, labels, tools: used, usage, calls, stopped: o.stopped, route: o.route, models, costUsd: usd, feature: o.feature, fellThrough: !!o.fellThrough, cacheable: o.cacheable !== false };
   };
+  const trace: TurnTrace = ctx.trace || { step: "turn" };
+  trace.step = "turn";
+  const bookFailed = (name: string, e: unknown) => { trace.tool = name; trace.dbCode = dbCodeOf(e); };
   const runBook = async (name: string, input: Record<string, unknown>, clientId: string): Promise<{ r: any, params: Record<string, unknown> } | { error: string }> => {
     const bt = bookTool(name);
     if (!bt || bt === SLICE_TOOL) return { error: "unknown tool " + name };
     const a = safeArgs(bt, input, clientId);
     if (!a.ok) return { error: a.error };
     let r: any;
-    try { r = await ctx.exec(bt.fn, a.args); } catch (e) { return { error: String((e as Error)?.message || e).slice(0, 200) }; }
+    try { r = await ctx.exec(bt.fn, a.args); } catch (e) { bookFailed(name, e); return { error: String((e as Error)?.message || e).slice(0, 200) }; }
     return { r, params: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "p_client")) };
   };
   const showResult = (name: string, x: { r: any, params: Record<string, unknown> }, client: string) => {
@@ -170,8 +182,11 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   };
   // one model call: the cap first, then the call, then its cost (in rupees, added to the firm's day and the feature)
   const call = async (p: Plan, req: Record<string, unknown>, onEvent?: (ev: any) => void): Promise<any> => {
+    trace.step = "cap";
     const cap = await ctx.capTake();
-    if (!cap.ok) return { capped: cap };
+    if (!cap.ok) { trace.step = "turn"; return { capped: cap }; }
+    trace.step = p.feature === "routing" ? "routing_call" : "model_call";
+    trace.model = p.model;
     calls++;
     if (!models.includes(p.model)) models.push(p.model);
     let msg: any = null;
@@ -191,6 +206,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         if (e instanceof Anthropic.APIError || tries >= 2) throw e;
       }
     }
+    trace.step = "turn";
     const u: Usage = msg.usage || {};
     usage.input += u.input_tokens || 0; usage.output += u.output_tokens || 0; usage.cacheRead += u.cache_read_input_tokens || 0; usage.cacheWrite += u.cache_creation_input_tokens || 0;
     const c = costUsd(p.model, u); usd += c;
@@ -503,6 +519,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
       }
       return err("unknown tool " + name);
     } catch (e) {
+      if (bookTool(name)) bookFailed(name, e);
       return err("the tool failed: " + String((e as Error)?.message || e).slice(0, 300));
     }
   };

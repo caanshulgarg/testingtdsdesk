@@ -14,6 +14,8 @@ import pg_stand
 ROOT = os.path.join(HERE, "..")
 SQL = os.path.join(ROOT, "server", "tally-cloud")
 MIG77 = os.path.join(ROOT, "server", "assistant", "migration-77-assistant.sql")
+# run after 77 as on staging: asst_span without tally_pick (Sentry FINCOM-CLOUD-STAGING-1)
+MIG85 = os.path.join(ROOT, "server", "assistant", "migration-85-asst-span.sql")
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -92,6 +94,15 @@ REUSED = [("tally_nm", "migration-23-clean-names.sql"), ("tally_pick", "migratio
           ("tally_led_kinds", "migration-23-clean-names.sql"), ("tally_tds_summary", "migration-14-reports.sql"),
           ("tally_gst_summary", "migration-37-follow-ups.sql"), ("tally_mis", "migration-37-follow-ups.sql")]
 
+# who may run the reused functions, as on staging (checked there on 14-Oct-2026): tally_pick is revoked from public and anon
+# (server/tally-cloud/migration.sql) and from signed-in users (server/security/migration-3-phase2.sql); only SECURITY
+# DEFINER functions and the service role call it. Sentry FINCOM-CLOUD-STAGING-1: the stand had left it callable by all, so
+# the book tools passed here and failed on staging ("permission denied for function tally_pick").
+PRIVILEGES = r"""
+revoke all on function tally_pick(text, date) from public, anon, authenticated;
+grant execute on function tally_pick(text, date) to service_role;
+"""
+
 def start(port):
     db = pg_stand.start(port)
     db.sql(SCHEMA)
@@ -99,10 +110,13 @@ def start(port):
         t = function_text(os.path.join(SQL, f), name)
         if t is None: raise SystemExit("not found: " + name + " in " + f)
         db.sql(t)
+    db.sql(PRIVILEGES)
     return db
 
 def migrate(db, path=MIG77):
-    return db.sql(open(path).read())
+    out = db.sql(open(path).read())
+    if path == MIG77: out += db.sql(open(MIG85).read())
+    return out
 
 def ask(db, query, uid=ME):
     """a query as a signed-in member: role authenticated, auth.uid() = uid (row-level security applies)"""

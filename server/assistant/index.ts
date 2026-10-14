@@ -15,7 +15,8 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { corsFor } from "../_shared/cors.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
-import { Ev, runTurn, TurnCtx } from "./agent.ts";
+import { Ev, runTurn, TurnCtx, TurnTrace } from "./agent.ts";
+import { classify } from "./failure.ts";
 import { FREE_SOURCES } from "./citations.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
@@ -39,7 +40,9 @@ export function handler(deps: Deps) {
     const r = await doFetch(URL_ + path, { ...init, headers: { apikey: token === SERVICE ? SERVICE : ANON, Authorization: "Bearer " + token, "Content-Type": "application/json", ...(init.headers || {}) } });
     const t = await r.text();
     let j: any = null; try { j = t ? JSON.parse(t) : null; } catch { j = t; }
-    if (!r.ok) throw Object.assign(new Error((j && (j.message || j.error)) || ("HTTP " + r.status)), { status: r.status });
+    // a database error keeps PostgREST's code (Postgres's SQLSTATE, e.g. 42501) and is marked as the database's, so a failed
+    // turn is never taken for the AI service's (a 403 here is not a refused Claude key)
+    if (!r.ok) throw Object.assign(new Error((j && (j.message || j.error)) || ("HTTP " + r.status)), { status: r.status, source: "db", code: j && typeof j.code === "string" ? j.code : undefined });
     return j;
   };
   const rpc = (fn: string, args: Record<string, unknown>, token: string) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
@@ -205,6 +208,7 @@ export function handler(deps: Deps) {
       }
     }
     const kept: Ev[] = [];
+    const trace: TurnTrace = { step: "turn" };          // where the turn is; read when it fails (failure.ts)
     // the certificates' store (migration 83): the firm's details for certificates, saved formats, the confirmed figures;
     // written here with the service role for the user's firm only (the tables' RLS lets the firm's members read them)
     const certStore = (firmId: string, uid: string) => ({
@@ -299,6 +303,7 @@ export function handler(deps: Deps) {
           certStore: certStore(firm, user.id),
           firm: { name: String(body?.firm?.name || "").slice(0, 120), lines: (Array.isArray(body?.firm?.lines) ? body.firm.lines : []).map((l: unknown) => String(l).slice(0, 160)).slice(0, 4) },
           emit,
+          trace,
         };
         try {
           emit({ t: "start", client: clientId, clientName });
@@ -312,10 +317,15 @@ export function handler(deps: Deps) {
               expires_at: new Date(Date.now() + (clientId ? 30 : 7) * 86400_000).toISOString() }) }).catch(() => {});
           }
         } catch (e) {
-          const status = (e as any)?.status;
-          const kind = status === 429 ? "rate_limit" : status === 401 || status === 403 ? "bad_key" : status >= 500 ? "overloaded" : "other";
-          emit({ t: "error", kind, message: kind === "rate_limit" ? "Claude is busy; try again in a minute." : kind === "bad_key" ? "The platform's Claude key was refused. Ask the administrator." : "The assistant could not answer just now; try again." });
-          sentry.report("assistant_turn", { message: "turn failed " + kind }, { kind: "ask", firm });
+          // what failed, in plain words for the user and in codes for Sentry (failure.ts); the event's exception is the
+          // error's class and stack with fixed words, never its own message (an API message can quote the request)
+          const f = classify(e, trace);
+          emit({ t: "error", kind: f.kind, message: f.message });
+          const rep = new Error("answer failed");
+          rep.name = f.errorClass;
+          if (typeof (e as Error)?.stack === "string") rep.stack = f.errorClass + ": answer failed\n" + String((e as Error).stack).split("\n").slice(1).join("\n");
+          sentry.report("assistant_turn", rep, { kind: f.kind, firm, tags: f.tags });
+          console.log(JSON.stringify({ evt: "assistant_failed", kind: f.kind, ...f.tags, error: f.errorClass }));
         }
         // one line: the question, the tools, the tokens and the time (never the answer or a figure)
         try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: tools, p_in: usage.input, p_out: usage.output, p_calls: calls, p_ms: Date.now() - t0,

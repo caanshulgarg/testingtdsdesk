@@ -5,6 +5,7 @@
 // (a mismatch row and one scrubbed Sentry event), files, the refusal to change anything, RLS, the cap and the log.
 import { handler } from "./index.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
+import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import ExcelJS from "npm:exceljs@4.4.0";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 
@@ -54,8 +55,8 @@ function sentryStand() {
   return { r, sent, settle: () => Promise.all(later) };
 }
 
-async function ask(claude: MockClaude, body: Record<string, unknown>, uid = ME, sentry = sentryStand()) {
-  const h = handler({ env: (k) => ({ SUPABASE_URL: STAND, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: (...a) => fetch(...a),
+async function ask(claude: MockClaude, body: Record<string, unknown>, uid = ME, sentry = sentryStand(), doFetch: typeof fetch = (...a) => fetch(...a)) {
+  const h = handler({ env: (k) => ({ SUPABASE_URL: STAND, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: doFetch,
     anthropic: () => claude as never, sentry: sentry.r, now: () => new Date("2026-10-13T10:00:00Z") });
   const res = await h(new Request("http://x/", { method: "POST", headers: { Authorization: "Bearer tok-" + uid, "Content-Type": "application/json", Origin: "https://staging.fincom.live" }, body: JSON.stringify({ action: "ask", ...body }) }));
   const raw = await res.text();
@@ -439,6 +440,54 @@ Deno.test("strict tools refused by the API: the call is made once more without s
   } } } };
   const r = await ask(c as never, { question: "What is section 194Q about? " + crypto.randomUUID().slice(0, 6), client_id: null });
   eq([r.done.text, (inner.calls[0] as any).tools.some((t: any) => t.strict)], ["General answer.", false], "answered without strict");
+});
+
+// Sentry FINCOM-CLOUD-STAGING-1: a turn that failed said only "turn failed other" in Sentry and "could not answer just now"
+// to the user. Each failure now has its own kind and words, and the Sentry event says what failed and where, in codes only.
+const failing = (err: () => unknown) => ({ beta: { messages: { stream: () => { throw err(); } } } });
+const apiErr = (status: number, type: string, message: string) =>
+  Anthropic.APIError.generate(status, { type: "error", error: { type, message } }, undefined, new Headers({ "request-id": "req_011CTestAbcdef0123456789" }));
+const sentryEvent = (s: { sent: string[] }) => JSON.parse(s.sent[s.sent.length - 1].split("\n")[2]);
+Deno.test("a failed turn: the user is told what failed in plain words; Sentry gets the error class, status, API error type, step and model, never the question", async () => {
+  const cases: [() => unknown, string, RegExp, Record<string, string>, string][] = [
+    [() => apiErr(400, "invalid_request_error", "Your credit balance is too low to access the Anthropic API."), "billing", /out of credit.*administrator/i,
+      { status: "400", api_error: "invalid_request_error", step: "model_call", model: "claude-sonnet-5-5", request_id: "req_011CTestAbcdef0123456789" }, "BadRequestError"],
+    [() => apiErr(404, "not_found_error", "model: claude-sonnet-5-5"), "model_unavailable", /claude-sonnet-5-5.*administrator/i,
+      { status: "404", api_error: "not_found_error", step: "model_call", model: "claude-sonnet-5-5" }, "NotFoundError"],
+    [() => apiErr(400, "invalid_request_error", "tools.12.blocked_domains: Extra inputs are not permitted"), "ai_request", /turned this request down.*reported/i,
+      { status: "400", api_error: "invalid_request_error", step: "model_call" }, "BadRequestError"],
+    [() => apiErr(529, "overloaded_error", "Overloaded"), "overloaded", /overloaded/i, { status: "529", api_error: "overloaded_error" }, "InternalServerError"],
+    [() => new Anthropic.APIConnectionError({ message: "Connection error." }), "network", /could not reach/i, { step: "model_call" }, "APIConnectionError"],
+    [() => new TypeError("Cannot read properties of undefined (reading 'content')"), "internal", /went wrong in FinCom/i, { step: "model_call" }, "TypeError"],
+  ];
+  for (const [err, kind, words, tags, cls] of cases) {
+    const marker = "Q" + crypto.randomUUID().slice(0, 8);
+    const r = await ask(failing(err) as never, { question: "What is section 194Q about? " + marker, client_id: null });
+    const e = ofType(r.events, "error")[0];
+    eq(e && e.kind, kind, cls + ": the kind");
+    assert(words.test(e.message), cls + ": the words: " + e.message);
+    assert(!/could not answer just now/.test(e.message), cls + ": not the generic message");
+    eq(r.sentry.sent.length, 1, cls + ": one Sentry event");
+    const ev = sentryEvent(r.sentry);
+    eq([ev.tags.where, ev.tags.kind, ev.exception.values[0].type], ["assistant_turn", kind, cls], cls + ": where, kind and class");
+    for (const [k, v] of Object.entries(tags)) eq(ev.tags[k], v, cls + ": tag " + k);
+    for (const bad of [marker, "194Q", "section"]) assert(!r.sentry.sent[0].includes(bad), cls + ": no '" + bad + "' of the question in Sentry");
+  }
+});
+
+Deno.test("a book tool that fails and then a failed model call: Sentry names the tool and the database's error code", async () => {
+  const s = sentryStand();
+  const marker = "Q" + crypto.randomUUID().slice(0, 8);
+  // what PostgREST answered on staging before migration 85, for the book tool the keyword router picked
+  const pgrst = (async (u: string | URL | Request, init?: RequestInit) => /\/rest\/v1\/rpc\/asst_tds_missed$/.test(String(u))
+    ? new Response(JSON.stringify({ code: "42501", details: null, hint: null, message: "permission denied for function tally_pick" }), { status: 403, headers: { "Content-Type": "application/json" } })
+    : fetch(u, init)) as typeof fetch;
+  const r = await ask(failing(() => apiErr(400, "invalid_request_error", "Your credit balance is too low")) as never,
+    { question: "Which suppliers crossed 30,000 under 194C without TDS this year? " + marker, client_id: CLIENT }, ME, s, pgrst);
+  const ev = sentryEvent(r.sentry);
+  eq(ofType(r.events, "error")[0].kind, "billing", "the kind");
+  eq([ev.tags.tool, ev.tags.db_code, ev.tags.step], ["tds_missed", "42501", "routing_call"], "the failed tool, its code and the step");
+  assert(!r.sentry.sent[0].includes(marker) && !r.sentry.sent[0].includes("tally_pick(") && !r.sentry.sent[0].includes(CLIENT), "nothing of the question or the client");
 });
 
 Deno.test("RLS: another firm's client is refused; the book tools give a member nothing of another firm", async () => {
