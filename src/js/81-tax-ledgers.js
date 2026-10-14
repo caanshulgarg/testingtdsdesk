@@ -188,11 +188,11 @@ const TaxLed = {
   },
 
   // ---------- the AI guess, for what the rules cannot tell ----------
-  // on only with the firm's assistant switched on and the clients' consent recorded (Settings › AI help); tests replace
+  // on while the firm's assistant is on (on by default, the owner's decision of 14-Oct-2026; Settings › AI help); tests replace
   // fetchGuess with a fake
   aiOn(){
     if (typeof Cloud !== "object" || !Cloud.on() || typeof ASST !== "object") return false;
-    const st = ASST.st().settings; if (!st && !ASST.st().settingsBusy) ASST.loadSettings(); return !!(st && st.enabled && st.consent);
+    const st = ASST.st().settings; if (!st && !ASST.st().settingsBusy) ASST.loadSettings(); return !!(st && !st.error && st.enabled);   // on by default since 14-Oct-2026 (the owner's decision); no consent tick
   },
   // the ledgers to ask about: not confirmed, no answer from the rules or the master, not asked before with the same facts
   toAsk(b, rows){ return rows.filter(r => !r.ok && r.src !== "rule" && r.src !== "confirmed" && !(r.it && r.it.ai && r.it.ai.key === this.aiKey(b, r))); },
