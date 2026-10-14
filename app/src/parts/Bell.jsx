@@ -7,9 +7,10 @@
 // slim line of the pages (ClearBtn, exported). What is cleared is kept per person (AlertClear, src/js/63-alerts.js: the
 // cloud, migration 68; this browser when not signed in) and never shown again; it changes no data. After a Clear, for a
 // few seconds: "Cleared N notifications · Undo" (UndoSnack).
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "./Button.jsx";
+import { useDismiss } from "./dismiss.js";
 
 // the Clear of one notification ({key, fp, text}: an AlertHub alert, or AlertClear.item(...) for a page's own line)
 export function ClearBtn({ x, label = "Clear" }) {
@@ -50,11 +51,14 @@ function Item({ x }) {
 }
 
 export default function Bell() {
+  const panel = useRef(null), btn = useRef(null);
+  // Esc, a click outside and (a phone) Back close the alerts (app/src/parts/dismiss.js); the bell itself toggles them
+  useDismiss(!!S.alertsOpen, panel, () => { S.alertsOpen = false; render(); }, { also: () => [btn.current].concat(Array.from(document.querySelectorAll("[data-alerts-undo]"))) });
   if (typeof AlertHub !== "object") return null;
   const list = AlertHub.list(), n = list.length, worst = n ? list[0].sev : "";
   const close = () => { S.alertsOpen = false; render(); };
   return <span className="bell-wrap">
-    <button className={"bell" + (worst ? " al-" + worst : "")} data-bell="" aria-haspopup="dialog" aria-expanded={!!S.alertsOpen}
+    <button ref={btn} className={"bell" + (worst ? " al-" + worst : "")} data-bell="" aria-haspopup="dialog" aria-expanded={!!S.alertsOpen}
       title={n ? n + (n === 1 ? " alert" : " alerts") : "No alerts"} aria-label={n ? n + (n === 1 ? " alert" : " alerts") : "No alerts"}
       onClick={() => { S.alertsOpen = !S.alertsOpen; if (S.alertsOpen) AlertHub.refresh(); render(); }}>
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>
@@ -62,7 +66,7 @@ export default function Bell() {
     </button>
     {S.alertsOpen && <>
       <button className="menu-scrim" onClick={close} aria-label="Close" />
-      <div className="alerts-panel" role="dialog" aria-label="Alerts" data-alerts-panel="">
+      <div ref={panel} className="alerts-panel" role="dialog" aria-label="Alerts" data-alerts-panel="">
         <div className="fm-head"><b>Alerts</b>
           <span className="row" style={{ gap: 6, alignItems: "center" }}>
             {n > 0 && typeof AlertClear === "object" && <Button className="btn small" data-alerts-clear-all="" title="Clear every notification here: they are not shown again to you"

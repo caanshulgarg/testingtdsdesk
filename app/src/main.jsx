@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/geist";
 import "./styles/index.css";
+import "./parts/dismiss.js";
 import App from "./App.jsx";
 import { adopt } from "./store.js";
 import { createElement, useSyncExternalStore } from "react";

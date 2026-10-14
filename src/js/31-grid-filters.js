@@ -149,5 +149,6 @@ document.addEventListener("input", e => {
   if (el.dataset.gfv !== undefined){ const t = GridF.table(); if (!t) return; const st = GridF.st(t), f = st[GridF.pop.i] = st[GridF.pop.i] || {}; f.sel = f.sel || [];
     if (el.checked){ if (!f.sel.includes(el.dataset.gfv)) f.sel.push(el.dataset.gfv); } else f.sel = f.sel.filter(v => v !== el.dataset.gfv); GridF.apply(t); }
 }, true);
-document.addEventListener("keydown", e => { if (e.key === "Escape" && GridF.pop) GridF.close(); });
+// Esc closes the filter and goes no further (the app's own Esc, src/js/27, would leave the client; 14-Oct-2026)
+document.addEventListener("keydown", e => { if (e.key === "Escape" && GridF.pop){ e.preventDefault(); e.stopImmediatePropagation(); GridF.close(); } }, true);
 window.addEventListener("resize", () => { const t = GridF.table(); if (t) GridF.place(t); });
