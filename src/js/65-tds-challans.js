@@ -22,7 +22,10 @@ const TDSCH = {
   // the deductions of one return: 26Q (Form 140), 27Q (144), 27EQ (143), or the 192 the books carry for 24Q (138)
   formRows(form){ return form === "24Q" ? TDS.salaryRows() : form === "27Q" ? TDS.nrRows() : form === "27EQ" ? TDS.tcsRows() : form ? TDS.rows() : this.rowsAll(); },
   ym(d){ return TDS.ymd(d).slice(0, 6); },
-  left(c, use){ return r2(num(c.tax) - ((use || TDS.challanUse())[c.id] || 0)); },
+  // the tax left on a challan: the one balance (TDSReg.balance); use: the tax used, where the caller has it already
+  left(c, use){ return use ? r2(num(c.tax) - (use[c.id] || 0)) : TDSReg.balance(c).tax; },
+  // a challan's key: BSR code | date of deposit | serial (5 digits): one challan in the register, whoever made it
+  chKey(c){ return c ? String(c.bsr || "") + "|" + TDS.ymd(c.date) + "|" + String(c.serial || "").padStart(5, "0") : ""; },
   label(c){ return [c.bsr || "", c.date ? fmtDate(tallyDate(c.date)) : "", c.serial || ""].join("/"); },
   // a section as a challan or a portal file writes it, as FinCom's old section: "94C" and "194C" and "194-C" are 194C,
   // "92B" is 192, a new-Act provision written with its old section ("393(1) Sl. 6(i) [old 194C]") is that section
@@ -131,27 +134,53 @@ const TDSCH = {
   },
   /* ---------- tagging ---------- */
   // tag deductions to a challan; refused (nothing changes) when the challan would be used beyond its amount
-  tag(ids, chId){
+  // tds-layout (14-Oct-2026, the owner's register rules, TDSReg src/js/79): refused on a return marked filed (locked until a
+  // correction is opened), and over the limit in the owner's words, "₹X left on this challan" (the one balance,
+  // TDSReg.balance); each tag goes to the audit trail. opt: via (tag | auto | tally | suggestion | balance), cx (the
+  // action's context, kept up to date here, so a loop of tags reads it), nosave (the caller saves once at its end)
+  tag(ids, chId, opt){
+    opt = opt || {};
     const b = S.books, c = TDS.challans().find(x => x.id === chId);
     if (!b || !c) return {ok: false, why: "No such challan."};
-    const byId = {};
-    this.rowsAll().forEach(r => { byId[r.id] = r; });
-    const rows = (ids || []).map(id => byId[id]).filter(Boolean).filter(r => r.challan !== chId);
+    const cx = opt.cx || TDSReg.ctx(), byId = cx.byRow;
+    const rows = (ids || []).map(id => byId[id] && byId[id].r).filter(Boolean).filter(r => r.challan !== chId);
     if (!rows.length) return {ok: true, n: 0};
-    const add = rows.reduce((a, r) => a + this.p(r.tds), 0), left = this.p(this.left(c));
-    if (add > left) return {ok: false, over: (add - left) / 100, why: "That is " + money((add - left) / 100) + " more than is left on challan " + this.label(c) + " (" + money(left / 100) + ")."};
+    const lock = TDSReg.lockedOf(rows.map(r => r.id), cx);
+    if (lock) return {ok: false, locked: true, why: lock};
+    const add = rows.reduce((a, r) => a + this.p(r.tds), 0), left = this.p(TDSReg.balance(c, cx).tax);
+    if (add > left) return {ok: false, over: (add - left) / 100, why: money(left / 100) + " left on this challan (" + this.label(c) + "): these need " + money(add / 100) + ", " + money((add - left) / 100) + " more than that."};
     b.alloc = b.alloc || {};
-    // bridge 2.4.3 (review 243 S1, S2): a tag made here is the person's (the sync marks its own "tally" after)
-    rows.forEach(r => { b.alloc[r.id] = chId; if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id]; });   // a person's "off" kept (review 243 U1)
-    saveBooks();
+    const chs = TDS.challans(), moved = rows.filter(r => r.challan).map(r => ({r, ch: chs.find(x => x.id === r.challan) || null}));
+    if (moved.length) TDSReg.logUntag(moved, cx);
+    // bridge 2.4.3 (review 243 S1, S2): a tag made here is the person's (the sync marks its own "tally" after); a person's "off" kept (review 243 U1)
+    rows.forEach(r => {
+      if (r.challan) TDSReg.track(cx, r, byId[r.id].form, r.challan, -1);
+      b.alloc[r.id] = chId; r.challan = chId; TDSReg.track(cx, r, byId[r.id].form, chId, 1);
+      if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id];
+    });
+    TDSReg.logTag(rows, c, opt.via || "tag", cx);
+    TDSReg.kept(cx);
+    if (!opt.nosave){ TDSReg.done(); saveBooks(); }
     return {ok: true, n: rows.length};
   },
-  untag(ids){
-    const b = S.books; let n = 0;
-    // a deduction a person takes off the challan Tally linked it to stays off ("off": the sync lists it, never tags it back)
-    (ids || []).forEach(id => { if (b && b.alloc && b.alloc[id]){ delete b.alloc[id]; n++; if (b.allocFrom && (b.allocFrom[id] === "tally" || b.allocFrom[id] === "off")) b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id]; } });   // (review 243 T2) an "off" kept
-    if (n) saveBooks();
-    return {ok: true, n};
+  untag(ids, opt){
+    opt = opt || {};
+    const b = S.books; if (!b) return {ok: true, n: 0};
+    const cx = opt.cx || TDSReg.ctx(), on = (ids || []).filter(id => b.alloc && b.alloc[id]);
+    const lock = TDSReg.lockedOf(on, cx);
+    if (lock) return {ok: false, n: 0, locked: true, why: lock};
+    const chs = TDS.challans(), gone = [];
+    // a deduction a person takes off the challan Tally linked it to stays off ("off": the sync lists it, never tags it back) (review 243 T2)
+    on.forEach(id => {
+      const x = cx.byRow[id], chId = b.alloc[id];
+      if (x){ gone.push({r: x.r, ch: chs.find(c => c.id === chId) || null}); TDSReg.track(cx, x.r, x.form, chId, -1); x.r.challan = ""; }
+      delete b.alloc[id];
+      if (b.allocFrom && (b.allocFrom[id] === "tally" || b.allocFrom[id] === "off")) b.allocFrom[id] = "off"; else if (b.allocFrom) delete b.allocFrom[id];
+    });
+    if (gone.length) TDSReg.logUntag(gone, cx);
+    TDSReg.kept(cx);
+    if (on.length && !opt.nosave){ TDSReg.done(); saveBooks(); }
+    return {ok: true, n: on.length};
   },
   // confirm a proposal: all its deductions, or (fit) those that fit the challan, oldest first
   confirm(pid, opt){
@@ -292,7 +321,7 @@ const TDSCH = {
   add(list){
     const b = S.books;
     b.challans = b.challans || [];
-    const key = c => c.bsr + "|" + TDS.ymd(c.date) + "|" + String(c.serial).padStart(5, "0");
+    const key = c => this.chKey(c);
     const have = {};
     b.challans.forEach(c => { have[key(c)] = c; });
     const linked = new Set(b.challans.map(c => c.fromVoucher).filter(Boolean));
@@ -306,14 +335,15 @@ const TDSCH = {
         if (ch) updated++;
         return;
       }
-      const c = Object.assign({id: uid("ch"), from: "upload"}, x);
+      const c = Object.assign({id: uid("ch"), from: "upload", autoPlace: "pending"}, x);   // tds-layout: placed by itself (TDSReg.placeNew)
       const near = (d) => pays.find(p => !linked.has(p.vid) && this.p(p.tax) === this.p(c.tax) && Math.abs(this.days(p.date, c.date)) <= d);
       const p = c.tax > 0 ? near(0) || near(3) : null;
       if (p){ c.fromVoucher = p.vid; linked.add(p.vid); linkedN++; }
       b.challans.push(c); have[key(c)] = c; added++;
     });
+    const placed = added && typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.placed).length : 0;
     if (added || updated) saveBooks();
-    return {added, updated, linked: linkedN};
+    return {added, updated, linked: linkedN, placed};
   },
   days(a, b){
     const d = s => { const t = TDS.ymd(s); return Date.UTC(num(t.slice(0, 4)), num(t.slice(4, 6)) - 1, num(t.slice(6, 8))); };
@@ -329,7 +359,7 @@ const TDSCH = {
     const r = this.add(read);
     const props = this.proposals(S.tdsFy, S.tdsQ, S.tdsView === "return" ? S.tdsForm || "26Q" : ""), exact = props.filter(p => p.exact).length;
     toast((r.added ? r.added + " challan" + (r.added === 1 ? "" : "s") + " added" : "No new challan") + (r.updated ? ", " + r.updated + " filled in" : "") +
-      (r.linked ? ", " + r.linked + " matched to Tally payments" : "") + "." + (props.length ? " " + props.length + " suggestion" + (props.length === 1 ? "" : "s") + " to confirm" + (exact ? " (" + exact + " exact)" : "") + "." : "") +
+      (r.linked ? ", " + r.linked + " matched to Tally payments" : "") + (r.placed ? ", " + r.placed + " allocated to " + (r.placed === 1 ? "its draft return" : "their draft returns") : "") + "." + (props.length ? " " + props.length + " suggestion" + (props.length === 1 ? "" : "s") + " to confirm" + (exact ? " (" + exact + " exact)" : "") + "." : "") +
       (bad.length ? " Nothing read from " + bad.slice(0, 3).join(", ") + (bad.length > 3 ? " and " + (bad.length - 3) + " more" : "") + "." : ""));
     render();
     return Object.assign({read: read.length, bad}, r);

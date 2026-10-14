@@ -21,7 +21,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const { load, HTML } = require("./harness");
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "tdsfields243", "7.1");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
-  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH", "challanFromBooks", "BOOKS_KEYS"];
+  "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH", "challanFromBooks", "BOOKS_KEYS",
+  // tds-layout (14-Oct-2026): the one tagging (TDSCH.tag) asks the challan register (TDSReg) for the balance, the lock, the trail
+  "TDSReg", "TDS_SEC_CODES", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const { ctx, x } = load(HTML, NAMES.filter((n) => { try { load(HTML, [n]); return true; } catch (e) { return false; } }));
 ctx.S.companies = { t: { id: "t", name: "FinCom Spike Co", choices: {} } }; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t"; let uidN = 0; ctx.uid = (p) => (p || "id") + ++uidN; ctx.D = () => ({parties: {}, entries: {}}); if (typeof ctx.money !== "function") ctx.money = (a) => "Rs " + a; ctx.toast = () => {}; ctx.render = () => {};

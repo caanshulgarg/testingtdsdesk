@@ -50,12 +50,9 @@ const Route = {
       if (v === "notices") return "/notices";
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
-      // round 46 (TDS & GST makeover): the TDS tabs Challans and Checks have their own addresses; the old …/certs is Checks
-      if (v === "certs" || v === "checks") return "/" + e(S.tdsFy) + "/checks/" + e(v === "certs" ? "rates" : (S.tdsCheck || "rates"));
-      if (v === "challans") return "/" + e(S.tdsFy) + "/challans" + (S.tdsQ ? "/" + e(S.tdsQ) : "");
-      if (v === "recon") return "/" + e(S.tdsFy) + "/26as";
-      if (v === "traces") return "/" + e(S.tdsFy) + "/traces";
-      if (v === "salary") return "/" + e(S.tdsFy) + "/salary" + (S.paySub && S.paySub !== "employees" ? "/" + e(S.paySub) : "");
+      // tds-layout (14-Oct-2026): the challan register has its own address; the old TDS tabs (Challans, Checks, 26AS, TRACES
+      // files, Salary) have none now: their addresses are read below and lead to the new places
+      if (v === "register") return "/" + e(S.tdsFy) + "/challan-register";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
@@ -71,13 +68,16 @@ const Route = {
       if (p[0] === "notices"){ S.tdsView = "notices"; return; }
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
-      if (p[1] === "certs"){ S.tdsView = "checks"; S.tdsCheck = "rates"; return; }
-      if (p[1] === "checks"){ S.tdsView = "checks"; S.tdsCheck = ["rates", "limits", "tieout", "corr"].includes(p[2]) ? p[2] : "rates"; return; }
-      if (p[1] === "challans"){ S.tdsView = "challans"; S.tdsQ = /^Q[1-4]$/.test(p[2] || "") ? p[2] : ""; return; }
-      if (p[1] === "26as"){ S.tdsView = "recon"; return; }
-      if (p[1] === "traces"){ S.tdsView = "traces"; return; }
-      if (p[1] === "salary"){ S.tdsView = "salary"; S.paySub = ["employees", "register", "form16"].includes(p[2]) ? p[2] : "employees"; return; }
-      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
+      // tds-layout (14-Oct-2026): the old tabs' addresses, kept so old links still work, lead to the new places: the register;
+      // a return's To fix (the year's checks under it), After filing, Employees & declarations; the client's Reconciliations
+      // (TdsPage.jsx tdsRedirect moves the views; the address is then written anew)
+      if (p[1] === "challan-register" || p[1] === "challans"){ S.tdsView = "register"; this.replaceNext = true; return; }
+      if (p[1] === "certs"){ S.tdsView = "certs"; S.tdsQ = ""; this.replaceNext = true; return; }
+      if (p[1] === "checks"){ S.tdsView = "checks"; S.tdsQ = ""; S.tdsCheck = ["rates", "limits", "tieout", "corr"].includes(p[2]) ? p[2] : "rates"; this.replaceNext = true; return; }
+      if (p[1] === "26as"){ S.booksTab = "recon"; S.recFy = p[0]; this.replaceNext = true; return; }
+      if (p[1] === "traces"){ S.tdsView = "traces"; S.tdsQ = ""; S.tdsForm = "26Q"; this.replaceNext = true; return; }
+      if (p[1] === "salary"){ S.tdsView = "salary"; S.tdsQ = ""; S.paySub = ["employees", "register", "form16"].includes(p[2]) ? p[2] : "employees"; this.replaceNext = true; return; }
+      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; S.tdsFix = ""; return; }
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;
     }

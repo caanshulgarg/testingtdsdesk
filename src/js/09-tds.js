@@ -44,12 +44,17 @@ const TDS = {
   // what a section can be found by in a search: its old number and, from 2026-27, its new provision and table entry
   secFind(section, fy){ const x = this.secNew(section, fy); return [x.old, x.ref, x.label].join(" "); },
   // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
-  // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
+  // row on or before the collection's date applies. The codes are the official ones of Form 27EQ (tds-layout, the TDS review
+  // of 14-Oct-2026, H3: they were shifted by one from 6CB to 6CI): 6CA liquor, 6CB timber under a forest lease, 6CC timber
+  // otherwise, 6CD other forest produce, 6CE scrap, 6CF parking lot, 6CG toll plaza, 6CH mining and quarrying, 6CI tendu
+  // leaves, 6CJ coal, lignite or iron ore, 6CL motor vehicle, 6CO overseas tour package. From 1 April 2026 (Finance Act
+  // 2026, review M5; OWNER TO CONFIRM against the enacted text): liquor, scrap, minerals and tendu leaves 2%, overseas tour
+  // packages 2% flat
   TCS_RATES: [
-    ["2016-06-01", "6CA", 1], ["2016-06-01", "6CB", 5], ["2016-06-01", "6CC", 2.5], ["2016-06-01", "6CD", 2.5], ["2016-06-01", "6CE", 2.5],
-    ["2016-06-01", "6CF", 1], ["2016-06-01", "6CG", 2], ["2016-06-01", "6CH", 2], ["2016-06-01", "6CI", 2], ["2016-06-01", "6CJ", 1], ["2016-06-01", "6CL", 1],
+    ["2016-06-01", "6CA", 1], ["2016-06-01", "6CB", 2.5], ["2016-06-01", "6CC", 2.5], ["2016-06-01", "6CD", 2.5], ["2016-06-01", "6CE", 1],
+    ["2016-06-01", "6CF", 2], ["2016-06-01", "6CG", 2], ["2016-06-01", "6CH", 2], ["2016-06-01", "6CI", 5], ["2016-06-01", "6CJ", 1], ["2016-06-01", "6CL", 1],
     ["2020-10-01", "6CO", 5],
-    ["2026-04-01", "6CF", 2], ["2026-04-01", "6CJ", 2], ["2026-04-01", "6CO", 2]
+    ["2026-04-01", "6CA", 2], ["2026-04-01", "6CE", 2], ["2026-04-01", "6CI", 2], ["2026-04-01", "6CJ", 2], ["2026-04-01", "6CO", 2]
   ],
   tcsRate(code, date){
     const d = this.ymd(date), iso = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "";
@@ -109,8 +114,17 @@ const TDS = {
     if (l && l.rate_worked_out) return pct + " \u00b7 rate worked out: Tally stored 0 (TDS \u00f7 assessable amount)";
     return has ? pct : "";
   },
-  // 26Q: every deduction from a resident other than salary
-  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section))); },
+  // 26Q: every deduction from a resident other than salary, and other than those filed in a challan-cum-statement on the
+  // portal (194-IA 26QB, 194-IB 26QC, 194M 26QD: RULE_DEFAULTS' form; the TDS review of 14-Oct-2026, M3)
+  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section)) && !this.portalForm(r.section)); },
+  // the portal's own statement a section is filed in (26QB, 26QC, 26QD), "" for the returns FinCom makes
+  portalForm(section){
+    const s = this.sec(section);
+    if (!this._portal){ this._portal = {}; (typeof RULE_DEFAULTS === "object" ? RULE_DEFAULTS : []).forEach(x => { if (x.form && x.old) this._portal[this.sec(x.old)] = x.form; }); }
+    return this._portal[s] || "";
+  },
+  // those deductions, listed apart (To fix of 26Q: "file in 26QB / 26QC / 26QD on the portal")
+  portalRows(){ return this.allRows().filter(r => this.portalForm(r.section)).map(r => Object.assign({}, r, {portalForm: this.portalForm(r.section)})); },
   // 27Q: deductions from non-residents
   nrRows(){ return this.allRows().filter(r => this.NR.test(this.sec(r.section))); },
   // 27EQ: tax collected at source on sales, one row per voucher and TCS ledger
@@ -165,6 +179,14 @@ const TDS = {
         });
       });
     });
+    // the TDS review of 14-Oct-2026, M2: a TDS entry of its own after the bill (nothing paid or credited in it): the bill it
+    // was deducted for (TDSInt.lateDeduct: the party's latest bill before it whose amount fits the section's rate) gives the
+    // amount paid or credited and its date (credit); the date of deduction stays the TDS entry's
+    if (typeof TDSInt === "object") out.forEach(r => {
+      if (r.paid > 0 || !(r.tds > 0)) return;
+      const hit = TDSInt.lateDeduct(r);
+      if (hit && hit.amount > 0){ r.paid = r2(hit.amount); r.credit = hit.date; r.bill = hit.voucher; r.rate = r2(r.tds / r.paid * 100); r.rateFrom = "bill"; }
+    });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
@@ -205,8 +227,11 @@ const TDS = {
   // interest under section 201(1A), for each form (T-S3, 10-Oct-2026): 1% a month (or part of one) for deducting late, from
   // the bill to the TDS entry (TDSInt, src/js/66), and 1.5% a month for paying late, from the deduction to the challan when
   // the challan is after the due date. TCS (27EQ) is 1% a month under 206C(7). Each entry says which (kind "deduct" or "pay")
-  interest(fy, q, form){
+  // (the TDS review, L1) a deduction past its due date and still on no challan: 1.5% a month to date (asOf, else today),
+  // kind "unpaid"
+  interest(fy, q, form, asOf){
     form = form || "26Q";
+    let today = this.ymd(asOf); if (!today) try { today = istToday(); } catch (e){ today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10).replace(/-/g, ""); }
     const ch = {}, pct = form === "27EQ" ? 1 : 1.5;
     this.challans().forEach(c => { ch[c.id] = c; });
     const out = [];
@@ -216,7 +241,13 @@ const TDS = {
         if (L){ const amount = r2(r.tds * 0.01 * L.months); if (amount >= 1) out.push({kind: "deduct", rate: 1, row: r, from: L.date, bill: L.voucher, to: r.date, months: L.months, amount}); }
       }
       const c = ch[r.challan];
-      if (!c) return;
+      if (!c){
+        const due = this.dueDate(r.date);
+        if (!(r.tds > 0) || !today || today <= this.ymd(due)) return;
+        const months = this.monthsBetween(r.date, today), amount = r2(r.tds * pct / 100 * months);
+        if (amount >= 1) out.push({kind: "unpaid", rate: pct, row: r, due, to: today, months, amount});
+        return;
+      }
       const due = this.dueDate(r.date);
       if (this.ymd(c.date) <= this.ymd(due)) return;
       const months = this.monthsBetween(r.date, c.date);
@@ -226,11 +257,15 @@ const TDS = {
     });
     return out.sort((a, b) => b.amount - a.amount);
   },
-  // the due date of a quarter's statement: 31 Jul, 31 Oct, 31 Jan, 31 May; TCS (27EQ) the 15th of those months
+  // the due date of a quarter's statement: 31 Jul, 31 Oct, 31 Jan, 31 May; TCS (27EQ) the 15th of those months up to 2025-26,
+  // and from tax year 2026-27 (Form 143, Income-tax Rules 2026) the TDS calendar (the TDS review of 14-Oct-2026, H2; OWNER TO
+  // CONFIRM the 2026 rule against the Gazette)
   returnDue(fy, q, form){
-    const last = form === "27EQ" ? {Q1: "0715", Q2: "1015", Q3: "0115", Q4: "0515"}[q] : {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
+    const last = form === "27EQ" && !this.isNew(fy) ? {Q1: "0715", Q2: "1015", Q3: "0115", Q4: "0515"}[q] : {Q1: "0731", Q2: "1031", Q3: "0131", Q4: "0531"}[q];
     return String(num(fy.slice(0, 4)) + (q === "Q3" || q === "Q4" ? 1 : 0)) + last;
   },
+  // the due date in words, as the pages say it ("31 Jul"): from returnDue, so the screen and the late fee agree
+  dueWords(fy, q, form){ const d = this.returnDue(fy, q, form || "26Q"); return num(d.slice(6, 8)) + " " + MONTHS3[num(d.slice(4, 6)) - 1]; },
   // the fee for filing the statement late (234E): 200 a day, capped at the tax of the quarter; worked out to the date it was
   // filed, else to today. penaltyBy: a year after the due date; filed after it, a penalty of 10,000 to 1,00,000 can be
   // levied under 271H (and filed by it with the fee and interest paid, it is not)
@@ -248,7 +283,8 @@ const TDS = {
     const days = Math.round((d2 - d1) / 86400000);
     return {due, filed, days, fee: Math.min(200 * days, tax), cap: tax, penaltyBy, p271h: filed > penaltyBy};
   },
-  challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
+  // tds-layout (14-Oct-2026): a challan deleted by hand is kept with its reason (c.deleted, TDSReg.deleteHand) and is in no list
+  challans(){ return ((S.books || {}).challans || []).filter(c => !c.deleted).sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
   // (tds-challans, 10-Oct-2026: the salary TDS the books carry under 192 counts too, as it can now be tagged; untagged
   // before, so no figure moves)
@@ -257,9 +293,13 @@ const TDS = {
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },
-  // put deductions against challans of the same quarter and section, as a person would
+  // put deductions against challans of the same quarter and section, as a person would. tds-layout (14-Oct-2026): no button
+  // calls this any more; the app's one allocator is TDSReg.autoAllocate (src/js/79, the owner's order). It stays as the
+  // tests' way to set up their books (tdsgst_snapshot.py, e2e_tdsgst_app.js, run_tds_accuracy.py, pages_tds.py), whose
+  // files and figures were made with it and must not move
   autoAllocate(){
-    const b = S.books, rows = this.rows().concat(this.nrRows(), this.tcsRows()).filter(r => !r.challan), use = this.challanUse();
+    // tds-layout (14-Oct-2026): a return marked filed is locked (TDSReg, src/js/79): its deductions are left as they are
+    const b = S.books, rows = this.rows().concat(this.nrRows(), this.tcsRows()).filter(r => !r.challan && !(typeof TDSReg === "object" && TDSReg.rowLocked(r.id))), use = this.challanUse();
     const ch = this.challans();
     b.alloc = b.alloc || {};
     let n = 0;

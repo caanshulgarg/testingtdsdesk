@@ -7,7 +7,9 @@
 const fs = require("fs"), {load, HTML} = require("./harness"), {restStub} = require("./copy_rest_stub");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS",
   "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
-  "TDSFiled", "TDSTally", "AIH", "Payroll", "PayTax", "TDS24Q_FILE", "BOOKS_KEYS"];
+  "TDSFiled", "TDSTally", "AIH", "Payroll", "PayTax", "TDS24Q_FILE", "BOOKS_KEYS",
+  // tds-layout (14-Oct-2026): the one tagging (TDSCH.tag) asks the challan register (TDSReg) for the balance, the lock, the trail
+  "TDSReg", "TDS_SEC_CODES", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 (async () => {
   const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), outPath = process.argv[3];
   const setup = JSON.parse(fs.readFileSync(inp.setup, "utf8"));

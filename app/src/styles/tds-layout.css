@@ -1,0 +1,49 @@
+/* tds-layout (14-Oct-2026, the owner's decisions of 13/14-Oct-2026): the TDS page (the year's grid with its totals in the
+   header row, one line for the ledgers to confirm, the way to the challan register), the register, a return's lock and
+   To fix lines, the form for a challan entered by hand, "Use…". Inputs wrap; none has a fixed width.
+   (The message at the bottom, moved to a corner, is with the other message styles in arc-look.css.) */
+/* the TDS page */
+.tg-ledline { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
+.tg-ledline .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); flex: none; }
+.tg-qtot { display: block; font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.tg-says { display: block; font-weight: 400; color: var(--text-secondary); }
+.tg-reglink { margin-left: auto; font-size: 13px; color: var(--text-secondary); }
+.tg-h2 { font-size: 18px; margin: 0; }
+.tg-said { margin: 0 0 10px; padding: 6px 10px; border-left: 3px solid var(--accent, var(--brand)); background: var(--surface-muted); }
+.tg-lock { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; font-size: 13px; color: var(--text-secondary); }
+.tg-lock.open { color: var(--warn, var(--foreground)); }
+/* the register */
+.reg-split { position: relative; display: inline-block; }
+.reg-fig { font-variant-numeric: tabular-nums; text-decoration: underline dotted; text-underline-offset: 3px; }
+.reg-split-pop { position: absolute; right: 0; top: 100%; z-index: 5; display: grid; gap: 2px; padding: 6px 8px; min-width: 190px; text-align: left;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-control, 6px); box-shadow: var(--shadow-floating); font-size: 12px; }
+.reg-split-pop span { display: flex; justify-content: space-between; gap: 10px; }
+.reg-open { padding: 8px 10px; }
+/* a challan entered by hand */
+.ach-grid { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.ach-f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-secondary); flex: 1 1 140px; min-width: 0; }
+.ach-f input.n { text-align: right; }
+.ach-more { margin: 4px 0; } .ach-more > summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.reg-use { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.reg-use input, .reg-use select { flex: 1 1 120px; min-width: 0; max-width: 100%; }
+.reg-use .reg-more { display: contents; } .reg-use .reg-more > summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+.ach-f input, .ach-f select { width: 100%; }
+.ach-f small.bad { color: var(--bad); }
+/* To fix: what is wrong, in one line */
+.fix-line { font-size: 14px; }
+.fix-line .linkbtn.on { font-weight: 600; text-decoration: underline; }
+
+/* a challan's source: small grey words on its number's line (the coordinator's screenshot review, 14-Oct-2026) */
+.ch-src { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 6px; white-space: nowrap; }
+.reg-no { white-space: nowrap; }
+
+/* the TDS grid's returns (the owner, 14-Oct-2026: "Where is the TDS return?"): each a button with its name, its status in
+   colour, "Open →" on hover or focus; an empty return is plain text, not a button */
+[data-tds-grid] .tg-hint { margin: 0 0 8px; font-size: 13px; color: var(--text-secondary, var(--muted)); }
+[data-tds-grid] .rp-cell { position: relative; cursor: pointer; }
+[data-tds-grid] .rp-cell .rp-name { font-weight: 700; font-size: 13px; color: var(--foreground, var(--ink)); }
+[data-tds-grid] .rp-cell .rp-open { position: absolute; top: 7px; right: 9px; font-size: 12px; font-weight: 600; color: var(--brand); opacity: 0; transition: opacity var(--duration-fast, .12s); }
+[data-tds-grid] button.rp-cell:hover .rp-open, [data-tds-grid] button.rp-cell:focus .rp-open, [data-tds-grid] button.rp-cell:focus-visible .rp-open { opacity: 1; }
+[data-tds-grid] button.rp-cell:focus-visible { box-shadow: 0 0 0 2px var(--brand); }
+[data-tds-grid] .rp-cell.rp-empty, [data-tds-grid] .rp-cell.rp-empty:hover { cursor: default; transform: none; box-shadow: none; border-color: var(--rule); border-left-color: var(--rule-strong); }
+[data-tds-grid] .rp-cell.rp-empty .rp-name { color: var(--muted); font-weight: 600; }

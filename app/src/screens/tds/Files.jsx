@@ -1,10 +1,10 @@
-// TDS/GST round 2 (items 2 and 3): files the CA brings from the portals, on the TDS page.
+// TDS/GST round 2 (items 2 and 3): files the CA brings from the portals (Recon26: the client's Reconciliations page).
 //   Recon26: Form 26AS / AIS / TIS against the books (AS26, src/js/69-tds-26as.js): the client's own tax credit against its
 //     TDS receivable entries, and its deductees' statements against its returns. Lists Matched / Only in 26AS / Only in
 //     the books, with amounts.
-//   TracesFiles: Form 16A certificates kept with each deductee, the justification report's defaults, and the
-//     consolidated file's deductees against FinCom's return (TRF, src/js/70-traces-files.js).
-//   TracesDefaults / F16Link: the same on a return's Errors to fix tab and its Deductees tab.
+//   TracesDefaults / Conso / F16Link: the justification report's defaults, the consolidated file's deductees against
+//     FinCom's return (TRF, src/js/70-traces-files.js), and a deductee's Form 16A: on a return's After filing and To fix
+//     tabs and its Deductions tab (tds-layout: TRACES files is no TDS tab any more; ReturnParts.jsx AfterFiling).
 // Nothing here changes a figure of the books or a return.
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
@@ -14,7 +14,7 @@ const money = (v) => (v == null ? "—" : "₹" + INR.format(r2(v || 0)));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 const ST = { matched: ["ok", "Matched"], file: ["bad", "Only in "], books: ["warn", "Only in "] };
 
-function Upload({ label, accept, onFiles, hint, name }) {
+export function Upload({ label, accept, onFiles, hint, name }) {
   const [busy, setBusy] = useState(false);
   return <label className={"btn small primary" + (busy ? " busy" : "")} style={{ cursor: "pointer" }} data-upload={name}>{busy ? "Reading…" : label}
     <input type="file" accept={accept} multiple hidden aria-label={label} title={hint}
@@ -95,8 +95,8 @@ function Deductees({ fy }) {
   </section>;
 }
 
-export function Recon26() {
-  const fy = S.tdsFy, files = AS26.files();
+export function Recon26({ fy = S.tdsFy }) {
+  const files = AS26.files();
   return <>
     <section className="dash-card" data-as26="">
       <div className="rp-title"><h3>Form 26AS, AIS and TIS</h3>
@@ -110,38 +110,6 @@ export function Recon26() {
     </section>
     <OwnCredit fy={fy} />
     <Deductees fy={fy} />
-  </>;
-}
-
-// ---------------------------------------------------------------- TRACES files
-export function TracesFiles() {
-  const fy = S.tdsFy, [said, setSaid] = useState([]);
-  const f16 = TRF.f16().filter((r) => !r.fy || r.fy === fy), jrs = TRF.jrs().filter((x) => x.fy === fy), cs = TRF.consos().filter((x) => x.fy === fy);
-  const byPan = {};
-  f16.forEach((r) => { (byPan[r.pan] = byPan[r.pan] || { pan: r.pan, party: r.party || TRF.partyOfPan(r.pan), certs: [] }).certs.push(r); });
-  return <>
-    <section className="dash-card" data-traces="">
-      <div className="rp-title"><h3>TRACES files, {fy}</h3><span className="note">Form 16A, the justification report and the consolidated file, as downloaded from TRACES.</span>
-        <Info label="Which files">Upload the zip TRACES gives, or the files inside it. Form 16A PDFs are kept with each deductee; a justification report’s defaults and a consolidated file’s deductees are read for their return.</Info></div>
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 10px" }}>
-        <Upload name="traces" label="Upload TRACES files" accept=".zip,.pdf,.txt,application/zip,application/pdf,text/plain" onFiles={async (fs) => setSaid(await TRF.add(fs))} />
-      </div>
-      {said.length > 0 && <ul className="note" data-traces-said="" style={{ margin: "0 0 8px 18px", padding: 0 }}>{said.map((s, i) => <li key={i}>{s}</li>)}</ul>}
-    </section>
-    <section className="dash-card" style={{ marginTop: 12 }} data-f16a={fy}>
-      <h3>{TDS.isNew(fy) ? "Form 131 (earlier Form 16A)" : "Form 16A"} certificates</h3>
-      <ListTable name="f16a" rows={Object.values(byPan)} rowKey={(p) => p.pan} unit={["deductee", "deductees"]} empty="No certificate yet. Upload the Form 16A zip from TRACES."
-        rowProps={(p) => ({ "data-f16-pan": p.pan })}
-        cols={[
-          { k: "party", role: "party", label: "Deductee", v: (p) => p.party, cell: (p) => p.party || <span className="note">not in this client’s TDS</span> },
-          { k: "pan", label: "PAN", v: (p) => p.pan, cell: (p) => p.pan },
-          { k: "certs", label: "Certificates", cell: (p) => p.certs.sort((a, b) => String(a.q).localeCompare(String(b.q))).map((c) => <span key={c.id} style={{ marginRight: 10 }}>
-            <button className="linkbtn" data-f16-get={c.id} onClick={() => TRF.downloadF16(c.id)}>{c.q || "?"} {c.fy || ""}</button>{c.cert ? <span className="nr"> {c.cert}</span> : null}
-            {" "}<button className="linkbtn" aria-label={"Take out " + c.name} onClick={() => TRF.remove("f16a", c.id)}>×</button></span>) },
-        ]} />
-    </section>
-    {jrs.map((j) => <TracesDefaults key={j.id} jr={j} full />)}
-    {cs.map((c) => <Conso key={c.id} c={c} />)}
   </>;
 }
 
@@ -168,7 +136,7 @@ export function TracesDefaults({ jr, full }) {
   </section>;
 }
 
-function Conso({ c }) {
+export function Conso({ c }) {
   const r = TRF.consoCheck(c), bad = r.rows.filter((x) => !x.ok);
   return <section className="dash-card" style={{ marginTop: 12 }} data-conso={c.form + "|" + c.q + "|" + c.fy}>
     <h3>Consolidated file: {TDS.formShort(c.form || "26Q", c.fy)}, {c.q} {c.fy}</h3>

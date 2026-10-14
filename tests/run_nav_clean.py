@@ -80,13 +80,13 @@ try:
         print("2. a client's sidebar and its titles")
         E("(c) => openCompany(c)", cid); W(800); E("() => { S.books = window.__bk; goClient('dash'); }"); W(1000)
         # ui-tidy (13-Oct-2026): Clients first (was All clients at the foot)
-        want = ["Clients", "Overview", "Inbox", "From Tally", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"]
+        want = ["Clients", "Overview", "Inbox", "From Tally", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"]
         ok(side() == want, "client: the tree in order (%s)" % side())
         ok(groups() == ["Bring in", "Work", "Returns", "Books"], "groups: Bring in · Work · Returns · Books (%s)" % groups())
         ok("TDS & GST" not in side() and "Dashboard" not in side(), "no TDS & GST, no Dashboard")
         pg.screenshot(path=os.path.join(OUT, "desk-client-overview.png"))
         titles = {"Overview": "Overview", "Inbox": "Inbox", "From Tally": "From Tally", "Purchase": "Purchase", "Bank": "Bank", "Sales": "Sales", "Transactions": "Transactions",
-                  "TDS": "TDS", "GST": "GST", "Reports": "Reports", "MIS": "MIS", "Accounts": "Accounts", "Audit": "Audit", "Look up": "Look up", "Letters": "Letters", "Client setup": "Client setup"}
+                  "TDS": "TDS", "GST": "GST", "Reconciliations": "Reconciliations", "Reports": "Reports", "MIS": "MIS", "Accounts": "Accounts", "Audit": "Audit", "Look up": "Look up", "Letters": "Letters", "Client setup": "Client setup"}
         for label, t in titles.items():
             pg.click('#side .side-link[data-side="%s"]' % label); W(1100)
             ok(title() == t and lit() == [label], "%s: titled %s and lit (%s, %s)" % (label, t, title(), lit()))
@@ -174,7 +174,7 @@ try:
         ph.screenshot(path=os.path.join(OUT, "phone-client-bar.png"))
         ph.click("#side .side-more"); W2(600)
         sheet = E2("[...document.querySelectorAll('[data-side-sheet] .side-link')].map(e => e.dataset.side)")
-        ok(sheet == ["Inbox", "From Tally", "Sales", "Transactions", "TDS", "GST", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"], "More: the rest, in order (%s)" % sheet)
+        ok(sheet == ["Inbox", "From Tally", "Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"], "More: the rest, in order (%s)" % sheet)
         ph.screenshot(path=os.path.join(OUT, "phone-more-sheet.png"))
         ph.click('[data-side-sheet] .side-link[data-side="GST"]'); W2(1200)
         ok(E2("booksTab()") == "gst" and ph.locator("[data-side-sheet]").count() == 0, "a page from More opens, and the sheet closes")

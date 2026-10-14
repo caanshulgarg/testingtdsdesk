@@ -101,14 +101,16 @@ with sync_playwright() as p:
     ok("Foreign Co" not in rows26 and "Ok Contractor" in rows26, "26Q leaves out the 195 deduction (%s)" % rows26)
     ok(pg.evaluate("() => TDS.nrRows().map(r => r.party).join(',')") == "Foreign Co", "27Q takes it")
     t = pg.evaluate("() => TDS.tcsRows()[0]")
-    ok(t and t["party"] == "Scrap Buyer" and t["tds"] == 1000 and t["paid"] == 100000 and t["code"] == "6CF" and t["rate"] == 1, "27EQ: TCS of ₹1,000 on scrap of ₹1,00,000, code 6CF, from the books")
+    ok(t and t["party"] == "Scrap Buyer" and t["tds"] == 1000 and t["paid"] == 100000 and t["code"] == "6CE" and t["rate"] == 1, "27EQ: TCS of ₹1,000 on scrap of ₹1,00,000, code 6CE (the official code; 6CF before the TDS review of 14-Oct-2026), from the books")
     ok(pg.evaluate("() => Certs.expected(TDS.rows().find(r => r.party === 'No Pan Prof')).rate") == 20, "no PAN on a 194J deduction: 20% expected")
     pg.evaluate("() => { S.books.nrInfo = {'Foreign Co': {country: 'US', nature: '49', email: 'a@b.com', address: '1 Main St', tin: 'TIN1', dtaa: false}}; }")
     # from 1 April 2026: Forms 140 / 144 / 143, with payment codes, a draft until matched to Protean's format
     n = pg.evaluate("() => { const f = (k) => { const r = TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', name: 'T'}, k); return [r.name, r.formNo, r.draft, r.missingCodes.join(','), r.text.split('\\r\\n')[1].split('^')[4]]; }; return [f('26Q'), f('27Q'), f('27EQ')]; }")
     ok(n[0][0] == "DELT12345A_Form140_Q2_202627_DRAFT.txt" and n[0][1] == "140" and n[0][2] and n[0][4] == "140", "2026-27 Q2 other than salary: Form 140 (was 26Q), file named DRAFT, batch header says 140")
     ok(n[1][1] == "144" and n[1][4] == "144" and n[2][1] == "143" and n[2][4] == "143", "non-residents: Form 144 (was 27Q); TCS: Form 143 (was 27EQ)")
-    ok(n[0][3] == "194C,194J" and n[2][3] == "6CF", "the payment codes not yet filled in are named (%s; %s)" % (n[0][3], n[2][3]))
+    # tds-layout (14-Oct-2026, H4): the confirmed payment codes are filled in (194J(a) 1026, 194J(b) 1027, scrap 1073, …);
+    # one without a confirmed code (194C here; a 194J whose kind is not known) is still named, never guessed
+    ok("194C" in n[0][3].split(",") and n[2][3] == "", "the payment codes not confirmed are named, the confirmed ones written (%s; %s)" % (n[0][3], n[2][3]))
     # up to 2025-26: 26Q / 27Q / 27EQ as before (late returns and corrections)
     pg.evaluate("""() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) - 1) + v.date.slice(4); });
       S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) - 1) + c.date.slice(4); }); S.books.certs[0].from = '20250401'; S.books.certs[0].to = '20260331'; }""")
@@ -125,13 +127,13 @@ with sync_playwright() as p:
     ok(bh27[4] == "27Q" and len(d27) == 1 and d27[0][20] == "195" and d27[0][30:34] == ["A", "49", "", "US"], "27Q file: form 27Q in the batch header, section 195, Act rate (A), nature 49, country US")
     fq = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27EQ')")
     dq = [l.split("^") for l in fq["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
-    ok(fq["name"].endswith("_27EQ_Q2_202526.txt") and len(dq) == 1 and dq[0][20] == "6CF" and dq[0][10] == "100000.00", "27EQ file: the scrap collection, code 6CF, received ₹1,00,000")
+    ok(fq["name"].endswith("_27EQ_Q2_202526.txt") and len(dq) == 1 and dq[0][20] == "6CE" and dq[0][10] == "100000.00", "27EQ file: the scrap collection, code 6CE, received ₹1,00,000")
     # TCS rates by date: scrap 1% before April 2026, 2% from then; overseas tours 2% flat from then
-    ok(pg.evaluate("() => [TDS.tcsRate('6CF', '20251001'), TDS.tcsRate('6CF', '20260401'), TDS.tcsRate('6CJ', '20260501'), TDS.tcsRate('6CO', '20260401'), TDS.tcsRate('6CO', '20250401')].join()") == "1,2,2,2,5",
+    ok(pg.evaluate("() => [TDS.tcsRate('6CE', '20251001'), TDS.tcsRate('6CE', '20260401'), TDS.tcsRate('6CJ', '20260501'), TDS.tcsRate('6CO', '20260401'), TDS.tcsRate('6CO', '20250401')].join()") == "1,2,2,2,5",
        "TCS by date: scrap 1% then 2%, minerals 2%, overseas tour 2% from April 2026 (5% before)")
     ok(pg.evaluate("() => TCS27EQ.checks('2025-26', 'Q2').length") == 0, "2025-26: scrap at 1% is right")
     pg.evaluate("() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) + 1) + v.date.slice(4); }); S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) + 1) + c.date.slice(4); }); S.books.certs[0].from = '20260401'; S.books.certs[0].to = '20270331'; }")
-    ok(any("2% applies to 6CF" in x["why"] for x in pg.evaluate("() => TCS27EQ.checks('2026-27', 'Q2')")), "2026-27: scrap collected at 1% is flagged: 2% applies")
+    ok(any("2% applies to 6CE" in x["why"] for x in pg.evaluate("() => TCS27EQ.checks('2026-27', 'Q2')")), "2026-27: scrap collected at 1% is flagged: 2% applies")
     ok(pg.evaluate("() => TDS26Q.nrChecks('2026-27', 'Q2').length") == 0, "27Q: nothing missing once the deductee's details are in")
 
     # the TDS screens: the year shows 27Q and 27EQ beside 26Q and 24Q; each opens with its own checks

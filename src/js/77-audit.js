@@ -94,7 +94,8 @@ const AuditWP = {
       const short = [], late = [];
       fys.forEach(fy => Q.forEach(q => {
         Certs.issues(fy, q).filter(x => x.short > 0).forEach(x => short.push({vid: vidOf(x.row), date: x.row.date, no: x.row.voucher || "", type: x.row.section, party: x.row.party, amount: r2(x.short), note: "short deducted: " + x.row.rate + "% used, " + x.expected + "% applies: " + x.why}));
-        TDS.interest(fy, q).forEach(x => late.push({vid: vidOf(x.row), date: x.row.date, no: x.row.voucher || "", type: x.row.section, party: x.row.party, amount: r2(x.amount),
+        // the deductions not yet paid are the unpaid list below (TDS.interest's "unpaid" lines, since tds-layout, are the same)
+        TDS.interest(fy, q).filter(x => x.kind !== "unpaid").forEach(x => late.push({vid: vidOf(x.row), date: x.row.date, no: x.row.voucher || "", type: x.row.section, party: x.row.party, amount: r2(x.amount),
           note: x.kind === "deduct" ? "interest: TDS " + m(x.row.tds) + " deducted " + x.months + " month(s) after the bill, at 1%" : "interest: TDS " + m(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " month(s) at " + x.rate + "%"}));
       }));
       const unpaid = TDS.rows().filter(r => !r.challan).map(r => ({vid: vidOf(r), date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r2(r.tds), note: "deducted, not against a challan (not deposited, or not matched)"}));

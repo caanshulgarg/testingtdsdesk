@@ -9,7 +9,9 @@
 //   5. the Excel and the Word are marked DRAFT
 //   6. with AuditWP present (the audit helper's 77-audit.js), its results are used and the counts agree
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
+  // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
+  "TDS_SEC_CODES", "TDSReg", "TDSInt", "TDSFiled", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 // the audit helper's module, when the program has it (after 77-audit.js is merged)
 const names = NAMES.concat(/\nconst AuditWP\b/.test(fs.readFileSync(HTML, "utf8")) ? ["AuditWP", "GSTCMP", "AS26"].filter(n => n === "AuditWP" || new RegExp("\\nconst " + n + "\\b").test(fs.readFileSync(HTML, "utf8"))) : []);
 const {ctx, x} = load(HTML, names);

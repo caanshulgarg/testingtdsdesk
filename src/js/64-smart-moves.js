@@ -106,7 +106,7 @@ const Smart = {
       if (w === "bill") return "the bill";
       if (w === "purchase") return p[3] === "review" ? "Review" : "Purchase bills";
       if (w === "upload") return "Upload";
-      if (w === "books") return {reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", tds: "TDS", gst: "GST", import: "From Tally"}[p[3]] || "the books";
+      if (w === "books") return {reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", tds: "TDS", gst: "GST", import: "From Tally", recon: "Reconciliations"}[p[3]] || "the books";
       if (w === "setup") return "Client setup";
       return {dash: "Overview", inbox: "Inbox", txn: "Transactions", bank: "Bank", sales: "Sales"}[w] || "the client";
     }

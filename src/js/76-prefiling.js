@@ -51,7 +51,8 @@ const PreFile = {
         () => this.audit("tdsUnpaid", from, to, f => true).map(f => Object.assign(f, {rows: f.rows.filter(x => this.formOf(x) === form || !x.type)}))));
       L.push(this.line("late", "Late deduction or payment, with interest", "Interest under section 201(1A): 1% a month for deducting late, 1.5% a month for paying late; unpaid deductions past their due date, to today.",
         () => {
-          const rows = TDS.interest(fy, q, form).map(x => ({vid: x.row.voucherId || "", date: x.row.date, no: x.row.voucher || "", party: x.row.party, type: x.row.section, amount: x.amount,
+          // the deductions not yet paid are added below, to today (TDS.interest's "unpaid" lines, since the TDS review L1, are the same)
+          const rows = TDS.interest(fy, q, form).filter(x => x.kind !== "unpaid").map(x => ({vid: x.row.voucherId || "", date: x.row.date, no: x.row.voucher || "", party: x.row.party, type: x.row.section, amount: x.amount,
             note: x.kind === "deduct" ? "deducted " + x.months + " month(s) late at 1%" : "paid " + fmtDate(tallyDate(x.challan.date)) + ", due " + fmtDate(tallyDate(x.due)) + ": " + x.months + " month(s) at " + x.rate + "%"}));
           const pct = form === "27EQ" ? 1 : 1.5;
           TDS.formRows(form).filter(r => r.fy === fy && r.q === q && !r.challan).forEach(r => {

@@ -56,6 +56,9 @@ const TDSFiled = {
     const b = S.books, fill = !this.closedOf(fy, q); b.tdsFiled = Object.assign({}, b.tdsFiled);
     b.tdsFiled[this.key(fy, q, form)] = Object.assign({on: iso, token: t, at: new Date().toISOString(), by: typeof whoAmI === "function" ? whoAmI() : ""}, fill ? {closedFilled: true} : {});
     if (typeof TDSDrift === "object") TDSDrift.keep(fy, q, form);
+    // tds-layout (14-Oct-2026): its challan allocations are locked from now (TDSReg, src/js/79); a correction open for it is
+    // closed by filing it, and the trail says each allocation is locked
+    if (typeof TDSReg === "object"){ if (b.tdsCorr && b.tdsCorr[TDSReg.corrKey(fy, q, form)]){ b.tdsCorr = Object.assign({}, b.tdsCorr); delete b.tdsCorr[TDSReg.corrKey(fy, q, form)]; } TDSReg.lockReturn(fy, q, form); }
     try { const co = CO(); if (co && fill){ const f = Object.assign({}, ClosedP.cfg(co).tdsFiled); f[fy + "|" + q] = iso; ClosedP.set(co, "tdsFiled", f); } } catch (e){}
     try { auditEvent("tds_return_filed", {form, fy, q, on: iso, token: t}, S.coId); } catch (e){}
     saveBooks(); toast(name + " marked filed on " + fmtDate(iso) + "."); render();
@@ -130,6 +133,8 @@ const TDSRate = {
 // this amount. Nothing is found where the TDS is in the bill's own entry.
 const TDSInt = {
   lateDeduct(r){
+    // the bill already found for the row (TDS.allRowsNow, the review's M2): from its date to the deduction
+    if (r && r.credit && r.tds > 0){ const m = TDS.monthsBetween(r.credit, r.date); return m > 0 && TDS.ymd(r.credit) < TDS.ymd(r.date) ? {date: TDS.ymd(r.credit), voucher: r.bill || "", amount: r.paid, months: m} : null; }
     if (!r || r.paid > 0 || !(r.tds > 0)) return null;
     const idx = typeof perRender === "function" ? perRender(this, "byParty", () => this.index()) : this.index();
     const std = TDS.STD[TDS.sec(r.section)] || [];

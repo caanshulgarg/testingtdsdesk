@@ -187,7 +187,8 @@ const Audit = {
     },
     tdsLate(A, V, ctx){
       const fy = TDS.fyOf(ctx.to), rows = [];
-      ["Q1", "Q2", "Q3", "Q4"].forEach(q => TDS.interest(fy, q).forEach(x => rows.push({vid: "", date: x.row.date, no: x.row.voucher || "", type: "", party: x.row.party,
+      // paid late (the deductions not yet paid, TDS.interest's "unpaid" lines since tds-layout, are the audit's tdsUnpaid)
+      ["Q1", "Q2", "Q3", "Q4"].forEach(q => TDS.interest(fy, q).filter(x => x.kind !== "unpaid").forEach(x => rows.push({vid: "", date: x.row.date, no: x.row.voucher || "", type: "", party: x.row.party,
         amount: x.amount, note: x.kind === "deduct" ? "TDS " + A.money(x.row.tds) + " deducted on " + fmtDate(tallyDate(x.row.date)) + " for the bill of " + fmtDate(tallyDate(x.from)) + ", " + x.months + " months at 1%"
           : "TDS " + A.money(x.row.tds) + " due " + fmtDate(tallyDate(x.due)) + ", paid " + fmtDate(tallyDate(x.challan.date)) + ", " + x.months + " months"})));
       if (!rows.length) return null;
