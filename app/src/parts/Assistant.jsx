@@ -26,6 +26,9 @@ const LABELS = {
   ai: ["warn", "AI answer, not checked against the books"],
   general: ["info", "General guidance — verify before relying"],
   notice: ["neutral", "Notice"],
+  // certificates: neutral; each row's "From" says where its figure came from
+  confirm: ["neutral", "Figures for the certificate – please confirm"],
+  certificate: ["neutral", "Certificate figures – source in each row"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -69,9 +72,10 @@ function Table({ r, t }) {
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, 25);
   const sum = r.summary && typeof r.summary === "object" ? Object.entries(r.summary).filter(([, x]) => typeof x === "number") : [];
-  return <section className="asst-card green" data-asst-result={r.tool}>
+  const own = LABELS[r.label];          // a tool's own neutral label (certificates), else FinCom's book tool: green
+  return <section className={"asst-card " + (own ? "neutral" : "green")} data-asst-result={r.tool} data-asst-table-label={r.label || "books"}>
     <header>
-      <span className="asst-src ok">Checked against the books ✓</span>
+      {own ? <span className={"asst-src " + own[0]}>{own[1]}</span> : <span className="asst-src ok">Checked against the books ✓</span>}
       <b>{r.title || r.tool}</b>
       {r.period && <span className="note">{dmy(r.period.from)} to {dmy(r.period.to)}</span>}
       {r.asOn && <span className="note">on {dmy(r.asOn)}</span>}
@@ -84,6 +88,7 @@ function Table({ r, t }) {
           {cols.map((c) => <td key={c.k} className={isNum(c.t) ? "n" : ""}>
             {c.t === "date" && row[c.k] && (row.guid || row.vno) && (c.k === "day" || c.k === "date") ? <button className="linkbtn" title="Open the entry" onClick={() => ASST.openEntry(row, r.client || t.cid)}>{dmy(row[c.k])}</button>
               : c.t === "date" ? dmy(row[c.k]) : c.t === "amount" ? money(row[c.k]) : c.t === "pct" ? (row[c.k] == null ? "" : row[c.k] + "%") : row[c.k] == null ? "" : String(row[c.k])}
+            {own && c.k === "source" && row.books_check && <span className="asst-src ok asst-rowtick" data-asst-rowtick="" title="Worked out from the books"> ✓ books</span>}
           </td>)}
         </tr>)}</tbody>
       </table></div>}
@@ -200,7 +205,7 @@ export default function Assistant() {
   const a = ASST.st();
   // a click outside or Esc closes it (app/src/parts/dismiss.js); what was typed stays in ASST's state as a draft
   useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")) });
-  const file = useRef(null);
+  const file = useRef(null), upl = useRef(null);
   const co = S.view === "company" ? CO() : null;
   const cid = ASST.cid();
   const turns = ASST.turns();
@@ -231,9 +236,12 @@ export default function Assistant() {
             <div className="asst-askbar">
               {cid && <><input ref={file} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files[0]; e.target.value = ""; ASST.attach(f); }} />
                 <button type="button" className="iconbtn" title="Attach a notice (PDF or picture)" onClick={() => file.current && file.current.click()} disabled={a.uploading}><Paperclip size={15} /> {a.uploading ? "Storing…" : a.attach ? a.attach.name : "Notice"}</button></>}
+              <input ref={upl} type="file" multiple accept=".pdf,.xlsx,.xls,.docx,.png,.jpg,.jpeg" hidden onChange={(e) => { const f = Array.from(e.target.files); e.target.value = ""; ASST.upload(f); }} />
+              <button type="button" className="iconbtn" data-asst-upload="" title="Signed statements, a format, the letterhead" onClick={() => upl.current && upl.current.click()} disabled={a.uploading}><Paperclip size={15} /> Files</button>
               <span className="note asst-hint" data-asst-privacy="">Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never posts, files or changes anything.</span>
               <Button type="submit" className="btn small primary" disabled={a.busy || !String(a.q || "").trim()}><Send size={14} /> Ask</Button>
             </div>
+            {ASST.ups().length > 0 && <div className="asst-ups" data-asst-ups="">{ASST.ups().map((u) => <span key={u.path} className="chip">{u.name} <button type="button" className="linkbtn" onClick={() => ASST.unUpload(u.path)}>×</button></span>)}</div>}
           </form>
           {!turns.length && <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} className="chip" onClick={() => ASST.ask(s)}>{s}</button>)}</div>}
           {latest && <Turn t={latest} latest />}

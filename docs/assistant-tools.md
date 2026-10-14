@@ -86,3 +86,15 @@ posted); the Excel with live formulas. Without a register for the year it says s
 `fs_build` and `tax_audit_draft` take the register's classes and blocks the same way (det.far, det.itBlocks, clause 18).
 Tests: `server/assistant/tools/depreciation_test.ts` (to the paisa), `tests/run_dep_tool.py` (migration 81 on pg_stand, then
 the Deno test on what the function returned).
+## Certificates (`tools/certificates.ts`, branch `certificates`)
+
+`certificate_prepare` is the first **firm-wide** tool (`firmWide: true`): it runs with no client open and names its clients
+(`ctx.clients`, `ctx.rpcFor`), reads the files uploaded in the chat (`ctx.uploads`, `ctx.readFile`; the panel's Files button,
+`<firm>/<client or _firm>/uploads/`, never sent to the model as they are), a client's kept uploads (`ctx.clientFiles`), and keeps
+the firm's certificate details, formats and confirmed figures in migration 83's tables (`ctx.store`, written by the function
+with the service role). Its questions (`firmWide` tools' words) skip the keyword router and Haiku and run on Sonnet (task
+`file`, no web); its answers are never cached. The AI only reads a statement FinCom cannot read (`ctx.aiRead`: Sonnet, low
+effort, counted against the cap; a scanned copy is sent as it is, as a notice is), and those figures are labelled "read by
+the AI" and checked on their line where the copy has text. Wording: `tools/certificate-templates.ts` (one file, every
+paragraph "to confirm by the owner"); the arithmetic and reading: `tools/certlib.ts`. Tests: `tests/run_certificates.py`,
+`tests/run_migration83.py`, `tests/run_certificates_ui.py`.

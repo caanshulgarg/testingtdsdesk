@@ -4,8 +4,10 @@ import type { ExtTool } from "./types.ts";
 import { TOOLS as AUDIT } from "./audit.ts";
 import { TOOLS as REPORTS } from "./reports.ts";
 import { TOOLS as DEPRECIATION } from "./depreciation.ts";
+import { TOOLS as CERTIFICATES } from "./certificates.ts";
 export const EXT_TOOLS: ExtTool[] = [
   ...AUDIT,
   ...REPORTS,
   ...DEPRECIATION,
+  ...CERTIFICATES,
 ];
