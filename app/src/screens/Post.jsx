@@ -19,6 +19,7 @@
 // Posting itself stays in the business logic (postAllToTally, postBillsToTally, …).
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
+import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -438,16 +439,6 @@ function History({ co, canPost }) {
   return <div data-post-history=""><EntryList co={co} tab="posted" canPost={canPost} empty={<p className="note" data-post-noposted="">{"Nothing posted yet for this client."}</p>} /></div>;
 }
 
-// the three tabs: [id, label, count]
-const TABS = [["topost", "To post"], ["posted", "Posted"], ["errors", "Errors"]];
-function PostTabs({ now, counts, pick }) {
-  // clean-up batch 3: inside Purchase's own tabs, a row of chips (a second level is never a second row of tabs)
-  return <div className="post-tabs chip-filter" role="tablist" data-post-tabs="">
-    {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={now === id} data-post-tab={id} className={"post-tab" + (now === id ? " on" : "") + (id === "errors" && counts[id] ? " bad" : "")}
-      onClick={() => pick(id)}>{label}{" "}<span className="sbar-n" data-tab-n="">{counts[id] || 0}</span></button>)}
-  </div>;
-}
-
 function ImportSteps({ co, ledgers }) {
   return <div className="bk-alert" data-import-steps="" style={{ margin: "10px 0 0" }}><b>Import into Tally</b>
     <ol className="post-import">
@@ -489,10 +480,9 @@ export function PostStep() {
   const others = postRows(co).filter((r) => r.kind !== "bill"), nb = others.filter((r) => r.kind === "bank").length, ns = others.length - nb;
   const status = postStatusFor(co);
   // the tab: the one chosen for this client, else the one with work (Errors when there are any)
-  const counts = typeof postTabCounts === "function" ? postTabCounts(co.id) : { topost: waiting.length, posted: 0, errors: 0 };
-  S.postTabs = S.postTabs || {};
-  const tab = S.postTabs[co.id] || (counts.errors ? "errors" : "topost");
-  const pick = (id) => { S.postTabs[co.id] = id; render(); };
+  // upload-pages (14-Oct-2026): the three lists are chosen on the page's one row of states (Ready to post · Errors ·
+  // In Tally, parts/StateBar.jsx), which carries their counts; the row of chips that repeated them here is gone
+  const tab = S.tab === "done" ? "posted" : postTabNow(co.id);
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const more = <details className="bk-menu" data-more="post"><summary className="btn">More</summary><div className="bk-menu-list">
     {status.more && <div className="note" data-post-bridge="" style={{ padding: "6px 10px" }}>{status.more}</div>}
@@ -513,7 +503,6 @@ export function PostStep() {
       <PostStyles />
       <StatusLine co={co} />
       <RunLine co={co} />
-      <PostTabs now={tab} counts={counts} pick={pick} />
       {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
         <Ready co={co} bills={bills} canPost={canPost} more={more} />
         <TestCopies co={co} bills={bills} />
@@ -522,7 +511,9 @@ export function PostStep() {
           {ns > 0 && <button className="linkbtn" onClick={() => goDocType("sales")}>{plural(ns, "sales invoice", "sales invoices")}</button>}</p>}
         {steps && <ImportSteps co={co} ledgers={ledgers} />}
       </div>}
-      {tab === "posted" && <div data-post-panel="posted" role="tabpanel"><History co={co} canPost={canPost} /></div>}
+      {/* upload-pages: Purchase → In Tally is this list (it was a page of its own, Done.jsx, which counted another way) */}
+      {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><History co={co} canPost={canPost} />
+        <HomeLink id="sent" text={"Everything sent to Tally for " + co.name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} /></div>}
       {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><Attention co={co} canPost={canPost} /></div>}
     </section>
   );

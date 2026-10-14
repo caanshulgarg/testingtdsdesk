@@ -1,0 +1,115 @@
+"""Made-up books for the upload-and-review pages (Purchase, Bank, Sales), as the owner saw them on 14-Oct-2026:
+Testing AAD with no bill to review, 3 entries Tally did not take (one gone from Tally, one with no answer, one refused),
+12 bills in Tally, 2 duplicates and 3 deleted; then, on demand, bills to review (one not read), a bank statement and
+sales invoices. Used by run_upload_pages.py and the screenshots of the pages (offline, nothing leaves the page).
+
+Each is a JS function for page.evaluate; PURCHASE first (it opens the client), the others after it."""
+
+PURCHASE = """async () => {
+  const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); c.tallyName = "GARG SHEKHAR & COMPANY";
+  S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  choiceConfirm(c, "tds:professional", "TDS Payable - Professional"); choiceConfirm(c, "postTo", "GARG SHEKHAR & COMPANY");
+  S.firm.firmName = "ABC"; S.account = {firm: {balance: 499999912, plan: {name: "Firm"}}, me: {email: "owner@abc.in", role: "owner"}};
+  const t = (m) => new Date(Date.now() - m * 60000).toISOString();
+  Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = [{user_id: "u-1", name: "Anshul"}];
+  const G = "GARG SHEKHAR & COMPANY";
+  TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: G, daysAt: new Date().toISOString(), state: {doneTo: "20261001", skipped: []}}]};
+  window.__jobs = [
+    {id: "jU", client_id: c.id, company: G, status: "running", done: 0, n: 1, message: "Checking whether it reached Tally", created_at: t(6), updated_at: t(5), entry_ids: ["u1"],
+      results: [{id: "u1", ok: false, outcomeUnknown: true, state: "unknown", message: "Checking whether it reached Tally"}], items: [{id: "u1", state: "unknown", reason: "Checking whether it reached Tally", outcomeUnknown: true}]},
+    {id: "jX", client_id: c.id, company: G, status: "done", done: 0, n: 1, message: "0 of 1 sent to Tally", created_at: t(30), updated_at: t(29), entry_ids: ["x1"],
+      results: [{id: "x1", ok: false, message: "Voucher date is outside the period of the company"}], items: [{id: "x1", state: "failed", reason: "Voucher date is outside the period of the company"}]}];
+  window.__postIds = [{job_id: "jX", fincom_id: "x1", entry_id: "x1", live: false, released_at: t(28), released_why: "refused"}];
+  TCloud.restAll = async (u) => /^tally_post_ids/.test(u) ? JSON.parse(JSON.stringify(window.__postIds)) : /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : [];
+  TCloud.rpc = async (fn, a) => fn === "tally_status" ? (TCloud.st[a.p_client] ? TCloud.st[a.p_client].books : []) : (/^tally_/.test(fn) ? {ok: true} : null);
+  Cloud.api = async () => [];
+  CloudJobs.list = null; CloudJobs.at = 0; CloudJobs.tried = {};
+  TLight.refresh = function(){ return Promise.resolve(); };
+  TLight.st = {at: Date.now(), busy: false, by: {}, devs: [], cos: []};
+  PostCheck.due = () => false;
+  await openCompany(c.id);
+  const mk = (id, n, no, amt, extra) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+    e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[c.id].entries[e.id] = e; approve(e); Object.assign(e, extra || {}); return e; };
+  const old = {approvedAt: t(400)};
+  // three Tally did not take: one with no answer, one refused, one posted and gone from Tally since
+  mk("u1", "Unknown Outcome Co", "U/1", 5000, old); mk("x1", "Refused Co", "X/1", 7000, old);
+  mk("fa", "FINGATE ADVISORY", "FA/ELEC/013", 25535, {approvedAt: t(400), exportedAt: "2026-09-29T03:58:55Z", postVerified: true, postedVia: "bridge", goneFromTally: "2026-10-02T10:04:00Z",
+    tally: {at: "2026-09-29T03:58:55Z", guid: "g-66b4", vchDate: "20260701", vchType: "Journal", company: G}});
+  // twelve in Tally
+  for (let i = 1; i <= 12; i++) mk("in" + i, ["Kashi IT Solutions", "Alpha Consultants", "Delta Legal LLP"][i % 3], "IN/" + i, 10000 + i * 1250,
+    {approvedAt: t(900), exportedAt: "2026-09-" + String(10 + i).padStart(2, "0") + "T03:00:00Z", postVerified: true, postedVia: "bridge", tally: {at: "2026-09-20T03:00:00Z", guid: "g-in" + i, vchDate: "20260701"}});
+  // two duplicates, three deleted
+  const raw = (id, n, no, amt, extra) => { const e = newEntry(n + ".pdf"); e.id = id; Object.assign(e.x, {vendorName: n, invoiceNo: no, invoiceDate: "2026-08-04", taxable: amt, total: amt}); Object.assign(e, extra); S.data[c.id].entries[id] = e; return e; };
+  raw("d1", "Kashi IT Solutions", "IN/2", 12500, {status: "duplicate", dupOf: {entryId: "in2", msg: "Duplicate of Kashi IT Solutions IN/2"}});
+  raw("d2", "Alpha Consultants", "IN/4", 15000, {status: "duplicate", dupOf: {entryId: "in4", msg: "Duplicate of Alpha Consultants IN/4"}});
+  for (let i = 1; i <= 3; i++) raw("del" + i, "Old Vendor " + i, "OV/" + i, 3000 * i, {status: "deleted", deleted: {at: t(2000 + i), by: "Anshul", reason: "uploaded by mistake"}});
+  TallyProof.at[c.id] = Date.now(); TallyProof.check = async () => 0; TallyProof.checkBank = async () => 0;
+  refreshStats(c.id);
+  S.bank = S.bank && S.bank.cid === c.id ? S.bank : S.bank; window.autoPostTo = async () => {};
+  await CloudJobs.load(true);
+  goStep("review", "bills");
+  await new Promise(r => setTimeout(r, 300));
+  render();
+  return c.id;
+}"""
+
+# bills to review: four read (one with no TDS ledger chosen yet), one the reading service could not read
+DRAFTS = """() => {
+  const cid = S.coId, d = S.data[cid];
+  const mk = (id, n, no, amt, extra) => { const e = newEntry(n + ".pdf"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-10-0" + (1 + Object.keys(d.entries).length % 8), taxable: amt, total: amt});
+    e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; Object.assign(e, extra || {}); d.entries[id] = e; return e; };
+  mk("v1", "Kashi IT Solutions", "K/101", 48000); mk("v2", "Alpha Consultants", "A/77", 125000); mk("v3", "Delta Legal LLP", "DL/9", 36500); mk("v4", "Mehta & Co", "M/12", 18250);
+  const nr = mk("v5", "", "", 0); nr.fileName = "scan-0042.jpg"; nr.notRead = {reason: "the photo is too dark to read", at: new Date().toISOString()};
+  refreshStats(cid); goStep("review", "bills"); render();
+}"""
+
+# an upload going on: 5 files, 2 read, 1 being read, 1 waiting and 1 the reader could not read
+UPLOADING = """() => {
+  const cid = S.coId, f = (n) => ({name: n});
+  const j = (n, st, extra) => Object.assign({id: uid("j"), file: f(n), name: n, target: cid, cid, status: st, msg: ""}, extra || {});
+  S.jobs = [j("bill-1.pdf", "done", {entryId: "v1"}), j("bill-2.pdf", "done", {entryId: "v2"}), j("bill-3.pdf", "reading", {startedAt: Date.now()}), j("bill-4.pdf", "waiting"),
+    j("bill-5.jpg", "failed", {msg: "The file could not be opened: it is not a PDF or a photo."})];
+  render();
+}"""
+
+BANK = """async () => {
+  const cid = S.coId, c = CO();
+  c.bankAccounts = [{id: "a1", bank: "ICICI", acct: "0214", ledger: "ICICI Bank"}];
+  const parties = ["DIPTI VATS", "PAYUAMAZON", "BHARATKOSH", "PERFEKT SENSE DIGITA", "CLOUD WIZARD CONSULTING", "AMAZON GROCERIES", "CCAPROTEAN", "NAVNEET TENDER DSC"];
+  const states = ["ready","ready","ready","attention","suggested","sent","intally","ready"];
+  let bal = 250000;
+  const rows = Array.from({length: 24}, (_, i) => { const out = i % 3 !== 1; const amt = [2000, 28788, 2970, 1000, 100000, 5.9, 16200, 1482][i % 8] * (1 + (i % 5) / 10);
+    bal += out ? -amt : amt;
+    return {id: "r" + i, fp: "fp" + i, date: "2026-04-" + String(1 + i).padStart(2, "0"), debit: out ? r2(amt) : 0, credit: out ? 0 : r2(amt), bal: r2(bal),
+      narr: (out ? "NEFT DR " : "NEFT CR ") + parties[i % 8] + " UTR" + (100000 + i), dec: {name: parties[i % 8], mode: "NEFT", utr: "UTR" + (100000 + i)},
+      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], tally: states[i % 8] === "sent" ? {guid: "g" + i} : undefined, balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
+  S.bank = {cid, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-24", opening: 250000, closing: bal, totDr: 0, totCr: 0}], cur: "s1", rows, rules: [], wrules: [],
+    ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "ICICI Bank", group: "Bank Accounts"}]), importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: "review", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
+    createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: [], stmtsTrash: []};
+  choiceConfirm(c, "bank:a1", "ICICI Bank");
+  S.tab = "bank"; S.step = null; render();
+}"""
+
+BANK_EMPTY = """() => { const b = B(); b.stmts = []; b.cur = null; b.rows = []; render(); }"""
+
+SALES = """async () => {
+  const cid = S.coId;
+  S.tab = "sales"; S.step = null;
+  await loadSales(cid);
+  const mk = (i, cust, total, status, led) => ({id: "sv" + i, source: i % 2 ? "upload" : "created", fileName: "inv-" + i + ".pdf", status, customerLedger: led || "",
+    x: {number: "INV/26-27/" + String(i).padStart(3, "0"), date: "2026-09-" + String(i + 1).padStart(2, "0"), customerName: cust, customerGstin: "", pos: "09", taxable: r2(total / 1.18), cgst: r2(total * 0.09 / 1.18), sgst: r2(total * 0.09 / 1.18), igst: 0, total}});
+  SL().list = [mk(1, "Alpha Retail LLP", 11800, "review", "Alpha Retail LLP"), mk(2, "Beta Stores", 23600, "review"), mk(3, "Gamma Mart", 5900, "ready", "Gamma Mart"),
+    mk(4, "Alpha Retail LLP", 47200, "ready", "Alpha Retail LLP"), mk(5, "Beta Stores", 35400, "posted", "Beta Stores"), mk(6, "Gamma Mart", 8260, "intally", "Gamma Mart"), mk(7, "Old Customer", 1180, "ignored", "")];
+  SL().filter = "review"; render();
+}"""
+
+SALES_EMPTY = """() => { SL().list = []; render(); }"""
+
+# two bills approved and not yet posted: Ready to post
+READY = """() => {
+  const cid = S.coId, d = S.data[cid];
+  const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+    e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; d.entries[id] = e; approve(e); return e; };
+  mk("r1", "Alpha Consultants", "A/1", 100000); mk("r2", "Kashi IT Solutions", "K/7", 20000);
+  refreshStats(cid); render();
+}"""

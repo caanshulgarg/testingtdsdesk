@@ -159,7 +159,8 @@ try:
         E("() => setAndShow('auditArea', '')"); W(300)
         pg.screenshot(path=os.path.join(OUT, "desk-audit.png"))
         go(CL("S.postTabs = {}; goStep('post', 'bills');"))
-        ok(pg.locator("#app .post-tabs.chip-filter [data-post-tab]").count() == 3, "Post to Tally: To post / Posted / Errors are chips inside Purchase's tabs")
+        # upload-pages (14-Oct-2026): Post to Tally's lists are states of Purchase's one row (Ready to post / Errors / In Tally)
+        ok(pg.locator("#app nav.statebar [data-post-tab]").count() >= 2 and pg.locator("#app .post-tabs").count() == 0, "Post to Tally: its lists are states on Purchase's one row, no second row of chips")
 
         print("2. one content width")
         lefts = {n: w["left"] for n, w in widths.items()}; rights = {n: w["right"] for n, w in widths.items()}

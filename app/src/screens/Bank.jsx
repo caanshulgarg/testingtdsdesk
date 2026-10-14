@@ -24,8 +24,8 @@ import NoticeLine from "../parts/NoticeLine.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
-const EMPTY = { review: "Nothing to review. Every entry has a ledger: use the Post to Tally tab to send them.", ready: "No entries are ready yet. Give each entry under To review its ledger; it then waits here.",
-  done: "Nothing posted or ignored yet. Use Post on the entries that are ready." };
+const EMPTY = { review: "Nothing to review: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To review its ledger; it then waits here.",
+  done: "Nothing in Tally yet. Post the lines under Ready to post.", ignored: "No line ignored." };
 const live = () => Bridge.on() && Bridge.up();
 
 
@@ -263,10 +263,9 @@ export default function Bank() {
     <div className="bk">
       {/* the steps at the top of the page (review of 02-Oct-2026: they were about 490 px down) */}
       <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">
-          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
-          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
-        </div>
+        {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
+            state, so they open from their own button */}
+        {tab === "rules" && <button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button>}
         {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
       </div>
@@ -283,7 +282,7 @@ export default function Bank() {
           <div><dt>Withdrawals</dt><dd>{sum("debit")}</dd></div><div><dt>Deposits</dt><dd>{sum("credit")}</dd></div>
           <div><dt>Closing</dt><dd>{st.closing !== undefined ? money(st.closing) : "—"}</dd></div>
         </dl>
-        <div className="bk-actions"><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
+        <div className="bk-actions"><button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>
       <div className="bk-check">
         {st.badRows ? <span className="bad">✖ {st.badRows} entries do not agree with the running balance — check them before posting</span>
@@ -334,7 +333,8 @@ export function BankBar() {
       {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
+    // upload-pages: the counts of the states are the state bar's; here only what is not a state
+    left = <>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
       {tc.gone > 0 && !noLed && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}
       {noLed && <span className="bk-stat bad" data-bank-noledger="">{whyLed + " "}<button className="linkbtn" onClick={chooseLed}>{/guessed/.test(whyLed) ? "Confirm the ledger" : "Choose the ledger"}</button></span>}</>;
     right = <>

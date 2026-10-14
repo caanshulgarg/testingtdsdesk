@@ -23,7 +23,7 @@ with sync_playwright() as p:
     ok(tile("To review") == "1" and tile("Ready to post") == "1", "Overview: 1 bill to review, 1 ready to post")
     # clean-up batch 2: what was posted lately is on Purchase → In Tally; TDS, Bank and Sales under "More about this client"
     pg.evaluate("goStep('done', 'bills')"); pg.wait_for_timeout(700)
-    ok("Alpha Consultants" in pg.inner_text("#app [data-posted-lately] .dash-list"), "posted lately (Purchase → In Tally): the bill sent to Tally")
+    ok("Alpha Consultants" in pg.inner_text("#app [data-post-panel=posted]"), "Purchase → In Tally (upload-pages: Post to Tally's In Tally list): the bill sent to Tally")
     pg.evaluate("goClient('dash')"); pg.wait_for_timeout(700)
     pg.click("#app [data-dash-more] > summary"); pg.wait_for_timeout(300)
     # the TDS on bills approved here, of this year only (run_figures_agree.py has the books' figure beside it)

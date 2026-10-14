@@ -73,7 +73,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app .queue li").count() == 2 and pg.locator("#app .detail h2").inner_text() == "New invoice", "a second bill: two in the list, the new one open")
     pg.click('#app .queue button:has-text("ZZ Consulting LLP")'); pg.wait_for_timeout(500)
     ok(pg.locator("#app .detail h2").inner_text() == "ZZ Consulting LLP" and pg.get_attribute('#app .queue button:has-text("ZZ Consulting LLP")', "aria-current") == "true", "a click on the list opens that bill")
-    ok(pg.locator('#app button:has-text("Review all 2 in a table")').count() == 1, "“Review all 2 in a table”")
+    ok(pg.locator('#app button:has-text("Review them in a table")').count() == 1, "“Review them in a table” (upload-pages: the count is the row of states')")
     pg.evaluate("S.filter = 'approved'; S.selected = null; render()"); pg.wait_for_timeout(500)
     ok("Nothing approved yet." in app() and "Select an invoice" in app(), "Approved: nothing yet")
     pg.evaluate("S.filter = 'draft'; S.selected = null; render()"); pg.wait_for_timeout(500)

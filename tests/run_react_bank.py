@@ -36,9 +36,12 @@ with sync_playwright() as p:
     tc = pg.evaluate("tabCounts(B().rows)")
     ok(pg.inner_text("#app .bk-title") == "ICICI Bank" and "24 entries" in pg.inner_text("#app .bk-sub"), "the statement: its Tally ledger and 24 entries")
     ok("The statement adds up" in pg.inner_text("#app .bk-check"), "the running-balance check")
-    ok(rows().count() == tc["review"] and ("%d to review" % tc["review"]) in bar().replace("\n", " "), "To review: %d lines, and the bar says so" % tc["review"])
-    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(400)
-    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Post to Tally")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
+    # upload-pages (14-Oct-2026): the states are the page's one row of states (in the words of every upload page); the bar
+    # at the foot does not count them again
+    ST = lambda k: '#app nav.statebar [data-state="%s"]' % k
+    ok(rows().count() == tc["review"] and pg.inner_text(ST("review") + " [data-state-n]") == str(tc["review"]) and "to review" not in bar(), "To review: %d lines, counted once, on the row of states" % tc["review"])
+    pg.click(ST("ready")); pg.wait_for_timeout(400)
+    ok(rows().count() == tc["ready"] and pg.get_attribute(ST("ready"), "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
     # ticking, with Shift for a run of lines
     pg.click('#app table.bk-table tbody tr >> nth=0 >> input[type=checkbox]')
     pg.click('#app table.bk-table tbody tr >> nth=3 >> input[type=checkbox]', modifiers=["Shift"]); pg.wait_for_timeout(400)
@@ -51,9 +54,9 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table thead input[aria-label="Select all"]'); pg.wait_for_timeout(300)
     ok(pg.evaluate("B().sel.size") == rows().count(), "Select all: every line shown")
     pg.click('#app .actionbar button:has-text("Clear")'); pg.wait_for_timeout(300)
-    ok(pg.evaluate("B().sel.size") == 0 and "to review" in bar(), "Clear")
+    ok(pg.evaluate("B().sel.size") == 0 and "selected" not in bar(), "Clear")
     # a line to review: confirm a suggestion, a ledger typed that Tally does not have
-    pg.click('#app .bk-tabs button:has-text("To review")'); pg.wait_for_timeout(300)
+    pg.click(ST("review")); pg.wait_for_timeout(300)
     sug = pg.evaluate("B().rows.find(r => r.state === 'suggested').id")
     pg.click('#app tr:has(input[data-bled="%s"]) button:has-text("Confirm")' % sug); pg.wait_for_timeout(400)
     ok(pg.evaluate("bankRow('%s').state" % sug) == "ready", "Confirm on a suggested line: ready")
@@ -64,12 +67,12 @@ with sync_playwright() as p:
     box.fill("CCAPROTEAN"); box.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("bankRow('%s').ledger" % att) == "CCAPROTEAN" and pg.evaluate("bankRow('%s').state" % att) == "ready", "a Tally ledger typed and left: the line is ready")
     pg.click('#app tr:has(input[data-bled="%s"]) button[aria-label="Ignore"]' % pg.evaluate("B().rows.find(r => ['attention','suggested'].includes(r.state)).id")); pg.wait_for_timeout(400)
-    pg.click('#app .bk-tabs button:has-text("In Tally")'); pg.wait_for_timeout(300)
-    ok(pg.locator('#app table.bk-table button:has-text("Restore")').count() >= 1 and "Ignored" in app(), "✕ ignores a line; it is under In Tally, with Restore")
+    pg.click(ST("ignored")); pg.wait_for_timeout(300)
+    ok(pg.locator('#app table.bk-table button:has-text("Restore")').count() >= 1 and "Ignored" in app(), "✕ ignores a line; it is under Ignored (not In Tally), with Restore")
     pg.click('#app table.bk-table tr:has-text("Ignored") button:has-text("Restore")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("B().rows.filter(r => r.state === 'ignored').length") == 0, "Restore")
     # search, and give every line found one ledger
-    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
+    pg.click(ST("ready")); pg.wait_for_timeout(300)
     pg.fill('#app input[aria-label="Search the statement"]', "DIPTI"); pg.wait_for_timeout(600)
     n = pg.evaluate("bankVisibleRows().length")
     ok(n >= 1 and rows().count() == n and ("%d entr" % n) in pg.inner_text('#app .bk-found:has-text("match")').replace("\n", " ") and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Search the statement", "search “DIPTI”: %d lines, the cursor stays in the box" % n)
@@ -82,7 +85,7 @@ with sync_playwright() as p:
     ok(pg.input_value('#app input[aria-label="Search the statement"]') == "" and pg.locator('#app .bk-found:has-text("match")').count() == 0, "Clear empties the search")
     # group by party
     pg.evaluate("B().rows.slice(0, 3).forEach(r => { r.state = 'attention'; r.ledger = ''; }); B().rows[0].dec.key = B().rows[1].dec.key = 'k-dipti'; render()")
-    pg.click('#app .bk-tabs button:has-text("To review")'); pg.wait_for_timeout(300)
+    pg.click(ST("review")); pg.wait_for_timeout(300)
     pg.click('#app label:has-text("Group by party") input'); pg.wait_for_timeout(400)
     ok("ledger for all its entries" in app().lower() and rows().count() == pg.evaluate("bankGroups().length"), "Group by party: one line per party")
     g = pg.locator('#app input[data-gkey="k-dipti"]'); g.fill("DIPTI VATS")

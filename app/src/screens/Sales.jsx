@@ -23,9 +23,9 @@ import DateBox from "../parts/DateBox.jsx";
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 // an empty tab says what to do next (spec K6, round 2)
-const EMPTY = { review: "Nothing to review. Use Upload invoices at the top right to add more, or Create invoice to make one.",
-  ready: "No invoices are ready yet. Confirm each one's customer ledger under To review; it then waits here to be posted.",
-  done: "Nothing posted or ignored yet. Use Post to Tally on the invoices that are ready." };
+const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
+  ready: "Nothing ready to post. Confirm each invoice's customer ledger under To review; it then waits here.",
+  done: "Nothing in Tally yet. Post the invoices under Ready to post.", ignored: "No invoice ignored." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
@@ -300,12 +300,10 @@ export default function Sales() {
   if (s.loading) return <Loading what="sales invoices" page="table" />;
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
-  const tc = salesCounts(), all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
+  const all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
   const sum = (k) => r2(all.reduce((a, v) => a + num(v.x[k]), 0));
-  // the three steps at the top, as on Purchase and Bank, also before the first invoice (review of 02-Oct-2026)
-  const tabs = <div className="bk-tabs" role="tablist" data-sales-tabs="" style={{ marginBottom: 10 }}>{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>;
+  // upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx), as on Purchase and Bank
   const head = <>
-    {tabs}
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {/* one row (round 3, 05-Oct-2026), the how-to on hover and behind How */}
     {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />
@@ -314,7 +312,7 @@ export default function Sales() {
         <button className="btn small" onClick={() => salesAct("ledPick")}>Bring in from Tally</button></NoticeLine>)}
     <div className="bk-head">
       {/* the page is named in the top bar (one heading, spec I); here only what it holds */}
-      <div className="bk-id"><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
+      <div className="bk-id"><div className="bk-sub">{all.length ? fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
       <dl className="bk-figs">
         <div><dt>Taxable</dt><dd>{money(sum("taxable"))}</dd></div>
         <div><dt>GST</dt><dd>{money(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess")))}</dd></div>
@@ -335,7 +333,7 @@ export default function Sales() {
     <div className="bk sl">{head}
       <div className="bk-empty" id="salesDrop" tabIndex={0} role="button" onClick={() => salesAct("salesPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); salesAct("salesPick"); } }}>
         <div className="bk-empty-ic">⤒</div><h2>No sales invoices yet</h2>
-        <p className="note">Drop the invoices you issued (PDF or photo) here, or use <b>Upload invoices</b> at the top right, to turn them into Sales vouchers. To make a new GST invoice, use <b>Create invoice</b>: it is printed and posted in one go.</p>
+        <p className="note">Drop the invoices the client issued (PDF or photo) here, or click to choose them.</p>
       </div>
     </div>
     {s.showSettings && <SettingsPanel />}
@@ -383,7 +381,8 @@ export function SalesBar() {
     </>;
   } else {
     const confirmable = s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
+    // upload-pages: the counts of the states are the state bar's; the Post button counts what it posts
+    left = null;
     right = <>
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}

@@ -68,9 +68,9 @@ with sync_playwright() as p:
       {at: '2026-09-20T10:00:00Z', what: 'bill', co: S.coId, ref: 'A/1', amount: 100000, tally: {vchType: 'Purchase', masterId: '77', company: 'Zeta Exports'}, by: 'a@b.c'},
       {at: '2026-09-21T10:00:00Z', what: 'bank', co: 'other-client', ref: 'NEFT 1', amount: 500, tally: {vchType: 'Payment', masterId: '78'}, by: 'a@b.c'}]); goStep('done', 'bills'); }""")
     pg.wait_for_timeout(600)
-    ok("Bills posted\n0" in pg.inner_text("#app .post-sum") and "2 approved in all" in pg.inner_text("#app .post-sum"), "Done: a Tally file is not counted as posted until Tally confirms it (0 posted, 2 approved)")
-    pg.click('#app button:has-text("Approved bills")'); pg.wait_for_timeout(400)
-    ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("S.filter") == "approved", "“Approved bills” opens them")
+    # upload-pages (14-Oct-2026): In Tally is Post to Tally's list of what is in Tally, counted on the row of states
+    ok(pg.inner_text('#app nav.statebar [data-state="intally"] [data-state-n]') == "0" and pg.locator('#app [data-post-panel="posted"] li[data-entry-row]').count() == 0,
+       "In Tally: a Tally file is not counted as posted until Tally confirms it (In Tally 0, no row)")
     # clean-up batch 2: the record of what went to Tally has one home, the Tally page; In Tally links there
     pg.evaluate("goStep('done', 'bills')"); pg.wait_for_timeout(600)
     pg.click("#app [data-home-go=sent]"); pg.wait_for_timeout(800)

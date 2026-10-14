@@ -106,10 +106,14 @@ with sync_playwright() as p:
         return sorted(E("Array.from(document.querySelectorAll('#app [data-post-panel=\"posted\"] [data-posted-entry]')).map(r => r.getAttribute('data-posted-entry'))"))
     ACTS = lambda sel: pg.locator(sel + " .acts button, " + sel + " [data-row-more] button").count()
     # ---- three tabs, the status line above them
-    ok(pg.locator("#app [data-post-tabs] [data-post-tab]").count() == 3 and [E("(el => el.textContent)(document.querySelectorAll('#app [data-post-tab]')[%d])" % i).split(" ")[0] for i in range(3)] == ["To", "Posted", "Errors"],
-       "three tabs: To post, Posted, Errors (%s)" % txt("#app [data-post-tabs]"))
-    ok(E("(() => { const l = document.querySelector('#app [data-post-line]'), t = document.querySelector('#app [data-post-tabs]'); return !!(l && t && (l.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)); })()"),
-       "the status line stays on top, above the tabs")
+    # upload-pages (14-Oct-2026): the three lists are states on Purchase's one row of states, in its words: Ready to post,
+    # Errors, In Tally (data-post-tab topost / errors / posted, as before); the page's own row of chips is gone
+    ok(pg.locator("#app [data-post-tabs] [data-post-tab]").count() == 3 and [E("(el => el.getAttribute('data-post-tab'))(document.querySelectorAll('#app [data-post-tab]')[%d])" % i) for i in range(3)] == ["topost", "errors", "posted"]
+       and [E("(el => el.textContent)(document.querySelectorAll('#app [data-post-tab]')[%d])" % i).split(" ")[0] for i in range(3)] == ["Ready", "Errors", "In"],
+       "three lists on the row of states: Ready to post, Errors, In Tally (%s)" % txt("#app [data-post-tabs]"))
+    ok(pg.locator("#app .post-tabs").count() == 0, "no second row of chips on the page")
+    ok(E("(() => { const l = document.querySelector('#app [data-post-line]'), t = document.querySelector('#app [data-post-tabs]'); return !!(l && t && (t.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING)); })()"),
+       "the row of states first, the status line under it")
     # ---- the tab with work opens by itself: Errors
     ok(on() == "errors", "Errors opens by itself when there are errors (%s)" % on())
     # ---- each tab's rows
@@ -140,8 +144,8 @@ with sync_playwright() as p:
     ok([badge(t) for t in TABS] == [pc["ready"], 2, pc["attention"]] and pc == {"ready": 2, "attention": 4},
        "tab counts from postCounts: To post %d, Posted %d, Errors %d (%s)" % (badge("topost"), badge("posted"), badge("errors"), pc))
     step_n = num(E("(document.querySelector('nav.sbar [data-step=post] [data-step-n]') || {}).textContent || ''"))
-    attn_n = num(E("(document.querySelector('nav.sbar [data-step=post] [data-attn-n]') || {}).textContent || ''"))
-    ok(step_n == badge("topost") and attn_n == badge("errors"), "the step bar's badges are the tabs' counts (%d, %d)" % (step_n, attn_n))
+    attn_n = num(E("(document.querySelector('nav.sbar [data-state=errors] [data-state-n]') || {}).textContent || ''"))
+    ok(step_n == badge("topost") and attn_n == badge("errors") and attn_n == pc["attention"], "Ready to post and Errors on the row of states are postCounts (%d, %d)" % (step_n, attn_n))
     ok(num(E("tallyStatus(CO()).short")) == badge("topost"), "the header chip says the same (%s)" % E("tallyStatus(CO()).short"))
     # ---- no entry in two tabs
     seen = {t: (bills_in(t) if t != "posted" else entries_posted()) for t in TABS}

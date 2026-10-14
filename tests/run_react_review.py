@@ -25,11 +25,13 @@ with sync_playwright() as p:
     app = lambda: pg.inner_text("#app")
     rows = lambda: pg.locator("#app table.revtbl tbody tr")
     bar = lambda: pg.inner_text("#app .actionbar")
-    ok("Review 3 uploaded bills" in app() and rows().count() == 3, "the review table: three bills")
+    # upload-pages (14-Oct-2026): the list is named and counted once, on the row of states ("To review 3"), not again in a
+    # heading; its totals are at the table's foot
+    ok(pg.inner_text('#app nav.statebar [data-state="review"]').replace("\n", " ") == "To review 3" and "uploaded bill" not in app() and rows().count() == 3, "the review table: three bills, “To review 3”")
     want_tds = pg.evaluate("money0 ? INR.format(r2(draftRows().reduce((a, r) => a + num(r.c.tds), 0))) : ''")
-    ok(want_tds in pg.inner_text("#app .bk-figs"), "the TDS total is the rules' figure (" + want_tds + ")")
+    ok(want_tds in pg.inner_text("#app table.revtbl tfoot"), "the TDS total (at the table's foot) is the rules' figure (" + want_tds + ")")
     ready = pg.evaluate("draftRows().filter(r => !(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === 'hi') && !r.e.confirmType).length")
-    ok("3 to review" in bar().replace("\n", " ") and ("Approve all that are ready (%d)" % ready) in bar(), "the bar: 3 to review, %d ready" % ready)
+    ok("to review" not in bar() and ("Approve all that are ready (%d)" % ready) in bar(), "the bar: Approve all that are ready (%d), the count of bills not said again" % ready)
     # the filter box
     pg.fill('#app input[aria-label="Filter the bills"]', "gamma"); pg.wait_for_timeout(500)
     ok(rows().count() == 1 and "1 of 3 shown" in app() and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Filter the bills", "filter “gamma”: one bill, “1 of 3 shown”, the cursor stays in the box")
@@ -47,7 +49,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("draftRows().every(r => r.c.tds > 0 || r.c.tdsWould <= 0 || r.c.rule.basis === 'never')") and pg.evaluate("draftRows().every(r => !r.c.anyway)"),
        "“Book TDS”: booked where it is due; a bill below the limit is not forced (review item 3)")
     pg.click('#app .actionbar button:has-text("Clear")'); pg.wait_for_timeout(400)
-    ok("to review" in bar() and "selected" not in bar(), "Clear: nothing selected")
+    ok("Approve all that are ready" in bar() and "selected" not in bar(), "Clear: nothing selected")
     # one row's own controls
     row = rows().filter(has_text="Beta Traders")
     beta = "draftRows().find(r => r.e.x.vendorName === 'Beta Traders')"
@@ -86,7 +88,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("draftRows().find(r => r.e.x.vendorName === 'Alpha Consultants').e.x.invoiceNo") == "A/1-X" and "enter" not in pg.get_attribute("#app aside.drawer", "class"), "typing in the drawer changes the bill; it does not slide in again")
     pg.screenshot(path=OUT + "/react-drawer.png")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
-    ok(pg.locator("#app aside.drawer").count() == 0 and "to review" in bar(), "Esc closes the drawer")
+    ok(pg.locator("#app aside.drawer").count() == 0 and "Approve all that are ready" in bar(), "Esc closes the drawer")
     pg.click('#app button[aria-label="Open this bill"] >> nth=0'); pg.wait_for_timeout(500)
     pg.click('#app .drawer-head button:has-text("Close")'); pg.wait_for_timeout(500)
     ok(pg.locator("#app aside.drawer").count() == 0, "↗ opens it, Close closes it")

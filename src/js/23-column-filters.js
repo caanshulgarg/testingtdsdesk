@@ -100,7 +100,7 @@ function colPopHtml(){
   } else if (!bank && p.k === "tds"){
     title = "TDS"; body = radio("tds", f.tds, [["", "All bills"], ["yes", "TDS booked"], ["no", "No TDS"]]);
   } else if (!bank && p.k === "look"){
-    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Needs you"], ["no", "Ready to approve"]]);
+    title = "Status"; body = radio("look", f.look, [["", "All bills"], ["yes", "Check"], ["no", "Ready to approve"]]);
   }
   return '<div class="colpop" id="colpop" role="dialog" aria-label="Filter ' + esc(title) + '"><div class="cp-head"><b>Filter: ' + esc(title) + '</b><button class="icon" data-cpclose aria-label="Close">\u2715</button></div>' +
     '<div class="cp-body">' + body + "</div>" +
@@ -192,7 +192,7 @@ function colChips(t){
     if (f.min || f.max) chips.push(["val", "Value " + rng(f.min, f.max)]);
     if (f.natures && f.natures.length) chips.push(["nature", "Type: " + f.natures.map(n => lab[n] || n).join(", ")]);
     if (f.tds) chips.push(["tds", f.tds === "yes" ? "TDS booked" : "No TDS"]);
-    if (f.look) chips.push(["look", f.look === "yes" ? "Needs you" : "Ready to approve"]);
+    if (f.look) chips.push(["look", f.look === "yes" ? "Check" : "Ready to approve"]);
   }
   return chips;
 }

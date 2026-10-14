@@ -124,7 +124,8 @@ try:
         pg.keyboard.press("/"); W(900)
         ok(E("booksTab()") == "lookup" and pg.locator("#lkAsk").count() == 1, "'/' opens Look up, where the books are asked")
         go(CL("goStep('done', 'bills');"))
-        ok(pg.locator("#app [data-posted-lately]").count() == 1, "Purchase → In Tally: Posted lately")
+        # upload-pages (14-Oct-2026): Purchase → In Tally is Post to Tally's list of what is in Tally, newest first
+        ok(pg.locator("#app [data-post-panel=posted]").count() == 1, "Purchase → In Tally: what is in Tally, newest first")
         ok("Bank lines in Tally" not in app() and "Everything sent to Tally" not in E("[...document.querySelectorAll('#app h2')].map(e => e.innerText).join('|')"), "Purchase → In Tally: no bank lines, no copy of the post log")
         go(CL("S.postTabs = {}; goStep('post', 'bills');"))
         ok(pg.locator("#app [data-remoteid-test]").count() == 1 and not pg.locator("#app [data-remoteid-test]").is_visible(), "Post to Tally: the REMOTEID test is not on the page")

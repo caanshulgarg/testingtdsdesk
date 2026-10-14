@@ -63,7 +63,8 @@ with sync_playwright() as p:
     seen = {}
     for name, js in [("Purchase", "goClient('bills')"), ("Bank", "goClient('bank')"), ("Sales", "goClient('sales')"), ("Reports", "goClient('books:reports')"), ("MIS", "goClient('books:mis')"), ("Audit", "goClient('books:audit')"), ("Look up", "goClient('books:lookup')"), ("Letters", "goClient('books:letters')")]:
         pg.evaluate("() => { S.helpOpen = false; Help.after(); " + js + " }"); pg.wait_for_timeout(700)
-        btn = pg.locator("header.top .help-btn")
+        # upload-pages (14-Oct-2026): Purchase, Bank and Sales have their guide as a "?" at the end of their row of states
+        btn = pg.locator("header.top .help-btn, #app nav.statebar .help-btn")
         if not btn.count(): seen[name] = "no button"; continue
         btn.first.click(); pg.wait_for_timeout(300)
         seen[name] = pg.inner_text("#helpPanel .help-head") if pg.locator("#helpPanel").count() else "no panel"

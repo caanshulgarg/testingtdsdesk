@@ -12,6 +12,7 @@ import SCREENS from "./screens/index.js";
 import PageSkeleton from "./parts/PageSkeleton.jsx";
 import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
+import { UploadLine } from "./parts/StateBar.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
@@ -30,7 +31,8 @@ function Screen() {
   if (open && S.tab === "dash") return <Dash />;
   if (open && S.tab === "clientInbox") return <ClientInbox />;
   if (open && S.tab === "export") return <PostStep />;
-  if (open && S.tab === "done") return <DoneStep />;
+  // upload-pages: Purchase → In Tally is Post to Tally's list of what is in Tally (the count on the state bar is its rows)
+  if (open && S.tab === "done") return docType() === "bills" ? <PostStep /> : <DoneStep />;
   if (open && isSetupTab(S.tab)) return <ClientSetup />;
   if (open && S.step === "collect") return docType() === "sales" ? <Sales /> : <Collect />;
   if (S.view === "company" && co) {
@@ -67,6 +69,7 @@ export default function Main({ v }) {
     {/* tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): no row of the
         client's pages here any more (the sidebar lists them); its Tally chip is on the title line (TopBar.jsx ClientHeader) */}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
+    {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>

@@ -27,7 +27,8 @@ export function Working() {
   const mine = (S.jobs || []).filter((j) => j.cid === S.coId || j.target === S.coId || j.target === "auto");
   const busy = mine.filter((j) => BUSY.includes(j.status)), n = CloudDocs.queue.length;
   let bills = null;
-  if (busy.length) {
+  // Purchase says it in its own upload line (parts/StateBar.jsx UploadLine)
+  if (busy.length && !(typeof uploadPage === "function" && uploadPage() === "bills")) {
     const now = busy.find((j) => j.status === "reading") || busy[0];
     const stage = now.msg || { waiting: "waiting its turn", checking: "checking whether it was uploaded before", reading: "reading it" }[now.status] || "";
     const secs = now.startedAt ? Math.round((Date.now() - now.startedAt) / 1000) : 0;
