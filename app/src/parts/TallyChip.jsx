@@ -15,7 +15,7 @@ export default function TallyChip({ co, where = "", title }) {
   const k = tallyLinkOf(co);
   return <button type="button" className={"tag tchip " + k.level} data-tally-chip={k.state} data-tally-chip-at={where} data-tally-link-chip={k.state}
     title={title || ("Link to Tally: " + k.word + (k.company ? " (" + k.company + ")" : ""))} aria-label={co.name + ", Tally: " + k.word}
-    // upload-pages (14-Oct-2026): beside an upload page's name the chip says it is Tally's ("○ Needs you" beside Purchase
-    // read as the bills to review)
-    onClick={(ev) => { ev.stopPropagation(); goTallyCard(co.id); }}>{MARK[k.level] + (where === "title" && typeof uploadPage === "function" && uploadPage() ? "Tally · " : "") + k.word}</button>;
+    // upload-pages (14-Oct-2026): beside an upload page's name, "Tally needs you" ("○ Needs you" beside Purchase read as
+    // the bills to review); the other words already say Tally
+    onClick={(ev) => { ev.stopPropagation(); goTallyCard(co.id); }}>{MARK[k.level] + (where === "title" && k.state === "needs" && typeof uploadPage === "function" && uploadPage() ? "Tally " + k.word.toLowerCase() : k.word)}</button>;
 }

@@ -75,6 +75,7 @@ with sync_playwright() as p:
        and E("document.querySelectorAll('#app [data-empty-next] button').length") == 1 and pg.inner_text("#app [data-empty-next] button") == "Upload bills",
        "the empty state: “No bills to review” and one next step, Upload bills")
     ok(E("document.querySelectorAll('#app .actionbar').length") == 0, "no bar of greyed buttons with nothing to review")
+    ok(E("document.querySelectorAll('#app [data-queue-done]').length") == 0, "no “Post N to Tally” over Ready to post 0 (the approved bills Tally refused are under Errors)")
     ok(E("document.querySelectorAll('#cobar .help-btn').length") == 0 and E("document.querySelectorAll('#app nav.statebar .help-btn').length") == 1
        and E("(() => { const b = [...document.querySelectorAll('#app nav.statebar button')]; return b[b.length - 1].classList.contains('help-btn'); })()"),
        "the guide is a “?” at the end of the row of states, not at the top")
@@ -88,6 +89,9 @@ with sync_playwright() as p:
     res = counts_match_rows(pg, "bills")
     ok(all(n == r and on for _, n, r, on in res) and len(res) == 6, "Purchase: each state's count is the rows of its table, and it opens (%s)" % res)
     ok(dict((s, n) for s, n, _, _ in res).get("review") == 5 and dict((s, n) for s, n, _, _ in res).get("ready") == 2, "5 to review, 2 ready to post (%s)" % res)
+    E("() => { Object.values(D().entries).filter(e => e.status === 'draft').forEach(e => { e.status = 'deleted'; }); refreshStats(S.coId); goStep('review', 'bills'); }"); W = pg.wait_for_timeout; W(600)
+    ok("Post 2 to Tally" in (pg.inner_text("#app [data-queue-done]") if E("!!document.querySelector('#app [data-queue-done]')") else ""), "every bill reviewed: “Post 2 to Tally”, the Ready to post count")
+    E("() => { Object.values(D().entries).filter(e => /^v[1-5]$/.test(e.id)).forEach(e => { e.status = 'draft'; }); refreshStats(S.coId); goStep('review', 'bills'); }"); W(600)
     pg.click('#app nav.statebar [data-state="review"]'); pg.wait_for_timeout(600)
     ok(E("document.querySelectorAll('#app [data-rev-how]').length") == 1 and "Book TDS" in pg.inner_text("#app [data-rev-how]"), "with bills to review: the TDS instruction, one line")
     bar = pg.inner_text("#app .actionbar") if E("!!document.querySelector('#app .actionbar')") else ""

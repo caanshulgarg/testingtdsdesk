@@ -231,12 +231,22 @@ const SheetFmt = {
   async pdfGrid(file){
     const pdf = await getPdf(file), lines = [];
     for (let p = 1; p <= Math.min(pdf.numPages, 50); p++){
-      const c = await (await pdf.getPage(p)).getTextContent(), rows = new Map();
-      c.items.forEach(it => { const y = Math.round(it.transform[5]); const r = rows.get(y) || []; r.push({x: it.transform[4], w: it.width || 0, s: it.str}); rows.set(y, r); });
-      Array.from(rows.keys()).sort((a, b) => b - a).forEach(y => {
-        const r = rows.get(y).sort((a, b) => a.x - b.x), cells = []; let cur = null;
-        r.forEach(it => { if (cur && it.x - (cur.x + cur.w) < 6){ cur.s += (it.x - (cur.x + cur.w) > 1.5 ? " " : "") + it.s; cur.w = it.x + it.w - cur.x; } else { cur = {x: it.x, w: it.w, s: it.s}; cells.push(cur); } });
-        const row = cells.map(c2 => c2.s.trim()).filter(x => x !== "");
+      const tc = await (await pdf.getPage(p)).getTextContent(), rows = [];
+      // the pieces of text in rows (as pageTextLines groups them), then cells where a gap wider than a space parts them
+      for (const it of tc.items || []){
+        if (!it.str || !it.str.trim()) continue;
+        const x = it.transform[4], y = it.transform[5], h = Math.abs(it.transform[3]) || it.height || 10;
+        let row = rows.find(r => Math.abs(r.y - y) <= Math.max(r.h, h) * 0.5);
+        if (!row){ row = {y, h, items: []}; rows.push(row); }
+        row.items.push({x, s: it.str, w: it.width || 0});
+      }
+      rows.sort((a, b) => b.y - a.y).forEach(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        const cells = []; let cur = null;
+        r.items.forEach(it => { const gap = cur ? it.x - cur.end : Infinity;
+          if (cur && gap <= Math.max(4, r.h * 0.6)){ cur.s += (gap > r.h * 0.15 ? " " : "") + it.s; cur.end = it.x + it.w; }
+          else { cur = {s: it.s, end: it.x + it.w}; cells.push(cur); } });
+        const row = cells.map(c => c.s.replace(/\s+/g, " ").trim()).filter(x => x !== "");
         if (row.length) lines.push(row);
       });
     }
