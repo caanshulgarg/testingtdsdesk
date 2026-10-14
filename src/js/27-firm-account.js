@@ -2010,7 +2010,11 @@ function pickFiles(mode){ pickMode = mode; document.getElementById("fileIn").cli
 async function handleFiles(files, mode){
   if (!files.length) return;
   if (mode === "company" && S.view === "company" && S.coId){
-    enqueueFiles(files, S.coId);
+    // a register (a sheet or JSON: GSTR-2B, a portal's or an ERP's) on Purchase: the sheet panel (src/js/80); bills as before
+    const sheets = typeof SheetImport === "object" ? files.filter(f => SheetImport.isSheet(f)) : [];
+    if (sheets.length) SheetImport.start(sheets, "purchase");
+    const bills = files.filter(f => !sheets.includes(f));
+    if (bills.length) enqueueFiles(bills, S.coId);
   } else {
     if (!Object.keys(S.companies).length){ toast("Add a client first, so uploads have somewhere to go."); S.addingCo = true; render(); return; }
     enqueueFiles(files, "auto");
@@ -2325,7 +2329,7 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (S.sample){
     try { const lim = await S.sample.limits(); S.imgMax = lim && lim.images ? Math.min(6, lim.images.maxCount) : 0; } catch(e){ S.imgMax = 0; }
     try { const perms = await window.claude.use("permissions"); if (perms) S.samplePerm = await perms.state("sample"); } catch(e){}
-    document.getElementById("fileIn").accept = "application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic";
+    document.getElementById("fileIn").accept = "application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic,.xlsx,.xls,.csv,.json";
   }
   pickEngine();
   S.sampleReady = true;

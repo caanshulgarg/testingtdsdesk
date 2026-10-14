@@ -7,6 +7,7 @@
 // Each section is one draft (review 18: parts/Confirm.jsx, src/js/60): what is typed or picked is checked as before
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
+import { SheetFormats } from "../parts/SheetPanel.jsx";
 import HowPage from "../parts/HowPage.jsx";
 import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
@@ -47,7 +48,7 @@ function SetNav({ label, groups, current, pick }) {
 const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstAato,gstContacts,gstApi,gstEst,gstRegs,rev";
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
-const SEC_EMPTY = { bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
+const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
   plan: "Nothing to save here.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
 
 // "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
@@ -355,6 +356,8 @@ function clientGroups() {
     ] },
     { title: "Books", items: [
       it("coclosed", "Periods already closed or filed: FinCom warns before posting an entry dated in one.", ""),
+      it("cosheets", "The formats of purchase and sales registers FinCom has learnt (sheets, PDF tables, JSON): rename, delete or map one again.",
+        (typeof SheetFmt === "object" ? SheetFmt.saved(co.id).length : 0) + " saved"),
     ] },
   ];
 }
@@ -370,6 +373,7 @@ export function ClientSetup() {
     bankset: () => <BankSetup which="accounts" />,
     bankrules: () => <BankSetup which="rules" />,
     coclosed: () => <ClosedPeriods co={co} />,
+    cosheets: () => <SheetFormats />,
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);
   // removing the client is out of the way, in More, behind the client's name (review of 02-Oct-2026)

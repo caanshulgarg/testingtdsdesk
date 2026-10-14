@@ -13,6 +13,7 @@ import PageSkeleton from "./parts/PageSkeleton.jsx";
 import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
 import { UploadLine } from "./parts/StateBar.jsx";
+import SheetPanel from "./parts/SheetPanel.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
@@ -38,7 +39,8 @@ function Screen() {
   if (S.view === "company" && co) {
     // stability batch 1: one wait, in the page's shape (the same as the frame before the program loads), not a "Loading…" note
     if (S.loadingCo) return <PageSkeleton what={co.name + "’s work"} />;
-    if (S.tab === "invoices") return VR.st() ? <VendorRecon /> : S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
+    // the vendor reconciliation's old place: Reconciliations → Vendors now (src/js/42 vrOpen)
+    if (S.tab === "invoices") return S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
     if (S.tab === "bank") return <Bank />;
     if (S.tab === "sales") return <Sales />;
     if (S.tab === "deductees") return <Parties />;
@@ -74,6 +76,7 @@ export default function Main({ v }) {
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
+    {company && S.sheetImp && <Guard name="the register panel" v={v}><SheetPanel /></Guard>}
     <Guard name="the bar" v={v} quiet><Suspense fallback={null}><Bar /></Suspense></Guard>
     <Legacy html={colPopHtml()} />
   </>;

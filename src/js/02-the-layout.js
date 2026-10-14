@@ -152,7 +152,7 @@ function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 /* ---------- Client setup: four tabs, out of the daily path ---------- */
 // the sections of Client setup, in the order of the list on its left (app/src/screens/Settings.jsx)
 const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TDS"], ["deductees", "Suppliers"], ["gstset", "GST"],
-  ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["coclosed", "Closed periods"], ["coremove", "Remove this client"]];
+  ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["coclosed", "Closed periods"], ["cosheets", "Register formats"], ["coremove", "Remove this client"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
 
 /* ---------- Collect: everything that arrives for this client (React: app/src/screens/Collect.jsx) ---------- */

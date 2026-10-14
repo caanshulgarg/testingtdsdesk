@@ -43,7 +43,7 @@ export default function Invoices() {
         {/* upload-pages: the count is the state bar's */}
         {drafts > 1 && S.filter === "draft" && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review them in a table</button></div>}
         <div className="row" style={{ margin: "8px 0 0", justifyContent: "flex-end" }}>
-          <button className="btn small" onClick={() => vrOpen()} title="Match a vendor’s ledger with the party’s ledger in Tally">Reconcile a vendor ledger</button>
+          <button className="btn small" onClick={() => vrOpen()} title="Reconciliations → Vendors: a vendor’s statement against its ledger">Reconcile a vendor ledger</button>
         </div>
         {/* which bills: the one row of tabs at the top (To review · Post to Tally · In Tally · Duplicates · Deleted) */}
         {shown.length ? (

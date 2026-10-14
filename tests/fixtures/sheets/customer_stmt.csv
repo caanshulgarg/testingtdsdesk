@@ -1,0 +1,4 @@
+Date,"Bill No",Narration,Dr,Cr,Balance
+01/07/2026,,"Opening balance",,,"10,000.00 Cr"
+03/07/2026,S/101,Purchase,,"17,400.00","27,400.00 Cr"
+19/07/2026,,"Paid by NEFT","15,000.00",,"12,400.00 Cr"

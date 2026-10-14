@@ -168,6 +168,9 @@ async function importMarketFile(file){
 }
 async function uploadSales(files){
   const s = SL(); if (!s) return;
+  // a register (a sheet or JSON: GSTR-1, a marketplace's or an ERP's report) goes to the sheet panel (src/js/80)
+  const sheets = typeof SheetImport === "object" ? files.filter(f => SheetImport.isSheet(f)) : [];
+  if (sheets.length){ SheetImport.start(sheets, "sales"); files = files.filter(f => !sheets.includes(f)); if (!files.length) return; }
   const cid = s.cid;
   let added = 0;
   // a PDF holding several sales invoices is read one invoice at a time
