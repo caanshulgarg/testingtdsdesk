@@ -11,11 +11,17 @@
 // State: S.rxView, S.rxFy, S.rxTab.
 import { useState } from "react";
 // FSX (src/js/78-reports.js) is its own file, fetched the first time a report is opened (not in legacy.js, build.py
-// react_parts; not with the page): "Preparing…" meanwhile. It sets globalThis.FSX.
-let fsxLoad = null;
+// react_parts; not with the page): "Preparing…" meanwhile. It sets globalThis.FSX. The fixed asset register's code, FAR
+// (src/js/80-assets.js, globalThis.FAR), comes with it: the statements and the 3CD draft take the register's figures.
+let fsxLoad = null, farLoad = null;
+export function loadFAR() {
+  if (globalThis.FAR) return Promise.resolve(globalThis.FAR);
+  return farLoad || (farLoad = import("../../../../src/js/80-assets.js").then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FAR; },
+    (e) => { farLoad = null; S.farLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
+}
 export function loadFSX() {
-  if (globalThis.FSX) return Promise.resolve(globalThis.FSX);
-  return fsxLoad || (fsxLoad = import("../../../../src/js/78-reports.js").then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
+  if (globalThis.FSX && globalThis.FAR) return Promise.resolve(globalThis.FSX);
+  return fsxLoad || (fsxLoad = Promise.all([import("../../../../src/js/78-reports.js"), loadFAR()]).then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
     (e) => { fsxLoad = null; S.rxLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
 }
 
@@ -109,10 +115,17 @@ function Details({ b, fy, r }) {
       <p className="note">Leave a paragraph empty to use the firm's text for the entity type (shown greyed).</p>
     </details>
     <details><summary>Fixed assets {co ? "(register)" : "(income-tax blocks)"} and closing stock</summary>
-      {co ? <><List det={det} path="far.cy" title="Fixed asset register, this year" cols={[["cls", "Class"], ["line", "ppe / intang / cwip"], ["gOpen", "Gross at start", "num"], ["gAdd", "Additions", "num"], ["gDel", "Deductions", "num"], ["dOpen", "Depreciation at start", "num"], ["dYear", "For the year", "num"], ["dDel", "On deductions", "num"]]} />
-        <List det={det} path="far.py" title="Fixed asset register, last year" cols={[["cls", "Class"], ["line", "ppe / intang / cwip"], ["gOpen", "Gross at start", "num"], ["gAdd", "Additions", "num"], ["gDel", "Deductions", "num"], ["dOpen", "Depreciation at start", "num"], ["dYear", "For the year", "num"], ["dDel", "On deductions", "num"]]} /></>
-        : <><List det={det} path="itBlocks.cy" title="Income-tax blocks, this year" cols={[["block", "Block"], ["rate", "Rate %", "num"], ["open", "Opening WDV", "num"], ["addGt180", "Added, 180 days or more", "num"], ["addLt180", "Added, under 180 days", "num"], ["sale", "Sale value", "num"], ["stcg", "STCL / (STCG)", "num"], ["addlRate", "Additional rate %", "num"]]} />
-          <List det={det} path="itBlocks.py" title="Income-tax blocks, last year" cols={[["block", "Block"], ["rate", "Rate %", "num"], ["open", "Opening WDV", "num"], ["addGt180", "Added, 180 days or more", "num"], ["addLt180", "Added, under 180 days", "num"], ["sale", "Sale value", "num"]]} /></>}
+      {(() => {
+        // the fixed asset register of the year (Books, Accounts, Fixed assets & depreciation; src/js/80-assets.js), when kept,
+        // replaces this year's typed register and blocks (and last year's, when last year's register is kept too)
+        const far = typeof FAR === "object" && FAR ? FAR.forYear(b, fy) : null;
+        const farCy = ["far.cy", "Fixed asset register, this year"], farPy = ["far.py", "Fixed asset register, last year"], FC = [["cls", "Class"], ["line", "ppe / intang / cwip"], ["gOpen", "Gross at start", "num"], ["gAdd", "Additions", "num"], ["gDel", "Deductions", "num"], ["dOpen", "Depreciation at start", "num"], ["dYear", "For the year", "num"], ["dDel", "On deductions", "num"]];
+        const itCy = ["itBlocks.cy", "Income-tax blocks, this year"], itPy = ["itBlocks.py", "Income-tax blocks, last year"], IC = [["block", "Block"], ["rate", "Rate %", "num"], ["open", "Opening WDV", "num"], ["addGt180", "Added, 180 days or more", "num"], ["addLt180", "Added, under 180 days", "num"], ["sale", "Sale value", "num"], ["stcg", "STCL / (STCG)", "num"], ["addlRate", "Additional rate %", "num"]];
+        const lists = (co ? [farCy, farPy] : [itCy, itPy]).filter(([p]) => !far || (p.endsWith(".py") && !far.prev));
+        return <>{far && <p className="note" data-rx-far-register="">{"From the fixed asset register: " + far.far.length + " classes, depreciation " + FAR.inr(far.totals.dep) + " for the year (Companies Act); " + far.itRows.length + " income-tax blocks, depreciation " + FAR.inr(far.totals.itDep + far.totals.itAddl) + ". "}
+          <button className="linkbtn" onClick={() => { S.fsTab = "dep"; S.fsFy = fy; goClient("books:fs"); }}>Open the register</button></p>}
+          {lists.map(([p, t]) => <List key={p} det={det} path={p} title={t} cols={(co ? FC : IC).slice(0, p.endsWith(".py") && !co ? 6 : undefined)} />)}</>;
+      })()}
       {FSX.SUBS.inv.map((k) => <Field key={k} det={det} path={"stock.cy." + k} label={"Closing stock: " + k} type="num" />)}
       {FSX.SUBS.inv.map((k) => <Field key={"py" + k} det={det} path={"stock.py." + k} label={"Last year's closing stock: " + k} type="num" />)}
       {M && !M.rolled && <p className="note">These books are not rolled over to this year in FinCom's copy: last year's closing stock is needed for this year's opening.</p>}
@@ -248,7 +261,7 @@ export const RX_VIEWS = [["fs", "Financial statements (Schedule III)", "Balance 
 
 export default function Statements({ b }) {
   const v = S.rxView;
-  if (!globalThis.FSX) {
+  if (!globalThis.FSX || !globalThis.FAR) {
     loadFSX().catch(() => {});
     return <div className="rx" data-rx-view={v}><button className="btn small" data-rx-back="" onClick={() => setAndShow("rxView", null)}>← All reports</button>
       {S.rxLoadFailed ? <p className="note" data-rx-load-failed="">The reports could not be loaded. <button className="linkbtn" onClick={() => { S.rxLoadFailed = null; loadFSX().catch(() => {}); render(); }}>Try again</button></p>
