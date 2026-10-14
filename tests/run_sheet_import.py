@@ -98,7 +98,10 @@ with sync_playwright() as p:
        "the entries: the same fields as a bill read, the credit note a credit note, the party to be created (%s)" % new)
     shot("sheet-3-added")
     # approved, they post through the existing path: Post to Tally → the cloud's queue
-    E("""() => { Object.values(D().entries).filter(e => e.readMode === 'sheet' && !e.noteKind).forEach(e => { e.natureId = "professional"; e.expenseLedger = "Professional Charges"; approve(e); });
+    # (the Client setup ledgers the entries use, confirmed as a person confirms them there: posting waits on a guessed one)
+    E("""() => { const co = CO(); Object.values(D().entries).filter(e => e.readMode === 'sheet' && !e.noteKind).forEach(e => { e.natureId = "professional"; e.expenseLedger = "Professional Charges"; approve(e);
+        (e.snapshot.lines || []).forEach(l => { const ck = l.ck || (/^Client setup/.test(l.why || "") ? (l.role === "tds" ? "tds:" + e.natureId : l.role === "gst" && l.head ? "gst:" + l.head.toLowerCase() : "") : ""); if (ck && l.ledger) choiceConfirm(co, ck, l.ledger); }); });
+      window.__toasts = []; const t0 = window.toast; window.toast = (m) => { window.__toasts.push(String(m)); return t0 && t0(m); };
       refreshStats(S.coId); S.postTabs[S.coId] = "topost"; goStep("post", "bills"); }""")
     W(900)
     ready = E("[...document.querySelectorAll('#app [data-post-panel=topost] [data-post-row]')].map(r => r.getAttribute('data-post-row'))")
@@ -110,7 +113,7 @@ with sync_playwright() as p:
         W(300)
         if not E("!!(S.billPost && S.billPost.busy)") and not pg.locator('#confirmBox [data-cbx="yes"]').count(): break
     enq = E("window.__enq")
-    ok(len(enq) == 1 and sorted(enq[0]) == sorted(sheet_ids), "posted through the existing path: one tally_post_enqueue with the sheet's bills (%s)" % enq)
+    ok(len(enq) == 1 and sorted(enq[0]) == sorted(sheet_ids), "posted through the existing path: one tally_post_enqueue with the sheet's bills (%s %s %s)" % (enq, E("window.__toasts"), E("JSON.stringify(S.billPost || {})")[:300]))
 
     # ---- 2. the same format again: no AI, the same documents, each held as a duplicate
     goto_review = lambda: (E("() => goStep('review', 'bills')"), W(500))
@@ -140,6 +143,7 @@ with sync_playwright() as p:
     E("""(b64) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
       goStep("review", "bills"); setTimeout(() => SheetImport.start([new File([u], "purchase_table.pdf", {type: "application/pdf"})], "purchase", {asTable: true}), 50); }""", pdf)
     W(3000)
+    print("    pdf:", E("JSON.stringify(S.sheetImp ? {step: S.sheetImp.step, err: S.sheetImp.err, busy: S.sheetImp.busy} : null)"), errors[-2:])
     st = E("SheetImport.st() && [SheetImport.st().how, (SheetImport.st().docs || []).map(d => [d.no, d.total])]")
     ok(st and st[0] == "known" and st[1] == [["KIT/101", 11800], ["DL/77", 35400], ["KIT/CN/4", -1180], ["NEW/9", 2950.6]], "a PDF table of the same register: its rows read, by the saved format, no AI (%s)" % st)
     E("SheetImport.close()"); W(300)
@@ -185,8 +189,8 @@ with sync_playwright() as p:
     answer_all("create")
     pg.click("#app [data-sheet-add]"); W(900)
     sl = E("SL().list.filter(v => v.source === 'sheet').map(v => [v.x.number, v.x.total, v.x.noteKind || ''])")
-    ok(["S/101", 17400, ""] in sl and ["CN/7 (CN)", 1180, "credit"] in sl and len([x for x in sl if x[0].startswith("B2CS/")]) == 2,
-       "sales entries: the invoice, the credit note, and B2CS as one entry per rate / place of supply (%s)" % sl)
+    ok(["S/101", 17400, ""] in sl and ["CN/7", 1180, "credit"] in sl and ["CNU/2", 1050, "credit"] in sl and ["EXP/1", 50000, ""] in sl and len([x for x in sl if x[0].startswith("B2CS/")]) == 2,
+       "sales entries: the invoice, the export, the credit notes, and B2CS as one entry per rate / place of supply (%s)" % sl)
     upload("gstr1.json", "#salesIn"); answer_all("create"); pg.click("#app [data-sheet-add]"); W(800)
     ok("already here, not added again" in pg.inner_text("#app [data-sheet-result]"), "the same GSTR-1 again: not added twice (%s)" % pg.inner_text("#app [data-sheet-result]"))
     ok(not errors, "no page errors " + str(errors[:2]))
