@@ -85,7 +85,8 @@ export function UploadLine() {
     {!p.busy && last && last.lines.length > 0 && <details className="upline-last" data-upload-result="" open={last.lines.some((l) => l.kind !== "ok")}>
       <summary><span data-upload-last="">{"Last upload " + fmtTime(last.at) + " · " + last.text}</span></summary>
       <ul>{last.lines.map((l, i) => <li key={i}><span className={"tag " + UP_CLS[l.kind]}>{UP_WORD[l.kind]}</span>{" " + l.name + ": " + l.text}
-        {l.open && <>{" · "}<button type="button" className="linkbtn" onClick={() => openUploaded(l)}>open it</button></>}</li>)}</ul>
+        {l.kind === "dup" && l.orig && <>{" · "}<button type="button" className="linkbtn" onClick={() => openUploaded({ open: l.orig })}>open the original</button></>}
+        {l.open && <>{" · "}<button type="button" className="linkbtn" onClick={() => openUploaded(l)}>{l.kind === "dup" && l.orig ? "open the copy" : "open it"}</button></>}</li>)}</ul>
       <button type="button" className="linkbtn" onClick={() => { delete S.lastUpload[S.coId]; S.jobs = (S.jobs || []).filter((j) => !(j.cid === S.coId || j.target === S.coId) || ["waiting", "checking", "reading"].includes(j.status)); render(); }}>Clear</button>
     </details>}
   </section>;
