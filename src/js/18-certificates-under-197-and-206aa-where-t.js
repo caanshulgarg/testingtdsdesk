@@ -143,7 +143,8 @@ const TDSYear = {
 };
 
 /* ---------- Books, TDS and GST: the screens ---------- */
-function booksTab(){ return S.booksTab || "import"; }
+// ledger-confirm (14-Oct-2026): the old Tally ledgers tab, asked for anywhere, is the TDS page's Ledgers (TaxLed.redirect)
+function booksTab(){ if (S.booksTab === "ledgers" && typeof TaxLed === "object") TaxLed.redirect(); return S.booksTab || "import"; }
 async function openBooks(cid){
   if (S.books && S.books.cid === cid) return;
   S.books = {cid, loading: true};

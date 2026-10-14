@@ -462,7 +462,9 @@ const CopyLive = {
         try { await TCloud.status(cid, true); } catch (e){}
         if (x.res && x.res.src === "cloud" && !x.busy) await LK.run("tally");     // it draws the page itself
         else draw = true;
-      } else if (S.booksTab === "ledgers" && typeof Ledgers === "object"){
+      // the ledgers page: the TDS or GST page's Ledgers since ledger-confirm (14-Oct-2026), the old Tally ledgers tab before
+      } else if ((S.booksTab === "ledgers" || (S.booksTab === "tds" && S.tdsView === "ledgers") || (S.booksTab === "gst" && S.gstView === "ledgers")) && typeof Ledgers === "object"){
+        if (typeof TaxLed === "object" && leds) delete TaxLed.ext[cid];
         if (leds) await Ledgers.load(cid, {fresh: true});
         try { delete Ledgers.hist[cid]; } catch (e){}
         draw = true;

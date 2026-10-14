@@ -96,7 +96,7 @@ try:
         pg.click('#side .side-link[data-side="From Tally"]'); W(900)
         ok(pg.locator('#app nav[aria-label="From Tally"] button[data-books-tab="ledgers"]').count() == 0, "From Tally: no Tally ledgers tab")
         E("() => booksTabGo('ledgers')"); W(900)
-        ok(E("booksTab()") == "tds" and E("S.tdsView") == "ledgers" and title() == "TDS" and lit() == ["TDS"] and E("location.hash").endswith("/books/tds/ledgers/all"), "the Tally ledgers: the TDS page's Ledgers, its own address")
+        ok(E("booksTab()") == "tds" and E("S.tdsView") == "ledgers" and title() == "TDS" and lit() == ["TDS"] and E("location.hash").endswith("/books/tds/ledgers/all"), "the Tally ledgers: the TDS page's Ledgers, its own address (%s)" % [E("booksTab()"), E("S.tdsView"), title(), lit(), E("location.hash")])
         pg.click('#side .side-link[data-side="Audit"]'); W(900)
         at = E("[...document.querySelectorAll('#app nav[aria-label=\"Audit\"] button')].map(b => b.innerText.trim())")
         ok(at[-1:] == ["Tie-out with Tally"], "Audit's tabs end with Tie-out with Tally (%s)" % at)
