@@ -299,3 +299,11 @@ run_depreciation.js                   240
 run_depreciation_books.js             180
 run_dep_tool.py                       300
 run_fixed_assets_ui.py                300  TDSDESK_SITE=../app/dist-test
+# registers on Purchase and Sales (14-Oct-2026, the owner: "any purchase sheet or sales sheet ... AI the first time for any
+# format; after that it should learn that format"): the engine on the made-up registers (no browser), then the panel, the
+# questions, To review and posting (Tally's queue; Zoho Books faked); GSTR-1 and GSTR-2B JSON by rules
+run_sheet_engine.js                   120
+run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
+# Reconciliations → Vendors / Customers: a party's statement in any format against its ledger in the books
+run_party_recon.js                    120
+run_party_recon_ui.py                 300  TDSDESK_SITE=../app/dist-test
