@@ -236,7 +236,8 @@ try:
         shot(pg, "05c-uploads")
         # a step, on the click: the certificate format kept; the statement added to Bank for review
         pg.click('[data-name="certificate-format.docx"] [data-asst-act="keep"]'); pg.wait_for_timeout(600)
-        ok(db.one("select action from assistant_uploads where name = 'certificate-format.docx'") == "keep", "Keep as a certificate format: on the click, recorded")
+        ok(db.one("select action from assistant_uploads where name = 'certificate-format.docx'") == "keep", "Use for a certificate: on the click, recorded")
+        ok(pg.evaluate("ASST.ups().some(x => /certificate-format/.test(x.name)) && !ASST.ups().some(x => /notice/.test(x.name))"), "the certificate format (and the other files, not the notices) go to the certificate tool with the next question (ASST.ups)")
         # the stand-in has no credit ledger (charge_usage): the reading is not charged here; on staging it is, as on Bank
         pg.evaluate("() => { window.charge = async () => true; }")
         pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
