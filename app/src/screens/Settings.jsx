@@ -12,7 +12,7 @@ import { useState } from "react";
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
-import { AssistantSettings } from "../parts/Assistant.jsx";
+import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import TallyLink from "../parts/TallyLink.jsx";
