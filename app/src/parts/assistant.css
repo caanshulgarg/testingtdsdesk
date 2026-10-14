@@ -107,3 +107,6 @@
 .asst-warn-txt { color: var(--warn, #b45309); }
 .asst-cap label { margin-right: 8px; }
 .asst-rowtick { margin-left: 6px; font-size: 11px; padding: 0 5px; }
+
+/* "Which one?": the ledger names as buttons */
+.asst-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

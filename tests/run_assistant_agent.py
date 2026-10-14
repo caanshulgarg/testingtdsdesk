@@ -22,6 +22,14 @@ db = A.start(55477)
 try:
     A.migrate(db); A.load_fixture(db); A.add_notice_data(db)
     db.sql("insert into assistant_settings (firm_id, enabled, consent) values ('%s', true, true);" % A.FIRM)
+    # ledgers whose names are typed loosely by the owner (no entries, nothing under a party group: no other answer changes)
+    db.sql("insert into tally_ledgers (book_id, firm_id, name, parent, open, chain) values "
+           "('%s', '%s', 'AIR ESS EXIM PRIVATE LIMITED', 'Loans & Advances (Asset)', 0, array['Loans & Advances (Asset)', 'Current Assets']), "
+           "('%s', '%s', 'Mehta & Sons', 'Loans & Advances (Asset)', 0, array['Loans & Advances (Asset)', 'Current Assets']), "
+           "('%s', '%s', 'Mehta Traders LLP', 'Loans & Advances (Asset)', 0, array['Loans & Advances (Asset)', 'Current Assets']);" % ((A.BOOK, A.FIRM) * 3))
+    # a client of the firm whose cloud book is empty (as Master Cad on staging: no start date, no entries, no ledgers)
+    db.sql("insert into clients (id, firm_id, name) values ('mastercad', '%s', 'Master Cad Infra Solutions');"
+           "insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('00000000-0000-4000-8000-0000000000c9', '%s', 'mastercad', 'Master Cad Infra Solutions', null);" % (A.FIRM, A.FIRM))
     port = 9476
     srv = SUPA.start(db, port)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:%d" % port, NO_COLOR="1")

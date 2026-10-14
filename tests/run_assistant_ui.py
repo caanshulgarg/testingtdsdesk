@@ -214,6 +214,44 @@ try:
         ok(isinstance(res, list) and ["missed", "fix", 1] in res and any(x[0] == "late" and x[1] == "fix" for x in res), "check my Q4 26Q: FinCom's checklist (missed 1, late payments) %s" % res)
         ok(pg.locator("[data-asst-prefile] [data-prefile-line]").count() >= 5, "the checklist in the chat")
         shot(pg, "07-prefile")
+        # ---------- no books in the cloud (FINCOM-CLOUD-STAGING-1): the neutral label, never the green tick, and the Tally
+        # card's button, which opens the Tally page on the client (the answer as the function sends it: assistant_test.ts)
+        pg.evaluate("""() => { ASST.turns().push({id: 'tnodata', q: 'Which suppliers crossed 30,000 under 194C without TDS this year?', at: new Date().toISOString(), cid: 'larkspur', live: '', done: true,
+          text: 'FinCom has no entries for Larkspur yet. Link its Tally company or upload its Day Book.', labels: ['nodata'], results: [], slices: [], tools: [], files: [], drafts: [], notice: null,
+          screens: [{t: 'screen', screen: 'tally_sync', label: 'Tally (the bridge and bringing books in)', button: 'Link Tally company', why: 'FinCom has no entries for Larkspur in the cloud.'}],
+          verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null}); render(); }""")
+        pg.wait_for_timeout(600)
+        last = pg.locator(".asst-turn.latest")
+        lab = last.locator('[data-asst-label="nodata"]')
+        ok(lab.count() == 1 and "No entries in FinCom" in lab.inner_text() and last.locator('[data-asst-label="books"]').count() == 0 and "Checked against the books" not in last.inner_text(),
+           "no books: the neutral 'No entries in FinCom for this client yet' label, not the green tick")
+        go = last.locator('[data-asst-screen="tally_sync"] [data-asst-screen-go="tally_sync"]')
+        ok(go.count() == 1 and go.inner_text().strip() == "Link Tally company", "the Tally card has its 'Link Tally company' button")
+        shot(pg, "07b-no-books")
+        home_tab = pg.evaluate("S.homeTab || ''")
+        if go.count():
+            go.click(); pg.wait_for_timeout(700)
+            ok(pg.evaluate("S.tallyFocus") == "larkspur" and pg.locator("[data-asst-panel]").count() == 0, "the button opens the Tally page on the client (the panel closes)")
+        pg.evaluate("(h) => { S.tallyFocus = ''; S.homeTab = h; S.view = 'company'; S.coId = 'larkspur'; S.books = window.__bk; render(); }", home_tab); pg.wait_for_timeout(500)
+        # ---------- "Which one?": the ledger names as buttons; a click asks again with the name (the answer as the function
+        # sends it: assistant_test.ts); a neutral label
+        pg.keyboard.press("Control+j"); pg.wait_for_timeout(600)
+        pg.evaluate("""() => { ASST.turns().push({id: 'tchoose', q: 'balance of mehta', at: new Date().toISOString(), cid: 'larkspur', live: '', done: true,
+          text: "Which one? Several ledgers in Larkspur's books match \u201cmehta\u201d.", labels: ['notfound'], results: [], slices: [], tools: [], files: [], drafts: [], notice: null, screens: [],
+          choices: {t: 'choices', prompt: 'Which one?', options: [{label: 'Mehta & Sons', q: 'balance of Mehta & Sons'}, {label: 'Mehta Traders LLP', q: 'balance of Mehta Traders LLP'}]},
+          verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null}); render(); }""")
+        pg.wait_for_timeout(600)
+        last = pg.locator(".asst-turn.latest")
+        btns = last.locator("[data-asst-choices] [data-asst-choice]")
+        ok(btns.count() == 2 and "Which one?" in last.locator("[data-asst-choices]").inner_text() and last.locator('[data-asst-label="notfound"]').count() == 1 and "Checked against the books" not in last.inner_text(),
+           "Which one?: a button per ledger, a neutral 'Not found in the books' label")
+        shot(pg, "07c-which-one")
+        if btns.count():
+            btns.nth(0).click(); pg.wait_for_timeout(300)
+            ok(pg.evaluate("ASST.turns().slice(-1)[0].q") == "balance of Mehta & Sons", "a name's button asks again with that ledger")
+            t0 = time.time()
+            while time.time() - t0 < 30 and not pg.evaluate("ASST.turns().slice(-1)[0].done"): pg.wait_for_timeout(200)
+        pg.evaluate("ASST.close()"); pg.wait_for_timeout(300)
         # ---------- the owner's Mismatches list
         pg.evaluate("ASST.close()"); pg.wait_for_timeout(300)
         pg.evaluate("S.view = 'home'; S.settingsTab = 'ai'; ASST.st().usage = undefined; render()"); pg.wait_for_timeout(1500)

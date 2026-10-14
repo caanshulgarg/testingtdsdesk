@@ -93,6 +93,7 @@ const ASST = {
     else if (e.t === "draft"){ t.drafts.push(e); if (e.kind === "notice_reply") t.noticeStatus = "drafted"; }
     else if (e.t === "file") t.files.push(e);
     else if (e.t === "screen"){ if (!t.screens.some(x => x.screen === e.screen)) t.screens.push(e); }
+    else if (e.t === "choices") t.choices = e;          // "Which one?": a button per ledger name, each asking again with it
     else if (e.t === "error") t.error = {kind: e.kind, message: e.message};
     else if (e.t === "prefile"){ t.prefile = e; this.runPrefile(t); }
     else if (e.t === "done"){ t.cached = e.cached || null; t.route = e.route || ""; if (e.cases) t.cases = e.cases; t.text = e.text || t.live; t.labels = e.labels || []; t.unchecked = e.unchecked || []; t.citations = e.citations || {ok: [], dropped: []}; t.links = e.links || []; t.verdicts = e.verdicts || t.verdicts; t.usage = e.usage; }
@@ -148,10 +149,11 @@ const ASST = {
     if (S.view !== "company" || S.coId !== id) openCompany(id).then(go); else go();
   },
   screen(s){
+    const cid = this.cid();          // the open client: the Tally page opens on it (its link card)
     this.close();
     const m = {post_to_tally: () => goClient("post"), bills: () => goClient("bills"), bank: () => goClient("bank"), sales: () => goClient("sales"), gst_filing: () => goClient("books:gst"),
       gst_settings: () => goGstSettings ? goGstSettings() : goClient("books:gst"), tds_returns: () => goClient("books:tds"), tds_challans: () => goClient("books:tds"), tally_ledgers: () => goClient("books:ledgers"),
-      tally_sync: () => navHome("tally"), closed_periods: () => goSettings("closed"), due_list: () => navHome("today")};
+      tally_sync: () => { S.tallyFocus = cid || ""; navHome("tally"); }, closed_periods: () => goSettings("closed"), due_list: () => navHome("today")};
     try { (m[s] || (() => navHome("today")))(); } catch (e){ navHome("today"); }
   },
   async download(f){
@@ -239,7 +241,7 @@ const ASST = {
   async save(quiet){
     const a = this.st(), k = this.key(), cid = this.cid();
     const turns = this.turns().filter(t => t.done).map(t => ({q: t.q, at: t.at, text: t.text, labels: t.labels, results: t.results.map(r => ({tool: r.tool, title: r.title, columns: r.columns, rows: (r.rows || []).slice(0, 500), summary: r.summary, basis: r.basis, period: r.period, params: r.params})),
-      files: t.files, drafts: t.drafts, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, unchecked: t.unchecked, error: t.error}));
+      files: t.files, drafts: t.drafts, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, choices: t.choices || null, unchecked: t.unchecked, error: t.error}));
     if (!turns.length){ if (!quiet) toast("Nothing to save yet."); return; }
     const title = turns[0].q.slice(0, 120);
     try {

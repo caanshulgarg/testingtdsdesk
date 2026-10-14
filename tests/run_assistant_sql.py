@@ -174,6 +174,95 @@ try:
     ok([x["party"] for x in rows(r)] == ["Ashvattha Transport Co"], "migration 85 runs twice; 194C without TDS as a member: Ashvattha Transport Co")
     r = J("select asst_tds_missed(%s, null, null, null)" % C, A.STRANGER)
     ok(r.get("none") is True and not rows(r), "after migration 85 another firm's member still gets no book")
+    # migration 86 (staging, 14-Oct-2026): a book the bridge filled without a start date (from_date null; GB TEXCOAT, 863
+    # entries) was invisible to every tool; an empty book (Master Cad: no entries, no ledgers) must answer "none", not an
+    # empty green table
+    db.sql(open(A.MIG86).read())          # 86 after 85 (85 was run again just above)
+    ok("from_date is not null" not in db.one("select prosrc from pg_proc where proname = 'asst_span'").lower().split("-- the fallback")[-1], "asst_span's fallback does not need a start date (migration 86)")
+    db.sql("update tally_books set from_date = null where book_id = '%s';" % A.BOOK)
+    r = J("select asst_tds_missed(%s, null, null, '194C')" % C)
+    ok([x["party"] for x in rows(r)] == ["Ashvattha Transport Co"], "a book with entries and no start date: 194C without TDS still found (%s)" % (r.get("why") or ""))
+    first, last = db.rows("select min(day)::text f, max(day)::text l from tally_vouchers where book_id = '%s'" % A.BOOK)[0].values()
+    ok(r.get("period") == {"from": max("2025-04-01", first), "to": last}, "its period: to its last entry, from the financial year's start or its first entry, whichever is later (%s)" % r.get("period"))
+    r = J("select asst_tds_missed(%s, null, null, null)" % C, A.STRANGER)
+    ok(r.get("none") is True, "a book with no start date: still nothing for another firm's member")
+    db.sql("update tally_books set from_date = '2025-04-01' where book_id = '%s';" % A.BOOK)
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('00000000-0000-4000-8000-0000000000e1', '%s', 'zz-empty', 'Empty Co', null), "
+           "('00000000-0000-4000-8000-0000000000e2', '%s', 'zz-empty-dated', 'Empty Dated Co', '2025-04-01');" % (A.FIRM, A.FIRM))
+    for cl in ["zz-empty", "zz-empty-dated"]:
+        r = J("select asst_tds_missed('%s', null, null, '194C')" % cl)
+        ok(r.get("none") is True and not rows(r), "a book with no entries and no ledgers (%s): 'none', not an empty table" % cl)
+    db.sql("delete from tally_books where client_id in ('zz-empty', 'zz-empty-dated');")
+    db.sql(open(A.MIG86).read())
+    ok([x["party"] for x in rows(J("select asst_tds_missed(%s, null, null, '194C')" % C))] == ["Ashvattha Transport Co"], "migration 86 runs twice")
+
+    # migration 87 (FINCOM-CLOUD-STAGING-2): the due list timed out (57014) on a book of GARG SHEKHAR's size, because each
+    # read policy called my_firm() once per row. A book of that size: 1,110 ledgers, 4,120 entries, about 10,300 lines,
+    # 5,400 kept items, TDS deducted on every bill and paid from the bank each month
+    big, bk = "zz-big", "00000000-0000-4000-8000-0000000000f1"
+    db.sql(f"""
+insert into clients (id, firm_id, name) values ('{big}', '{A.FIRM}', 'Big Books Co');
+insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('{bk}', '{A.FIRM}', '{big}', 'Big Books Co', '2026-04-01', '2026-04-01');
+insert into tally_ledgers (book_id, firm_id, name, parent, open, chain)
+  select '{bk}', '{A.FIRM}', 'Supplier ' || g, 'Sundry Creditors', 0, array['Sundry Creditors', 'Current Liabilities'] from generate_series(1, 1100) g
+  union all values ('{bk}'::uuid, '{A.FIRM}'::uuid, 'Freight Charges', 'Direct Expenses', 0::numeric, array['Direct Expenses']),
+    ('{bk}', '{A.FIRM}', 'TDS Payable 194C', 'Duties & Taxes', 0, array['Duties & Taxes', 'Current Liabilities']),
+    ('{bk}', '{A.FIRM}', 'Kotak Bank', 'Bank Accounts', 0, array['Bank Accounts', 'Current Assets']);
+insert into tally_vouchers (book_id, firm_id, guid, day, vtype, vno, party, narration, cancelled, optional)
+  select '{bk}', '{A.FIRM}', 'big-' || g, date '2026-04-01' + (g % 190), 'Journal', 'J' || g, 'Supplier ' || (1 + g % 1100), 'freight', false, false from generate_series(1, 4000) g;
+insert into tally_lines (book_id, firm_id, guid, day, ledger, amount)
+  select '{bk}', '{A.FIRM}', 'big-' || g, date '2026-04-01' + (g % 190), x.l, x.a from generate_series(1, 4000) g,
+    lateral (values ('Freight Charges', -10000), ('Supplier ' || (1 + g % 1100), 9900), ('TDS Payable 194C', 100)) x(l, a);
+insert into tally_vouchers (book_id, firm_id, guid, day, vtype, vno, party, narration, cancelled, optional)
+  select '{bk}', '{A.FIRM}', 'bigpay-' || m, (date '2026-05-07' + (m || ' month')::interval)::date, 'Payment', 'P' || m, 'Kotak Bank', 'TDS', false, false from generate_series(0, 5) m;
+insert into tally_lines (book_id, firm_id, guid, day, ledger, amount)
+  select '{bk}', '{A.FIRM}', 'bigpay-' || m, (date '2026-05-07' + (m || ' month')::interval)::date, x.l, x.a from generate_series(0, 5) m,
+    lateral (values ('TDS Payable 194C', -60000), ('Kotak Bank', 60000)) x(l, a);
+insert into client_book_items (firm_id, client_id, key, item, data) select '{A.FIRM}', '{big}', 'ledInfo', '.Supplier ' || g, '{{"pan": ""}}' from generate_series(1, 1100) g;
+insert into client_book_items (firm_id, client_id, key, item, data) select '{A.FIRM}', 'zz-noise-' || (g % 50), 'map', '.L' || g, '{{}}' from generate_series(1, 4300) g;
+analyze;""")
+    import time
+    def timed(q):
+        t0 = time.time()
+        out = A.ask(db, "set statement_timeout = '8s';\n" + q)
+        return time.time() - t0, json.loads(out)
+    pol = db.one("select string_agg(qual, ' | ') from pg_policies where tablename in ('tally_lines', 'tally_vouchers', 'tally_ledgers', 'client_book_items') and cmd = 'SELECT'")
+    ok(pol.lower().count("select my_firm()") >= 4, "the read policies work out my_firm() once per query (migration 87): " + pol)
+    try:
+        sec, r = timed("select asst_due_list('%s', null, null)" % big)
+        ok(not r.get("none") and any(x["what"].startswith("TDS deposit for") for x in rows(r)) and sec < 8, "a book of GARG SHEKHAR's size: the due list as a member inside the 8 s limit (%.1f s)" % sec)
+        sec, r = timed("select asst_tds_missed('%s', null, null, '194C')" % big)
+        ok(not r.get("none") and sec < 8, "and 194C without TDS (%.1f s)" % sec)
+    except RuntimeError as e:
+        ok(False, "a book of GARG SHEKHAR's size: the due list as a member inside the 8 s limit: " + str(e)[-200:])
+    r = J("select asst_due_list('%s', null, null)" % big, A.STRANGER)
+    ok(r.get("none") is True, "after migration 87 another firm's member still gets nothing of it")
+    # migration 88 (the owner, 14-Oct-2026: "balance of air Ess exim" found no ledger): a ledger or party name typed as
+    # people say it: case, spaces, punctuation, & / and, and the company's suffix do not matter
+    db.sql(f"""insert into tally_ledgers (book_id, firm_id, name, parent, open, chain) values
+      ('{bk}', '{A.FIRM}', 'AIR ESS EXIM PRIVATE LIMITED', 'Sundry Creditors', 0, array['Sundry Creditors']),
+      ('{bk}', '{A.FIRM}', 'Mehta & Sons', 'Sundry Creditors', 0, array['Sundry Creditors']),
+      ('{bk}', '{A.FIRM}', 'Mehta Traders LLP', 'Sundry Creditors', 0, array['Sundry Creditors']),
+      ('{bk}', '{A.FIRM}', 'Mehta Brothers', 'Sundry Creditors', 0, array['Sundry Creditors']);""")
+    pick = lambda t, u=A.ME: J("select asst_ledger_pick('%s', %s)" % (big, A.q(t)), u)
+    for typed in ["air Ess exim", "Air-Ess Exim Pvt Ltd", "AIR ESS EXIM PRIVATE LIMITED", "air ess exim pvt. ltd.", "Airess Exim Limited"]:
+        r = pick(typed)
+        ok(r.get("ledger") == "AIR ESS EXIM PRIVATE LIMITED" and not r.get("choices"), "'%s' finds AIR ESS EXIM PRIVATE LIMITED (%s)" % (typed, r))
+    r = pick("mehta")
+    ok(r.get("ledger") is None and r.get("ask") is True and sorted(r.get("choices") or []) == ["Mehta & Sons", "Mehta Brothers", "Mehta Traders LLP"], "an ambiguous name asks which one (%s)" % r)
+    r = pick("Mehta and Sons")
+    ok(r.get("ledger") == "Mehta & Sons", "& and 'and' are the same (%s)" % r)
+    r = pick("air ess exin")
+    ok(r.get("ledger") is None and not r.get("ask") and (r.get("choices") or [None])[0] == "AIR ESS EXIM PRIVATE LIMITED" and len(r["choices"]) <= 5, "a typo: no ledger, the closest names first (%s)" % r)
+    r = pick("zzqx")
+    ok(r.get("ledger") is None and (r.get("choices") or []) == [], "nothing like it: no suggestions (%s)" % r)
+    r = pick("air ess exim", A.STRANGER)
+    ok(r.get("ledger") is None and not r.get("choices"), "another firm's member: nothing (%s)" % r)
+    ok(db.one("select asst_match_ledger('%s', 'Air-Ess Exim Pvt Ltd')" % bk) == "AIR ESS EXIM PRIVATE LIMITED", "the tools' own match (asst_match_ledger) uses the same rule")
+    ok(db.one("select prosecdef::text from pg_proc where proname = 'asst_ledger_pick'") == "false", "asst_ledger_pick runs as the caller")
+    db.sql(open(A.MIG88).read())
+    db.sql(open(A.MIG87).read())
+    ok(db.one("select string_agg(qual, ' | ') from pg_policies where tablename in ('tally_lines', 'tally_vouchers', 'tally_ledgers', 'client_book_items') and cmd = 'SELECT'") == pol, "migration 87 runs twice (policies unchanged the second time)")
 
     # ---- the cap (in rupees: Rs 150 a day at Rs 85 a dollar unless the owner sets others) and the log
     take = lambda n=1: json.loads(db.one("select asst_cap_take('%s', %d)" % (A.FIRM, n)))

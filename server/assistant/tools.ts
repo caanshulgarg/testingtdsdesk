@@ -171,8 +171,8 @@ function bookSchema(t: BookTool, firmWide: boolean) {
 
 // Claude's tool list for a task. Deterministic (the same task gives byte-identical tools, so the prompt cache is read):
 // every book tool, the Day Book slice, the others the task uses, and the web tools (search at most 3 times an answer;
-// fetch for case law and circulars) only for general questions and notices. strict: the schema is enforced by the API
-// (FinCom still checks every input: eager input streaming).
+// fetch for case law and circulars) only for general questions and notices. strict: asked for, and kept only while the
+// request stays within the API's limits on strict schemas (fitStrict, below); FinCom checks every input either way.
 export function claudeTools(firmWide: boolean, o: { web?: boolean, notice?: boolean, strict?: boolean } = {}): Record<string, unknown>[] {
   const strict = o.strict !== false;
   const tools: Record<string, unknown>[] = ALL_BOOK_TOOLS.map((t) => ({ name: t.name, description: t.desc, input_schema: bookSchema(t, firmWide), eager_input_streaming: true, ...(strict ? { strict: true } : {}) }));
@@ -188,11 +188,40 @@ export function claudeTools(firmWide: boolean, o: { web?: boolean, notice?: bool
     tools.push({ type: "web_search_20260209", name: "web_search", max_uses: 3, blocked_domains: PAID_DOMAINS });
     tools.push({ type: "web_fetch_20260209", name: "web_fetch", max_uses: 4, blocked_domains: PAID_DOMAINS });
   }
-  return tools;
+  return fitStrict(tools);
 }
 // the routing step's tools (Haiku): the book tools only, no fallback, nothing else
 export function routerTools(strict = true): Record<string, unknown>[] {
-  return BOOK_TOOLS.map((t) => ({ name: t.name, description: t.desc, input_schema: bookSchema(t, false), ...(strict ? { strict: true } : {}) }));
+  return fitStrict(BOOK_TOOLS.map((t) => ({ name: t.name, description: t.desc, input_schema: bookSchema(t, false), ...(strict ? { strict: true } : {}) })));
+}
+
+// The API's limits on strict tools, for all the strict schemas of one request together (platform.claude.com, structured
+// outputs, checked 14-Oct-2026): at most 20 tools with strict: true, 24 optional parameters, and 16 parameters with a union
+// type (anyOf or a type array such as ["string", "null"]). Over any of them the request is refused with a 400 (Sentry
+// FINCOM-CLOUD-STAGING-1/-2: every call, Haiku's and Sonnet's, sent 35-52 strict tools with 93-176 union parameters).
+// A list over the limits is sent without strict: FinCom checks every tool input itself (safeArgs; eager input streaming
+// means the API does not validate it anyway).
+export const STRICT_LIMITS = { tools: 20, optional: 24, unions: 16 };
+export function strictLoad(tools: Record<string, unknown>[]): { tools: number, optional: number, unions: number } {
+  const n = { tools: 0, optional: 0, unions: 0 };
+  const walk = (s: any) => {
+    if (!s || typeof s !== "object") return;
+    const req = new Set(Array.isArray(s.required) ? s.required : []);
+    for (const [k, v] of Object.entries<any>(s.properties || {})) {
+      if (!req.has(k)) n.optional++;
+      if (Array.isArray(v?.type) || Array.isArray(v?.anyOf)) n.unions++;
+      walk(v);
+    }
+    if (s.items) walk(s.items);
+    for (const a of s.anyOf || []) walk(a);
+  };
+  for (const t of tools) if (t.strict === true) { n.tools++; walk(t.input_schema); }
+  return n;
+}
+export function fitStrict(tools: Record<string, unknown>[]): Record<string, unknown>[] {
+  const n = strictLoad(tools);
+  if (n.tools <= STRICT_LIMITS.tools && n.optional <= STRICT_LIMITS.optional && n.unions <= STRICT_LIMITS.unions) return tools;
+  return tools.map(({ strict: _s, ...t }) => t);
 }
 
 // a tool's input checked against its parameters (eager input streaming: the API does not validate it). Unknown keys,
@@ -258,4 +287,14 @@ export function toolLabel(name: string, input: Record<string, unknown>): string 
     make_file: "Making the file", point_to_screen: "Finding the right screen", web_search: "Searching the web", web_fetch: "Reading a page", record_citation: "Checking the case law", add_documents: "Adding documents", prefiling_check: "Checking the return before filing",
   };
   return (L[name] || name) + span;
+}
+
+// Words the user reads never name FinCom's tools ("Use find_ledgers to list the names", "ledger_balance"): a tool's name
+// becomes plain words ("ledger balance"); the old SQL hint to use a tool is dropped (the answer gives buttons instead).
+const TOOL_NAMES = () => [...ALL_BOOK_TOOLS.map((t) => t.name), ...OTHER_TOOLS.map((t: any) => String(t.name)), ...EXT_TOOLS.map((t) => t.name), "find_ledgers", "list_clients", "web_search", "web_fetch"];
+export function plainWords(text: string): string {
+  let t = String(text || "").replace(/\s*Use find_ledgers to list the names\.?/g, "");
+  const names = Array.from(new Set(TOOL_NAMES().filter((n) => /_/.test(n)))).sort((a, b) => b.length - a.length);
+  if (names.length) t = t.replace(new RegExp("`?\\b(" + names.join("|") + ")\\b`?", "g"), (_m, n: string) => n.replace(/_/g, " "));
+  return t;
 }
