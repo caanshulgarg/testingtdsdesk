@@ -13,7 +13,7 @@ const ASST = {
   SUGGEST: {
     client: ["Which suppliers crossed 30,000 under 194C without TDS this year?", "Cash payments over 10,000 in September", "Top 10 customers by sales this quarter",
       "Why is GSTR-3B ITC different from 2B in August?", "TDS paid late this year", "Owed to MSME suppliers for more than 45 days", "Is my client liable for tax audit?"],
-    firm: ["TDS rate on rent for a company?", "Due date of GSTR-9 for 2025-26?", "How to treat advance received under GST?", "What changes for TDS under the Income-tax Act, 2025?"],
+    firm: ["Turnover certificate for the last 3 years and net worth as on 31-Mar-2026 for…", "TDS rate on rent for a company?", "Due date of GSTR-9 for 2025-26?", "How to treat advance received under GST?", "What changes for TDS under the Income-tax Act, 2025?"],
   },
   st(){
     if (!S.asst) S.asst = {open: false, q: "", busy: false, scope: "client", by: {}, attach: null, uploading: false, saved: null, chatIds: {}};
@@ -52,7 +52,7 @@ const ASST = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess();
       const r = await fetch(this.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), attachments: attach ? [attach] : [], firm: this.letterhead()})});
+        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead()})});
       if (!r.ok || !String(r.headers.get("content-type") || "").includes("event-stream")){
         const j = await r.json().catch(() => ({}));
         throw Object.assign(new Error(j.error || ("The assistant could not be reached (" + r.status + ").")), {kind: j.kind || "other"});
@@ -183,6 +183,31 @@ const ASST = {
     } catch (e){ toast("The notice could not be stored: " + (e && e.message)); }
     a.uploading = false; this.draw();
   },
+  // files for the assistant to read in this conversation (a signed balance sheet, a certificate format, a letterhead):
+  // into the firm's private bucket (<firm>/<client or _firm>/uploads/...), sent with every question of the conversation;
+  // the tool reads them, the model is not sent them as they are
+  ups(){ const a = this.st(), k = this.key(); a.upsBy = a.upsBy || {}; return a.upsBy[k] = a.upsBy[k] || []; },
+  async upload(files){
+    const a = this.st(), cid = this.cid(), list = Array.from(files || []);
+    if (!list.length) return;
+    if (!Cloud.on()){ toast("Sign in to the firm account to upload."); return; }
+    a.uploading = true; this.draw();
+    for (const file of list.slice(0, 20)){
+      if (!/\.(pdf|xlsx|xls|docx|png|jpe?g)$/i.test(file.name || "")){ toast(file.name + ": upload a PDF, Excel, Word or picture file."); continue; }
+      if (file.size > 20 * 1024 * 1024){ toast(file.name + " is larger than 20 MB."); continue; }
+      try {
+        await Cloud.fresh().catch(() => {});
+        const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name).replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
+        const path = Cloud.st.firm + "/" + (cid || "_firm") + "/uploads/" + Date.now().toString(36) + "-" + name;
+        const r = await fetch(String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/"),
+          {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": file.type || "application/octet-stream"}, body: file});
+        if (!r.ok) throw new Error("upload " + r.status);
+        this.ups().push({path, name: file.name, type: file.type || ""});
+      } catch (e){ toast(file.name + " could not be stored: " + (e && e.message)); }
+    }
+    a.uploading = false; this.draw();
+  },
+  unUpload(path){ const l = this.ups(), i = l.findIndex(x => x.path === path); if (i >= 0) l.splice(i, 1); this.draw(); },
   // the notice's reply date on the client's due list: only when the user clicks
   async addTask(t){
     const n = t.notice || {};
@@ -241,7 +266,7 @@ const ASST = {
       a.chatIds[k] = id; a.saveOn = true; a.saved = null; this.draw();
     } catch (e){ toast("Could not open it: " + (e && e.message)); }
   },
-  newChat(){ const a = this.st(), k = this.key(); a.by[k] = []; delete a.chatIds[k]; a.saveOn = false; this.draw(); },
+  newChat(){ const a = this.st(), k = this.key(); a.by[k] = []; delete a.chatIds[k]; if (a.upsBy) delete a.upsBy[k]; a.saveOn = false; this.draw(); },
   // ---------- Settings › Assistant (the owner): today's use, the cap, the days, the questions, the mismatches
   async loadUsage(){
     const a = this.st();
