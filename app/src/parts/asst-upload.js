@@ -228,7 +228,7 @@ const AUpload = window.AUpload = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess(), bin = r.pdf || /^image\/(png|jpeg|webp|gif)$/.test(u.type);
       const res = await fetch(ASST.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? "" : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : "")}] : []})});
+        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? "" : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : ""), kind: "upload"}] : []})});
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) return {kind: "other", by: "rules", summary: (j.error || "FinCom could not tell what this file is just now") + "", aiError: true};
       return {kind: AUpload.KIND[j.kind] ? j.kind : "other", by: "ai", summary: String(j.summary || "").slice(0, 300)};
