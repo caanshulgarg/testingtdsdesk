@@ -14,8 +14,9 @@ const rpcData = viaSql ? JSON.parse(Deno.readTextFileSync(viaSql)) : (() => {
   return { me: { reg, prev: null, years: ["2025"] }, stranger: { reg: null, prev: null, years: [] } };
 })();
 const uploaded: string[] = [];
-const mk = (who: "me" | "stranger") => ({ clientId: "larkspur", clientName: "Kestrel Widgets", today: "2026-10-14", firm: { name: "Test firm", lines: [] },
-  rpc: async (fn: string, a: any) => fn === "asst_dep_register" ? (a.p_fy === "2025" ? rpcData[who] : { reg: null, prev: null, years: rpcData[who].years }) : fn === "rpt_saved" ? { rx: { kind: "company" } } : null,
+// rx: what the client's statements keep (the entity, and the ICAI Level IV switch of the year's policies)
+const mk = (who: "me" | "stranger", rx: any = { kind: "company" }, regEdit?: (r: any) => void) => ({ clientId: "larkspur", clientName: "Kestrel Widgets", today: "2026-10-14", firm: { name: "Test firm", lines: [] },
+  rpc: async (fn: string, a: any) => fn === "asst_dep_register" ? (a.p_fy === "2025" ? (regEdit && rpcData[who].reg ? (() => { const r = JSON.parse(JSON.stringify(rpcData[who])); regEdit(r.reg); return r; })() : rpcData[who]) : { reg: null, prev: null, years: rpcData[who].years }) : fn === "rpt_saved" ? { rx } : null,
   book: async () => ({ rows: [] }), makeFile: async () => null, progress: () => {}, aiText: async () => "",
   uploadFile: async (b: Uint8Array, name: string, kind: string) => { uploaded.push(name); return { id: name, name, kind, path: "p/" + name, expires: "", bytes: b.length }; } }) as any;
 const tool = TOOLS[0];
@@ -63,4 +64,22 @@ Deno.test("tax_audit_draft: clause 18 from the register", async () => {
   const r = await REPORTS.find((t) => t.name === "tax_audit_draft")!.run({ client: null, year: "2025-26" }, mk("me"));
   const c18 = r.tables![0].rows.find((x: any) => x.no === "18") as any;
   assert(c18.src === "books" && c18.rows === 2, "clause 18: the register's two blocks, from the books");
+});
+
+Deno.test("by entity: a proprietor's books at the Income-tax rates, no deferred tax", async () => {
+  const r = await tool.run({ client: null, year: "2025-26", basis: "both" }, mk("me", { kind: "proprietor" }));
+  assert(!r.error && !r.tables!.some((t) => /Companies Act|Deferred tax/.test(t.title)), "no Companies Act, no deferred tax table: " + r.tables!.map((t) => t.title.slice(0, 40)).join(" | "));
+  // the blocks' 42,750 (2,10,000 x 15% + 1,50,000 x 7.5%) is the books' charge, shared: the AC 303.19, the machine 42,446.81
+  const assets: any = r.tables!.find((t) => /asset by asset/.test(t.title));
+  assert(P(r.tables![0].summary!.book_depreciation) === 4275000 && r.tables![0].summary!.books_basis === "income_tax_rates" && r.tables![0].summary!.deferred_tax_movement === null && P(row(assets, "AC - Hitachi").c8) === 30319, "book depreciation 42,750 at the Income-tax rates; the AC's share 303.19");
+  assert(/no deferred tax/.test(r.forModel!) && !/Companies Act/.test(r.forModel!), "for the model: " + r.forModel!.slice(0, 160));
+});
+Deno.test("by entity: a firm's own policy, deferred tax at Level II, none at Level IV", async () => {
+  const own = (r: any) => { r.settings = Object.assign({}, r.settings, { bookBasis: "own", dtRate: null }); };
+  const l2 = await tool.run({ client: null, year: "2025-26", basis: "both" }, mk("me", { kind: "firm", det: { "2025": { policies: { switches: { levelIV: false } } } } }, own));
+  // (3,68,359.83 - 3,17,250) x 31.2% = 15,946.27 less 39,250 x 31.2% = 12,246.00: 3,700.27
+  const dt: any = l2.tables!.find((t) => /Deferred tax/.test(t.title));
+  assert(!!dt && P(dt.rows[4].c2) === 370027 && P(l2.tables![0].summary!.book_depreciation) === 3661675 && !l2.tables!.some((t) => /Companies Act/.test(t.title)), "Level II: deferred tax movement 3,700.27; the firm's policy 36,616.75");
+  const l4 = await tool.run({ client: null, year: "2025-26", basis: "both" }, mk("me", { kind: "firm", det: { "2025": { policies: { switches: { levelIV: true } } } } }, own));
+  assert(!l4.tables!.some((t) => /Deferred tax/.test(t.title)) && /Level IV/.test(l4.forModel!), "Level IV: no deferred tax");
 });
