@@ -131,7 +131,7 @@ try:
         ok("from the books, not audited" in txt, "the year from the books is flagged in one line")
         cards = pg.locator(".asst-turn.latest").locator("[data-asst-result=certificate_prepare]")
         heads = [cards.nth(i).locator("header .asst-src").first.inner_text() for i in range(cards.count())]
-        turn_labels = pg.locator(".asst-turn.latest").locator(".asst-labels").inner_text() if pg.locator(".asst-turn.latest").locator(".asst-labels").count() else ""
+        turn_labels = pg.locator(".asst-turn.latest").locator("[data-asst-source]").inner_text() if pg.locator(".asst-turn.latest").locator("[data-asst-source]").count() else ""
         ok(heads and all(h == "Figures for the certificate – please confirm" for h in heads) and "Checked against the books" not in turn_labels and "Figures for the certificate" in turn_labels,
            "the figures to confirm are labelled neutrally, not 'Checked against the books': " + "; ".join(heads[:2]) + " / " + turn_labels)
         lark = [r for r in pg.evaluate("() => { const t = ASST.turns(); return t[t.length - 1].results; }") if r.get("title", "").startswith("Larkspur")][0]

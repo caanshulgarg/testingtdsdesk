@@ -111,7 +111,7 @@ with sync_playwright() as p:
     n.locator("button").click(); pg.wait_for_timeout(400)
     ok(pg.locator("[data-asst-first-notice]").count() == 0, "first use: the notice goes once read")
     pg.keyboard.press("Control+j"); pg.wait_for_timeout(300); pg.keyboard.press("Control+j"); pg.wait_for_timeout(600)
-    ok(pg.locator("[data-asst-first-notice]").count() == 0 and "identifiers are masked" in pg.inner_text("[data-asst-privacy]"), "and does not come back (the short note stays under the box)")
+    ok(pg.locator("[data-asst-first-notice]").count() == 0 and pg.locator("[data-asst-panel] [data-asst-privacy]").count() == 0, "and does not come back (the line is in Settings › AI, not in the panel)")
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
 print("\n" + ("FAILED: %d" % len(fails) if fails else "all passed"))

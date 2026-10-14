@@ -13,7 +13,7 @@ Checked, with a screenshot of each in tests/out/assistant/:
 Run under the lock: flock /tmp/fincom-app.lock python3 tests/run_assistant_ui.py
 Needs Deno (DENO, else on the PATH or /opt/deno/deno); without it: skipped (fails on CI)."""
 # The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
-import os, sys, json, shutil, subprocess, threading, functools, http.server, time
+import os, re, sys, json, shutil, subprocess, threading, functools, http.server, time
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import assistant_stand as A, assistant_supa as SUPA
@@ -135,11 +135,22 @@ try:
         ok(pg.locator("[data-asst-panel]").count() == 1, "Ctrl+J opens the panel")
         ok(pg.locator("[data-asst-first-notice]").count() == 1, "first use: the notice (questions may be processed by an AI provider; identifiers are masked)")
         pg.locator("[data-asst-first-notice] button").click(); pg.wait_for_timeout(300)
-        ok(pg.locator("[data-asst-suggest] button").count() >= 5 and "identifiers are masked" in pg.inner_text("[data-asst-privacy]"), "suggested questions, and the privacy note")
+        ok(pg.locator("[data-asst-suggest] button").count() >= 5, "suggested questions")
+        # the owner, 14-Oct-2026 (a plain chat): no standing disclaimer under the box (it is in Settings › AI), one uploader
+        ok(pg.locator("[data-asst-panel] [data-asst-privacy]").count() == 0 and "never posts, files or changes" not in pg.inner_text("[data-asst-panel]"), "chat: no disclaimer line in the panel")
+        ok(pg.locator("[data-asst-panel] input[type=file]").count() == 1 and pg.locator("[data-asst-panel] [data-asst-upload]").count() == 1
+           and pg.locator("[data-asst-panel] button", has_text=re.compile(r"^\s*(Files|Notice)\s*$")).count() == 0, "chat: one upload control (Upload in the input bar)")
         shot(pg, "01-panel")
         # ---------- green: a book tool
         t = ask(pg, "Which suppliers crossed 30,000 under 194C without TDS this year?")
-        ok("books" in t["labels"] and pg.locator('[data-asst-label="books"]').count() >= 1 and "Checked against the books" in pg.inner_text(".asst-turn.latest"), "green: Checked against the books ✓")
+        ok("books" in t["labels"] and "Source: FinCom's books" in pg.inner_text(".asst-turn.latest [data-asst-source]"), "books: a grey 'Source: FinCom's books' line at the end of the reply")
+        # the owner, 14-Oct-2026 (a plain chat): no coloured label; the reply once (its title and totals are not repeated over the table)
+        ok(pg.locator("[data-asst-panel] .asst-labels, [data-asst-panel] [data-asst-label]").count() == 0 and "Checked against the books" not in pg.inner_text("[data-asst-panel]"), "chat: no green, amber or blue label")
+        title = (t["results"] or [{}])[0].get("title") or "Suppliers past a TDS limit"
+        ok(pg.inner_text(".asst-turn.latest").count(title) == 1 and pg.locator(".asst-turn.latest .asst-sum").count() == 0, "chat: the reply shows once (the title %r once, no summary line under the table)" % title)
+        geo = pg.evaluate("""() => { const l = document.querySelector('.asst-turn.latest'), f = document.querySelector('[data-asst-panel] .asst-ask'); const a = l.getBoundingClientRect(), b = f.getBoundingClientRect();
+          return {latestBottom: a.bottom, formTop: b.top, formBottom: b.bottom, vh: innerHeight, inView: a.top < b.top && a.bottom > 0}; }""")
+        ok(geo["inView"] and geo["formBottom"] <= geo["vh"] + 1, "chat: the newest reply in view above the question box, which sits at the foot (%s)" % geo)
         r = (t["results"] or [{}])[0]
         rows = r.get("rows") or []
         ok(r.get("tool") == "tds_missed" and any("Ashvattha" in json.dumps(x) for x in rows) and any(abs(float(x.get(k) or 0) - 40000) < 0.005 for x in rows for k in x if isinstance(x.get(k), (int, float))), "the table: Ashvattha Transport Co, 40,000.00 (from the database)")
@@ -152,9 +163,19 @@ try:
         shot(pg, "02-green")
         ask(pg, "Bank payments in September 2025")
         ok(pg.locator(".asst-turn.latest .asst-table button.linkbtn").count() >= 1, "dates are links to the entry (bank payments, September 2025)")
+        order = pg.evaluate("() => [...document.querySelectorAll('[data-asst-thread] .asst-turn [data-asst-q]')].map(e => e.textContent)")
+        ok(len(order) == 2 and order[0].startswith("Which suppliers") and order[1].startswith("Bank payments") and pg.locator(".asst-earlier").count() == 0 and "Earlier in this conversation" not in pg.inner_text("[data-asst-panel]"),
+           "chat: the conversation top to bottom, newest at the bottom; no 'Earlier in this conversation' block (%s)" % order)
+        ok(pg.locator("[data-asst-panel] .asst-saved").count() == 0, "chat: past conversations only behind the History button")
+        pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(800)
+        ok(pg.locator("[data-asst-panel] .asst-saved").count() == 1, "chat: the History button shows the saved conversations")
+        pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(300)
+        shot(pg, "02b-chat")
         # ---------- amber: the Day Book slice, a made-up voucher removed, a wrong figure corrected
         t = ask(pg, "What did we pay Rukmini in March and what was the reverse charge?")
-        ok("ai" in t["labels"] and "AI answer, not checked against the books" in pg.inner_text(".asst-turn.latest"), "amber: AI answer, not checked against the books")
+        ok("ai" in t["labels"] and "not checked against the books" in pg.inner_text(".asst-turn.latest [data-asst-source]"), "AI from the Day Book: said in the grey Source line")
+        pg.locator(".asst-turn.latest [data-asst-source] button").click(); pg.wait_for_timeout(300)
+        ok(pg.locator(".asst-turn.latest [data-asst-source-detail] [data-asst-cites]").count() == 1, "the Source line opens the entries the AI used")
         ok([c.get("no") for c in t["citations"]["dropped"]] == ["301"] and pg.locator("[data-asst-dropped]").count() == 1, "the made-up voucher 301 is removed and said so")
         v = {x["name"]: x for x in t["verdicts"]}
         bad = v.get("reverse charge on March's rent") or {}
@@ -169,7 +190,8 @@ try:
         # ---------- blue: general guidance with the web
         pg.evaluate("ASST.setScope('firm')"); pg.wait_for_timeout(300)
         t = ask(pg, "TDS rate on rent for a company?")
-        ok("general" in t["labels"] and "General guidance" in pg.inner_text(".asst-turn.latest") and pg.locator(".asst-turn.latest .asst-links a").count() == 1, "blue: General guidance, with the web source linked")
+        pg.locator(".asst-turn.latest [data-asst-source] button").click(); pg.wait_for_timeout(300)
+        ok("general" in t["labels"] and "general guidance" in pg.inner_text(".asst-turn.latest [data-asst-source]") and pg.locator(".asst-turn.latest .asst-links a").count() == 1, "general guidance: said in the Source line, which opens the web page used")
         ok("393" in t["text"] and "194-I" in t["text"], "both Acts' sections cited")
         shot(pg, "04-blue")
         pg.evaluate("ASST.setScope('client')"); pg.wait_for_timeout(300)

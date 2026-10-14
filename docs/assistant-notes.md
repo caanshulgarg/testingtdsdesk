@@ -15,6 +15,18 @@ off stays off. The same day's fix: the Settings page could stay on "Loading…" 
 first read before the sign-in had finished, and on a phone the Ask FinCom button covered the bottom bar's More (so
 Settings could not be reached); the setting is now read again until known, and the button sits above the bar.
 
+## A plain chat (the owner, 14-Oct-2026)
+
+The panel reads like any chat app: the conversation top to bottom, the newest at the bottom (scrolled into view as it
+streams), the question box fixed at the foot with the one Upload (paperclip; dropping files on the panel does the same).
+No "Earlier in this conversation" block: past conversations only behind the History button. No green, amber or blue
+labels: a small grey "Source: …" line at the end of a reply opens the detail (the entries the AI used, the web pages, the
+figures recomputed). A reply shows once: the words, then the table with no repeated title or summary line (a table keeps
+its title only beside others, and a tool's own note such as "Figures for the certificate – please confirm"). The line
+"Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never
+posts, files or changes anything." is in Settings › AI help only (the one-time first-use notice stays). Inside nothing
+changed: FinCom's figure still replaces the AI's (and says so), masking, the cap. Tests: run_assistant_ui.py ("chat:" checks).
+
 ## One Upload (the owner's request of 14-Oct-2026)
 
 The panel's "Notice" button is now **Upload** (app/src/parts/asst-upload.js, `AUpload`): PDF, pictures, Excel/CSV, Word, JSON,

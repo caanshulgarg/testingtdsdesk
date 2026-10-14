@@ -60,6 +60,8 @@ function AssistantSwitch() {
     <label className="chk"><input type="checkbox" checked={!!st.enabled} disabled={!st.owner} onChange={(e) => ASST.setSettings(e.target.checked)} /> <b>FinCom Assistant on for the firm</b>
       <span className="note"> · the chat panel on every page (Ctrl+J). On unless the owner switches it off (the owner's decision of 14-Oct-2026). "Check before filing" works either way: it is FinCom's own checks, no AI.</span></label>
     <p className="note">Questions may be processed by an AI provider (Anthropic's Claude); identifiers are masked: PANs, GSTINs, TANs, Aadhaar and phone numbers, and the names of parties the question does not name, are replaced by tokens before anything is sent, and FinCom puts the real values back. Only what the question needs is sent. Each person sees this notice the first time they open the assistant.</p>
+    {/* the owner, 14-Oct-2026: this line is here in Settings › AI, not under the question box */}
+    <p className="note" data-asst-privacy="">Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never posts, files or changes anything.</p>
     {!st.owner && <p className="note">Only the firm's owner can switch it on or off.</p>}
   </div>;
 }

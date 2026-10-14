@@ -1,9 +1,9 @@
 // FinCom Assistant: the one label map for the fields of a book tool's result (its `summary`), used everywhere a field is
-// shown to a person: FinCom's own line above a table (server/assistant/router.ts describe()), the line under the table in
-// the panel (app/src/parts/Assistant.jsx), the labels the model is given beside a result (agent.ts forClaude) and the
+// shown to a person: FinCom's own reply for a book tool (server/assistant/router.ts describe(): the panel shows the reply
+// once, with no summary line of its own), the labels the model is given beside a result (agent.ts forClaude) and the
 // last pass over the model's answer (agent.ts: a raw key that slipped into the words is put in words).
 // The owner's report of 14-Oct-2026: raw keys such as "disallowance30pct" showed in answers.
-// Plain JavaScript, no imports: read by the Deno function and bundled into the app (as _shared/sentry-scrub.js is).
+// Plain JavaScript, no imports: read by the Deno function.
 
 export const FIELD_LABELS = {
   total: "total", count: "entries", entries: "entries", tds: "TDS", tax: "tax", value: "value", amount: "amount",

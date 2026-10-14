@@ -1,6 +1,11 @@
-/* FinCom Assistant (parts/Assistant.jsx): a calm panel in Arc's style. Green, amber and blue say what an answer rests on. */
+/* FinCom Assistant (parts/Assistant.jsx): a plain chat in Arc's style (the owner, 14-Oct-2026): the conversation top to bottom,
+   the newest at the bottom, the question box fixed at the foot; no coloured labels, a grey "Source:" line at the end of a reply. */
 .asst-panel[data-side] { width: min(620px, 100vw); z-index: 72; }
-.asst-body { display: flex; flex-direction: column; gap: 14px; }
+.asst-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 100%; }
+.asst-panel :has(> .asst-body) { display: flex; flex-direction: column; flex: 1; }
+.asst-thread { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.asst-body > .asst-ask { position: sticky; bottom: 0; z-index: 2; margin-top: auto; }
+.asst-body > .asst-ask::before { content: ""; position: absolute; left: -12px; right: -12px; bottom: -24px; top: -12px; z-index: -1; background: var(--surface-raised, var(--surface)); }
 .asst-scope { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .asst-scope .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .asst-scope .seg button { border: 0; background: transparent; padding: 5px 12px; font: inherit; color: var(--text-secondary); cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -17,17 +22,13 @@
 .asst-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
 .asst .chip, .asst-suggest .chip, .asst-cites .chip { border: 1px solid var(--border); background: var(--surface-muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; color: var(--foreground); cursor: pointer; text-align: left; }
 .asst-suggest .chip:hover { border-color: var(--accent); }
-.asst-turn { display: flex; flex-direction: column; gap: 10px; padding: 14px 0 6px; border-top: 1px solid var(--border-subtle); }
-.asst-turn.latest { border-top: 0; padding-top: 0; }
+.asst-turn { display: flex; flex-direction: column; gap: 10px; padding: 0 0 6px; }
+.asst-turn .asst-q { align-self: flex-end; max-width: 85%; background: var(--surface-muted); border-radius: 14px 14px 4px 14px; padding: 8px 12px; font-family: inherit; font-weight: 500; font-size: 14px; }
 .asst-q { margin: 0; font-weight: 600; font-family: var(--font-display); font-size: 15px; }
 .asst-progress { display: flex; flex-direction: column; gap: 2px; color: var(--text-secondary); font-size: 12.5px; }
 .asst-progress span::before { content: "• "; color: var(--accent); }
 .asst-labels { display: flex; flex-wrap: wrap; gap: 6px; }
-.asst-src { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; border: 1px solid transparent; }
-.asst-src.ok { background: color-mix(in oklab, var(--success) 14%, transparent); color: color-mix(in oklab, var(--success) 85%, var(--foreground)); border-color: color-mix(in oklab, var(--success) 35%, transparent); }
-.asst-src.warn { background: color-mix(in oklab, var(--warning) 16%, transparent); color: color-mix(in oklab, var(--warning) 80%, var(--foreground)); border-color: color-mix(in oklab, var(--warning) 40%, transparent); }
-.asst-src.info { background: color-mix(in oklab, var(--info, #2563eb) 13%, transparent); color: color-mix(in oklab, var(--info, #2563eb) 85%, var(--foreground)); border-color: color-mix(in oklab, var(--info, #2563eb) 35%, transparent); }
-.asst-src.neutral { background: var(--surface-muted); color: var(--text-secondary); border-color: var(--border); }
+.asst-src { display: inline; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .asst-words { font-size: 14px; line-height: 1.55; }
 .asst-words p { margin: 0 0 8px; }
 .asst-words ul { margin: 0 0 8px 18px; padding: 0; }
@@ -52,7 +53,6 @@
 .asst-card header b { font-family: var(--font-display); }
 .asst-card header .iconbtn { margin-left: auto; }
 .asst-card header .iconbtn + .iconbtn { margin-left: 0; }
-.asst-card.green { border-color: color-mix(in oklab, var(--success) 30%, var(--border)); }
 .asst-card.draft { border-color: color-mix(in oklab, var(--warning) 40%, var(--border)); }
 .asst-card.draft pre { white-space: pre-wrap; font: inherit; font-size: 13px; margin: 0; max-height: 320px; overflow: auto; }
 .asst-card.notice dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 13px; }
@@ -132,3 +132,8 @@
 .asst-up-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .asst-attached { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asst-rowtick { margin-left: 6px; font-size: 11px; padding: 0 5px; }
+
+/* the reply's source, small and grey, opening the detail (the entries the AI used, the web pages, the figures recomputed) */
+.asst-source { margin: 0; font-size: 12px; }
+.asst-source .linkbtn { color: var(--text-secondary); font-size: 12px; text-decoration: underline dotted; }
+.asst-source-detail { border-left: 2px solid var(--border); padding-left: 10px; display: flex; flex-direction: column; gap: 6px; }
