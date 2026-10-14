@@ -270,7 +270,7 @@ html{scroll-padding-bottom:calc(150px + var(--bottom-banner-h, 0px))}
 .back-to{margin:0 0 10px}
 /* a warning is shown once (the owner's rule): where the "not read yet" line is on the page, the other notes that say the
    books end earlier (the year note, "Books: last entry …", Look up's and Reports' freshness box) give way to it */
-#app:has([data-not-read]) :is(.lk-fresh, [data-fresh], [data-books-asof-line], [data-books-year-note]){display:none}
+#app:has([data-not-read]) :is(.lk-fresh, [data-fresh], [data-books-asof-line], [data-books-year-note], [data-books-stale]){display:none}
 .bk-setup{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--flag);background:var(--flag-soft);border-radius:10px}
 .bk-setup select{min-width:280px;height:34px;border:1px solid var(--rule);border-radius:6px;padding:0 8px;font:inherit}
 .bk-empty{border:1.5px dashed var(--rule);border-radius:12px;background:var(--sheet);padding:48px 24px;text-align:center;cursor:pointer}
@@ -803,7 +803,8 @@ table.led-t th.n,table.led-t td.n{text-align:right;white-space:nowrap}
 @media (max-width:900px){.si-grid{grid-template-columns:1fr}}
 .accreate{color:var(--ledger);font-weight:600}
 @media (max-width:900px){.bk-head{grid-template-columns:1fr}.bk-figs{justify-content:space-between}.bk-search{margin-left:0;width:100%}.bk-table .pn,.bk-table .nr{max-width:200px}.bk-form label{grid-template-columns:1fr}.bk-setup{flex-direction:column;align-items:stretch}.bk-actionbar .lgbox{width:100%}}
-#confirmBox{position:fixed;inset:0;z-index:80;background:rgb(var(--shade) / .45);display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px}
+/* the confirm box is a step above every overlay, a modal dialog included (its "Discard what you typed?"; 14-Oct-2026) */
+#confirmBox{position:fixed;inset:0;z-index:90;pointer-events:auto;background:rgb(var(--shade) / .45);display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px}
 #confirmBox .cbx{background:var(--sheet);border-radius:10px;max-width:480px;width:100%;padding:18px 20px;box-shadow:0 12px 40px rgb(var(--shade) / .25)}
 #confirmBox h2{margin:0 0 8px;font-size:18px}
 .btn.danger-fill{background:var(--bad);border-color:var(--bad);color:var(--sheet)}

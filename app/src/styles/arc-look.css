@@ -221,3 +221,10 @@ body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: calc(96px + var(
 #app table.lt.lt thead th.n:has(> .gff), #app table.lt.lt thead th[data-numeric]:has(> .gff) { text-align: right; }
 /* an amount's heading ends where its figures end: the sort arrow's empty place (shown only once sorted) takes no room */
 #app table.lt.lt thead th.n .lt-ar:empty, #app table.lt.lt thead th[data-numeric] .lt-ar:empty { display: none; }
+/* round 3 A (14-Oct-2026): the books' freshness off the page. One small amber line, only when stale (parts/TallyLine.jsx) */
+.books-stale { margin: 0 0 8px; font-size: 12.5px; color: var(--warn, #b45309); }
+.books-stale .linkbtn { font-size: inherit; }
+.tsave.ok { color: var(--text-secondary, var(--ink-2)); font-weight: 500; cursor: default; }
+.tallypanel .tp-books .tp-details { margin-top: 4px; }
+.tallypanel .tp-books .tp-details > summary { cursor: pointer; }
+.tallypanel .tp-books .tp-details p { margin: 4px 0; }

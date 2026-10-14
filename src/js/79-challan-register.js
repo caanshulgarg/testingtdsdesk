@@ -439,6 +439,27 @@ const TDSReg = {
     return c.from === "upload" ? "upload" : c.from === "books" || c.fromVoucher ? "books" : "hand";
   },
   srcWords(c){ return {tally: "From Tally", hand: "Entered by hand", upload: "Uploaded from the portal", books: "From a Tally payment"}[this.srcOf(c)] || ""; },
+  // the register's row (round 3 B, the owner 14-Oct-2026): the source in two words beside the BSR code / serial
+  srcShort(c){ return {tally: "Tally", hand: "by hand", upload: "portal", books: "Tally payment"}[this.srcOf(c)] || ""; },
+  // "Set type" (round 3 B): a challan that gives no nature of payment (or a wrong one) gets one. Kept with the challan as
+  // FinCom's own note (Tally is not changed), in the trail, and a challan of unknown type is then placed in its own draft
+  // return as a new one is (autoPlace). Not while a filed return uses it.
+  setNature(chId, code){
+    const c = TDS.challans().find(z => z.id === chId);
+    if (!c) return {ok: false, why: "No such challan."};
+    const f = this.filedUsing(c);
+    if (f.length) return {ok: false, why: "A filed return uses this challan (" + f.map(u => u.form + " " + u.q + " " + u.fy).join(", ") + "): open a correction for it first."};
+    const raw = String(code || "").trim().toUpperCase(), section = /^6C[A-Z]{1,2}$/.test(raw) ? "20" + raw : raw;
+    if (!TDSCH.secNorm(section)) return {ok: false, why: "Give the nature of payment (section code), e.g. 94C or 194C, 92B for salary."};
+    const was = this.natureCode(c) || "none";
+    c.section = section; c.natureCode = /^(9[2-6][A-Z]{0,3}|6C[A-Z]{1,2})$/.test(raw) ? raw : "";
+    c.natureSet = {at: new Date().toISOString(), by: this.who(), was};
+    this.log({act: "challan-edit", ch: c, tax: c.tax, note: "type set: " + was + " to " + (this.natureCode(c) || section)});
+    let placed = null;
+    if (c.autoPlace === "unknown"){ c.autoPlace = "pending"; this.forget(); placed = this.autoPlace(c, this.tallyLinked(), true); }
+    this.forget(); this.done(); saveBooks();
+    return {ok: true, placed};
+  },
   // {ok, errors: {field: words}, c (the challan as it would be kept), dup, dupTally}
   check(x, editId){
     const e = {}, t = (v) => String(v == null ? "" : v).trim();
