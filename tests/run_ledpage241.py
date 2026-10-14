@@ -151,9 +151,12 @@ with sync_playwright() as p:
     if ub.count(): ub.click(); pg.wait_for_timeout(500)
     ok(E("(b) => Object.keys(b).every(n => JSON.stringify(Object.assign({}, b[n], {n: 0})) === JSON.stringify(Object.assign({}, S.books.map[n], {n: 0})))", before_all), "E. Undo: every ledger is as before Confirm all")
     # all shown confirmed again but one ledger used in entries and one no entry uses, left for the rows' Confirm below (A)
-    keep = E("""(ns) => { const m = S.books.map; const u = ns.find(n => m[n] && (m[n].n || 0) > 0 && /^gst/.test(m[n].what || '')) || ns.find(n => m[n] && (m[n].n || 0) > 0), z = ns.find(n => m[n] && !((m[n].n || 0) > 0)); return [u || '', z || '']; }""", want)
+    keep = E("""(ns) => { const m = S.books.map; const u = ns.find(n => m[n] && (m[n].n || 0) > 0 && LedMaster.isTds(m[n].what || '')) || ns.find(n => m[n] && (m[n].n || 0) > 0 && !/^gst$/.test(m[n].what || '')), z = ns.find(n => m[n] && !((m[n].n || 0) > 0)); return [u || '', z || '']; }""", want)
     want = [n for n in want if n not in keep]
     E("(ns) => TaxLed.confirm(S.books, ns, 'shown')", want); pg.wait_for_timeout(500)
+    # no ledger without entries left to confirm (one was confirmed in 0.): Unconfirm one, so a row's Confirm is tried on it
+    if not keep[1]:
+        E("""() => { const z = Object.entries(S.books.map).find(([n, m]) => m.ok && !((m.n || 0) > 0) && LedPage.taxW(m.what)); if (z) TaxLed.unconfirm(S.books, z[0]); }"""); pg.wait_for_timeout(400)
     # ---------- the owner of 09-Oct-2026: "if I want to edit the confirm ledger, then I should be able to do that"
     cg = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-okby]') && t.querySelector('[data-led-change]') && (S.books.map[t.dataset.key] || {}).what === 'gst' && (S.books.map[t.dataset.key] || {}).n > 0); return r ? r.dataset.key : ''; }")
     ok(bool(cg), "K. a confirmed GST ledger used in entries, with Change beside '✓ Confirmed' and Undo (%s)" % cg)
