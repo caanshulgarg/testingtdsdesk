@@ -221,12 +221,12 @@ try:
             ok(u.get("state") == "ready" and u.get("kind") == kind and u.get("by") == by and u.get("acts") == acts, "%s: %s, told by %s, offered %s (%s)" % (name, kind, "FinCom's rules" if by == "rules" else "the AI", acts, [u.get("kind"), u.get("by"), u.get("acts"), u.get("summary")]))
         ok("ATH/25-26/0142" in ups["bill.pdf"]["summary"] and "purchase" in ups["bill.pdf"]["summary"], "the bill's line: its number, and that it is a purchase (%s)" % ups["bill.pdf"]["summary"])
         ok("HDFC Bank" in ups["bank-statement.csv"]["summary"] and "6789" in ups["bank-statement.csv"]["summary"], "the statement's line: the bank and the account's last digits (%s)" % ups["bank-statement.csv"]["summary"])
-        ok("4 rows" in ups["sales-register.xlsx"]["summary"] and "2025-26" in ups["26as.txt"]["summary"] and "blank" in ups["certificate-format.docx"]["summary"], "the register, 26AS and certificate lines")
+        ok("4 rows" in ups["sales-register.xlsx"]["summary"] and "2025-26" in ups["26as.txt"]["summary"] and "blank" in ups["certificate-format.docx"]["summary"], "the register, 26AS and certificate lines %s" % [ups["sales-register.xlsx"]["summary"], ups["26as.txt"]["summary"], ups["certificate-format.docx"]["summary"]])
         ok("GSTR-2B" in ups["gstr2b-032026.json"]["summary"] and "3 invoices" in ups["gstr2b-032026.json"]["summary"] and "03-2026" in ups["gstr2b-032026.json"]["summary"], "the GSTR-2B file: a register to import, coming soon (%s)" % ups["gstr2b-032026.json"]["summary"])
         ok(pg.locator('[data-name="gstr2b-032026.json"] [data-asst-act="soon"]').is_disabled() and "coming soon" in pg.inner_text('[data-name="gstr2b-032026.json"]'), "Import in Purchase/Sales: coming soon (the summary meanwhile)")
         ok("ASMT-10" in ups["notice-copy.pdf"]["summary"] and "/notices/" in ups["notice-copy.pdf"]["path"], "the notice in the batch: the notice flow (stored with the notices; Read the notice and draft a reply)")
         ok(pg.evaluate("ASST.st().attach == null || !/notice-copy/.test(ASST.st().attach.name || '')"), "in a batch, the notice is not attached by itself")
-        ok(all("/uploads/" in u["path"] for n, u in ups.items() if n != "notice-copy.pdf"), "the others are stored in the firm's private folder (…/uploads/)")
+        ok(all("/uploads/" in u["path"] for n, u in ups.items() if u["kind"] != "notice"), "the others are stored in the firm's private folder (…/uploads/)")
         seen = json.load(__import__("urllib.request").request.urlopen(FNURL + "/__seen"))
         cl = [x for x in seen if x["kind"] == "classify"]
         ok(len(cl) == 2 and sum(1 for x in cl if x["image"]) == 1 and any("RENT AGREEMENT" in x["text"] for x in cl), "the AI was asked about 2 files only: the picture as it is, the Word file as its text")
@@ -237,11 +237,14 @@ try:
         # a step, on the click: the certificate format kept; the statement added to Bank for review
         pg.click('[data-name="certificate-format.docx"] [data-asst-act="keep"]'); pg.wait_for_timeout(600)
         ok(db.one("select action from assistant_uploads where name = 'certificate-format.docx'") == "keep", "Keep as a certificate format: on the click, recorded")
+        # the stand-in has no credit ledger (charge_usage): the reading is not charged here; on staging it is, as on Bank
+        pg.evaluate("() => { window.charge = async () => true; }")
+        pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
         pg.click('[data-name="bank-statement.csv"] [data-asst-act="bank"]')
         for _ in range(60):
             if pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count(): break
             pg.wait_for_timeout(250)
-        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 + 1 and pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count() == 1, "Add to Bank for review: the statement is in Bank, for review")
+        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 + 1 and pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count() == 1, "Add to Bank for review: the statement is in Bank, for review (%s)" % [stmts0, pg.evaluate("(S.bank && S.bank.stmts || []).length"), pg.inner_text('[data-name="bank-statement.csv"]')[:300], pg.evaluate("window.__toasts || []"), pg.evaluate("[S.view, S.coId, S.bank && S.bank.cid, S.bank && S.bank.busy, S.bank && S.bank.lastFail, S.bank && S.bank.moved, S.creditStop || null]")])
         pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
         # Ask about it: the Word file's text goes with the question (masked), to the file model, not the notice one
         pg.click('[data-name="agreement.docx"] [data-asst-act="ask"]'); pg.wait_for_timeout(300)
@@ -249,7 +252,7 @@ try:
         t = ask(pg, "What is in agreement.docx? Summarise it.")
         seen = json.load(__import__("urllib.request").request.urlopen(FNURL + "/__seen"))
         last = [x for x in seen if x["kind"] == "ask"][-1:]
-        ok("20,000" in t["text"] and last and "RENT AGREEMENT" in last[0]["fileText"] and last[0]["model"] == "claude-sonnet-5-5", "the answer about the file (the model had its text; Sonnet, not the notice model) %s" % (last[0]["model"] if last else None))
+        ok("20,000" in t["text"] and last and "RENT AGREEMENT" in last[0]["fileText"] and last[0]["model"] == "claude-sonnet-5-5", "the answer about the file (the model had its text; Sonnet, not the notice model) %s" % [t["text"][:200], last])
         ok(not t.get("notice"), "it is not read as a notice")
         # dropped on the panel: the same as Upload
         n0 = pg.evaluate("AUpload.list().length")

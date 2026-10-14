@@ -85,7 +85,12 @@ const AUpload = {
     // 26AS / AIS / TIS: the portal's words, the JSON it gives, or the file's name (its PDF is locked with a password)
     if (this.AS26.test(head) || (/^(json|txt)$/.test(this.ext(file)) && /Permanent Account Number|"(pan|PAN)"\s*:/.test(head) && /deduct|TDS|tax\s*collected/i.test(head)) || (r.locked && this.AS26_NAME.test(name))){
       const kind = /Annual\s+Information\s+Statement|\bAIS\b/i.test(head) || /\bais\b/i.test(name) ? "AIS" : /Taxpayer\s+Information\s+Summary|\bTIS\b/.test(head) ? "TIS" : "Form 26AS";
-      const fy = (head.match(/(?:Financial|Assessment)\s+Year\s*[:\-]?\s*(\d{4}-\d{2,4})/i) || [])[1];
+      let fy = (head.match(/Financial\s+Year\s*[:\-]?\s*(\d{4}-\d{2,4})/i) || [])[1];
+      if (!fy){
+        // TRACES' text export: a row of headings ("…^Financial Year^Assessment Year^…") with the values on the next line
+        const ls = head.split(/\r?\n/), i = ls.findIndex(l => /Financial\s+Year/i.test(l) && /[\^\t|,]/.test(l));
+        if (i >= 0 && ls[i + 1]){ const sep = (ls[i].match(/[\^\t|,]/) || ["^"])[0], c = ls[i].split(sep).findIndex(x => /Financial\s+Year/i.test(x)), v = (ls[i + 1].split(sep)[c] || "").trim(); if (/^\d{4}-\d{2,4}$/.test(v)) fy = v; }
+      }
       return {kind: "as26", summary: kind + (fy ? " for " + fy : "") + (r.locked ? " (locked with a password: FinCom asks for it when it is added)" : "") + "."};
     }
     // a bank statement: a sheet whose headings are a statement's, or a PDF naming a bank with its balances

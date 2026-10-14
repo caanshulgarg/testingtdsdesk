@@ -8,6 +8,8 @@ type Block = Record<string, unknown>;
 const tool = (name: string, input: Record<string, unknown>): Block => ({ type: "tool_use", name, input });
 const text = (t: string, extra: Block = {}): Block => ({ type: "text", text: t, ...extra });
 const SCRIPTS: [RegExp, (Block[] | ((p: any) => Block[]))[]][] = [
+  // first: the Upload's "Ask about it" (the file's text names Rukmini, whom another script answers about)
+  [/Summarise it/, [[text("A rent agreement (made-up): the godown is let for eleven months at ₹20,000 a month.")]]],
   [/194C/, [[tool("tds_missed", { from: null, to: null, section: "194C" })],
     [text("One supplier crossed the 194C limit with no TDS in the books: ₹40,000.00 of freight in February 2026. TDS of ₹400.00 is due, and 30% of the expense (₹12,000.00) is exposed to disallowance under section 40(a)(ia) until it is deducted and paid.")]]],
   [/Cash payments over 10,000/i, [[tool("entries_filter", { from: "2025-09-01", to: "2025-09-30", min_amount: 10000, max_amount: null, mode: "cash", direction: "payment", ledger: null, party: null, voucher_type: null, narration: null, limit: null })],
@@ -22,7 +24,6 @@ const SCRIPTS: [RegExp, (Block[] | ((p: any) => Block[]))[]][] = [
     { type: "web_search_tool_result", tool_use_id: "srvtoolu_1", content: [{ type: "web_search_result", url: "https://incometaxindia.gov.in/Pages/tds-rates.aspx", title: "TDS rates - Income Tax Department", encrypted_content: "x" }] },
     text("For rent of land, building or furniture paid by a company: TDS at 10% where the rent is more than ₹50,000 in a month - section 194-I of the Income-tax Act, 1961 for payments up to 31-Mar-2026, and section 393(1) (Table, Sl. 2(ii)) of the Income-tax Act, 2025 from 1-Apr-2026. Plant and machinery: 2%.",
       { citations: [{ type: "web_search_result_location", url: "https://incometaxindia.gov.in/Pages/tds-rates.aspx", title: "TDS rates - Income Tax Department", cited_text: "10%", encrypted_index: "x" }] })]]],
-  [/Summarise it/, [[text("A rent agreement (made-up): the godown is let for eleven months at ₹20,000 a month.")]]],
   [/notice/i, [[tool("record_notice", { summary: "The officer says GSTR-3B for February 2026 took ₹11,000 of input tax but GSTR-2B shows ₹5,400, so ₹5,600 is excess and is to be explained.", law: "GST", form: "ASMT-10", kind: "gst_asmt10",
       notice_no: "ZD0711260123456", din: "ZD0711260123456", notice_date: "2026-10-20", section: "Section 61 of the CGST Act, 2017, read with rule 99", period: "February 2026 (FY 2025-26)", id_no: "07AAGCL4827M1Z3",
       amount: 5600, reply_by: "2026-11-15", asked: ["Explain the excess input tax credit of ₹5,600 for February 2026"], issues: [{ type: "itc_mismatch", point: "ITC in 3B more than in 2B", amount: 5600, period: "2026-02" }], months: ["2026-02"], fy: "2025-26" })],
