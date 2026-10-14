@@ -124,16 +124,15 @@
   .bk-actionbar .bk-stat { margin-right: 4px; font-size: 13px; }
   .bk-actionbar .bk-stat + .bk-stat { display: none; }
   .bk-actionbar .ab-why > summary .ab-why-w { display: none; }
-  .bk-actionbar .ab-why > .ab-why-pop { position: fixed; left: 12px; right: 12px; bottom: 120px; width: auto; }
-  body:has(.side:not(.hidden)):has(.actionbar) .mainwrap { padding-bottom: 120px; }
+  .bk-actionbar .ab-why > .ab-why-pop { position: fixed; left: 12px; right: 12px; bottom: calc(var(--bottom-banner-h, 0px) + 120px); width: auto; }
+  body:has(.side:not(.hidden)):has(.actionbar) .mainwrap { padding-bottom: calc(120px + var(--bottom-banner-h, 0px)); }
   /* just over the bottom bar (64 px high), never on it */
-  body:has(.side:not(.hidden)) .actionbar { bottom: calc(64px + env(safe-area-inset-bottom)); }
-  body.is-test:has(.side:not(.hidden)) .actionbar { bottom: calc(83px + env(safe-area-inset-bottom)); }   /* the test build's strip is 19 px under the bottom bar */
+  body:has(.side:not(.hidden)) .actionbar { bottom: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom)); }   /* the testing strip, if any, is under the bottom bar */
 }
 
 /* ---------- 6. Save bars only when something changed ---------- */
 .cfm-foot.cfm-clean { position: static; margin: 10px 0 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
-.cfm-foot.cfm-dirty { position: sticky; bottom: 0; box-shadow: 0 -6px 18px rgb(var(--shade) / .08); border: 1px solid var(--border); background: var(--surface); }
+.cfm-foot.cfm-dirty { position: sticky; bottom: var(--bottom-banner-h, 0px); box-shadow: 0 -6px 18px rgb(var(--shade) / .08); border: 1px solid var(--border); background: var(--surface); }
 
 /* ---------- 7. "How this page works", folded ---------- */
 .howto { margin: 0 0 12px; color: var(--text-secondary); font-size: 13.5px; }

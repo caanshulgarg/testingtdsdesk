@@ -3,7 +3,9 @@
 // payments, 10,000, September); "194C without TDS" -> tds_missed (194C). The answer is the tool's table with a line FinCom
 // writes from the tool's own summary (describe()), so it is green and costs nothing.
 // A question that asks why or how, or for advice, a draft or anything not plainly one tool, is not routed here.
-// Plain module: no Deno, no imports.
+// Plain module: no Deno; its one import is the label map (plain JavaScript, shared with the app).
+
+import { fieldKind, fieldLabel } from "../_shared/assistant-labels.js";
 
 export type Route = { tool: string, input: Record<string, unknown>, why: string } | { prefile: { form: string, fy: string | null, quarter: string | null, month: string | null, reg: string | null }, why: string };
 
@@ -139,16 +141,13 @@ const money = (n: unknown) => {
   return (neg ? "-" : "") + "₹" + (rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," : "") + last3 + "." + d;
 };
 const dmy = (v: unknown) => { const s = String(v ?? ""); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + "-" + MONTHS[Number(s.slice(5, 7)) - 1].replace(/^./, (c) => c.toUpperCase()) + "-" + s.slice(0, 4) : s; };
-const COUNTS = /^(count|entries|parties|months|suppliers|deductees|overdue|late|withR1|withRef|differ|sameBill|near|ledgersConfirmed|msmeSuppliers|deductors|monthsWith3b)$/;
-const WORDS: Record<string, string> = { total: "total", count: "entries", tds: "TDS", tax: "tax", value: "value", amount: "amount", books: "in the books", twob: "in 2B", diff: "difference",
-  in26as: "in 26AS", deducted: "deducted", paid: "paid", lateAmount: "paid late", overdueAmount: "overdue", late: "paid late (entries)", overdue: "overdue (entries)", deductees: "deductees",
-  parties: "parties", taxable: "value before tax", excess: "3B more than 2B", b3all: "ITC in 3B", rcm: "reverse charge", gstr1: "in GSTR-1", gstr3b: "in GSTR-3B" };
+// the words for a summary's fields: one map for the function and the app (server/_shared/assistant-labels.js)
 export function describe(r: Record<string, any>, why: string): string {
   if (!r || r.none) return String((r && r.why) || "FinCom has nothing for this in the books held.");
   const title = String(r.title || why || r.tool || "");
   const per = r.period && (r.period.from || r.period.to) ? (r.period.from ? dmy(r.period.from) + " to " : "to ") + dmy(r.period.to) : r.period && r.period.as_on ? "on " + dmy(r.period.as_on) : "";
   const sum = r.summary && typeof r.summary === "object" ? Object.entries(r.summary).filter(([, v]) => typeof v === "number").slice(0, 5)
-    .map(([k, v]) => (WORDS[k] || k.replace(/([A-Z])/g, " $1").toLowerCase()) + ": " + (COUNTS.test(k) ? String(v) : money(v))) : [];
+    .map(([k, v]) => fieldLabel(k) + ": " + (fieldKind(k) === "count" ? String(v) : fieldKind(k) === "pct" ? String(v) + "%" : money(v))) : [];
   const n = Array.isArray(r.rows) ? r.rows.length : null;
   const head = title + (per ? ", " + per : "") + ".";
   const body = sum.length ? " " + sum.join("; ") + "." : "";

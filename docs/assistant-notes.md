@@ -32,6 +32,19 @@ buttons, each the user's own click; nothing is posted or filed by itself:
 | 26AS / AIS / TIS | Add to Reconciliations (26AS) |
 | a certificate format | kept with the client's uploads (certificates are branch certificates); its summary |
 | anything else | its summary, and Ask about it (its text goes with the question, masked; Sonnet, not the notice model) |
+## The same day's other fixes (14-Oct-2026)
+
+- **The testing strip covered Ask FinCom.** The strip along the bottom of the testing site and of review builds
+  ("REVIEW BUILD – …") is measured as drawn and put on `:root` as `--bottom-banner-h` (0px without one;
+  `bottomBannerH()` in src/js/01, run with `padForBars` on every drawing, resize and when the fonts load). Everything fixed
+  to the bottom stands on it with `calc(var(--bottom-banner-h, 0px) + its own gap)`: Ask FinCom, the toasts, the undo
+  snack, the phone's bottom bar, the action bar, sticky table footers and save bars; the pages' bottom padding adds it.
+  No fixed numbers for the strip are left in build/test-style.html. Test: tests/run_bottom_banner_ui.py.
+- **Raw keys in answers** ("disallowance30pct"). One label map for the fields of a tool's result,
+  `server/_shared/assistant-labels.js` (plain JavaScript): FinCom's own line (router.ts describe()), the line under a table
+  in the panel, `summaryLabels` beside each result the model reads (it is told to use those words), and a last pass over the
+  model's answer (`relabelText`). "Disallowance u/s 40(a)(ia) – 30%", "payments in cash (%)" and so on.
+- **A long client name on Ask FinCom** is cut with an ellipsis inside the button's width; the tooltip has the whole name.
 
 ## How a question is answered (cheapest first)
 

@@ -2,6 +2,7 @@
 // straight to which book tool, and which are left to a model), the task and model for a question, the cost of a call,
 // and the case-law check (a page with the name and the quote; a quote not on the page; a link not read in the answer).
 import { describe, periodOf, route } from "./router.ts";
+import { relabelText } from "../_shared/assistant-labels.js";
 import { costUsd, plan, taskOf } from "./models.ts";
 import { applyCitations, nameOnPage, NO_CASE, quoteOnPage, verify } from "./citations.ts";
 import { annexureCheck, checklistFor, kindOf } from "./notices.ts";
@@ -106,4 +107,14 @@ Deno.test("notices: the kind from the form; the checklist by issue; the reply mu
 Deno.test("describe: FinCom's own line from a tool's summary", () => {
   const t = describe({ tool: "tds_missed", title: "Suppliers past a TDS limit with no TDS", period: { from: "2025-04-01", to: "2026-03-31" }, rows: [{}], summary: { tds: 400, disallowance30pct: 12000, count: 1 } }, "");
   assert(t.startsWith("Suppliers past a TDS limit with no TDS, 01-Apr-2025 to 31-Mar-2026.") && t.includes("TDS: ₹400.00") && t.includes("entries: 1") && t.includes("1 line"), t);
+  // the owner's report of 14-Oct-2026: no raw key in an answer; one label map (server/_shared/assistant-labels.js)
+  assert(t.includes("Disallowance u/s 40(a)(ia) – 30%: ₹12,000.00") && !t.includes("disallowance30pct"), t);
+  const c = describe({ tool: "cash_share", title: "Cash", summary: { cashPaymentsPct: 12.5, otherIncome: 100 } }, "");
+  assert(c.includes("payments in cash (%): 12.5%") && c.includes("other income: ₹100.00"), c);
+});
+
+Deno.test("relabelText: a raw key the model wrote is put in words; figure markers and cited entries are left alone", () => {
+  eq(relabelText("The disallowance30pct is ⟦F1⟧ (`lateAmount`); see [V:12|2025-04-01]."), "The Disallowance u/s 40(a)(ia) – 30% is ⟦F1⟧ (paid late); see [V:12|2025-04-01].", "relabelled");
+  eq(relabelText("summary.cashPaymentsPct"), "payments in cash (%)", "with the summary. path");
+  eq(relabelText("the total is fine"), "the total is fine", "plain words are not touched");
 });
