@@ -46,7 +46,7 @@ with sync_playwright() as p:
     # 2.4.1 (Cause B): saved at once; no Save at the foot (it was a draft until Save, review 18)
     ok(pg.locator('#app [data-confirm-foot="books:ledgers"]').count() == 0 and pg.evaluate("Drafts.hold('books:' + S.books.cid)") is False, "2.4.1: the ledger's kind and section are saved at once")
     box.fill(""); pg.evaluate("S.ledEdit = ''; render()"); pg.wait_for_timeout(400)
-    if pg.locator("#app [data-led-confirm-agree]").count(): pg.click("#app [data-led-confirm-agree]"); pg.wait_for_timeout(500)
+    if pg.locator("#app [data-tl-confirm-shown]").count(): pg.click("#app [data-tl-confirm-shown]"); pg.wait_for_timeout(500)
     while pg.locator("#app table[data-led-table=main] tbody tr [data-led-confirm]").count():
         pg.locator("#app table[data-led-table=main] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
     # a ledger FinCom could not tell is chosen by hand, then confirmed

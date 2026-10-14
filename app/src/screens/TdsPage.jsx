@@ -17,6 +17,7 @@
 // S.tdsPickForm (the form chosen in the bar while no quarter is), all kept in the address (Route.booksMore, src/js/52).
 import { Return26, Return24 } from "./TdsReturn.jsx";
 import Register from "./tds/Register.jsx";
+import TaxLedgers from "./books/TaxLedgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import More from "../parts/More.jsx";
 import { Notices } from "../parts/Ai.jsx";
@@ -63,11 +64,12 @@ export function tdsRedirect() {
 }
 
 // one line for the ledgers still to confirm (the owner: "19 ledgers to confirm → Confirm")
+// (ledger-confirm, 14-Oct-2026: Confirm opens the ledgers here, the TDS page's own Ledgers, TaxLedgers.jsx)
 function LedgerLine({ b }) {
-  const p = LedMaster.pending(b);
+  const p = TaxLed.pending(b, "tds");
   if (!p.length) return null;
   return <p className="tg-ledline" data-ledger-banner="" title={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")}>
-    <span className="dot" aria-hidden="true" />{p.length} ledger{p.length === 1 ? "" : "s"} to confirm → <button className="linkbtn" onClick={() => booksTabGo("ledgers")}>Confirm</button></p>;
+    <span className="dot" aria-hidden="true" />{p.length} ledger{p.length === 1 ? "" : "s"} to confirm → <button className="linkbtn" data-ledger-confirm="" onClick={() => TaxLed.go("tds")}>Confirm</button></p>;
 }
 
 // the bar under the tabs: the year, and on Returns the quarter and form (year → quarter → form opens a return), on
@@ -95,6 +97,7 @@ function Bar({ fys }) {
     tools={v !== "return" ? <More items={[
           ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
           ["The challan register", () => tdsNav("register"), { "data-tds-more": "register" }],
+          ["TDS ledgers (confirm, unconfirm)", () => TaxLed.go("tds"), { "data-tds-more": "ledgers" }],
           ["TDS receivable vs 26AS (Reconciliations)", () => { S.recFy = fy; booksTabGo("recon"); }, { "data-tds-more": "recon" }],
           AIH.enabled("notices") && ["Notices", () => tdsNav("notices"), { "data-tds-more": "notices" }],
           ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
@@ -240,7 +243,7 @@ export default function Tds({ b }) {
   if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
   if (["year", "return", "register"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
-  if (!S.tdsFy && !["years", "notices", "register"].includes(S.tdsView)) S.tdsView = "years";
+  if (!S.tdsFy && !["years", "notices", "register", "ledgers"].includes(S.tdsView)) S.tdsView = "years";
   const v = S.tdsView;
   // a return's tab is settled before the way back is drawn: the guide beside it is for that tab. A return opens on its
   // entries (the summary is the card above the tabs since round 46; an old link to …/summary opens the entries)
@@ -252,12 +255,13 @@ export default function Tds({ b }) {
   const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
-  const none = !had.length && v !== "notices" && v !== "register" && !Payroll.has("") && !TDS.challans().length;
+  const none = !had.length && v !== "notices" && v !== "register" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
   return <div data-phone-scroll="" data-tds-page="">
     {/* the ledgers still to confirm: one line (tds-layout), on the year's page and a return's */}
-    {v !== "register" && <LedgerLine b={b} />}
-    {!none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && <Bar fys={fys} />}
-    {none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
+    {v !== "register" && v !== "ledgers" && <LedgerLine b={b} />}
+    {!none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && v !== "ledgers" && <Bar fys={fys} />}
+    {v === "ledgers" ? <TaxLedgers b={b} kind="tds" />
+      : none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
       <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => goClient("books:import")}>Bring in from Tally</button>
         <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div></Calm>
       : v === "notices" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← Returns</button></p><Notices b={b} kind="tds" /></>
