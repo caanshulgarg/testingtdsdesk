@@ -427,11 +427,13 @@ export function Return26({ b, allRows, form = "26Q" }) {
       : <ToFix
         items={[{ k: "nopan", n: noPan, one: "without PAN", many: "without PAN" }, { k: "rate", n: issues.length, one: "rate question", many: "rate questions" },
           { k: "unmatched", n: un.length, one: unit.replace(/s$/, "") + " without a challan", many: unit + " without a challan" }, overItem(fy, q, form)].concat(missingItems(form, other)).concat([
+          { k: "paycode", n: TDS26Q.payCodeRows(fy, q, form).length, one: unit.replace(/s$/, "") + " with a payment code to confirm", many: unit + " with a payment code to confirm" },
           { k: "interest", n: int1A.length, one: "interest to pay", many: "interest lines to pay" }, { k: "fee", n: feeErr ? 1 : 0, one: "late fee", many: "late fees" },
           { k: "portal", n: form === "26Q" ? TDS.portalRows().filter((r) => r.fy === fy && r.q === q).length : 0, one: "deduction to file in 26QB / 26QC / 26QD on the portal", many: "deductions to file in 26QB / 26QC / 26QD on the portal" },
           { k: "corr", n: driftN, one: "change since filing", many: "changes since filing" }, { k: "traces", n: TRF.jrFor(fy, q, form) ? TRF.jrFor(fy, q, form).items.length : 0, one: "TRACES default", many: "TRACES defaults" }, unknownItem(fy, q)])}
         parts={[
           ["chtype", <UnknownChallans fy={fy} q={q} form={form} />],
+          ["paycode", <PayCodeRows fy={fy} q={q} form={form} />],
           ["portal", form === "26Q" ? <PortalRows fy={fy} q={q} /> : null],
           ["unmatched", <FixRows title={un.length + " " + unit + " without a challan · " + money(notCh)} rows={un} unit={unit} go={<button className="btn small" onClick={() => tdsTabGo("challans")}>Allocate them on Challans</button>} />],
           ["over", TDSReg.overUsed(fy, q, form).length ? <section className="dash-card bad" style={{ marginBottom: 12 }} data-over-used=""><h3>Challans used beyond their amount</h3>
@@ -446,6 +448,18 @@ export function Return26({ b, allRows, form = "26Q" }) {
         ]}
         year={yearChecks(fy)} />}
   </>;
+}
+
+// the deductions of a 2026-27 return whose payment code is not confirmed (rent, a section or collection not in FinCom's
+// confirmed list): the file leaves the code empty; never picked silently (docs/tds-codes.md)
+function PayCodeRows({ fy, q, form }) {
+  const list = TDS26Q.payCodeRows(fy, q, form);
+  if (!list.length) return null;
+  return <section className="dash-card" style={{ marginBottom: 12 }} data-paycode-rows=""><h3>Payment code to confirm</h3>
+    <p className="note">The forms of the Income-tax Act, 2025 carry a 4-digit payment code for each deduction. For these, the code is not confirmed (the sources disagree, or it is not yet in FinCom's list), so the file leaves it empty: confirm it before filing.</p>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Deductee</th><th>Section</th><th>Why</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th></tr></thead>
+      <tbody>{list.slice(0, 300).map(({ row: r, why }) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td>{form === "27EQ" ? r.code || "" : <Sec s={r.section} fy={fy} />}</td><td>{why.replace(/^payment code to confirm: /, "")}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
+  </section>;
 }
 
 // 194-IA, 194-IB and 194M: not in 26Q; each filed in its challan-cum-statement on the portal (the TDS review, M3)

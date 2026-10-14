@@ -169,7 +169,7 @@ export function FootLine() {
     t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
     const signIn = () => { S.view = "home"; S.homeTab = "rules"; S.settingsTab = "account"; render(); };
     return <><span className="side-quiet side-one" data-trust-line="" title={t}>{t}</span>
-      <span className="side-quiet side-one" data-local-only="" title="Working on this computer only. Sign in from Settings to share with the firm.">Not shared · <button type="button" className="linkbtn side-data" onClick={signIn}>Sign in</button></span></>;
+      <span className="side-quiet side-one" data-local-only="" title="Working on this computer only. Sign in from Settings to share with the firm.">Not shared · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></span></>;
   }
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }

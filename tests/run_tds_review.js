@@ -2,7 +2,7 @@
 // app's own code (the built site-test/index.html, or TDSDESK_HTML), worked out by hand here:
 //   H1  a deduction paid by the next quarter's challan is in its quarter's file (June paid 7-July; March paid 30-April)
 //   H2  TCS (27EQ / Form 143) return due dates: the 15th up to 2025-26; from tax year 2026-27 the TDS calendar (31 Jul,
-//       31 Oct, 31 Jan, 31 May); the late fee and the words on screen from the same function   [owner to confirm the 2026 rule]
+//       31 Oct, 31 Jan, 31 May); the late fee and the words on screen from the same function   [confirmed by several sources; official text not reachable]
 //   H3  27EQ collection codes as the official list (quoted below with its source); a code a person chose from the old,
 //       shifted list moved to the same nature
 //   H4  the section codes of the 26Q file from one table; 194J technical and professional, 194-I machinery and building
@@ -12,7 +12,7 @@
 //   M2  TDS deducted in a separate entry after the bill: the bill's amount and its date are the amount and date of credit
 //   M3  194-IA / 194-IB / 194M are not in 26Q: listed apart, to be filed in 26QB / 26QC / 26QD on the portal
 //   M4  above a lower-deduction certificate's limit the section's rate applies, whatever the ledger is called
-//   M5  TCS from 1-Apr-2026: liquor 2%, tendu leaves 2%   [owner to confirm against the Finance Act 2026]
+//   M5  TCS from 1-Apr-2026: liquor 2%, tendu leaves 2%   [confirmed by several sources; official text not reachable]
 //   M6  a return's Challans figure is what that return uses, not every challan of the quarter
 //   M8  Tally's payroll tags never change a 24Q marked filed
 //   L1  interest for paying late on a deduction still on no challan, to date
@@ -96,6 +96,30 @@ const code = (id) => x.TDS26Q.codeFor(x.TDS.rows().find(r => r.id.startsWith(id 
 ok(typeof x.TDS26Q.codeFor === "function" && code("j1") !== code("j2") && code("i1") !== code("i2"), "H4. 194J technical and professional, 194-I machinery and building get different codes (" + (typeof x.TDS26Q.codeFor === "function" ? [code("j1"), code("j2"), code("i1"), code("i2")] : "no codeFor") + ")");
 ok(typeof x.TDS26Q.codeFor === "function" && code("k1") === "94C", "H4. 194C stays 94C");
 ok(has("TDS_SEC_CODES"), "H4. the codes are one table (TDS_SEC_CODES)");
+// H4 (the coordinator's research, 14-Oct-2026: several secondary sources agree; the official text not reachable): from
+// FY 2026-27 the new forms carry 4-digit payment codes. Form 140: 194J(a) technical 1026, 194J(b) professional 1027, 194T
+// 1067; rent (old 194-I) is UNCONFIRMED (the sources disagree): no code, listed in To fix. Form 143: liquor 1068, tendu
+// 1069, timber under a forest lease 1070, other timber 1071, other forest produce 1072, scrap 1073; others unconfirmed.
+// The inferred codes 1007, 1010, 1025 and 1036 are never used. Up to 2025-26 the old section codes stay.
+ok(code("j2") === "4JB" && code("j1") === "4JA" && code("i1") === "4IA" && code("i2") === "4IB", "H4. a 2025-26 26Q keeps the old section codes (" + [code("j1"), code("j2"), code("i1"), code("i2")] + ")");
+b = books([V("p1", "20260510", "Beta", 100000, 10000, "TDS 194J", "Professional Fees"), V("p2", "20260511", "Beta", 100000, 2000, "TDS 194J", "Technical Services"),
+  V("p3", "20260512", "Gamma", 100000, 10000, "TDS 194I", "Office Rent"), V("p4", "20260513", "Alpha Ltd", 100000, 2000, "TDS 194C")]);
+b.challans = [{id: "pc1", bsr: "0240020", serial: "00011", date: "20260607", tax: 24000, interest: 0}];
+b.alloc = {"p1|TDS 194J": "pc1", "p2|TDS 194J": "pc1", "p3|TDS 194I": "pc1", "p4|TDS 194C": "pc1"};
+f = x.TDS26Q.build("2026-27", "Q1", firm, "26Q");
+const ddOf = (party, amt) => lines(f.text, "DD").find(l => l.includes("^" + party + "^") && l.includes("^" + amt + "^")) || "";
+ok(!f.error && /\^1027\^/.test(ddOf("Beta", "10000.00")) && /\^1026\^/.test(ddOf("Beta", "2000.00")), "H4. a 2026-27 Form 140 writes 194J(b) professional as 1027, 194J(a) technical as 1026 (" + (f.error || [ddOf("Beta", "10000.00").split("^")[20], ddOf("Beta", "2000.00").split("^")[20]]) + ")");
+ok(!/\^10(07|10|25|36)\^/.test(f.text || "") && !/\^(1008|1009|1016|1017|1019)\^/.test(ddOf("Gamma", "10000.00")), "H4. no inferred code (1007, 1010, 1025, 1036) and no rent code picked silently");
+const pc = typeof x.TDS26Q.payCodeRows === "function" ? x.TDS26Q.payCodeRows("2026-27", "Q1", "26Q") : null;
+ok(pc && pc.some(z => z.row.id.startsWith("p3|") && /payment code to confirm/.test(z.why)) && !pc.some(z => /^p[12]\|/.test(z.row.id)), "H4. the 2026-27 rent deduction is in To fix: payment code to confirm (" + (pc ? J(pc.map(z => [z.row.id.split("|")[0], z.why])) : "no payCodeRows") + ")");
+ok(pc && x.TDS26Q.payCodeRows("2025-26", "Q1", "26Q").length === 0, "H4. none for a 2025-26 return (the old codes)");
+b = books([{id: "s9", date: "20260510", type: "Sales", party: "Beta", ent: [{l: "Beta", a: -102000}, {l: "Sales", a: 100000}, {l: "TCS Scrap", a: 2000}]},
+  {id: "s8", date: "20260511", type: "Sales", party: "Beta", ent: [{l: "Beta", a: -102000}, {l: "Sales", a: 100000}, {l: "TCS Parking", a: 2000}]}]);
+b.challans = [{id: "t9", bsr: "0240020", serial: "00019", date: "20260607", tax: 4000, section: "206C"}]; b.alloc = {"s9|TCS Scrap": "t9", "s8|TCS Parking": "t9"};
+f = x.TDS26Q.build("2026-27", "Q1", firm, "27EQ");
+ok(!f.error && lines(f.text, "DD").some(l => /\^1073\^/.test(l)), "H4. a 2026-27 Form 143 writes scrap as 1073 (" + (f.error || lines(f.text, "DD").map(l => l.split("^")[20])) + ")");
+const pt = typeof x.TDS26Q.payCodeRows === "function" ? x.TDS26Q.payCodeRows("2026-27", "Q1", "27EQ") : [];
+ok(pt.length === 1 && pt[0].row.id.startsWith("s8|"), "H4. a 2026-27 parking-lot collection (no confirmed code) is in To fix (" + J(pt.map(z => z.why)) + ")");
 
 // ---------------- H5 and M1
 b = books([V("v1", "20260520", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("v2", "20260620", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("v3", "20260720", "Alpha Ltd", 100000, 2000, "TDS 194C")]);

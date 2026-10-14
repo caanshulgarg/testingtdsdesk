@@ -108,7 +108,9 @@ with sync_playwright() as p:
     n = pg.evaluate("() => { const f = (k) => { const r = TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', name: 'T'}, k); return [r.name, r.formNo, r.draft, r.missingCodes.join(','), r.text.split('\\r\\n')[1].split('^')[4]]; }; return [f('26Q'), f('27Q'), f('27EQ')]; }")
     ok(n[0][0] == "DELT12345A_Form140_Q2_202627_DRAFT.txt" and n[0][1] == "140" and n[0][2] and n[0][4] == "140", "2026-27 Q2 other than salary: Form 140 (was 26Q), file named DRAFT, batch header says 140")
     ok(n[1][1] == "144" and n[1][4] == "144" and n[2][1] == "143" and n[2][4] == "143", "non-residents: Form 144 (was 27Q); TCS: Form 143 (was 27EQ)")
-    ok(n[0][3] == "194C,194J" and n[2][3] == "6CE", "the payment codes not yet filled in are named (%s; %s)" % (n[0][3], n[2][3]))
+    # tds-layout (14-Oct-2026, H4): the confirmed payment codes are filled in (194J(a) 1026, 194J(b) 1027, scrap 1073, …);
+    # one without a confirmed code (194C here; a 194J whose kind is not known) is still named, never guessed
+    ok("194C" in n[0][3].split(",") and n[2][3] == "", "the payment codes not confirmed are named, the confirmed ones written (%s; %s)" % (n[0][3], n[2][3]))
     # up to 2025-26: 26Q / 27Q / 27EQ as before (late returns and corrections)
     pg.evaluate("""() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) - 1) + v.date.slice(4); });
       S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) - 1) + c.date.slice(4); }); S.books.certs[0].from = '20250401'; S.books.certs[0].to = '20260331'; }""")

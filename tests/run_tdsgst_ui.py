@@ -17,6 +17,8 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
     challan's tax); a return's Challans tab and card show only what that return uses (the owner's register; the review, M6),
     so a challan's whole amount (₹9,00,000.00 in the fixture) and other returns' use are on the challan register, not on
     every return of its quarter.
+    Taken again the same day for H4: the 2026-27 Form 140 files of Q3 and Q4 now carry 194J(b)'s payment code 1027 where
+    the field was empty (docs/tds-codes.md); no other file or figure changed.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")

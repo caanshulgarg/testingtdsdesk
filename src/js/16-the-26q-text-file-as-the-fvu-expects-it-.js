@@ -15,8 +15,20 @@ const TDS_FORMS = {
 // are to be matched field by field to Protean's file-format documents and run through their FVU; until that is done
 // (NEW_FORMS_VALIDATED), a new-form file is a draft: named so, and not sent to the FVU from FinCom.
 const NEW_FORMS_VALIDATED = false;
-// payment code by old section (TDS) or 27EQ collection code (TCS): to be filled from Protean's documents
-const PAY_CODES = {};
+// The payment codes of the new forms (FY 2026-27 on), by form: Form 140 (26Q) by old section (and, for a section split by
+// what was paid for, by TDSRate.payType: r.pay); Form 143 (27EQ) by the old collection code. From the coordinator's
+// research of 14-Oct-2026 (docs/tds-codes.md, with the sources): several secondary sources agree; the official text
+// (Income-tax Rules 2026, Protean's file format) could not be reached. A section with { unconfirmed } gets NO code: the
+// sources disagree, so FinCom never picks one; its deductions are in To fix as "payment code to confirm" (payCodeRows).
+// Anything not listed is unconfirmed the same way. The codes some sources only infer (1007, 1010, 1025, 1036) are never used.
+const PAY_CODES = {
+  "26Q": {
+    "194J": {by: {technical: "1026", professional: "1027"}, note: "s.393(1): technical services (old 194J(a)) at 2%; professional services (old 194J(b)) at 10%"},
+    "194T": {code: "1067", note: "partner's remuneration (old 194T)"},
+    "194I": {unconfirmed: "rent: the sources disagree (1008/1009, or 1016/1017/1019)"}
+  },
+  "27EQ": {"6CA": "1068", "6CI": "1069", "6CB": "1070", "6CC": "1071", "6CD": "1072", "6CE": "1073"}
+};
 // The section codes of the 26Q / 27Q file's deductee records, in one place (the TDS review of 14-Oct-2026, H4). A section
 // not listed keeps the code the file has always carried (194C -> 94C; 195 stays 195). A section split by what was paid for
 // (TDSRate.payType: r.pay) has a code for each kind; a row whose kind is not known gets none, and the file says so.
@@ -24,7 +36,7 @@ const PAY_CODES = {};
 // confirm them against Protean's current list before filing; docs/tds-codes.md says how.
 const TDS_SEC_CODES = {
   "194J": {by: {technical: "4JA", professional: "4JB"}, unverified: true, note: "194J(a) fees for technical services; 194J(b) professional fees"},
-  "194I": {by: {rent_machinery: "4IA", rent_building: "4IB"}, unverified: true, note: "194-I(a) plant and machinery; 194-I(b) land, building or furniture"},
+  "194I": {by: {rent_machinery: "4IA", rent_building: "4IB"}, note: "194-I(a) plant and machinery; 194-I(b) land, building or furniture (Protean's 2018 annexure)"},
   "194DA": {code: "4DA", unverified: true}, "194BB": {code: "4BB", unverified: true}, "194LA": {code: "4LA", unverified: true}
 };
 const TDS26Q = {
@@ -94,7 +106,23 @@ const TDS26Q = {
       remarks: rows.filter(r => this.remark(r, form).remark).length};
   },
   // the payment code of the Act of 2025 for a deduction or collection (new forms); "" until the table has it
-  payCode(r, form){ return String(PAY_CODES[form === "27EQ" ? r.code : TDS.sec(r.section)] || ""); },
+  payCode(r, form){ return this.payCodeOf(r, form).code; },
+  // {code, why}: the code, or "" with why it has none ("payment code to confirm: …")
+  payCodeOf(r, form){
+    const t = PAY_CODES[form === "27EQ" ? "27EQ" : form === "26Q" ? "26Q" : ""] || {};
+    if (form === "27EQ"){ const c = t[r.code || ""]; return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + (r.code ? "collection code " + r.code + " has no confirmed code in Form 143" : "no collection code")}; }
+    const sec = TDS.sec(r.section), e = t[sec];
+    if (!e) return {code: "", why: "payment code to confirm: " + sec + " has no confirmed code in Form " + TDS.formNo(form, "2026-27")};
+    if (e.unconfirmed) return {code: "", why: "payment code to confirm: " + e.unconfirmed};
+    if (e.code) return {code: e.code, why: ""};
+    const c = e.by && e.by[r.pay];
+    return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + sec + ", what was paid for is not known (" + Object.keys(e.by || {}).join(" or ") + ")"};
+  },
+  // the deductions of a new-form return (FY 2026-27 on) with no confirmed payment code: [{row, why}] (To fix)
+  payCodeRows(fy, q, form){
+    if (!TDS.isNew(fy) || !TDS_FORMS[form]) return [];
+    return TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q).map(r => ({row: r, why: this.payCodeOf(r, form).why})).filter(x => x.why);
+  },
   // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
   code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
   // a deduction's code, from the one table (TDS_SEC_CODES); "" when its section is split and what was paid for is not known
