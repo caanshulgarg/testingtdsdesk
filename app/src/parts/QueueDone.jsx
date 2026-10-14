@@ -3,7 +3,9 @@
 export default function QueueDone() {
   const all = Object.values(D().entries);
   if (all.some((e) => e.status === "draft")) return null;
-  const waiting = all.filter((e) => e.status === "approved" && !e.exportedAt).length;
+  // upload-pages (14-Oct-2026): what is ready to post is the row of states' Ready to post (billStates); an approved bill
+  // Tally refused is under Errors, not "reviewed, post it" (the owner's screen said "Post 2 to Tally" over "Ready to post 0")
+  const waiting = typeof billStates === "function" ? ((billStates() || {}).ready || 0) : all.filter((e) => e.status === "approved" && !e.exportedAt).length;
   if (!waiting) return null;
   return <div className="bk-alert ok queue-done" data-queue-done="" role="status">
     <b>{"All " + waiting + (waiting === 1 ? " bill" : " bills") + " reviewed"}</b>

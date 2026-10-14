@@ -1,0 +1,115 @@
+{
+ "chksum": "x",
+ "data": {
+  "gstin": "09AANFG3202D1ZR",
+  "rtnprd": "072026",
+  "version": "1.0",
+  "gendt": "14-08-2026",
+  "itcsumm": {},
+  "docdata": {
+   "b2b": [
+    {
+     "ctin": "09AAACK1234A1Z5",
+     "trdnm": "KASHI IT SOLUTIONS",
+     "supfildt": "11-08-2026",
+     "supprd": "072026",
+     "inv": [
+      {
+       "inum": "KIT/101",
+       "typ": "R",
+       "dt": "05-07-2026",
+       "val": 11800,
+       "pos": "09",
+       "rev": "N",
+       "itcavl": "Y",
+       "rsn": "",
+       "diffprcnt": 1,
+       "srctyp": "",
+       "irn": "",
+       "irngendate": "",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 10000,
+         "igst": 0,
+         "cgst": 900,
+         "sgst": 900,
+         "cess": 0
+        }
+       ],
+       "txval": 10000,
+       "igst": 0,
+       "cgst": 900,
+       "sgst": 900,
+       "cess": 0
+      }
+     ]
+    },
+    {
+     "ctin": "27AADCM9999M1Z1",
+     "trdnm": "MUMBAI MOVERS PVT LTD",
+     "supfildt": "11-08-2026",
+     "supprd": "072026",
+     "inv": [
+      {
+       "inum": "MM/55",
+       "typ": "R",
+       "dt": "10-07-2026",
+       "val": 5900,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "N",
+       "rsn": "P",
+       "diffprcnt": 1,
+       "txval": 5000,
+       "igst": 0,
+       "cgst": 450,
+       "sgst": 450,
+       "cess": 0
+      }
+     ]
+    }
+   ],
+   "cdnr": [
+    {
+     "ctin": "09AAACK1234A1Z5",
+     "trdnm": "KASHI IT SOLUTIONS",
+     "supfildt": "11-08-2026",
+     "supprd": "072026",
+     "nt": [
+      {
+       "ntnum": "KIT/CN/4",
+       "typ": "C",
+       "suptyp": "R",
+       "dt": "09-07-2026",
+       "val": 1180,
+       "pos": "09",
+       "rev": "N",
+       "itcavl": "Y",
+       "rsn": "",
+       "diffprcnt": 1,
+       "txval": 1000,
+       "igst": 0,
+       "cgst": 90,
+       "sgst": 90,
+       "cess": 0
+      }
+     ]
+    }
+   ],
+   "impg": [
+    {
+     "refdt": "15-07-2026",
+     "portcode": "INNSA1",
+     "boenum": "7654321",
+     "boedt": "15-07-2026",
+     "isamd": "N",
+     "txval": 100000,
+     "igst": 18000,
+     "cess": 0
+    }
+   ]
+  }
+ }
+}

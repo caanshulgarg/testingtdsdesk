@@ -6,6 +6,7 @@ import { relabelText } from "../_shared/assistant-labels.js";
 import { costUsd, plan, taskOf } from "./models.ts";
 import { applyCitations, nameOnPage, NO_CASE, quoteOnPage, verify } from "./citations.ts";
 import { annexureCheck, checklistFor, kindOf } from "./notices.ts";
+import { PARTY_FIELDS, parseSheetMap, sheetPrompt } from "./sheetmap.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -117,4 +118,24 @@ Deno.test("relabelText: a raw key the model wrote is put in words; figure marker
   eq(relabelText("The disallowance30pct is ⟦F1⟧ (`lateAmount`); see [V:12|2025-04-01]."), "The Disallowance u/s 40(a)(ia) – 30% is ⟦F1⟧ (paid late); see [V:12|2025-04-01].", "relabelled");
   eq(relabelText("summary.cashPaymentsPct"), "payments in cash (%)", "with the summary. path");
   eq(relabelText("the total is fine"), "the total is fine", "plain words are not touched");
+});
+
+Deno.test("a register's format: the prompt carries the header and 10 rows only; the answer keeps only FinCom's fields and the sheet's headers", () => {
+  const head = ["Inv Dt", "Bill No", "Supplier", "GSTIN", "Taxable Amt", "IGST", "CGST", "SGST", "Total", "Remarks"];
+  const rows = Array.from({ length: 25 }, (_, i) => ["0" + (1 + i % 9) + "/07/2026", "B-" + i, "TEXT_1", "GSTIN_1", "1,000.00", "0", "90", "90", "1,180.00", "TEXT_2"]);
+  const p = sheetPrompt(head, rows, "purchase");
+  assert(p.includes("purchase register") && p.includes("Inv Dt") && p.split("\n").length === 13, "the prompt: a line of header, 10 rows (" + p.split("\n").length + " lines)");
+  const ans = '{"map": {"date": "Inv Dt", "no": "Bill No", "party": "Supplier", "gstin": "GSTIN", "taxable": "Taxable Amt", "igst": "IGST", "cgst": "CGST", "sgst": "SGST", "total": "Total",' +
+    ' "amount": "Total", "hsn": "Not a column", "qty": "Total"}, "transforms": {"date": "dmy", "groupByNo": true}, "why": {"date": "from \'Inv Dt\'", "hsn": "x"}}';
+  const r = parseSheetMap("Here it is: " + ans, head);
+  eq(Object.keys(r.map).sort(), ["cgst", "date", "gstin", "igst", "no", "party", "sgst", "taxable", "total"], "unknown fields, unknown headers and a second field on one column dropped");
+  eq([r.transforms.date, r.transforms.groupByNo, r.why.date, r.why.hsn], ["dmy", true, "from 'Inv Dt'", undefined], "how to read, and why only for what is mapped");
+  eq(parseSheetMap("no json at all", head).map, {}, "an answer that is not JSON maps nothing");
+});
+
+Deno.test("a party's statement: its own fields (debit, credit, balance), never an invoice's", () => {
+  const head = ["Date", "Vch No", "Particulars", "Debit", "Credit", "Balance"];
+  assert(sheetPrompt(head, [], "vendor").startsWith("A vendor's statement of our account"), "the prompt names a vendor's statement");
+  const r = parseSheetMap('{"map": {"date": "Date", "no": "Vch No", "narration": "Particulars", "debit": "Debit", "credit": "Credit", "balance": "Balance", "taxable": "Debit"}}', head, PARTY_FIELDS);
+  eq(Object.keys(r.map).sort(), ["balance", "credit", "date", "debit", "narration", "no"], "a party's fields kept, an invoice field dropped");
 });

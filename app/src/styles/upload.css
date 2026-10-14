@@ -1,0 +1,41 @@
+/* The upload pages' shared pattern (upload-pages, 14-Oct-2026; parts/StateBar.jsx): one row of states with the guide's
+   "?" at its end, the upload line under it, an empty state with one next step. Calm: no boxes around the lines, the
+   counts in the tab's pill, Errors in the warning tone. */
+#app nav.statebar { display: flex !important; flex-wrap: nowrap !important; align-items: center; gap: 8px; }
+#app nav.statebar > div { flex: 1 1 auto; min-width: 0; }
+#app :is(nav.statebar, .statebar-none) .statebar-help { flex: 0 0 auto; display: inline-flex; }
+#app nav.statebar .st-errors { color: var(--warn); }
+/* the "?" as tall as a state's tab, so it sits on the row's one line (centred like the tabs) */
+#app .help-btn.help-q { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 999px; font-weight: 600; font-size: 13px; line-height: 1;
+  display: inline-grid; place-items: center; color: var(--muted); background: transparent; border: 1px solid var(--border); }
+#app .help-btn.help-q:hover { color: var(--foreground); border-color: var(--muted); }
+
+/* the upload line: what is being read, the files not read, the last upload */
+#app .upline { margin: 0 0 12px; font-size: 13.5px; }
+#app .upline-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 28px; }
+#app .upline-row .spinner { width: 14px; height: 14px; }
+#app .upline-bar { flex: 0 1 180px; height: 4px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+#app .upline-bar > i { display: block; height: 100%; background: var(--accent); }
+#app .upline-fails { list-style: none; margin: 6px 0 0; padding: 0; border-top: 1px solid var(--border); }
+#app .upline-fails > li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
+#app .upline-fails .upline-acts { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
+#app .upline-last > summary { cursor: pointer; color: var(--muted); list-style: none; }
+#app .upline-last > summary::-webkit-details-marker { display: none; }
+#app .upline-last > summary::after { content: " ▾"; font-size: 10px; }
+#app .upline-last[open] > summary::after { content: " ▴"; }
+#app .upline-last > ul { margin: 6px 0; padding-left: 18px; }
+
+/* an empty list: what is so, then its one next step */
+#app .empty-next { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 16px; text-align: center;
+  border: 1px dashed var(--border); border-radius: 12px; color: var(--foreground); }
+#app .empty-next > b { font-size: 15px; font-weight: 600; }
+#app .empty-next > .btn { margin-top: 6px; }
+
+/* To review's one line of what to do */
+#app .rev-how { margin: 0 0 8px; }
+
+@media (max-width: 600px) {
+  #app .upline-fails .upline-acts { margin-left: 0; }
+  #app .upline-bar { flex-basis: 100%; }
+}
+#app .statebar-none { display: flex; justify-content: flex-end; }

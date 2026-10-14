@@ -1,0 +1,178 @@
+{
+ "gstin": "09AANFG3202D1ZR",
+ "fp": "072026",
+ "version": "GST3.2",
+ "hash": "hash",
+ "b2b": [
+  {
+   "ctin": "09AAACK1234A1Z5",
+   "inv": [
+    {
+     "inum": "S/101",
+     "idt": "05-07-2026",
+     "val": 17400,
+     "pos": "09",
+     "rchrg": "N",
+     "inv_typ": "R",
+     "itms": [
+      {
+       "num": 1801,
+       "itm_det": {
+        "rt": 18,
+        "txval": 10000,
+        "camt": 900,
+        "samt": 900,
+        "csamt": 0
+       }
+      },
+      {
+       "num": 1201,
+       "itm_det": {
+        "rt": 12,
+        "txval": 5000,
+        "camt": 300,
+        "samt": 300,
+        "csamt": 0
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "b2cs": [
+  {
+   "sply_ty": "INTRA",
+   "pos": "09",
+   "typ": "OE",
+   "rt": 18,
+   "txval": 20000,
+   "camt": 1800,
+   "samt": 1800,
+   "csamt": 0
+  },
+  {
+   "sply_ty": "INTRA",
+   "pos": "09",
+   "typ": "OE",
+   "rt": 18,
+   "txval": 1000.5,
+   "camt": 90.05,
+   "samt": 90.05,
+   "csamt": 0
+  },
+  {
+   "sply_ty": "INTER",
+   "pos": "07",
+   "typ": "OE",
+   "rt": 5,
+   "txval": 4000,
+   "iamt": 200,
+   "csamt": 0
+  }
+ ],
+ "cdnr": [
+  {
+   "ctin": "09AAACK1234A1Z5",
+   "nt": [
+    {
+     "ntty": "C",
+     "nt_num": "CN/7",
+     "nt_dt": "20-07-2026",
+     "val": 1180,
+     "pos": "09",
+     "rchrg": "N",
+     "inv_typ": "R",
+     "itms": [
+      {
+       "num": 1801,
+       "itm_det": {
+        "rt": 18,
+        "txval": 1000,
+        "camt": 90,
+        "samt": 90,
+        "csamt": 0
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "cdnur": [
+  {
+   "ntty": "C",
+   "nt_num": "CNU/2",
+   "nt_dt": "22-07-2026",
+   "val": 1050,
+   "typ": "B2CL",
+   "pos": "27",
+   "itms": [
+    {
+     "num": 501,
+     "itm_det": {
+      "rt": 5,
+      "txval": 1000,
+      "iamt": 50,
+      "csamt": 0
+     }
+    }
+   ]
+  }
+ ],
+ "exp": [
+  {
+   "exp_typ": "WOPAY",
+   "inv": [
+    {
+     "inum": "EXP/1",
+     "idt": "25-07-2026",
+     "val": 50000,
+     "sbpcode": "INNSA1",
+     "sbnum": "123",
+     "sbdt": "26-07-2026",
+     "itms": [
+      {
+       "txval": 50000,
+       "rt": 0,
+       "iamt": 0,
+       "csamt": 0
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "hsn": {
+  "data": [
+   {
+    "num": 1,
+    "hsn_sc": "8471",
+    "uqc": "NOS",
+    "qty": 10,
+    "txval": 15000,
+    "iamt": 0,
+    "camt": 1200,
+    "samt": 1200,
+    "csamt": 0
+   }
+  ]
+ },
+ "doc_issue": {
+  "doc_det": [
+   {
+    "doc_num": 1,
+    "docs": [
+     {
+      "num": 1,
+      "from": "S/101",
+      "to": "S/101",
+      "totnum": 1,
+      "cancel": 0,
+      "net_issue": 1
+     }
+    ]
+   }
+  ]
+ }
+}

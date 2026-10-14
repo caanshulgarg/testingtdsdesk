@@ -1,0 +1,10 @@
+"Txn Date","Ref No",Description,Amount,Dr/Cr,Balance
+01-07-2026,,"Opening Balance",,,"5,000.00 Dr"
+05-07-2026,KIT/101,"Sales: laptops","11,800.00",Dr,"16,800.00 Dr"
+06-07-2026,DL/77,"Sales: retainer","35,400.00",Dr,"52,200.00 Dr"
+09-07-2026,KIT/CN/4,"Credit note: returned mouse","1,180.00",Cr,"51,020.00 Dr"
+12-07-2026,NEW/9,"Sales: stationery","2,950.60",Dr,"53,970.60 Dr"
+15-07-2026,LF/3,"Late payment fee",590.00,Dr,"54,560.60 Dr"
+25-07-2026,NEFT-UTR77,"Payment received","20,000.00",Cr,"34,560.60 Dr"
+26-07-2026,INV/88,"Sales: repairs","4,130.00",Dr,"38,690.60 Dr"
+31-07-2026,TDS/Q2,"TDS deducted by you","1,000.00",Cr,"37,690.60 Dr"

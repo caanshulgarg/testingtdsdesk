@@ -24,8 +24,8 @@ import NoticeLine from "../parts/NoticeLine.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
-const EMPTY = { review: "Nothing to review. Every entry has a ledger: use the Post to Tally tab to send them.", ready: "No entries are ready yet. Give each entry under To review its ledger; it then waits here.",
-  done: "Nothing posted or ignored yet. Use Post on the entries that are ready." };
+const EMPTY = { review: "Nothing to review: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To review its ledger; it then waits here.",
+  done: "Nothing in Tally yet. Post the lines under Ready to post.", ignored: "No line ignored." };
 const live = () => Bridge.on() && Bridge.up();
 
 
@@ -88,14 +88,14 @@ function bankCols(b, total, nSel) {
   return [
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} />,
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
-    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
+    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel hideIdle t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
       const party = bankParty(r), sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
       return <><div className="pn">{party || r.narr.slice(0, 60)}</div><div className="nr" title={r.narr}>{sub && <><span className="md">{sub}</span> </>}{r.narr}</div></>; } },
-    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
-    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
+    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel hideIdle t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
+    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel hideIdle t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
     { k: "st", role: "status", label: "Status", v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
-    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
+    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel hideIdle t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
     { k: "ac", role: "act", cls: "ac", cell: (r) => <RowActions r={r} /> },
   ];
 }
@@ -105,7 +105,7 @@ function Table({ tab }) {
   const nSel = all.filter((r) => b.sel.has(r.id)).length;
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
-  return <ListTable name="bank" cols={bankCols(b, total, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+  return <ListTable name="bank" className="bk-table gf-off" cols={bankCols(b, total, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
     rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") })}
     empty={bankRangeOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("bank")}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />;
 }
@@ -129,7 +129,7 @@ function Groups() {
   const b = B(), q = b.q.trim().toLowerCase();
   const all = bankGroups().filter((g) => !q || (g.name + " " + g.sample).toLowerCase().includes(q));
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show more parties ({all.length - Math.min(all.length, b.limit)} left)</button></div>;
-  return <ListTable name="bankParties" cols={groupCols()} rows={all} rowKey={(g) => g.key} unit={["party", "parties"]} limit={b.limit} more={more}
+  return <ListTable name="bankParties" className="bk-table gf-off" cols={groupCols()} rows={all} rowKey={(g) => g.key} unit={["party", "parties"]} limit={b.limit} more={more}
     empty="Nothing to review: every entry has a ledger. Use the Post to Tally tab to send them." />;
 }
 
@@ -263,10 +263,9 @@ export default function Bank() {
     <div className="bk">
       {/* the steps at the top of the page (review of 02-Oct-2026: they were about 490 px down) */}
       <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">
-          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
-          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
-        </div>
+        {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
+            state, so they open from their own button */}
+        {tab === "rules" && <button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button>}
         {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
       </div>
@@ -283,7 +282,7 @@ export default function Bank() {
           <div><dt>Withdrawals</dt><dd>{sum("debit")}</dd></div><div><dt>Deposits</dt><dd>{sum("credit")}</dd></div>
           <div><dt>Closing</dt><dd>{st.closing !== undefined ? money(st.closing) : "—"}</dd></div>
         </dl>
-        <div className="bk-actions"><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
+        <div className="bk-actions"><button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>
       <div className="bk-check">
         {st.badRows ? <span className="bad">✖ {st.badRows} entries do not agree with the running balance — check them before posting</span>
@@ -334,7 +333,8 @@ export function BankBar() {
       {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
+    // upload-pages: the counts of the states are the state bar's; here only what is not a state
+    left = <>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
       {tc.gone > 0 && !noLed && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}
       {noLed && <span className="bk-stat bad" data-bank-noledger="">{whyLed + " "}<button className="linkbtn" onClick={chooseLed}>{/guessed/.test(whyLed) ? "Confirm the ledger" : "Choose the ledger"}</button></span>}</>;
     right = <>

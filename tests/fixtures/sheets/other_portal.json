@@ -1,0 +1,39 @@
+{
+ "source": "ShopERP",
+ "data": {
+  "invoices": [
+   {
+    "invoice": {
+     "no": "SE-1",
+     "date": "2026-07-11"
+    },
+    "buyer": {
+     "name": "Ravi Stores",
+     "gstin": "09AAAFR1111R1Z1"
+    },
+    "amounts": {
+     "net": 8000,
+     "cgst": 720,
+     "sgst": 720,
+     "gross": 9440
+    }
+   },
+   {
+    "invoice": {
+     "no": "SE-2",
+     "date": "2026-07-12"
+    },
+    "buyer": {
+     "name": "Ravi Stores",
+     "gstin": "09AAAFR1111R1Z1"
+    },
+    "amounts": {
+     "net": 1200.25,
+     "cgst": 108.02,
+     "sgst": 108.02,
+     "gross": 1416.29
+    }
+   }
+  ]
+ }
+}

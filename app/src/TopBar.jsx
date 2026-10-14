@@ -10,15 +10,12 @@ import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 // Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
 // style (Radix's menu, as Arc's DropdownMenu, whose trigger and items do not fit the firm button and its menu)
-import { Tabs } from "@/registry/components/tabs/tabs";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
-import tabs from "@/registry/components/tabs/tabs.module.css";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
-import { FinComNav } from "./nav.js";
+import { StateBar } from "./parts/StateBar.jsx";
 import { useDismiss } from "./parts/dismiss.js";
 import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
 
@@ -62,7 +59,8 @@ export function uploadKind() {
 // To review's Approve, and Post to Tally's "Post N to Tally" (its To post tab, with bills ready)
 export function pageOwnsPrimary() {
   const up = uploadKind();
-  if (up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft") return true;
+  // (upload-pages: only while there are bills to approve; with none, Upload is the page's one next step)
+  if (up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft") return typeof draftRows === "function" && draftRows().length > 0;
   if (up === "bills" && S.tab === "export") {
     const co = CO(); if (!co) return false;
     let ready = 0, errors = 0;
@@ -118,30 +116,11 @@ export function statusTabsShown() {
   return true;
 }
 
-// a client's status tabs: were a second row of the header, which made the header taller on these pages only (the page
-// jumped 53 px between Purchase and TDS). Now the first thing on the page, kept in view under the header (steady.css)
+// a client's states (upload-pages, 14-Oct-2026): the one row of states of Purchase, Bank and Sales (parts/StateBar.jsx),
+// the first thing on the page, kept in view under the header (steady.css). It was the three steps with an unlabelled
+// badge for Tally's errors beside them, and Bank and Sales had rows of their own
 export function StatusTabs() {
-  if (!statusTabsShown()) return null;
-  const t = docType();
-  const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
-  // purchase bills: one row of tabs (review of 02-Oct-2026: a second row under it repeated "To review"): the three steps,
-  // then the bills held as duplicates, deleted, or needing no entry
-  const bills = t === "bills", ents = bills && typeof D === "function" && D() ? Object.values(D().entries || {}) : [], cnt = (st) => ents.filter((e) => e.status === st).length;
-  const side = bills ? [["duplicate", "Duplicates"], ["deleted", "Deleted"]].concat(cnt("rejected") ? [["rejected", "No entry"]] : []) : [];
-  const onSide = bills && S.tab === "invoices" && side.some(([id]) => id === S.filter);
-  const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
-  // Arc's Tabs, its root with Radix's list and triggers in Arc's classes: no scroll arrows (more buttons in nav.sbar) and
-  // each tab's words first, as the tests read them; the chosen tab's pill is drawn in styles/arc-look.css. A tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
-  // (activationMode "manual"), so going along the tabs never opens a page on the way
-  const cur = onSide ? S.filter : now || "";
-  return <div className="sbar-band"><nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
-    <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
-    {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => FinComNav.go(() => goStep(id))} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
-        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsPrimitive.Trigger>)}
-    {side.map(([id, label]) => <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsPrimitive.Trigger>)}
-    </TabsPrimitive.List></Tabs>
-  </nav></div>;
+  return <StateBar />;
 }
 
 // Saving (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click opens Settings → Sign-in),
@@ -163,15 +142,16 @@ function SaveState() {
   return null;
 }
 
-// "N entries need review" (spec H4): the count of Post to Tally → Errors (postTabCounts, src/js/59), a link to that tab;
-// hidden at zero and on the firm's own pages
+// "N Tally errors" (spec H4): the count of Post to Tally → Errors (postTabCounts, src/js/59), a link to that list;
+// hidden at zero and on the firm's own pages. upload-pages (14-Oct-2026): it said "3 entries need review" over Purchase's
+// "To review 0"; the upload pages show the same count as their Errors state, so it is not said again in the top bar
 function ReviewLink() {
   const co = S.view === "company" ? CO() : null;
-  if (!co || typeof postTabCounts !== "function") return null;
+  if (!co || typeof postTabCounts !== "function" || (typeof uploadPage === "function" && uploadPage())) return null;
   let n = 0; try { n = num(postTabCounts(co.id).errors); } catch (e) { n = 0; }
   if (!n) return null;
   const go = () => { S.postTabs = S.postTabs || {}; S.postTabs[co.id] = "errors"; goStep("post", "bills"); };
-  return <button className="treview" data-review-link="" title="Open Post to Tally → Errors" onClick={go}>{n + (n === 1 ? " entry needs review" : " entries need review")}</button>;
+  return <button className="treview" data-review-link="" title="Open Post to Tally → Errors" onClick={go}>{n + (n === 1 ? " Tally error" : " Tally errors")}</button>;
 }
 
 // the one Tally sign (spec H1, H2): green connected / red not connected (tallySign, src/js/49), naming the computer (round
@@ -234,7 +214,8 @@ function TopRight() {
     <div className="topright">
       {/* keyed by the page: a page's own buttons are its own, drawn new with it (not slid along when their width changes) */}
       <span className="tb-page" key={S.view + ":" + (inCo ? S.tab + ":" + (S.tab === "books" ? booksTab() : "") : S.homeTab)}>
-      {inCo && <HelpButton page />}
+      {/* the upload pages have their guide as a "?" at the end of their row of states */}
+      {inCo && !(typeof uploadPage === "function" && uploadPage()) && <HelpButton page />}
       <ReviewLink />
       <SaveState />
       {/* the page's one primary action, at the right of the page's own buttons, in the same place on every page (spec I, K2) */}
@@ -247,7 +228,9 @@ function TopRight() {
       <Menu.Root open={!!S.firmMenu && !signInNeeded()} onOpenChange={(o) => { if (o !== !!S.firmMenu) doAct(o ? "firmMenu" : "firmMenuClose"); }} modal={false}>
         <Menu.Trigger asChild><button className="firmbtn" title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
           <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
-          {bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
+          {/* upload-pages (14-Oct-2026; the owner read "ABC ₹49.99 Cr credit" on Purchase as meaning nothing): the firm's
+              credit shows on the firm's own pages; on a client's page it is in the firm menu and the button's tip */}
+          {inCo ? null : bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
         </button></Menu.Trigger>
         <FirmMenu />
       </Menu.Root>

@@ -281,6 +281,7 @@ run_reports_server.py                 180
 run_reports_step3_ui.py               300  TDSDESK_SITE=../app/dist-test
 # ui-tidy (13-Oct-2026): details beside the row, one filter bar, one table, the answer first, the client and its Tally link, the bill drawer
 run_ui_tidy.py                        420  TDSDESK_SITE=../app/dist-test
+run_upload_pages.py                   300  TDSDESK_SITE=../app/dist-test
 # zoho-books (13-Oct-2026, the owner: "Zoho first, then Busy"; FinCom reads and posts): Zoho's documents into the cloud copy (map.js),
 # migration 75 twice with its row-level security, the zoho-books function under Deno against a stand-in Zoho (fake_zoho.py):
 # GSTR-1, 3B and 26Q from a known Zoho organisation to the paisa, changes only, deletions, 429s, token renewal, posting; the Integrations page
@@ -307,6 +308,14 @@ run_depreciation_books.js             180
 run_depreciation_entity.js            300
 run_dep_tool.py                       300
 run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
+# registers on Purchase and Sales (14-Oct-2026, the owner: "any purchase sheet or sales sheet ... AI the first time for any
+# format; after that it should learn that format"): the engine on the made-up registers (no browser), then the panel, the
+# questions, To review and posting (Tally's queue; Zoho Books faked); GSTR-1 and GSTR-2B JSON by rules
+run_sheet_engine.js                   120
+run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
+# Reconciliations → Vendors / Customers: a party's statement in any format against its ledger in the books
+run_party_recon.js                    120
+run_party_recon_ui.py                 300  TDSDESK_SITE=../app/dist-test
 # quiet refresh (14-Oct-2026): idle 60 s on Clients, TDS, Accounts and Bills with heartbeats and syncs: no reload, no loading state, scroll/focus/menu kept
 run_quiet_refresh.py                  900  TDSDESK_SITE=../app/dist-test
 # CA certificates in the Assistant (14-Oct-2026, the owner: turnover and net worth certificates for many clients, chat first):

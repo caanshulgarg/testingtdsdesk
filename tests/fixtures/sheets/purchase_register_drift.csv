@@ -1,0 +1,7 @@
+"Inv Dt","Bill No",Supplier,GSTIN,Branch,"Doc Type","Taxable Amt",IGST,CGST,SGST,Total,Notes
+05/07/2026,KIT/101,"Kashi IT Solutions",09AAACK1234A1Z5,Lucknow,Invoice,"Rs. 10,000.00",0,900.00,900.00,"11,800.00",laptops
+06/07/2026,DL/77,"Delhi Legal LLP",07AABFD5678B1Z2,Lucknow,Invoice,"25,000.00","4,500.00",0,0,"29,500.00",retainer
+06/07/2026,DL/77,"Delhi Legal LLP",07AABFD5678B1Z2,Lucknow,Invoice,"5,000.00",900.00,0,0,"5,900.00","out of pocket"
+09/07/2026,KIT/CN/4,"Kashi IT Solutions",09AAACK1234A1Z5,Lucknow,"Credit Note","(1,000.00)",0,(90.00),(90.00),"(1,180.00)","returned mouse"
+12/07/2026,NEW/9,"Nirmal Traders",09AAFCN4321C1Z9,Lucknow,Invoice,"2,500.50",0,225.05,225.05,"2,950.60",stationery
+,,Total,,Lucknow,,"41,500.50","5,400.00","1,035.05","1,035.05","48,970.60",

@@ -187,7 +187,10 @@ async function bankReconExcel(){
 }
 
 // what the vendor reconciliation page does
-function vrOpen(){ S.vrec = VR.def(); render(); window.scrollTo(0, 0); }
+// phase 3 (14-Oct-2026): vendor reconciliation lives under Reconciliations → Vendors (app/src/lib/registers.js); the old place (Purchase's
+// "Reconcile a vendor ledger") leads there. The live check against Tally (this one) is under Vendors' More
+function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }
+function vrOpenLive(){ S.vrec = VR.def(); render(); window.scrollTo(0, 0); }
 function vrClose(){ S.vrec = null; render(); }
 // the ledger, from and to; a ledger typed that is a Tally ledger takes Tally's spelling
 function vrSet(key, val){
