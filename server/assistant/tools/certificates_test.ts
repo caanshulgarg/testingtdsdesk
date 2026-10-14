@@ -160,6 +160,7 @@ Deno.test("certificates in the chat: three clients, the questions, typed and sig
   for (const v of ["1,10,00,000.00", "1,32,50,250.75", "1,52,30,400.00", "20,45,300.50"]) ok(wb.includes(v) && pb.replace(/\s+/g, " ").includes(v), "Birchwood's Word and PDF carry " + v);
   ok(/INDEPENDENT PRACTITIONER'S CERTIFICATE ON TURNOVER AND NET WORTH/.test(wb) && /The Branch Manager, Example Bank/.test(wb) && /Restriction on Use/.test(wb), "the ICAI format by default: title, addressee, restriction on use");
   ok(/UDIN: _{10,}/.test(wb) && /UDIN: _{10,}/.test(pb), "the UDIN is blank in Word and PDF");
+  ok(pb.includes("To,") && !/To,\?/.test(pb), "the PDF keeps the line breaks (To, / the addressee)");
   ok(/FRN: 000000X/.test(wb) && /M\. No\. 123456/.test(wb) && /Place: Faketown/.test(wb) && /Date: 14-10-2026/.test(wb), "the signature block from the firm's settings");
   const wa = await word("Alder");
   ok(/2025-26 \(as per books, not audited\)/.test(wa) && /books of account of the Company for the financial year 2025-26 \(not audited/.test(wa), "Alder's certificate states the books basis for 2025-26");

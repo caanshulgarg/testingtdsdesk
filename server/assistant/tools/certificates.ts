@@ -138,7 +138,7 @@ async function pdf(bs: Block[], lh: Letterhead, o: { title: string, noFont?: boo
   let font: PDFFont, bold: PDFFont;
   if (ttf) { doc.registerFontkit(fontkit); font = await doc.embedFont(ttf, { subset: true }); bold = font; }
   else { font = await doc.embedFont(StandardFonts.TimesRoman); bold = await doc.embedFont(StandardFonts.TimesRomanBold); }
-  const clean = (s: string) => ttf ? s : s.replace(/₹/g, "Rs.").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/[^\x20-\x7E -ÿ]/g, "?");
+  const clean = (s: string) => ttf ? s : s.replace(/₹/g, "Rs.").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/[^\n\x20-\x7E -ÿ]/g, "?");
   const Wd = 595.28, H = 841.89, M = 56;
   let head: PDFImage | null = null, foot: PDFImage | null = null, bg: any = null, top = H - 60, bottom = 60;
   if (lh.kind === "image") {
