@@ -8,7 +8,7 @@ export default function Uploads() {
   const list = AUpload.list();
   if (!list.length) return null;
   return <section className="asst-uploads" data-asst-uploads="">
-    {list.slice().reverse().map((u) => <div key={u.id} className={"asst-up " + u.state} data-asst-upload={u.kind || u.state} data-name={u.name}>
+    {list.slice().reverse().map((u) => <div key={u.id} className={"asst-up " + u.state} data-asst-upfile={u.kind || u.state} data-name={u.name}>
       <header><b>{u.name}</b>
         {u.state === "ready" && <span className="asst-src neutral" data-asst-kind={u.kind}>{AUpload.KIND[u.kind] || "Other document"}</span>}
         {u.state === "ready" && <span className="note" data-asst-kind-by={u.by}>{u.by === "ai" ? "told by the AI" : "told by FinCom's rules"}</span>}

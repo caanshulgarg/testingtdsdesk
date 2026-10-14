@@ -157,6 +157,8 @@ const AUpload = window.AUpload = {
   // the next steps for a kind (buttons; each is the user's own click)
   actions(u){
     const ask = {id: "ask", label: "Ask about it"};
+    // firm-wide (no client open): a step that belongs to a client's pages waits for the client to be opened
+    if (!u.cid && ["bill", "bank", "as26", "register"].includes(u.kind)) return [{id: "client", label: "Open the client to add it", disabled: true}, ask];
     if (u.tally) return [{id: "tally", label: "Open Books › Tally"}];
     switch (u.kind){
       case "notice": return [{id: "notice", label: "Read the notice and draft a reply", primary: true}];
@@ -166,7 +168,7 @@ const AUpload = window.AUpload = {
       case "register": return [{id: "soon", label: "Import in Purchase/Sales: coming soon", disabled: true}, ask];
       case "bank": return [{id: "bank", label: "Add to Bank for review", primary: true}];
       case "as26": return [{id: "as26", label: "Add to Reconciliations (26AS / AIS)", primary: true}];
-      case "certificate": return [{id: "keep", label: "Keep as a certificate format", primary: true}, ask];
+      case "certificate": return [{id: "keep", label: "Use for a certificate", primary: true}, ask];
       default: return [ask];
     }
   },
@@ -176,9 +178,8 @@ const AUpload = window.AUpload = {
     const a = this.st(), cid = ASST.cid();
     files = Array.from(files || []).filter(Boolean);
     if (!files.length) return;
-    if (!cid){ toast("Open the client the files are for first."); return; }
     if (!Cloud.on()){ toast("Sign in to the firm account to upload."); return; }
-    const co = CO(cid) || {};
+    const co = (cid && CO(cid)) || {};   // firm-wide (no client open): kept under <firm>/_firm/uploads/
     a.uploading = true; ASST.draw();
     for (const file of files.slice(0, 20)){
       const u = {id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: ASST.key(), cid, name: file.name, size: file.size, type: file.type || "", file,
@@ -197,6 +198,9 @@ const AUpload = window.AUpload = {
           if (!r.pdf && !r.image && !String(r.text || "").trim()) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
           else { u.state = "asking"; ASST.draw(); Object.assign(u, await this.classify(u, r)); }
         }
+        // every file of the Upload but a notice is also given to the certificate tool (its formats, signed statements and
+        // letterheads are read from the conversation's uploads: ASST.ups(), sent with each question; branch certificates)
+        if (u.kind !== "notice" && u.path && !ASST.ups().some(x => x.path === u.path)) ASST.ups().push({path: u.path, name: u.name, type: u.type || ""});
         u.acts = this.actions(u);
         u.state = "ready";
         this.record(u).catch(() => {});
@@ -211,7 +215,7 @@ const AUpload = window.AUpload = {
   async store(file, cid, folder){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name || "file").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
-    const path = Cloud.st.firm + "/" + cid + "/" + folder + "/" + Date.now().toString(36) + "-" + name;
+    const path = Cloud.st.firm + "/" + (cid || "_firm") + "/" + folder + "/" + Date.now().toString(36) + "-" + name;
     const r = await fetch(String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/"),
       {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": file.type || "application/octet-stream"}, body: file});
     if (!r.ok) throw new Error("it could not be stored (" + r.status + ")");
@@ -262,7 +266,13 @@ const AUpload = window.AUpload = {
         if (!S.books || S.books.cid !== u.cid){ toast("Open the client's books first (Books › Tally), then add the file again."); return; }
         const r = await AS26.add(f); if (r) mark("Added to Reconciliations › TDS receivable vs 26AS."); return;
       }
-      if (id === "keep"){ mark("Kept with this client's uploads as a certificate format."); return; }
+      if (id === "keep"){
+        // the certificate tool reads it from the conversation's uploads (it is there already); the question is the user's to send
+        if (!a.q) a.q = "Prepare the certificate in the format " + u.name + ".";
+        mark("Given to the certificate tool with your next question; kept with this client's uploads.");
+        setTimeout(() => { const el = document.getElementById("asstQ"); if (el) el.focus(); }, 60);
+        return;
+      }
       if (id === "tally"){ ASST.screen("tally_sync"); return; }
       if (id === "open"){ ASST.close(); await atClient(); goClient(u.done.as26 ? "books:recon" : u.done.sales ? "sales" : u.done.bank ? "bank" : "bills"); return; }
     } catch (e){ toast("That step could not be done: " + ((e && e.message) || e)); }

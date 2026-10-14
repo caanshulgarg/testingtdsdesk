@@ -27,6 +27,9 @@ const LABELS = {
   ai: ["warn", "AI answer, not checked against the books"],
   general: ["info", "General guidance — verify before relying"],
   notice: ["neutral", "Notice"],
+  // certificates: neutral; each row's "From" says where its figure came from
+  confirm: ["neutral", "Figures for the certificate – please confirm"],
+  certificate: ["neutral", "Certificate figures – source in each row"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -70,9 +73,10 @@ function Table({ r, t }) {
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, 25);
   const sum = r.summary && typeof r.summary === "object" ? Object.entries(r.summary).filter(([, x]) => typeof x === "number") : [];
-  return <section className="asst-card green" data-asst-result={r.tool}>
+  const own = LABELS[r.label];          // a tool's own neutral label (certificates), else FinCom's book tool: green
+  return <section className={"asst-card " + (own ? "neutral" : "green")} data-asst-result={r.tool} data-asst-table-label={r.label || "books"}>
     <header>
-      <span className="asst-src ok">Checked against the books ✓</span>
+      {own ? <span className={"asst-src " + own[0]}>{own[1]}</span> : <span className="asst-src ok">Checked against the books ✓</span>}
       <b>{r.title || r.tool}</b>
       {r.period && <span className="note">{dmy(r.period.from)} to {dmy(r.period.to)}</span>}
       {r.asOn && <span className="note">on {dmy(r.asOn)}</span>}
@@ -85,6 +89,7 @@ function Table({ r, t }) {
           {cols.map((c) => <td key={c.k} className={isNum(c.t) ? "n" : ""}>
             {c.t === "date" && row[c.k] && (row.guid || row.vno) && (c.k === "day" || c.k === "date") ? <button className="linkbtn" title="Open the entry" onClick={() => ASST.openEntry(row, r.client || t.cid)}>{dmy(row[c.k])}</button>
               : c.t === "date" ? dmy(row[c.k]) : c.t === "amount" ? money(row[c.k]) : c.t === "pct" ? (row[c.k] == null ? "" : row[c.k] + "%") : row[c.k] == null ? "" : String(row[c.k])}
+            {own && c.k === "source" && row.books_check && <span className="asst-src ok asst-rowtick" data-asst-rowtick="" title="Worked out from the books"> ✓ books</span>}
           </td>)}
         </tr>)}</tbody>
       </table></div>}
@@ -205,7 +210,7 @@ export default function Assistant() {
   const a = ASST.st();
   // a click outside or Esc closes it (app/src/parts/dismiss.js); what was typed stays in ASST's state as a draft
   useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")) });
-  const file = useRef(null);
+  const file = useRef(null), upl = useRef(null);
   const co = S.view === "company" ? CO() : null;
   const cid = ASST.cid();
   const turns = ASST.turns();
@@ -215,10 +220,10 @@ export default function Assistant() {
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
       <DrawerContent className="asst-panel" data-overlay="asst" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
         {a.open && <div className={"asst-body" + (a.dragOver ? " drag" : "")} data-asst-panel=""
-          onDragOver={(e) => { if (!cid) return; e.preventDefault(); if (!a.dragOver) { a.dragOver = true; ASST.draw(); } }}
+          onDragOver={(e) => { e.preventDefault(); if (!a.dragOver) { a.dragOver = true; ASST.draw(); } }}
           onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; a.dragOver = false; ASST.draw(); }}
-          onDrop={(e) => { if (!cid) return; e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
-          {a.dragOver && <div className="asst-dropzone" data-asst-dropzone="">Drop the files to upload them for {co ? co.name : "this client"}</div>}
+          onDrop={(e) => { e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
+          {a.dragOver && <div className="asst-dropzone" data-asst-dropzone="">Drop the files to upload them for {co ? co.name : "the whole firm"}</div>}
           <div className="asst-scope">
             {co ? <div className="seg" role="tablist">
               <button role="tab" aria-selected={a.scope === "client"} className={a.scope === "client" ? "on" : ""} onClick={() => ASST.setScope("client")}>{co.name}</button>
@@ -238,12 +243,13 @@ export default function Assistant() {
             <textarea id="asstQ" rows={2} value={a.q} placeholder={cid ? "Ask about " + co.name + "'s books, tax, or a notice…" : "Ask a tax or accounting question…"} disabled={a.busy}
               onChange={(e) => { a.q = e.target.value; ASST.draw(); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ASST.ask(); } }} />
             <div className="asst-askbar">
-              {cid && <><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
-                <button type="button" className="iconbtn" data-asst-upload-btn="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading}><UploadIcon size={15} /> {a.uploading ? "Reading…" : "Upload"}</button>
+              {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
+                <button type="button" className="iconbtn" data-asst-upload-btn="" data-asst-upload="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading}><UploadIcon size={15} /> {a.uploading ? "Reading…" : "Upload"}</button>
                 {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
               <span className="note asst-hint" data-asst-privacy="">Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never posts, files or changes anything.</span>
               <Button type="submit" className="btn small primary" disabled={a.busy || !String(a.q || "").trim()}><Send size={14} /> Ask</Button>
             </div>
+            {ASST.ups().length > 0 && <div className="asst-ups" data-asst-ups="">{ASST.ups().map((u) => <span key={u.path} className="chip">{u.name} <button type="button" className="linkbtn" onClick={() => ASST.unUpload(u.path)}>×</button></span>)}</div>}
           </form>
           {AUpload.list().length > 0 && <Suspense fallback={null}><Uploads /></Suspense>}
           {!turns.length && <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} className="chip" onClick={() => ASST.ask(s)}>{s}</button>)}</div>}

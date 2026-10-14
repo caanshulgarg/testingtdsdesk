@@ -106,10 +106,24 @@ class H(http.server.BaseHTTPRequestHandler):
                     if method == "PATCH":
                         where = " and ".join("%s = %s" % (k, q(unquote(vs[0].partition(".")[2]))) for k, vs in qs.items() if vs[0].startswith("eq."))
                         sql = "update %s set %s where %s returning to_json(%s.*);" % (table, ", ".join("%s = %s" % (c, lit(row[c], c)) for c in cols), where or "false", table)
+                    elif "merge-duplicates" in (self.headers.get("Prefer") or "") and table == "assistant_cert_settings":
+                        sql = "insert into %s (%s) values (%s) on conflict (firm_id) do update set %s returning to_json(%s.*);" % (table, ", ".join(cols), ", ".join(lit(row[c], c) for c in cols), ", ".join("%s = excluded.%s" % (c, c) for c in cols if c != "firm_id"), table)
                     else:
                         sql = "insert into %s (%s) values (%s) returning to_json(%s.*);" % (table, ", ".join(cols), ", ".join(lit(row[c], c) for c in cols), table)
                     out = run(("set role service_role; " + sql) if w == "service" else sql, None if w == "service" else w)
                     return self.send(201, raw=("[" + out + "]").encode() if "return=representation" in (self.headers.get("Prefer") or "") else b"")
+            # the certificates (migration 83): a listing of a folder (as the user), and a copy (the service role)
+            if path.startswith("/storage/v1/object/list/"):
+                bucket = path[len("/storage/v1/object/list/"):]; pre = json.loads(self.body() or b"{}").get("prefix", "")
+                firm = run("select my_firm()", w) if w and w != "service" else ""
+                if w != "service" and pre.split("/")[0] != firm: return self.send(200, [])
+                return self.send(200, [{"name": k[len(bucket) + 1 + len(pre):], "metadata": {"mimetype": v[1]}} for k, v in FILES.items() if k.startswith(bucket + "/" + pre)])
+            if path == "/storage/v1/object/copy":
+                if w != "service": return self.send(403, {"message": "no"})
+                j = json.loads(self.body() or b"{}"); src = j["bucketId"] + "/" + j["sourceKey"]
+                if src not in FILES: return self.send(404, {"message": "not found"})
+                FILES[j["bucketId"] + "/" + j["destinationKey"]] = FILES[src]
+                return self.send(200, {"Key": j["destinationKey"]})
             if path.startswith("/storage/v1/object/"):
                 key = unquote(path[len("/storage/v1/object/"):])
                 if key.startswith("authenticated/"): key = key[len("authenticated/"):]
