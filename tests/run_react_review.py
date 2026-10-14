@@ -65,10 +65,8 @@ with sync_playwright() as p:
     other = pg.evaluate("rules().find(r => r.basis !== 'never' && r.id !== draftRows().find(x => x.e.x.vendorName === 'Beta Traders').e.natureId).id")
     row.locator('select[aria-label="Payment type"]').select_option(other); pg.wait_for_timeout(400)
     ok(pg.evaluate("draftRows().find(r => r.e.x.vendorName === 'Beta Traders').e.natureId") == other, "the payment type chosen in the row is kept")
-    # the column filter (an old pop-up) opens under its funnel in the React table
-    pg.click('#app button[aria-label="Filter Payment type"]'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("(() => { const p = document.getElementById('colpop'); return !!p && getComputedStyle(p).display !== 'none' && p.getBoundingClientRect().top > 0; })()"), "the column filter opens, placed under its column")
-    pg.keyboard.press("Escape"); pg.evaluate("S.colPop = null; render()"); pg.wait_for_timeout(300)
+    # 14-Oct-2026 (the owner: one filter bar only, as on the challan register): no filter arrow on the headings
+    ok(pg.locator('#app table.revtbl thead .colf, #app table.revtbl thead .gff').count() == 0, "no filter arrows on the headings (the filter bar is the one filter)")
     # the filter chips over the list: a chip opens its column's filter box, ✕ removes it, Clear all
     pg.evaluate("S.revF = {sup: 'Alpha', no: 'A/'}; render()"); pg.wait_for_timeout(400)
     ok(pg.locator("#app .chipbar .fchip").count() == 2 and "Supplier has “Alpha”" in pg.inner_text("#app .chipbar"), "the filters set show as chips")

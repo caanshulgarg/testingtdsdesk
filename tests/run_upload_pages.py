@@ -139,6 +139,27 @@ with sync_playwright() as p:
     n = E("postTabCounts(S.coId).errors")
     ok(n > 0 and re.search(r"\b%d Tally errors\b" % n, TOP(pg)) is not None, "elsewhere the top bar's link counts the same errors, in the same word: “%d Tally errors” (%s)" % (n, TOP(pg)[:160]))
     br.close()
+    # ---- 4b. at 1400 px (the coordinator, 14-Oct-2026): the page's title in full, never "Purcha…" or "Accou…"; and one
+    # filter bar only: no filter arrow on the table's headings (as on the challan register, round 3)
+    br, pg = start(p, 1400, 900)
+    E = lambda js, *a: pg.evaluate(js, *a)
+    TITLE = "(() => { const h = document.querySelector('#cobar .tbar-title h2'); return h ? [h.textContent, h.scrollWidth, h.clientWidth] : null; })()"
+    ARROWS = "document.querySelectorAll('#app table thead .colf, #app table thead .gff').length"
+    E(BK.PURCHASE); pg.wait_for_timeout(1500); E(BK.DRAFTS); pg.wait_for_timeout(900)
+    t = E(TITLE); ok(t and t[0] == "Purchase" and t[1] <= t[2], "1400 px: the title “Purchase” in full (%s)" % t)
+    ok(E("document.querySelectorAll('#app table.revtbl tbody tr').length") >= 4 and E(ARROWS) == 0, "Purchase: no filter arrows on the headings (%d); the filter bar above is the one filter" % E(ARROWS))
+    ok(E("document.querySelectorAll('#app .revfilter input[type=search]').length") == 1, "Purchase: its one filter bar")
+    E(BK.BANK); pg.wait_for_timeout(1200)
+    t = E(TITLE); ok(t and t[0] == "Bank" and t[1] <= t[2], "1400 px: the title “Bank” in full (%s)" % t)
+    ok(E(ARROWS) == 0 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Bank: no filter arrows on the headings (%d), one search" % E(ARROWS))
+    E(BK.SALES); pg.wait_for_timeout(1200)
+    t = E(TITLE); ok(t and t[0] == "Sales" and t[1] <= t[2], "1400 px: the title “Sales” in full (%s)" % t)
+    ok(E(ARROWS) == 0 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Sales: no filter arrows on the headings (%d), one search" % E(ARROWS))
+    E("() => { S.tab = 'books'; S.booksTab = 'fs'; render(); }"); pg.wait_for_timeout(1500)
+    t = E(TITLE); ok(t and t[0] == "Accounts" and t[1] <= t[2], "1400 px: the title “Accounts” in full (%s)" % t)
+    E("() => { S.tab = 'books'; S.booksTab = 'recon'; render(); }"); pg.wait_for_timeout(1500)
+    t = E(TITLE); ok(t and t[1] <= t[2], "1400 px: a long title in full too (%s)" % t)
+    br.close()
     # ---- 5. a phone
     br, pg = start(p, 390, 844)
     pg.evaluate(BK.PURCHASE); pg.wait_for_timeout(1500)

@@ -145,7 +145,15 @@
 #app .tnl-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--border-subtle, var(--border)); }
 #app .tnl-list li:first-child { border-top: 0; }
 #app .tnl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (min-width: 901px) { header.top .headrow > .tbar[data-crumb="client-nav"] { flex-basis: clamp(200px, 22%, 360px); } }
+/* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room): on a computer the title block is
+   as wide as the title and its Tally chip need (never less than the usual share of the row, never more than half); the
+   line over it (the breadcrumb, the firm's name) takes the block's width and is cut with … instead of widening it */
+@media (min-width: 901px) {
+  header.top .headrow > .tbar, header.top .headrow > .tbar[data-crumb="client-nav"] { flex: 0 0 auto; min-width: clamp(200px, 22%, 360px); max-width: 50%; }
+  header.top .headrow > .tbar .tbar-title h2, #cobar .tbar-title .tbar-h h2 { flex: 0 0 auto; max-width: none; overflow: visible; text-overflow: clip; }
+  header.top .headrow > .tbar .tbar-title > .note, #cobar .tbar-title .crumbs { width: 0; min-width: 100%; }
+}
+
 #cobar .tbar-title .crumbs > * { flex: 0 0 auto; }
 #cobar .tbar-title .crumbs > .crumb-co { flex: 0 1 auto; min-width: 40px; }
 

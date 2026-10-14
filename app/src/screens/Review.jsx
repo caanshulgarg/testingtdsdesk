@@ -27,9 +27,9 @@ function revCols(rows, sel, nSel) {
   return [
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} />,
       cell: ({ e }) => <input type="checkbox" checked={sel.has(e.id)} aria-label={"Select " + (e.x.vendorName || e.fileName || "bill")} onChange={(ev) => revPick(e.id, ev.target.checked)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="rev" k="date" label="Date" />, v: ({ e }) => e.x.invoiceDate || "", cell: ({ e }) => e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—" },
-    { k: "no", role: "number", label: "Bill no.", filter: <ColFunnel t="rev" k="no" label="Bill no." />, v: ({ e }) => e.x.invoiceNo || "", cell: ({ e }) => e.x.invoiceNo || "—" },
-    { k: "sup", role: "party", label: "Supplier", cls: "pt", filter: <ColFunnel t="rev" k="sup" label="Supplier" />, v: ({ e }) => e.x.vendorName || e.fileName || "",
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="rev" k="date" label="Date" />, v: ({ e }) => e.x.invoiceDate || "", cell: ({ e }) => e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—" },
+    { k: "no", role: "number", label: "Bill no.", filter: <ColFunnel hideIdle t="rev" k="no" label="Bill no." />, v: ({ e }) => e.x.invoiceNo || "", cell: ({ e }) => e.x.invoiceNo || "—" },
+    { k: "sup", role: "party", label: "Supplier", cls: "pt", filter: <ColFunnel hideIdle t="rev" k="sup" label="Supplier" />, v: ({ e }) => e.x.vendorName || e.fileName || "",
       cell: ({ e }, p) => <>
         <button className="linkbtn pn" title={e.x.vendorName || e.fileName || undefined} onClick={() => revOpen(e.id)}>{e.x.vendorName || e.fileName || "—"}</button>
         <div className="nr">{e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN"}</div>
@@ -39,18 +39,18 @@ function revCols(rows, sel, nSel) {
         {notReadYet(e) && <div className="nr bad" data-notread="">{S.reading[e.id] ? "Reading again…" : <>Not read yet: {e.notRead.reason} <button className="linkbtn" onClick={() => retryNotRead(e.id)}>Retry</button></>}</div>}
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
       </> },
-    { k: "val", role: "amount", label: "Value", cls: "n", filter: <ColFunnel t="rev" k="val" label="Value" />, v: ({ e }) => num(e.x.total), cell: ({ e }) => money(num(e.x.total)) },
+    { k: "val", role: "amount", label: "Value", cls: "n", filter: <ColFunnel hideIdle t="rev" k="val" label="Value" />, v: ({ e }) => num(e.x.total), cell: ({ e }) => money(num(e.x.total)) },
     // upload-pages: "Check" (as the list of bills one at a time says), not "Needs you", which was also the Tally chip's word
     { k: "st", role: "status", label: "Status", v: (r) => (needsLook(r) ? "Check" : "Ready to approve"),
       cell: (r, p) => <span className={"tag " + (p.miss ? "warn" : "ok")}>{p.miss ? "Check" : "Ready to approve"}</span> },
-    { k: "nature", label: "Payment type", filter: <ColFunnel t="rev" k="nature" label="Payment type" />, v: ({ c }) => (c.rule && c.rule.label) || "",
+    { k: "nature", label: "Payment type", filter: <ColFunnel hideIdle t="rev" k="nature" label="Payment type" />, v: ({ c }) => (c.rule && c.rule.label) || "",
       cell: ({ e }) => <select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select> },
-    { k: "tdson", label: "Book TDS", cls: "ck", filter: <ColFunnel t="rev" k="tds" label="Book TDS" />, cell: ({ e, c }) => <input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
+    { k: "tdson", label: "Book TDS", cls: "ck", filter: <ColFunnel hideIdle t="rev" k="tds" label="Book TDS" />, cell: ({ e, c }) => <input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
         title={c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway"}
         onChange={(ev) => revTds(e.id, ev.target.checked)} /> },
     { k: "tds", label: "TDS", cls: "n", v: ({ c }) => num(c.tds), sum: ({ c }) => num(c.tds),
       cell: ({ c }) => c.tds ? <b>{money(c.tds)}</b> : c.tdsWould ? <span className="src muted">{money(c.tdsWould)} not booked</span> : "—" },
-    { k: "look", label: "This year vs limit", filter: <ColFunnel t="rev" k="look" label="This year vs limit" />, cell: (r, p) => !p.m || !p.m.limit ? <span className="src muted">no yearly limit</span> : <>
+    { k: "look", label: "This year vs limit", filter: <ColFunnel hideIdle t="rev" k="look" label="This year vs limit" />, cell: (r, p) => !p.m || !p.m.limit ? <span className="src muted">no yearly limit</span> : <>
         <span className={p.over ? "src bad" : "src"}>{money0(p.m.used + p.m.add)} of {money0(p.m.limit)}{p.over ? " · crossed" : " · within"}</span>
         <span className="src muted">{p.t ? "incl. " + money0(p.t.credited) + " from Tally" : "bills here only"}</span></> },
     { k: "ac", role: "act", cls: "ac", cell: ({ e }, p) => <>
@@ -102,7 +102,7 @@ export function ReviewTable() {
         </div>
         <ChipBar t="rev" shown={rows.length} total={all.length + " bills"} />
         {/* the one list table (spec K6): column order, sorting, sticky header, the count and totals at the foot */}
-        <ListTable name="rev" className="bk-table revtbl" cols={revCols(rows, sel, nSel).filter((c) => revColShown(c.k))} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
+        <ListTable name="rev" className="bk-table gf-off revtbl" cols={revCols(rows, sel, nSel).filter((c) => revColShown(c.k))} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
           rowProps={(r, p) => ({ className: [sel.has(r.e.id) && "picked", p.miss && "needs", S.drawerOpen && S.selected === r.e.id && "open"].filter(Boolean).join(" ") || undefined })}
           empty={<>No bill matches the filter. <button className="linkbtn" onClick={() => { S.revQuery = ""; colChipAll("rev"); }}>Clear the filters</button> to see all {all.length}.</>} />
       </>}

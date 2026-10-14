@@ -38,16 +38,16 @@ function salesCols(s, list, nSel) {
   return [
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === list.length} onChange={(ev) => salesSelAll(ev.target.checked)} />,
       cell: (v) => <input type="checkbox" aria-label="Select" checked={s.sel.has(v.id)} disabled={v.status === "posted"} onChange={() => {}} onClick={(ev) => salesToggle(v.id, ev.target.checked, ev.shiftKey)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="sales" k="date" label="Date" />, v: (v) => v.x.date || "", td: (v) => ({ title: fmtDate(v.x.date) }), cell: (v) => v.x.date ? shortDate(v.x.date) : "—" },
-    { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="sales" k="date" label="Date" />, v: (v) => v.x.date || "", td: (v) => ({ title: fmtDate(v.x.date) }), cell: (v) => v.x.date ? shortDate(v.x.date) : "—" },
+    { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
       cell: (v) => <><div className="pn"><button className="linkbtn strong" onClick={() => salesOpen(v.id)}>{v.x.number || "(no number)"}</button></div><div className="nr">{v.source === "created" ? "Created here" : v.fileName || "Uploaded"}</div></> },
-    { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
+    { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: ({ x }) => <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}</div></> },
-    { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
+    { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
     { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.status] || ["no", v.status]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => money(gstOf(v.x)) },
-    { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
+    { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel hideIdle t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
       cell: (v, p) => p.editable ? <>
         {v.postError && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
@@ -351,7 +351,7 @@ export default function Sales() {
       </div>
       <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
       {/* the one list table (spec K6) */}
-      <ListTable name="sales" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length}
+      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length}
         rowProps={(v) => ({ className: s.sel.has(v.id) ? "picked" : undefined })}
         empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter]} />
     </div>
