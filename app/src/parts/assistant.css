@@ -106,3 +106,4 @@
 .asst-cached { font-style: italic; }
 .asst-warn-txt { color: var(--warn, #b45309); }
 .asst-cap label { margin-right: 8px; }
+.asst-rowtick { margin-left: 6px; font-size: 11px; padding: 0 5px; }

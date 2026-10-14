@@ -139,6 +139,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   let checked: Checked[] = [];
   let notice: { id: string | null, n: Notice, items: Item[], annexures: Annexure[] } | null = null;
   let resultN = 0, draftFails = 0, extBooks = false, extAi = false;
+  const extLabels = new Set<string>();            // a tool's own neutral labels (the certificates: 'confirm', 'certificate')
   const files: FileOut[] = [];
 
   // identifiers and the client's parties' names never go to a model as they are (mask.ts)
@@ -348,7 +349,9 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         for (const t of out.tables || []) { const id = ++resultN; results.push(t); emit({ t: "result", id, client: ctx.clientId, params: ext.firmWide ? {} : input, ...t }); }
         for (const f of out.files || []) { files.push(f); emit({ t: "file", ...f }); }
         if (out.aiText) { extAi = true; emit({ t: "draft", id: ++resultN, title: ext.name.replace(/_/g, " "), kind: "note", body: out.aiText }); }
-        if (ext.label === "books" && (out.tables || []).length) extBooks = true;
+        // green only for tables FinCom computed from the books; a table with its own label (a certificate's figures: typed,
+        // read from a signed statement, or from books) is neutral, its "From" column saying where each figure came from
+        for (const t of out.tables || []) { if (t.label) extLabels.add(t.label); else if (ext.label === "books") extBooks = true; }
         return okr(String(out.forModel || "done").slice(0, RESULT_TO_CLAUDE));
       }
       if (name === "list_clients" && ctx.firmWide) {
@@ -558,7 +561,8 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const labels: string[] = [];
   if (usedBooks) labels.push("books");
   if (slices.length || extAi) labels.push("ai");
-  if (webUsed || (!usedBooks && !slices.length)) labels.push("general");
+  labels.push(...Array.from(extLabels));
+  if (webUsed || (!usedBooks && !slices.length && !extLabels.size)) labels.push("general");
   if (used.includes("record_notice")) labels.push("notice");
   const cases = checked.map((c) => ({ n: c.n, ok: c.ok, why: c.why, case_name: c.ok ? c.case_name : "", court: c.court, date: c.date, citation: c.citation, url: c.ok ? c.url : "", quote: c.ok ? c.quote : "", point: c.point, flags: c.flags, act: c.act, label: CITE_LABEL }));
   emit({ t: "done", text, labels, unchecked, verdicts: verdicts.map((v) => ({ id: v.id, name: v.name, ai: v.value, fincom: v.fincom, status: v.status, text: v.text, tool: v.tool })),

@@ -262,7 +262,7 @@ export async function prepare(inp: In, ctx: CertCtx): Promise<ExtResult> {
   const firmMissing = (["firm_name", "frn", "signatory", "membership_no", "place"] as const).filter((k) => !st[k]);
   const firmLabels: Record<string, string> = { firm_name: "the firm's name", frn: "the firm registration no. (FRN)", signatory: "the signing partner's name", membership_no: "the partner's membership no.", place: "the default place of signing" };
   if (firmMissing.length) Q.push("Before the first certificate, FinCom needs the firm's details once (kept in the firm's settings): " + firmMissing.map((k) => firmLabels[k]).join(", ") + (st.letterhead_path ? "" : ", and the letterhead (upload it as Word, PDF or a picture, or say 'no letterhead')") + ".");
-  else if (!st.confirmed) Q.push("Use this letterhead and signatory? " + st.firm_name + ", FRN " + st.frn + "; " + st.signatory + " (" + (st.designation || "Partner") + "), M. No. " + st.membership_no + "; place " + st.place + (st.letterhead_path ? "; letterhead on file" : "; no letterhead on file") + ". Answer yes, or give the changes.");
+  else if (!st.confirmed) Q.push("Use this letterhead and signatory? " + st.firm_name + ", FRN " + st.frn + "; " + st.signatory + " (" + (st.designation || "Partner") + "), M. No. " + st.membership_no + "; place " + st.place + (st.letterhead_path ? "; letterhead on file" : "; no letterhead on file yet (upload it with Files: Word, PDF or a picture)") + ". Answer yes, or give the changes.");
 
   // ---- 2. the clients
   type C = { id: string, name: string, kind: Kind, info: Record<string, unknown> };
@@ -392,10 +392,11 @@ export async function prepare(inp: In, ctx: CertCtx): Promise<ExtResult> {
       if (have) nwTotal = w.total;
     }
     tables.push({ tool: "certificate_prepare", title: c.name + ": figures for the certificate" + (inp.confirm ? "" : " (to confirm)"), columns: [{ k: "item", label: "Item" }, { k: "year", label: "Year / date" }, { k: "amount", label: "Amount", t: "amount" }, { k: "source", label: "From" }],
-      rows, basis: "as per the signed (audited) financial statements unless a row says 'from books, not audited'", summary: { client: c.name, kind: c.kind, net_worth: nwTotal } });
+      rows: rows.map((r) => ({ ...r, books_check: r.source === "from books, not audited" })), label: inp.confirm && !Q.length ? "certificate" : "confirm",
+      basis: "as per the signed (audited) financial statements unless a row says 'from books, not audited'", summary: { client: c.name, kind: c.kind, net_worth: nwTotal } });
     sumRows.push({ client: c.name, kind: c.kind, ...Object.fromEntries(years.map((y) => ["t" + y, fmt((figs.get(c.id + "|" + y) || {}).turnover)])), net_worth: nwTotal });
   }
-  if (flags.length) tables.push({ tool: "certificate_prepare", title: "Flags", columns: [{ k: "flag", label: "For your attention" }], rows: flags.map((f) => ({ flag: f })) });
+  if (flags.length) tables.push({ tool: "certificate_prepare", title: "Flags", columns: [{ k: "flag", label: "For your attention" }], rows: flags.map((f) => ({ flag: f })), label: "confirm" });
 
   // ---- 6. the format, and what it needs
   const fam0 = (inp.format || st.default_format || "icai").toLowerCase();
@@ -456,6 +457,7 @@ export async function prepare(inp: In, ctx: CertCtx): Promise<ExtResult> {
   const fyList = [...years, ...(nwFy && !years.includes(nwFy) ? [nwFy] : [])];
   const summaryForModel = clients.map((c) => c.name + ": " + fyList.map((y) => { const g = figs.get(c.id + "|" + y) || {}; return fyLabel(y) + " " + Object.entries(g).map(([i, x]) => i + " " + x.value + " (" + x.how + ")").join(", "); }).join("; ")).join(" | ");
   if (Q.length || !inp.confirm) {
+    for (const t of tables) t.label = "confirm";
     return { tables, forModel: (Q.length ? "QUESTIONS to ask the user, one line each, exactly as written (nothing is made until they are answered):\n- " + Q.join("\n- ") + "\n" : "No question left. Show the figures table and ask the user to confirm the figures; call again with confirm true only after they confirm.\n") +
       (flags.length ? "FLAGS to tell the user, one line each:\n- " + flags.join("\n- ") + "\n" : "") + "Figures found (shown to the user in the table): " + summaryForModel.slice(0, 3000) + "\nFormat: " + (family === "upload" ? "the uploaded format " + fmtName : family === "firm" ? "the firm's usual format" : "the ICAI format") + "." };
   }

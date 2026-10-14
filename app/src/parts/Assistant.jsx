@@ -18,6 +18,9 @@ const LABELS = {
   ai: ["warn", "AI answer, not checked against the books"],
   general: ["info", "General guidance — verify before relying"],
   notice: ["neutral", "Notice"],
+  // the certificates: figures typed, read from signed statements or taken from the books: neutral, the "From" column says which
+  confirm: ["neutral", "Figures for the certificate – please confirm"],
+  certificate: ["neutral", "Figures in the certificates – the source is in each row"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -61,9 +64,10 @@ function Table({ r, t }) {
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, 25);
   const sum = r.summary && typeof r.summary === "object" ? Object.entries(r.summary).filter(([, x]) => typeof x === "number") : [];
-  return <section className="asst-card green" data-asst-result={r.tool}>
+  const own = LABELS[r.label];          // a tool's own neutral label (certificates), else FinCom's book tool: green
+  return <section className={"asst-card " + (own ? "neutral" : "green")} data-asst-result={r.tool} data-asst-table-label={r.label || "books"}>
     <header>
-      <span className="asst-src ok">Checked against the books ✓</span>
+      {own ? <span className={"asst-src " + own[0]}>{own[1]}</span> : <span className="asst-src ok">Checked against the books ✓</span>}
       <b>{r.title || r.tool}</b>
       {r.period && <span className="note">{dmy(r.period.from)} to {dmy(r.period.to)}</span>}
       {r.asOn && <span className="note">on {dmy(r.asOn)}</span>}
@@ -76,6 +80,7 @@ function Table({ r, t }) {
           {cols.map((c) => <td key={c.k} className={isNum(c.t) ? "n" : ""}>
             {c.t === "date" && row[c.k] && (row.guid || row.vno) && (c.k === "day" || c.k === "date") ? <button className="linkbtn" title="Open the entry" onClick={() => ASST.openEntry(row, r.client || t.cid)}>{dmy(row[c.k])}</button>
               : c.t === "date" ? dmy(row[c.k]) : c.t === "amount" ? money(row[c.k]) : c.t === "pct" ? (row[c.k] == null ? "" : row[c.k] + "%") : row[c.k] == null ? "" : String(row[c.k])}
+            {own && c.k === "source" && row.books_check && <span className="asst-src ok asst-rowtick" data-asst-rowtick="" title="Worked out again from FinCom's copy of the books"> ✓ books</span>}
           </td>)}
         </tr>)}</tbody>
       </table></div>}

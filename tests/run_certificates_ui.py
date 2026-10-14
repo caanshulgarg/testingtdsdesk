@@ -129,6 +129,14 @@ try:
         txt = t.get("text") or ""
         ok("the firm's details once" not in txt and db.one("select signatory || '|' || membership_no from assistant_cert_settings where firm_id = '%s'" % A.FIRM) == "A. Example|123456", "the firm's details saved once in the firm's settings (assistant_cert_settings)")
         ok("from the books, not audited" in txt, "the year from the books is flagged in one line")
+        cards = pg.locator(".asst-turn.latest").locator("[data-asst-result=certificate_prepare]")
+        heads = [cards.nth(i).locator("header .asst-src").first.inner_text() for i in range(cards.count())]
+        turn_labels = pg.locator(".asst-turn.latest").locator(".asst-labels").inner_text() if pg.locator(".asst-turn.latest").locator(".asst-labels").count() else ""
+        ok(heads and all(h == "Figures for the certificate – please confirm" for h in heads) and "Checked against the books" not in turn_labels and "Figures for the certificate" in turn_labels,
+           "the figures to confirm are labelled neutrally, not 'Checked against the books': " + "; ".join(heads[:2]) + " / " + turn_labels)
+        lark = [r for r in pg.evaluate("() => { const t = ASST.turns(); return t[t.length - 1].results; }") if r.get("title", "").startswith("Larkspur")][0]
+        ticks = pg.locator(".asst-turn.latest").locator("[data-asst-rowtick]").count()
+        ok(ticks == len([r for r in lark["rows"] if r.get("books_check")]) and ticks > 0, "a '✓ books' tick only beside the %d rows worked out from FinCom's books" % ticks)
         shot(pg, "cert-03-figures-to-confirm")
 
         q3 = "Figures confirmed, go ahead. Addressed to the Branch Manager, Example Bank, for renewal of the CC limit."

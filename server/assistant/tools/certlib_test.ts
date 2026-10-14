@@ -76,7 +76,7 @@ Deno.test("the ICAI and the firm's templates: every element, placeholders only, 
   const tpl = TPL as any;
   const s = JSON.stringify(tpl);
   ok(!/\d{5,}|[A-Z]{5}\d{4}[A-Z]|[LU]\d{5}[A-Z]{2}\d{4}/.test(s.replace(/\{\{[a-z_]+\}\}/g, "")), "no number, PAN or CIN in the template file: placeholders only");
-  for (const fam of ["icai", "firm"]) for (const t of ["turnover", "networth", "combined"]) ok(tpl.templates[fam][t].filter((i: any) => !i.pb).every((i: any) => i.confirm === "to confirm by the owner"), fam + " " + t + ": each paragraph marked 'to confirm by the owner'");
+  for (const fam of ["icai", "firm"]) for (const t of ["turnover", "networth", "combined"]) ok(tpl.templates[fam][t].filter((i: any) => !i.pb).every((i: any) => /^(approved by the owner on \d{2}-[A-Z][a-z]{2}-\d{4}|to confirm by the owner)$/.test(i.confirm)), fam + " " + t + ": each paragraph carries its approval mark");
   const d = { values: { client_name: "Made-up Castings Pvt Ltd", client_kind_word: "Company", client_ids: "", client_address: "Plot 1, Nowhere", addressee: "The Manager, A Bank", purpose: "a loan", years_text: "2024-25 and 2025-26",
     basis_text: "the audited financial statements", auditor: "the statutory auditor", as_on: "31-03-2026", fy_last: "2025-26", firm_name: "A & Co", frn: "000000X", signatory: "A Partner", designation: "Partner", membership_no: "000000", place: "Somewhere", date: "14-10-2026", udin: "____________________" },
     turnover: [{ fy: "2024", value: 100, basis: "signed" }, { fy: "2025", value: 200, basis: "signed" }], networth: netWorth({ share_capital: 10, reserves: 5 }, "company").rows, bvps: null };

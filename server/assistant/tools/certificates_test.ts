@@ -118,6 +118,8 @@ Deno.test("certificates in the chat: three clients, the questions, typed and sig
   ok(birchT.rows.find((r: any) => /Turnover/.test(r.item)).source.includes("birchwood-signed-2023-24.pdf p.1 line"), "each figure shows the page and line it came from");
   eq(birchT.rows.find((r: any) => r.item === "Net worth").amount, 1800000 + 245300.5, "Birchwood's net worth: capital 18,00,000 + current 2,45,300.50 = 20,45,300.50");
   ok(!t1.events.some((e) => e.t === "file") && !Object.keys(made).length, "nothing made before the figures are confirmed");
+  ok(t1.events.filter((e) => e.t === "result").every((e) => e.label === "confirm") && !r1.labels.includes("books") && r1.labels.includes("confirm") && !r1.labels.includes("general"),
+    "neutral, not green: the tables and the answer say 'Figures for the certificate – please confirm' (labels " + r1.labels.join() + ")");
 
   // ---- turn 2: the answers; Alder 2023-24 and 2024-25 typed; 2025-26 turnover typed, its net worth from the books (asked for)
   const ask2 = { ...ask0, answers: [{ client: "Alder Bright", field: "which", value: "Alder Bright Castings Pvt Ltd" }, { client: "Cedar & Co", field: "kind", value: "LLP" }],
@@ -140,6 +142,9 @@ Deno.test("certificates in the chat: three clients, the questions, typed and sig
   const nwB = netWorth({ share_capital: BOOKS.share, reserves: BOOKS.reserves }, "company").total;
   eq(alder.rows.find((r: any) => r.item === "Net worth").amount, nwB, "Alder's net worth from the books = capital + reserves of the books (FSX): " + inr(nwB));
   ok(alder.rows.filter((r: any) => r.year === "as on 31-03-2026" && r.amount).every((r: any) => r.item === "Net worth" || r.source === "from books, not audited"), "each books figure labelled 'from books, not audited'");
+  ok(alder.rows.every((r: any) => r.books_check === (r.source === "from books, not audited")) && alder.rows.some((r: any) => r.books_check) && alder.rows.some((r: any) => r.source.startsWith("typed") && !r.books_check),
+    "the books tick only on the rows FinCom worked out from the books; typed rows carry none");
+  ok(t2.events.filter((e) => e.t === "result").every((e) => e.label === "confirm" && e.rows.every((r: any) => !r.books_check || r.source === "from books, not audited")), "Birchwood's signed rows and the flags: no tick");
 
   // ---- turn 3: Cedar's 2023-24 typed; the user confirms; addressee and purpose given; the documents
   const ask3 = { ...ask2, firm: null, figures: [...ask2.figures, { client: "Cedar & Co", year: "2023-24", item: "turnover", value: 1875000.5 }], addressee: "The Branch Manager, Example Bank, Faketown", purpose: "renewal of the cash credit limit",
@@ -174,6 +179,7 @@ Deno.test("certificates in the chat: three clients, the questions, typed and sig
   ok(vals.includes(15230400) && vals.includes(1545678.9), "the summary Excel has every client's figures as numbers");
   ok(figrows.some((r) => r.client === "c-birch" && r.fy === "2025" && r.figures.turnover.value === 15230400), "the confirmed figures are kept for next time");
   ok(r3.costUsd > 0 && r3.calls === 2, "two model calls, counted against the cap");
+  ok(r3.labels.includes("certificate") && !r3.labels.includes("books") && t3.events.filter((e) => e.t === "result" && e.summary).every((e) => e.label === "certificate"), "the final answer: 'Figures in the certificates – the source is in each row', never the green books label");
 
   // ---- turn 4: "same certificates for 2 more clients": the firm is not asked again; only what is missing
   const c4 = new MockClaude([[tool({ ...ask0, clients: ["Dovetail Prints"], addressee: ask3.addressee, purpose: ask3.purpose })], [text("Dovetail needs its signed statements.")]]);
