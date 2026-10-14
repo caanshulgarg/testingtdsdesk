@@ -150,7 +150,8 @@ with sync_playwright() as p:
     ok(ub.count() == 1, "E. one Undo for the batch")
     if ub.count(): ub.click(); pg.wait_for_timeout(500)
     ok(E("(b) => Object.keys(b).every(n => JSON.stringify(Object.assign({}, b[n], {n: 0})) === JSON.stringify(Object.assign({}, S.books.map[n], {n: 0})))", before_all), "E. Undo: every ledger is as before Confirm all")
-    pg.locator("#app [data-tl-confirm-shown]").click() if pg.locator("#app [data-tl-confirm-shown]").count() else None; pg.wait_for_timeout(500)
+    # as before 14-Oct-2026: only those where FinCom and its check agree confirmed, so some rows are left to confirm below
+    E("() => TaxLed.confirm(S.books, LedPage.agreeing(S.books), 'agree')"); pg.wait_for_timeout(500)
     # ---------- the owner of 09-Oct-2026: "if I want to edit the confirm ledger, then I should be able to do that"
     cg = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-okby]') && t.querySelector('[data-led-change]') && (S.books.map[t.dataset.key] || {}).what === 'gst' && (S.books.map[t.dataset.key] || {}).n > 0); return r ? r.dataset.key : ''; }")
     ok(bool(cg), "K. a confirmed GST ledger used in entries, with Change beside '✓ Confirmed' and Undo (%s)" % cg)

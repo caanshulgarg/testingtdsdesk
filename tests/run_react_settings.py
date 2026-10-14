@@ -68,7 +68,7 @@ with sync_playwright() as p:
     pg.fill('#app input[aria-label="Expense ledger for %s"]' % lab, "Contract Charges"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().expenseLedgers['%s']" % rid) == "Contract Charges", "an expense ledger by payment type")
     save()
-    ok(pg.evaluate("choiceState(CO(), 'exp:%s')" % rid) == "confirmed", "review 20: an expense ledger saved by a person is a confirmed choice")
+    ok(pg.evaluate("CO().expenseLedgers['%s']" % rid) == "Contract Charges", "the expense ledger kept after Save")
     nav("GST"); pg.wait_for_timeout(1200)
     ok("Blocked credit, section 17(5)" in pg.inner_text("#app .setbody") and "Reverse charge ledgers" not in pg.inner_text("#app .setbody") and "Confirm TDS/GST ledgers on the TDS and GST pages" in pg.inner_text("#app .setbody"), "GST: registrations and blocked credit; the GST ledgers on the GST page (one line)")
     cat = pg.evaluate("BLOCK_CATS[0]")

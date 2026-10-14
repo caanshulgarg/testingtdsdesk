@@ -154,7 +154,7 @@ export default function TaxLedgers({ b, kind: pageKind }) {
         {shown.length > 0 && <button className="btn small primary" data-tl-confirm-shown="" onClick={() => TaxLed.confirm(b, shown.map((r) => r.n), "shown")}>{"Confirm all shown (" + shown.length + ")"}</button>}</div>
       <div className="led-tools">
         <input type="search" aria-label="Find a ledger" data-fk="ledq" value={S.ledQ || ""} placeholder="Find a ledger, section or group; or any Tally ledger, e.g. TDS payable 194C" onChange={(ev) => setAndShow("ledQ", ev.target.value, true)} />
-        {cos.length > 1 && <select aria-label="Client" data-led-client="" style={{ width: "auto", maxWidth: "100%" }} value={cid} onChange={(ev) => { if (ev.target.value !== cid) Rec.openClientTab(ev.target.value, kind === "gst" ? "books:gst" : "books:tds"); }}>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+        {cos.length > 1 && <select aria-label="Client" data-led-client="" style={{ width: "auto", maxWidth: "100%" }} value={cid} onChange={(ev) => { if (ev.target.value !== cid) Rec.openClientTab(ev.target.value, "books:ledgers"); }}>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
       </div>
       {rows.length ? <Table b={b} rows={rows} which="main" /> : <p className="note" data-led-empty="main">{q ? "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger matches." : "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger yet."}</p>}
       {tallyHits.length > 0 && <div className="tl-tallyhits" data-tl-tally-hits="">
