@@ -4,7 +4,9 @@
 // after the check runs, and with FinCom Assistant switched on and off.
 const fs = require("fs"), path = require("path"), {load, openBlob, HTML, FIXTURE_DIR, FIXTURE_CACHE} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "TDS_FORMS", "PAY_CODES", "GSTIN_RE", "Books", "LedMaster", "Audit", "MIS", "TDS", "TDSInt", "TDSFiled", "Certs", "GSTR", "GSTAdv", "GSTRev",
-  "GSTAmend", "GST2B", "GSTSet", "GSTF", "GSTQ", "GSTV", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "TDS26Q", "AS26", "PreFile", "D"];
+  "GSTAmend", "GST2B", "GSTSet", "GSTF", "GSTQ", "GSTV", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "TDS26Q", "AS26", "PreFile", "D",
+  // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
+  "TDS_SEC_CODES", "TDSReg", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {
   let ld, names = NAMES.slice();
