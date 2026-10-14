@@ -1,7 +1,7 @@
 // A client's books read from Tally (the day book, ledgers, balances), and the work done on them: TDS returns, GST
 // returns, MIS, accounts, audit. Was viewBooks and, for TDS, viewBooksTds, tdsCrumbs, viewTdsYears and
 // viewTdsYearPage (src/js/18). Every part is a page of its own in the side menu (clean-up batch 1, 11-Oct-2026):
-// From Tally (with its Tally ledgers tab) under Bring in, TDS and GST under Returns, Reports, MIS, Accounts, Audit (with
+// From Tally under Bring in (its Tally ledgers tab moved to the TDS and GST pages, 14-Oct-2026), TDS and GST under Returns, Reports, MIS, Accounts, Audit (with
 // its Tie-out with Tally tab), Look up and Letters under Books.
 //
 // State: S.books (the open client's books: vouchers, ledgers, salary, the work saved with them), S.booksTab (the
@@ -11,7 +11,6 @@ import { BusyCard } from "../parts/Reading.jsx";
 import Tds from "./TdsPage.jsx";
 import Gst from "./Gst.jsx";
 import FromTally, { needDays } from "./books/FromTally.jsx";
-import Ledgers from "./books/Ledgers.jsx";
 import MisTab from "./books/Mis.jsx";
 import { ServerMis, ServerTds, ServerGst, TallyTdsLines } from "./books/ServerReports.jsx";
 import Accounts from "./books/Accounts.jsx";
@@ -61,7 +60,6 @@ function FreshLine({ b, unknown = true }) {
 const BRING = "Bring in from Tally";
 const EMPTY_TAB = {
   // clean-up batch 3: one sentence, one button
-  ledgers: ["The Tally ledgers come from the client's books, which are not in yet.", BRING, () => booksTabGo("import")],
   mis: ["MIS is worked out from the day book, which is not in yet.", BRING, () => goClient("books:import")],
   fs: ["The accounts (balance sheet and profit and loss) are made from the day book, which is not in yet.", BRING, () => goClient("books:import")],
   audit: ["The audit checks run over the day book, which is not in yet.", BRING, () => goClient("books:import")],
@@ -78,6 +76,9 @@ function EmptyTab({ tab }) {
 // slim line, the client's first alert and its button (the rest in the bell)
 export default function Books() {
   const co = CO();
+  // ledger-confirm (14-Oct-2026): the Tally ledgers tab is gone; its address and every way to it open the TDS page's
+  // Ledgers (TaxLed.redirect, src/js/81)
+  TaxLed.redirect();
   // 2.4.0: on From Tally, the book's alert (lines waiting, the cloud's gap) is not said twice: the page lists those days,
   // each with its Upload (needDays); the bell keeps it
   const days = co && booksTab() === "import" && S.books && S.books.cid === co.id ? needDays(S.books, co.id) : [];
@@ -108,11 +109,9 @@ function BooksPage() {
         : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
     </>;
   }
-  const pending = n ? LedMaster.pending(b).length : 0;
-  // clean-up batch 1: TDS and GST are each a page of the sidebar (Returns), with no tab row here; From Tally keeps its
-  // two tabs, the books brought in and the Tally ledgers
-  const fromTally = tab === "import" || tab === "ledgers";
-  const tabs = fromTally ? [["import", "Books", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null]] : [];
+  // clean-up batch 1: TDS and GST are each a page of the sidebar (Returns), with no tab row here. ledger-confirm
+  // (14-Oct-2026): From Tally is the books brought in; the TDS and GST ledgers are confirmed on the TDS and GST pages
+  const tabs = [];
   let body;
   if (tab === "import") body = <FromTally b={b} />;
   else if (srv && tab === "gst") body = <><ServerGst b={b} />{n ? <Gst /> : null}</>;
@@ -122,7 +121,6 @@ function BooksPage() {
   else if (!n) body = b.busy ? null : <EmptyTab tab={tab} />;
   else if (tab === "tds") body = <><TallyTdsLines b={b} /><Tds b={b} /></>;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
-  else if (tab === "ledgers") body = <Ledgers b={b} />;
   else if (tab === "audit") body = <AuditTab b={b} />;
   else if (tab === "mis") body = <MisTab b={b} />;
   else body = <Accounts b={b} />;
@@ -131,7 +129,7 @@ function BooksPage() {
       <button key={id} data-books-tab={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>}
     <SyncNote cid={co.id} tab={tab} />
     {/* From Tally (2.4.0) says the upload's progress and the reading of the books in its own upload part */}
-    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={tab !== "ledgers" || !n} /></>}
+    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={!((tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
     {tab !== "import" && busy}
     {body}
   </>;

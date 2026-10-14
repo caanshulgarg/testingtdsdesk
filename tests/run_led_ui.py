@@ -56,7 +56,7 @@ with sync_playwright() as p:
     # confirm one guess with the button, then the rest shown (2.4.0: Confirm all, a section at a time)
     first = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; nm = first.get_attribute("data-key"); first.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].ok" % json.dumps(nm)) is True, "Confirm button: " + nm)
-    if pg.locator("#app [data-led-confirm-agree]").count(): pg.click("#app [data-led-confirm-agree]"); pg.wait_for_timeout(500)   # 2.4.1: where FinCom and its check agree
+    if pg.locator("#app [data-tl-confirm-shown]").count(): pg.click("#app [data-tl-confirm-shown]"); pg.wait_for_timeout(500)   # 2.4.1: where FinCom and its check agree
     while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
         pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
     ok(pg.evaluate("LedMaster.pending(S.books).length") == 0, "confirm the rest shown: none left")

@@ -48,6 +48,8 @@ const Route = {
       const v = S.tdsView || "";
       if (v === "years") return "/all";
       if (v === "notices") return "/notices";
+      // ledger-confirm (14-Oct-2026): the TDS page's Ledgers (…/books/tds/ledgers; …/ledgers/all with GST ledgers too)
+      if (v === "ledgers") return "/ledgers" + (S.ledKind === "all" ? "/all" : "");
       if (!S.tdsFy) return "";
       if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
       // tds-layout (14-Oct-2026): the challan register has its own address; the old TDS tabs (Challans, Checks, 26AS, TRACES
@@ -56,6 +58,7 @@ const Route = {
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
+      if (S.gstView === "ledgers") return "/ledgers";
       if (!S.gstYm || !S.gstReg) return "";
       if ((S.gstView || "year") === "year") return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/year";
       return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/" + e(S.gstPart || "r1") + (S.gstSub ? "/" + e(S.gstSub) : "");
@@ -66,6 +69,7 @@ const Route = {
     if (tab === "tds"){
       if (p[0] === "all"){ S.tdsView = "years"; return; }
       if (p[0] === "notices"){ S.tdsView = "notices"; return; }
+      if (p[0] === "ledgers"){ S.tdsView = "ledgers"; S.ledKind = p[1] === "all" ? "all" : ""; return; }
       if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
       S.tdsFy = p[0];
       // tds-layout (14-Oct-2026): the old tabs' addresses, kept so old links still work, lead to the new places: the register;
@@ -81,6 +85,7 @@ const Route = {
       S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
       return;
     }
+    if (tab === "gst" && p[0] === "ledgers"){ S.gstView = "ledgers"; S.ledKind = ""; return; }
     if (tab === "gst" && /^\d{2}$/.test(p[0] || "") && /^\d{6}$/.test(p[1] || "")){
       S.gstReg = p[0]; if (S.gstYm !== p[1] && S.books) S.books.reco = null; S.gstYm = p[1];
       S.gstSeen = p[0] + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(p[1], p[0]) : "monthly");

@@ -23,6 +23,7 @@ import { PreFileButton } from "../parts/PreFile.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner } from "../parts/Notes.jsx";
+import TaxLedgers from "./books/TaxLedgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import More from "../parts/More.jsx";
 import { Gstr1, Gstr3b } from "./gst/Returns.jsx";
@@ -216,18 +217,21 @@ export default function Gst() {
   const sub = subs ? S.gstSub : undefined;
   const noDownload = ["r2b", "rev", "inreg", "follow", "health", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
   const forWhat = ftype === "qrmp" ? " for the quarter" : " for the portal";
-  const sec = gstSecOf(part, S.gstView);
+  // ledger-confirm (14-Oct-2026): the GST ledgers are confirmed here, a section of their own (TaxLedgers.jsx)
+  const sec = S.gstView === "ledgers" ? "ledgers" : gstSecOf(part, S.gstView);
   const secParts = (k) => parts.filter(([id]) => gstSecOf(id, "return") === k);
-  const secGo = (k) => { if (k === "returns" && !noBooks) { gstViewGo("year"); return; } const first = secParts(k)[0]; if (first) gstPartGo(first[0]); };
-  const shownSecs = SECS.filter(([k]) => secParts(k).length || (k === "returns" && !noBooks));
+  const secGo = (k) => { if (k === "ledgers") { TaxLed.go("gst"); return; } if (k === "returns" && !noBooks) { gstViewGo("year"); return; } const first = secParts(k)[0]; if (first) gstPartGo(first[0]); };
+  const ledN = TaxLed.pending(b, "gst").length;
+  const shownSecs = SECS.filter(([k]) => secParts(k).length || (k === "returns" && !noBooks)).concat(noBooks ? [] : [["ledgers", "Ledgers"]]);
   const subParts = secParts(sec);
   return <div data-phone-scroll="" data-gst-page="">
     {/* the ledgers still to confirm: said once, on Returns (round 46) */}
     {sec === "returns" && <LedgerBanner b={b} which="gst" />}
     <div className="tg-head">
-      <nav className="sbar" aria-label="GST sections">{shownSecs.map(([k, l]) => <button key={k} data-gst-sec={k} aria-selected={sec === k} onClick={() => secGo(k)}>{l}</button>)}</nav>
+      <nav className="sbar" aria-label="GST sections">{shownSecs.map(([k, l]) => <button key={k} data-gst-sec={k} aria-selected={sec === k} onClick={() => secGo(k)}>{l}{k === "ledgers" && ledN > 0 && <> <span className="sbar-n" data-gst-led-n="">{ledN + " to confirm"}</span></>}</button>)}</nav>
       <div className="tg-tools"><HelpButton /></div>
     </div>
+    {sec === "ledgers" ? <TaxLedgers b={b} kind="gst" /> : <>
     <Bar months={months} regs={regs} gNow={gNow} ftype={ftype} noDownload={noDownload && part !== "qtr"} />
     {(subParts.length > 1 || sec === "returns") && <nav className="sbar subnav rp-tabs" aria-label="GST">
       {sec === "returns" && !noBooks && <button data-part="year" aria-selected={S.gstView === "year"} onClick={() => gstViewGo("year")}>Year</button>}
@@ -250,6 +254,7 @@ export default function Gst() {
       </div>
       <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p></section>}
     {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
+    </>}
     </>}
   </div>;
 }
