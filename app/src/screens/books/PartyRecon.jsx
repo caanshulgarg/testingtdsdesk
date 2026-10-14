@@ -3,6 +3,7 @@
 // difference, then also show it in the difference."). The party's statement in any format (the sheet engine: AI once
 // for a new format, then its saved columns) against the party's ledger in FinCom's copy of the books. The logic is
 // PartyRecon (src/js/82); the upload goes through the register panel (parts/SheetPanel.jsx).
+import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import DetailDrawer from "../../parts/DetailDrawer.jsx";
 import Button from "../../parts/Button.jsx";
@@ -14,10 +15,15 @@ import VendorRecon from "../VendorRecon.jsx";
 const m = (v) => (num(v) < 0 ? "−" : "") + money(Math.abs(num(v)));
 const d = (x) => (x ? fmtDate(x) : "—");
 
+// an entry's note ("explained"), written in place (the drawer keeps the page's focus; a box over it could not be clicked)
 function Note({ run, x }) {
   const key = PartyRecon.itemKey(x), n = (run.notes || {})[key];
-  return n ? <span className="note" data-recon-note="">{n.note} <button className="linkbtn" onClick={() => PartyRecon.explain(run.id, key, "")}>✕</button></span>
-    : <button className="linkbtn" data-recon-explain="" onClick={async () => { const r = await askConfirm({ title: "Explained", ok: "Save", body: '<label class="f"><span>What explains it</span><input type="text" id="rcNote"></label>', read: () => (document.getElementById("rcNote") || {}).value || "" }); if (r && r.data) PartyRecon.explain(run.id, key, r.data); }}>Explain</button>;
+  const [edit, setEdit] = useState(false), [text, setText] = useState("");
+  if (n) return <span className="note" data-recon-note="">{n.note} <button className="linkbtn" aria-label="Remove the note" onClick={() => PartyRecon.explain(run.id, key, "")}>✕</button></span>;
+  if (!edit) return <button className="linkbtn" data-recon-explain="" onClick={() => setEdit(true)}>Explain</button>;
+  return <span className="row" style={{ gap: 6, display: "inline-flex" }}><input type="text" autoFocus data-recon-note-box="" aria-label="What explains it" placeholder="What explains it" value={text}
+      onChange={(ev) => setText(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && text.trim()) PartyRecon.explain(run.id, key, text.trim()); if (ev.key === "Escape") setEdit(false); }} />
+    <button className="btn small" data-recon-note-save="" disabled={!text.trim()} onClick={() => PartyRecon.explain(run.id, key, text.trim())}>Save</button></span>;
 }
 
 function Items({ run, title, kind, rows, cols, extra }) {

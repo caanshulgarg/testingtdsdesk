@@ -96,7 +96,7 @@ with sync_playwright() as p:
     ok("Matched (5)" in T("[data-recon-matched] > summary"), "matched: 5, folded")
     shot("recon-2-statement")
     pg.click('#app [data-recon-sec=oursOnly] [data-recon-explain]'); W(300)
-    pg.fill("#confirmBox #rcNote", "courier bill posted twice in our books"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
+    pg.fill("#app [data-recon-note-box]", "courier bill posted twice in our books"); pg.click("#app [data-recon-note-save]"); W(500)
     ok("courier bill posted twice" in T("[data-recon-sec=oursOnly] [data-recon-note]") and "1 explained" in T("[data-recon-sec=oursOnly] h4"), "an entry explained with a note")
     n0 = E("Object.values(D().entries).length")
     pg.click('#app [data-recon-sec=theirsOnly] [data-recon-create]'); W(600)

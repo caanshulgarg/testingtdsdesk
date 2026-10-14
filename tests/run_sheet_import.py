@@ -99,8 +99,11 @@ with sync_playwright() as p:
     shot("sheet-3-added")
     # approved, they post through the existing path: Post to Tally → the cloud's queue
     # (the Client setup ledgers the entries use, confirmed as a person confirms them there: posting waits on a guessed one)
-    E("""() => { const co = CO(); Object.values(D().entries).filter(e => e.readMode === 'sheet' && !e.noteKind).forEach(e => { e.natureId = "professional"; e.expenseLedger = "Professional Charges"; approve(e);
+    E("""async () => { if (!S.bank || S.bank.cid !== S.coId) await loadBank(S.coId); const co = CO(); Object.values(D().entries).filter(e => e.readMode === 'sheet' && !e.noteKind).forEach(e => { e.natureId = "professional"; e.expenseLedger = "Professional Charges"; approve(e);
         (e.snapshot.lines || []).forEach(l => { const ck = l.ck || (/^Client setup/.test(l.why || "") ? (l.role === "tds" ? "tds:" + e.natureId : l.role === "gst" && l.head ? "gst:" + l.head.toLowerCase() : "") : ""); if (ck && l.ledger) choiceConfirm(co, ck, l.ledger); }); });
+      // the ledgers these bills use, as Tally has them once the new parties are made there
+      S.bank.ledgers = {list: ["Kashi IT Solutions", "Delhi Legal LLP", "Nirmal Traders", "Professional Charges", "TDS Payable - Professional", "Input CGST", "Input SGST", "Input IGST", "Round Off"].map(n => ({name: n, group: /Input|TDS|Round/.test(n) ? "Duties & Taxes" : /Charges/.test(n) ? "Indirect Expenses" : "Sundry Creditors"})), importedAt: new Date().toISOString(), live: true};
+      Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId];
       window.__toasts = []; const t0 = window.toast; window.toast = (m) => { window.__toasts.push(String(m)); return t0 && t0(m); };
       refreshStats(S.coId); S.postTabs[S.coId] = "topost"; goStep("post", "bills"); }""")
     W(900)
@@ -145,7 +148,7 @@ with sync_playwright() as p:
     W(3000)
     print("    pdf:", E("JSON.stringify(S.sheetImp ? {step: S.sheetImp.step, err: S.sheetImp.err, busy: S.sheetImp.busy} : null)"), errors[-2:])
     st = E("SheetImport.st() && [SheetImport.st().how, (SheetImport.st().docs || []).map(d => [d.no, d.total])]")
-    ok(st and st[0] == "known" and st[1] == [["KIT/101", 11800], ["DL/77", 35400], ["KIT/CN/4", -1180], ["NEW/9", 2950.6]], "a PDF table of the same register: its rows read, by the saved format, no AI (%s)" % st)
+    ok(st and st[0] in ("known", "drift") and st[1] == [["KIT/101", 11800], ["DL/77", 35400], ["KIT/CN/4", -1180], ["NEW/9", 2950.6]] and len(E("window.__ai")) == 2, "a PDF table of the same register (no Remarks column): its rows read by the saved format's columns, no AI (%s)" % st)
     E("SheetImport.close()"); W(300)
     E("() => goTab('cosheets')"); W(600)
     pg.fill('#app [data-sheet-rename]', "CA register"); pg.locator('#app [data-sheet-rename]').blur(); W(300)
