@@ -6,7 +6,7 @@
 // A figure the AI stated that the books give differently is shown as FinCom's, with the AI's struck out. Under the
 // answer: the tables (amounts right-aligned, dates opening the entry), Copy, Export to Excel, files, drafts, a notice's
 // fields with "Add to due list", and "Wrong answer?". Earlier questions of the session below. Ctrl+J opens it anywhere.
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { Sparkles, Paperclip, Upload as UploadIcon, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
 import Button from "./Button.jsx";
@@ -135,30 +135,9 @@ function Cases({ t }) {
   </section>;
 }
 
-// one Upload (the owner's request of 14-Oct-2026): each file as FinCom found it - its kind (by FinCom's own rules, or by
-// the AI when they could not tell), one line about it, and the next steps as buttons (nothing is done by itself)
-const DONE_OPENS = ["purchase", "sales", "bank", "as26"];
-function Uploads() {
-  const list = AUpload.list();
-  if (!list.length) return null;
-  return <section className="asst-uploads" data-asst-uploads="">
-    {list.slice().reverse().map((u) => <div key={u.id} className={"asst-up " + u.state} data-asst-upload={u.kind || u.state} data-name={u.name}>
-      <header><b>{u.name}</b>
-        {u.state === "ready" && <span className="asst-src neutral" data-asst-kind={u.kind}>{AUpload.KIND[u.kind] || "Other document"}</span>}
-        {u.state === "ready" && <span className="note" data-asst-kind-by={u.by}>{u.by === "ai" ? "told by the AI" : "told by FinCom's rules"}</span>}
-        {u.state === "reading" && <span className="note">Reading…</span>}
-        {u.state === "asking" && <span className="note">FinCom's rules could not tell; asking the AI…</span>}
-        <button type="button" className="iconbtn asst-up-x" title="Take off this list (the file stays stored)" onClick={() => AUpload.remove(u)}>×</button></header>
-      {u.state === "failed" && <p className="asst-error">Not uploaded: {u.error}.</p>}
-      {u.state === "ready" && <p className="asst-up-sum" data-asst-summary="">{u.summary}</p>}
-      {u.state === "ready" && <div className="asst-up-acts">
-        {u.acts.map((x) => u.done[x.id] ? <span key={x.id} className="note asst-up-done" data-asst-done={x.id}>✓ {u.done[x.id]}</span>
-          : <Button key={x.id} className={"btn small" + (x.primary ? " primary" : "")} disabled={!!x.disabled} data-asst-act={x.id} onClick={() => AUpload.act(u, x.id)}>{x.label}</Button>)}
-        {DONE_OPENS.some((k) => u.done[k]) && <Button className="btn small" data-asst-act="open" onClick={() => AUpload.act(u, "open")}>Open</Button>}
-      </div>}
-    </div>)}
-  </section>;
-}
+// one Upload (the owner's request of 14-Oct-2026): the files as FinCom found them, in their own small file
+// (AssistantUploads.jsx), fetched when the panel first shows one, so the app's first file stays within its budget
+const Uploads = lazy(() => import("./AssistantUploads.jsx"));
 
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null);
@@ -269,7 +248,7 @@ export default function Assistant() {
               <Button type="submit" className="btn small primary" disabled={a.busy || !String(a.q || "").trim()}><Send size={14} /> Ask</Button>
             </div>
           </form>
-          <Uploads />
+          {AUpload.list().length > 0 && <Suspense fallback={null}><Uploads /></Suspense>}
           {!turns.length && <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} className="chip" onClick={() => ASST.ask(s)}>{s}</button>)}</div>}
           {latest && <Turn t={latest} latest />}
           {earlier.length > 0 && <details className="asst-earlier" open={earlier.length < 3}><summary>Earlier in this conversation ({earlier.length})</summary>{earlier.map((t) => <Turn key={t.id} t={t} />)}</details>}
