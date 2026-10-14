@@ -134,23 +134,26 @@ with sync_playwright() as p:
       LedPage.same({what: 'gst', tax: 'CGST', side: 'input'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 9, reg: '07'}),
       LedPage.same({what: 'tds_payable', section: '194C', rate: 2}, {what: 'tds_payable', section: '194C', rate: 1})]""")
     ok(sm == [True, False, False, True, False], "M5. same: the rate (when both have one) and the registration compared (%s)" % sm)
-    # ---------- D. Confirm all: only n > 0 where both agree
-    want = E("""() => Object.entries(S.books.map).filter(([n, m]) => (LedMaster.isGst(m.what) || LedMaster.isTds(m.what)) && !m.ok && (m.n || 0) > 0 &&
-      (() => { const it = (S.books.ledCheck.items || {})[n], s = it && it.s; return !!(s && s.what && s.conf !== 'low' && LedPage.same(s, m)); })()).map(([n]) => n).sort()""")
-    btn = pg.locator("#app [data-led-confirm-agree]")
-    ok(btn.count() == 1 and ("Confirm %d ledgers that FinCom and its check agree on" % len(want)) in btn.inner_text(), "D. 'Confirm %d ledgers that FinCom and its check agree on' (%r)" % (len(want), btn.inner_text() if btn.count() else ""))
+    # ---------- D. Confirm all shown (ledger-confirm, 14-Oct-2026; was "Confirm N that FinCom and its check agree on"): every
+    # row shown with an answer, the answer each has (what the returns read) kept
+    want = E("""() => { const a = TaxLed.all(S.books); return a.rows.concat(a.more).filter(r => !r.ok && r.ans && r.ans.what).map(r => r.n).sort(); }""")
+    btn = pg.locator("#app [data-tl-confirm-shown]")
+    ok(btn.count() == 1 and ("Confirm all shown (%d)" % len(want)) in btn.inner_text(), "D. 'Confirm all shown (%d)' (%r)" % (len(want), btn.inner_text() if btn.count() else ""))
     before_all = E("() => JSON.parse(JSON.stringify(S.books.map))")
     if btn.count(): btn.click(); pg.wait_for_timeout(500)
     now_ok = E("(b) => Object.keys(S.books.map).filter(n => S.books.map[n].ok && !(b[n] || {}).ok).sort()", before_all)
     ok(len(want) > 2 and now_ok == want, "D. Confirm all confirmed exactly those %d (%s)" % (len(want), [x for x in now_ok if x not in want] or [x for x in want if x not in now_ok] or "same"))
     ok(not diff(f0, E(FIGS)), "D. ... and no figure moved")
-    ok(pg.locator("#app [data-led-confirm-agree]").count() == 0, "D. the button goes once nothing is left to confirm that way")
+    ok(pg.locator("#app [data-tl-confirm-shown]").count() == 0, "D. the button goes once nothing shown is left to confirm")
     # ---------- E. Undo of the batch
     ub = pg.locator("#app [data-led-undo-bar] [data-led-undo-last]")
     ok(ub.count() == 1, "E. one Undo for the batch")
     if ub.count(): ub.click(); pg.wait_for_timeout(500)
     ok(E("(b) => Object.keys(b).every(n => JSON.stringify(Object.assign({}, b[n], {n: 0})) === JSON.stringify(Object.assign({}, S.books.map[n], {n: 0})))", before_all), "E. Undo: every ledger is as before Confirm all")
-    pg.locator("#app [data-led-confirm-agree]").click() if pg.locator("#app [data-led-confirm-agree]").count() else None; pg.wait_for_timeout(500)
+    # all shown confirmed again but one ledger used in entries and one no entry uses, left for the rows' Confirm below (A)
+    keep = E("""(ns) => { const m = S.books.map; const u = ns.find(n => m[n] && (m[n].n || 0) > 0 && LedMaster.isTds(m[n].what || '')) || ns.find(n => m[n] && (m[n].n || 0) > 0 && !/^gst$/.test(m[n].what || '')), z = ns.find(n => m[n] && !((m[n].n || 0) > 0)); return [u || '', z || '']; }""", want)
+    want = [n for n in want if n not in keep]
+    E("(ns) => TaxLed.confirm(S.books, ns, 'shown')", want); pg.wait_for_timeout(500)
     # ---------- the owner of 09-Oct-2026: "if I want to edit the confirm ledger, then I should be able to do that"
     cg = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-okby]') && t.querySelector('[data-led-change]') && (S.books.map[t.dataset.key] || {}).what === 'gst' && (S.books.map[t.dataset.key] || {}).n > 0); return r ? r.dataset.key : ''; }")
     ok(bool(cg), "K. a confirmed GST ledger used in entries, with Change beside '✓ Confirmed' and Undo (%s)" % cg)
@@ -190,6 +193,9 @@ with sync_playwright() as p:
             if pg.locator("#app [data-led-done]").count(): pg.click("#app [data-led-done]"); pg.wait_for_timeout(200)
             row(pg, z).locator("[data-led-undo]").click() if row(pg, z).locator("[data-led-undo]").count() else None; pg.wait_for_timeout(300)
     # ---------- A. a row's Confirm, an n:0 ledger, Change
+    # no ledger without entries left to confirm (0. and K confirmed them): Unconfirm one, so a row's Confirm is tried on it
+    E("""() => { if (Object.entries(S.books.map).some(([n, m]) => !m.ok && !((m.n || 0) > 0) && LedPage.taxW(m.what))) return;
+      const z = Object.entries(S.books.map).find(([n, m]) => m.ok && !((m.n || 0) > 0) && LedPage.taxW(m.what)); if (z) TaxLed.unconfirm(S.books, z[0]); }"""); pg.wait_for_timeout(400)
     one = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-confirm]') && (S.books.map[t.dataset.key] || {}).n > 0); return r ? r.dataset.key : ''; }")
     zero = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-confirm]') && !((S.books.map[t.dataset.key] || {}).n > 0)); return r ? r.dataset.key : ''; }")
     ok(bool(one) and bool(zero), "A. a ledger used in entries to confirm (%s) and one with no entries (%s)" % (one, zero))
@@ -198,8 +204,8 @@ with sync_playwright() as p:
         if n: row(pg, n).locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(E(OKOF, [one, zero]) == [True, True], "A. Confirm on the rows: both confirmed")
     r1 = row(pg, one)
-    ok(r1.locator("[data-led-okby]").count() == 1 and re.search(r"✓ Confirmed by .+, \d\d-[A-Z][a-z]{2}-\d{4}", r1.locator("[data-led-okby]").inner_text()) is not None and r1.locator("[data-led-undo]").count() == 1,
-       "A. a confirmed row: '%s' and a separate Undo" % (r1.locator("[data-led-okby]").inner_text() if r1.locator("[data-led-okby]").count() else ""))
+    ok(r1.locator("[data-led-okby]").count() == 1 and re.search(r"✓ Confirmed by .+, \d\d-[A-Z][a-z]{2}-\d{4}", r1.locator("[data-led-okby]").inner_text()) is not None and r1.locator("[data-led-unconfirm]").count() == 1,
+       "A. a confirmed row: '%s' and a separate Unconfirm" % (r1.locator("[data-led-okby]").inner_text() if r1.locator("[data-led-okby]").count() else ""))
     ok(r1.locator("button[data-led-okby]").count() == 0, "A. ✓ itself is not a button (not a hidden undo)")
     # Change: a GST ledger's side, saved at once
     ch = E("() => { const r = [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].find(t => t.querySelector('[data-led-change]') && /^gst$/.test((S.books.map[t.dataset.key] || {}).what || '') && (S.books.map[t.dataset.key] || {}).n > 0 && t.dataset.key !== %s); return r ? r.dataset.key : ''; }" % json.dumps(cg))
@@ -223,10 +229,11 @@ with sync_playwright() as p:
     okn = E(OKOF, names)
     ok(all(okn), "A+B. after the reload: still confirmed (%d of %d)%s" % (sum(okn), len(okn), "" if all(okn) else " LOST: " + str([n for n, v in zip(names, okn) if not v])))
     ok(E("(n) => S.books.map[n].side", ch) == new_side, "B. Change in the browser's store after the reload, no Save: %s %s" % (ch, E("(n) => S.books.map[n].side", ch)))
-    # ---------- E. a row's Undo puts back what was there
+    # ---------- E. a row's Unconfirm (ledger-confirm, 14-Oct-2026; was its Undo): back to "to confirm" with the same answer
     pg.wait_for_timeout(300)
-    if row(pg, one).locator("[data-led-undo]").count(): row(pg, one).locator("[data-led-undo]").click(); pg.wait_for_timeout(400)
-    ok(E(ENTRY, one) == e1, "E. a row's Undo: %s as before its Confirm" % one)
+    if row(pg, one).locator("[data-led-unconfirm]").count(): row(pg, one).locator("[data-led-unconfirm]").click(); pg.wait_for_timeout(400)
+    eu = E(ENTRY, one)
+    ok(not eu.get("ok") and all(eu.get(k) == e1.get(k) for k in ("what", "tax", "side", "section", "rate", "gstRate")) and (eu.get("unok") or {}).get("by"), "E. a row's Unconfirm: %s not confirmed, its answer as before, who and when kept" % one)
     if row(pg, ch).locator("[data-led-undo]").count(): row(pg, ch).locator("[data-led-undo]").click(); pg.wait_for_timeout(400)
     ok(E(ENTRY, ch) == e_ch, "E. Undo of a Change: %s as before (side %s)" % (ch, E("(n) => S.books.map[n].side", ch)))
     # ---------- C. Please check: confirmed by hand, the check reads it otherwise

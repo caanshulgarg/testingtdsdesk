@@ -29,7 +29,7 @@ with sync_playwright() as p:
     pg.evaluate("S.booksTab = 'ledgers'; render();"); pg.wait_for_timeout(500)
     ok(pg.evaluate("LedMaster.posting(S.books, CO()).every(x => !x.from)"), "before confirming: nothing from the master")
     # FinCom 2.4.1: Confirm all (where FinCom and its check agree), then each row's Confirm
-    if pg.locator("#app [data-led-confirm-agree]").count(): pg.click("#app [data-led-confirm-agree]"); pg.wait_for_timeout(500)
+    if pg.locator("#app [data-tl-confirm-shown]").count(): pg.click("#app [data-tl-confirm-shown]"); pg.wait_for_timeout(500)
     while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
         pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
     pg.wait_for_timeout(500)

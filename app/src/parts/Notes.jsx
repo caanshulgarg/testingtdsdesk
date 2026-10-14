@@ -9,12 +9,12 @@ import Button from "./Button.jsx";
 // the ledgers still to be confirmed, above the TDS or GST work that uses them
 export function LedgerBanner({ b, which }) {
   // one count everywhere (review of 01-Oct-2026): the same ledgers as the "N to confirm" on the Tally ledgers tab
-  const p = LedMaster.pending(b);
+  const p = TaxLed.pending(b, which || "all");
   if (!p.length) return null;
   // one row (round 3, 05-Oct-2026); the ledgers' names on hover
   return <NoticeLine sev="bad" data-ledger-banner="" style={{ marginBottom: 12 }} text={p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed: the figures use guesses and the return files wait."}
-    how={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "") + ". Confirm them on the Tally ledgers tab."}>
-    <Button className="btn small" onClick={() => booksTabGo("ledgers")}>Confirm them</Button></NoticeLine>;
+    how={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "") + ". Confirm them on the " + (which === "gst" ? "GST" : "TDS") + " page's Ledgers."}>
+    <Button className="btn small" data-ledger-confirm="" onClick={() => TaxLed.go(which === "gst" ? "gst" : "tds")}>Confirm them</Button></NoticeLine>;
 }
 
 // filed GST returns that the books no longer match
