@@ -72,7 +72,8 @@ TABROWS = VIS + """
   const rows = [...document.querySelectorAll('#cobar nav.sbar, #app nav.sbar, #app .bk-tabs, #app .lk-kinds, #app [role=tablist]')]
     .filter(e => vis(e) && !e.matches('.subnav, [aria-label=Return], .chip-filter') && !e.closest('.chip-filter'))
     .filter((e, i, a) => !a.some(o => o !== e && o.contains(e)));
-  return rows.map(r => { const tabs = [...r.querySelectorAll('button, details.more > summary')].filter(b => vis(b) && !b.closest('.more-pop'));
+  // (upload-pages: the guide's "?" at the end of the upload pages' row of states is not a tab)
+  return rows.map(r => { const tabs = [...r.querySelectorAll('button, details.more > summary')].filter(b => vis(b) && !b.closest('.more-pop') && !b.matches('.help-q'));
     const sel = tabs.find(b => b.getAttribute('aria-selected') === 'true' || b.closest('details[data-on]'));
     const cs = sel ? getComputedStyle(sel) : null;
     return {name: r.getAttribute('aria-label') || r.className, n: tabs.filter(b => !b.matches('summary')).length, more: tabs.some(b => b.matches('summary')),
