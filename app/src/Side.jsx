@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FinComNav } from "./nav.js";
+import { useDismiss } from "./parts/dismiss.js";
 // Arc UI (arc-ui, 09-Oct-2026): the sidebar in Arc's look (styles/arc-shell.css): a light surface, Lucide icons as
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
 // sidebar to its icons (remembered on this computer).
@@ -129,13 +130,12 @@ function Groups({ groups, after, phone }) {
 
 // the phone's More: everything not in the bar, as a sheet over the page (styles/arc-shell.css; shown on a phone only)
 function MoreSheet({ groups, open, home, close }) {
-  useEffect(() => {
-    const k = (ev) => { if (ev.key === "Escape") close(); };
-    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, []);
+  // a tap on the dimmed area, Esc and Back close it (parts/dismiss.js); Esc goes no further (it left the client before)
+  const sheet = useRef(null);
+  useDismiss(true, sheet, close);
   return createPortal(<div className="side-sheet-wrap" data-side-sheet="">
     <button className="side-sheet-back" aria-label="Close the menu" onClick={close} />
-    <div className="side-sheet" role="dialog" aria-label="More">
+    <div ref={sheet} className="side-sheet" role="dialog" aria-label="More">
       <div className="side-sheet-head"><b>More</b><button className="side-fold" onClick={close} aria-label="Close"><X width={16} height={16} aria-hidden="true" /></button></div>
       {open && <ClientCard open={open} home={home} after={close} />}
       {/* the rest: what the bar does not show */}

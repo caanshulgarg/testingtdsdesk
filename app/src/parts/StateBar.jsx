@@ -69,7 +69,7 @@ export function UploadLine() {
     {p.busy > 0 && <div className="upline-row" data-upload-busy="">
       <span className="spinner" aria-hidden="true" />
       <b data-upload-progress="">{"Reading " + Math.min(p.total, p.done + 1) + " of " + p.total + "…"}</b>
-      {p.now && <span className="note">{p.now.name}</span>}
+      {p.now && <span className="note" data-upload-now="">{p.now.name + (p.now.msg ? " · " + p.now.msg : "")}</span>}
       <span className="upline-bar" aria-hidden="true"><i style={{ width: pct + "%" }} /></span>
     </div>}
     {failed.length > 0 && <ul className="upline-fails" data-upload-failed="">

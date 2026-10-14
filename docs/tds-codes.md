@@ -93,7 +93,7 @@ How the list was wrong, and what was changed:
 
 - **Before 14-Oct-2026:** FinCom's list was shifted by one from 6CB to 6CI. Scrap was written as 6CF (parking lot), tendu leaves as 6CB, and so on.
 - **Codes a person had already chosen:** these were chosen against the old words, so they are moved once to the same nature's official code. `TCS27EQ.fixCodes`, marked `tcsCodesFixed` in the books.
-- **From 1-Apr-2026 (s.394(1) of the Income-tax Act, 2025; review M5):** alcoholic liquor 2% and tendu leaves 2% (1% and 5% up to FY 2025-26). **Confirmed by several sources; official text not reachable** (taxguru, caclubindia, tdsman, taxupdate, figmentglobal, GimBooks and TaxGST rate charts).
+- **From 1-Apr-2026 (s.394(1) of the Income-tax Act, 2025; review M5):** alcoholic liquor 2% and tendu leaves 2% (1% and 5% up to FY 2025-26). **Confirmed by several secondary sources; official text not reachable** (taxguru, caclubindia, tdsman, taxupdate, studycafe, figmentglobal, GimBooks and TaxGST rate charts; re-checked 14-Oct-2026).
 - **Not yet in the list (review L3):** the luxury-goods codes from 22-Apr-2025, and 6CK, 6CM, 6CN, 6CP and 6CQ. They are left out until confirmed.
 
 ## TCS return due dates (H2)
@@ -101,4 +101,4 @@ How the list was wrong, and what was changed:
 - **Up to tax year 2025-26:** Form 27EQ is due on the 15th of July, October, January and May.
 - **From tax year 2026-27:** Form 143 follows the TDS calendar: 31 July, 31 October, 31 January and 31 May (Rule 219 of the Income-tax Rules 2026, s.397(3)(b)).
 - `TDS.returnDue` and `TDS.dueWords` give both the late fee and the date shown on screen.
-- **Confirmed by several sources; official text not reachable** (the same sources as above).
+- **Confirmed by several secondary sources; official text not reachable** (taxguru, caclubindia, tdsman, taxupdate and studycafe agree on 31 Jul / 31 Oct / 31 Jan / 31 May for Form 143 from tax year 2026-27; re-checked 14-Oct-2026).

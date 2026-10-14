@@ -45,14 +45,15 @@ with sync_playwright() as p:
     tab = pg.evaluate("(document.querySelector('nav.sbar button[aria-selected]') ? Array.from(document.querySelectorAll('#app nav.sbar button')).map(b => b.textContent).join('|') : '')")
     n_tab = re.search(r"(\d+) to confirm", tab); banner = re.search(r"(\d+) ledgers? (are|is) still to be confirmed", pg.inner_text("#app"))
     ok(n_tab and banner and n_tab.group(1) == banner.group(1), "7. the tab and the GST page say the same number of ledgers to confirm (%s / %s)" % (n_tab and n_tab.group(1), banner and banner.group(1)))
-    # 8. one freshness sentence
-    fr = pg.inner_text("#app [data-fresh]") if pg.locator("#app [data-fresh]").count() else ""
-    ok(fr.startswith("Books: last entry 01-Jul-2026"), "8. one books-freshness sentence: " + fr[:90])
+    # 8. round 3 A (14-Oct-2026): no freshness sentence on the pages; "Books up to … · read …" in the Tally panel only
+    ok(pg.locator("#app [data-fresh]").count() == 0 and "Books: last entry" not in pg.inner_text("#app"), "8. GST: no books-freshness sentence on the page")
     go("S.booksTab = 'reports'")
-    fr2 = pg.locator("#app [data-fresh]").first.inner_text() if pg.locator("#app [data-fresh]").count() else ""
-    ok(fr2.startswith("Books: last entry 01-Jul-2026"), "8. Reports says the same: " + fr2[:90])
     txt = pg.inner_text("#app")
-    ok("Books up to" not in txt and "run to" not in txt, "8. no other wording of how fresh the books are")
+    ok(pg.locator("#app [data-fresh]").count() == 0 and "Books: last entry" not in txt and "Books up to" not in txt and "run to" not in txt, "8. Reports: none either")
+    pg.evaluate("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(600)
+    pb = pg.inner_text('[data-panel-books]') if pg.locator('[data-panel-books]').count() else ""
+    ok(pb.startswith("Books up to 01-Jul-2026"), "8. the Tally panel: " + pb[:90])
+    pg.evaluate("() => { S.tallyPanel = false; render(); }"); pg.wait_for_timeout(300)
     # 11. Reports opens on the current year (the owner's choice of 09-Oct-2026, smart moves round 1; it was the last year with
     # sales); 5, 6: one basis, payables positive, advances apart
     ok(pg.evaluate("RPT.range().fy") == "2026" and pg.evaluate("RPT.range().notRead") is False, "11. Reports opens on 2026-27, the current year (the books reach it)")

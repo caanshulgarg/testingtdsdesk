@@ -126,7 +126,15 @@ const Help = {
     if (S.helpOpen && has){
       if (!p){ p = document.createElement("aside"); p.id = "helpPanel"; p.className = "help-panel"; p.setAttribute("aria-label", "How this tab works"); document.body.appendChild(p); }
       if (p.dataset.k !== k){ p.innerHTML = this.html(k); p.dataset.k = k; }
-    } else if (p) p.remove();
+      // a click outside it, Esc and (a phone) Back close it, like every overlay (app/src/parts/dismiss.js); the
+      // "How this tab works" button itself toggles it
+      if (!this.undock && typeof window === "object" && window.FCOverlay){
+        const el = p; this.undock = window.FCOverlay.add(el, () => { S.helpOpen = false; Help.after(); }, {also: () => Array.from(document.querySelectorAll("[data-help]"))});
+      }
+    } else {
+      if (p) p.remove();
+      if (this.undock){ const u = this.undock; this.undock = null; u(); }
+    }
     document.body.classList.toggle("help-on", !!(S.helpOpen && has));
   }
 };

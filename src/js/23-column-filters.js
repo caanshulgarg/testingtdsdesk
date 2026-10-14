@@ -521,7 +521,10 @@ function askConfirm(o){
     };
     const onKey = ev => { if (ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); finish(false); } else if (ev.key === "Enter" && !(ev.target && (ev.target.id === "cbxCheck" || ev.target.tagName === "SELECT"))){ ev.preventDefault(); ev.stopPropagation(); finish(true); } };
     document.addEventListener("keydown", onKey, true);
-    box.onclick = ev => { const bt = ev.target.closest("[data-cbx]"); if (bt){ ev.stopPropagation(); finish(bt.dataset.cbx === "yes"); } else if (ev.target === box) finish(false); };
+    box.onclick = ev => { const bt = ev.target.closest("[data-cbx]"); if (bt){ ev.stopPropagation(); finish(bt.dataset.cbx === "yes"); } else if (ev.target === box && !typed()) finish(false); };
+    // a click on the dark area around it is Cancel, never OK; once a reason or a word is typed it stays (the owner,
+    // 14-Oct-2026: a confirm step does not close on an outside click with input in it); Esc is Cancel
+    const typed = () => Array.from(box.querySelectorAll("input[type=text], input:not([type]), textarea")).some(i => String(i.value || "").trim() !== "" && i.defaultValue !== i.value);
     if (o.onReady) try { o.onReady(box); } catch (e){}
     const first = box.querySelector("input[type=text]"); const yes = box.querySelector('[data-cbx="yes"]');
     if (first){ first.focus(); first.select(); } else if (yes) yes.focus();
