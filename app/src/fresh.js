@@ -1,6 +1,6 @@
 // A new build loads by itself (review of 01-Oct-2026: after a republish the browser kept the old index.html until a hard
 // refresh). build.json, fetched past every cache, names the current build: on opening, an older page loads the new one
-// once (by a new address, so no cache can answer); later, while the page stays open, a note offers to reload.
+// once (by a new address, so no cache can answer); later, while the page stays open, a small chip offers to reload.
 const KEY = "fincom-reloaded-for";
 async function current() {
   // no line: no check (it could only fail; stability batch 6), the next one runs when the page is shown again
@@ -12,19 +12,39 @@ async function current() {
     return j && j.build ? j.build : null;
   } catch (e) { return null; }
 }
-// stability batch 3: in the page's one message region (#toast), in its look, staying until Reload is pressed (and coming
-// back after any other message), never a second box of its own stacked with a message
-let noted = null;
+// quiet refresh (owner, 14-Oct-2026): never a reload while someone works, and no message that keeps coming back. A small
+// chip at the foot of the page, "New version – Refresh", staying until it is pressed; the page loads the new build by
+// itself only when it is not in use: the tab hidden for HIDDEN_MS, with nothing unsaved (unsavedWork below)
+let noted = null, hiddenTimer = 0;
+const HIDDEN_MS = 5 * 60000;
 function note(build) {
-  if (noted === build) return;
-  if (typeof window.toast === "function") { noted = build; window.toast("A newer FinCom is out.", { stay: true, actions: [{ label: "Reload", run: () => go(build) }] }); return; }
-  if (document.getElementById("fresh-note")) return;
-  const d = document.createElement("div");
-  d.id = "fresh-note"; d.setAttribute("role", "status");
-  d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:90;background:#064E3B;color:#fff;padding:10px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:14px";
-  d.innerHTML = 'A newer FinCom is out. <button style="margin-left:10px" class="btn small">Reload</button>';
-  d.querySelector("button").onclick = () => go(build);
-  document.body.appendChild(d);
+  noted = build;
+  let d = document.querySelector("[data-new-version]");
+  if (!d) {
+    d = document.createElement("div");
+    d.setAttribute("data-new-version", ""); d.setAttribute("role", "status"); d.className = "new-version-chip";
+    d.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:90;display:flex;align-items:center;gap:8px;background:var(--surface,#fff);color:var(--ink,#111);border:1px solid var(--line,#D5DBD8);padding:4px 6px 4px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:13px";
+    d.innerHTML = '<span>New version</span><button type="button" class="btn small" data-new-version-go="">Refresh</button>';
+    document.body.appendChild(d);
+  }
+  d.querySelector("button").onclick = () => go(noted);
+}
+// something not yet saved here: a save on its way or failed, a change not yet sent to the firm's cloud, a page with
+// unsaved changes (Drafts), a bill being read. Any doubt counts as unsaved
+export function unsavedWork() {
+  try {
+    if (typeof Live === "object" && Live.sv && Live.sv.state && Live.sv.state !== "saved") return true;
+    if (typeof cloudChanges === "function" && typeof Cloud === "object" && Cloud.on() && cloudChanges().changes.length) return true;
+    if (typeof Drafts === "object" && Drafts.anyDirty()) return true;
+    if (typeof BookItems === "object" && Object.values(BookItems.st || {}).some((x) => x && x.timer)) return true;
+    if (typeof S === "object" && (S.jobs || []).some((j) => ["waiting", "checking", "reading"].includes(j.status))) return true;
+    return false;
+  } catch (e) { return true; }
+}
+function whenHidden() {
+  clearTimeout(hiddenTimer);
+  if (!noted || document.visibilityState !== "hidden") return;
+  hiddenTimer = setTimeout(() => { if (noted && document.visibilityState === "hidden" && !unsavedWork()) go(noted); }, HIDDEN_MS);
 }
 function go(build) {
   try { sessionStorage.setItem(KEY, build); } catch (e) { /* private window */ }
@@ -43,6 +63,7 @@ export async function checkFresh(onOpen) {
 }
 export function watchFresh() {
   checkFresh(true);
+  document.addEventListener("visibilitychange", whenHidden);
   // a new build's service worker took over this page: say so (the page still runs the build it opened with)
   try { navigator.serviceWorker.addEventListener("controllerchange", () => checkFresh(false)); } catch (e) { /* no workers here */ }
   setInterval(() => checkFresh(false), 10 * 60000);

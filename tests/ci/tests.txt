@@ -310,3 +310,5 @@ run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
 # Reconciliations → Vendors / Customers: a party's statement in any format against its ledger in the books
 run_party_recon.js                    120
 run_party_recon_ui.py                 300  TDSDESK_SITE=../app/dist-test
+# quiet refresh (14-Oct-2026): idle 60 s on Clients, TDS, Accounts and Bills with heartbeats and syncs: no reload, no loading state, scroll/focus/menu kept
+run_quiet_refresh.py                  900  TDSDESK_SITE=../app/dist-test
