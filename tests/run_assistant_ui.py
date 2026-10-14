@@ -271,6 +271,7 @@ try:
             if pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count(): break
             pg.wait_for_timeout(250)
         ok(pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count() == 1 and pg.evaluate("typeof SheetImport === 'object' && S.view === 'company'"), "Import in Sales: the register goes to the Sales page's import, for review")
+        pg.evaluate("SheetImport.close()"); pg.wait_for_timeout(300)
         pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
         # ---------- a file
         t = ask(pg, "An Excel of TDS by deductee with PANs")
