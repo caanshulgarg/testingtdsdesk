@@ -298,5 +298,6 @@ run_tds_review.js                     120
 # 3CD clause 18 from the register, migration 81 twice with its row-level security, the Assistant's depreciation_schedule, the screen
 run_depreciation.js                   240
 run_depreciation_books.js             180
+run_depreciation_entity.js            300
 run_dep_tool.py                       300
-run_fixed_assets_ui.py                300  TDSDESK_SITE=../app/dist-test
+run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
