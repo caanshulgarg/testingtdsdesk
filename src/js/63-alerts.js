@@ -42,7 +42,8 @@ const AlertHub = {
         "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,received,queued,failed)&order=received_at.desc&limit=200") || []);
       h.none = false;
     } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
-    h.busy = false; h.at = Date.now(); if (typeof render === "function") render();
+    // quiet refresh (14-Oct-2026): read again each minute; the page is drawn only when the lines changed
+    h.busy = false; h.at = Date.now(); if (typeof quietChanged === "function") quietChanged("alerts:held", [h.rows, !!h.none]); else if (typeof render === "function") render();
   },
   // the lines still waiting, as known now: the bell's own read, each brought up to date by Sync activity's lines (read
   // later, or come in live), so a line applied there is not counted as waiting here
@@ -405,7 +406,7 @@ const AlertClear = {
       }
     } catch (e){ if (this.missing(e)) st.none = true; }
     st.busy = false; st.at = Date.now(); st.ver++;
-    if (this.st === st){ this.saveLocal(); if (typeof render === "function") render(); }
+    if (this.st === st){ this.saveLocal(); if (typeof quietChanged === "function") quietChanged("alerts:cleared", [st.rows.map(r => [r.key, r.fp, !!r.pending]), !!st.none]); else if (typeof render === "function") render(); }
   },
   async send(rows){
     const st = this.st;

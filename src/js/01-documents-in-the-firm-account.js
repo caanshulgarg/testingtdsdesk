@@ -3459,6 +3459,27 @@ let activeJobs = 0;
 const MAX_PARALLEL = 2;
 let renderQueued = false;
 function softRender(){ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
+// quiet refresh (owner, 14-Oct-2026: "App got refreshed every few seconds, and it is visible"): what FinCom reads in the
+// background (a Tally heartbeat, the firm's sync, the alerts read again each minute, a row come back through Realtime)
+// draws the page only when it brought something new, once per frame, and as a background drawing: an old piece shown in a
+// React screen (Legacy.jsx) whose HTML is the same is left as it is (its open sections, scroll and focus stay). Never a
+// loading state: the screen keeps what it shows until the new figures are in.
+//   quietRender()             the page drawn again quietly (the caller knows something changed)
+//   quietChanged(key, value)  drawn quietly only when value differs from the last one given under key; true when drawn
+let quietQueued = false;
+const QUIET = {depth: 0, sig: {}};
+function quietRender(){
+  if (quietQueued) return;
+  quietQueued = true;
+  const go = () => { quietQueued = false; QUIET.depth++; try { render(); } finally { QUIET.depth--; } };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(go); else setTimeout(go, 0);
+}
+function quietDrawing(){ return QUIET.depth > 0; }
+function quietChanged(key, value){
+  let s; try { s = typeof stableStr === "function" ? stableStr(value) : JSON.stringify(value); } catch (e){ s = String(Date.now()); }
+  if (QUIET.sig[key] === s) return false;
+  QUIET.sig[key] = s; quietRender(); return true;
+}
 // One PDF may hold one invoice over several pages, several invoices, or copies of one invoice.
 // Returns the pages of each invoice, or null when the PDF is a single invoice.
 async function invoiceGroups(file){
