@@ -11,6 +11,8 @@
 .asst-ask { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 10px; background: var(--surface); box-shadow: var(--shadow-raised); }
 .asst-ask textarea { border: 0; resize: vertical; min-height: 44px; font: inherit; font-size: 14px; background: transparent; color: var(--foreground); outline: none; }
 .asst-askbar { display: flex; align-items: center; gap: 8px; }
+.asst-ups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.asst-ups .chip { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asst-hint { flex: 1; margin: 0; font-size: 11.5px; }
 .asst-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
 .asst .chip, .asst-suggest .chip, .asst-cites .chip { border: 1px solid var(--border); background: var(--surface-muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; color: var(--foreground); cursor: pointer; text-align: left; }
@@ -104,3 +106,4 @@
 .asst-cached { font-style: italic; }
 .asst-warn-txt { color: var(--warn, #b45309); }
 .asst-cap label { margin-right: 8px; }
+.asst-rowtick { margin-left: 6px; font-size: 11px; padding: 0 5px; }
