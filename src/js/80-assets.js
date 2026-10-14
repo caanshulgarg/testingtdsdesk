@@ -90,6 +90,10 @@ const FAR = (() => {
     {k: "none", name: "Not depreciable (land; goodwill from AY 2021-22)", rate: 0},
   ];
   X.block = k => X.IT.find(b => b.k === k) || (/^r\d/.test(String(k || "")) ? {k, name: "Block at " + k.slice(1) + "% (from the books' group)", rate: Number(k.slice(1)), custom: true} : null);
+  // The rules and defaults of this file (docs/depreciation.md, the ten points: the Schedule II list, residual 5% and nil for
+  // intangibles, WDV by default with straight line for intangibles, old assets over the remaining life, days counted
+  // inclusive, block-level accumulated depreciation spread by cost, a sale taking the whole asset, the section 32 working,
+  // additional depreciation, the deferred tax rates, the block's opening): approved by the owner on 14-Oct-2026.
   X.DEFAULTS = {method: "WDV", residualPct: 5, addl: false, addlRate: 20, dtRate: null, dtStd: "AS 22"};
 
   // ------------------------------------------------------------ proposing from the names

@@ -1,9 +1,11 @@
 // How fresh FinCom's copy of the books is, on Reports and Look up: kept in step with Tally by the bridge, the last copy,
 // or the cloud's copy; with the buttons to switch keeping in step on, bring in today's entries or check against Tally,
 // and the result of that check. Was LK.freshBar (src/js/44); the work is LK (keepOn, bringToday, keepCheck).
-// 2.1.3: first "Books as of 15:34 · Update now" (parts/TallyLine.jsx): Tally cannot send its changes by itself.
+// round 3 A (the owner, 14-Oct-2026): no status sentence here any more. "Books up to … · read …" and Update now are in
+// the top bar's Tally panel; this keeps what needs the person: the first copy's progress, Tally not answering, the buttons,
+// a check's answer, the offline copy, and the one amber line when the books are stale (parts/TallyLine.jsx BooksStale).
 import Msg from "./Msg.jsx";
-import { BooksAsOf } from "./TallyLine.jsx";
+import { BooksStale } from "./TallyLine.jsx";
 import HeldBooks from "./HeldBooks.jsx";
 
 const hhmm = (s2) => fmtTime(s2);
@@ -16,12 +18,12 @@ function Check({ c }) {
     {c.listMatchesDayBook ? "matches" : <b>does not match</b>}{" the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.")}</p>;
 }
 
-// the cloud's copy of the books: how old, days not read yet, Tally not answering. Was TCloud.bar (src/js/49)
+// the cloud's copy of the books: only what needs saying (the first copy still being made, Tally not answering). Was
+// TCloud.bar (src/js/49); how old the copy is, is in the Tally panel
 function CloudBar({ cid }) {
   const bk = TCloud.book(cid); if (!bk) return null;
-  const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-  // the same sentence as every other page (booksFresh, src/js/49)
-  return <>{st.phase === "first" ? <><b>The books</b>{": the first copy is still being made (up to " + FC.when(String(st.doneTo || "")) + ")."}</> : <span data-fresh="" className={sk.length ? "bad" : ""}>{booksFresh(S.books, cid).text}</span>}
+  const st = bk.state || {};
+  return <>{st.phase === "first" && <><b>The books</b>{": the first copy is still being made (up to " + FC.when(String(st.doneTo || "")) + ")."}</>}
     {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + fmtTime(st.trouble.at) + "; the bridge carries on by itself."}</span></>}</>;
 }
 
@@ -34,24 +36,25 @@ export default function FreshBar({ b, held = true }) {
   const off = b && b.offline ? <p className="note warn" data-books-offline="">{"FinCom’s server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."}</p> : null;
   // the cloud's copy: what this page shows when it is the source
   const hb = held && <HeldBooks cid={S.coId} where="fresh" />, hd = typeof booksHeld === "function" && !!booksHeld(S.coId);
-  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}<CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}{off}</div></>;
+  const stale = <BooksStale cid={S.coId} />;
+  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh">{stale}<span className="note"><CloudBar cid={S.coId} /></span>{chk}{off}</div></>;
   let upTo, btns = null;
   if (m.keep) {
     const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
     if (m.phase === "open") upTo = "The bridge is reading the opening balances, a few ledgers at a time.";
     else if (m.phase === "first") { const pct = Math.max(0, Math.min(99, Math.round(Audit.days(m.from, m.doneTo || m.from) / Math.max(1, Audit.days(m.from, today)) * 100))); upTo = <>The bridge is copying this company from Tally a few days at a time: up to <b>{FC.when(m.doneTo)}</b>{" (" + pct + "%). It carries on whenever the company is open in Tally."}</>; }
-    else { const f = booksFresh(b, S.coId); upTo = <span data-fresh="" className={f.skipped.length ? "bad" : ""}>{f.text}{f.skipped.length ? " Figures touching those days may be out; the bridge tries them again at the next update." : ""}{seenMin < 5 && !hd ? " In step with Tally now." : ""}</span>; }
+    else { const f = booksFresh(b, S.coId); upTo = f.skipped.length ? <span className="bad">Figures touching the days not read may be out; the bridge tries them again at the next update.</span> : seenMin < 5 && !hd ? "In step with Tally now." : null; }
     upTo = <>{upTo}
       {m.trouble && m.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + hhmm(m.trouble.at) + "; the bridge leaves it alone for a while and tries again at the next update."}</span></>}</>;
     btns = live ? <Btn onClick={() => LK.keepCheck()}>Check against Tally</Btn> : null;
   } else {
-    upTo = have ? <span data-fresh="">{booksFresh(b, S.coId).text}</span> : "No books in FinCom yet.";
+    upTo = have ? null : "No books in FinCom yet.";
     if (live) {
       btns = <>{kp.ok ? (kp.on ? null : <Btn className="btn small primary" onClick={() => LK.keepOn(true)}>Keep this company in step with Tally</Btn>) : <span className="note">Install FinCom Bridge from the Tally page to keep companies in step while they are open.</span>}
         {have && String(meta.to) < today && <Btn onClick={() => LK.bringToday()}>Bring in today’s entries</Btn>}
         {sch.on && <span className="note">{"Nightly copy is on" + (sch.next ? ", next " + sch.next : "") + "."}</span>}</>;
-      if (kp.on) upTo = <>{upTo} The bridge reads it when this client is opened, on Update now, and in the nightly catch-up.</>;
+
     } else btns = <span className="note">Connect FinCom Bridge to keep this up to date.</span>;
   }
-  return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}{off}</div></>;
+  return <>{hb}<div className="lk-fresh">{stale}{upTo && <span className="note">{upTo}</span>}{btns}{chk}{off}</div></>;
 }
