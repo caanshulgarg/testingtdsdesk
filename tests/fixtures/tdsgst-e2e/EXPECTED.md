@@ -93,6 +93,16 @@ Landlord's PAN corrected to ABCPS9999F.
 
 Totals, Form 140: 8 rows, paid 10,65,000, tax 27,000 (phase 2: 31,800 = 27,000 - 1,200 + 6,000). Psi Small Contractor
 (20,000 for a contract, below the threshold, no TDS) is not reported. Form 144: Omega Software Inc, 195, 1,00,000, 20,800
-(20.8%). Salary (192, Employee A, 10,000) goes to Form 138 only. Form 143: Scrap Buyer Delhi, code 6CF, received
+(20.8%). Salary (192, Employee A, 10,000) goes to Form 138 only. Form 143: Scrap Buyer Delhi, code 6CE (see the note on collection codes below), received
 1,18,000, TCS 2,360 (2%). The "TCS 206C(1H)" collection on TC2 (118) has no collection code in 2026-27 (206C(1H) was
 omitted from 1 April 2025): FinCom must not give it one and must say so before filing.
+
+### Collection codes (corrected 14-Oct-2026, the independent TDS review, H3)
+
+Written from the official list, not from FinCom: the note "Collection Code" to Form No. 27EQ (Income-tax Rules, 1962; TRACES
+copy https://traces61contents.tdscpc.gov.in/forms/Form-27EQ.pdf, as quoted by the review): A alcoholic liquor for human
+consumption · B timber obtained under a forest lease · C timber obtained by any mode other than under a forest lease ·
+D any other forest produce not being timber or tendu leaves · **E scrap** · F parking lot · G toll plaza · H mining and
+quarrying · I tendu leaves · J minerals, being coal or lignite or iron ore · L motor vehicle · O overseas tour programme
+package. Scrap is therefore 6CE. This key said 6CF until 14-Oct-2026, copied from FinCom's own (shifted) list.
+

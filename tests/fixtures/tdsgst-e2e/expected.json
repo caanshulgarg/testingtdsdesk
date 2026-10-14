@@ -103,7 +103,7 @@
   ],
   "salary_192": [{"party": "Employee A", "pan": "ABCPE1234M", "date": "20260601", "tds": 10000, "_about": "in Form 138 (was 24Q), never in Form 140 or 144"}],
   "form143": [
-   {"party": "Scrap Buyer Delhi", "pan": "AABCS5555E", "code": "6CF", "date": "20260601", "received": 118000, "tcs": 2360, "rate": 2}
+   {"party": "Scrap Buyer Delhi", "pan": "AABCS5555E", "code": "6CE", "date": "20260601", "received": 118000, "tcs": 2360, "rate": 2}
   ],
   "form143_flagged": [
    {"party": "Zeta Retail Buyer", "date": "20260602", "tcs": 118, "_about": "TCS under old section 206C(1H) was omitted from 1 April 2025: no collection code exists for 2026-27; FinCom must not give it one and must say so before filing"}

@@ -4,8 +4,9 @@
 //
 // The figures come from the business logic: TDS.rows() (deductions read from the books), TDS.challans(),
 // TDS.challanUse(), Certs.issues(), TDS.interest(), TDS.lateFee(), TDS24Q.annexI()/annexII()/checks().
-// Redesign of 09-Oct-2026 (the owner's request, Computax and Winman as the pattern): a return opens on its Summary, then
-// Challans · Deductees · Entries · Errors to fix · File (the downloads and the FVU, moved from above the tabs). From tax
+// Redesign of 09-Oct-2026 (the owner's request, Computax and Winman as the pattern), and tds-layout of 14-Oct-2026: a return
+// opens on its card, then the six tabs of tds/ReturnParts.jsx (Deductions · Employees & declarations for 24Q · Challans ·
+// To fix · Return file · After filing). From tax
 // year 2026-27 a section is shown as the Act of 2025 numbers it with the old section beside it (TDS.secNew, src/js/09):
 // "393(1) Sl. 6(i) [old 194C]"; the section filter and the find box take either.
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
@@ -18,10 +19,13 @@ import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
 import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults, F16Link } from "./tds/Files.jsx";
 import More from "../parts/More.jsx";
-import { Return24Tally } from "./tds/Payroll.jsx";
+import Salary, { Return24Tally } from "./tds/Payroll.jsx";
 import Filters, { Search } from "../parts/Filters.jsx";
 import { barSelects } from "../parts/FilterBar.jsx";
-import { Answer, Info } from "../parts/Answer.jsx";
+import { Info } from "../parts/Answer.jsx";
+// tds-layout (14-Oct-2026): a return's six tabs in the owner's layout, its challans from the one register, To fix, After filing
+import { returnTabs, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
+import { Limits, TieOut } from "./tds/Smart.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -56,12 +60,14 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] 
     tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable(table, title)], excel && ["Excel", () => doAct(excel)]]} />} />;
 }
 
-function Tabs({ tabs }) {
-  return (
-    <nav className="sbar rp-tabs" aria-label="Return" style={{ marginTop: 4 }}>
-      {tabs.map(([id, l, n]) => <button key={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
-    </nav>
-  );
+// tds-layout: the owner's tabs (ReturnParts.jsx: one declaration per form), with the counts the return hands over, and the
+// filed lock above them, said on every tab
+function Tabs({ counts }) {
+  return <>
+    <LockLine fy={S.tdsFy} q={S.tdsQ} form={S.tdsForm || "26Q"} />
+    <nav className="sbar rp-tabs" aria-label="Return" style={{ marginTop: 4 }} data-return-tabs="">
+      {returnTabs(S.tdsForm || "26Q", counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
+    </nav></>;
 }
 
 // the shared list table (spec K6, round 2) with the return's own order (S.tdsSort, tdsSortBy): same headers and arrows
@@ -72,7 +78,7 @@ const Toggle = ({ which, k, children }) => <button className="linkbtn" onClick={
 // a return's summary card (the TDS & GST makeover, round 46): the way back to the year, the return's name and status, its
 // key figures, and one main button; rare actions and the long words under More. The status words are those of the year's
 // grid: filed (with its date), a correction needed, errors to fix, ready; a form of the 2025 Act not yet validated is a draft
-const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" }, Q_DUE_ON = { Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May" };
+const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
 function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, more = [], words }) {
   const st = driftN ? ["bad", "Correction needed"] : filed ? ["ok", "Filed " + day(TDS.ymd(filed.on))] : errN ? ["bad", errN + " to fix"] : ["info", "Ready to file"];
   return <section className="ret-card" data-return-card={form + "|" + q}>
@@ -80,7 +86,7 @@ function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, mo
     <div className="ret-top">
       <div>
         <h2 data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
-        <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {Q_DUE_ON[q]}</p>
+        <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {TDS.dueWords(fy, q, form)}</p>
       </div>
       <div className="ret-acts">
         {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft, not yet validated</span>}
@@ -93,24 +99,6 @@ function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, mo
     </div>
     <div className="ret-figs">{figs.map((f) => <div key={f.label} className={"ret-fig" + (f.warn ? " warn" : "")}><span>{f.label}</span><b>{f.value}</b>{f.sub && <small>{f.sub}</small>}</div>)}</div>
   </section>;
-}
-
-// the TDS page's Challans tab (round 46): a quarter's challans, as on its Form 140 / 26Q return (upload, the suggested
-// tagging, the list), without opening the return; the other forms' tagging is on their own return
-export function YearChallans({ fy, q }) {
-  const rows = TDS.rows().filter((r) => r.fy === fy && r.q === q), allRows = TDS.rows();
-  const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
-  const title = CO().name + " " + TDS.formName("26Q", fy) + " " + q + " " + fy;
-  // ui-tidy (13-Oct-2026): the answer first: the quarter's challans, what they paid, what is used and left (the same figures
-  // as the list's foot); then the one main button, Upload challans; the suggestions and the list below
-  const tax = r2(ch.reduce((a, c) => a + num(c.tax), 0)), used = r2(ch.reduce((a, c) => a + (use[c.id] || 0), 0));
-  return <div data-year-challans={fy + "|" + q}>
-    <Answer label="Challans key figures" data-challans-answer="" figs={[["Challans, " + q, String(ch.length), fy], ["Tax paid", money(tax)], ["Used", money(used)], ["Left", money(r2(tax - used)), "", tax - used < -0.5 ? "bad" : ""]]} />
-    <Upload main={!TDSCH.proposals(fy, q, "26Q").some((p) => p.exact)} />
-    <Suggest fy={fy} q={q} form="26Q" />
-    <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
-    <p className="note" style={{ marginTop: 10 }}>Salary, non-resident and TCS challans are tagged on {TDS.formShort("24Q", fy)}, {TDS.formShort("27Q", fy)} and {TDS.formShort("27EQ", fy)}’s own returns.</p>
-  </div>;
 }
 
 /* ---------------------------------------------------------------- 26Q */
@@ -128,38 +116,10 @@ function PayRow({ p }) {
   </tr>;
 }
 
-// the last row of the challans table: a challan typed in
-function NewChallan() {
-  const blank = { bsr: "", serial: "", date: "", tax: "", interest: "" }, [c, setC] = useState(blank);
-  const box = (k, props) => <input value={c[k]} onChange={(ev) => setC({ ...c, [k]: ev.target.value })} {...props} />;
-  return <tr className="lt-new">
-    <td></td><td>{box("date", { type: "date", "aria-label": "New challan: date" })}</td>
-    <td>{box("bsr", { type: "text", placeholder: "0240020", "aria-label": "New challan: BSR code", style: { width: 100 } })}</td>
-    <td>{box("serial", { type: "text", placeholder: "00979", "aria-label": "New challan: serial", style: { width: 90 } })}</td>
-    <td className="n">{box("tax", { type: "text", inputMode: "decimal", placeholder: "tax", "aria-label": "New challan: tax", style: { width: 110, textAlign: "right" } })}</td>
-    <td colSpan={2}></td>
-    <td className="n">{box("interest", { type: "text", inputMode: "decimal", placeholder: "interest", "aria-label": "New challan: interest", style: { width: 100, textAlign: "right" } })}</td>
-    <td colSpan={3}></td>
-    <td className="ac"><button className="btn small" onClick={() => { if (challanAdd(c)) setC(blank); }}>Add</button></td>
-  </tr>;
-}
-
-// a challan's use, in words (the status of the challans list)
-const chState = (c, use) => { const u = use[c.id] || 0, l = r2(num(c.tax) - u); return l < -0.5 ? "Used more than paid" : u <= 0 ? "Not used" : Math.abs(l) <= 0.5 ? "Fully used" : "Part used"; };
-
-function Challans({ fy, q, ch, allRows, allCh, use, title }) {
-  const f = (S.tdsFl || {}).challans || {}, qq = String(f.q || "").toLowerCase(), left = (c) => r2(num(c.tax) - (use[c.id] || 0));
-  const shown = tdsSorted("challans", ch.filter((c) => {
-    if (qq && ![c.bsr, c.serial, c.section ? TDS.secFind(c.section, fy) : ""].join(" ").toLowerCase().includes(qq)) return false;
-    if (f.state === "unused" && (use[c.id] || 0) > 0) return false;
-    if (f.state === "part" && !((use[c.id] || 0) > 0 && left(c) > 0.5)) return false;
-    if (f.state === "full" && Math.abs(left(c)) > 0.5) return false;
-    if (f.state === "over" && left(c) >= -0.5) return false;
-    if (f.month && TDS.ymd(c.date).slice(0, 6) !== f.month) return false;
-    return true;
-  }), (c, k) => k === "state" ? chState(c, use) : k === "int" ? num(c.interest) : k === "date" ? TDS.ymd(c.date) : k === "tax" ? num(c.tax) : k === "left" ? num(c.tax) - (use[c.id] || 0) : k === "used" ? (use[c.id] || 0) : String(c[k] || ""));
-  const pays = TDS.paymentsFromBooks().filter((p) => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q)
-    .filter((p) => TDSTally.notChallan(p, allCh));
+// a return's Challans tab, under its challans from the register: what Tally and FinCom differ on, and the quarter's TDS payments
+// in Tally not yet challans (give each its BSR code and serial, or the CIN)
+function TallyPays({ fy, q }) {
+  const allCh = TDS.challans(), pays = TDS.paymentsFromBooks().filter((p) => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q).filter((p) => TDSTally.notChallan(p, allCh));
   return <>
     <TallyDiffs kind="challan" />
     {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books <Info label="About these payments">TDS payment vouchers in Tally for this quarter, proposed as challans. Give each its CIN (or BSR code and serial) to confirm it. Uploaded challans of the same date and amount are matched to them on their own.</Info></h3>
@@ -167,32 +127,6 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
         <thead><tr><th>Date</th><th className="n">Tax</th><th className="n">Interest and fee</th><th>Sections</th><th>Voucher</th><th>BSR code or CIN</th><th>Serial</th><th className="ac"></th></tr></thead>
         <tbody>{pays.map((p) => <PayRow key={p.vid} p={p} />)}</tbody>
       </table></div></section>}
-    <FilterBar tab="challans" placeholder="Find a BSR code or serial" table="tdsChTable" title={title + " challans"} excel="tdsExcel" count={shown.length + " of " + ch.length + " challans"}
-      selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) },
-        { key: "state", label: "Use", options: [["", "Used: any"], ["unused", "Not used"], ["part", "Part used"], ["full", "Fully used"], ["over", "Used more than paid"]] }]} />
-    {/* the one list table (spec K6): deposited (date), BSR code and serial (number), tax (amount), use (status), then the rest */}
-    <ListTable name="tdsChallans" id="tdsChTable" rows={shown} rowKey={(c) => c.id} unit={["challan", "challans"]} of={ch.length} sortVia={via("challans")}
-      empty={ch.length ? "No challan matches these filters. Use Clear filters above to see all." : null}
-      tail={<NewChallan />} prep={(c) => ({ mine: allRows.filter((r) => r.challan === c.id), l: left(c) })}
-      after={(c, p) => S.chOpen === c.id && (p.mine.length ? <table className="bk-table" style={{ margin: 0 }} data-statement="">
-          <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
-          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td><Sec s={r.section} fy={fy} /></td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)} <FromTally on={((S.books || {}).allocFrom || {})[r.id] === "tally"} /></td></tr>)}</tbody>
-        </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>)}
-      cols={[
-        { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (c, p, i) => i + 1 },
-        { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
-        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <><Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> <FromTally on={TDSTally.made(c)} /></> },
-        { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
-        { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
-        { k: "state", role: "status", label: "Use", v: (c, p) => chState(c, use), cell: (c) => { const w = chState(c, use); return <span className={"tag " + (/more than/.test(w) ? "bad" : /Not used|Part/.test(w) ? "warn" : "ok")}>{w}</span>; } },
-        { k: "secs", label: "Sections", cell: (c, p) => Array.from(new Set(p.mine.map((r) => r.section))).map((x) => secText(x, fy)).join(", ") || c.section || "—" },
-        { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
-        { k: "used", label: "Used", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
-        { k: "left", label: "Left", cls: "n", v: (c) => left(c), sum: true, fmt: money, td: (c, p) => ({ className: p.l < -0.5 ? "bad" : undefined }), cell: (c, p) => money(p.l) },
-        { k: "n", label: "Deductions", cls: "n", cell: (c, p) => <button className="linkbtn" onClick={() => tdsToggle("chOpen", c.id)}>{p.mine.length}</button> },
-        { k: "ac", role: "act", cls: "ac", cell: (c) => <button className="icon danger" title="Remove this challan" aria-label="Remove this challan" onClick={() => challanDelete(c.id)}>✕</button> },
-      ]} />
-    {!shown.length && !ch.length && <table className="bk-table" id="tdsChTable" data-statement=""><tbody><NewChallan /></tbody></table>}
   </>;
 }
 
@@ -200,17 +134,6 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
 // The owner's choice: the challans read from the portal's Payment History or receipt PDFs (Upload challans), and the
 // tagging proposed from Tally's bill-wise details or by section and month, each confirmed by a person (TDSCH, src/js/65).
 // Nothing here works out a figure: the proposals, the amounts left and the refusals are TDSCH's.
-// main: the tab's one main button, unless a suggestion is ready to confirm (then that is)
-function Upload({ main = true }) {
-  const ref = useRef(null);
-  return <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }} data-challan-upload-bar="">
-    <button className={"btn small" + (main ? " primary" : "")} onClick={() => ref.current && ref.current.click()}>Upload challans</button>
-    <input ref={ref} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf"
-      onChange={(ev) => { const f = Array.from(ev.target.files || []); ev.target.value = ""; TDSCH.upload(f); }} />
-    <Info label="What can be uploaded">The e-filing portal’s Payment History (CSV or Excel) or challan receipt PDFs, many at once. Each challan’s CIN, section and amounts are read, and the tagging is suggested below.</Info>
-  </div>;
-}
-
 const gapTag = (p) => p.exact ? <span className="tag ok">Exact</span>
   : p.gap < 0 ? <span className="tag bad">{money(-p.gap)} short</span> : <span className="tag warn">{money(p.gap)} more on the challan</span>;
 
@@ -254,7 +177,7 @@ function Suggest({ fy, q, form }) {
     {props.length ? <>
       {exact > 1 && <div className="row" style={{ marginBottom: 8 }}><button className="btn small primary" onClick={() => tdsConfirmAll()}>Confirm all exact ({exact})</button></div>}
       <ul className="tch-list">{props.map((p) => <Proposal key={p.id} p={p} fy={fy} open={open === p.id} setOpen={setOpen} main={exact === 1 && p.exact} />)}</ul></>
-      : <p className="note">No suggestion now: the deductions are against challans, or no challan fits them. Upload challans{form === "24Q" ? "" : ", or tick deductions under Entries and tag them"}.</p>}
+      : <p className="note">No suggestion now: the deductions are against challans, or no challan fits them. Add or upload challans in the challan register{form === "24Q" ? "" : ", or tick deductions under Deductions and tag them"}.</p>}
   </section>;
 }
 
@@ -391,13 +314,6 @@ function BySection({ fy, q, form }) {
   </table></div></section>;
 }
 
-function Checks26({ fy, q, int1A, fee, issues, filed }) {
-  return <>
-    <InterestFee fy={fy} q={q} form="26Q" list={int1A} fee={fee} filed={filed} />
-    <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
-  </>;
-}
-
 // 27Q and 27EQ: what is missing before the file can be made, the non-resident's details, and the FVU's answer
 function NrInfo({ party }) {
   const i = TDS26Q.nrInfo(party);
@@ -437,8 +353,9 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const issues = form === "26Q" ? Certs.issues(fy, q) : [], issueOf = {};
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
-  if (!["challans", "deductees", "deductions", "checks", "file"].includes(S.tdsTab)) S.tdsTab = "deductions";
-  const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
+  S.tdsTab = tabNow(S.tdsTab, form);
+  if (!["challans", "deductions", "checks", "file", "after"].includes(S.tdsTab)) S.tdsTab = "deductions";
+  const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan);
   // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
   // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
   const filed = TDSFiled.get(fy, q, form), filedOn = filed ? filed.on : "";
@@ -449,7 +366,9 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
   const title = CO().name + " " + fname + " " + q + " " + fy;
   const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
-  const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && TDS.fyOf(c.date) === fy));
+  // the challans a deduction may be put on: the quarter's, the year's, and any other with tax left (another form's, an
+  // earlier period's: allowed, and noted; the owner's rules)
+  const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && (TDS.fyOf(c.date) === fy || TDSReg.balance(c).tax > 0.005)));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
   const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => { const n = TDS.secNew(x, fy); return [x, n.ref ? n.text + " · " + n.label : x]; })) },
     { key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]] },
@@ -478,38 +397,102 @@ export function Return26({ b, allRows, form = "26Q" }) {
       more={[["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")]]}
       figs={[
         { label: form === "27EQ" ? "TCS collected" : "TDS deducted", value: money(tds), sub: rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees") },
-        { label: "Challans", value: money(chTax), sub: ch.length + " challan" + (ch.length === 1 ? "" : "s") },
+        // what this return uses of its challans, its own share (the TDS review, M6; the whole challans are the register's)
+        { label: "Challans", value: money(TDSReg.usedBy(fy, q, form)), sub: (() => { const n = Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length; return n + " challan" + (n === 1 ? "" : "s") + " used"; })() },
         { label: "Not against a challan", value: money(notCh), sub: un.length + " " + unit, warn: un.length > 0 },
         { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
       ]} />
-    <Tabs tabs={[["deductions", "Entries", rows.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["challans", "Challans", ch.length],
-      ["checks", "Errors to fix", errN || checksN || null], ["file", "Files"]]} />
-    {S.tdsTab === "challans" ? <>
-        <Upload />
+    <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }} />
+    {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
         <Suggest fy={fy} q={q} form={form} />
-        <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} /></>
-      : S.tdsTab === "deductees" ? <Deductees deductees={deductees} {...common_} />
-      : S.tdsTab === "deductions" ? <><Deductions fy={fy} q={q} {...common_} /><BySection fy={fy} q={q} form={form} /></>
+        <TallyPays fy={fy} q={q} /></ReturnChallans>
+      : S.tdsTab === "deductions" ? <><DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} />{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
+        : <><Deductions fy={fy} q={q} {...common_} /><BySection fy={fy} q={q} form={form} /></>}</>
+      : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
       : S.tdsTab === "file" ? <>
         {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (earlier {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
         <FvuResult form={form} />
         <section className="dash-card" data-file={form}><h3>The file for {fname}, {q} {fy}</h3>
           {un.length > 0 && <p className="note bad">{un.length} {unit} not against a challan: <button className="linkbtn" onClick={() => tdsTabGo("challans")}>tag them to challans</button> first.</p>}
           <p className="note" style={{ margin: "0 0 12px" }}>Check the working, download the text file, run it through the FVU, then file it.</p>
+          {/* the TDS review, H5: the record layout is not yet checked against Protean's format (docs/fvu-check.md) */}
+          <p className="note warn" data-fvu-check=""><b>Check with Protean’s FVU before filing.</b> The file’s layout and some section codes are not yet confirmed against Protean’s current format.</p>
+          <PreFileSlot />
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
             <button className="btn small primary" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
             <button className="btn small" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
           </div></section>
         <MarkFiled fy={fy} q={q} form={form} /></>
-      : <>
-        {(un.length > 0 || noPan > 0) && <section className="dash-card" style={{ marginBottom: 12 }} data-fix=""><h3>To fix before the file</h3>
-          {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(notCh)}</b></div>}
-          {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
-        <Correction fy={fy} q={q} form={form} drift={drift} />
-        <TracesDefaults jr={TRF.jrFor(fy, q, form)} />
-        {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} filed={filedOn} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} int1A={int1A} fee={fee} filed={filedOn} />}</>}
+      : <ToFix
+        items={[{ k: "nopan", n: noPan, one: "without PAN", many: "without PAN" }, { k: "rate", n: issues.length, one: "rate question", many: "rate questions" },
+          { k: "unmatched", n: un.length, one: unit.replace(/s$/, "") + " without a challan", many: unit + " without a challan" }, overItem(fy, q, form)].concat(missingItems(form, other)).concat([
+          { k: "paycode", n: TDS26Q.payCodeRows(fy, q, form).length, one: unit.replace(/s$/, "") + " with a payment code to confirm", many: unit + " with a payment code to confirm" },
+          { k: "interest", n: int1A.length, one: "interest to pay", many: "interest lines to pay" }, { k: "fee", n: feeErr ? 1 : 0, one: "late fee", many: "late fees" },
+          { k: "portal", n: form === "26Q" ? TDS.portalRows().filter((r) => r.fy === fy && r.q === q).length : 0, one: "deduction to file in 26QB / 26QC / 26QD on the portal", many: "deductions to file in 26QB / 26QC / 26QD on the portal" },
+          { k: "corr", n: driftN, one: "change since filing", many: "changes since filing" }, { k: "traces", n: TRF.jrFor(fy, q, form) ? TRF.jrFor(fy, q, form).items.length : 0, one: "TRACES default", many: "TRACES defaults" }, unknownItem(fy, q)])}
+        parts={[
+          ["chtype", <UnknownChallans fy={fy} q={q} form={form} />],
+          ["paycode", <PayCodeRows fy={fy} q={q} form={form} />],
+          ["portal", form === "26Q" ? <PortalRows fy={fy} q={q} /> : null],
+          ["unmatched", <FixRows title={un.length + " " + unit + " without a challan · " + money(notCh)} rows={un} unit={unit} go={<button className="btn small" onClick={() => tdsTabGo("challans")}>Allocate them on Challans</button>} />],
+          ["over", TDSReg.overUsed(fy, q, form).length ? <section className="dash-card bad" style={{ marginBottom: 12 }} data-over-used=""><h3>Challans used beyond their amount</h3>
+            <p className="note">Two people allocated at once, or an old tagging: the file cannot be made until each is within its amount. Take deductions off them on Challans.</p>
+            <ul className="note">{TDSReg.overUsed(fy, q, form).map((c) => <li key={c.id}>{TDSCH.label(c)}: {money(-TDSReg.balance(c).tax)} over</li>)}</ul></section> : null],
+          ["nopan", <FixRows title={noPan + " without a valid PAN"} rows={rows.filter((r) => !Certs.validPan(r.pan))} unit={unit} />],
+          ["corr", <Correction fy={fy} q={q} form={form} drift={drift} />],
+          ["traces", <TracesDefaults jr={TRF.jrFor(fy, q, form)} />],
+          [["interest", "fee"], form === "26Q" ? <InterestFee fy={fy} q={q} form={form} list={int1A} fee={fee} filed={filedOn} /> : null],
+          [form === "26Q" ? "rate" : ["nrdetails", "nocode", "tcsrate", "missing", "interest", "fee"], form === "26Q" ? <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
+            : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} int1A={int1A} fee={fee} filed={filedOn} />],
+        ]}
+        year={yearChecks(fy)} />}
   </>;
+}
+
+// the deductions of a 2026-27 return whose payment code is not confirmed (rent, a section or collection not in FinCom's
+// confirmed list): the file leaves the code empty; never picked silently (docs/tds-codes.md)
+function PayCodeRows({ fy, q, form }) {
+  const list = TDS26Q.payCodeRows(fy, q, form);
+  if (!list.length) return null;
+  return <section className="dash-card" style={{ marginBottom: 12 }} data-paycode-rows=""><h3>Payment code to confirm</h3>
+    <p className="note">The forms of the Income-tax Act, 2025 carry a 4-digit payment code for each deduction. For these, the code is not confirmed (the sources disagree, or it is not yet in FinCom's list), so the file leaves it empty: confirm it before filing.</p>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Deductee</th><th>Section</th><th>Why</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th></tr></thead>
+      <tbody>{list.slice(0, 300).map(({ row: r, why }) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td>{form === "27EQ" ? r.code || "" : <Sec s={r.section} fy={fy} />}</td><td>{why.replace(/^payment code to confirm: /, "")}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
+  </section>;
+}
+
+// 194-IA, 194-IB and 194M: not in 26Q; each filed in its challan-cum-statement on the portal (the TDS review, M3)
+function PortalRows({ fy, q }) {
+  const list = TDS.portalRows().filter((r) => r.fy === fy && r.q === q);
+  if (!list.length) return null;
+  return <section className="dash-card" style={{ marginBottom: 12 }} data-portal-rows=""><h3>File on the income-tax portal, not in this return</h3>
+    <p className="note">Tax deducted on buying property (194-IA, Form 26QB), on rent paid by an individual or HUF (194-IB, Form 26QC) and on payments by an individual or HUF under 194M (Form 26QD) is paid and reported with its own challan-cum-statement on the portal, within 30 days of the month's end.</p>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th>File in</th><th className="n">Paid</th><th className="n">TDS</th></tr></thead>
+      <tbody>{list.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td><Sec s={r.section} fy={fy} /></td><td>{r.portalForm}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
+  </section>;
+}
+
+// 27Q's and 27EQ's "before the file is made", said as what is missing (the review: "details missing" made specific)
+function missingItems(form, other) {
+  if (form === "27Q") {
+    const fields = Array.from(new Set([].concat(...other.map((x) => x.missing || [])).map((w) => w.replace(/ \(.*$/, "").replace(/, or the .*$/, ""))));
+    return [{ k: "nrdetails", n: other.length, one: "non-resident deductee missing " + fields.join(", "), many: "non-resident deductees missing " + fields.join(", ") }];
+  }
+  if (form === "27EQ") {
+    const nocode = other.filter((x) => /No collection code/.test(x.why || "")).length;
+    return [{ k: "nocode", n: nocode, one: "collection without a collection code", many: "collections without a collection code" },
+      { k: "tcsrate", n: other.length - nocode, one: "TCS rate question", many: "TCS rate questions" }];
+  }
+  return [];
+}
+
+// the year's checks, opened from a return's To fix (they were TDS › Checks): limits, the tie-out with Tally, section 197
+// certificates with the year's rate questions
+export function yearChecks(fy) {
+  return [["limits", "TDS limits", TDSWatch.tracker(fy).length ? <Limits fy={fy} /> : <p className="note">No party has come near a TDS limit in {fy}.</p>],
+    ["tieout", "Tie-out with Tally", TDSTie.quarters(fy).some((x) => x.deducted || x.challans || x.moved || x.paidBooks) ? <TieOut fy={fy} /> : <p className="note">No TDS deducted or paid in {fy} to tie out with Tally.</p>],
+    ["rates", "Section 197 certificates", <CertsPage />]];
 }
 
 /* ---------------------------------------------------------------- 24Q */
@@ -541,9 +524,9 @@ function Employees({ fy, q, a1 }) {
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
   // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
-  if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} ReturnCard={ReturnCard} Tabs={Tabs} Upload={Upload} Suggest={Suggest} />;
-  const tabs = [["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "Files"]]);
-  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "employees";
+  if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} ReturnCard={ReturnCard} Tabs={Tabs} Suggest={Suggest} />;
+  // tds-layout: Deductions (Annexure I, the employees), Employees & declarations (the old Salary tab, Annexure II), …
+  S.tdsTab = tabNow(S.tdsTab, "24Q");
   const fname = TDS.formName("24Q", fy);
   const top = <div className="revfilter">
     <button className="btn small primary" onClick={() => doAct("salaryPick")}>Bring in the salary sheet</button>
@@ -566,16 +549,15 @@ export function Return24({ b }) {
           ]} />
         <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
       {/* tds-challans: the 192 the books carry, tagged to their challans here too (no salary sheet needed for that) */}
-      {inB.length > 0 && <div style={{ maxWidth: 1100 }}><Upload /><Suggest fy={fy} q={q} form="24Q" /></div>}
+      {inB.length > 0 && <div style={{ maxWidth: 1100 }}><Suggest fy={fy} q={q} form="24Q" /></div>}
       <section className="dash-card" style={{ maxWidth: 760 }} data-needs-sheet=""><h3>24Q needs the salary sheet</h3>
         <p className="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare — Excel or CSV — and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>
     </>;
   }
-  const a1 = TDS24Q.annexI(fy, q), checks = TDS24Q.checks(fy, q), ch = TDS.challans().filter((c) => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
+  const a1 = TDS24Q.annexI(fy, q), checks = TDS24Q.checks(fy, q);
   const inBooks = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q), booksTds = r2(inBooks.reduce((a, r) => a + r.tds, 0)), sheetTds = r2(a1.reduce((s, e) => s + e.tds, 0));
   if (inBooks.length && Math.abs(booksTds - sheetTds) >= 1) checks.push({ what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length,
     how: "Tally has " + money(booksTds) + " under section 192 this quarter; the sheet has " + money(sheetTds) + ".", who: Array.from(new Set(inBooks.map((r) => r.party))).slice(0, 3) });
-  const use = S.tdsTab === "challans" ? TDS.challanUse() : null;
   // T-E1, T-S3: 24Q's interest (the books' salary TDS under 192 against its challans) and late fee, to the date marked filed
   const filed = TDSFiled.get(fy, q, "24Q"), filedOn = filed ? filed.on : "", int1A = TDS.interest(fy, q, "24Q"), fee = TDS.lateFee(fy, q, filedOn, "24Q");
   const late = int1A.length + (!filed && fee && fee.days > 0 ? 1 : 0);
@@ -588,36 +570,25 @@ export function Return24({ b }) {
         { label: "TDS deducted", value: money(sheetTds), sub: q + " " + fy },
         { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
       ]} />
-    <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length + late || null) : null])} />
+    <Tabs counts={{ deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length + late || null }} />
     {S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
         <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}</section>
+        <PreFileSlot />
         <MarkFiled fy={fy} q={q} form="24Q" /></>
-      : S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
-      : S.tdsTab === "challans" ? <>
-        <p className="note">Challans deposited in {q}. Salary TDS is paid under section 192; upload challans here, or add one under 26Q’s Challans tab if it is not here.</p>
-        <Upload />
-        {TDS.salaryRows().some((r) => r.fy === fy && r.q === q) && <Suggest fy={fy} q={q} form="24Q" />}
-        <ListTable name="q24Challans" id="q24ChTable" rows={ch} rowKey={(c) => c.id} unit={["challan", "challans"]}
-          empty="No challan deposited in this quarter. Add one under 26Q’s Challans tab."
-          cols={[
-            { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
-            { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => c.bsr },
-            { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
-            { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
-            { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => (c.section ? <Sec s={c.section} fy={fy} /> : "—") },
-            { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
-            { k: "used", label: "Used", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
-          ]} /></>
-      : S.tdsTab === "annex2" ? <div className="bk-tablewrap"><table className="bk-table" data-statement="">
+      : S.tdsTab === "deductions" ? <Employees fy={fy} q={q} a1={a1} />
+      : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
+      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q">
+        {TDS.salaryRows().some((r) => r.fy === fy && r.q === q) && <Suggest fy={fy} q={q} form="24Q" />}</ReturnChallans>
+      : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
           <thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Standard</th><th className="n">Chapter VI-A</th><th className="n">Taxable</th><th className="n">TDS</th></tr></thead>
           <tbody>{TDS24Q.annexII(fy).map((e) => <tr key={e.pan || e.name}><td>{e.name}</td><td>{e.pan || "—"}</td><td>{e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "—"}</td>
             <td className="n">{money(e.gross)}</td><td className="n">{money(e.exempt)}</td><td className="n">{money(e.standard)}</td><td className="n">{money(e.chapter6)}</td><td className="n">{money(e.taxable)}</td><td className="n">{money(e.tds)}</td></tr>)}</tbody>
-        </table></div>
-      : <><InterestFee fy={fy} q={q} form="24Q" list={int1A} fee={fee} filed={filedOn} />
-        {checks.length ? <section className="dash-card"><h3>Before filing</h3>{checks.map((c, i) => <span key={i} style={{ display: "contents" }}>
-          <div className="dash-row"><span>{c.what}</span><b>{c.n}</b></div><p className="note">{c.how}{c.who.length ? " e.g. " + c.who.join(", ") : ""}</p></span>)}</section>
-        : <p className="note">Nothing to fix for this quarter.</p>}
-        <TracesDefaults jr={TRF.jrFor(fy, q, "24Q")} /></>}
+        </table></div></section>}</>
+      : <ToFix items={checksToFix(checks).items
+          .concat([{ k: "interest", n: int1A.length, one: "interest to pay", many: "interest lines to pay" }, { k: "fee", n: !filed && fee && fee.days > 0 ? 1 : 0, one: "late fee", many: "late fees" }, unknownItem(fy, q)])}
+        parts={[["chtype", <UnknownChallans fy={fy} q={q} form="24Q" />], [["interest", "fee"], <InterestFee fy={fy} q={q} form="24Q" list={int1A} fee={fee} filed={filedOn} />]]
+          .concat(checksToFix(checks).parts).concat([["traces", <TracesDefaults jr={TRF.jrFor(fy, q, "24Q")} />]])}
+        year={yearChecks(fy)} />}
   </>;
 }
 

@@ -20,6 +20,7 @@ import Lookup from "./books/Lookup.jsx";
 import Letters from "./books/Letters.jsx";
 import AuditTab, { Tabs as AuditTabs } from "./books/Audit.jsx";
 import Tieout from "./books/Tieout.jsx";
+import Recon from "./books/Recon.jsx";
 import { GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 import { BooksAsOf } from "../parts/TallyLine.jsx";
 import HeldBooks from "../parts/HeldBooks.jsx";
@@ -92,6 +93,8 @@ function BooksPage() {
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
+  // tds-layout: Reconciliations (TDS receivable vs 26AS) works from the files brought in, with or without the books
+  if (tab === "recon") return <>{busy}<Recon b={b} /></>;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
   // MIS, Accounts and Audit: pages of their own in the sidebar (review item 7); the tie-out is Audit's tab

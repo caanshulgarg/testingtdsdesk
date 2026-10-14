@@ -113,7 +113,7 @@ const DueList = {
   },
   // ---- every client: the open one from S.books, the others from their copy on this computer
   cache: {},          // cid -> {key, items}
-  keyOf(b){ return b ? [b.cid, (b.vouchers || []).length, b.mapV || 0, fpHash(JSON.stringify([b.gstFiled, b.portalFiled, b.tdsFiled, b.challans, b.alloc, b.gstSet, b.gstRegs, (b.gstVault || []).length, (b.salary || []).length])), this.today()].join("|") : ""; },
+  keyOf(b){ return b ? [b.cid, (b.vouchers || []).length, b.mapV || 0, fpHash(JSON.stringify([b.gstFiled, b.portalFiled, b.tdsFiled, b.challans, b.alloc, b.gstSet, b.gstRegs, (b.gstVault || []).length, (b.salary || []).length, (b.payroll || {}).at || ""])), this.today()].join("|") : ""; },
   forClient(co, b){
     const k = this.keyOf(b), c = this.cache[co.id];
     if (c && c.key === k && c.b === b) return c.items;
@@ -162,7 +162,7 @@ const DueList = {
       S.booksTab = "gst"; S.gstReg = g.reg; S.gstYm = g.ym; S.gstPart = noBooks ? "vault" : g.part; S.gstView = "return"; S.gstSub = ""; S.gstSeen = "";
       if (S.books && S.books.cid === x.cid) S.books.reco = null;
     } else {
-      S.booksTab = "tds"; S.tdsFy = g.fy; S.tdsQ = g.q; S.tdsForm = g.form; S.tdsPickForm = g.form; S.tdsView = "return"; S.tdsTab = g.sub || ""; S.tdsOpen = ""; S.chOpen = "";
+      S.booksTab = "tds"; S.tdsFy = g.fy; S.tdsQ = g.q; S.tdsForm = g.form; S.tdsPickForm = g.form; S.tdsView = "return"; S.tdsTab = g.sub || ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = "";
     }
     render(); window.scrollTo(0, 0);
   },

@@ -1,4 +1,4 @@
-// Smarter TDS (the owner's list of 10-Oct-2026, group 2), under the TDS year's grid and on a return's Errors to fix:
+// Smarter TDS (the owner's list of 10-Oct-2026, group 2), under the TDS year's grid and on a return's To fix:
 //   - T-A4 the TDS payable ledgers in Tally against deducted less challans, quarter by quarter (TDSTie, src/js/65);
 //   - T-S1 each party's running total against the TDS limit, and the parties over it whose payments TDS does not cover:
 //     the TDS due, interest and the 40(a)(ia) amount at risk (TDSWatch);

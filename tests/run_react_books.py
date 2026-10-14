@@ -37,8 +37,8 @@ with sync_playwright() as p:
         .map(([date, name, pan, gross, tds]) => ({date, name, pan, code: "", gross, tds, exempt: 0, standard: 0, profTax: 0, chapter6: 0, surcharge: 0, cess: 0}));
       S.tdsView = null; booksTabGo("tds"); }""")
     pg.wait_for_timeout(600)
-    # round 46: TDS opens on its Returns tab (the year's grid); the TDS tabs above it
-    ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1 and pg.get_attribute('#app nav[aria-label="TDS"] [data-tds-sec="returns"]', "aria-selected") == "true", "one year: TDS opens on its Returns tab")
+    # round 46: TDS opens on the year's grid; tds-layout (14-Oct-2026): the grid is the whole page, no TDS tabs above it
+    ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1 and pg.locator('#app nav[aria-label="TDS"]').count() == 0, "one year: TDS opens on the year's grid, no tabs")
     # 09-Oct-2026 (app-tdsgst): the year is a grid of forms × quarters; 24Q in Q1 is its own cell
     # smart moves round 1 (the owner, 09-Oct-2026): the year opens on the quarter due now; every quarter is chosen for the grid
     due = pg.evaluate("Smart.tdsDue()")
@@ -54,8 +54,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and "Form 138 (earlier 24Q) · Q2" in pg.inner_text("#app [data-return-title]"), "Q2 24Q: its return opens")
     pg.click("#app [data-return-card] .ret-back"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
-    pg.click('#app [data-tds-sec="checks"]'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("[S.tdsView, S.tdsCheck]") == ["checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "Checks: certificates and rate questions")
+    # tds-layout: the old Checks (certificates and rate questions) is a return's To fix
+    pg.evaluate("() => Route.apply('#/c/' + S.coId + '/books/tds/2026-27/checks/rates')"); pg.wait_for_timeout(700)
+    ok(pg.evaluate("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old Checks address: a return's To fix, certificates and rate questions")
     pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(500)
     pg.click('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")'); pg.wait_for_timeout(500)
     ok(pg.get_attribute('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")', "aria-selected") == "true", "the Tally ledgers tab opens")

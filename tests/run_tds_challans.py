@@ -94,9 +94,9 @@ try:
         if pg.evaluate("typeof TDSCH !== 'object'"): raise SystemExit("no TDSCH: nothing more to check")
         ok("error" in pg.evaluate("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')"), "before any challan is tagged, the FVU file has no challan record (refused)")
 
-        # ---- 4. upload: the portal's CSV and a receipt PDF, at once
-        tab(pg, "Challans")
-        ok(pg.locator('#app input[type="file"][data-challan-upload]').count() == 1 and pg.locator('#app button:has-text("Upload challans")').count() == 1, "Challans: an “Upload challans” button")
+        # ---- 4. upload: the portal's CSV and a receipt PDF, at once (tds-layout, 14-Oct-2026: in the challan register)
+        pg.evaluate("() => { S.tdsView = 'register'; render(); }"); pg.wait_for_timeout(400)
+        ok(pg.locator('#app input[type="file"][data-challan-upload]').count() == 1 and pg.locator('#app button:has-text("Upload challans")').count() == 1, "the challan register: an “Upload challans” button")
         pg.set_input_files('#app input[type="file"][data-challan-upload]', [CSV, PDF]); pg.wait_for_timeout(2500)
         ch = pg.evaluate("S.books.challans.map(c => ({bsr: c.bsr, serial: c.serial, date: c.date, tax: c.tax, interest: c.interest || 0, section: c.section || '', minor: c.minorHead || '', cin: c.cin || '', from: c.fromVoucher || ''}))")
         by = {c["serial"]: c for c in ch}
@@ -117,13 +117,21 @@ try:
         pg.evaluate("""() => { S.books.challans.push({id: "chShort", bsr: "0510308", serial: "00301", date: "20260606", tax: 7500, interest: 0, section: "194C", minorHead: "200"},
                                                    {id: "chPart", bsr: "0510308", serial: "00302", date: "20260607", tax: 1500, interest: 0, section: "194J", minorHead: "200"}); render(); }""")
         pg.wait_for_timeout(300)
+        # the owner's rule of 14-Oct-2026: a new challan goes to the draft return of its own type and quarter by itself
+        placed = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")
+        ok(placed == {"00123": 8, "00456": 8, "00124": 5}, "the new challans placed themselves: 94C and 194J in 26Q Q1, 92B in 24Q Q1, each exactly its April deductions; the minor head 400 one not (%s)" % placed)
+        ok(pg.evaluate("(S.books.challans.find(c => c.serial === '00125') || {}).autoPlace") == "unknown", "the minor head 400 challan: no return of its own, asked in To fix")
+        pg.evaluate("() => { S.tdsView = 'return'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(400)
         row = pg.locator('#app tr', has_text="P-2")
         ok(row.count() == 1 and "bill-wise" in row.inner_text().lower(), "the Tally payment P-2 is offered as a challan, with its bill-wise deductions said (%s)" % (row.inner_text()[:120] if row.count() else ""))
         row.locator('input[aria-label="BSR code or CIN"]').fill("05103080606202600222"); row.locator('button:has-text("Make it a challan")').click(); pg.wait_for_timeout(600)
         c4 = pg.evaluate("(S.books.challans.find(c => c.fromVoucher === 'pay194jMay') || {})")
         ok(c4.get("bsr") == "0510308" and c4.get("serial") == "00222" and c4.get("date") == "20260606" and c4.get("tax") == 10000 and c4.get("section") == "194J",
            "the payment made a challan from its CIN: BSR, serial, the voucher's date and amount, section 194J (%s)" % c4)
-        ok(pg.evaluate("Object.keys(S.books.alloc).length") == 0, "nothing tagged yet: proposals only")
+        ok(pg.evaluate("Object.values(S.books.alloc).filter(v => v === (S.books.challans.find(c => c.fromVoucher === 'pay194jMay') || {}).id).length") == 4,
+           "the payment's challan placed itself too: the four deductions it pays (the same as Tally's bill-wise)")
+        # the proposals (the challans' own suggestions) from here, on the same challans as if already there: nothing tagged
+        pg.evaluate("() => { S.books.alloc = {}; S.books.allocFrom = {}; S.books.challans.forEach(c => { c.autoPlace = 'placed'; }); render(); }"); pg.wait_for_timeout(300)
 
         # ---- 1 and 2: the proposals
         P = pg.evaluate("TDSCH.proposals('2026-27', 'Q1').map(p => ({id: p.id, kind: p.kind, serial: p.challan.serial, sec: p.section, n: p.rows.length, need: p.need, avail: p.avail, gap: p.gap, exact: p.exact, rows: p.rows.map(r => r.id)}))")
@@ -192,7 +200,7 @@ try:
                     q.close()
 
         # ---- 3. manual multi-select on Entries
-        tab(pg, "Entries")
+        tab(pg, "Deductions")
         pg.select_option('#app select[aria-label="Section"]', "194J"); pg.select_option('#app select[aria-label="Month"]', "202605"); pg.select_option('#app select[aria-label="Challan"]', "no"); pg.wait_for_timeout(400)
         pg.click('#tdsDnTable thead input[type="checkbox"][aria-label="Select all shown"]'); pg.wait_for_timeout(300)
         bar = pg.locator("#app [data-tag-bar]")
@@ -230,11 +238,12 @@ try:
         lines = [l.split("^") for l in f.get("text", "").split("\r\n") if l]
         cd = [l for l in lines if len(l) > 1 and l[1] == "CD"]; dd = [l for l in lines if len(l) > 1 and l[1] == "DD"]
         want = pg.evaluate("""(() => { const out = {}; TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan).forEach(r => { const c = S.books.challans.find(x => x.id === r.challan);
-          const k = c.serial; out[k] = out[k] || {n: 0, tax: 0, bsr: c.bsr, date: c.date.slice(6, 8) + c.date.slice(4, 6) + c.date.slice(0, 4), total: Math.round((num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100}; out[k].n++; out[k].tax = Math.round((out[k].tax + r.tds) * 100) / 100; }); return out; })()""")
+          const k = c.serial; out[k] = out[k] || {n: 0, tax: 0, bsr: c.bsr, date: c.date.slice(6, 8) + c.date.slice(4, 6) + c.date.slice(0, 4), extra: Math.round((num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100}; out[k].n++; out[k].tax = Math.round((out[k].tax + r.tds) * 100) / 100; });
+          Object.values(out).forEach(v => { v.total = Math.round((v.tax + v.extra) * 100) / 100; }); return out; })()""")
         got = {l[15]: {"n": int(l[4]), "tax": float(l[6]), "bsr": l[13], "date": l[14], "total": float(l[11])} for l in cd}
         ok(len(cd) == 5 and set(got) == {"00123", "00456", "00222", "00301", "00302"}, "the file: one CD record per challan with confirmed 26Q deductions, none for 192 or the 400 challan (%s)" % sorted(got))
         ok(got == {k: {"n": v["n"], "tax": v["tax"], "bsr": v["bsr"], "date": v["date"], "total": v["total"]} for k, v in want.items()},
-           "each CD: BSR, date, serial, number of deductions, tax as tagged; total deposited with interest (%s)" % got.get("00456"))
+           "each CD: BSR, date, serial, number of deductions, tax as tagged; its total the tax and the interest and fee it carries (the TDS review, H5) (%s)" % got.get("00456"))
         ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 7 + 1, "DD records: the 28 confirmed deductions (%d)" % len(dd))
         ok(all(l[17] == "200" for l in cd), "minor head 200 on every CD record")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

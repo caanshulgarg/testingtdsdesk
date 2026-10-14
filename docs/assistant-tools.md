@@ -75,6 +75,17 @@ Your own runner (`tests/run_audit*.py|js`, `tests/run_reports*.py|js`) on the ma
 `tests/assistant_stand.py` / `tests/assistant_supa.py`): your tool's tables to the paisa, the label, and that `aiText`
 never carries a figure that is not in your tables.
 
+## The depreciation tool (14-Oct-2026, branch `depreciation`)
+
+`server/assistant/tools/depreciation.ts`: `depreciation_schedule` (client, year, basis: `companies_act` | `income_tax` | `both`),
+registered after the reports. Every figure is FAR's (`src/js/80-assets.js`), the same code as the app's Books, Accounts,
+Fixed assets & depreciation tab, run over the register the app keeps for the year (and the year before, whose closing is
+this year's opening), read by migration 81's `asst_dep_register` (SECURITY INVOKER, STABLE, row-level security). Tables:
+by Schedule II class, asset by asset, by income-tax block, the deferred tax working and the suggested journal entry (never
+posted); the Excel with live formulas. Without a register for the year it says so and points to the screen. The reports'
+`fs_build` and `tax_audit_draft` take the register's classes and blocks the same way (det.far, det.itBlocks, clause 18).
+Tests: `server/assistant/tools/depreciation_test.ts` (to the paisa), `tests/run_dep_tool.py` (migration 81 on pg_stand, then
+the Deno test on what the function returned).
 ## Certificates (`tools/certificates.ts`, branch `certificates`)
 
 `certificate_prepare` is the first **firm-wide** tool (`firmWide: true`): it runs with no client open and names its clients

@@ -26,13 +26,24 @@ const Certs = {
       const lim = num(cert.limit), name = "certificate " + (cert.certNo || "under 197");
       if (!lim || typeof TDSLdc !== "object") return {rate: num(cert.rate), why: name, cert};
       const before = num(((TDSLdc.use()[cert.id] || {}).byRow || {})[r.id]), left = r2(Math.max(0, lim - before)), paid = num(r.paid);
-      const normal = this.expectedNormal(r);
+      const normal = this.afterCert(r);
       if (left >= paid || normal.rate == null) return {rate: num(cert.rate), why: name + " (\u20b9" + INR.format(left) + " of its \u20b9" + INR.format(lim) + " left before this)", cert};
       if (left <= 0) return {rate: normal.rate, why: name + "'s amount of \u20b9" + INR.format(lim) + " used up: " + normal.why};
-      return {rate: r2((left * num(cert.rate) + (paid - left) * normal.rate) / paid), cert,
+      // the tax due worked out on the amounts, not on the rounded rate (the TDS review's case: ₹8,000 short, not ₹8,010)
+      return {rate: r2((left * num(cert.rate) + (paid - left) * normal.rate) / paid), cert, due: r2((left * num(cert.rate) + (paid - left) * normal.rate) / 100),
         why: name + ": \u20b9" + INR.format(left) + " left at " + num(cert.rate) + "%, the other \u20b9" + INR.format(r2(paid - left)) + " at " + normal.rate + "%"};
     }
     return this.expectedNormal(r);
+  },
+  // the rate above a certificate's amount (the TDS review of 14-Oct-2026, M4): the section's own rate for what was paid for,
+  // never the rate deducted (under a certificate that is the certificate's); what was paid for not known, the section's
+  // higher rate, said so. No PAN: as without a certificate
+  afterCert(r){
+    if (!this.validPan(r.pan) || this.inoperative(r.pan)) return this.expectedNormal(r);
+    const by = typeof TDSRate === "object" ? TDSRate.expect(r) : null;
+    if (by) return {rate: by.rate, why: by.why};
+    const std = TDS.STD[TDS.sec(r.section)] || [];
+    return std.length ? {rate: Math.max(...std), why: "the section's higher rate, " + Math.max(...std) + "% (what was paid for is not known)"} : {rate: null, why: ""};
   },
   // the rate without a certificate
   expectedNormal(r){
@@ -57,7 +68,7 @@ const Certs = {
     TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
-      const short = r2(r.paid * (e.rate - r.rate) / 100);
+      const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);
       if (Math.abs(e.rate - r.rate) < 0.05 || Math.abs(short) < 1) return;
       out.push({row: r, expected: e.rate, why: e.why, short});
     });
@@ -161,7 +172,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp", "chPortions", "tdsCorr", "allocLog", "tracesChStatus", "tcsCodesFixed", "fixedAssets"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)

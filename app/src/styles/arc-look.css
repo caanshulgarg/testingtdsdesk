@@ -152,6 +152,24 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
   border-radius: var(--radius-panel); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating);
   font-size: 14px; line-height: 1.4; }
 #toast.toast::before { position: absolute; left: 13px; top: 18px; transform: none; background: var(--text-muted); }   /* the dot stays by the first line when the words wrap */
+/* tds-layout (14-Oct-2026, the owner): the message never covers the page. Small, in the bottom corner, out of the way.
+   Beside a sidebar (from 901px wide) it sits in the sidebar's own corner and the sidebar keeps room for it while it
+   shows; with the sidebar folded, or on a narrower screen, it sits in the bottom right corner and the page keeps room
+   below its content while it shows, so nothing stays under it. Everywhere in the app. */
+#toast.toast { left: auto; right: 12px; bottom: 12px; transform: none; width: auto; max-width: min(300px, calc(100vw - 24px));
+  min-height: 0; max-height: 104px; overflow-y: auto; padding: 6px 10px 6px 24px; font-size: 12.5px; line-height: 1.35; z-index: 40; }
+#toast.toast::before { left: 10px; top: 12px; width: 7px; height: 7px; }
+#toast .toast-acts { margin-left: 0; }
+#toast .toast-act { min-height: 26px; padding: 0 8px; font-size: 12px; }
+@media (min-width: 901px) {
+  body:has(.side:not(.hidden):not(.side-folded)) #toast.toast { left: 12px; right: auto; bottom: 12px; max-width: 212px; }
+  /* the sidebar's own box ends above the message while it shows (its items scroll within), so nothing is under it */
+  body:has(#toast.toast:not(.hidden)) .side:not(.hidden):not(.side-folded) { bottom: 116px; }
+}
+body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 96px; }
+@media (min-width: 901px) { body:has(.side:not(.hidden):not(.side-folded)):has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 0; } }
+@media (max-width: 600px) { #toast.toast { right: 8px; left: 8px; max-width: none; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
+
 #toast.toast[data-tone="ok"] { border-color: color-mix(in oklab, var(--ok) 35%, var(--border)); }
 #toast.toast[data-tone="ok"]::before { background: var(--ok); }
 #toast.toast[data-tone="stop"] { border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); }
@@ -193,3 +211,13 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- a sortable heading with its column filter (31-grid-filters.js adds .gff to a table of 4 rows or more) ----------
+   The coordinator's screenshot review (14-Oct-2026): the sort button took the whole width, so the filter fell to a line of
+   its own and the amounts' headings sat off their columns. Both on one line now: the filter after a heading, before an
+   amount's (whose heading stays right-aligned over its figures). */
+#app table.lt.lt thead th:has(> .gff) { white-space: nowrap; }
+#app table.lt.lt thead th:has(> .gff) > .lt-sort { display: inline-flex; width: auto; vertical-align: middle; }
+#app table.lt.lt thead th.n:has(> .gff), #app table.lt.lt thead th[data-numeric]:has(> .gff) { text-align: right; }
+/* an amount's heading ends where its figures end: the sort arrow's empty place (shown only once sorted) takes no room */
+#app table.lt.lt thead th.n .lt-ar:empty, #app table.lt.lt thead th[data-numeric] .lt-ar:empty { display: none; }

@@ -4,10 +4,10 @@ illogical"), used as a person would, on the fixture books (tests/fixtures/books,
 
   - the firm's Compliance page (#/compliance, in the sidebar) lists the returns and payments due; Today keeps one line;
     the Clients list shows no return figures or status;
-  - a client's TDS: Returns · Challans · 26AS & AIS · TRACES files · Checks (Rates and certificates · Limits · Tie-out ·
-    Corrections), each its own address; Every year and the year's downloads under More;
-  - a return: the summary card (the figures, the status, one main button, More) on top, Entries · Deductees · Challans ·
-    Errors to fix · Files below;
+  - a client's TDS (tds-layout, 14-Oct-2026): no tabs; the year's grid; the old Challans, 26AS, TRACES files and Checks
+    addresses open the register, Reconciliations, After filing and To fix; Every year and the downloads under More;
+  - a return: the summary card (the figures, the status, one main button, More) on top, Deductions · Challans · To fix ·
+    Return file · After filing below;
   - GST: Returns · 2B & ITC · Supplier health · Checks, every part reachable;
   - old addresses go to the new places (…/certs → Checks, a return's …/summary → its entries);
   - the sidebar's TDS opens the returns, not From Tally (clean-up batch 1: TDS and GST each a sidebar item); the ledgers-to-confirm banner once, on Returns;
@@ -72,56 +72,54 @@ try:
         ok(E("booksTab()") == "tds" and E("S.tdsView") in ("year", "years"), "the sidebar's TDS opens TDS Returns, not From Tally (%s)" % E("booksTab()"))
         side = E("[...document.querySelectorAll('#side .side-link')].map(b => b.dataset.side)")
         ok(all(w in side for w in ["TDS", "GST", "From Tally", "Audit"]) and side.index("From Tally") < side.index("TDS") < side.index("GST"), "TDS and GST in the sidebar; From Tally before them (%s)" % side)
+        # tds-layout (14-Oct-2026, the owner: "too many tabs; salary, challans, 26AS and TRACES don't belong as top tabs"): the
+        # TDS page has no tabs; Challans is the challan register, 26AS the client's Reconciliations, TRACES files a return's
+        # After filing, Checks a return's To fix (run_tds_newlayout.py checks the rest of the new layout)
         hash_go("#/c/%s/books/tds/2026-27" % cid)
-        secs = E("[...document.querySelectorAll('#app nav[aria-label=TDS] button')].map(b => b.textContent)")
-        ok(secs == ["Returns", "Salary", "Challans", "26AS & AIS", "TRACES files", "Checks"], "TDS tabs: %s" % secs)
-        ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1, "Returns: the year's grid of forms × quarters")
-        ok(pg.locator("#app [data-tieout]").count() == 0 and pg.locator("#app [data-limits]").count() == 0, "Returns carries no checks under the grid")
-        ok(pg.locator("#app [data-ledger-banner]").count() == 1, "the ledgers-to-confirm banner: on Returns")
+        ok(pg.locator("#app nav[aria-label=TDS]").count() == 0 and pg.locator("#app [data-tds-sec]").count() == 0, "the TDS page: no tabs")
+        ok(pg.locator("#app [data-tds-grid='2026-27']").count() == 1, "the year's grid of forms × quarters")
+        ok(pg.locator("#app [data-tieout]").count() == 0 and pg.locator("#app [data-limits]").count() == 0, "no checks under the grid")
+        ok(pg.locator("#app [data-ledger-banner]").count() == 1, "the ledgers to confirm: one line")
         pg.click("#app [data-tds-bar] details.more > summary"); W(200)
         more = E("[...document.querySelectorAll('#app [data-tds-bar] .more-item')].map(b => b.textContent)")
-        ok("Every year" in more and "Download the whole year" in more and any(m.startswith("Download the year, Form 140") for m in more), "More: Every year and the year's downloads (%s)" % more)
+        ok("Every year" in more and "Download the whole year" in more and any(m.startswith("Download the year, Form 140") for m in more) and "The challan register" in more, "More: Every year, the register and the year's downloads (%s)" % more)
         pg.click("#app [data-tds-more='years']"); W(400)
         ok(E("S.tdsView") == "years" and "Every year" in text(), "More › Every year")
-        want = {"challans": ("/books/tds/2026-27/challans/", "[data-year-challans]"), "recon": ("/books/tds/2026-27/26as", "[data-upload='as26']"),
-                "traces": ("/books/tds/2026-27/traces", "[data-upload='traces']"), "checks": ("/books/tds/2026-27/checks/rates", "[data-certs]")}
-        hash_go("#/c/%s/books/tds/2026-27" % cid)
-        for k, (h, sel) in want.items():
-            pg.click("#app [data-tds-sec='%s']" % k); W(600)
-            ok(h in E("location.hash") and pg.locator("#app " + sel).count() >= 1 and pg.locator("#app [data-ledger-banner]").count() == 0,
-               "TDS › %s: its own page and address (%s), no banner" % (k, E("location.hash").split("/books/")[-1]))
-        hash_go("#/c/%s/books/tds/2026-27/challans/Q1" % cid)
-        ok(E("[S.tdsView, S.tdsQ]") == ["challans", "Q1"] and pg.locator("#app #tdsChTable").count() == 1 and pg.locator("#app [data-challan-upload-bar]").count() == 1, "Challans: a quarter's challans, upload and list")
-        checks = {"rates": "[data-certs]", "limits": "[data-limits='2026-27']", "tieout": "[data-tieout='2026-27']", "corr": "[data-list-empty], [data-tds-corrections]"}
+        want = {"challans/Q1": ("register", "/books/tds/2026-27/challan-register", "[data-register]"), "26as": ("recon", "/books/recon", "[data-upload='as26']"),
+                "traces": ("after", "/books/tds/2026-27/", "[data-after-filing]"), "checks/rates": ("checks", "/books/tds/2026-27/", "[data-certs]")}
+        for k, (where, h, sel) in want.items():
+            hash_go("#/c/%s/books/tds/2026-27/%s" % (cid, k))
+            ok(h in E("location.hash") and pg.locator("#app " + sel).count() >= 1, "the old …/%s opens its new place: %s (%s)" % (k, where, E("location.hash").split("/books/")[-1]))
         hash_go("#/c/%s/books/tds/2026-27/checks/rates" % cid)
-        for k, sel in checks.items():
-            pg.click("#app [data-tds-check='%s']" % k); W(400)
-            ok(E("location.hash").endswith("/checks/" + k) and pg.locator("#app " + sel).count() >= 1, "Checks › %s" % k)
+        for k, sel in {"limits": "[data-limits='2026-27']", "tieout": "[data-tieout='2026-27']", "rates": "[data-certs]"}.items():
+            pg.click("#app [data-fix='%s']" % k); W(400)
+            ok(pg.locator("#app " + sel).count() >= 1, "To fix › the year's checks › %s" % k)
 
         print("3. a return")
         hash_go("#/c/%s/books/tds/2026-27/Q1/26Q/summary" % cid)
-        ok(E("S.tdsTab") == "deductions" and E("location.hash").endswith("/Q1/26Q/deductions"), "the old …/summary opens the entries, and the address follows (%s)" % E("location.hash"))
+        ok(E("S.tdsTab") == "deductions" and E("location.hash").endswith("/Q1/26Q/deductions"), "the old …/summary opens the deductions, and the address follows (%s)" % E("location.hash"))
         card = "#app [data-return-card='26Q|Q1']"
         ok(pg.locator(card).count() == 1 and "Form 140 (earlier 26Q) · Q1" in text(card + " [data-return-title]"), "the summary card, named Form 140 (earlier 26Q) · Q1")
         ok("Filed 05-Aug-2026" in text(card + " [data-status-tag]"), "the card's status: Filed 05-Aug-2026")
+        ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said above the tabs")
         ok(all(x in text(card) for x in ["TDS deducted", "Challans", "Not against a challan", "To look at"]), "the card's key figures")
         tabs = E("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
-        ok(tabs == ["Entries", "Deductees", "Challans", "Errors to fix", "Files"], "tabs below: %s" % tabs)
+        ok(tabs == ["Deductions", "Challans", "To fix", "Return file", "After filing"], "tabs below: %s" % tabs)
         hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
         ok(vis("#app .btn.primary") == 1 and pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]").count() == 1, "a return not filed: one main button, on the card (%d)" % vis("#app .btn.primary"))
         pg.click("#app [data-return-card='26Q|Q2'] [data-card-primary]"); W(400)
-        ok(E("S.tdsTab") == "file" and vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0, "Make the file → Files, whose download is then the one main button")
+        ok(E("S.tdsTab") == "file" and vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0, "Make the file → Return file, whose download is then the one main button")
         pg.click("#app [data-return-card] details.more > summary"); W(200)
         ok(any("working" in x for x in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")), "the card's More: the working (Excel)")
-        for t in ["Entries", "Deductees", "Challans", "Errors to fix", "Files"]:
+        for t in ["Deductions", "Challans", "To fix", "Return file", "After filing"]:
             pg.click('#app nav[aria-label="Return"] button:has-text("%s")' % t); W(300)
         ok(not errors, "every tab of the return draws")
         pg.click("#app [data-return-card] .ret-back"); W(400)
         ok(E("S.tdsView") == "year", "← the year, from the card")
         hash_go("#/c/%s/books/tds/2026-27/Q1/24Q" % cid)
-        ok(pg.locator("#app [data-return-card='24Q|Q1']").count() == 1 and E("S.tdsTab") == "employees", "Form 138: its card, opened on Employees")
+        ok(pg.locator("#app [data-return-card='24Q|Q1']").count() == 1 and E("S.tdsTab") == "deductions", "Form 138: its card, opened on Deductions")
         hash_go("#/c/%s/books/tds/2025-26/certs" % cid)
-        ok(E("[S.tdsView, S.tdsCheck]") == ["checks", "rates"] and E("location.hash").endswith("/books/tds/2025-26/checks/rates"), "the old …/certs opens Checks › Rates and certificates (%s)" % E("location.hash"))
+        ok(E("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old …/certs opens To fix › section 197 certificates (%s)" % E("location.hash"))
 
         print("4. GST")
         hash_go("#/c/%s/books/gst/07/202603/year" % cid)
