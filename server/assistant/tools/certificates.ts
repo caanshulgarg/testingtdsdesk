@@ -19,7 +19,7 @@ import "../../../src/js/78-reports.js";
 import { PDFDocument, PDFFont, PDFImage, rgb, StandardFonts } from "npm:pdf-lib@1.17.1";
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import type { ExtCtx, ExtResult, ExtTool, ToolTable } from "./types.ts";
-import TPL from "./certificate-templates.json" with { type: "json" };
+import TPL from "./certificate-templates.ts";
 import { Block, docx, docxText, fieldsIn, fillDocx, fillText, fyEnd, fyLabel, fyOf, imageSize, inr, Kind, lastYears, Letterhead, Line, linesFromRows, netWorth, NwIn, onLine, readSigned, render, Signed, Tpl, Values } from "./certlib.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -67,9 +67,10 @@ const P = (v: number) => Math.round(v * 100);
 // ------------------------------------------------------------------ reading an uploaded file
 type Read = { up: Upload, lines: Line[], signed: Signed | null, text: string, kind: "statement" | "format" | "letterhead" | "other", bytes: Uint8Array, scanned: boolean };
 async function pdfLines(bytes: Uint8Array): Promise<Line[]> {
-  // the same pdf.js the app's statement reading uses (01-documents: text pieces with positions rebuilt into lines)
-  const pdfjs: any = await import("npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, disableFontFace: true, verbosity: 0, useSystemFonts: false }).promise;
+  // pdf.js, as the app's statement reading uses it (01-documents: text pieces with positions rebuilt into lines), in its
+  // serverless build (unpdf: no canvas, no native module, so the function bundles at deploy)
+  const { getDocumentProxy } = await import("npm:unpdf@0.12.1");
+  const doc: any = await getDocumentProxy(bytes.slice());
   const out: Line[] = [];
   for (let p = 1; p <= Math.min(doc.numPages, 40); p++) {
     const tc = await (await doc.getPage(p)).getTextContent();

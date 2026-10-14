@@ -95,6 +95,6 @@ the firm's certificate details, formats and confirmed figures in migration 83's 
 with the service role). Its questions (`firmWide` tools' words) skip the keyword router and Haiku and run on Sonnet (task
 `file`, no web); its answers are never cached. The AI only reads a statement FinCom cannot read (`ctx.aiRead`: Sonnet, low
 effort, counted against the cap; a scanned copy is sent as it is, as a notice is), and those figures are labelled "read by
-the AI" and checked on their line where the copy has text. Wording: `tools/certificate-templates.json` (one file, every
+the AI" and checked on their line where the copy has text. Wording: `tools/certificate-templates.ts` (one file, every
 paragraph "to confirm by the owner"); the arithmetic and reading: `tools/certlib.ts`. Tests: `tests/run_certificates.py`,
 `tests/run_migration83.py`, `tests/run_certificates_ui.py`.

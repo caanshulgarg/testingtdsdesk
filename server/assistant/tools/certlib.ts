@@ -6,7 +6,7 @@
 //                 each with the page and line it came from
 //   fieldsIn / fillText / fillDocx    an uploaded format's placeholders and blanks, and filling them
 //   unzip / zip   docx and xlsx are zips (DecompressionStream, no package)
-//   render / docx the certificate from a template (certificate-templates.json) as blocks, and those blocks as Word
+//   render / docx the certificate from a template (certificate-templates.ts) as blocks, and those blocks as Word
 export type Kind = "company" | "firm" | "llp" | "proprietor";
 export type NwIn = { share_capital?: number | null, reserves?: number | null, revaluation_reserve?: number | null, accumulated_losses?: number | null,
   misc_expenditure?: number | null, partners_capital?: number | null, partners_current?: number | null };

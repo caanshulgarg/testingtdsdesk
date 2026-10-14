@@ -1,4 +1,7 @@
-{
+// The wording of FinCom's CA certificates (certificates.ts): ONE file, edited by hand. It is the JSON that was
+// certificate-templates.json, kept as a module so the deployed function bundles it with its code (a .json import with an
+// import attribute is not bundled at deploy). Edit the text between the quotes only; the rules are in _about below.
+export default {
   "_about": [
     "The wording of FinCom's CA certificates (server/assistant/tools/certificates.ts). One file, edited by hand; every paragraph carries 'confirm': the owner approved this wording on 14-Oct-2026 ('approved by the owner on 14-Oct-2026'); a paragraph changed later goes back to 'to confirm by the owner' until approved again.",
     "Placeholders are {{name}}. Never put a client's name, PAN, CIN, address or figure, or the firm's own details, in this file: they come from FinCom at run time.",
@@ -146,4 +149,4 @@
     "typed": "the audited financial statements of the {{client_kind_word}} for the financial year {{fy}} (figures as given by the Management)",
     "confirm": "approved by the owner on 14-Oct-2026"
   }
-}
+};

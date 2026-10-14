@@ -1,7 +1,7 @@
 // deno test server/assistant/tools/certlib_test.ts (tests/run_certificates.py). The certificates' arithmetic and reading,
 // each figure worked out by hand below. Every company here is made up.
 import { blocksText, docx, docxText, fieldsIn, fillDocx, fillText, fyOf, inr, lastYears, netWorth, onLine, readSigned, render, unzip, zip } from "./certlib.ts";
-import TPL from "./certificate-templates.json" with { type: "json" };
+import TPL from "./certificate-templates.ts";
 const ok = (c: unknown, w: string) => { if (!c) throw new Error(w); console.log("  ok   " + w); };
 const eq = (a: unknown, b: unknown, w: string) => ok(JSON.stringify(a) === JSON.stringify(b), w + (JSON.stringify(a) === JSON.stringify(b) ? "" : ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b)));
 

@@ -9,7 +9,7 @@ import { runTurn, TurnCtx } from "../agent.ts";
 import { prepare } from "./certificates.ts";
 import { docxText, inr, netWorth, unzip, zip } from "./certlib.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
-import * as pdfjs from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
+import { getDocumentProxy } from "npm:unpdf@0.12.1";
 import ExcelJS from "npm:exceljs@4.4.0";
 
 const ok = (c: unknown, w: string) => { if (!c) throw new Error(w); console.log("  ok   " + w); };
@@ -53,7 +53,7 @@ async function signedPdf(name: string, fy: number, lines: [string, string, strin
 }
 const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 async function pdfText(b: Uint8Array): Promise<string> {
-  const doc = await (pdfjs as any).getDocument({ data: b.slice(), isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise; let t = "";
+  const doc: any = await getDocumentProxy(b.slice()); let t = "";
   for (let i = 1; i <= doc.numPages; i++) t += (await (await doc.getPage(i)).getTextContent()).items.map((x: any) => x.str).join(" ") + "\n";
   return t;
 }
