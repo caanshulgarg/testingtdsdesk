@@ -77,5 +77,6 @@
  "76-prefiling.js",
  "77-audit.js",
  "78-reports.js",
- "79-challan-register.js"
+ "79-challan-register.js",
+ "80-assets.js"
 ]
