@@ -2,7 +2,7 @@
 // reconciliation should come under the Reconciliation tab ... Prepare a proper reconciliation. If the opening has a
 // difference, then also show it in the difference."). The party's statement in any format (the sheet engine: AI once
 // for a new format, then its saved columns) against the party's ledger in FinCom's copy of the books. The logic is
-// PartyRecon (src/js/81); the upload goes through the register panel (parts/SheetPanel.jsx).
+// PartyRecon (src/js/82); the upload goes through the register panel (parts/SheetPanel.jsx).
 import ListTable from "../../parts/ListTable.jsx";
 import DetailDrawer from "../../parts/DetailDrawer.jsx";
 import Button from "../../parts/Button.jsx";

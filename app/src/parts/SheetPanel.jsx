@@ -1,6 +1,6 @@
 // A register uploaded on Purchase or Sales (a sheet, a PDF table or JSON): the panel beside the page (DetailDrawer)
 // that says which format it is, shows a new format's mapping once to confirm or change, asks what needs an answer,
-// and adds the documents to To review. The logic is SheetImport / SheetFmt (src/js/80-sheet-import.js).
+// and adds the documents to To review. The logic is SheetImport / SheetFmt (src/js/81-sheet-import.js).
 import DetailDrawer from "./DetailDrawer.jsx";
 import ListTable from "./ListTable.jsx";
 import Button from "./Button.jsx";

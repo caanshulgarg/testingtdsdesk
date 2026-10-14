@@ -6,7 +6,7 @@
 // a proper reconciliation. If the opening has a difference, then also show it in the difference."
 //
 // The party's statement (its ledger of the client, or a balance confirmation) in any format: read by the sheet engine
-// (SheetFmt, src/js/80: fingerprint, the AI's mapping once, saved, then rules) with the statement's own fields
+// (SheetFmt, src/js/81: fingerprint, the AI's mapping once, saved, then rules) with the statement's own fields
 // (PARTY_FIELDS); against the party's ledger in FinCom's copy of the books (Tally or Zoho: LK.ledgerBooks), seen from
 // both sides (their debit is our credit). Every figure is FinCom's: the AI only maps columns.
 //   PartyRecon.statement(fmt, grid, hi)   → {open, rows: [{date, no, narr, dr, cr, tds, gst}], close}   (their side)

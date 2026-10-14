@@ -1,6 +1,6 @@
 // The sheet-format half of the assistant (the owner, 14-Oct-2026: "Use AI the first time for any format; after that it
 // should learn that format and use that memory next time"). FinCom sends a register's header and up to 10 rows, with
-// every identifier, name and long number already masked in the browser (SheetFmt.masked, src/js/80); the cheap model
+// every identifier, name and long number already masked in the browser (SheetFmt.masked, src/js/81); the cheap model
 // (Haiku) answers which column is which of FinCom's fields and how to read them. It never sees a whole sheet and never
 // decides a figure: FinCom's own rules read every row with the mapping, once the person has confirmed it. The system
 // prompt is cached (1 hour), so a firm mapping several formats in a session pays for it once.
