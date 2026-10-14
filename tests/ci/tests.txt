@@ -284,3 +284,10 @@ run_zoho_map.mjs                      120
 run_migration75.py                    180
 run_zoho_server.py                    900
 run_integrations_ui.py                300  TDSDESK_SITE=../app/dist-test
+# fixed assets and depreciation (14-Oct-2026, the owner's approval; branch depreciation): the register proposed from the books, the
+# Companies Act (Schedule II) and the Income-tax Act (section 32) worked to the paisa against hand-worked answers, the statements and
+# 3CD clause 18 from the register, migration 81 twice with its row-level security, the Assistant's depreciation_schedule, the screen
+run_depreciation.js                   240
+run_depreciation_books.js             180
+run_dep_tool.py                       300
+run_fixed_assets_ui.py                300  TDSDESK_SITE=../app/dist-test
