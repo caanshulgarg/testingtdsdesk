@@ -115,7 +115,7 @@ const SheetFmt = {
     };
     return {head: head.map(h => String(h == null ? "" : h)), rows: rows.slice(0, 10).map(r => (r || []).map(cell))};
   },
-  // a register's fields, or (vendor / customer) a party statement's (src/js/81)
+  // a register's fields, or (vendor / customer) a party statement's (src/js/82)
   fieldsFor(side){ return (side === "vendor" || side === "customer") && typeof PARTY_FIELDS !== "undefined" ? PARTY_FIELDS : SHEET_FIELDS; },
   // a new format's mapping: asked of the AI once (SheetAI, the firm's assistant on the cheap model), never a figure
   async propose(head, rows, side){

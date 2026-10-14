@@ -78,6 +78,7 @@
  "77-audit.js",
  "78-reports.js",
  "79-challan-register.js",
- "80-sheet-import.js",
- "81-party-recon.js"
+ "80-assets.js",
+ "81-sheet-import.js",
+ "82-party-recon.js"
 ]

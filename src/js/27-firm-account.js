@@ -2010,7 +2010,7 @@ function pickFiles(mode){ pickMode = mode; document.getElementById("fileIn").cli
 async function handleFiles(files, mode){
   if (!files.length) return;
   if (mode === "company" && S.view === "company" && S.coId){
-    // a register (a sheet or JSON: GSTR-2B, a portal's or an ERP's) on Purchase: the sheet panel (src/js/80); bills as before
+    // a register (a sheet or JSON: GSTR-2B, a portal's or an ERP's) on Purchase: the sheet panel (src/js/81); bills as before
     const sheets = typeof SheetImport === "object" ? files.filter(f => SheetImport.isSheet(f)) : [];
     if (sheets.length) SheetImport.start(sheets, "purchase");
     const bills = files.filter(f => !sheets.includes(f));

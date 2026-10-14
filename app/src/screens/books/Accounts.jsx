@@ -3,7 +3,10 @@
 // figures are FS (src/js/29); the statements themselves are FS.html, the same pages as the PDF, shown as an old piece.
 // Changes go through fsKindSet, fsFyGo, fsStockSet, fsSet, fsMapSet, fsUnmap (src/js/23) and doAct (fsRun, fsPdf, fsExcel).
 //
-// State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map), S.fsQ (the ledger search), S.fsPage
+// The third tab, Fixed assets & depreciation (FixedAssets.jsx, 14-Oct-2026): the asset register and the depreciation under
+// the Companies Act and the Income-tax Act, whose figures the statements and Form 3CD clause 18 take.
+//
+// State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map, dep), S.fsQ (the ledger search), S.fsPage
 // (the page of the Mapping tab).
 import HowPage from "../../parts/HowPage.jsx";
 import Msg from "../../parts/Msg.jsx";
@@ -11,6 +14,7 @@ import { useEffect } from "react";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Confirm from "../../parts/Confirm.jsx";
+import FixedAssets from "./FixedAssets.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
@@ -91,16 +95,17 @@ export default function Accounts({ b }) {
   });
   if (!fy) return <div className="bk-none">The statements are made from the day book, which is not in yet. <button className="linkbtn" onClick={() => goClient("books:import")}>Bring in from Tally</button></div>;
   let body;
-  if (!d) body = <div className="bk-none">Working out the statements for {fy + "-" + String(num(fy) + 1).slice(2)}…</div>;
+  if (tab === "dep") body = <FixedAssets b={b} fy={fy} />;
+  else if (!d) body = <div className="bk-none">Working out the statements for {fy + "-" + String(num(fy) + 1).slice(2)}…</div>;
   // clean-up batch 3: the one next step beside it
   else if (d.error) body = <div className="bk-alert" data-fs-need="">The balances are needed: <Msg text={d.error} /> <button className="linkbtn" onClick={() => goClient("books:import")}>Bring in the balances from Tally</button></div>;
   else if (tab === "map") body = <Mapping c={c} d={d} />;
   else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "var(--ok)" }}>The balance sheet tallies.</p>}
     <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></section>;
   return <>
-    <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
+    <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"], ["dep", "Fixed assets & depreciation"]].map(([id, l]) => <button key={id} data-fs-tab={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
     <HowPage page="fs" />
-    <Head c={c} years={years} fy={fy} d={d} />
+    {tab !== "dep" && <Head c={c} years={years} fy={fy} d={d} />}
     {body}
   </>;
 }
