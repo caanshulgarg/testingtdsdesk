@@ -25,11 +25,11 @@ function toTable(t: any, period: { from: string, to: string }, basis: string): T
 
 export const TOOLS: ExtTool[] = [{
   name: "depreciation_schedule",
-  description: "The client's depreciation for a year from the fixed asset register kept in FinCom: under the Companies Act (Schedule II useful lives, SLM or WDV, per asset and per class, gain or loss on sales), under the Income-tax Act (section 32 blocks: opening WDV, additions over and under 180 days, sale value, STCG / STCL, additional depreciation), the deferred tax working and the suggested journal entry (never posted). Use for 'depreciation', 'fixed asset schedule', 'block of assets', 'WDV', 'Schedule II', '3CD clause 18'.",
+  description: "The client's depreciation for a year from the fixed asset register kept in FinCom, by the entity type: a company's books under the Companies Act (Schedule II useful lives, SLM or WDV, per asset and per class, gain or loss on sales) with deferred tax (AS 22); a firm, LLP, proprietor, trust, HUF or AOP's books at the Income-tax rates (one schedule, no deferred tax) unless it keeps its own policy; and the Income-tax Act blocks (section 32: opening WDV, additions over and under 180 days, sale value, STCG / STCL, additional depreciation) and the suggested journal entry (never posted). Use for 'depreciation', 'fixed asset schedule', 'fixed asset register', 'block of assets', 'WDV', 'Schedule II', '3CD clause 18'.",
   input_schema: strict({
     client: { type: ["string", "null"], description: "the client (the one open when null)" },
     year: { type: ["string", "null"], description: "the financial year, e.g. 2025-26 (the last year ended when null)" },
-    basis: { type: ["string", "null"], enum: ["companies_act", "income_tax", "both", null], description: "which schedules (both when null)" },
+    basis: { type: ["string", "null"], enum: ["companies_act", "income_tax", "both", null], description: "which schedules: companies_act = the books' schedule (the Companies Act for a company; for a non-corporate entity its books' basis), income_tax = the blocks; both when null" },
   }),
   task: "heavy", label: "books", words: /\b(depreciation|fixed asset (schedule|register)|block of assets|written down value|wdv|schedule ii|clause 18)\b/i,
   async run(input, ctx) {
@@ -41,22 +41,30 @@ export const TOOLS: ExtTool[] = [{
       const years = ((got && got.years) || []).map((y: string) => FAR.fyLabel(y));
       return { error: "No fixed asset register is kept in FinCom for " + FAR.fyLabel(fy) + (years.length ? " (kept for " + years.join(", ") + ")" : "") + ". Open the client's Books, Accounts, Fixed assets & depreciation once: the register is proposed from the books and kept." };
     }
-    const res = FAR.compute(reg, got.prev || null), T = FAR.tables(res);
+    // the entity and the ICAI level as the client's statements keep them (as the app's screen takes them)
+    let saved: any = null;
+    try { saved = await ctx.rpc("rpt_saved", { p_client: ctx.clientId }); } catch (_e) { saved = null; }
+    const rx = (saved && saved.rx) || {}, sw = ((((rx.det || {})[fy] || {}).policies) || {}).switches || {};
+    const res = FAR.compute(reg, got.prev || null, { kind: rx.kind || reg.kind || "company", levelIV: !!sw.levelIV }), T = FAR.tables(res);
     const by = (id: string) => T.find((t: { id: string }) => t.id === id);
     const from = "the fixed asset register kept in FinCom for " + FAR.fyLabel(fy) + (res.hasPrev ? " (opening from " + FAR.fyLabel(Number(fy) - 1) + "'s register)" : "");
     const tables: ToolTable[] = [];
-    if (basis !== "income_tax") tables.push(toTable(by("classes"), period, from), toTable(by("assets"), period, from));
-    if (basis !== "companies_act") tables.push(toTable(by("blocks"), period, from));
-    if (basis === "both") tables.push(toTable(by("dt"), period, from));
+    // a non-corporate entity's books at the Income-tax rates: the block schedule is the books' schedule too (no class
+    // schedule, no Companies Act); deferred tax only where it applies
+    if (basis !== "income_tax"){ if (by("classes")) tables.push(toTable(by("classes"), period, from)); tables.push(toTable(by("assets"), period, from)); }
+    if (basis !== "companies_act" || res.basis === "it") tables.push(toTable(by("blocks"), period, from));
+    if (basis === "both" && by("dt")) tables.push(toTable(by("dt"), period, from));
     if (basis !== "income_tax") tables.push(toTable(by("je"), period, from));
     const pending = (res.confirm || []).length;
-    tables[0].summary = { companies_act_depreciation: res.totals.dep, income_tax_depreciation: res.totals.itDep, additional_depreciation: res.totals.itAddl, closing_wdv: res.totals.itClose,
-      deferred_tax_movement: res.dt.move, gain_on_sale: res.totals.gain, to_confirm: pending };
+    tables[0].summary = { entity: res.kind, books_basis: res.basis === "sch2" ? "companies_act" : res.basis === "it" ? "income_tax_rates" : "own_policy", book_depreciation: res.totals.dep,
+      ...(res.co ? { companies_act_depreciation: res.totals.dep } : {}), income_tax_depreciation: res.totals.itDep, additional_depreciation: res.totals.itAddl, closing_wdv: res.totals.itClose,
+      deferred_tax_movement: res.dt ? res.dt.move : null, gain_on_sale: res.totals.gain, to_confirm: pending };
     const name = ctx.clientName, base = safe(name) + "-depreciation-" + FAR.fyLabel(fy);
     const f = await ctx.uploadFile(FSX.xlsx(FAR.sheets(res, { name }), {}), base + ".xlsx", "xlsx");
-    const ca = "Companies Act depreciation " + res.totals.dep + " (" + res.settings.method + ", residual " + res.settings.residualPct + "%)", it = "income-tax depreciation " + res.totals.itDep + (res.totals.itAddl ? " and additional " + res.totals.itAddl : "") + ", closing WDV " + res.totals.itClose;
+    const ca = (res.co ? "Companies Act depreciation " + res.totals.dep + " (" + res.settings.method + ", residual " + res.settings.residualPct + "%)"
+      : res.basis === "it" ? "book depreciation " + res.totals.dep + " at the Income-tax rates (a " + res.kind + ": one schedule for the books and tax)" : "book depreciation " + res.totals.dep + " under the firm's own policy (" + res.settings.method + ")"), it = "income-tax depreciation " + res.totals.itDep + (res.totals.itAddl ? " and additional " + res.totals.itAddl : "") + ", closing WDV " + res.totals.itClose;
     return { tables, files: f ? [f] : [],
-      forModel: "Fixed assets " + FAR.fyLabel(fy) + ": " + (basis === "income_tax" ? it : basis === "companies_act" ? ca : ca + "; " + it + "; deferred tax movement " + res.dt.move) + ". " +
+      forModel: "Fixed assets " + FAR.fyLabel(fy) + ": " + (basis === "income_tax" ? it : basis === "companies_act" ? ca : ca + "; " + it + "; " + (res.dt ? "deferred tax movement " + res.dt.move : "no deferred tax: " + res.dtWhy)) + ". " +
         (pending ? pending + " points in the register are still to be confirmed in FinCom (the figures use the proposals meanwhile)." : "Every point of the register is confirmed.") + " The journal entry is a suggestion; nothing is posted." };
   },
 }];
