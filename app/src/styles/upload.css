@@ -1,7 +1,7 @@
 /* The upload pages' shared pattern (upload-pages, 14-Oct-2026; parts/StateBar.jsx): one row of states with the guide's
    "?" at its end, the upload line under it, an empty state with one next step. Calm: no boxes around the lines, the
    counts in the tab's pill, Errors in the warning tone. */
-#app nav.statebar { display: flex !important; align-items: center; gap: 8px; }
+#app nav.statebar { display: flex !important; flex-wrap: nowrap !important; align-items: center; gap: 8px; }
 #app nav.statebar > div { flex: 1 1 auto; min-width: 0; }
 #app nav.statebar .statebar-help { flex: 0 0 auto; display: inline-flex; }
 #app nav.statebar .st-errors { color: var(--warn); }
