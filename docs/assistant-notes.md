@@ -27,10 +27,10 @@ buttons, each the user's own click; nothing is posted or filed by itself:
 |---|---|
 | a tax notice | the notice flow as before (one notice alone is attached to the next question at once) |
 | a bill or invoice | Add to Purchase (or Sales, when the client issued it) for review |
-| a register sheet, a GSTR-1 or GSTR-2B JSON | Import in Purchase/Sales: coming soon (branch upload-pages); the summary meanwhile |
+| a register sheet, a GSTR-1 or GSTR-2B JSON | Import in Purchase / Import in Sales: the page's own import (upload pages, src/js/82-registers.js), for review; GSTR-2B to Purchase, GSTR-1 to Sales |
 | a bank statement | Add to Bank for review |
 | 26AS / AIS / TIS | Add to Reconciliations (26AS) |
-| a certificate format | kept with the client's uploads (certificates are branch certificates); its summary |
+| a certificate format, a signed statement | Use for a certificate: it goes to the certificate tool with the next question (every upload but a notice is in the conversation's files, `ASST.ups()`) |
 | anything else | its summary, and Ask about it (its text goes with the question, masked; Sonnet, not the notice model) |
 ## The same day's other fixes (14-Oct-2026)
 

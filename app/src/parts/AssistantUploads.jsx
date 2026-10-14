@@ -3,7 +3,7 @@ import Button from "./Button.jsx";
 
 // one Upload (the owner's request of 14-Oct-2026): each file as FinCom found it - its kind (by FinCom's own rules, or by
 // the AI when they could not tell), one line about it, and the next steps as buttons (nothing is done by itself)
-const DONE_OPENS = ["purchase", "sales", "bank", "as26"];
+const DONE_OPENS = ["purchase", "sales", "bank", "as26"];   // (an import opens its own page)
 export default function Uploads() {
   const list = AUpload.list();
   if (!list.length) return null;

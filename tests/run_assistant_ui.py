@@ -213,17 +213,17 @@ try:
             pg.wait_for_timeout(250)
         ups = {u["name"]: u for u in pg.evaluate("AUpload.list().map(u => ({name: u.name, state: u.state, kind: u.kind, by: u.by, side: u.side || '', summary: u.summary, path: u.path || '', acts: u.acts.map(a => a.id + (a.disabled ? '!' : ''))}))")}
         print("    " + json.dumps({k: [v["kind"], v["by"], v["acts"]] for k, v in ups.items()}))
-        want = {"bill.pdf": ("bill", "rules", ["purchase", "ask"]), "sales-register.xlsx": ("register", "rules", ["soon!", "ask"]), "bank-statement.csv": ("bank", "rules", ["bank"]),
+        want = {"bill.pdf": ("bill", "rules", ["purchase", "ask"]), "sales-register.xlsx": ("register", "rules", ["importP", "importS", "ask"]), "bank-statement.csv": ("bank", "rules", ["bank"]),
                 "26as.txt": ("as26", "rules", ["as26"]), "certificate-format.docx": ("certificate", "rules", ["keep", "ask"]), "agreement.docx": ("other", "ai", ["ask"]), "photo.png": ("bill", "ai", ["purchase", "sales", "ask"]),
-                "gstr2b-032026.json": ("register", "rules", ["soon!", "ask"]), "notice-copy.pdf": ("notice", "rules", ["notice"])}
+                "gstr2b-032026.json": ("register", "rules", ["importP", "ask"]), "notice-copy.pdf": ("notice", "rules", ["notice"])}
         for name, (kind, by, acts) in want.items():
             u = ups.get(name) or {}
             ok(u.get("state") == "ready" and u.get("kind") == kind and u.get("by") == by and u.get("acts") == acts, "%s: %s, told by %s, offered %s (%s)" % (name, kind, "FinCom's rules" if by == "rules" else "the AI", acts, [u.get("kind"), u.get("by"), u.get("acts"), u.get("summary")]))
         ok("ATH/25-26/0142" in ups["bill.pdf"]["summary"] and "purchase" in ups["bill.pdf"]["summary"], "the bill's line: its number, and that it is a purchase (%s)" % ups["bill.pdf"]["summary"])
         ok("HDFC Bank" in ups["bank-statement.csv"]["summary"] and "6789" in ups["bank-statement.csv"]["summary"], "the statement's line: the bank and the account's last digits (%s)" % ups["bank-statement.csv"]["summary"])
         ok("4 rows" in ups["sales-register.xlsx"]["summary"] and "2025-26" in ups["26as.txt"]["summary"] and "blank" in ups["certificate-format.docx"]["summary"], "the register, 26AS and certificate lines %s" % [ups["sales-register.xlsx"]["summary"], ups["26as.txt"]["summary"], ups["certificate-format.docx"]["summary"]])
-        ok("GSTR-2B" in ups["gstr2b-032026.json"]["summary"] and "3 invoices" in ups["gstr2b-032026.json"]["summary"] and "03-2026" in ups["gstr2b-032026.json"]["summary"], "the GSTR-2B file: a register to import, coming soon (%s)" % ups["gstr2b-032026.json"]["summary"])
-        ok(pg.locator('[data-name="gstr2b-032026.json"] [data-asst-act="soon"]').is_disabled() and "coming soon" in pg.inner_text('[data-name="gstr2b-032026.json"]'), "Import in Purchase/Sales: coming soon (the summary meanwhile)")
+        ok("GSTR-2B" in ups["gstr2b-032026.json"]["summary"] and "3 invoices" in ups["gstr2b-032026.json"]["summary"] and "03-2026" in ups["gstr2b-032026.json"]["summary"], "the GSTR-2B file: a register to import (%s)" % ups["gstr2b-032026.json"]["summary"])
+        ok(pg.locator('[data-name="gstr2b-032026.json"] [data-asst-act="importP"]').count() == 1, "GSTR-2B: Import in Purchase (the upload pages' import), offered, not done")
         ok("ASMT-10" in ups["notice-copy.pdf"]["summary"] and "/notices/" in ups["notice-copy.pdf"]["path"], "the notice in the batch: the notice flow (stored with the notices; Read the notice and draft a reply)")
         ok(pg.evaluate("ASST.st().attach == null || !/notice-copy/.test(ASST.st().attach.name || '')"), "in a batch, the notice is not attached by itself")
         ok(all("/uploads/" in u["path"] for n, u in ups.items() if u["kind"] != "notice"), "the others are stored in the firm's private folder (…/uploads/)")
@@ -264,6 +264,14 @@ try:
             pg.wait_for_timeout(250)
         ok(pg.evaluate("AUpload.list().slice(-1)[0].name") == "march.csv" and pg.evaluate("AUpload.list().slice(-1)[0].kind") == "bank", "a file dropped on the panel is uploaded and told (a bank statement)")
         shot(pg, "05d-dropped")
+        # Import in Sales: the sales register opens in the Sales page's own import (upload pages), for review; nothing posted
+        pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
+        pg.click('[data-name="sales-register.xlsx"] [data-asst-act="importS"]')
+        for _ in range(60):
+            if pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count(): break
+            pg.wait_for_timeout(250)
+        ok(pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count() == 1 and pg.evaluate("typeof SheetImport === 'object' && S.view === 'company'"), "Import in Sales: the register goes to the Sales page's import, for review")
+        pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
         # ---------- a file
         t = ask(pg, "An Excel of TDS by deductee with PANs")
         ok(len(t["files"]) == 1 and t["files"][0]["kind"] == "xlsx" and pg.locator('[data-asst-file="xlsx"]').count() == 1, "the Excel file is listed in the chat")

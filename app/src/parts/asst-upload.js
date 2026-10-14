@@ -164,8 +164,10 @@ const AUpload = window.AUpload = {
       case "notice": return [{id: "notice", label: "Read the notice and draft a reply", primary: true}];
       case "bill": return (u.side === "sales" ? [{id: "sales", label: "Add to Sales for review", primary: true}] : u.side === "purchase" ? [{id: "purchase", label: "Add to Purchase for review", primary: true}]
         : [{id: "purchase", label: "Add to Purchase for review", primary: true}, {id: "sales", label: "Add to Sales for review"}]).concat([ask]);
-      // the import of a register or a GSTR-1/2B file is being built (branch upload-pages); until it lands: coming soon
-      case "register": return [{id: "soon", label: "Import in Purchase/Sales: coming soon", disabled: true}, ask];
+      // a register sheet or a GSTR-1/2B file: the Purchase or Sales page's own import (upload pages, src/js/82-registers.js),
+      // which shows what it read for review; GSTR-2B is purchases, GSTR-1 sales; nothing is posted
+      case "register": return (u.gst === "GSTR-2B" ? [{id: "importP", label: "Import in Purchase", primary: true}] : u.gst === "GSTR-1" ? [{id: "importS", label: "Import in Sales", primary: true}]
+        : [{id: "importP", label: "Import in Purchase", primary: true}, {id: "importS", label: "Import in Sales"}]).concat([ask]);
       case "bank": return [{id: "bank", label: "Add to Bank for review", primary: true}];
       case "as26": return [{id: "as26", label: "Add to Reconciliations (26AS / AIS)", primary: true}];
       case "certificate": return [{id: "keep", label: "Use for a certificate", primary: true}, ask];
@@ -265,6 +267,13 @@ const AUpload = window.AUpload = {
         await atClient();
         if (!S.books || S.books.cid !== u.cid){ toast("Open the client's books first (Books › Tally), then add the file again."); return; }
         const r = await AS26.add(f); if (r) mark("Added to Reconciliations › TDS receivable vs 26AS."); return;
+      }
+      if (id === "importP" || id === "importS"){
+        const side = id === "importS" ? "sales" : "purchase";
+        await atClient(); goStep("review", side === "sales" ? "sales" : "bills");
+        await sheetStart([f], side);
+        mark("Opened in " + (side === "sales" ? "Sales" : "Purchase") + "'s import: check what was read there; nothing is posted.");
+        return;
       }
       if (id === "keep"){
         // the certificate tool reads it from the conversation's uploads (it is there already); the question is the user's to send
