@@ -113,7 +113,7 @@ with sync_playwright() as p:
     ok(r["line"] == "Balance from FinCom's copy · books as of %s %s" % (hm, ASOF_WHY) and txt("#app .lk-res [data-copy-line]") == r["line"], "3. the header: 'books as of %s %s' (%s)" % (hm, ASOF_WHY, r["line"]))
     # round 3 A (14-Oct-2026): "Books as of" is in the Tally panel's Details now, not on the page
     E("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(700)
-    pnl = pg.inner_text('[data-overlay="tallypanel"] [data-panel-books] [data-books-asof]') if pg.locator('[data-overlay="tallypanel"] [data-panel-books] [data-books-asof]').count() else ""
+    pnl = pg.evaluate("() => { const e = document.querySelector('[data-overlay=\"tallypanel\"] [data-panel-books] [data-books-asof]'); return e ? e.textContent : ''; }")   # under Details, closed
     ok(E("booksAsOf(S.coId).text") == "Books as of %s %s" % (hm, ASOF_WHY) and ("Books as of %s %s" % (hm, ASOF_WHY)) in pnl and "Books as of" not in app(), "3. 'Books as of' (Tally panel, Details) says what the time is (%s)" % E("booksAsOf(S.coId).text"))
     E("() => { S.tallyPanel = false; render(); }"); pg.wait_for_timeout(400)
     ok(not INSTEP.search(app()) and len(alltxt("#app [data-books-held]")) == 1, "1. Look up page: no 'in step with Tally' anywhere; the held line once (%d)" % len(alltxt("#app [data-books-held]")))

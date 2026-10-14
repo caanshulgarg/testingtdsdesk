@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from tdsgst_snapshot import LOAD, CHALLANS
 from books_data import CACHE
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
-PORT = int(os.environ.get("OVERLAYS_PORT") or 8291)
+PORT = int(os.environ.get("OVERLAYS_PORT") or 8362)
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
