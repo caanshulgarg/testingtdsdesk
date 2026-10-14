@@ -35,8 +35,9 @@ export function SyncNote({ cid, tab }) {
   const s = BookSync.st[cid] || {};
   if (s.readonly) return note("Look-only access: changes here are not saved for the firm.");
   if (s.error) return note("TDS and GST work not saved to the firm yet: " + plainText(s.error) + ". It is safe in this browser and will be sent at the next sync.", "warn");
-  // live sync: next to the work, whether the last change is saved
-  if (typeof BookItems === "object" && BookItems.on()) { const n = BookItems.note(cid); if (n) return <p className={"note" + (n.cls ? " " + n.cls : "")} data-booksave style={{ margin: "6px 0" }}>{n.t}</p>; }
+  // live sync: only a warning (offline, not saved yet) stays by the work; "Saving…" and "Saved 08:07" are the top bar's
+  // save chip (round 3 A, the owner 14-Oct-2026)
+  if (typeof BookItems === "object" && BookItems.on()) { const n = BookItems.note(cid); if (n && n.cls) return <p className={"note " + n.cls} data-booksave style={{ margin: "6px 0" }}>{n.t}</p>; }
   return null;
 }
 

@@ -12,6 +12,7 @@ import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, Exter
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
+import { useDismiss } from "./dismiss.js";
 
 const LABELS = {
   books: ["ok", "Checked against the books ✓"],
@@ -193,8 +194,11 @@ export function AssistantLauncher() {
   return <button className="asst-launch" data-asst-launch="" onClick={() => ASST.open()} title="FinCom Assistant (Ctrl+J)"><Sparkles size={16} /> {co ? "Ask about " + co.name : "Ask FinCom"}</button>;
 }
 
+const ASST_REF = { get current() { return document.querySelector('[data-overlay="asst"]'); } };
 export default function Assistant() {
   const a = ASST.st();
+  // a click outside or Esc closes it (app/src/parts/dismiss.js); what was typed stays in ASST's state as a draft
+  useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")) });
   const file = useRef(null);
   const co = S.view === "company" ? CO() : null;
   const cid = ASST.cid();
@@ -204,7 +208,7 @@ export default function Assistant() {
   return <>
     <AssistantLauncher />
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
-      <DrawerContent className="asst-panel" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()}>
+      <DrawerContent className="asst-panel" data-overlay="asst" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
         {a.open && <div className="asst-body" data-asst-panel="">
           <div className="asst-scope">
             {co ? <div className="seg" role="tablist">

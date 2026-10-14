@@ -194,7 +194,8 @@ function backToClient(){
 // from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
 function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
 if (typeof window !== "undefined"){
-  window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
+  // Back closes the top overlay first, when one is open (app/src/parts/dismiss.js: a phone's step for each overlay)
+  window.addEventListener("popstate", () => { if (window.FCOverlay && window.FCOverlay.onBack()) return; if (/^#\//.test(location.hash)) Route.apply(location.hash); });
   window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.full()) Route.apply(location.hash); });
 }
 // ui-tidy (13-Oct-2026): a row's detail opens beside it (app/src/parts/DetailDrawer.jsx: a drawer on a computer, the whole

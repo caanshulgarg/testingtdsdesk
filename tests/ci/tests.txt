@@ -81,6 +81,8 @@ run_mis_ui.py                         120  TDSDESK_SITE=../app/dist-test
 run_multi_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_names_shared.js                   120
 run_no_delete_on_reload.py            120
+run_overlays.py                       240
+run_page_tops.py                      180
 run_pair_ui.py                        120
 run_parts_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_party_hist.js                     120

@@ -7,7 +7,8 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "../parts/dismiss.js";
 import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import Loading from "../parts/Loading.jsx";
@@ -63,10 +64,14 @@ function salesCols(s, list, nSel) {
 }
 
 // a panel over the page (the invoice, or the settings); a click on the dark area around it or Esc closes it
+// (parts/dismiss.js: a click outside, Esc and, on a phone, Back all go through close, which asks first when something is
+// not saved)
 function Panel({ title, wide, close, children }) {
+  const ref = useRef(null);
+  useDismiss(true, ref, close);
   return (
-    <div className="bk-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget) close(); }}>
-      <div className={"bk-panel" + (wide ? " wide" : "")} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Invoice"}>
+    <div className="bk-overlay">
+      <div ref={ref} className={"bk-panel" + (wide ? " wide" : "")} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Invoice"}>
         <div className="bk-panel-head"><h2>{title}</h2><button className="icon" aria-label="Close" onClick={close}>✕</button></div>
         {children}
       </div>

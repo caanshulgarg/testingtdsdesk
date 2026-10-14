@@ -21,7 +21,7 @@ import AuditTab, { Tabs as AuditTabs } from "./books/Audit.jsx";
 import Tieout from "./books/Tieout.jsx";
 import Recon from "./books/Recon.jsx";
 import { GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
-import { BooksAsOf } from "../parts/TallyLine.jsx";
+import { BooksStale } from "../parts/TallyLine.jsx";
 import HeldBooks from "../parts/HeldBooks.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 import Loading from "../parts/Loading.jsx";
@@ -36,23 +36,15 @@ function lastEntryDate(b) {
   lastMemo.set(vs, d); return d;
 }
 
-// how up to date the books are, on every tab but From Tally, and Update now (a job for the bridge: nobody waits on Tally)
+// how up to date the books are, on every tab but From Tally (round 3 A, the owner 14-Oct-2026): no status line on the page.
+// "Books up to … · read …", Update now and the timing are in the top bar's Tally panel (parts/TallyLine.jsx PanelBooks);
+// here only the books' own warnings, and one amber line when the books are stale or reading has stopped (BooksStale)
 // unknown: false on the ledgers page, whose Needs you lists those ledgers one line each (Ledgers.jsx)
 function FreshLine({ b, unknown = true }) {
-  const m = b.meta || {};
-  if (!(b.vouchers || []).length || !m.to) return <><HeldBooks cid={S.coId} where="books" />{unknown && <UnknownLedgers cid={S.coId} where="books" byBook />}</>;
-  // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
-  const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
-  // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
-  const f = booksFresh(b, S.coId), asOf = (typeof booksAsOf === "function" && booksAsOf(S.coId)) || (typeof booksYearNote === "function" && booksYearNote(S.coId));
-  // 2.1.3: "Books as of 15:34 · Update now" first: Tally cannot send its changes, so old figures are never shown as now
   return <>
     <HeldBooks cid={S.coId} where="books" />
     {unknown && <UnknownLedgers cid={S.coId} where="books" byBook />}
-    {asOf && <p className="note" style={{ margin: "0 0 4px" }} data-books-asof-line=""><BooksAsOf cid={S.coId} /></p>}
-    <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
-    {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
-    {can && !asOf && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p></>;
+    <BooksStale cid={S.coId} /></>;
 }
 
 // what a tab needs before it can show anything, and the button that brings it (review item 7). One name for bringing
@@ -102,7 +94,7 @@ function BooksPage() {
   if (tab === "mis" || tab === "fs" || tab === "audit" || tab === "tieout") {
     // the page's title is in the top bar
     return <>
-      {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><UnknownLedgers cid={co.id} where="books" byBook /><p className="note" style={{ margin: "0 0 10px" }} data-books-asof-line=""><BooksAsOf cid={co.id} /></p></>}
+      {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><UnknownLedgers cid={co.id} where="books" byBook /><BooksStale cid={co.id} /></>}
       <JobsNote cid={co.id} />
       {busy}
       {tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
