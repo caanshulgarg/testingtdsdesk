@@ -18,6 +18,7 @@ import("../../../server/_shared/assistant-labels.js").then((m) => { LAB = m; }).
 const fieldLabel = (k) => (LAB ? LAB.fieldLabel(k) : String(k).replace(/([a-z])([A-Z0-9])/g, "$1 $2").toLowerCase());
 const fieldKind = (k) => (LAB ? LAB.fieldKind(k) : "amount");
 import "./assistant.css";
+import "./asst-upload.js";   // AUpload: the panel's Upload (window.AUpload, ASST.upload)
 import { useDismiss } from "./dismiss.js";
 import { AssistantLauncher } from "./AssistantLauncher.jsx";
 

@@ -1,3 +1,6 @@
+// FinCom Assistant's one Upload (AUpload). It was src/js/82-asst-upload.js; it lives with the panel (loaded the first
+// time the panel opens, App.jsx), so legacy.js stays within its budget (tests/run_stability.py). It uses the app's
+// readers (AS26, gridsFromSheet, statementMeta, uploadStatements …), which are the page's globals.
 /* ================================================================== */
 /* FinCom Assistant: one Upload (the owner's request of 14-Oct-2026). */
 /* Anything can be uploaded (PDF, picture, Excel/CSV, Word, JSON),    */
@@ -6,7 +9,7 @@
 /* asked only when they cannot tell. Then the next steps as buttons:  */
 /* nothing is posted, filed or added by itself.                       */
 /* ================================================================== */
-const AUpload = {
+const AUpload = window.AUpload = {
   KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", other: "Other document"},
   MAX: 20 * 1024 * 1024,
   ACCEPT: ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.txt,.json,.xml,application/pdf,image/png,image/jpeg,image/webp",
@@ -267,3 +270,5 @@ const AUpload = {
   remove(u){ const a = this.st(); a.uploads = a.uploads.filter(x => x !== u); ASST.draw(); }
 };
 ASST.upload = files => AUpload.add(files);
+
+export default AUpload;

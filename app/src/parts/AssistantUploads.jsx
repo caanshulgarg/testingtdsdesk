@@ -1,4 +1,4 @@
-// FinCom Assistant: the files of one Upload (src/js/82-asst-upload.js keeps them, AUpload), shown in the panel
+// FinCom Assistant: the files of one Upload (app/src/parts/asst-upload.js keeps them, AUpload), shown in the panel
 import Button from "./Button.jsx";
 
 // one Upload (the owner's request of 14-Oct-2026): each file as FinCom found it - its kind (by FinCom's own rules, or by
