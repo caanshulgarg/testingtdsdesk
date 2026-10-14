@@ -15,6 +15,8 @@ let seq = 0, skipPop = 0, swallowUntil = 0;
 const PHONE = () => typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 600px)").matches;
 // the native popups: More, the older bk-menu menus, the column pickers, the "why" and the Info (i) popovers
 const MENUS = "details.more[open], details.bk-menu[open], details.colpick[open], details.ab-why[open], details.info[open]";
+// open pop-up menus only: a <details class="more"> without More's pop-up (an inline "show more" section) stays as it is
+const openMenus = () => Array.from(document.querySelectorAll(MENUS)).filter((d) => !d.classList.contains("more") || d.querySelector(":scope > .more-pop"));
 
 // the click that follows a closing pointerdown is not passed on (the first click only closes)
 function swallowNextClick() { swallowUntil = Date.now() + 700; }
@@ -43,7 +45,7 @@ function onPointerDown(ev) {
   const t = ev.target;
   if (above(t) || confirmOpen()) return;
   // the native menus: one open menu closes when the press is outside it
-  const menus = Array.from(document.querySelectorAll(MENUS)).filter((d) => !inside(d, t));
+  const menus = openMenus().filter((d) => !inside(d, t));
   if (menus.length) { menus.forEach((d) => { d.open = false; }); swallowNextClick(); return; }
   const top = stack[stack.length - 1];
   if (!top || inside(top.ref.current, t) || (top.opts.also && top.opts.also().some((el) => inside(el, t)))) return;
@@ -64,7 +66,7 @@ function legacyPop() {
 }
 function onKey(ev) {
   if (ev.key !== "Escape" || confirmOpen() || legacyPop()) return;
-  const menus = Array.from(document.querySelectorAll(MENUS));
+  const menus = openMenus();
   if (menus.length) {
     ev.preventDefault(); ev.stopImmediatePropagation();
     menus.forEach((d) => { d.open = false; const s = d.querySelector("summary"); if (s && s.focus) s.focus(); });
@@ -115,7 +117,7 @@ window.FCOverlay = window.FCOverlay || {
   onBack, swallowNextClick,
   // FCOverlay.add(el, close, opts) -> remove()
   add(el, close, opts) { const e = { ref: { current: el }, close, opts: opts || {}, id: ++seq }; open(e); return () => shut(e); },
-  any() { return stack.length > 0 || !!document.querySelector(MENUS); },
+  any() { return stack.length > 0 || openMenus().length > 0; },
 };
 
 // useDismiss(open, ref, close, opts): while open, the overlay in ref closes on an outside press, on Esc and (a phone) on Back.
