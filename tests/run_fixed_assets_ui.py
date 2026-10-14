@@ -85,7 +85,11 @@ with sync_playwright() as p:
        "1. the register: one row per asset, grouped by class with subtotals and the grand total; the accumulated-depreciation ledgers are not assets")
     gt = pg.inner_text("[data-far-total]")
     ok("Grand total" in gt and "4,95,000.00" in gt, "1. the grand total row (" + gt.replace("\n", " ")[:90] + ")")
-    ok(pg.locator("[data-far-confirm]").count() == 1 and pg.locator("[data-far-item='settings']").count() == 1, "1. the Confirm list (%d points)" % pg.locator("[data-far-item]").count())
+    total = pg.evaluate("FAR.forYear(S.books, '2025').confirm.length")
+    ok(pg.locator("[data-far-confirm]").count() == 1 and pg.locator("[data-far-item]").count() == 3 and pg.locator("[data-far-item='settings']").count() == 1 and ("Show %d more" % (total - 3)) in pg.inner_text("[data-far-conf-more]"),
+       "1. the Confirm list: the first 3 of %d, then Show %d more" % (total, total - 3))
+    pg.click("[data-far-conf-more]"); pg.wait_for_timeout(400)
+    ok(pg.locator("[data-far-item]").count() == total, "1. Show more: all %d" % total)
     tabs = pg.eval_on_selector_all("[data-far-tab]", "els => els.map(e => e.getAttribute('data-far-tab'))")
     ok(tabs == ["reg", "books", "it", "dt", "je"], "1. the tabs: Register, Books schedule, IT blocks, Deferred tax, Journal " + str(tabs))
     # 2 the books
@@ -110,7 +114,7 @@ with sync_playwright() as p:
     pg.click("[data-far-row='L:Edge Binding Machine']"); pg.wait_for_selector("[data-detail='farAsset'] [data-far-ledger]", timeout=10000)
     led = pg.inner_text("[data-far-ledger]")
     ok(pg.locator("[data-far-ledger] tbody tr").count() == 2 and "Opening balance" in led and "Sharma Machines" in led and "4,50,000.00" in led and pg.locator("[data-far-look]").count() == 1, "4. the ledger: opening 3,00,000, the purchase from Sharma Machines, 4,50,000; Look up on the entry")
-    ok("2025-26" in pg.inner_text("[data-far-history]"), "4. its depreciation by year")
+    ok("2025-26" in pg.inner_text("[data-far-history]") and "from Sharma Machines (Purchase A1)" in pg.inner_text("[data-far-drawer-head]"), "4. its depreciation by year; the supplier and voucher in the drawer")
     f = pg.locator("[data-far-field='location']"); f.fill("Bay 3, Noida"); f.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("window.__bk.fixedAssets['2025'].assets.find(a => a.ledger === 'Edge Binding Machine').location || ''") == "", "4. a change without a reason is refused")
     pg.fill("[data-far-why]", "physical verification of 31-03-2026"); f = pg.locator("[data-far-field='location']"); f.fill("Bay 3, Noida"); f.press("Tab"); pg.wait_for_timeout(600)
@@ -160,12 +164,18 @@ with sync_playwright() as p:
     pg.click("[data-far-carry]"); pg.wait_for_timeout(1500)
     ok(pg.evaluate("Object.keys(window.__bk.fixedAssets).sort().join()") == "2025,2026" and pg.input_value("[data-far-year-pick]") == "2026" and sorted(rows(pg)) == ["L:AC - Hitachi", "L:Edge Binding Machine"],
        "6. carried forward to 2026-27: the two assets still held, the laptop sold stays behind")
+    # Confirm all shown
+    pg.evaluate("S.farFy = '2025'; render();"); pg.wait_for_timeout(800)
+    n0 = pg.evaluate("FAR.forYear(S.books, '2025').confirm.filter(c => !/^need:/.test(c.key)).length")
+    pg.click("[data-far-ok-all]"); pg.wait_for_timeout(800)
+    ok(n0 > 1 and pg.evaluate("FAR.forYear(S.books, '2025').confirm.filter(c => !/^need:/.test(c.key)).length") == 0 and pg.locator("[data-far-confirm]").count() == 0, "1. Confirm all shown: %d points confirmed, the list gone" % n0)
     ok(pg.evaluate(STATE) == before, "8. the books are unchanged: vouchers, balances, ledger map; nothing queued for Tally")
     ctx.close()
 
     print("== a firm")
     ctx, pg = page(br, "firm")
     before = pg.evaluate(STATE)
+    pg.evaluate("S.farConfAll = true; render();"); pg.wait_for_timeout(400)
     t = pg.inner_text("[data-far]")
     ok(pg.get_attribute("[data-far]", "data-far-basis") == "it" and "Companies Act" not in t and "Schedule II" not in t.replace("no Schedule II", "") and "Partnership firm: the books follow the Income-tax rates" in t, "7. a firm: the books at the Income-tax rates, no Companies Act")
     tabs = pg.eval_on_selector_all("[data-far-tab]", "els => els.map(e => e.getAttribute('data-far-tab'))")
@@ -177,6 +187,9 @@ with sync_playwright() as p:
     ok(len(items) == 10 and not any(i.startswith("dt-") for i in items), "7. Export: no deferred tax working")
     pg.click("[data-far-export] summary"); pg.wait_for_timeout(200)
     pg.screenshot(path=os.path.join(OUT, "fixed-assets-ui-firm.png"), full_page=True)
+    # the layout follow-up: the page's name in full; the block as its rate; the sideways scroll said
+    ok(pg.evaluate("(() => { const h = document.querySelector('#cobar .tbar-title h2'); return h && h.scrollWidth <= h.clientWidth + 1; })()") and pg.locator("[data-far-scroll]").count() == 1, "7. the page's name is not cut short; the register says to scroll sideways")
+    ok(pg.evaluate("[...document.querySelectorAll('[data-far-kind=a] td:nth-child(2)')].every(td => /^\\d+%$/.test(td.innerText.trim()))"), "7. the block column shows the rate (15%, 40%)")
     # its own policy at ICAI Level II, then Level IV (the statements' switch)
     pg.evaluate("""() => { const b = window.__bk, r = b.fixedAssets['2025']; r.settings = Object.assign({}, r.settings, {bookBasis: 'own', method: 'SLM'});
       b.fs = {rx: {map: {versions: [], draft: {}}, det: {'2025': {policies: {switches: {levelIV: false}}}}, opts: {}}}; render(); }"""); pg.wait_for_timeout(800)

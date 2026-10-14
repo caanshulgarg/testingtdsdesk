@@ -145,7 +145,7 @@
 #app .tnl-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--border-subtle, var(--border)); }
 #app .tnl-list li:first-child { border-top: 0; }
 #app .tnl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room): on a computer the title block is
+/* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room; the one rule for it, the depreciation follow-up's folded in): on a computer the title block is
    as wide as the title and its Tally chip need (never less than the usual share of the row, never more than half); the
    line over it (the breadcrumb, the firm's name) takes the block's width and is cut with … instead of widening it */
 @media (min-width: 901px) {

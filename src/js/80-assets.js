@@ -475,7 +475,7 @@ const FAR = (() => {
   X.registerRow = function(a, res){
     const b = X.block(a.block), first = a.firstAdd || null;
     const c = X.cls(a.cls);
-    return {id: a.id, asset: a.name, group: res.basis === "it" ? (b ? b.name : "") : a.clsName, groupShort: res.basis === "it" ? (b ? "Block " + b.rate + "%" : "") : c ? c.head.replace(/^[IVXL]+\.\s*/, "") : "", purchased: first ? first.date : a.gOpen ? "opening" : "", putToUse: a.putToUse || "",
+    return {id: a.id, asset: a.name, group: res.basis === "it" ? (b ? b.name : "") : a.clsName, groupShort: res.basis === "it" ? (b ? b.rate + "%" : "") : c ? c.head.replace(/^[IVXL]+\.\s*/, "") : "", purchased: first ? first.date : a.gOpen ? "opening" : "", putToUse: a.putToUse || "",
       supplier: first ? [first.party || first.with || "", first.vno ? first.vtype + " " + first.vno : ""].filter(Boolean).join(" · ") : a.gOpen ? "Opening balance" : "",
       gOpen: a.gOpen, gAdd: a.gAdd, gDel: a.gDel, gClose: a.gClose, dOpen: a.dOpen, dep: a.dep, dDel: a.dDel, dClose: a.dClose, nOpen: a.nOpen, nClose: a.nClose,
       block: b ? b.name : "", rate: b ? b.rate : null, sold: a.sales.length > 0, added: a.gAdd > 0, override: !!a.override, gone: a.gone};
