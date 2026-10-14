@@ -74,3 +74,16 @@ Your own runner (`tests/run_audit*.py|js`, `tests/run_reports*.py|js`) on the ma
 `tests/ci/tests.txt`. For the chat path, a Deno test like `server/assistant/assistant_test.ts` (MockClaude, the stand in
 `tests/assistant_stand.py` / `tests/assistant_supa.py`): your tool's tables to the paisa, the label, and that `aiText`
 never carries a figure that is not in your tables.
+
+## Certificates (`tools/certificates.ts`, branch `certificates`)
+
+`certificate_prepare` is the first **firm-wide** tool (`firmWide: true`): it runs with no client open and names its clients
+(`ctx.clients`, `ctx.rpcFor`), reads the files uploaded in the chat (`ctx.uploads`, `ctx.readFile`; the panel's Files button,
+`<firm>/<client or _firm>/uploads/`, never sent to the model as they are), a client's kept uploads (`ctx.clientFiles`), and keeps
+the firm's certificate details, formats and confirmed figures in migration 83's tables (`ctx.store`, written by the function
+with the service role). Its questions (`firmWide` tools' words) skip the keyword router and Haiku and run on Sonnet (task
+`file`, no web); its answers are never cached. The AI only reads a statement FinCom cannot read (`ctx.aiRead`: Sonnet, low
+effort, counted against the cap; a scanned copy is sent as it is, as a notice is), and those figures are labelled "read by
+the AI" and checked on their line where the copy has text. Wording: `tools/certificate-templates.json` (one file, every
+paragraph "to confirm by the owner"); the arithmetic and reading: `tools/certlib.ts`. Tests: `tests/run_certificates.py`,
+`tests/run_migration83.py`, `tests/run_certificates_ui.py`.

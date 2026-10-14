@@ -284,3 +284,8 @@ run_zoho_map.mjs                      120
 run_migration75.py                    180
 run_zoho_server.py                    900
 run_integrations_ui.py                300  TDSDESK_SITE=../app/dist-test
+# CA certificates in the Assistant (14-Oct-2026, the owner: turnover and net worth certificates for many clients, chat first):
+# net worth hand-worked, signed statements read with their page and line, formats filled, the UDIN blank, migration 83 twice
+run_certificates.py                   300
+run_migration83.py                    180
+run_certificates_ui.py                300  TDSDESK_SITE=../app/dist-test

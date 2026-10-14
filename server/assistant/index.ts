@@ -98,7 +98,17 @@ export function handler(deps: Deps) {
     // a notice the user attached: read from the firm's private bucket with the user's own token
     const attachments: Record<string, unknown>[] = [];
     let noticePath = "";
-    for (const a of (Array.isArray(body.attachments) ? body.attachments : []).slice(0, 3)) {
+    // files uploaded in the chat for a tool to read (a signed balance sheet, a certificate format, a letterhead):
+    // <firm>/<client or _firm>/uploads/...; never sent to the model as they are (the tool reads them)
+    const uploads: { path: string, name: string, type: string }[] = [];
+    const isUpload = (p: string) => p.startsWith(firm + "/") && !p.includes("..") && /^[^/]+\/[^/]+\/uploads\//.test(p);
+    for (const a of [...(Array.isArray(body.uploads) ? body.uploads : []), ...(Array.isArray(body.attachments) ? body.attachments : [])].slice(0, 40)) {
+      const path = String(a?.path || "");
+      if (!/\/uploads\//.test(path)) continue;
+      if (!isUpload(path)) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
+      if (!uploads.some((u) => u.path === path)) uploads.push({ path, name: String(a?.name || path.split("/").pop() || "file").slice(0, 160), type: String(a?.type || "").slice(0, 120) });
+    }
+    for (const a of (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || ""))).slice(0, 3)) {
       const path = String(a?.path || "");
       if (!path.startsWith(firm + "/") || !/\/notices\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's notices." });
       const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
@@ -138,7 +148,7 @@ export function handler(deps: Deps) {
     // relative period), the client and the version of the client's books. General questions keep 7 days, a client's 30.
     const history = (Array.isArray(body.history) ? body.history : []).filter((h: any) => h && (h.role === "user" || h.role === "assistant"));
     let cacheKey = "", cacheVersion = "";
-    if (!attachments.length && !history.length && deps.levers?.answerCache !== false) {
+    if (!attachments.length && !uploads.length && !history.length && deps.levers?.answerCache !== false) {
       const nq = question.toLowerCase().replace(/[^a-z0-9₹%.,]+/g, " ").replace(/\s+/g, " ").trim();
       const rel = /\b(this|last|current|previous|today|yesterday|ytd|so far|to date|recent|latest|now)\b/.test(nq) ? "|" + today : "";
       cacheKey = await sha256(nq + rel + "|" + (clientId ? "client" : "firm"));
@@ -157,6 +167,31 @@ export function handler(deps: Deps) {
       }
     }
     const kept: Ev[] = [];
+    // the certificates' store (migration 83): the firm's details for certificates, saved formats, the confirmed figures;
+    // written here with the service role for the user's firm only (the tables' RLS lets the firm's members read them)
+    const certStore = (firmId: string, uid: string) => ({
+      settings: async () => ((await rest("/rest/v1/assistant_cert_settings?select=*&firm_id=eq." + firmId, SERVICE).catch(() => [])) as any[])[0] || null,
+      saveSettings: async (x: Record<string, unknown>) => {
+        const row: Record<string, unknown> = { firm_id: firmId, updated_by: uid, updated_at: new Date().toISOString() };
+        for (const k of ["firm_name", "frn", "signatory", "designation", "membership_no", "place", "letterhead_path", "letterhead_footer_path", "default_format", "confirmed"]) if (x[k] !== undefined) row[k] = x[k];
+        await rest("/rest/v1/assistant_cert_settings", SERVICE, { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(row) });
+      },
+      formats: async () => ((await rest("/rest/v1/assistant_cert_formats?select=id,name,path,kind,fields&firm_id=eq." + firmId + "&order=made_at.desc", SERVICE).catch(() => [])) as any[]) || [],
+      saveFormat: async (f: Record<string, unknown>) => {
+        const r = (await rest("/rest/v1/assistant_cert_formats", SERVICE, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ firm_id: firmId, name: String(f.name).slice(0, 120), path: f.path, kind: f.kind, fields: f.fields, made_by: uid }) })) as any[];
+        return (r && r[0] && r[0].id) || null;
+      },
+      figures: async (client: string, fy: string) => ((await rest("/rest/v1/assistant_cert_figures?select=figures,basis&firm_id=eq." + firmId + "&client_id=eq." + encodeURIComponent(client) + "&fy=eq." + encodeURIComponent(fy) + "&order=made_at.desc&limit=1", SERVICE).catch(() => [])) as any[])[0] || null,
+      saveFigures: async (x: Record<string, unknown>) => { await rest("/rest/v1/assistant_cert_figures", SERVICE, { method: "POST", body: JSON.stringify({ firm_id: firmId, client_id: x.client, fy: x.fy, basis: x.basis, figures: x.figures, made_by: uid }) }); },
+      // a copy kept in the firm's settings folder (a letterhead, a format), so it outlives the chat's uploads
+      keep: async (path: string, name: string) => {
+        if (!path.startsWith(firmId + "/")) return null;
+        const to = firmId + "/_firm/settings/" + crypto.randomUUID().slice(0, 8) + "-" + safeName(name);
+        const r = await doFetch(URL_ + "/storage/v1/object/copy", { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify({ bucketId: BUCKET, sourceKey: path, destinationKey: to }) });
+        await r.text();
+        return r.ok ? to : null;
+      },
+    });
     const upload = async (bytes: Uint8Array, fileName: string, kind: string) => {
       const id = crypto.randomUUID(), name = safeName(fileName).replace(/\.(xlsx|docx|pdf|zip)$/i, "") + "." + kind;
       const path = firm + "/" + (clientId ? clientId.replace(/[^A-Za-z0-9_-]/g, "_") : "_firm") + "/files/" + id + "." + kind;
@@ -208,6 +243,22 @@ export function handler(deps: Deps) {
               return id || null;
             } catch { return null; }
           },
+          uploads,
+          // a file of the firm's private bucket, read as the user (row-level security on storage decides)
+          readFile: async (path) => {
+            if (!path.startsWith(firm + "/") || path.includes("..")) return null;
+            const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
+            if (!r.ok) { await r.body?.cancel(); return null; }
+            const b = new Uint8Array(await r.arrayBuffer());
+            return b.length > MAX_NOTICE ? null : b;
+          },
+          clientInfo: async (id) => ((await rest("/rest/v1/clients?select=*&id=eq." + encodeURIComponent(id), jwt).catch(() => [])) as any[])[0] || null,
+          // what was uploaded to the client before (<firm>/<client>/uploads/), newest first
+          clientFiles: async (id) => {
+            const r = (await rest("/storage/v1/object/list/" + BUCKET, jwt, { method: "POST", body: JSON.stringify({ prefix: firm + "/" + id.replace(/[^A-Za-z0-9_-]/g, "_") + "/uploads/", limit: 40, sortBy: { column: "created_at", order: "desc" } }) }).catch(() => [])) as any[];
+            return (r || []).filter((o) => o && o.name && !o.name.endsWith("/")).map((o) => ({ path: firm + "/" + id.replace(/[^A-Za-z0-9_-]/g, "_") + "/uploads/" + o.name, name: String(o.name).replace(/^[a-z0-9]+-/, ""), type: String(o.metadata?.mimetype || "") }));
+          },
+          certStore: certStore(firm, user.id),
           firm: { name: String(body?.firm?.name || "").slice(0, 120), lines: (Array.isArray(body?.firm?.lines) ? body.firm.lines : []).map((l: unknown) => String(l).slice(0, 160)).slice(0, 4) },
           emit,
         };
