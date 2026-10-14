@@ -8,7 +8,7 @@
 // fields with "Add to due list", and "Wrong answer?". Earlier questions of the session below. Ctrl+J opens it anywhere.
 import { useRef, useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
-import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus, Upload } from "lucide-react";
+import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
@@ -18,9 +18,9 @@ const LABELS = {
   ai: ["warn", "AI answer, not checked against the books"],
   general: ["info", "General guidance — verify before relying"],
   notice: ["neutral", "Notice"],
-  // the certificates: figures typed, read from signed statements or taken from the books: neutral, the "From" column says which
+  // certificates: neutral; each row's "From" says where its figure came from
   confirm: ["neutral", "Figures for the certificate – please confirm"],
-  certificate: ["neutral", "Figures in the certificates – the source is in each row"],
+  certificate: ["neutral", "Certificate figures – source in each row"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -80,7 +80,7 @@ function Table({ r, t }) {
           {cols.map((c) => <td key={c.k} className={isNum(c.t) ? "n" : ""}>
             {c.t === "date" && row[c.k] && (row.guid || row.vno) && (c.k === "day" || c.k === "date") ? <button className="linkbtn" title="Open the entry" onClick={() => ASST.openEntry(row, r.client || t.cid)}>{dmy(row[c.k])}</button>
               : c.t === "date" ? dmy(row[c.k]) : c.t === "amount" ? money(row[c.k]) : c.t === "pct" ? (row[c.k] == null ? "" : row[c.k] + "%") : row[c.k] == null ? "" : String(row[c.k])}
-            {own && c.k === "source" && row.books_check && <span className="asst-src ok asst-rowtick" data-asst-rowtick="" title="Worked out again from FinCom's copy of the books"> ✓ books</span>}
+            {own && c.k === "source" && row.books_check && <span className="asst-src ok asst-rowtick" data-asst-rowtick="" title="Worked out from the books"> ✓ books</span>}
           </td>)}
         </tr>)}</tbody>
       </table></div>}
@@ -230,11 +230,11 @@ export default function Assistant() {
               {cid && <><input ref={file} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files[0]; e.target.value = ""; ASST.attach(f); }} />
                 <button type="button" className="iconbtn" title="Attach a notice (PDF or picture)" onClick={() => file.current && file.current.click()} disabled={a.uploading}><Paperclip size={15} /> {a.uploading ? "Storing…" : a.attach ? a.attach.name : "Notice"}</button></>}
               <input ref={upl} type="file" multiple accept=".pdf,.xlsx,.xls,.docx,.png,.jpg,.jpeg" hidden onChange={(e) => { const f = Array.from(e.target.files); e.target.value = ""; ASST.upload(f); }} />
-              <button type="button" className="iconbtn" data-asst-upload="" title="Upload files for the assistant to read: a signed balance sheet, a certificate format, the letterhead" onClick={() => upl.current && upl.current.click()} disabled={a.uploading}><Upload size={15} /> Files</button>
+              <button type="button" className="iconbtn" data-asst-upload="" title="Signed statements, a format, the letterhead" onClick={() => upl.current && upl.current.click()} disabled={a.uploading}><Paperclip size={15} /> Files</button>
               <span className="note asst-hint" data-asst-privacy="">Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never posts, files or changes anything.</span>
               <Button type="submit" className="btn small primary" disabled={a.busy || !String(a.q || "").trim()}><Send size={14} /> Ask</Button>
             </div>
-            {ASST.ups().length > 0 && <div className="asst-ups" data-asst-ups="">{ASST.ups().map((u) => <span key={u.path} className="chip">{u.name} <button type="button" className="linkbtn" title="Not for this conversation" onClick={() => ASST.unUpload(u.path)}>×</button></span>)}</div>}
+            {ASST.ups().length > 0 && <div className="asst-ups" data-asst-ups="">{ASST.ups().map((u) => <span key={u.path} className="chip">{u.name} <button type="button" className="linkbtn" onClick={() => ASST.unUpload(u.path)}>×</button></span>)}</div>}
           </form>
           {!turns.length && <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} className="chip" onClick={() => ASST.ask(s)}>{s}</button>)}</div>}
           {latest && <Turn t={latest} latest />}
