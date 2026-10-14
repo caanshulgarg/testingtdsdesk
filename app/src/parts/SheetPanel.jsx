@@ -1,11 +1,13 @@
 // A register uploaded on Purchase or Sales (a sheet, a PDF table or JSON): the panel beside the page (DetailDrawer)
 // that says which format it is, shows a new format's mapping once to confirm or change, asks what needs an answer,
-// and adds the documents to To review. The logic is SheetImport / SheetFmt (src/js/81-sheet-import.js).
+// and adds the documents to To review. The logic is SheetImport / SheetFmt (app/src/lib/registers.js).
 import DetailDrawer from "./DetailDrawer.jsx";
 import ListTable from "./ListTable.jsx";
 import Button from "./Button.jsx";
 import { BusyCard } from "./Reading.jsx";
 import LedgerBox from "./LedgerBox.jsx";
+import Loading from "./Loading.jsx";
+import { useEffect, useState } from "react";
 
 const HOW = {
   builtin: "A format FinCom knows: read by its own rules, no AI.",
@@ -128,10 +130,13 @@ export default function SheetPanel() {
 function pickRegister(side) {
   let el = document.getElementById("sheetIn");
   if (!el) { el = document.createElement("input"); el.type = "file"; el.id = "sheetIn"; el.hidden = true; el.multiple = true; el.accept = ".xlsx,.xls,.csv,.json,.pdf"; document.body.appendChild(el); }
-  el.onchange = () => { const files = Array.from(el.files || []); el.value = ""; if (files.length) { goStep("review", side === "sales" ? "sales" : "bills"); setTimeout(() => SheetImport.start(files, side, { asTable: true }), 50); } };
+  el.onchange = () => { const files = Array.from(el.files || []); el.value = ""; if (files.length) { goStep("review", side === "sales" ? "sales" : "bills"); setTimeout(() => sheetStart(files, side, { asTable: true }), 50); } };
   el.click();
 }
 export function SheetFormats() {
+  const [ready, setReady] = useState(typeof SheetImport === "object");
+  useEffect(() => { if (!ready) registersLoad().then(() => setReady(true), () => {}); }, [ready]);
+  if (!ready) return <Loading what="the register formats" />;
   const co = CO(), all = (co.sheetFormats || []).concat((S.firm && S.firm.sheetFormats) || []);
   const live = all.filter((f) => !f.deleted), gone = all.filter((f) => f.deleted);
   return <section data-sheet-formats="">

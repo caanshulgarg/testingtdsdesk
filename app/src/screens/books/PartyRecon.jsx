@@ -2,8 +2,9 @@
 // reconciliation should come under the Reconciliation tab ... Prepare a proper reconciliation. If the opening has a
 // difference, then also show it in the difference."). The party's statement in any format (the sheet engine: AI once
 // for a new format, then its saved columns) against the party's ledger in FinCom's copy of the books. The logic is
-// PartyRecon (src/js/82); the upload goes through the register panel (parts/SheetPanel.jsx).
-import { useState } from "react";
+// PartyRecon (app/src/lib/registers.js); the upload goes through the register panel (parts/SheetPanel.jsx).
+import { useEffect, useState } from "react";
+import Loading from "../../parts/Loading.jsx";
 import ListTable from "../../parts/ListTable.jsx";
 import DetailDrawer from "../../parts/DetailDrawer.jsx";
 import Button from "../../parts/Button.jsx";
@@ -74,6 +75,13 @@ function RunView({ run }) {
 }
 
 export default function PartyReconPage({ side }) {
+  // the reconciliation's engine loads the first time the page is opened (registersLoad, src/js/81-registers.js)
+  const [ready, setReady] = useState(typeof PartyRecon === "object");
+  useEffect(() => { if (!ready) registersLoad().then(() => setReady(true), () => {}); }, [ready]);
+  if (!ready) return <Loading what="the reconciliations" />;
+  return <PartyReconBody side={side} />;
+}
+function PartyReconBody({ side }) {
   const runs = PartyRecon.runs(side), open = detailOpen("recon"), run = open ? PartyRecon.byId(open) : null;
   const who = side === "customer" ? "customer" : "vendor";
   return <div data-party-recon={side}>

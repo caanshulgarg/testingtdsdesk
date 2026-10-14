@@ -29,7 +29,7 @@ def ok(c, w):
     if not c: fails.append(w)
 
 # FinCom's AI, faked: it maps by the header's words, and counts its calls and what it was shown
-FAKE_AI = """() => { window.__ai = []; SheetAI.map = async (req) => { window.__ai.push(JSON.parse(JSON.stringify(req)));
+FAKE_AI = """async () => { await registersLoad(); window.__ai = []; SheetAI.map = async (req) => { window.__ai.push(JSON.parse(JSON.stringify(req)));
   const pick = (re) => req.head.find(h => re.test(h)) || undefined;
   const map = {date: pick(/dt|date/i), no: pick(/bill no|voucher no|inv(oice)? no/i), party: pick(/supplier|party name/i), gstin: pick(/gstin/i), doctype: pick(/type/i),
     taxable: pick(/taxable|assessable/i), igst: pick(/^igst|integrated/i), cgst: pick(/^cgst|central/i), sgst: pick(/^sgst|^state/i), total: pick(/^total|gross/i)};

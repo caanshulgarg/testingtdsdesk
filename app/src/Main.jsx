@@ -4,7 +4,7 @@
 // loaded, the ledger list's box, the tables' funnels) and React draws the page.
 //
 // Which screen: S.view (home or company), S.tab (a client's part), S.step (collecting), S.homeTab (home's page).
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import Guard from "./Guard.jsx";
 import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
@@ -13,7 +13,8 @@ import PageSkeleton from "./parts/PageSkeleton.jsx";
 import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
 import { UploadLine } from "./parts/StateBar.jsx";
-import SheetPanel from "./parts/SheetPanel.jsx";
+// the register panel: with the registers' engine, only when a register is read
+const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
@@ -76,7 +77,7 @@ export default function Main({ v }) {
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
-    {company && S.sheetImp && <Guard name="the register panel" v={v}><SheetPanel /></Guard>}
+    {company && S.sheetImp && <Guard name="the register panel" v={v}><Suspense fallback={null}><SheetPanel /></Suspense></Guard>}
     <Guard name="the bar" v={v} quiet><Suspense fallback={null}><Bar /></Suspense></Guard>
     <Legacy html={colPopHtml()} />
   </>;

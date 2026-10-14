@@ -29,6 +29,7 @@ def ok(c, w):
     if not c: fails.append(w)
 
 SETUP = """async () => {
+  await registersLoad();
   // the ledgers of the books, and the two parties' ledgers as the books read them (LK.ledgerBooks' shape)
   await loadBank(S.coId);
   S.bank.ledgers = {list: [{name: "Kashi IT Solutions", group: "Sundry Creditors", gstin: "09AAACK1234A1Z5"}, {name: "Asha Retail LLP", group: "Sundry Debtors", gstin: "09AAAFR1111R1Z1"},

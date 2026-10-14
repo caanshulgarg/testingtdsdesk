@@ -1,5 +1,5 @@
 // node run_party_recon.js - a vendor's and a customer's statement against the party's ledger in the books (PartyRecon,
-// src/js/81): the statement read in two formats (debit and credit columns; one amount with Dr / Cr and a running
+// app/src/lib/registers.js): the statement read in two formats (debit and credit columns; one amount with Dr / Cr and a running
 // balance), seen from both sides (their debit is our credit), the opening difference a line of its own, each kind of
 // difference (matched by number; by amount and date within ±7 days and ±₹1; the same entry with another amount; ours only;
 // theirs only; TDS deducted by us and not shown by them; TDS shown by them only; GST), and the statement adding up to
@@ -9,8 +9,10 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const h = load(HTML, ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "stateOfGstin", "normInv", "Market", "SheetFmt", "VR", "PARTY_FIELDS", "RECON_TOL", "PartyRecon"]);
-const F = h.x.SheetFmt, P = h.x.PartyRecon;
+const h = load(HTML, ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"]);
+// the engine is a file of its own, loaded by the app when first used: run here on the program's helpers
+const vm = require("vm"); h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8"), h.ctx);
+const F = h.ctx.SheetFmt, P = h.ctx.PartyRecon;
 const csv = (n) => F.csv(fs.readFileSync(path.join(FX, n), "utf8"));
 
 // ---- the vendor's statement in its first format: debit and credit columns

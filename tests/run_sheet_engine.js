@@ -1,4 +1,4 @@
-// node run_sheet_engine.js - the sheet-format engine (src/js/81-sheet-import.js) on the made-up registers in
+// node run_sheet_engine.js - the sheet-format engine (app/src/lib/registers.js) on the made-up registers in
 // tests/fixtures/sheets (make_sheets.py), with no browser: the header found, the fingerprint, a saved format found again
 // (exact, and with a column added), a real change not, the AI shown only the header and 10 masked rows, every figure
 // worked out by FinCom's rules to the paisa (Rs., commas, brackets negative, an invoice on two rows, a total row left
@@ -9,8 +9,11 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const NAMES = ["num", "r2", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "Market", "GST2B", "GSTAmend", "SHEET_FIELDS", "SheetFmt"];
-const h = load(HTML, NAMES), F = h.x.SheetFmt;
+const NAMES = ["num", "r2", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "money", "INR", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"];
+const h = load(HTML, NAMES);
+// the engine is a file of its own, loaded by the app when first used: run here on the program's helpers
+const vm = require("vm"); h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8"), h.ctx);
+const F = h.ctx.SheetFmt;
 h.ctx.CO = () => ({name: "ZZ Up Client", gstin: "09AANFG3202D1ZR"});
 const csv = (n) => F.csv(fs.readFileSync(path.join(FX, n), "utf8"));
 const co = h.ctx.CO();
