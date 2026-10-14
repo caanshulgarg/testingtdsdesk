@@ -300,3 +300,5 @@ run_depreciation.js                   240
 run_depreciation_books.js             180
 run_dep_tool.py                       300
 run_fixed_assets_ui.py                300  TDSDESK_SITE=../app/dist-test
+# quiet refresh (14-Oct-2026): idle 60 s on Clients, TDS, Accounts and Bills with heartbeats and syncs: no reload, no loading state, scroll/focus/menu kept
+run_quiet_refresh.py                  900  TDSDESK_SITE=../app/dist-test

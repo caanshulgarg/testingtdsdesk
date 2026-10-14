@@ -11,7 +11,12 @@ import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { Sparkles, Paperclip, Upload as UploadIcon, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
-import { fieldKind, fieldLabel } from "../../../server/_shared/assistant-labels.js";
+// the one label map for a result's fields (server/_shared/assistant-labels.js), fetched as its own small file so the
+// app's first file stays within its budget (tests/run_stability.py); until it is in, a key is put in words
+let LAB = null;
+import("../../../server/_shared/assistant-labels.js").then((m) => { LAB = m; }).catch(() => {});
+const fieldLabel = (k) => (LAB ? LAB.fieldLabel(k) : String(k).replace(/([a-z])([A-Z0-9])/g, "$1 $2").toLowerCase());
+const fieldKind = (k) => (LAB ? LAB.fieldKind(k) : "amount");
 import "./assistant.css";
 
 const LABELS = {

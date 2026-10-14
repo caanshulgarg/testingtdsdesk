@@ -1419,6 +1419,9 @@ table.data.lt thead th{background:var(--sheet)}
 th[aria-sort=ascending],th[aria-sort=descending]{color:var(--ink)}
 table.lt tfoot td{background:var(--paper);border-top:1px solid var(--rule);border-bottom:0;white-space:nowrap;position:sticky;bottom:var(--bottom-banner-h, 0px);z-index:1}
 table.lt tfoot td.lt-count{color:var(--muted)}
+/* the totals line stands on the testing strip (--bottom-banner-h); where it then lies over the last row, a click goes
+   through it to the row (it holds figures only; a link or button in it still takes the click) */
+table.lt tfoot{pointer-events:none}table.lt tfoot a,table.lt tfoot button,table.lt tfoot input,table.lt tfoot select{pointer-events:auto}
 table.lt tfoot td.lt-count b{color:var(--ink)}
 .lt-empty{background:var(--sheet);border:1px solid var(--rule);border-radius:10px}
 /* K7: while data loads, "Loading…" over grey bars in the shape of what comes (app/src/parts/Loading.jsx) */
