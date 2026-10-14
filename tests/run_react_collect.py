@@ -44,7 +44,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.jobs.length") == 0 and "blurry.jpg" not in app(), "Clear list")
     # the "reading…" card above the work
     pg.evaluate("(cid) => { S.jobs = [{id: 'j3', name: 'big.pdf', status: 'reading', target: cid, cid, msg: 'page 2 of 4', startedAt: Date.now()}]; render(); }", cid); pg.wait_for_timeout(400)
-    ok(pg.locator("#app .busycard").count() >= 1 and "Reading a bill" in app() and "page 2 of 4" in app(), "a bill being read: the card says which and how far")
+    # upload-pages (14-Oct-2026): on Purchase the upload line says it, inline ("Reading 1 of 1… big.pdf · page 2 of 4"); elsewhere the card
+    ok((pg.locator("#app .busycard").count() >= 1 and "Reading a bill" in app() or pg.locator("#app [data-upload-progress]").count() == 1 and "Reading 1 of 1" in app()) and "page 2 of 4" in app(),
+       "a bill being read: it says which and how far")
     pg.evaluate("S.jobs = []; render()")
     # the client's document inbox (firm account stood in)
     pg.evaluate("""(cid) => { Cloud.on = () => true; S.account = {email: 'a@b.c'};

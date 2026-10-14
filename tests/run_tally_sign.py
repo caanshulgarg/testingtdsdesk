@@ -12,7 +12,8 @@ panel's "The firm's Tally computers" and the hover's second line, "connected" no
     when disconnected the reason and the fix, one for each: the bridge not running, Tally closed, no company open, a
     different company open, no internet on that computer;
   - no "live" and no cloud sign; "Saving…" while saving, "Not saved: <reason>" in red on a failure, nothing when saved;
-  - "N to check in Tally" is now "N entries need review", a link to Post to Tally → Errors, hidden at zero.
+  - "N to check in Tally" is now "N Tally errors", a link to Post to Tally → Errors, hidden at zero (and on the upload
+    pages, whose row of states counts them as Errors).
 Offline, a made-up client, the React test build (app/dist-test)."""
 import os, re, threading, functools, http.server, datetime
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -149,12 +150,14 @@ with sync_playwright() as p:
     ok(r and r[1].startswith("Not saved: ") and "internet" in r[1] and "Failed to fetch" not in r[1], "offline: “Not saved: …internet…” (%s)" % (r,))
     pg.evaluate("() => { Cloud.on = () => false; Live.sv = {state: '', at: 0}; render(); }")
     # 4. entries that need review
-    pg.evaluate("() => { window.__ptc = window.postTabCounts; }")
+    # upload-pages (14-Oct-2026): "N Tally errors" (it said "N entries need review" over Purchase's "To review 0"); on the
+    # upload pages the count is their Errors state, so the link is on the client's other pages
+    pg.evaluate("() => { window.__ptc = window.postTabCounts; goClient('dash'); }"); pg.wait_for_timeout(500)
     def rv(_, n):
         pg.evaluate("(n) => { window.postTabCounts = () => ({topost: 0, posted: 0, errors: n}); render(); }", n); pg.wait_for_timeout(500)
         return pg.evaluate("() => { const e = document.querySelector('#cobar [data-review-link]'); return e ? e.innerText.trim() : null; }")
-    ok(rv(0, 6) == "6 entries need review", "six on Post to Tally → Errors: “6 entries need review”")
-    ok(rv(0, 1) == "1 entry needs review", "one: “1 entry needs review”")
+    ok(rv(0, 6) == "6 Tally errors", "six on Post to Tally → Errors: “6 Tally errors”")
+    ok(rv(0, 1) == "1 Tally error", "one: “1 Tally error”")
     ok("to check in Tally" not in hdr(), "no “to check in Tally” any more")
     pg.click("#cobar [data-review-link]"); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.tab, (S.postTabs || {})[S.coId]]") == ["export", "errors"], "the link opens Post to Tally on its Errors tab (%s)" % pg.evaluate("[S.tab, (S.postTabs || {})[S.coId]]"))

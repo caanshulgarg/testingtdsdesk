@@ -1,0 +1,14 @@
+"Kashi IT Solutions","GSTIN 09AAACK1234A1Z5",,,,
+"Statement of account: Testing AAD (GSTIN 09AANFG3202D1ZR)",,,,,
+
+Date,"Vch No",Particulars,Debit,Credit,GST
+01/07/2026,,"Opening Balance","5,000.00",,
+05/07/2026,KIT/101,"Sales: laptops","11,800.00",,"1,818.00"
+06/07/2026,DL/77,"Sales: retainer","35,400.00",,
+09/07/2026,KIT/CN/4,"Credit note: returned mouse",,"1,180.00",
+12/07/2026,NEW/9,"Sales: stationery","2,950.60",,
+15/07/2026,LF/3,"Late payment fee",590.00,,
+25/07/2026,NEFT-UTR77,"Payment received",,"20,000.00",
+26/07/2026,INV/88,"Sales: repairs","4,130.00",,
+31/07/2026,TDS/Q2,"TDS deducted by you",,"1,000.00",
+,,Total,"59,870.60","22,180.00",

@@ -4,7 +4,7 @@
 // loaded, the ledger list's box, the tables' funnels) and React draws the page.
 //
 // Which screen: S.view (home or company), S.tab (a client's part), S.step (collecting), S.homeTab (home's page).
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import Guard from "./Guard.jsx";
 import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
@@ -12,6 +12,9 @@ import SCREENS from "./screens/index.js";
 import PageSkeleton from "./parts/PageSkeleton.jsx";
 import OpenLoader, { openingAfterSignIn } from "./parts/OpenLoader.jsx";
 import { StatusTabs } from "./TopBar.jsx";
+import { UploadLine } from "./parts/StateBar.jsx";
+// the register panel: with the registers' engine, only when a register is read
+const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations } = SCREENS;
@@ -30,13 +33,15 @@ function Screen() {
   if (open && S.tab === "dash") return <Dash />;
   if (open && S.tab === "clientInbox") return <ClientInbox />;
   if (open && S.tab === "export") return <PostStep />;
-  if (open && S.tab === "done") return <DoneStep />;
+  // upload-pages: Purchase → In Tally is Post to Tally's list of what is in Tally (the count on the state bar is its rows)
+  if (open && S.tab === "done") return docType() === "bills" ? <PostStep /> : <DoneStep />;
   if (open && isSetupTab(S.tab)) return <ClientSetup />;
   if (open && S.step === "collect") return docType() === "sales" ? <Sales /> : <Collect />;
   if (S.view === "company" && co) {
     // stability batch 1: one wait, in the page's shape (the same as the frame before the program loads), not a "Loading…" note
     if (S.loadingCo) return <PageSkeleton what={co.name + "’s work"} />;
-    if (S.tab === "invoices") return VR.st() ? <VendorRecon /> : S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
+    // the vendor reconciliation's old place: Reconciliations → Vendors now (src/js/42 vrOpen)
+    if (S.tab === "invoices") return S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
     if (S.tab === "bank") return <Bank />;
     if (S.tab === "sales") return <Sales />;
     if (S.tab === "deductees") return <Parties />;
@@ -67,10 +72,12 @@ export default function Main({ v }) {
     {/* tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): no row of the
         client's pages here any more (the sidebar lists them); its Tally chip is on the title line (TopBar.jsx ClientHeader) */}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
+    {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
+    {company && S.sheetImp && <Guard name="the register panel" v={v}><Suspense fallback={null}><SheetPanel /></Suspense></Guard>}
     <Guard name="the bar" v={v} quiet><Suspense fallback={null}><Bar /></Suspense></Guard>
     <Legacy html={colPopHtml()} />
   </>;

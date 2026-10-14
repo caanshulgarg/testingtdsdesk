@@ -41,7 +41,7 @@ with sync_playwright() as p:
     # a client
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Zeta Exports", gstin: ""}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return openCompany(c.id); }"""); pg.wait_for_timeout(800)
     pg.evaluate("toggleSetup()"); pg.wait_for_timeout(500)
-    ok(head() == "Company" and pg.locator("header nav.sbar").count() == 0 and pg.locator("#app .setnav button").count() == 8, "Client setup: eight sections on the left, no row of tabs at the top (Remove this client is under More)")
+    ok(head() == "Company" and pg.locator("header nav.sbar").count() == 0 and pg.locator("#app .setnav button").count() == 9, "Client setup: nine sections on the left (Register formats the ninth, 14-Oct-2026), no row of tabs at the top (Remove this client is under More)")
     g = pg.locator('#app label:has-text("GSTIN") input'); g.fill("09aanfg3202d1zr"); g.blur(); pg.wait_for_timeout(500)
     ok(pg.evaluate("CO().gstin") == "09AANFG3202D1ZR" and pg.evaluate("CO().pan") == "AANFG3202D", "GSTIN kept in capitals; the PAN filled in from it")
     pg.fill('#app label:has-text("PAN") input', "AAAAA1111A"); pg.locator('#app label:has-text("PAN") input').blur(); pg.wait_for_timeout(400)

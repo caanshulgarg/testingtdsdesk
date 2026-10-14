@@ -79,7 +79,9 @@ try:
         bj = pg.evaluate("async () => (await Bridge.call('/balances?company=' + encodeURIComponent(%s) + '&from=20250602&to=20250605')).ledgers.find(l => l.name === '%s')" % (json.dumps(CO_NAME), BANK))
         t_open = -float(bj["open"] or 0)
         pg.evaluate("(o) => { const st = curStmt(); st.opening = o; st.closing = r2(o - 1000 - 2500 - 330 - 47000); render(); }", t_open); pg.wait_for_timeout(500)
-        ok(pg.locator(".sbar").count() == 0 and pg.locator('.bk-tabs button:has-text("Post to Tally")').count() == 1 and "Post to Tally" in pg.inner_text(".bk-tabs"), "one row of tabs on the bank page, numbered in the order of the work")
+        # upload-pages (14-Oct-2026): the bank page's states are its one row of states, in the words of every upload page
+        ok(pg.locator("nav.sbar").count() == 1 and pg.locator("nav.statebar[data-states=bank] [data-state]").count() >= 3 and pg.locator(".bk-tabs").count() == 0
+           and pg.inner_text("nav.statebar").split("\n")[0].startswith("To review"), "one row of states on the bank page, in the order of the work")
         ok(pg.locator(".bk-actions [data-act='bankPick']").count() == 0 and pg.locator('button:text-is("Upload statement")').count() == 1, "one Upload statement button")
         # an entry an earlier build left in Tally under another date
         tag0 = pg.evaluate("fpHash('fp-e2e-0')")

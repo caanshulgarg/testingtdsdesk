@@ -17,7 +17,8 @@ with sync_playwright() as p:
     pg.evaluate("(cid) => openCompany(cid).then(() => goStep('review', 'bills'))", cid); pg.wait_for_timeout(1200)
     app = lambda: pg.inner_text("#app")
     # Purchase opens on the review table (an old screen still); “One at a time” is the list with the bill beside it
-    pg.click('#app button:has-text("One at a time")'); pg.wait_for_timeout(600)
+    # (upload-pages: with no bill at all the review table is its empty state, with its one next step; the list is asked for)
+    pg.evaluate("doAct('revList')"); pg.wait_for_timeout(600)
     E = lambda k: pg.evaluate("(k) => { const e = D().entries[S.selected]; return k ? (k in e.x ? e.x[k] : e[k]) : e; }", k)
     ok("No bills yet for ZZ Zeta Exports" in app(), "no bills: the upload box says so")
     # a bill typed in
@@ -73,7 +74,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app .queue li").count() == 2 and pg.locator("#app .detail h2").inner_text() == "New invoice", "a second bill: two in the list, the new one open")
     pg.click('#app .queue button:has-text("ZZ Consulting LLP")'); pg.wait_for_timeout(500)
     ok(pg.locator("#app .detail h2").inner_text() == "ZZ Consulting LLP" and pg.get_attribute('#app .queue button:has-text("ZZ Consulting LLP")', "aria-current") == "true", "a click on the list opens that bill")
-    ok(pg.locator('#app button:has-text("Review all 2 in a table")').count() == 1, "“Review all 2 in a table”")
+    ok(pg.locator('#app button:has-text("Review them in a table")').count() == 1, "“Review them in a table” (upload-pages: the count is the row of states')")
     pg.evaluate("S.filter = 'approved'; S.selected = null; render()"); pg.wait_for_timeout(500)
     ok("Nothing approved yet." in app() and "Select an invoice" in app(), "Approved: nothing yet")
     pg.evaluate("S.filter = 'draft'; S.selected = null; render()"); pg.wait_for_timeout(500)

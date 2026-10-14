@@ -4,7 +4,7 @@ import DocqPanel from "../parts/Docq.jsx";
 import DropZone from "../parts/DropZone.jsx";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDetail from "./Bill.jsx";
-import UploadResult from "../parts/UploadResult.jsx";
+import { EmptyNext } from "../parts/StateBar.jsx";
 import QueueDone from "../parts/QueueDone.jsx";
 
 function Tag({ e }) {
@@ -19,7 +19,7 @@ function Tag({ e }) {
 }
 
 // an empty list says what to do next (spec K6, round 2)
-const EMPTY = { draft: (co) => "No bills to review for " + co.name + ". Use Upload bills at the top right to add them.",
+const EMPTY = { draft: () => "No bills to review.",
   approved: () => "Nothing approved yet. Approve bills under To review; they wait here until they are posted to Tally.",
   duplicate: () => "No duplicates held. A bill uploaded twice waits here, so you can keep both or delete one.",
   deleted: () => "No deleted bills. A bill you delete waits here; open it to restore it.",
@@ -37,13 +37,13 @@ export default function Invoices() {
   };
   return <>
     <DocqPanel cid={S.coId} />
-    <UploadResult />
     {S.filter === "draft" && <QueueDone />}
     <div className="desk">
       <div>
-        {drafts > 1 && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review all {drafts} in a table</button></div>}
+        {/* upload-pages: the count is the state bar's */}
+        {drafts > 1 && S.filter === "draft" && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review them in a table</button></div>}
         <div className="row" style={{ margin: "8px 0 0", justifyContent: "flex-end" }}>
-          <button className="btn small" onClick={() => vrOpen()} title="Match a vendor’s ledger with the party’s ledger in Tally">Reconcile a vendor ledger</button>
+          <button className="btn small" onClick={() => vrOpen()} title="Reconciliations → Vendors: a vendor’s statement against its ledger">Reconcile a vendor ledger</button>
         </div>
         {/* which bills: the one row of tabs at the top (To review · Post to Tally · In Tally · Duplicates · Deleted) */}
         {shown.length ? (
@@ -63,7 +63,8 @@ export default function Invoices() {
           <DropZone mode="company" className="drop-empty" label={"Upload invoices for " + co.name}>
             <strong>No bills yet for {co.name}</strong><div className="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div>
           </DropZone>
-        ) : <p className="empty lt-empty" data-list-empty="">{(EMPTY[S.filter] || EMPTY.rejected)(co)}</p>}
+        ) : S.filter === "draft" ? <EmptyNext what="No bills to review" act={() => doAct("uploadHere")} label="Upload bills" />
+          : <p className="empty lt-empty" data-list-empty="">{(EMPTY[S.filter] || EMPTY.rejected)(co)}</p>}
       </div>
       <div>
         {S.selected ? <BillDetail id={S.selected} /> : <div className="detail"><section><p className="empty">Select an invoice to see its TDS draft.</p></section></div>}

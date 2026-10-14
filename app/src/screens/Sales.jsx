@@ -24,9 +24,9 @@ import DateBox from "../parts/DateBox.jsx";
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 // an empty tab says what to do next (spec K6, round 2)
-const EMPTY = { review: "Nothing to review. Use Upload invoices at the top right to add more, or Create invoice to make one.",
-  ready: "No invoices are ready yet. Confirm each one's customer ledger under To review; it then waits here to be posted.",
-  done: "Nothing posted or ignored yet. Use Post to Tally on the invoices that are ready." };
+const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
+  ready: "Nothing ready to post. Confirm each invoice's customer ledger under To review; it then waits here.",
+  done: "Nothing in Tally yet. Post the invoices under Ready to post.", ignored: "No invoice ignored." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
@@ -38,16 +38,16 @@ function salesCols(s, list, nSel) {
   return [
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === list.length} onChange={(ev) => salesSelAll(ev.target.checked)} />,
       cell: (v) => <input type="checkbox" aria-label="Select" checked={s.sel.has(v.id)} disabled={v.status === "posted"} onChange={() => {}} onClick={(ev) => salesToggle(v.id, ev.target.checked, ev.shiftKey)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="sales" k="date" label="Date" />, v: (v) => v.x.date || "", td: (v) => ({ title: fmtDate(v.x.date) }), cell: (v) => v.x.date ? shortDate(v.x.date) : "—" },
-    { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="sales" k="date" label="Date" />, v: (v) => v.x.date || "", td: (v) => ({ title: fmtDate(v.x.date) }), cell: (v) => v.x.date ? shortDate(v.x.date) : "—" },
+    { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
       cell: (v) => <><div className="pn"><button className="linkbtn strong" onClick={() => salesOpen(v.id)}>{v.x.number || "(no number)"}</button></div><div className="nr">{v.source === "created" ? "Created here" : v.fileName || "Uploaded"}</div></> },
-    { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
+    { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: ({ x }) => <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}</div></> },
-    { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
+    { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
     { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.status] || ["no", v.status]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => money(gstOf(v.x)) },
-    { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
+    { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel hideIdle t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
       cell: (v, p) => p.editable ? <>
         {v.postError && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
@@ -305,12 +305,10 @@ export default function Sales() {
   if (s.loading) return <Loading what="sales invoices" page="table" />;
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
-  const tc = salesCounts(), all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
+  const all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
   const sum = (k) => r2(all.reduce((a, v) => a + num(v.x[k]), 0));
-  // the three steps at the top, as on Purchase and Bank, also before the first invoice (review of 02-Oct-2026)
-  const tabs = <div className="bk-tabs" role="tablist" data-sales-tabs="" style={{ marginBottom: 10 }}>{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>;
+  // upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx), as on Purchase and Bank
   const head = <>
-    {tabs}
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {/* one row (round 3, 05-Oct-2026), the how-to on hover and behind How */}
     {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />
@@ -319,7 +317,7 @@ export default function Sales() {
         <button className="btn small" onClick={() => salesAct("ledPick")}>Bring in from Tally</button></NoticeLine>)}
     <div className="bk-head">
       {/* the page is named in the top bar (one heading, spec I); here only what it holds */}
-      <div className="bk-id"><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
+      <div className="bk-id"><div className="bk-sub">{all.length ? fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
       <dl className="bk-figs">
         <div><dt>Taxable</dt><dd>{money(sum("taxable"))}</dd></div>
         <div><dt>GST</dt><dd>{money(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess")))}</dd></div>
@@ -340,7 +338,7 @@ export default function Sales() {
     <div className="bk sl">{head}
       <div className="bk-empty" id="salesDrop" tabIndex={0} role="button" onClick={() => salesAct("salesPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); salesAct("salesPick"); } }}>
         <div className="bk-empty-ic">⤒</div><h2>No sales invoices yet</h2>
-        <p className="note">Drop the invoices you issued (PDF or photo) here, or use <b>Upload invoices</b> at the top right, to turn them into Sales vouchers. To make a new GST invoice, use <b>Create invoice</b>: it is printed and posted in one go.</p>
+        <p className="note">Drop the invoices the client issued (PDF or photo) here, or click to choose them.</p>
       </div>
     </div>
     {s.showSettings && <SettingsPanel />}
@@ -353,7 +351,7 @@ export default function Sales() {
       </div>
       <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
       {/* the one list table (spec K6) */}
-      <ListTable name="sales" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length}
+      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length}
         rowProps={(v) => ({ className: s.sel.has(v.id) ? "picked" : undefined })}
         empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter]} />
     </div>
@@ -388,7 +386,8 @@ export function SalesBar() {
     </>;
   } else {
     const confirmable = s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
+    // upload-pages: the counts of the states are the state bar's; the Post button counts what it posts
+    left = null;
     right = <>
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}

@@ -136,7 +136,8 @@ try:
         ok(not seen, "none of the old count words on Today, Clients, Overview, the review table (%s)" % seen)
         # the review table's status words, in the built program (the fixture client has no bills to review)
         src = open(os.path.join(SITE, "assets", next(f for f in os.listdir(os.path.join(SITE, "assets")) if f.startswith("index") and f.endswith(".js")))).read() if os.path.isdir(os.path.join(SITE, "assets")) else ""
-        ok(not src or ('"Needs you":"Ready to approve"' in src and "Needs a check" not in src), "the review table's status: Needs you / Ready to approve")
+        # upload-pages (14-Oct-2026): "Check" (the one-at-a-time list's word), not "Needs you", which was also the Tally chip's
+        ok(not src or ('"Check":"Ready to approve"' in src and "Needs a check" not in src), "the review table's status: Check / Ready to approve")
 
         print("6. no in-page Back to…; the sidebar's client card goes back")
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); W(1200)

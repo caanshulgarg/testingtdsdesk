@@ -141,8 +141,8 @@ with sync_playwright() as p:
     bar = pg.inner_text("header nav.sbar") if pg.locator("header nav.sbar").count() else pg.inner_text("nav.sbar[aria-label=Status]")
     # second pass of 02-Oct-2026: the tab counts what is ready to post (none); the two bills not confirmed in Tally are a
     # badge of their own (what needs attention)
-    tabn = E("[document.querySelector('nav.sbar [data-step=post] [data-step-n]').textContent, (document.querySelector('nav.sbar [data-step=post] [data-attn-n]') || {}).textContent || '']")
-    ok("In Tally 1" in bar.replace("\n", " ") and tabn == ["0", "2"], "8. the step bar: Post to Tally 0, needing attention 2 · In Tally 1 (%s; %s)" % (bar.replace("\n", " "), tabn))
+    tabn = E("[document.querySelector('nav.sbar [data-step=post] [data-step-n]').textContent, (document.querySelector('nav.sbar [data-state=errors] [data-state-n]') || {}).textContent || '']")
+    ok("In Tally 1" in bar.replace("\n", " ") and tabn == ["0", "2"], "8. the row of states: Ready to post 0, Errors 2 · In Tally 1 (%s; %s)" % (bar.replace("\n", " "), tabn))
     # 9, 10. the server's queue: what went to Tally, and a failed posting on the Post page
     E("""() => { TCloud.restAll = async () => [
         {id: 'e9bd8ae0', client_id: S.coId, company: 'GARG SHEKHAR & COMPANY', status: 'done', done: 1, n: 1, message: '1 of 1 sent to Tally', created_at: '2026-10-02T02:21:12Z', updated_at: '2026-10-02T02:21:30Z', created_by: 'u-1',

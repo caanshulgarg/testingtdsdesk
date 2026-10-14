@@ -168,6 +168,9 @@ async function importMarketFile(file){
 }
 async function uploadSales(files){
   const s = SL(); if (!s) return;
+  // a register (a sheet or JSON: GSTR-1, a marketplace's or an ERP's report) goes to the sheet panel (app/src/lib/registers.js)
+  const sheets = files.filter(f => isSheetFile(f));
+  if (sheets.length){ sheetStart(sheets, "sales"); files = files.filter(f => !sheets.includes(f)); if (!files.length) return; }
   const cid = s.cid;
   let added = 0;
   // a PDF holding several sales invoices is read one invoice at a time
@@ -382,9 +385,11 @@ function printInvoiceHtml(html, number){
   toast("The invoice was downloaded. Open it and choose Print \u2192 Save as PDF.");
 }
 /* ---------- the Sales screen ---------- */
-const SALES_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
-function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally", "ignored"] : ["review"]; }
-function salesCounts(){ const c = {review: 0, ready: 0, done: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else c.done++; }); return c; }
+// upload-pages (14-Oct-2026): the words of the state bar of every upload page (STATE_WORDS, src/js/02); an invoice
+// ignored is under Ignored, not under In Tally
+const SALES_TABS = [["review", "To review"], ["ready", "Ready to post"], ["done", "In Tally"], ["ignored", "Ignored"]];
+function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally"] : t === "ignored" ? ["ignored"] : ["review"]; }
+function salesCounts(){ const c = {review: 0, ready: 0, done: 0, ignored: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else if (v.status === "ignored") c.ignored++; else c.done++; }); return c; }
 function salesColPass(v){
   const f = (SL() || {}).f || {}, x = v.x || {};
   if (f.from && (x.date || "") < f.from) return false;

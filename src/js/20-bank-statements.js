@@ -56,7 +56,7 @@ const BankDB = {
 function B(){ return S.bank; }
 // file pickers live outside the redrawn screen, so a refresh while a file dialog is open cannot lose the choice
 function ensureFileInputs(){
-  [["bankIn", true, ".xlsx,.xls,.xlsm,.csv,.txt,.pdf,.jpg,.jpeg,.png,.webp,image/*"], ["ledIn", false, ".xlsx,.xls,.csv,.xml"], ["bookIn", false, ".xlsx,.xls,.csv"], ["salesIn", true, "application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp"]].forEach(([id, multi, accept]) => {
+  [["bankIn", true, ".xlsx,.xls,.xlsm,.csv,.txt,.pdf,.jpg,.jpeg,.png,.webp,image/*"], ["ledIn", false, ".xlsx,.xls,.csv,.xml"], ["bookIn", false, ".xlsx,.xls,.csv"], ["salesIn", true, "application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.json"]].forEach(([id, multi, accept]) => {
     if (document.getElementById(id)) return;
     const el = document.createElement("input");
     el.type = "file"; el.id = id; el.hidden = true; el.accept = accept; if (multi) el.multiple = true;

@@ -169,7 +169,7 @@ with sync_playwright() as p:
     ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors", "1b. something needs attention: the Errors tab opens by itself")
     pg.click('#app [data-post-tab="topost"]'); pg.wait_for_timeout(300)
     page = pg.inner_text("#app [data-post-main]") if pg.locator("#app [data-post-main]").count() else ""
-    attn = E("(() => { const b = document.querySelector('nav.sbar [data-attn-n]'); return b ? b.textContent : ''; })()")
+    attn = E("(() => { const b = document.querySelector('nav.sbar [data-state=errors] [data-state-n]'); return b ? b.textContent : ''; })()")
     tab = E("(() => { const b = document.querySelector('nav.sbar [data-step=post] [data-step-n]'); return b ? b.textContent : ''; })()")
     E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(600)
     dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Ready to post/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")

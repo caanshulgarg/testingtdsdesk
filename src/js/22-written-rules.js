@@ -956,8 +956,10 @@ function exportBankCsv(){
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
 // the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
-const BANK_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
-function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
+// upload-pages (14-Oct-2026): the same words as the state bar of every upload page (STATE_WORDS, src/js/02); a line
+// ignored is under Ignored, not under In Tally (it never went there)
+const BANK_TABS = [["review", "To review"], ["ready", "Ready to post"], ["done", "In Tally"], ["ignored", "Ignored"]];
+function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally"] : tab === "ignored" ? ["ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 // a line is in Tally only when it is matched to a Tally voucher: found there (intally), or posted through the bridge and
 // Tally gave back the voucher (review of 02-Oct-2026: 184 lines showed "In Tally" after a Tally file was only made, with
 // no bank ledger linked and no bank entries in Tally for the year). A line sent in a file and never seen in Tally stays
@@ -969,13 +971,13 @@ function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r
 function bankTabOf(r){
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
-  return "done";
+  return r.state === "ignored" ? "ignored" : "done";
 }
-function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
+function bankTab(){ const b = B(); return ["review", "ready", "done", "ignored", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
-  const t = {review: 0, ready: 0, done: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
-  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
+  const t = {review: 0, ready: 0, done: 0, ignored: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
+  return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }

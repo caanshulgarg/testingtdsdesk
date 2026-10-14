@@ -1,0 +1,5 @@
+"Seller Gstin","Invoice Number","Invoice Date","Transaction Type","Order Id","Ship To State","Tax Exclusive Gross","Cgst Tax","Sgst Tax","Igst Tax","Invoice Amount",Hsn/sac,"Buyer Name"
+09AANFG3202D1ZR,AMZ-UP-1,2026-07-03,Shipment,403-1,"UTTAR PRADESH",1000,90,90,0,1180,8471,"Asha Rao"
+09AANFG3202D1ZR,AMZ-UP-1,2026-07-03,Shipment,403-1,"UTTAR PRADESH",500,45,45,0,590,8471,"Asha Rao"
+09AANFG3202D1ZR,AMZ-DL-2,2026-07-04,Shipment,403-2,DELHI,2000,0,0,360,2360,8471,"Vikram Shah"
+09AANFG3202D1ZR,AMZ-DL-2,2026-07-08,Refund,403-2,DELHI,-2000,0,0,-360,-2360,8471,"Vikram Shah"

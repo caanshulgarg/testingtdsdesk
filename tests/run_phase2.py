@@ -89,8 +89,15 @@ with sync_playwright() as p:
     pg.fill('.firmsetup-scrim input[aria-label="Firm name"]', "Garg Shekhar & Company"); pg.fill('.firmsetup-scrim textarea', "Kanpur"); pg.click('.firmsetup-scrim button:text-is("Save")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.firm.firmName, S.firm.firmAddress]") == ["Garg Shekhar & Company", "Kanpur"] and pg.locator(".firmsetup-scrim").count() == 0 and "Garg Shekhar" in top(), "32. saved: the name in the header, the address kept")
     pg.evaluate("() => { S.account = {me: {role: 'owner'}, firm: {balance: 499999912, plan: {name: 'Pro'}}}; render(); }"); pg.wait_for_timeout(400)
-    # review of 01-Oct-2026: the chip says it short (₹49.99 Cr credit), the full figure on hover
-    ok("₹49.99 Cr credit" in pg.inner_text("header.top .firmbtn") and "₹49,99,99,912.00" in (pg.get_attribute("header.top .firmbtn", "title") or ""), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
+    # review of 01-Oct-2026: the chip says it short (₹49.99 Cr credit), the full figure on hover. upload-pages (14-Oct-2026;
+    # the owner read "ABC ₹49.99 Cr credit" on Purchase as meaning nothing): on the firm's own pages; on a client's page the
+    # firm's name only, the credit in its tip and its menu
+    on_client = pg.evaluate("S.view === 'company'")
+    ok((not on_client or "credit" not in pg.inner_text("header.top .firmbtn")) and "₹49,99,99,912.00" in (pg.get_attribute("header.top .firmbtn", "title") or ""), "32. on a client's page: no credit on the button, the figure in its tip")
+    cid0 = pg.evaluate("S.coId")
+    pg.evaluate("() => navHome('clients')"); pg.wait_for_timeout(500)
+    ok("₹49.99 Cr credit" in pg.inner_text("header.top .firmbtn"), "32. the credit shows with ₹ on the firm's pages (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
+    pg.evaluate("(c) => openCompany(c)", cid0); pg.wait_for_timeout(700)
     # 27 and 26. the page's main button; the header at 1024 px
     pg.evaluate("() => goClient('books:letters')"); pg.wait_for_timeout(700)
     # owner's spec I (04-Oct-2026): one Upload, only on the pages that upload; no "+ Upload" elsewhere

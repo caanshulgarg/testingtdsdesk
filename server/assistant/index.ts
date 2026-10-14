@@ -2,6 +2,7 @@
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
 //   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines}}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
+//   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
 //   {action: "ledger_guess", client_id, ledgers: [{name, group, chain, open, taxType, nature, use, samples}], parties}
 //                                                                      the AI guess for ledgers the rules could not tell (ledgers.ts)
 // Who: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner has not switched the
@@ -19,8 +20,9 @@ import { Ev, runTurn, TurnCtx } from "./agent.ts";
 import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
+import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
-import { HAIKU } from "./models.ts";
+import { costUsd as priceUsd, HAIKU } from "./models.ts";
 
 export type Env = (k: string) => string | undefined;
 export type Deps = { env: Env, fetch: typeof fetch, anthropic?: (key: string) => TurnCtx["client"], sentry?: ReturnType<typeof cloudReporter>, now?: () => Date,
@@ -127,14 +129,42 @@ export function handler(deps: Deps) {
         return reply(502, { ok: false, kind: status === 429 ? "rate_limit" : "other", error: "AI could not be asked just now; the rules' guesses are shown." });
       }
     }
-    if (action !== "ask" && action !== "classify") return reply(400, { ok: false, error: "Unknown request" });
-    const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : String(body.question || "").trim().slice(0, 4000);
+    if (action !== "ask" && action !== "classify" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
+    const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
 
     // the platform's Claude key (the one bill reading uses)
     let key = "";
     try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; key = (k && k[0] && k[0].value) || ""; } catch { key = ""; }
     if (!key) return reply(503, { ok: false, kind: "bad_key", error: "No Claude key is set on the platform yet. Ask the administrator." });
+
+    // a register's new format (sheetmap.ts): the header and 10 masked rows to the cheap model, once per format; under the
+    // firm's switch, consent and rupee cap like every call; the answer is a mapping the person confirms, never a figure
+    if (action === "sheet_map") {
+      const head = (Array.isArray(body.head) ? body.head : []).map((x: unknown) => String(x ?? "").slice(0, 60)).slice(0, 80);
+      const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r : []).map((x: unknown) => String(x ?? "").slice(0, 40)).slice(0, 80));
+      if (head.filter(Boolean).length < 2) return reply(400, { ok: false, error: "No header row was sent." });
+      const party = body.side === "vendor" || body.side === "customer";
+      const cap = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE).catch(() => null);
+      if (!cap?.ok) return reply(429, { ok: false, kind: "cap", error: String(cap?.why || "The firm's AI budget for this month is used up.") });
+      const client = deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 60_000 }) as unknown as TurnCtx["client"]);
+      try {
+        const msg: any = await (client as any).messages.create({ model: HAIKU, max_tokens: 1200,
+          system: [{ type: "text", text: party ? PARTY_SYSTEM : SHEET_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
+          messages: [{ role: "user", content: sheetPrompt(head, rows, String(body.side || "purchase")) }] });
+        const text = (msg?.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+        const usd = priceUsd(HAIKU, msg?.usage || {});
+        const added = await rpc("asst_cost_add", { p_firm: firm, p_feature: "sheet_map", p_cost_usd: usd, p_in: msg?.usage?.input_tokens || 0, p_out: msg?.usage?.output_tokens || 0,
+          p_cache_read: msg?.usage?.cache_read_input_tokens || 0, p_cache_write: msg?.usage?.cache_creation_input_tokens || 0 }, SERVICE).catch(() => null);
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: "sheet format (" + head.length + " columns)", p_tools: [], p_in: msg?.usage?.input_tokens || 0,
+          p_out: msg?.usage?.output_tokens || 0, p_calls: 1, p_ms: Date.now() - t0, p_feature: "sheet_map", p_route: "sheet_map", p_models: [HAIKU], p_cache_read: msg?.usage?.cache_read_input_tokens || 0,
+          p_cache_write: msg?.usage?.cache_creation_input_tokens || 0, p_cost_inr: Number(added?.inr || 0), p_fell_through: false }, SERVICE); } catch { /* the mapping still stands */ }
+        return reply(200, { ok: true, ...parseSheetMap(text, head, party ? PARTY_FIELDS : undefined), cost: { usd, inr: Number(added?.inr || 0), model: HAIKU } });
+      } catch (e) {
+        sentry.report("sheet_map", e, { kind: "sheet_map", firm });
+        return reply(502, { ok: false, kind: "other", error: "FinCom's AI could not read the format just now. Map the columns yourself, or try again." });
+      }
+    }
 
     // a notice or another upload the user attached: read from the firm's private bucket with the user's own token
     const attachments: Record<string, unknown>[] = [];
