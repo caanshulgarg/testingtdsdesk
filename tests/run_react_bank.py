@@ -95,6 +95,9 @@ with sync_playwright() as p:
     # menus and panels
     pg.click('#app .bk-menu summary'); pg.wait_for_timeout(200)
     ok(pg.locator('#app .bk-menu-list button:has-text("Reconcile with Tally")').count() == 0 and pg.locator('#app .bk-menu-list button:has-text("Download as Excel")').is_visible(), "More: without Tally, no Tally checks; the Excel download is there")
+    # round 3 C (14-Oct-2026): an open menu closes on Esc or a click outside, and that first click only closes it
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    ok(pg.locator('#app .bk-menu[open]').count() == 0, "Esc closes More")
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(400)
     ok(pg.locator("#app .bk-panel").is_visible() and "Bank settings" in pg.inner_text("#app .bk-panel"), "Settings opens the (old) settings panel")
     pg.uncheck('#app .bk-panel label:has-text("Mark sure matches as Ready") input'); pg.wait_for_timeout(200)

@@ -53,7 +53,7 @@ function Item({ x }) {
 export default function Bell() {
   const panel = useRef(null), btn = useRef(null);
   // Esc, a click outside and (a phone) Back close the alerts (app/src/parts/dismiss.js); the bell itself toggles them
-  useDismiss(!!S.alertsOpen, panel, () => { S.alertsOpen = false; render(); }, { also: () => [btn.current] });
+  useDismiss(!!S.alertsOpen, panel, () => { S.alertsOpen = false; render(); }, { also: () => [btn.current].concat(Array.from(document.querySelectorAll("[data-alerts-undo]"))) });
   if (typeof AlertHub !== "object") return null;
   const list = AlertHub.list(), n = list.length, worst = n ? list[0].sev : "";
   const close = () => { S.alertsOpen = false; render(); };
