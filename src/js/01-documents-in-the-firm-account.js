@@ -4295,8 +4295,23 @@ function recentIds(){ try { return JSON.parse(lsGet("tdsdesk:recent") || "[]"); 
 
 // The page always ends below the bars fixed at the bottom of the window (the action bar, the testing strip),
 // so the last line of a long list can be scrolled into view instead of staying hidden behind them.
+// The testing site's strip along the bottom (the body's ::after: "TESTING SITE …", or a review build's "REVIEW BUILD – …")
+// is measured as drawn and put on :root as --bottom-banner-h (0px without one). Everything fixed to the bottom of the
+// window stands on it: calc(var(--bottom-banner-h, 0px) + its own gap) (Ask FinCom, the toasts, the undo snack, the
+// phone's bottom bar, the action bar, sticky table footers). The owner's report of 14-Oct-2026: the review build's strip
+// covered the Ask FinCom button. It is measured, not a fixed number: a long review banner takes two lines.
+function bottomBannerH(){
+  let h = 0;
+  try {
+    const cs = getComputedStyle(document.body, "::after");
+    if (cs.content && cs.content !== "none" && cs.content !== "normal" && cs.position === "fixed" && cs.display !== "none") h = Math.ceil(parseFloat(cs.height) || 0);
+  } catch (e){}
+  const v = h + "px", root = document.documentElement;
+  if (root.style.getPropertyValue("--bottom-banner-h") !== v) root.style.setProperty("--bottom-banner-h", v);
+  return h;
+}
 function padForBars(){
-  let top = window.innerHeight;
+  let top = window.innerHeight - bottomBannerH();
   document.querySelectorAll("body *").forEach(el => {
     if (!el.offsetParent && getComputedStyle(el).position !== "fixed") return;
     const cs = getComputedStyle(el);
@@ -4308,6 +4323,7 @@ function padForBars(){
   if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
 }
 window.addEventListener("resize", () => requestAnimationFrame(padForBars));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => requestAnimationFrame(padForBars));
 // build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
 // each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
 let RENDER_GEN = 0, IN_RENDER = 0;

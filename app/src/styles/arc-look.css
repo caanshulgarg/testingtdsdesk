@@ -156,19 +156,19 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
    Beside a sidebar (from 901px wide) it sits in the sidebar's own corner and the sidebar keeps room for it while it
    shows; with the sidebar folded, or on a narrower screen, it sits in the bottom right corner and the page keeps room
    below its content while it shows, so nothing stays under it. Everywhere in the app. */
-#toast.toast { left: auto; right: 12px; bottom: 12px; transform: none; width: auto; max-width: min(300px, calc(100vw - 24px));
+#toast.toast { left: auto; right: 12px; bottom: calc(var(--bottom-banner-h, 0px) + 12px); transform: none; width: auto; max-width: min(300px, calc(100vw - 24px));
   min-height: 0; max-height: 104px; overflow-y: auto; padding: 6px 10px 6px 24px; font-size: 12.5px; line-height: 1.35; z-index: 40; }
 #toast.toast::before { left: 10px; top: 12px; width: 7px; height: 7px; }
 #toast .toast-acts { margin-left: 0; }
 #toast .toast-act { min-height: 26px; padding: 0 8px; font-size: 12px; }
 @media (min-width: 901px) {
-  body:has(.side:not(.hidden):not(.side-folded)) #toast.toast { left: 12px; right: auto; bottom: 12px; max-width: 212px; }
+  body:has(.side:not(.hidden):not(.side-folded)) #toast.toast { left: 12px; right: auto; bottom: calc(var(--bottom-banner-h, 0px) + 12px); max-width: 212px; }
   /* the sidebar's own box ends above the message while it shows (its items scroll within), so nothing is under it */
-  body:has(#toast.toast:not(.hidden)) .side:not(.hidden):not(.side-folded) { bottom: 116px; }
+  body:has(#toast.toast:not(.hidden)) .side:not(.hidden):not(.side-folded) { bottom: calc(var(--bottom-banner-h, 0px) + 116px); }
 }
-body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 96px; }
+body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: calc(96px + var(--bottom-banner-h, 0px)); }
 @media (min-width: 901px) { body:has(.side:not(.hidden):not(.side-folded)):has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 0; } }
-@media (max-width: 600px) { #toast.toast { right: 8px; left: 8px; max-width: none; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 600px) { #toast.toast { right: 8px; left: 8px; max-width: none; bottom: calc(var(--bottom-banner-h, 0px) + 68px + env(safe-area-inset-bottom, 0px)); } }
 
 #toast.toast[data-tone="ok"] { border-color: color-mix(in oklab, var(--ok) 35%, var(--border)); }
 #toast.toast[data-tone="ok"]::before { background: var(--ok); }

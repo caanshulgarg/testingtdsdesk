@@ -11,6 +11,7 @@ import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
+import { fieldKind, fieldLabel } from "../../../server/_shared/assistant-labels.js";
 import "./assistant.css";
 
 const LABELS = {
@@ -81,7 +82,7 @@ function Table({ r, t }) {
       </table></div>}
     {rows.length > 25 && <button className="linkbtn" onClick={() => setAll(!all)}>{all ? "Show the first 25" : "Show all " + rows.length}</button>}
     {(r.count != null && r.shown != null && r.count > r.shown) && <p className="note">{r.shown} of {r.count} shown; the Excel export has them all.</p>}
-    {sum.length > 0 && <p className="asst-sum">{sum.slice(0, 6).map(([k, x]) => <span key={k}>{k.replace(/([A-Z])/g, " $1").toLowerCase()}: <b>{/count|parties|entries|months|suppliers|deductees|overdue|late|withR1|differ|sameBill|near|ledgersConfirmed|msmeSuppliers/i.test(k) ? x : "₹" + money(x)}</b></span>)}</p>}
+    {sum.length > 0 && <p className="asst-sum">{sum.slice(0, 6).map(([k, x]) => <span key={k} data-asst-sum-field={k}>{fieldLabel(k)}: <b>{fieldKind(k) === "count" ? x : fieldKind(k) === "pct" ? x + "%" : "₹" + money(x)}</b></span>)}</p>}
     {r.basis && <p className="note asst-basis">{r.basis}</p>}
   </section>;
 }
@@ -190,7 +191,9 @@ export function AssistantLauncher() {
   if (a.settings === undefined && !a.settingsBusy) setTimeout(() => ASST.loadSettings(), 0);
   if (!ASST.on()) return null;
   const co = S.view === "company" && CO();
-  return <button className="asst-launch" data-asst-launch="" onClick={() => ASST.open()} title="FinCom Assistant (Ctrl+J)"><Sparkles size={16} /> {co ? "Ask about " + co.name : "Ask FinCom"}</button>;
+  // a long client name is cut with an ellipsis (assistant.css); the whole name is in the tooltip (the owner's report of 14-Oct-2026)
+  const words = co ? "Ask about " + co.name : "Ask FinCom";
+  return <button className="asst-launch" data-asst-launch="" onClick={() => ASST.open()} title={words + " · FinCom Assistant (Ctrl+J)"} aria-label={words}><Sparkles size={16} /> <span className="asst-launch-txt">{words}</span></button>;
 }
 
 export default function Assistant() {

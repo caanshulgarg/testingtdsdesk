@@ -18,6 +18,7 @@ import { DocSpec, Section, TableData } from "./files.ts";
 import { Masker } from "./mask.ts";
 import { costUsd, HAIKU, plan, Plan, SONNET, Task, taskOf, Usage } from "./models.ts";
 import { compound, describe, route } from "./router.ts";
+import { relabelText, summaryLabels } from "../_shared/assistant-labels.js";
 import { applyCitations, Checked, Citation, LABEL as CITE_LABEL, NO_CASE, verify } from "./citations.ts";
 import { EXT_TOOLS } from "./tools/index.ts";
 import type { ExtCtx } from "./tools/types.ts";
@@ -67,6 +68,7 @@ Figures of the books:
 - Every figure of the client's books comes from the book tools. Never work out a figure of the books yourself, never estimate one, never take one from memory. Prefer the book tool that answers the question; the table it returns is shown to the user under your answer, so do not copy the table: give the answer in a few lines and point to the table. A tool result shows you its summary and at most 15 rows; the user sees every row.
 - If no book tool fits, or a tool gives nothing usable, call daybook_slice for the smallest period that covers the question (narrowed by a ledger, party or words when the question names one) and answer from those entries only. Cite every entry you rely on as [V:<voucher no>|<YYYY-MM-DD>]. If the answer is not in the entries, say "not in these entries" rather than guess.
 - Any figure you state that is not copied from a book tool's table (a total you add up, a count, an amount for one party, month or ledger, any figure from daybook_slice) must be recorded with record_figures, with the book tool and parameters that compute the same figure, before your final answer. FinCom computes each again; where the books give another figure, FinCom's figure is the answer and you must use it.
+- A tool result's summaryLabels gives the words for its summary fields: name a figure by those words ("Disallowance u/s 40(a)(ia) – 30%"), never by the field's key ("disallowance30pct").
 - Tally's sign: in daybook_slice lines a debit is negative and a credit positive.
 
 Tax and accounting law:
@@ -106,6 +108,9 @@ function forClaude(r: any, m: Masker, slim = true): string {
   const x = r && typeof r === "object" ? { ...r } : r;
   const rows = slim ? ROWS_TO_CLAUDE : 40;
   if (x && typeof x === "object" && slim) { delete x.columns; delete x.basis; }
+  // the words for the summary's fields (the one label map): the answer names a figure by these, never by its key
+  const sl = x && typeof x === "object" ? summaryLabels(x.summary) : null;
+  if (sl) x.summaryLabels = sl;
   if (x && Array.isArray(x.rows) && x.rows.length > rows) { x.rowsToYou = rows; x.rowsInAll = x.rows.length; x.rows = x.rows.slice(0, rows); }
   if (x && Array.isArray(x.rows)) x.rows = x.rows.map((row: any) => { const { guid: _g, ...rest } = row || {}; return rest; });
   if (x && Array.isArray(x.entries) && slim) x.entries = x.entries.map((e: any) => ({ no: e.no, date: e.date, type: e.type, party: e.party, narration: String(e.narration || "").slice(0, 80), lines: e.lines }));
@@ -523,7 +528,8 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   }
 
   // what the user may rely on
-  let text = texts.join("\n\n").trim();
+  // a raw field key that slipped into the words is put in words (the owner's report of 14-Oct-2026: "disallowance30pct")
+  let text = relabelText(texts.join("\n\n").trim());
   const cites = checkCitations(text, slices);
   text = cites.text;
   const ap = applyCitations(text, checked);

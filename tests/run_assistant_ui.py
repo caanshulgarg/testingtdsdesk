@@ -144,6 +144,10 @@ try:
         ok(r.get("tool") == "tds_missed" and any("Ashvattha" in json.dumps(x) for x in rows) and any(abs(float(x.get(k) or 0) - 40000) < 0.005 for x in rows for k in x if isinstance(x.get(k), (int, float))), "the table: Ashvattha Transport Co, 40,000.00 (from the database)")
         al = pg.evaluate("() => { const td = [...document.querySelectorAll('.asst-turn.latest .asst-table td.n')]; return td.length ? getComputedStyle(td[0]).textAlign : ''; }")
         ok(al in ("right", "end"), "amounts right aligned (%s)" % al)
+        # the owner's report of 14-Oct-2026: no raw keys; the one label map (server/_shared/assistant-labels.js)
+        latest = pg.inner_text(".asst-turn.latest")
+        ok("disallowance30pct" in json.dumps(r.get("summary") or {}) and "Disallowance u/s 40(a)(ia) – 30%" in latest and "disallowance30pct" not in latest and "disallowance30pct" not in t["text"],
+           "the summary's fields in words: Disallowance u/s 40(a)(ia) – 30%, no raw key")
         shot(pg, "02-green")
         ask(pg, "Bank payments in September 2025")
         ok(pg.locator(".asst-turn.latest .asst-table button.linkbtn").count() >= 1, "dates are links to the entry (bank payments, September 2025)")
