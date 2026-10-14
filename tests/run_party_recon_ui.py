@@ -124,7 +124,7 @@ with sync_playwright() as p:
     ok(len(E("window.__ai")) == 2 and step() == "map", "another format: FinCom's AI asked once more")
     pg.click("#app [data-sheet-save]"); W(800)
     ok(step() == "party" and pg.locator("#app [data-recon-party-ask]").count() == 1, "no GSTIN in it: the party is asked in the panel")
-    box = pg.locator("#app [data-recon-ledger]"); box.click(); box.fill("Kashi IT Solutions"); box.press("Enter"); W(500)
+    box = pg.locator("#app [data-recon-ledger]"); box.click(); box.fill("Kashi IT Solutions"); box.press("Tab"); W(500)
     pg.click("#app [data-recon-go]"); W(1000)
     ok(T("[data-recon-unexplained]").endswith("0.00") and "37,690.60" in T("[data-recon-theirs]"), "… the same reconciliation: 37,690.60, nothing unexplained")
     E("() => closeDetail()"); W(400)
@@ -134,7 +134,7 @@ with sync_playwright() as p:
     pg.click("#app [data-sheet-save]"); W(800)
     box = pg.locator("#app [data-recon-ledger]")
     if E("SheetImport.st().ledger") != "Asha Retail LLP":
-        box.click(); box.fill("Asha Retail LLP"); box.press("Enter"); W(500)
+        box.click(); box.fill("Asha Retail LLP"); box.press("Tab"); W(500)
     pg.click("#app [data-recon-go]"); W(1000)
     ok("14,760.00" in T("[data-recon-ours]") and "12,400.00" in T("[data-recon-theirs]") and T("[data-recon-unexplained]").endswith("0.00") and pg.locator("#app [data-recon-line=open]").count() == 0,
        "a customer: their credit is our debit; 14,760 ours, 12,400 theirs (S/102 not yet in theirs), no opening difference, nothing unexplained")
