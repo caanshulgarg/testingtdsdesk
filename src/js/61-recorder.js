@@ -581,6 +581,7 @@ const Rec = {
       a.msg = null;
     } catch (e){ a.msg = {err: this.missing(e) ? "Marking an alert read: not available until migration 47 runs." : this.say(e)}; }
     await this.alertsLoad();
+    render();                                   // asked for by the person: drawn, with its words, whatever the list did
   },
   alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); },
 

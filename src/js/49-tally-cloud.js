@@ -1357,8 +1357,10 @@ const TLight = {
     try {
       const co = typeof CO === "function" && S.view === "company" ? CO() : null, l = co ? tallyLine(co) : null, h = tallyHere(co), t = tallyStatus(co);
       const tallyPage = !!S.tallyPanel || (S.view === "home" && S.homeTab === "tally") || (S.view === "company" && S.tab === "export");
-      const min = x => { const ms = Date.parse(x || 0) || 0; return ms ? Math.floor(ms / 60000) : 0; };
-      const devs = tallyPage ? (this.st.devs || []).map(d => { const b = (d.info || {}).beat || {}; return [d.id, d.name, min(b.at || d.last_seen), b.tallyState, b.updating, b.open, b.companies, b.readStop, b.paused, (d.info || {}).readStop]; }) : null;
+      // on the Tally page or panel everything a computer sent is shown (its bridges, their words, the requests), so all of
+      // it is compared; a time is compared to the minute (as shown), so a beat whose times alone moved draws nothing
+      const minute = (k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) ? v.slice(0, 16) : v);
+      const devs = tallyPage ? JSON.stringify((this.st.devs || []).map(d => [d.id, d.name, d.last_seen, d.info]), minute) : null;
       return JSON.stringify([t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, (h.other || ""), S.view === "home" ? this.st.by : null, devs]);
     } catch (e){ return String(Date.now()); }
   },
