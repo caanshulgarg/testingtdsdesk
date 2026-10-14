@@ -321,9 +321,9 @@ try:
           verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null}); render(); }""")
         pg.wait_for_timeout(600)
         last = pg.locator(".asst-turn.latest")
-        lab = last.locator('[data-asst-label="nodata"]')
-        ok(lab.count() == 1 and "No entries in FinCom" in lab.inner_text() and last.locator('[data-asst-label="books"]').count() == 0 and "Checked against the books" not in last.inner_text(),
-           "no books: the neutral 'No entries in FinCom for this client yet' label, not the green tick")
+        lab = last.locator('[data-asst-source="nodata"]')
+        ok(lab.count() == 1 and "no entries in FinCom" in lab.inner_text() and "FinCom's books" not in lab.inner_text(),
+           "no books: 'Source: no entries in FinCom for this client yet', never FinCom's books")
         go = last.locator('[data-asst-screen="tally_sync"] [data-asst-screen-go="tally_sync"]')
         ok(go.count() == 1 and go.inner_text().strip() == "Link Tally company", "the Tally card has its 'Link Tally company' button")
         shot(pg, "07b-no-books")
@@ -342,8 +342,8 @@ try:
         pg.wait_for_timeout(600)
         last = pg.locator(".asst-turn.latest")
         btns = last.locator("[data-asst-choices] [data-asst-choice]")
-        ok(btns.count() == 2 and "Which one?" in last.locator("[data-asst-choices]").inner_text() and last.locator('[data-asst-label="notfound"]').count() == 1 and "Checked against the books" not in last.inner_text(),
-           "Which one?: a button per ledger, a neutral 'Not found in the books' label")
+        ok(btns.count() == 2 and "Which one?" in last.locator("[data-asst-choices]").inner_text() and last.locator('[data-asst-source="notfound"]').count() == 1 and "FinCom's books" not in last.locator("[data-asst-source]").inner_text(),
+           "Which one?: a button per ledger, 'Source: not found in the books'")
         shot(pg, "07c-which-one")
         if btns.count():
             btns.nth(0).click(); pg.wait_for_timeout(300)
