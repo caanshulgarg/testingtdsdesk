@@ -8,7 +8,7 @@ work in FinCom"), used as a person would, on the fixture books (tests/fixtures/b
      13-Oct-2026: Clients first, from inside a client too, and in the phone's bar; was All clients at the foot);
   3. each page's title is its sidebar word (Overview, From Tally, TDS, GST, Audit, Tally, Settings, …); the Tally ledgers
      are a tab of From Tally, the tie-out a tab of Audit;
-  4. old addresses still open their page: …/dash, …/books/import, …/books/ledgers, …/books/tieout, #/settings/account;
+  4. old addresses still open their page: …/dash, …/books/import, …/books/ledgers (now the TDS page's Ledgers), …/books/tieout, #/settings/account;
      new ones #/people, #/plan, …/overview, …/from-tally are written back as the page's own address;
   5. one set of count words: To read · To review · Ready to post · Needs you on Today, Clients and Overview, and in the
      review table's status; none of "Need a look", "Need a check", "Waiting for Tally", "Needs a check";
@@ -92,12 +92,11 @@ try:
             ok(title() == t and lit() == [label], "%s: titled %s and lit (%s, %s)" % (label, t, title(), lit()))
         pg.click('#side .side-link[data-side="TDS"]'); W(900)
         ok(pg.locator('#app nav[aria-label="Books"]').count() == 0 and pg.locator('#app nav[aria-label="From Tally"]').count() == 0, "TDS: no row of book tabs (the sidebar is the way)")
-        print("3. Tally ledgers a tab of From Tally; the tie-out a tab of Audit")
+        print("3. the TDS and GST ledgers on the TDS and GST pages (ledger-confirm, 14-Oct-2026); the tie-out a tab of Audit")
         pg.click('#side .side-link[data-side="From Tally"]'); W(900)
-        tabs = E("[...document.querySelectorAll('#app nav[aria-label=\"From Tally\"] button')].map(b => b.dataset.booksTab)")
-        ok(tabs == ["import", "ledgers"], "From Tally: Books · Tally ledgers (%s)" % tabs)
-        pg.click('#app nav[aria-label="From Tally"] button[data-books-tab="ledgers"]'); W(900)
-        ok(E("booksTab()") == "ledgers" and title() == "From Tally" and lit() == ["From Tally"] and E("location.hash").endswith("/books/ledgers"), "Tally ledgers: under From Tally, its own address")
+        ok(pg.locator('#app nav[aria-label="From Tally"] button[data-books-tab="ledgers"]').count() == 0, "From Tally: no Tally ledgers tab")
+        E("() => booksTabGo('ledgers')"); W(900)
+        ok(E("booksTab()") == "tds" and E("S.tdsView") == "ledgers" and title() == "TDS" and lit() == ["TDS"] and E("location.hash").endswith("/books/tds/ledgers/all"), "the Tally ledgers: the TDS page's Ledgers, its own address (%s)" % [E("booksTab()"), E("S.tdsView"), title(), lit(), E("location.hash")])
         pg.click('#side .side-link[data-side="Audit"]'); W(900)
         at = E("[...document.querySelectorAll('#app nav[aria-label=\"Audit\"] button')].map(b => b.innerText.trim())")
         ok(at[-1:] == ["Tie-out with Tally"], "Audit's tabs end with Tie-out with Tally (%s)" % at)
@@ -109,7 +108,7 @@ try:
         print("4. old and new addresses")
         c = "#/c/" + cid + "/"
         for h, bt, t, canon in [(c + "dash", None, "Overview", c + "dash"), (c + "overview", None, "Overview", c + "dash"), (c + "books/import", "import", "From Tally", c + "books/import"),
-                                (c + "from-tally", "import", "From Tally", c + "books/import"), (c + "from-tally/ledgers", "ledgers", "From Tally", c + "books/ledgers"),
+                                (c + "from-tally", "import", "From Tally", c + "books/import"), (c + "from-tally/ledgers", "tds", "TDS", c + "books/tds/ledgers/all"),
                                 (c + "books/tieout", "tieout", "Audit", c + "books/tieout"), (c + "books/tds", "tds", "TDS", None), (c + "books/gst", "gst", "GST", None)]:
             hash_go(h)
             ok(title() == t and (bt is None or E("booksTab()") == bt) and (canon is None or E("location.hash") == canon), "%s → %s (%s)" % (h.replace(c, "…/"), t, E("location.hash").replace(c, "…/")))

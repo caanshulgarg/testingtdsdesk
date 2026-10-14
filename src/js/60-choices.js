@@ -104,12 +104,24 @@ function choiceConfirm(co, key, value, opts){
   Drafts.direct(() => { choiceWrite(co, key, rec); if (!opts.nosave) Store.saveCompany(co); }, {bypass: true});
   return rec;
 }
+// a person takes a confirmation back (the owner, 14-Oct-2026: "if we want to unconfirm that, we can do that"): the value
+// stays as a guess to confirm again, with who unconfirmed it and when; posting waits for a new Confirm (choiceUsable)
+function choiceUnconfirm(co, key, opts){
+  if (!co) return null;
+  const was = choiceGet(co, key);
+  if (!was || was.state !== "confirmed") return null;
+  const now = new Date().toISOString(), who = (opts && opts.by) || choiceWho();
+  const rec = {value: was.value || "", state: "guessed", by: who, at: now, why: "unconfirmed by " + who, unok: {by: who, at: now}, prev: {value: was.value || "", state: was.state, by: was.by || "", at: was.at || ""}};
+  Drafts.direct(() => { choiceWrite(co, key, rec); if (!(opts && opts.nosave)) Store.saveCompany(co); }, {bypass: true});
+  return rec;
+}
 // forget a choice (a GST override emptied in Client setup: each bill picks its own again)
 function choiceForget(co, key, opts){ if (!co) return; Drafts.direct(() => { choiceWrite(co, key, null); if (!(opts && opts.nosave)) Store.saveCompany(co); }, {bypass: true}); }
 // one of two records of the same choice: a confirmed one is never replaced by a guess; else the later one
 function choicePick(a, b){
   if (!a) return b; if (!b) return a;
-  if (a.state !== b.state) return a.state === "confirmed" ? a : b;
+  // a person's Unconfirm (choiceUnconfirm) later than the confirmation beats it; any other guess never does
+  if (a.state !== b.state){ const c = a.state === "confirmed" ? a : b, g = c === a ? b : a; return g.unok && String(g.unok.at || "") >= String(c.at || "") ? g : c; }
   return String(a.at || "") >= String(b.at || "") ? a : b;
 }
 // From fixCompany: a client's copy coming in (the cloud, a merge) keeps any choice the copy here holds that is newer,
