@@ -137,3 +137,5 @@
 .asst-source { margin: 0; font-size: 12px; }
 .asst-source .linkbtn { color: var(--text-secondary); font-size: 12px; text-decoration: underline dotted; }
 .asst-source-detail { border-left: 2px solid var(--border); padding-left: 10px; display: flex; flex-direction: column; gap: 6px; }
+/* "Which one?": the ledger names as buttons */
+.asst-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

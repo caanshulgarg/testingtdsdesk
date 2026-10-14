@@ -165,6 +165,11 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
     "a failed turn: step, status, API error type, model, request id, tool and database code kept (" + JSON.stringify(good.tags) + ")");
   const bad = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { step: "Which suppliers", status: "40000", api_error: "ALPHA TRADERS", model: "gpt 4 ALPHA", request_id: "09AANFG3202D1ZR", db_code: "permission denied for tally_pick" } });
   ok(!bad.tags, "a failed turn's tags with data in them are dropped (" + JSON.stringify(bad.tags) + ")");
+  const am = (m, tags = { where: "assistant_turn", kind: "ai_request" }) => (S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags, extra: { api_message: m, question: "air ess exim" } }).extra || {});
+  ok(JSON.stringify(am("tools: 35 strict tools; at most 20")) === '{"api_message":"tools: 35 strict tools; at most 20"}', "the API's message is kept, and nothing else of extra");
+  const leak = am("messages.0.content: invalid value 'Ashvattha Transport 40,000' for ALPHA TRADERS 09AANFG3202D1ZR AGWPA1185G a@b.in 123456").api_message;
+  ok(!/Ashvattha|40,000|ALPHA|TRADERS|09AANFG|AGWPA|a@b|123456/.test(leak) && /messages\.0\.content/.test(leak), "the API's message: quoted values, names in capitals, ids, e-mails and numbers dropped (" + leak + ")");
+  ok(!("extra" in S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { where: "light_check" }, extra: { api_message: "x" } })), "api_message only on the assistant's failed turn");
 }
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");

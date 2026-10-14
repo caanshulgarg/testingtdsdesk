@@ -373,13 +373,13 @@ export function handler(deps: Deps) {
           }
         } catch (e) {
           // what failed, in plain words for the user and in codes for Sentry (failure.ts); the event's exception is the
-          // error's class and stack with fixed words, never its own message (an API message can quote the request)
+          // error's class and stack with fixed words; the API's own message goes in extra, scrubbed (scrubApiMessage)
           const f = classify(e, trace);
           emit({ t: "error", kind: f.kind, message: f.message });
           const rep = new Error("answer failed");
           rep.name = f.errorClass;
           if (typeof (e as Error)?.stack === "string") rep.stack = f.errorClass + ": answer failed\n" + String((e as Error).stack).split("\n").slice(1).join("\n");
-          sentry.report("assistant_turn", rep, { kind: f.kind, firm, tags: f.tags });
+          sentry.report("assistant_turn", rep, { kind: f.kind, firm, tags: f.tags, ...(f.apiMessage ? { extra: { api_message: f.apiMessage } } : {}) });
           console.log(JSON.stringify({ evt: "assistant_failed", kind: f.kind, ...f.tags, error: f.errorClass }));
         }
         // one line: the question, the tools, the tokens and the time (never the answer or a figure)

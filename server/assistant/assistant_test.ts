@@ -4,6 +4,8 @@
 // does with it: the book tools' figures to the paisa, the labels, the citation check, the cross-check of the AI's figures
 // (a mismatch row and one scrubbed Sentry event), files, the refusal to change anything, RLS, the cap and the log.
 import { handler } from "./index.ts";
+import { apiShape } from "./api_shape.ts";
+import { BOOK_TOOLS, claudeTools, routerTools } from "./tools.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import ExcelJS from "npm:exceljs@4.4.0";
@@ -22,12 +24,16 @@ const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === J
 type Block = Record<string, unknown>;
 type Step = Block[] | ((p: Record<string, unknown>, n: number) => Block[]);
 const ROUTER = /^You route a question/;
+const shapeRefusals: string[] = [];
 class MockClaude {
   calls: Record<string, unknown>[] = [];
   routerCalls: Record<string, unknown>[] = [];
   usage: (n: number) => Record<string, unknown> = () => ({ input_tokens: 1200, output_tokens: 150 });
   constructor(public script: Step[], public router: (p: Record<string, unknown>, n: number) => Block[] = () => [text("NONE")]) {}
   beta = { messages: { stream: (p: Record<string, unknown>) => {
+    // as the real API: a request outside the documented shape is refused with a 400 (FINCOM-CLOUD-STAGING-1/-2)
+    const bad = apiShape(p as Record<string, any>);
+    if (bad.length) { shapeRefusals.push(bad.join("; ")); throw Anthropic.APIError.generate(400, { type: "error", error: { type: "invalid_request_error", message: bad.join("; ") } }, undefined, new Headers()); }
     const isRouter = ROUTER.test(String(((p.system as any[]) || [])[0]?.text || ""));
     const list = isRouter ? this.routerCalls : this.calls;
     const n = list.length; list.push({ ...p, messages: [...(p.messages as unknown[])] });
@@ -87,15 +93,57 @@ Deno.test("the keyword router: common questions go to their book tool with no mo
   eq(c.calls.length + c.routerCalls.length, 0, "still no model called");
 });
 
+Deno.test("no books in the cloud for the client: said plainly with the client's name and the next step; a neutral label, not the green tick; the Tally card; not cached", async () => {
+  const c = new MockClaude([]);
+  const q = "Which suppliers crossed 30,000 under 194C without TDS this year?";
+  const r = await ask(c, { question: q, client_id: "mastercad" });
+  eq([c.calls.length, c.routerCalls.length], [0, 0], "no model called");
+  eq(r.done.labels, ["nodata"], "the neutral 'no entries' label only");
+  assert(!r.done.labels.includes("books"), "never 'Checked against the books'");
+  eq(r.done.text, "FinCom has no entries for Master Cad Infra Solutions yet. Link its Tally company or upload its Day Book.", "the words");
+  eq(ofType(r.events, "result").length, 0, "no empty table card with the green tick");
+  const card = ofType(r.events, "screen")[0];
+  eq([card && card.screen, card && card.button], ["tally_sync", "Link Tally company"], "the Tally card with its button");
+  const again = await ask(c, { question: q, client_id: "mastercad" });
+  assert(!again.events[0].cached, "a 'no entries' answer is not kept in the answer cache (the books may arrive)");
+});
+
+Deno.test("a ledger named as people type it: found and named; several: 'Which one?' with buttons; a typo: the closest names; never a tool's name", async () => {
+  const c = new MockClaude([]);
+  for (const q of ["balance of air Ess exim", "Balance of Air-Ess Exim Pvt Ltd"]) {
+    const r = await ask(c, { question: q, client_id: CLIENT });
+    const res = ofType(r.events, "result");
+    eq([res.length, res[0] && res[0].ledger], [1, "AIR ESS EXIM PRIVATE LIMITED"], q + ": the ledger's balance");
+    assert(r.done.text.startsWith("Ledger used: AIR ESS EXIM PRIVATE LIMITED."), q + ": says which ledger: " + r.done.text);
+    eq(r.done.labels, ["books"], q + ": green, from the books");
+  }
+  const amb = await ask(c, { question: "balance of mehta", client_id: CLIENT });
+  eq(ofType(amb.events, "result").length, 0, "several: no table");
+  const ch = ofType(amb.events, "choices")[0];
+  assert(ch && ch.prompt === "Which one?" && ch.options.length === 2 && ch.options.length <= 5, "Which one? with the names: " + JSON.stringify(ch));
+  eq(ch.options.map((o: any) => o.label).sort(), ["Mehta & Sons", "Mehta Traders LLP"], "the names");
+  eq(ch.options.find((o: any) => o.label === "Mehta & Sons").q, "balance of Mehta & Sons", "each button asks again with the ledger's name");
+  eq(amb.done.labels, ["notfound"], "a neutral label, not the green tick");
+  const typo = await ask(c, { question: "balance of air ess exin", client_id: CLIENT });
+  const sg = ofType(typo.events, "choices")[0];
+  assert(sg && sg.options[0].label === "AIR ESS EXIM PRIVATE LIMITED" && sg.options.length <= 5, "a typo: the closest names: " + JSON.stringify(sg));
+  assert(/no ledger called .air ess exin./i.test(typo.done.text), "says so plainly: " + typo.done.text);
+  eq(typo.done.labels, ["notfound"], "a neutral label");
+  for (const t of [amb.done.text, typo.done.text, sg.prompt]) assert(!/\b[a-z]+_[a-z_]+\b/.test(t) && !/find_ledgers|ledger_balance/.test(t), "no tool's name shown: " + t);
+  eq([c.calls.length, c.routerCalls.length], [0, 0], "no model called");
+});
+
 Deno.test("Haiku routes what the keywords cannot: one book tool, at low effort, no tax reasoning; a bad choice is tried once with Sonnet", async () => {
   const c = new MockClaude([], () => [tool("entries_filter", { from: "2025-06-01", to: "2025-08-31", min_amount: 50000, max_amount: null, mode: "any", direction: "any", ledger: null, party: "Nightjar", voucher_type: null, narration: null, limit: null })]);
   const r = await ask(c, { question: "Nightjar entries above 50000 between June and August 2025", client_id: CLIENT });
   eq([c.routerCalls.length, c.calls.length, r.done.route], [1, 0, "haiku"], "Haiku only");
   const rp = c.routerCalls[0] as any;
   assert(rp.model === "claude-haiku-5-5" && rp.output_config.effort === "low" && !("fallbacks" in rp) && rp.max_tokens <= 1024, "Haiku at low effort, no fallback (Haiku has none): " + JSON.stringify({ m: rp.model, e: rp.output_config }));
-  assert(rp.tools.length >= 30 && rp.tools.every((t: any) => t.strict === true && !t.type) && !rp.tools.some((t: any) => ["daybook_slice", "draft", "record_notice", "make_file"].includes(t.name)), "only the book tools, strict");
+  assert(rp.tools.length >= 30 && rp.tools.every((t: any) => !t.type) && !rp.tools.some((t: any) => ["daybook_slice", "draft", "record_notice", "make_file"].includes(t.name)), "only the book tools");
+  eq(apiShape(rp), [], "Haiku's request is one the API accepts (strict only within its limits)");
   const res = ofType(r.events, "result")[0];
-  eq([res.tool, res.filters.party, res.filters.min], ["entries_filter", "Nightjar", 50000], "the tool Haiku chose, run by FinCom");
+  eq([res.tool, res.filters.party, res.filters.min], ["entries_filter", "Nightjar Sound & Light Co", 50000], "the tool Haiku chose, run by FinCom (the party as the books name it)");
+  assert(r.done.text.startsWith("Party used: Nightjar Sound & Light Co."), "says which party: " + r.done.text);
   eq(r.done.labels, ["books"], "green");
   // a choice that fails FinCom's check (a date that is not a date): once more with Sonnet, then answered
   const c2 = new MockClaude([], (p) => (p as any).model === "claude-haiku-5-5" ? [tool("cash_bank", { as_on: "2026-02-30" })] : [tool("cash_bank", { as_on: "2026-03-31" })]);
@@ -104,7 +152,7 @@ Deno.test("Haiku routes what the keywords cannot: one book tool, at low effort, 
   eq(ofType(r2.events, "result")[0].summary.total, 231750, "cash and bank on 31-Mar-2026: 2,31,750.00");
 });
 
-Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, strict tools, fallbacks on; two tools; logged as fell through", async () => {
+Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, a request the API accepts, fallbacks on; two tools; logged as fell through", async () => {
   const c = new MockClaude([
     [tool("entries_filter", { from: "2025-09-01", to: "2025-09-30", min_amount: 10000, max_amount: null, mode: "bank", direction: "payment", ledger: null, party: null, voucher_type: null, narration: null, limit: null }),
      tool("tds_missed", { from: null, to: null, section: "194C" })],
@@ -121,7 +169,8 @@ Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, str
   const p = c.calls[0] as any;
   assert(p.model === "claude-sonnet-5-5" && p.output_config.effort === "medium" && p.thinking.type === "adaptive" && p.fallbacks === "default" && p.betas.includes("server-side-fallback-2026-07-01"), "Sonnet, medium, adaptive, fallbacks");
   assert(!("tool_choice" in p) || p.tool_choice?.type === "auto", "no forced tool choice");
-  assert(p.tools.filter((t: any) => t.name && !t.type).every((t: any) => t.eager_input_streaming === true && t.strict === true), "strict tools, eager input streaming");
+  assert(p.tools.filter((t: any) => t.name && !t.type).every((t: any) => t.eager_input_streaming === true), "eager input streaming");
+  eq(apiShape(p), [], "Sonnet's request is one the API accepts (strict only within its limits)");
   assert(!p.tools.some((t: any) => t.type), "a book question has no web tools");
   eq(p.system[0].cache_control, { type: "ephemeral", ttl: "1h" }, "the frozen system prompt cached for an hour");
   eq(p.cache_control, { type: "ephemeral" }, "the turn cached automatically");
@@ -471,6 +520,8 @@ Deno.test("a failed turn: the user is told what failed in plain words; Sentry ge
     const ev = sentryEvent(r.sentry);
     eq([ev.tags.where, ev.tags.kind, ev.exception.values[0].type], ["assistant_turn", kind, cls], cls + ": where, kind and class");
     for (const [k, v] of Object.entries(tags)) eq(ev.tags[k], v, cls + ": tag " + k);
+    if (tags.status && tags.status.startsWith("4")) assert(ev.extra && typeof ev.extra.api_message === "string" && ev.extra.api_message.length > 5, cls + ": the API's own message in extra: " + JSON.stringify(ev.extra));
+    if (cls === "BadRequestError" && kind === "ai_request") eq(ev.extra.api_message, "tools.12.blocked_domains: Extra inputs are not permitted", "the API's words kept");
     for (const bad of [marker, "194Q", "section"]) assert(!r.sentry.sent[0].includes(bad), cls + ": no '" + bad + "' of the question in Sentry");
   }
 });
@@ -488,6 +539,26 @@ Deno.test("a book tool that fails and then a failed model call: Sentry names the
   eq(ofType(r.events, "error")[0].kind, "billing", "the kind");
   eq([ev.tags.tool, ev.tags.db_code, ev.tags.step], ["tds_missed", "42501", "routing_call"], "the failed tool, its code and the step");
   assert(!r.sentry.sent[0].includes(marker) && !r.sentry.sent[0].includes("tally_pick(") && !r.sentry.sent[0].includes(CLIENT), "nothing of the question or the client");
+});
+
+Deno.test("the request shape (FINCOM-CLOUD-STAGING-2): every request FinCom builds is one the API accepts; the one that was refused is caught", async () => {
+  // what staging sent until now: every book tool strict, each parameter a ["type", "null"] union
+  const before = BOOK_TOOLS.map((t) => ({ ...(routerTools(false).find((x: any) => x.name === t.name) as Record<string, unknown>), strict: true }));
+  const refused = apiShape({ model: "claude-haiku-5-5", max_tokens: 1024, output_config: { effort: "low" }, thinking: { type: "adaptive" }, tools: before,
+    system: [{ type: "text", text: "x", cache_control: { type: "ephemeral", ttl: "1h" } }], messages: [{ role: "user", content: "q" }] });
+  assert(refused.some((b) => /strict tools; at most 20/.test(b)) && refused.some((b) => /union types/.test(b)), "the old request is refused: " + refused.join(" | "));
+  // each tool list FinCom builds stays within the strict limits
+  for (const [w, tools] of [["router", routerTools(true)], ["client", claudeTools(false, { web: true })], ["firm", claudeTools(true, { web: true })], ["notice", claudeTools(false, { web: true, notice: true })]] as const)
+    eq(apiShape({ model: "claude-sonnet-5-5", max_tokens: 6000, tools, messages: [{ role: "user", content: "q" }] }).filter((b) => /strict|union|optional/.test(b)), [], w + ": within the strict limits");
+  // and every request the tests in this file made was accepted (the mocked Claude refuses as the API does)
+  eq(shapeRefusals, [], "no request refused for its shape");
+  // the rules themselves: what the 5.5 models refuse
+  const base = { model: "claude-sonnet-5-5", max_tokens: 100, messages: [{ role: "user", content: "q" }] };
+  assert(apiShape({ ...base, thinking: { type: "enabled", budget_tokens: 2000 } }).length === 1, "a thinking budget");
+  assert(apiShape({ ...base, fallbacks: "default" }).length === 1, "fallbacks without their beta");
+  assert(apiShape({ ...base, model: "claude-haiku-5-5", fallbacks: "default", betas: ["server-side-fallback-2026-07-01"] }).length === 1, "fallbacks on Haiku");
+  assert(apiShape({ ...base, model: "claude-haiku-5-5", tools: [{ type: "web_search_20260209", name: "web_search" }] }).length === 1, "web search 20260209 on Haiku");
+  assert(apiShape({ ...base, tool_choice: { type: "any" } }).length === 1, "forced tool use");
 });
 
 Deno.test("RLS: another firm's client is refused; the book tools give a member nothing of another firm", async () => {

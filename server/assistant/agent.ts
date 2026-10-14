@@ -12,7 +12,7 @@
 //      cached for an hour; tool results sent as totals and at most 15 rows; the Day Book slice at most 150 entries.
 // (The answer cache, lever 6, is in index.ts: the same first question on the same books is answered from there.)
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
-import { ALL_BOOK_TOOLS, BOOK_TOOLS, SCREENS, SLICE_TOOL, bookTool, claudeTools, routerTools, safeArgs, toolLabel } from "./tools.ts";
+import { ALL_BOOK_TOOLS, BOOK_TOOLS, SCREENS, SLICE_TOOL, bookTool, claudeTools, plainWords, routerTools, safeArgs, toolLabel } from "./tools.ts";
 import { actionAsked, checkCitations, Claim, compare, fieldOf, markFigures, uncheckedFigures, Verdict } from "./checks.ts";
 import { DocSpec, Section, TableData } from "./files.ts";
 import { Masker } from "./mask.ts";
@@ -105,6 +105,8 @@ Identifiers are masked: PANs, GSTINs, TANs, Aadhaar and phone numbers, and the n
 
 Files: when the user asks for a file (Excel, Word, PDF), call make_file. Tables come only from book tools (give the tool and its parameters; FinCom computes them again). Your own text (a letter, a covering note, a draft reply) is allowed and is marked AI-drafted.
 
+In what the user reads, never name a tool (say "the ledger's balance", not ledger_balance); when a ledger name is not one, the user is shown the names as buttons: ask which one.
+
 What you never do: you never post, change, delete or file anything - not entries, ledgers, settings, returns or challans - and you never change data to make figures agree. If the user asks for one of these, say plainly that you cannot, and call point_to_screen with the FinCom screen that does it.
 
 Writing: answer first, in a few short lines, in plain English for a CA. Amounts with ₹ in the Indian style (₹1,23,450.00); dates as 05-Mar-2026. Name the period you used. Say when the books held do not cover the dates asked.
@@ -164,22 +166,78 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const act = actionAsked(ctx.question);
   if (act) emit({ t: "screen", screen: act.screen, label: SCREENS[act.screen], why: "FinCom Assistant only reads, works out, drafts and exports. Changing, posting, filing or deleting is done on this screen." });
 
-  const finish = (text: string, labels: string[], o: { route: string, feature: string, fellThrough?: boolean, stopped?: string, cacheable?: boolean }): TurnResult => {
+  const finish = (text0: string, labels: string[], o: { route: string, feature: string, fellThrough?: boolean, stopped?: string, cacheable?: boolean }): TurnResult => {
+    const text = plainWords(text0);
     emit({ t: "done", text, labels, unchecked: [], verdicts: [], citations: { ok: [], dropped: [] }, links: [], cases: [], usage: { ...usage, calls }, route: o.route, models, stopped: o.stopped || null });
     return { text, labels, tools: used, usage, calls, stopped: o.stopped, route: o.route, models, costUsd: usd, feature: o.feature, fellThrough: !!o.fellThrough, cacheable: o.cacheable !== false };
   };
   const trace: TurnTrace = ctx.trace || { step: "turn" };
   trace.step = "turn";
   const bookFailed = (name: string, e: unknown) => { trace.tool = name; trace.dbCode = dbCodeOf(e); };
-  const runBook = async (name: string, input: Record<string, unknown>, clientId: string): Promise<{ r: any, params: Record<string, unknown> } | { error: string }> => {
+  // a ledger or party name as the user typed it ("air Ess exim"), matched to the book's own name in SQL
+  // (asst_ledger_pick, migration 88: case, punctuation, & / and and the company's suffix do not matter). The one: used,
+  // and said. A ledger with several or no matches stops the tool (Which one? / the closest names); a party that does not
+  // match is left as typed (it is matched by its words in the entries). Without migration 88 the name goes as typed.
+  type Pick = { typed: string, ask: boolean, choices: string[] };
+  type Used = { typed: string, name: string, what: string };
+  const pickNames = async (bt: { params: Record<string, unknown> }, input: Record<string, unknown>, clientId: string): Promise<{ input: Record<string, unknown>, used?: Used, stop?: Pick }> => {
+    let out = input, usedName: Used | undefined;
+    for (const k of ["ledger", "party"]) {
+      const typed = typeof input[k] === "string" ? String(input[k]).trim() : "";
+      if (!(k in bt.params) || !typed) continue;
+      let p: any = null;
+      try { p = await ctx.exec("asst_ledger_pick", { p_client: clientId, p_text: typed }); } catch { p = null; }
+      if (!p || p.none) continue;
+      if (p.ledger) {
+        out = { ...out, [k]: p.ledger };
+        if (String(p.ledger).toLowerCase() !== typed.toLowerCase()) usedName = { typed, name: String(p.ledger), what: k === "party" ? "Party" : "Ledger" };
+      } else if (k === "ledger") return { input: out, stop: { typed, ask: !!p.ask, choices: (Array.isArray(p.choices) ? p.choices : []).map(String).slice(0, 5) } };
+    }
+    return { input: out, used: usedName };
+  };
+  // a button for each name: the same question with the name as the book has it
+  const askWith = (typed: string, name: string) => {
+    const q = ctx.question, i = q.toLowerCase().indexOf(typed.toLowerCase());
+    return i >= 0 ? q.slice(0, i) + name + q.slice(i + typed.length) : q + " (" + name + ")";
+  };
+  const whose = () => (ctx.clientName ? ctx.clientName + "'s" : "the client's");
+  const pickCard = (pk: Pick) => {
+    if (pk.choices.length) emit({ t: "choices", prompt: pk.ask ? "Which one?" : "Did you mean one of these?", options: pk.choices.map((n) => ({ label: n, q: askWith(pk.typed, n) })) });
+    return pk.ask ? "Which one? Several ledgers in " + whose() + " books match \u201c" + pk.typed + "\u201d."
+      : "FinCom has no ledger called \u201c" + pk.typed + "\u201d in " + whose() + " books." + (pk.choices.length ? " The closest names are below." : "");
+  };
+  const pickAnswer = (name: string, pk: Pick, o: { route: string }) => {
+    used.push(name);
+    return finish(pickCard(pk), ["notfound"], { route: o.route, feature: "book", cacheable: false });
+  };
+  const runBook = async (name: string, input0: Record<string, unknown>, clientId: string): Promise<{ r: any, params: Record<string, unknown>, used?: Used } | { error: string } | { pick: Pick }> => {
     const bt = bookTool(name);
     if (!bt || bt === SLICE_TOOL) return { error: "unknown tool " + name };
+    const pn = await pickNames(bt, input0, clientId);
+    if (pn.stop) return { pick: pn.stop };
+    const input = pn.input;
     const a = safeArgs(bt, input, clientId);
     if (!a.ok) return { error: a.error };
     let r: any;
     try { r = await ctx.exec(bt.fn, a.args); } catch (e) { bookFailed(name, e); return { error: String((e as Error)?.message || e).slice(0, 200) }; }
-    return { r, params: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "p_client")) };
+    return { r, params: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "p_client")), used: pn.used };
   };
+  // a book tool that found no books for the client (none: no book in the cloud, or an empty one): said plainly with the
+  // client's name and what to do, with the Tally card; never the green "Checked against the books" (FINCOM-CLOUD-STAGING-1)
+  let bookData = false, noBooks = false;
+  const NO_BOOKS = () => "FinCom has no entries for " + (ctx.clientName || "this client") + " yet. Link its Tally company or upload its Day Book.";
+  const noBooksCard = () => {
+    if (noBooks) return;
+    noBooks = true;
+    emit({ t: "screen", screen: "tally_sync", label: SCREENS.tally_sync, button: "Link Tally company",
+      why: "FinCom has no entries for " + (ctx.clientName || "this client") + " in the cloud. Link its Tally company on the Tally page, or upload its Day Book; then ask again." });
+  };
+  const noBooksAnswer = (name: string, o: { route: string }) => {
+    used.push(name);
+    noBooksCard();
+    return finish(NO_BOOKS(), ["nodata"], { route: o.route, feature: "book", cacheable: false });
+  };
+  const usedLine = (u?: Used) => (u ? u.what + " used: " + u.name + ". " : "");
   const showResult = (name: string, x: { r: any, params: Record<string, unknown> }, client: string) => {
     used.push(name);
     const id = ++resultN;
@@ -239,9 +297,11 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     }
     if (rt && "tool" in rt) {
       const x = await runBook(rt.tool, rt.input, ctx.clientId);
-      if (!("error" in x)) {
+      if ("pick" in x) return pickAnswer(rt.tool, x.pick, { route: "keyword" });
+      if ("r" in x && x.r && x.r.none) return noBooksAnswer(rt.tool, { route: "keyword" });
+      if ("r" in x) {
         showResult(rt.tool, x, ctx.clientId);
-        return finish(describe(x.r || {}, rt.why), ["books"], { route: "keyword", feature: "book" });
+        return finish(usedLine(x.used) + describe(x.r || {}, rt.why), ["books"], { route: "keyword", feature: "book" });
       }
     }
   }
@@ -266,14 +326,17 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     let got = await pick(plan("route"));
     if (got !== "capped") {
       let x = got && typeof got === "object" ? await runBook(got.name, got.input, ctx.clientId) : null;
+      if (got && typeof got === "object" && x && "pick" in x) return pickAnswer(got.name, x.pick, { route: "haiku" });
       if (got && typeof got === "object" && (!x || "error" in x)) {
         // Haiku's choice failed the check: once with Sonnet
         got = await pick({ ...plan("book", "low"), maxTokens: 1024, feature: "routing" });
         x = got && typeof got === "object" ? await runBook(got.name, got.input, ctx.clientId) : null;
       }
-      if (got && typeof got === "object" && x && !("error" in x)) {
+      if (got && typeof got === "object" && x && "pick" in x) return pickAnswer(got.name, x.pick, { route: models.includes(SONNET) ? "sonnet-route" : "haiku" });
+      if (got && typeof got === "object" && x && "r" in x && x.r && x.r.none) return noBooksAnswer(got.name, { route: models.includes(SONNET) ? "sonnet-route" : "haiku" });
+      if (got && typeof got === "object" && x && "r" in x) {
         showResult(got.name, x, ctx.clientId);
-        return finish(describe(x.r || {}, ""), ["books"], { route: models.includes(SONNET) ? "sonnet-route" : "haiku", feature: "book" });
+        return finish(usedLine(x.used) + describe(x.r || {}, ""), ["books"], { route: models.includes(SONNET) ? "sonnet-route" : "haiku", feature: "book" });
       }
     }
   }
@@ -310,7 +373,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     if (near.length === 1) return { id: near[0].client };
     return { error: near.length ? "more than one client matches: " + near.slice(0, 8).map((c) => c.name).join("; ") : "no client of the firm matches " + want };
   };
-  const execTool = async (name: string, input: Record<string, unknown>, cid: string) => { const x = await runBook(name, input, cid); return "error" in x ? null : x.r; };
+  const execTool = async (name: string, input: Record<string, unknown>, cid: string) => { const x = await runBook(name, input, cid); return "error" in x || "pick" in x ? null : x.r; };
 
   const runTool = async (tu: any): Promise<any> => {
     const name = String(tu.name), input = mk.undeep((tu.input && typeof tu.input === "object") ? tu.input : {});
@@ -323,7 +386,9 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
       if (bt) {
         const c = await resolveClient(input);
         if ("error" in c) return err(c.error);
-        const a = safeArgs(bt, input, c.id);
+        const pn = await pickNames(bt, input, c.id);
+        if (pn.stop) { pickCard(pn.stop); return err(JSON.stringify({ LEDGER_NOT_ONE: pn.stop.typed, several: pn.stop.ask, names: pn.stop.choices, say: "ask the user which ledger; the names are shown to them as buttons" })); }
+        const a = safeArgs(bt, pn.input, c.id);
         if (!a.ok) return err(JSON.stringify({ INVALID_INPUT: a.error }));
         const r = await ctx.exec(bt.fn, a.args);
         const id = ++resultN;
@@ -333,6 +398,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
           emit({ t: "slice", id, count: r?.count ?? 0, shown: r?.shown ?? 0, period: r?.period || null, ledger: r?.ledger || null });
         } else {
           results.push(r || {});
+          if (r && r.none) noBooksCard(); else bookData = true;
           emit({ t: "result", id, tool: name, params, client: c.id, ...(r || {}) });
         }
         return { type: "tool_result", tool_use_id: tu.id, content: forClaude(r, mk, L.slim) };
@@ -578,21 +644,23 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const cites = checkCitations(text, slices);
   text = cites.text;
   const ap = applyCitations(text, checked);
-  text = ap.text;
+  text = plainWords(ap.text);              // never a tool's name in what the user reads
   text = markFigures(text, verdicts);
   const unchecked = uncheckedFigures(text, results, verdicts);
-  const usedBooks = used.some((n) => BOOK_TOOLS.some((t) => t.name === n)) || !!(notice && notice.annexures.length) || extBooks;
+  // green only when a book tool gave something from the books; one that found no books for the client is "nodata"
+  const usedBooks = bookData || !!(notice && notice.annexures.length) || extBooks;
   const labels: string[] = [];
   if (usedBooks) labels.push("books");
+  else if (noBooks) labels.push("nodata");
   if (slices.length || extAi) labels.push("ai");
   labels.push(...Array.from(extLabels));
-  if (webUsed || (!usedBooks && !slices.length && !extLabels.size)) labels.push("general");
+  if (webUsed || (!usedBooks && !noBooks && !slices.length && !extLabels.size)) labels.push("general");
   if (used.includes("record_notice")) labels.push("notice");
   const cases = checked.map((c) => ({ n: c.n, ok: c.ok, why: c.why, case_name: c.ok ? c.case_name : "", court: c.court, date: c.date, citation: c.citation, url: c.ok ? c.url : "", quote: c.ok ? c.quote : "", point: c.point, flags: c.flags, act: c.act, label: CITE_LABEL }));
   emit({ t: "done", text, labels, unchecked, verdicts: verdicts.map((v) => ({ id: v.id, name: v.name, ai: v.value, fincom: v.fincom, status: v.status, text: v.text, tool: v.tool })),
     citations: { ok: cites.ok, dropped: cites.dropped }, cases, casesRemoved: ap.removed, links: Array.from(links, ([url, title]) => ({ url, title })), notice: notice ? notice.id : null,
     usage: { ...usage, calls }, route: "model", models, stopped: stopped || null });
-  const cacheable = !stopped && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
+  const cacheable = !stopped && !noBooks && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
   return { text, labels, tools: used, usage, calls, stopped, route: "model", models, costUsd: usd, feature: P.feature, fellThrough, cacheable };
 }
 

@@ -197,6 +197,23 @@ const CONTEXT_VALUE = /^[A-Za-z0-9 ._()+\/-]{1,80}$/;
 const LEVELS = ["fatal", "error", "warning", "info", "debug"], PLATFORMS = ["javascript", "node", "go", "other"];
 const RELEASE = /^[a-z][a-z-]{1,30}-[A-Za-z0-9._+-]{1,40}$/;
 
+// the Claude API's own error message, for FinCom Assistant's failed turn only (Sentry FINCOM-CLOUD-STAGING-2): it names the
+// parameter the API refused ("tools: 35 strict tools ..."), which a code alone cannot. Kept: the API's words and parameter
+// paths. Dropped: anything quoted (a value echoed back), e-mails, numbers of 4 digits or more, PAN/GSTIN-like tokens and
+// any word in capitals (a name), so nothing of a client's data can pass even if the API echoes part of the request.
+const API_WORDS_KEPT = new Set(["JSON", "API", "HTTP", "HTTPS", "URL", "URI", "ID", "OK", "SDK", "TTL", "MCP"]);
+export function scrubApiMessage(m) {
+  if (typeof m !== "string" || !m) return "";
+  let t = m.slice(0, 600).replace(/(["'`\u201c\u2018])[^"'`\u201d\u2019]{0,400}(["'`\u201d\u2019])/g, "…");
+  t = t.split(/\s+/).filter(Boolean).map((w) => {
+    if (/@/.test(w) || /\d{4,}/.test(w) || /[A-Z]{5}\d{4}[A-Z]/.test(w) || /\d{2}[A-Z]{5}\d{4}/.test(w)) return "…";
+    const core = w.replace(/[^A-Za-z]/g, "");
+    if (/[A-Z]{3,}/.test(w) && !API_WORDS_KEPT.has(core)) return "…";
+    return /^[A-Za-z0-9_.,:;()\[\]{}<>=\/+\-|…]+$/.test(w) ? w : "…";
+  }).join(" ").replace(/…(?:\s*…)+/g, "…");
+  return t.length > 300 ? t.slice(0, 299) + "…" : t;
+}
+
 // an event, rebuilt from the allowed fields only; null when it is not an error event (a replay, feedback, transaction...)
 export function scrubEvent(e) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return null;
@@ -249,6 +266,11 @@ export function scrubEvent(e) {
     const ids = Array.isArray(e.extra.entry_ids) ? e.extra.entry_ids.filter((g) => typeof g === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-[0-9a-f]{8})?$/i.test(g)).slice(0, 50) : [];
     if (ids.length) x.entry_ids = ids;
     if (Object.keys(x).length) o.extra = x;
+  }
+  // FinCom Assistant's failed turn: the API's own message, scrubbed (scrubApiMessage), and nothing else of extra
+  if (!ak && tags.where === "assistant_turn" && e.extra && typeof e.extra.api_message === "string") {
+    const m = scrubApiMessage(e.extra.api_message);
+    if (m) o.extra = { api_message: m };
   }
   if (ak && typeof o.message === "string") {
     const mm = typeof e.message === "string" ? e.message.match(/^(Assistant mismatch|Assistant answer reported wrong): ([a-z][a-z0-9_.\[\]]{0,60})$/) : null;

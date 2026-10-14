@@ -3,10 +3,11 @@
 // and reached Sentry as "turn failed other", with nothing to say what had failed. Now each kind has its own words, and the
 // event carries the error's class, the HTTP status, the API's error type, the step of the turn, the model, the API's
 // request id, and the book tool that failed before with the database's error code. Codes only: never the question, the
-// client, a figure, or the API's own message (which can quote the request). Plain module: no Deno, no imports.
+// client or a figure. The API's own message goes as extra.api_message, through the scrubber's scrubApiMessage (which
+// drops anything quoted, numbers, capitals and e-mails). Plain module: no Deno, no imports.
 import type { TurnTrace } from "./agent.ts";
 
-export type Failure = { kind: string, message: string, errorClass: string, tags: Record<string, string | undefined> };
+export type Failure = { kind: string, message: string, errorClass: string, tags: Record<string, string | undefined>, apiMessage?: string };
 
 const ERROR_CLASS = /^[A-Z][A-Za-z]{0,40}(Error|Exception)$/;
 const ADMIN = " Ask the administrator (Account › Platform). Answers from FinCom's own book tools and the checks before filing keep working.";
@@ -43,6 +44,8 @@ export function classify(e: unknown, trace?: TurnTrace): Failure {
   else { kind = "internal"; message = "Something went wrong in FinCom while answering (it has been reported to FinCom). Try again; if it keeps happening, tell FinCom support."; }
   return {
     kind, message, errorClass,
+    // the API's own words for a refused request (the parameter it refused); scrubbed again before Sentry (scrubApiMessage)
+    apiMessage: status !== undefined && (body || isApi) ? apiText.slice(0, 600) : undefined,
     tags: {
       step: trace?.step || "turn",
       status: status !== undefined ? String(status) : undefined,

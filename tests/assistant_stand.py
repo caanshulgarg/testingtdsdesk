@@ -18,6 +18,12 @@ MIG82 = os.path.join(ROOT, "server", "assistant", "migration-82-assistant-defaul
 MIG84 = os.path.join(ROOT, "server", "assistant", "migration-84-assistant-uploads.sql")      # one Upload (14-Oct-2026)
 # run after 77 as on staging: asst_span without tally_pick (Sentry FINCOM-CLOUD-STAGING-1)
 MIG85 = os.path.join(ROOT, "server", "assistant", "migration-85-asst-span.sql")
+# then 86: asst_span finds a book with entries but no start date, and an empty book is no book
+MIG86 = os.path.join(ROOT, "server", "assistant", "migration-86-asst-span-books.sql")
+# then 87: the read policies work out my_firm() once per query, not once per row
+MIG87 = os.path.join(ROOT, "server", "assistant", "migration-87-rls-initplan.sql")
+# then 88: a ledger or party name matched as people type it (asst_ledger_pick)
+MIG88 = os.path.join(ROOT, "server", "assistant", "migration-88-ledger-names.sql")
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -118,13 +124,16 @@ def start(port):
     return db
 
 def migrate(db, path=MIG77):
-    """77, then 82 (the assistant on by default), 84 (uploads) and 85 (asst_span without tally_pick) as staging has them;
-    another path: that file only"""
+    """77, then 82 (the assistant on by default), 84 (uploads) and 85-88 (asst_span, the read policies, ledger names) as
+    staging has them; another path: that file only"""
     if path != MIG77: return db.sql(open(path).read())
-    db.sql(open(MIG77).read())
-    db.sql(open(MIG82).read())
-    db.sql(open(MIG84).read())
-    return db.sql(open(MIG85).read())
+    out = db.sql(open(MIG77).read())
+    out += db.sql(open(MIG82).read())
+    out += db.sql(open(MIG84).read())
+    out += db.sql(open(MIG85).read())
+    for m in (MIG86, MIG87, MIG88):
+        if os.path.exists(m) and not os.environ.get("ASST_SKIP_" + os.path.basename(m)[10:12]): out += db.sql(open(m).read())
+    return out
 
 def ask(db, query, uid=ME):
     """a query as a signed-in member: role authenticated, auth.uid() = uid (row-level security applies)"""

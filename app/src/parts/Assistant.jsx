@@ -3,6 +3,8 @@
 //   green  "Checked against the books ✓"            a book tool's figures (the table under the answer)
 //   amber  "AI answer, not checked against the books" the AI read the Day Book; the entries it cited, checked
 //   blue   "General guidance — verify before relying" the law, with the web pages used
+//   grey   "No entries in FinCom for this client yet"  a book tool found no books in the cloud (with the Tally card)
+//   grey   "Not found in the books"                    a ledger name that is not one ledger ("Which one?", buttons)
 // A figure the AI stated that the books give differently is shown as FinCom's, with the AI's struck out. Under the
 // answer: the tables (amounts right-aligned, dates opening the entry), Copy, Export to Excel, files, drafts, a notice's
 // fields with "Add to due list", and "Wrong answer?". Earlier questions of the session below. Ctrl+J opens it anywhere.
@@ -23,6 +25,10 @@ const LABELS = {
   ai: ["warn", "AI, from the Day Book entries (not checked against the books)"],
   general: ["info", "general guidance, verify before relying"],
   notice: ["neutral", "the notice"],
+  // a book tool found no books for the client in the cloud: never "FinCom's books"
+  nodata: ["neutral", "no entries in FinCom for this client yet"],
+  // a ledger name that is not one ledger: "Which one?" or the closest names, as buttons
+  notfound: ["neutral", "not found in the books"],
   // certificates: neutral; each row's "From" says where its figure came from
   confirm: ["neutral", "Figures for the certificate – please confirm"],
   certificate: ["neutral", "Certificate figures – source in each row"],
@@ -155,7 +161,9 @@ function Turn({ t, latest }) {
     {t.error && <p className={"asst-error" + (t.error.kind === "cap" ? " cap" : "")} data-asst-error={t.error.kind}>{t.error.message}</p>}
     {verdicts.length > 0 && <div className="asst-fixes" data-asst-fixes="">{verdicts.map((x) => <p key={x.id}>AI said <s>{x.text || "₹" + money(x.ai)}</s>, FinCom's books say <b>₹{money(x.fincom)}</b> ({x.name}). FinCom's figure is used.</p>)}</div>}
     {(t.verdicts || []).some((v) => v.status === "match") && <p className="note asst-matched">{t.verdicts.filter((v) => v.status === "match").length} figure{t.verdicts.filter((v) => v.status === "match").length === 1 ? "" : "s"} recomputed from the books: ✓ matches FinCom.</p>}
-    {(t.screens || []).map((s) => <div key={s.screen} className="asst-card screen" data-asst-screen={s.screen}><p>{s.why || "The assistant only reads, works out, drafts and exports."}</p><Button className="btn small" onClick={() => ASST.screen(s.screen)}>Open {s.label}</Button></div>)}
+    {t.choices && (t.choices.options || []).length > 0 && <div className="asst-card choices" data-asst-choices=""><p>{t.choices.prompt}</p>
+      <div className="asst-choices">{t.choices.options.slice(0, 5).map((o) => <Button key={o.label} className="btn small" data-asst-choice={o.label} onClick={() => ASST.ask(o.q)}>{o.label}</Button>)}</div></div>}
+    {(t.screens || []).map((s) => <div key={s.screen} className="asst-card screen" data-asst-screen={s.screen}><p>{s.why || "The assistant only reads, works out, drafts and exports."}</p><Button className="btn small" data-asst-screen-go={s.screen} onClick={() => ASST.screen(s.screen)}>{s.button || "Open " + s.label}</Button></div>)}
     {t.notice && <Notice t={t} />}
     {t.prefile && <section className="asst-card green" data-asst-prefile="">
       <header><span className="asst-src ok">FinCom's own checks ✓</span><b>Check before filing: {t.prefileRes ? PreFile.title(t.prefileRes) : t.prefile.form}</b>
