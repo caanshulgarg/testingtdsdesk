@@ -785,17 +785,31 @@ const FSX = (() => {
             sv = din(k + "_s", lab + "sale value", b.sale, "Income-tax blocks"), st = din(k + "_st", lab + "short-term capital loss / (gain)", b.stcg, "Income-tax blocks");
           const rate = Number(b.rate) || 0, ar = Number(b.addlRate) || 0, rIn = dinN(k + "_rate", lab + "rate of depreciation (%)", rate, "Income-tax blocks"), aIn = dinN(k + "_arate", lab + "rate of additional depreciation (%)", ar, "Income-tax blocks");
           const base1 = o.v + a1.v - sv.v, b2 = Math.max(0, a2.v + Math.min(0, base1));
-          const dep = C(R0(Math.max(0, base1) * rate / 100 + b2 * rate / 200), "ROUND(MAX(0,#C1#+#C2#-#C4#)*#C6#/100+MAX(0,#C3#+MIN(0,#C1#+#C2#-#C4#))*#C6#/200,0)");
-          const addl = C(R0(a1.v * ar / 100 + a2.v * ar / 200), "ROUND(#C2#*#C8#/100+#C3#*#C8#/200,0)");
-          const close = C(o.v + a1.v + a2.v - sv.v - dep.v - addl.v, "#C1#+#C2#+#C3#-#C4#-#C7#-#C9#");
-          return {b: b.block, cells: [o, a1, a2, sv, st, {v: rate, rt: 1, f: rIn.f}, dep, {v: ar, rt: 1, f: aIn.f}, addl, close]};
+          // the fixed asset register (src/js/80-assets.js) gives the additions eligible for additional depreciation (section
+          // 32(1)(iia)) and the half brought forward from last year; a block with a short-term capital gain or loss (section
+          // 50: a negative block, or a block emptied) gets no depreciation and closes at nil. Typed rows without these work as before.
+          const reg = b.addlGt180 != null || b.addlLt180 != null || b.addlBf != null, ceased = st.v !== 0, nw = reg || ceased;
+          const e1 = reg ? din(k + "_e1", lab + "additions eligible for additional depreciation, 180 days or more", b.addlGt180 || 0, "Income-tax blocks") : a1,
+            e2 = reg ? din(k + "_e2", lab + "additions eligible for additional depreciation, less than 180 days", b.addlLt180 || 0, "Income-tax blocks") : a2,
+            bf = reg ? din(k + "_bf", lab + "additional depreciation brought forward (section 32(1)(iia))", b.addlBf || 0, "Income-tax blocks") : null;
+          const e1f = reg ? e1.f : "#C2#", e2f = reg ? e2.f : "#C3#", bff = reg ? bf.f : "0";
+          const depF = "ROUND(MAX(0,#C1#+#C2#-#C4#)*#C6#/100+MAX(0,#C3#+MIN(0,#C1#+#C2#-#C4#))*#C6#/200,0)";
+          const dep = ceased ? C(0, "IF(#C5#<>0,0," + depF + ")") : C(R0(Math.max(0, base1) * rate / 100 + b2 * rate / 200), nw ? "IF(#C5#<>0,0," + depF + ")" : depF);
+          const addl = !nw ? C(R0(a1.v * ar / 100 + a2.v * ar / 200), "ROUND(#C2#*#C8#/100+#C3#*#C8#/200,0)")
+            : C(ceased ? 0 : Math.max(0, Math.min(o.v + a1.v + a2.v - sv.v - dep.v, R0(e1.v * ar / 100 + e2.v * ar / 200) + (bf ? bf.v : 0))),
+              "IF(#C5#<>0,0,MAX(0,MIN(#C1#+#C2#+#C3#-#C4#-#C7#,ROUND(" + e1f + "*#C8#/100+" + e2f + "*#C8#/200,0)+" + bff + ")))");
+          const close = !nw ? C(o.v + a1.v + a2.v - sv.v - dep.v - addl.v, "#C1#+#C2#+#C3#-#C4#-#C7#-#C9#") : C(o.v + a1.v + a2.v - sv.v - st.v - dep.v - addl.v, "#C1#+#C2#+#C3#-#C4#-#C5#-#C7#-#C9#");
+          return {b: b.block, cells: [o, a1, a2, sv, st, {v: rate, rt: 1, f: rIn.f}, dep, {v: ar, rt: 1, f: aIn.f}, addl, close], nw, e1f: reg ? e1f : null, e2f: reg ? e2f : null, bff: reg ? bff : null};
         });
         const cyR = mk("cy"), pyR = mk("py"), idx = [];
         cyR.forEach(r => idx.push(row(t, r.b, r.cells)));
         const ct = row(t, "Current Year Total", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(j => j === 6 || j === 8 ? null : sumRows(t, idx, j)), "t");
         // the previous year's blocks are not printed row by row; their totals are, worked out from the Details cells
         const pf = (r, j) => { const c = r.cells, nmf = k => c[k].f, rate = nmf(5), ar = nmf(7), b1 = "(" + nmf(0) + "+" + nmf(1) + "-" + nmf(3) + ")";
-          const dep = "ROUND(MAX(0," + b1 + ")*" + rate + "/100+MAX(0," + nmf(2) + "+MIN(0," + b1 + "))*" + rate + "/200,0)", addl = "ROUND(" + nmf(1) + "*" + ar + "/100+" + nmf(2) + "*" + ar + "/200,0)";
+          let dep = "ROUND(MAX(0," + b1 + ")*" + rate + "/100+MAX(0," + nmf(2) + "+MIN(0," + b1 + "))*" + rate + "/200,0)", addl = "ROUND(" + nmf(1) + "*" + ar + "/100+" + nmf(2) + "*" + ar + "/200,0)";
+          if (r.nw){ const st = nmf(4), tot = "(" + nmf(0) + "+" + nmf(1) + "+" + nmf(2) + "-" + nmf(3) + ")"; dep = "IF(" + st + "<>0,0," + dep + ")";
+            addl = "IF(" + st + "<>0,0,MAX(0,MIN(" + tot + "-" + dep + ",ROUND(" + (r.e1f || nmf(1)) + "*" + ar + "/100+" + (r.e2f || nmf(2)) + "*" + ar + "/200,0)+" + (r.bff || "0") + ")))";
+            return j === 6 ? dep : j === 8 ? addl : j === 9 ? "(" + tot + "-" + st + "-" + dep + "-" + addl + ")" : nmf(j); }
           return j === 6 ? dep : j === 8 ? addl : j === 9 ? "(" + nmf(0) + "+" + nmf(1) + "+" + nmf(2) + "-" + nmf(3) + "-" + dep + "-" + addl + ")" : nmf(j); };
         const pt = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(j => j === 5 || j === 7 ? null : C(sum(pyR, r => r.cells[j].v), pyR.length ? pyR.map(r => pf(r, j)).join("+") : "0"));
         n.pyBlocks = pyR; n.cyBlocks = cyR;
@@ -1447,9 +1461,10 @@ const FSX = (() => {
       }
       if (n && n.itBlock){
         (n.cyBlocks || []).concat(n.pyBlocks || []).forEach(b => { const c = b.cells.map(z => z.v);
-          const base1 = c[0] + c[1] - c[3], b2 = Math.max(0, c[2] + Math.min(0, base1)), dep = R0(Math.max(0, base1) * c[5] / 100 + b2 * c[5] / 200);
+          // a short-term capital gain or loss (section 50): no depreciation, the block closes at nil
+          const base1 = c[0] + c[1] - c[3], b2 = Math.max(0, c[2] + Math.min(0, base1)), dep = c[4] ? 0 : R0(Math.max(0, base1) * c[5] / 100 + b2 * c[5] / 200);
           if (dep !== c[6]) it.push(b.b + ": depreciation " + rup(c[6]) + " is not the rate on the block with half the rate on additions under 180 days (" + rup(dep) + ")");
-          if (c[0] + c[1] + c[2] - c[3] - c[6] - c[8] !== c[9]) it.push(b.b + ": opening WDV + additions - sale value - depreciation is not the closing WDV");
+          if (c[0] + c[1] + c[2] - c[3] - c[4] - c[6] - c[8] !== c[9]) it.push(b.b + ": opening WDV + additions - sale value - STCL / (STCG) - depreciation is not the closing WDV");
           if (c[1] < 0 || c[2] < 0) it.push(b.b + ": negative additions"); });
         const dc = sum(n.cyBlocks || [], b => b.cells[6].v + b.cells[8].v); if ((n.cyBlocks || []).length && dc !== V("L_dep_CY")) it.push("Depreciation in the blocks " + rup(dc) + " is not the P&L depreciation " + rup(V("L_dep_CY")) + " (difference " + rup(dc - V("L_dep_CY")) + ")");
         if (!(n.cyBlocks || []).length) it.push("The income-tax blocks are not given (Details for you)");
@@ -2036,7 +2051,7 @@ const FSX = (() => {
         return {no, title, src: v ? "books" : "you", head: ["Answer"], rows: v ? [[v]] : [], note: v ? "" : "To be given."}; }
       if (b) return Object.assign({no, title, src: src === "confirm" ? "confirm" : "books"}, {head: b.head, rows: b.rows || [], note: b.note || "", count: b.count != null ? b.count : (b.rows || []).length, amount: b.amount});
       if (src === "details" && no === "9" && (inp.partners || []).length) return {no, title, src: "books", head: ["Partner", "Profit sharing ratio"], rows: inp.partners.map(p => [p.name, String(p.share) + "%"]), note: ""};
-      if (src === "details" && no === "18" && (inp.itBlocks || []).length) return {no, title, src: "books", head: ["Block", "Rate", "Opening WDV", "Additions", "Sale value", "Depreciation", "Closing WDV"], rows: inp.itBlocks, note: "From the income-tax block working (Details for you)."};
+      if (src === "details" && no === "18" && (inp.itBlocks || []).length) return {no, title, src: "books", head: ["Block", "Rate", "Opening WDV", "Additions", "Sale value", "Depreciation", "Closing WDV"], rows: inp.itBlocks, note: inp.itBlocksNote || "From the income-tax block working of the fixed asset register (Books, Accounts, Fixed assets and depreciation)."};
       if (src === "books" && no === "35" && !inp.hasStock) return {no, title, src: "you", head: [], rows: [], note: "No stock quantities are kept in the books: give the quantitative details."};
       if (given[no]) return {no, title, src: "given", head: ["Answer"], rows: [[given[no]]], note: "Given by you."};
       return {no, title, src: src === "books" ? "you" : src === "confirm" ? "confirm" : "you", head: [], rows: [], note: src === "books" ? "Not found in the books for this period: confirm." : "The books cannot answer this: to be given."};
@@ -2229,7 +2244,9 @@ const FSX = (() => {
     o = o || {};
     const b = S.books, st = X.store(b), co = typeof CO === "function" ? CO() || {} : {}, kind = o.kind || X.kindOf(b);
     const t = X.tbFromBooks(fy); if (t.error) return t;
-    const det = Object.assign({}, (st.det || {})[fy] || {});
+    let det = Object.assign({}, (st.det || {})[fy] || {});
+    // the fixed asset register of the year (src/js/80-assets.js), when kept: its classes and blocks replace the typed ones
+    if (typeof FAR === "object" && FAR) det = FAR.feedDet(det, FAR.forYear(b, fy));
     const ent = Object.assign({name: co.name || "", kind, pan: co.pan || String(co.gstin || "").slice(2, 12), address: co.address || ""}, det.entity || {});
     // ageing from the books' bills when the details do not give it (MIS.ageing: by days from the bill date; not due is the books' own)
     return {entity: ent, fy: String(fy), tb: t.tb, mapStore: st.map, det, opts: Object.assign({cashflow: false}, st.opts || {}, o.opts || {}), src: t.src, age: det.age || null};
@@ -2275,7 +2292,9 @@ const FSX = (() => {
     const co = typeof CO === "function" ? CO() || {} : {}, st = X.store(S.books), det = (st.det || {})[fy] || {};
     const fromBooks = clauses.map(c => Object.assign({}, c, {count: c.rows.length}));
     const hasStock = (S.books.vouchers || []).some(v => (v.inv || []).length);
-    return {run, counts, src: sh.src, d3: X.form3cd({entity: Object.assign({name: co.name, pan: co.pan, address: co.address, kind: X.kindOf(S.books)}, det.entity || {}), fy, fromBooks, partners: det.partners, hasStock, answers: det.answers3cd})};
+    // clause 18 from the fixed asset register's income-tax blocks (src/js/80-assets.js), when kept for the year
+    const far = typeof FAR === "object" && FAR ? FAR.forYear(S.books, fy) : null;
+    return {run, counts, src: sh.src, d3: X.form3cd({entity: Object.assign({name: co.name, pan: co.pan, address: co.address, kind: X.kindOf(S.books)}, det.entity || {}), fy, fromBooks, partners: det.partners, hasStock, answers: det.answers3cd, itBlocks: far ? far.rows3cd : undefined})};
   };
   return X;
 })();

@@ -5,11 +5,19 @@
 // summary for the model. Register in tools/index.ts: import { TOOLS as REPORTS } from "./reports.ts".
 //
 import "../../../src/js/78-reports.js";
+// the fixed asset register (FAR): its classes and blocks go into the statements and 3CD clause 18 (migration 81)
+import "../../../src/js/80-assets.js";
 
 import type { ExtCtx, ExtResult, ExtTool, ToolTable } from "./types.ts";
 type Ctx = ExtCtx; type Result = ExtResult; type ReportTool = ExtTool;
 // deno-lint-ignore no-explicit-any
 const FSX: any = (globalThis as any).FSX;
+// deno-lint-ignore no-explicit-any
+const FAR: any = (globalThis as any).FAR;
+// the year's fixed asset register worked out (null when none is kept, or migration 81 has not run)
+async function farFor(ctx: Ctx, fy: string) {
+  try { const g = await ctx.rpc("asst_dep_register", { p_client: ctx.clientId, p_fy: fy }); return g && g.reg && (g.reg.assets || []).length ? FAR.compute(g.reg, g.prev || null) : null; } catch (_e) { return null; }
+}
 const enc = new TextEncoder();
 const safe = (s: string) => String(s || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client";
 const rs = (p: number) => Math.round(p) / 100;
@@ -33,9 +41,9 @@ const tbRows = (rows: any[], msme: Record<string, unknown>) => rows.map((r) => {
 // the statements' input for a year, from the books and what the app keeps for the client
 async function inputFor(ctx: Ctx, fy: string, layout?: string | null) {
   const from = fy + "-04-01", to = (Number(fy) + 1) + "-03-31";
-  const [tb, saved] = await Promise.all([ctx.rpc("rpt_tb", { p_client: ctx.clientId, p_from: from, p_to: to }), ctx.rpc("rpt_saved", { p_client: ctx.clientId })]);
+  const [tb, saved, far] = await Promise.all([ctx.rpc("rpt_tb", { p_client: ctx.clientId, p_from: from, p_to: to }), ctx.rpc("rpt_saved", { p_client: ctx.clientId }), farFor(ctx, fy)]);
   if (!tb || !tb.ok) return { error: "No books for " + FSX.fyLabel(fy) + ": " + ((tb && tb.why) || "the trial balance could not be read") + "." };
-  const rx = (saved && saved.rx) || {}, det = (rx.det || {})[fy] || {};
+  const rx = (saved && saved.rx) || {}, det = FAR.feedDet((rx.det || {})[fy] || {}, far);
   const kind = layout || rx.kind || "company";
   return { inp: { entity: Object.assign({ name: ctx.clientName, kind }, det.entity || {}, { kind }), fy, tb: tbRows(tb.rows || [], (saved && saved.msme) || {}), mapStore: rx.map || { versions: [] },
     det, opts: Object.assign({ cashflow: false }, rx.opts || {}), age: det.age || null }, rx, from, to };
@@ -94,7 +102,8 @@ export const TOOLS: ReportTool[] = [
           { no: "21(b)", head: ["Party", "Amount", "Detail"], rows: rows(tm, ["party", "amount", "section"]) },
           { no: "40", head: ["Item", "This year"], rows: tu && tu.rows ? tu.rows.slice(0, 6).map((r: any) => [r.item ?? r.label ?? "", r.amount ?? r.value ?? ""]) : [] },
         ].filter((c) => c.rows.length || c.no === "21(d)" || c.no === "31(ba)").map((c) => Object.assign(c, { title: "", note: c.rows.length ? "" : "None found in the books." }));
-        d3 = FSX.form3cd({ entity: Object.assign({ name: ctx.clientName, kind: rx.kind || "company" }, ((rx.det || {})[fy] || {}).entity || {}), fy, fromBooks, partners: ((rx.det || {})[fy] || {}).partners, hasStock: false });
+        const far = await farFor(ctx, fy);
+        d3 = FSX.form3cd({ entity: Object.assign({ name: ctx.clientName, kind: rx.kind || "company" }, ((rx.det || {})[fy] || {}).entity || {}), fy, fromBooks, partners: ((rx.det || {})[fy] || {}).partners, hasStock: false, itBlocks: far ? far.rows3cd : undefined });
         basis = "the Assistant's book tools (40A(3), 269ST, 43B(h), TDS, turnover); 269SS / 269T and 34(a) are on the client's Reports screen";
       }
       const base = safe(ctx.clientName) + "-3CD-DRAFT-" + FSX.fyLabel(fy);
