@@ -17,7 +17,7 @@ Settings could not be reached); the setting is now read again until known, and t
 
 ## One Upload (the owner's request of 14-Oct-2026)
 
-The panel's "Notice" button is now **Upload** (src/js/81-asst-upload.js, `AUpload`): PDF, pictures, Excel/CSV, Word, JSON,
+The panel's "Notice" button is now **Upload** (src/js/82-asst-upload.js, `AUpload`): PDF, pictures, Excel/CSV, Word, JSON,
 several at once or dropped on the panel. Each file is stored in the firm's private folder (a notice with the notices, the
 rest under `uploads/`), recorded in `assistant_uploads` (migration 84) and told by FinCom's own rules first (no AI); only
 when they cannot tell is Haiku asked (server/assistant/upload.ts, masked, against the daily cap). Then the next steps as

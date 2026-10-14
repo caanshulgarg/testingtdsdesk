@@ -1,4 +1,4 @@
-// What an uploaded file is, when FinCom's own rules (src/js/81-asst-upload.js) cannot tell (the owner's request of
+// What an uploaded file is, when FinCom's own rules (src/js/82-asst-upload.js) cannot tell (the owner's request of
 // 14-Oct-2026: one Upload in the Assistant, anything can be uploaded). Haiku 5.5 reads the file (a PDF or a picture as
 // the user gave it, or the text FinCom took out of a sheet or a Word file, masked) and names its kind and gives one line;
 // it does nothing else. The cost goes against the firm's cap like any AI call.
