@@ -213,3 +213,22 @@ Deno.test("an uploaded Word format with placeholders: fields filled, the missing
   const r3 = await prepare({ ...ask, format: "Tender format A", answers: [{ client: null, field: "tender_no", value: "TN/2026/0043" }] } as any, { ...ectx, uploads: c2.uploads });
   ok(!r3.error && /Made: 1 certificate/.test(r3.forModel!), "the saved format is used by its name");
 });
+
+Deno.test("a default letterhead and signatory put in the settings (not confirmed) is offered once: 'Use this letterhead and signatory?'; 'use our usual format' sets the firm default", async () => {
+  await setup();
+  settings.length = 0;
+  settings.push({ firm_name: "Example & Associates", frn: "000000X", signatory: "A. Example", designation: "Partner", membership_no: "123456", place: "Faketown", letterhead_path: "F/_firm/uploads/letterhead.png", confirmed: false });
+  const { ctx } = turn(new MockClaude([]), "", [], ["F/_firm/uploads/birchwood-signed-2024-25.pdf"]);
+  const ectx: any = { clientId: null, clientName: "", today: "2026-10-14", firm: ctx.firm, rpc: () => null, book: () => null, makeFile: async () => null, uploadFile: ctx.uploadFile, progress: () => {}, aiText: async () => "",
+    clients: async () => CLIENTS, clientInfo: ctx.clientInfo, clientFiles: ctx.clientFiles, rpcFor: () => null, uploads: ctx.uploads, readFile: ctx.readFile, store, noFont: true };
+  const ask = { clients: ["Birchwood Traders"], types: ["turnover"], years: ["2024-25"], last_years: null, as_on: null, basis: null, format: null, format_name: null, addressee: null, purpose: null, date: null, figures: null, use_books: null, answers: null, firm: null, confirm: true };
+  const r1 = await prepare(ask as any, ectx);
+  ok(/Use this letterhead and signatory\? Example & Associates, FRN 000000X; A\. Example \(Partner\), M\. No\. 123456; place Faketown; letterhead on file/.test(r1.forModel!) && !r1.files, "the default letterhead and signatory are offered for confirmation; nothing made before");
+  const r2 = await prepare({ ...ask, firm: { firm_name: null, frn: null, signatory: null, designation: null, membership_no: null, place: null, letterhead_file: null, default_format: "firm", use_these: true } } as any, ectx);
+  ok((settings[settings.length - 1] as any).confirmed === true && (settings[settings.length - 1] as any).default_format === "firm" && r2.files!.length === 2, "confirmed once, and the firm's usual format chosen as the default");
+  const z = await unzip(made[Object.keys(made).filter((n) => n.endsWith(".zip")).pop()!]);
+  const t = await docxText(z.get(Array.from(z.keys()).find((n) => n.endsWith(".docx"))!)!);
+  ok(/^Turnover Certificate/m.test(t) && /We have verified the Audited Statement of Accounts/.test(t) && /2024-25 \(Audited\)/.test(t), "the firm's usual format (from its own certificates) is used");
+  const r3 = await prepare(ask as any, ectx);
+  ok(!/Use this letterhead/.test(r3.forModel!), "not asked again");
+});
