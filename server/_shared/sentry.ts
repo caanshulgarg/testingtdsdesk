@@ -15,7 +15,9 @@ const STAGING_REF = "qbocskaiewaxqcvaunzc";
 const PER_MINUTE = 30;
 
 type Frame = { function: string, filename: string, lineno?: number, colno?: number, in_app?: boolean };
-export type ReportCtx = { kind?: unknown, firm?: unknown };
+// tags: code names only (FinCom Assistant's failed turn: step, status, api_error, model, request_id, tool, db_code); each
+// is checked again by the scrubber's own shape for its key, and dropped when it does not fit
+export type ReportCtx = { kind?: unknown, firm?: unknown, tags?: Record<string, string | undefined> };
 type Opts = {
   release: string,
   dsn?: string,
@@ -89,7 +91,7 @@ export function cloudReporter(o: Opts) {
         const raw = {
           event_id: hex32(), timestamp: now / 1000, platform: "javascript", level: "error", release: o.release, environment: SENTRY_ENVIRONMENT,
           exception: { values: [{ type: p.type, value: p.value, mechanism: { type: "generic", handled: where !== "unhandled" }, stacktrace: { frames: parseStack(p.stack) } }] },
-          tags: { where, kind: typeof ctx.kind === "string" ? ctx.kind : undefined, firm },
+          tags: { ...(ctx.tags || {}), where, kind: typeof ctx.kind === "string" ? ctx.kind : undefined, firm },
           contexts: { runtime: { name: "deno", version: String(deno?.version?.deno || "") } },
           sdk: { name: "sentry.javascript.fincom-cloud", version: "1.0.0" },
         };

@@ -163,6 +163,17 @@ try:
     ok(str(vol) == "0", "every book tool is STABLE (cannot write)")
     inv = db.one("select count(*) from pg_proc where proname like 'asst\\_%' and proname not in ('asst_cap_take', 'asst_cost_add', 'asst_log_add', 'asst_set_cap', 'asst_usage', 'asst_set_settings', 'asst_settings', 'asst_notice_tick', 'asst_notice_status') and prosecdef")
     ok(str(inv) == "0", "every book tool runs as the caller (security invoker)")
+    # Sentry FINCOM-CLOUD-STAGING-1: on staging signed-in users may not run tally_pick (security migration-3-phase2), and
+    # the book tools must work without it (migration 85: asst_span picks the book itself, under RLS and my_firm())
+    try:
+        A.ask(db, "select tally_pick('larkspur', null)"); ok(False, "a member may not run tally_pick (as on staging)")
+    except RuntimeError as e: ok("permission denied" in str(e), "a member may not run tally_pick (as on staging)")
+    ok("tally_pick(" not in db.one("select prosrc from pg_proc where proname = 'asst_span'"), "asst_span does not call tally_pick (migration 85)")
+    db.sql(open(A.MIG85).read())
+    r = J("select asst_tds_missed(%s, null, null, '194C')" % C)
+    ok([x["party"] for x in rows(r)] == ["Ashvattha Transport Co"], "migration 85 runs twice; 194C without TDS as a member: Ashvattha Transport Co")
+    r = J("select asst_tds_missed(%s, null, null, null)" % C, A.STRANGER)
+    ok(r.get("none") is True and not rows(r), "after migration 85 another firm's member still gets no book")
 
     # ---- the cap (in rupees: Rs 150 a day at Rs 85 a dollar unless the owner sets others) and the log
     take = lambda n=1: json.loads(db.one("select asst_cap_take('%s', %d)" % (A.FIRM, n)))

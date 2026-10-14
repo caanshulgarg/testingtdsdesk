@@ -17,7 +17,7 @@ const ALLOWED = {
   top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk", "fingerprint", "extra"],
   exception: ["type", "value", "mechanism", "stacktrace"], mechanism: ["type", "handled"], frame: ["filename", "function", "module", "lineno", "colno", "in_app"],
   breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to"],
-  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
+  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
   contexts: ["os", "runtime", "browser"], context: ["name", "version"], sdk: ["name", "version", "settings"], settings: ["infer_ip"],
 };
 function shape(e) {
@@ -154,6 +154,17 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
   const other = S.scrubEvent({ ...JSON.parse(JSON.stringify(base)), tags: { kind: "beat" } });
   ok(!other.fingerprint && !other.extra, "any other event: still no fingerprint and no extra");
   ok(S.scrubEvent({ ...JSON.parse(JSON.stringify(base)), tags: { kind: "user-report", tool: "entries_filter" }, message: "Assistant answer reported wrong: user_report", fingerprint: ["user-report", "user_report", "entries_filter"] }).message === "Assistant answer reported wrong: user_report", "a user's report: its title kept");
+}
+
+// FinCom Assistant's failed turn (Sentry FINCOM-CLOUD-STAGING-1): the codes of what failed are kept, anything else in them dropped
+{
+  const good = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "error", exception: { values: [{ type: "BadRequestError", value: "answer failed" }] },
+    tags: { where: "assistant_turn", kind: "billing", step: "routing_call", status: "400", api_error: "invalid_request_error", model: "claude-haiku-5-5", request_id: "req_011CTestAbcdef0123456789", tool: "tds_missed", db_code: "42501" } });
+  const sorted = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
+  ok(sorted(good.tags) === sorted({ where: "assistant_turn", kind: "billing", tool: "tds_missed", step: "routing_call", status: "400", api_error: "invalid_request_error", model: "claude-haiku-5-5", request_id: "req_011CTestAbcdef0123456789", db_code: "42501" }) && good.exception.values[0].type === "BadRequestError",
+    "a failed turn: step, status, API error type, model, request id, tool and database code kept (" + JSON.stringify(good.tags) + ")");
+  const bad = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { step: "Which suppliers", status: "40000", api_error: "ALPHA TRADERS", model: "gpt 4 ALPHA", request_id: "09AANFG3202D1ZR", db_code: "permission denied for tally_pick" } });
+  ok(!bad.tags, "a failed turn's tags with data in them are dropped (" + JSON.stringify(bad.tags) + ")");
 }
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");

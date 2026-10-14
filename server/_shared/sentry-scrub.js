@@ -183,6 +183,15 @@ const TAGS = {
   where: (v) => (/^[a-z]+(?:_[a-z]+){0,3}$/.test(v) || (/^[a-z][a-z0-9_ .:-]{0,60}$/.test(v) && scrubText(v) === v) ? v : undefined),
   guard: (v) => (/^[A-Za-z][A-Za-z0-9 ']{0,40}$/.test(v) && (scrubText(v) === v || (/^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/.test(v) && !/[A-Z]{3}/.test(v))) ? v : undefined),   // a part of the page
   mode: (v) => (/^[a-z]{1,12}$/.test(v) ? v : undefined),
+  // FinCom Assistant's failed turn (Sentry FINCOM-CLOUD-STAGING-1): where in the turn, the API's HTTP status and error
+  // type, the model asked for, the API's request id (for Anthropic's support), the database's error code (SQLSTATE or
+  // PostgREST's). Codes only, each its own shape
+  step: (v) => (/^[a-z][a-z_]{0,30}$/.test(v) ? v : undefined),
+  status: (v) => (/^[1-5][0-9]{2}$/.test(v) ? v : undefined),
+  api_error: (v) => (/^[a-z][a-z_]{0,40}$/.test(v) ? v : undefined),
+  model: (v) => (/^claude-[a-z0-9-]{1,40}$/.test(v) ? v : undefined),
+  request_id: (v) => (/^req_[A-Za-z0-9]{8,40}$/.test(v) ? v : undefined),
+  db_code: (v) => (/^([0-9A-Z]{5}|PGRST[0-9]{3})$/.test(v) ? v : undefined),
 };
 const CONTEXT_VALUE = /^[A-Za-z0-9 ._()+\/-]{1,80}$/;
 const LEVELS = ["fatal", "error", "warning", "info", "debug"], PLATFORMS = ["javascript", "node", "go", "other"];
