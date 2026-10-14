@@ -34,7 +34,17 @@ const ASST = {
     return this.turns().filter(t => t.done && !t.error).slice(-8).flatMap(t => [{role: "user", content: t.q}, {role: "assistant", content: this.plain(t.text).slice(0, 4000)}]);
   },
   plain(s){ return String(s || "").replace(/⟦F(\d+)⟧/g, "").replace(/\[V:([^|\]]+)\|([^\]]+)\]/g, "(voucher $1, $2)"); },
-  open(q){ const a = this.st(); if (!this.on()){ this.loadSettings(true).then(st => { if (st && st.enabled && st.consent) this.open(q); else toast(st && st.enabled ? "The firm's owner has not recorded the clients' consent to AI processing yet (Settings › AI help)." : "FinCom Assistant is switched off for the firm. The owner can switch it on in Settings › AI help."); }); return; } a.open = true; if (q != null) a.q = q; this.draw(); setTimeout(() => { const el = document.getElementById("asstQ"); if (el) el.focus(); }, 80); },
+  open(q){
+    const a = this.st();
+    if (!this.on()){
+      this.loadSettings(true).then(st => { if (st && st.enabled) this.open(q); else if (st && !st.error) toast("FinCom Assistant is switched off for the firm. The owner can switch it on in Settings › AI help."); else toast("FinCom Assistant could not be reached just now; try again in a moment."); });
+      return;
+    }
+    a.open = true; if (q != null) a.q = q; this.draw(); setTimeout(() => { const el = document.getElementById("asstQ"); if (el) el.focus(); }, 80);
+  },
+  // the short notice on first use (the owner's decision of 14-Oct-2026: on by default, no consent tick; the notice instead)
+  noticeSeen(){ try { return lsGet("tdsdesk:asst-notice") === "1"; } catch (e){ return false; } },
+  noticeOk(){ try { lsSet("tdsdesk:asst-notice", "1"); } catch (e){} this.st().noticeOk = true; this.draw(); },
   close(){ this.st().open = false; this.draw(); },
   setScope(s){ this.st().scope = s; this.draw(); },
   async ask(q){
@@ -106,21 +116,40 @@ const ASST = {
       else { const fy = p.fy || TDS.fyOf(new Date().toISOString().slice(0, 10).replace(/-/g, "")); t.prefileRes = PreFile.tds(p.form, fy, p.quarter || TDS.qOf(new Date().toISOString().slice(0, 10).replace(/-/g, ""))); }
     } catch (e){ t.prefileErr = "The check could not run: " + ((e && e.message) || e); }
   },
-  // the firm's switch and the clients' consent (assistant_settings); the owner changes them in Settings › AI help
+  // the firm's switch (assistant_settings; the owner's decision of 14-Oct-2026: ON for every firm unless its owner switches
+  // it off). The owner's report of 14-Oct-2026 ("not able to click FinCom Assistant in settings"): the setting was read
+  // once, when the app first drew, and kept for good; read before the sign-in had finished it came back empty and the
+  // page said "Loading…" for ever, and after a failed read the switch stayed greyed. Now an empty or failed read is
+  // asked again (1, 2, 4 … 30 s), and a change of firm (another sign-in) reads it afresh.
   async loadSettings(force){
     const a = this.st();
-    if (a.settings && !force) return a.settings;
-    if (a.settingsBusy || typeof Cloud !== "object" || !Cloud.on()) return a.settings;
-    a.settingsBusy = true;
-    try { a.settings = await Cloud.rpc("asst_settings", {}); } catch (e){ a.settings = {enabled: false, consent: false, error: e.message}; }
-    a.settingsBusy = false; this.draw(); return a.settings;
+    const firm = typeof Cloud === "object" && Cloud.st ? Cloud.st.firm || "" : "";
+    if (a.settingsFirm !== firm){ a.settings = undefined; a.settingsFirm = firm; a.settingsTries = 0; }
+    if (a.settings && !a.settings.error && !force) return a.settings;
+    if (a.settingsBusy) return a.settingsBusy;
+    if (typeof Cloud !== "object" || !Cloud.on()){ this.retrySettings(); return a.settings; }
+    a.settingsBusy = (async () => {
+      let st;
+      try { st = await Cloud.rpc("asst_settings", {}); } catch (e){ st = {enabled: false, error: (e && e.message) || "could not be read"}; }
+      if (!st || typeof st !== "object"){ a.settings = null; this.retrySettings(); }
+      else { a.settings = st; a.settingsTries = 0; if (st.error) this.retrySettings(); }
+      a.settingsBusy = null; this.draw(); return a.settings;
+    })();
+    return a.settingsBusy;
   },
-  async setSettings(enabled, consent){
-    try { this.st().settings = await Cloud.rpc("asst_set_settings", {p_enabled: !!enabled, p_consent: !!consent}); toast(enabled ? (consent ? "FinCom Assistant is on." : "Switched on. Record the clients' consent to use it.") : "FinCom Assistant is off."); }
+  retrySettings(){
+    const a = this.st();
+    if (a.settingsTimer) return;
+    a.settingsTries = (a.settingsTries || 0) + 1;
+    const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(a.settingsTries - 1, 5)));
+    a.settingsTimer = setTimeout(() => { a.settingsTimer = null; this.loadSettings(true); }, wait);
+  },
+  async setSettings(enabled){
+    try { this.st().settings = await Cloud.rpc("asst_set_settings", {p_enabled: !!enabled, p_consent: true}); toast(enabled ? "FinCom Assistant is on for the firm." : "FinCom Assistant is off for the firm."); }
     catch (e){ toast("Could not change it: " + (e && e.message)); }
     this.draw();
   },
-  on(){ const st = this.st().settings; return !!(st && st.enabled && st.consent); },
+  on(){ const st = this.st().settings; return !!(st && !st.error && st.enabled); },
   // ---------- what the answer's buttons do
   copy(t){
     const lines = [t.q, "", this.plain(t.text)];

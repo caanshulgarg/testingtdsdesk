@@ -3,7 +3,7 @@
   by fixed transcripts) -> the Supabase stand-in (assistant_supa.py) -> a throwaway PostgreSQL with migration 77 and the
   made-up books of tests/fixtures/books (assistant_stand.py). The figures shown come from the book tools on the database.
 Checked, with a screenshot of each in tests/out/assistant/:
-  off by default (no launcher; Ctrl+J says it is off); the owner switches it on and records consent in Settings › AI help;
+  on by default (the owner's decision of 14-Oct-2026); the owner switches it off and on in Settings › AI help;
   the launcher and Ctrl+J; the panel's suggestions and privacy note; a green answer (194C, Ashvattha 40,000, amounts right
   aligned, a date that opens the entry); an amber answer with a made-up voucher removed and a wrong figure corrected
   (AI 4,000 struck out, FinCom 3,600) and its row on the owner's Mismatches list; a blue answer with its web source; a
@@ -114,26 +114,26 @@ try:
         pg.evaluate(SETUP, [books, master, twobs, A.ME, A.FIRM, FNURL]); pg.wait_for_timeout(1200)
         pg.evaluate("S.books = window.__bk; ASST.loadSettings(true)"); pg.wait_for_timeout(800)
 
-        # ---------- off by default
-        ok(pg.evaluate("!ASST.on()") and pg.locator("[data-asst-launch]").count() == 0, "off by default: no Assistant button")
-        pg.keyboard.press("Control+j"); pg.wait_for_timeout(800)
-        ok(pg.locator("[data-asst-panel]").count() == 0 and "switched off" in pg.inner_text("body"), "Ctrl+J says it is switched off for the firm")
-        # ---------- the owner switches it on, then records the clients' consent
-        pg.evaluate("S.view = 'home'; S.settingsTab = 'ai'; S.homeTab = 'rules'; render()"); pg.wait_for_timeout(500)
-        if pg.locator("[data-asst-switch]").count() == 0:
-            pg.evaluate("goHome && goHome('settings')") if pg.evaluate("typeof goHome === 'function'") else None; pg.wait_for_timeout(500)
+        # ---------- on by default (the owner's decision of 14-Oct-2026): the launcher is there; the owner can switch it off
+        ok(pg.evaluate("ASST.on()"), "on by default: no setting row for the firm, the assistant is on")
+        pg.evaluate("S.view = 'home'; S.settingsTab = 'ai'; S.homeTab = 'rules'; render()"); pg.wait_for_timeout(800)
         ok(pg.locator("[data-asst-switch]").count() == 1, "Settings › AI help has the Assistant's switch")
-        boxes = pg.locator("[data-asst-switch] input[type=checkbox]")
-        boxes.nth(0).click(); pg.wait_for_timeout(1200)
-        ok(pg.evaluate("ASST.st().settings.enabled && !ASST.on()"), "switched on, but not used until consent is recorded")
-        pg.locator("[data-asst-switch] input[type=checkbox]").nth(1).click(); pg.wait_for_timeout(1200)
-        ok(pg.evaluate("ASST.on()") and db.one("select enabled and consent from assistant_settings where firm_id = '%s'" % A.FIRM) == "t", "consent recorded: on (assistant_settings in the database)")
+        box = pg.locator("[data-asst-switch] input[type=checkbox]")
+        ok(box.count() == 1 and box.is_checked(), "the switch shows it on; no consent tick")
+        box.click(); pg.wait_for_timeout(1200)
+        ok(not pg.evaluate("ASST.on()") and db.one("select enabled from assistant_settings where firm_id = '%s'" % A.FIRM) == "f", "the owner switches it off (kept in assistant_settings)")
+        pg.keyboard.press("Control+j"); pg.wait_for_timeout(800)
+        ok(pg.locator("[data-asst-panel]").count() == 0 and "switched off" in pg.inner_text("body"), "switched off: Ctrl+J says so")
+        pg.locator("[data-asst-switch] input[type=checkbox]").click(); pg.wait_for_timeout(1200)
+        ok(pg.evaluate("ASST.on()") and db.one("select enabled from assistant_settings where firm_id = '%s'" % A.FIRM) == "t", "and on again")
         shot(pg, "08-settings-switch", "[data-asst-settings]")
         # ---------- the client's books: the launcher, Ctrl+J, the panel
         pg.evaluate("S.view = 'company'; S.coId = 'larkspur'; S.tab = 'books'; S.books = window.__bk; S.booksTab = 'tds'; render()"); pg.wait_for_timeout(700)
         ok(pg.locator("[data-asst-launch]").count() == 1 and "Larkspur" in pg.inner_text("[data-asst-launch]"), "the launcher: Ask about the open client")
         pg.keyboard.press("Control+j"); pg.wait_for_timeout(700)
         ok(pg.locator("[data-asst-panel]").count() == 1, "Ctrl+J opens the panel")
+        ok(pg.locator("[data-asst-first-notice]").count() == 1, "first use: the notice (questions may be processed by an AI provider; identifiers are masked)")
+        pg.locator("[data-asst-first-notice] button").click(); pg.wait_for_timeout(300)
         ok(pg.locator("[data-asst-suggest] button").count() >= 5 and "identifiers are masked" in pg.inner_text("[data-asst-privacy]"), "suggested questions, and the privacy note")
         shot(pg, "01-panel")
         # ---------- green: a book tool

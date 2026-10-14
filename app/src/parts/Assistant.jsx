@@ -187,7 +187,7 @@ function asstDraftFile(d, kind) {
 export function AssistantLauncher() {
   const a = ASST.st();
   if (!S.firm || a.open || typeof Cloud !== "object" || !Cloud.on()) return null;
-  if (a.settings === undefined) { a.settings = null; setTimeout(() => ASST.loadSettings(), 0); }
+  if (a.settings === undefined && !a.settingsBusy) setTimeout(() => ASST.loadSettings(), 0);
   if (!ASST.on()) return null;
   const co = S.view === "company" && CO();
   return <button className="asst-launch" data-asst-launch="" onClick={() => ASST.open()} title="FinCom Assistant (Ctrl+J)"><Sparkles size={16} /> {co ? "Ask about " + co.name : "Ask FinCom"}</button>;
@@ -218,6 +218,9 @@ export default function Assistant() {
             </span>
           </div>
           {a.saved && <div className="asst-saved">{a.saved.length ? a.saved.map((s) => <button key={s.id} className="linkbtn" onClick={() => ASST.loadSaved(s.id)}>{s.title} <span className="note">{dmy(String(s.updated_at).slice(0, 10))}</span></button>) : <p className="note">No saved conversations{cid ? " for this client" : ""} yet.</p>}</div>}
+          {!a.noticeOk && !ASST.noticeSeen() && <div className="asst-first-notice" data-asst-first-notice="" role="note">
+            <p><b>Before you start:</b> Questions may be processed by an AI provider; identifiers are masked. PANs, GSTINs, TANs, Aadhaar and phone numbers, and the names of parties you do not name, are replaced by tokens before anything leaves FinCom. It reads, works out, drafts and exports; it never posts, files or changes anything.</p>
+            <Button className="btn small" onClick={() => ASST.noticeOk()}>Got it</Button></div>}
           <form className="asst-ask" onSubmit={(e) => { e.preventDefault(); ASST.ask(); }}>
             <textarea id="asstQ" rows={2} value={a.q} placeholder={cid ? "Ask about " + co.name + "'s books, tax, or a notice…" : "Ask a tax or accounting question…"} disabled={a.busy}
               onChange={(e) => { a.q = e.target.value; ASST.draw(); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ASST.ask(); } }} />
@@ -277,16 +280,19 @@ export function AssistantSettings() {
   </section>;
 }
 
-// the firm's switch and the clients' consent (the owner): both on before anything goes to the AI provider
+// the firm's switch (the owner). ON for every firm unless its owner switches it off: the owner's decision of 14-Oct-2026,
+// which also replaced the clients'-consent tick with the notice on first use. Until the setting is read it says so (and
+// it is read again until it is, src/js/75-assistant.js loadSettings); a member who is not the owner sees it greyed.
 function AssistantSwitch() {
   const a = ASST.st();
-  if (a.settings === undefined || a.settings === null) { if (a.settings === undefined) { a.settings = null; setTimeout(() => ASST.loadSettings(), 0); } return <p className="note">Loading…</p>; }
-  const st = a.settings || {};
+  if (a.settings === undefined && !a.settingsBusy) setTimeout(() => ASST.loadSettings(), 0);
+  if (!a.settings) return <p className="note" data-asst-switch-wait="">Reading the firm's setting…</p>;
+  const st = a.settings;
+  if (st.error) return <p className="note" data-asst-switch-wait="">The firm's setting could not be read ({st.error}); trying again. <button className="linkbtn" onClick={() => ASST.loadSettings(true)}>Try now</button></p>;
   return <div className="asst-switch" data-asst-switch="">
-    <label className="chk"><input type="checkbox" checked={!!st.enabled} disabled={!st.owner} onChange={(e) => ASST.setSettings(e.target.checked, st.consent)} /> <b>FinCom Assistant on for the firm</b>
-      <span className="note"> · the chat panel on every page (Ctrl+J). Off by default. "Check before filing" works either way: it is FinCom's own checks, no AI.</span></label>
-    <label className="chk"><input type="checkbox" checked={!!st.consent} disabled={!st.owner} onChange={(e) => ASST.setSettings(st.enabled, e.target.checked)} /> <b>Clients' consent to AI processing</b>
-      <span className="note"> · the firm has its clients' consent for their questions and books to be processed by an AI provider (Anthropic's Claude). Before anything is sent, PANs, GSTINs, TANs, Aadhaar and phone numbers, and the names of parties the question does not name, are replaced by tokens; FinCom puts the real values back. Only what the question needs is sent.</span></label>
-    {!st.owner && <p className="note">Only the firm's owner changes these.</p>}
+    <label className="chk"><input type="checkbox" checked={!!st.enabled} disabled={!st.owner} onChange={(e) => ASST.setSettings(e.target.checked)} /> <b>FinCom Assistant on for the firm</b>
+      <span className="note"> · the chat panel on every page (Ctrl+J). On unless the owner switches it off (the owner's decision of 14-Oct-2026). "Check before filing" works either way: it is FinCom's own checks, no AI.</span></label>
+    <p className="note">Questions may be processed by an AI provider (Anthropic's Claude); identifiers are masked: PANs, GSTINs, TANs, Aadhaar and phone numbers, and the names of parties the question does not name, are replaced by tokens before anything is sent, and FinCom puts the real values back. Only what the question needs is sent. Each person sees this notice the first time they open the assistant.</p>
+    {!st.owner && <p className="note">Only the firm's owner can switch it on or off.</p>}
   </div>;
 }

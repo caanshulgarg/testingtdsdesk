@@ -104,3 +104,11 @@
 .asst-cached { font-style: italic; }
 .asst-warn-txt { color: var(--warn, #b45309); }
 .asst-cap label { margin-right: 8px; }
+.asst-first-notice { border: 1px solid var(--line, #d1d5db); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; background: var(--info-bg, #eff6ff); }
+.asst-first-notice p { margin: 0 0 8px; }
+/* the owner's report of 14-Oct-2026: on a phone the launcher sat on the bottom bar and covered More, so Settings could not
+   be reached. On a phone it is a round button above the bar (the bar and the review banner below it), words hidden */
+@media (max-width: 600px) {
+  .asst-launch { right: 12px; bottom: calc(104px + env(safe-area-inset-bottom)); width: 48px; height: 48px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .asst-launch svg { width: 20px; height: 20px; }
+}

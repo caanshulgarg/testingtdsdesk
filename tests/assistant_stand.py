@@ -14,6 +14,7 @@ import pg_stand
 ROOT = os.path.join(HERE, "..")
 SQL = os.path.join(ROOT, "server", "tally-cloud")
 MIG77 = os.path.join(ROOT, "server", "assistant", "migration-77-assistant.sql")
+MIG82 = os.path.join(ROOT, "server", "assistant", "migration-82-assistant-default-on.sql")   # on by default (14-Oct-2026)
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -102,7 +103,10 @@ def start(port):
     return db
 
 def migrate(db, path=MIG77):
-    return db.sql(open(path).read())
+    """77, then 82 (the assistant on by default) as staging has them; another path: that file only"""
+    if path != MIG77: return db.sql(open(path).read())
+    db.sql(open(MIG77).read())
+    return db.sql(open(MIG82).read())
 
 def ask(db, query, uid=ME):
     """a query as a signed-in member: role authenticated, auth.uid() = uid (row-level security applies)"""

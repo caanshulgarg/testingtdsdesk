@@ -2,8 +2,8 @@
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
 //   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines}}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
-// Who: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner has switched the assistant
-// on and recorded the clients' consent (assistant_settings); a client must be one of that firm's
+// Who: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner has not switched the
+// assistant off (assistant_settings; on by default: the owner's decision of 14-Oct-2026); a client must be one of that firm's
 // (read with the user's own token: row-level security decides). The book tools run with the user's token too. Claude's key
 // is the platform's (platform_secrets "claude_api_key", the one bill reading uses), read with the service role, never sent
 // anywhere but Anthropic. Before each AI call the firm's rupee cap is checked (asst_cap_take); after it, its cost is added
@@ -58,10 +58,12 @@ export function handler(deps: Deps) {
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });
     const firm = String(member.firm_id);
 
-    // the firm's switch and the clients' consent (assistant_settings): off until the owner switches both on
-    const set = ((await rest("/rest/v1/assistant_settings?select=enabled,consent&firm_id=eq." + firm, SERVICE).catch(() => [])) as any[])[0] || {};
-    if (!set.enabled) return reply(403, { ok: false, kind: "off", error: "FinCom Assistant is switched off for your firm. The firm's owner can switch it on in Settings › AI help." });
-    if (!set.consent) return reply(403, { ok: false, kind: "consent", error: "The firm's owner has not yet recorded the clients' consent to AI processing (Settings › AI help)." });
+    // the firm's switch (assistant_settings). The owner's decision of 14-Oct-2026: ON for every firm unless its owner
+    // switches it off (a firm with no row is on), and no clients'-consent tick (the app shows the notice on first use)
+    const setRows = await rest("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + firm, SERVICE).catch(() => null) as any[] | null;
+    if (setRows === null) return reply(503, { ok: false, kind: "other", error: "The firm's setting could not be read; try again in a moment." });
+    const set = setRows[0] || { enabled: true };
+    if (set.enabled === false) return reply(403, { ok: false, kind: "off", error: "FinCom Assistant is switched off for your firm. The firm's owner can switch it on in Settings › AI help." });
 
     let body: any;
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }

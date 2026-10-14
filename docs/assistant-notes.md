@@ -4,6 +4,17 @@ Branch `ask-fincom`. Function `fincom-assistant` (`server/assistant/`), migratio
 with `src/js/75-assistant.js`, "Check before filing" `src/js/76-prefiling.js` with `app/src/parts/PreFile.jsx`.
 Tool modules for the audit and the reports: `docs/assistant-tools.md`.
 
+## On by default (the owner's decision of 14-Oct-2026)
+
+FinCom Assistant is ON for every firm unless the firm's owner switches it off (Settings › AI help › FinCom Assistant);
+staff see the switch but cannot change it. There is no clients'-consent tick any more: the owner decided on 14-Oct-2026
+to use it by default, and each person sees the notice "Questions may be processed by an AI provider; identifiers are
+masked" the first time they open the assistant (the short note stays under the question box). The daily cost cap
+(Rs 150 a firm a day) stays on. Migration 82 makes a firm with no setting count as on; a firm whose owner switched it
+off stays off. The same day's fix: the Settings page could stay on "Loading…" (or greyed) when the firm's setting was
+first read before the sign-in had finished, and on a phone the Ask FinCom button covered the bottom bar's More (so
+Settings could not be reached); the setting is now read again until known, and the button sits above the bar.
+
 ## How a question is answered (cheapest first)
 
 1. **Answer cache.** The first question of a conversation, asked again for the same client on the same books (the
@@ -24,7 +35,7 @@ Tool modules for the audit and the reports: `docs/assistant-tools.md`.
 
 ## What goes to the AI provider, and when
 
-Only per question, after the owner has switched the assistant on and recorded the clients' consent. Nothing for a
+Only per question, while the firm's assistant is on (the default since 14-Oct-2026), with the first-use notice shown. Nothing for a
 keyword answer, a cached answer or a check before filing. Otherwise: the question; for Haiku nothing else; for Sonnet or
 Opus also the tool results the model asks for, as totals and at most 15 rows (the Day Book slice at most 150 entries,
 six columns), and a notice the user attached. PANs, GSTINs, TANs, Aadhaar and phone numbers, and the names of parties the

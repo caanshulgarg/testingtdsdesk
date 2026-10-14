@@ -11,6 +11,7 @@ run_add_client_tally.py               120
 run_assistant_agent.py                300
 run_assistant_cost.py                 300
 run_assistant_sql.py                  300
+run_assistant_settings_ui.py          180  TDSDESK_SITE=../app/dist-test
 run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test

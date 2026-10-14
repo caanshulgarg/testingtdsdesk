@@ -507,7 +507,7 @@ Deno.test("data minimisation: no raw PAN, GSTIN or unnamed party name in anythin
   eq([led.ledger, led.rows.length, led.rows[0].credit], ["Ashvattha Transport Co", 2, 40000], "the tool input was mapped back to the real ledger");
 });
 
-Deno.test("a named party is not masked; the switch: off or without consent, nothing goes to Claude", async () => {
+Deno.test("a named party is not masked; the switch: on by default (no row), off when the owner switches it off; no consent tick", async () => {
   const c = new MockClaude([[tool("ledger_balance", { ledger: "Nightjar", as_on: "2026-03-31" })], [text("Nightjar is owed ₹2,90,000.00.")]]);
   await ask(c, { question: "What do we owe Nightjar?", client_id: CLIENT });
   assert(JSON.stringify(c.calls[1]).includes("Nightjar Sound & Light Co"), "the party the question names is sent as it is");
@@ -515,12 +515,17 @@ Deno.test("a named party is not masked; the switch: off or without consent, noth
   try {
     await set(false, true);
     const off = new MockClaude([]);
-    const r1 = await ask(off, { question: "Top customers", client_id: CLIENT });
-    eq([r1.status, JSON.parse(r1.raw).kind, off.calls.length], [403, "off", 0], "switched off: refused, Claude not called");
+    const r1 = await ask(off, { question: "What is the TDS rate on rent?", client_id: null });
+    eq([r1.status, JSON.parse(r1.raw).kind, off.calls.length], [403, "off", 0], "switched off by the owner: refused, Claude not called");
     await set(true, false);
-    const r2 = await ask(off, { question: "Top customers", client_id: CLIENT });
-    eq([r2.status, JSON.parse(r2.raw).kind, off.calls.length], [403, "consent", 0], "no consent recorded: refused");
+    const on = new MockClaude([[text("10% under section 194-I.")]]);
+    const r2 = await ask(on, { question: "What is the TDS rate on rent? " + crypto.randomUUID().slice(0, 6), client_id: null });
+    eq([r2.status, on.calls.length], [200, 1], "on, with the old consent column false: answered (the owner's decision of 14-Oct-2026: no consent tick)");
   } finally { await set(true, true); }
+  // another firm that never set anything: on (the stranger's firm has no row)
+  const s2 = new MockClaude([[text("General answer.")]]);
+  const r3 = await ask(s2, { question: "What is section 194Q? " + crypto.randomUUID().slice(0, 6), client_id: null }, STRANGER);
+  eq([r3.status, s2.calls.length], [200, 1], "a firm with no setting row: on by default");
 });
 
 Deno.test("'check my Q4 26Q' from the chat: FinCom's own checklist, run in the browser; no figure from Claude", async () => {
