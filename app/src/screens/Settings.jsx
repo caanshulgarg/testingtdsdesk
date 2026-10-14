@@ -255,12 +255,20 @@ function TallySetup() {
         <CoCheck path="billwise" on={!!co.billwise}>Add the invoice number as a bill-wise reference on the party</CoCheck>
       </div>
     </Card>
-    <Card title="Ledgers used in every entry" note="Names as in Tally. Each bill picks its own GST ledgers (how the supplier was booked before, else the ledger used most for that tax and rate); a GST ledger typed here is used on every bill instead, and one of another tax is refused. Ledgers for TDS and expenses by payment type are under TDS.">
-      <div className="grid">
-        <CoText label="Input CGST" path="gst.cgst" choice="gst:cgst" /><CoText label="Input SGST" path="gst.sgst" choice="gst:sgst" /><CoText label="Input IGST" path="gst.igst" choice="gst:igst" /><CoText label="Round off" path="roundOff" />
-      </div>
+    <Card title="Ledgers used in every entry" note="Names as in Tally. Expense ledgers by payment type are under TDS.">
+      <LedgerPointer />
+      <div className="grid"><CoText label="Round off" path="roundOff" /></div>
     </Card>
   </>;
+}
+
+// ledger-confirm (14-Oct-2026; the owner: "we should do that from there only, so remove that from Settings"): the TDS and
+// GST ledgers (input CGST / SGST / IGST, the TDS ledger of each payment type, the reverse charge ledgers) are chosen and
+// confirmed on the TDS and GST pages' Ledgers (books/TaxLedgers.jsx); one line here says where
+export function LedgerPointer() {
+  return <p className="note" data-ledger-pointer="">Confirm TDS/GST ledgers on the TDS and GST pages:{" "}
+    <button className="linkbtn" data-ledger-pointer-go="tds" onClick={() => TaxLed.go("tds")}>TDS ledgers</button>{" · "}
+    <button className="linkbtn" data-ledger-pointer-go="gst" onClick={() => TaxLed.go("gst")}>GST ledgers</button></p>;
 }
 
 function RuleLedger({ kind, r }) {
@@ -283,28 +291,23 @@ function TdsSetup() {
         <p className="note">Untick if this client books TDS separately, for example at the time of payment. TDS is still worked out and shown.</p>
       </div>
     </Card>
-    <Card title="Ledgers by payment type" note="The TDS ledger each kind of payment is credited to, and the expense ledger a bill goes to unless you choose another.">
+    <Card title="Expense ledger by payment type" note="The expense ledger a bill goes to unless you choose another.">
+      <LedgerPointer />
       <div className="tblwrap"><table className="data" data-statement="">
-        <thead><tr><th>Payment type</th><th>TDS ledger in Tally</th><th>Default expense ledger</th></tr></thead>
-        <tbody>{rules().map((r) => <tr key={r.id}><td>{r.label}</td><td>{r.basis === "never" ? "—" : <RuleLedger kind="tds" r={r} />}</td><td><RuleLedger kind="exp" r={r} /></td></tr>)}</tbody>
+        <thead><tr><th>Payment type</th><th>Default expense ledger</th></tr></thead>
+        <tbody>{rules().map((r) => <tr key={r.id}><td>{r.label}</td><td><RuleLedger kind="exp" r={r} /></td></tr>)}</tbody>
       </table></div>
     </Card>
     <p className="note">Each supplier’s PAN, usual payment type and amounts credited before FinCom: <button className="linkbtn" onClick={() => goTab("deductees")}>Suppliers</button>.</p>
   </>;
 }
 
-const RCM_LABEL = { rcmCgstIn: "Input CGST (RCM)", rcmSgstIn: "Input SGST (RCM)", rcmIgstIn: "Input IGST (RCM)", rcmCgstOut: "CGST payable (RCM)", rcmSgstOut: "SGST payable (RCM)", rcmIgstOut: "IGST payable (RCM)" };
 
 function GstSetup() {
   const co = CO();
   return <>
     <GstSettings />
-    <Card title="Reverse charge ledgers" note="Reverse charge entries debit the input side (unless the credit is blocked) and credit the payable side.">
-      <div className="grid">{Object.keys(RCM_LEDGER_DEFAULTS).map((k) => (
-        <label className="f" key={k}><span>{RCM_LABEL[k]}</span>
-          <input type="text" value={rcmLedger(co, k)} onChange={(ev) => { coSetText("gst." + k, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommit("gst." + k)} /></label>))}
-      </div>
-    </Card>
+    <LedgerPointer />
     <Card title="Blocked credit, section 17(5)" note="Flag: suggest on matching bills, and you accept or reject. Always blocked: applied by itself (it can still be unticked on a bill). Credit allowed: never flagged — for example a car dealer buying motor vehicles.">
       <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Kind of purchase</th><th>Section</th><th>For this client</th></tr></thead>
@@ -343,12 +346,12 @@ function clientGroups() {
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the ledgers used in every entry.", "Tally: " + tallyLinkOf(co).word + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
+      it("cotally", "Which Tally company entries go into, how they are numbered, and the round-off ledger.", "Tally: " + tallyLinkOf(co).word + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
     ] },
     { title: "Tax", items: [
-      it("cotds", "Whether the client deducts TDS, and the ledgers each kind of payment uses.", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),
+      it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),
       it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s") + (tc ? " in Tally (Sundry Creditors)" + (known ? ", " + known + " with details here" : "") : "") + (supNew ? " + " + supNew + " new, not yet approved" : "")),
-      it("gstset", "GST registrations and how each is filed, reverse charge ledgers, and which purchases have blocked credit.", ""),
+      it("gstset", "GST registrations and how each is filed, and which purchases have blocked credit (GST ledgers: on the GST page).", ""),
     ] },
     { title: "Bank", items: [
       it("bankset", "The client’s bank accounts and the Tally ledger of each.", accs + " account" + (accs === 1 ? "" : "s") + (tc ? " in Tally (Bank Accounts)" + (here ? ", " + here + " with statements here" : "") : "")),

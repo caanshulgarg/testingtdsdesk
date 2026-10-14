@@ -124,7 +124,8 @@ try:
         print("4. GST")
         hash_go("#/c/%s/books/gst/07/202603/year" % cid)
         gsecs = E("[...document.querySelectorAll('#app nav[aria-label=\"GST sections\"] button')].map(b => b.textContent)")
-        ok(gsecs == ["Returns", "2B & ITC", "Supplier health", "Checks"], "GST tabs: %s" % gsecs)
+        # ledger-confirm (14-Oct-2026): the GST ledgers are a section of the GST page ("Ledgers", with the count to confirm)
+        ok(gsecs[:4] == ["Returns", "2B & ITC", "Supplier health", "Checks"] and len(gsecs) == 5 and gsecs[4].startswith("Ledgers"), "GST tabs: %s" % gsecs)
         ok(pg.locator("#app [data-gst-grid]").count() == 1 and pg.locator("#app [data-ledger-banner]").count() == 1, "Returns: the year's grid, and the banner once")
         sec_parts = {"returns": ["r1", "r3b", "amend", "adv", "g9", "g9c", "vault"], "itc": ["r2b", "inreg", "follow", "rev"], "health": ["health"], "checks": ["filedcmp", "recon"]}
         for sec, parts in sec_parts.items():

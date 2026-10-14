@@ -3,6 +3,8 @@
 //   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines}}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
 //   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
+//   {action: "ledger_guess", client_id, ledgers: [{name, group, chain, open, taxType, nature, use, samples}], parties}
+//                                                                      the AI guess for ledgers the rules could not tell (ledgers.ts)
 // Who: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner has switched the assistant
 // on and recorded the clients' consent (assistant_settings); a client must be one of that firm's
 // (read with the user's own token: row-level security decides). The book tools run with the user's token too. Claude's key
@@ -18,6 +20,7 @@ import { Ev, runTurn, TurnCtx } from "./agent.ts";
 import { FREE_SOURCES } from "./citations.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
+import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { costUsd as priceUsd, HAIKU } from "./models.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -88,6 +91,40 @@ export function handler(deps: Deps) {
       const id = row && row[0] && row[0].id;
       if (id) sentry.mismatch("user-report", { figureKey: "user_report", tool: tools[0] || "none", id, entries, firm, client: clientId || "" });
       return reply(200, { ok: true, id });
+    }
+    // the AI guess for the TDS and GST ledgers FinCom's rules could not tell (ledgers.ts): one batch on the cheap model,
+    // each ledger's answer cached for the firm and client; a guess only, never applied as confirmed
+    if (action === "ledger_guess") {
+      if (!clientId) return reply(400, { ok: false, error: "Open a client first." });
+      let lkey = "";
+      try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; lkey = (k && k[0] && k[0].value) || ""; } catch { lkey = ""; }
+      if (!lkey) return reply(503, { ok: false, kind: "bad_key", error: "No Claude key is set on the platform yet. Ask the administrator." });
+      const where = "firm_id=eq." + firm + "&client_id=eq." + encodeURIComponent(clientId) + "&version=eq." + LEDGER_GUESS_V;
+      try {
+        const r = await guessLedgers({
+          client: deps.anthropic ? deps.anthropic(lkey) : (new Anthropic({ apiKey: lkey, maxRetries: 1, timeout: 120_000 }) as unknown as TurnCtx["client"]),
+          capTake: async () => { const c = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!c?.ok, why: String(c?.why || "") }; },
+          costAdd: (feat, usd, u) => rpc("asst_cost_add", { p_firm: firm, p_feature: feat, p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }, SERVICE),
+          cacheGet: async (keys) => {
+            const out: Record<string, any> = {};
+            for (let i = 0; i < keys.length; i += 50) {
+              const rows = (await rest("/rest/v1/assistant_answers?select=key,events&" + where + "&expires_at=gt." + new Date().toISOString() + "&key=in.(" + keys.slice(i, i + 50).join(",") + ")", SERVICE)) as any[];
+              for (const row of rows || []) { const g = Array.isArray(row.events) ? row.events[0] : null; if (g && g.t === "ledger_guess" && g.guess) out[row.key] = g.guess; }
+            }
+            return out;
+          },
+          cachePut: async (rows) => { await rest("/rest/v1/assistant_answers", SERVICE, { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(rows.map((x) => ({
+            firm_id: firm, client_id: clientId, key: x.key, version: LEDGER_GUESS_V, events: [{ t: "ledger_guess", guess: x.guess }], expires_at: new Date(Date.now() + 180 * 86400_000).toISOString() }))) }); },
+        }, body.ledgers, body.parties);
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: "ledger guess: " + r.asked + " asked, " + r.cached + " cached", p_tools: [], p_in: r.usage.input_tokens || 0, p_out: r.usage.output_tokens || 0,
+          p_calls: r.asked ? 1 : 0, p_ms: Date.now() - t0, p_feature: "ledger_guess", p_route: r.asked ? "haiku" : "cache", p_models: r.asked ? [HAIKU] : [], p_cache_read: r.usage.cache_read_input_tokens || 0, p_cache_write: r.usage.cache_creation_input_tokens || 0, p_cost_inr: 0, p_fell_through: false }, SERVICE); } catch { /* the guesses still stand */ }
+        if ((r as any).capped) return reply(429, { ok: false, kind: "cap", error: "Your firm has used today's limit for AI. The rules' guesses are shown; AI guesses start again at midnight (India time).", guesses: r.guesses, cached: r.cached });
+        return reply(200, { ok: true, guesses: r.guesses, cached: r.cached, asked: r.asked, usd: Math.round(r.usd * 1e6) / 1e6, model: HAIKU });
+      } catch (e) {
+        const status = (e as any)?.status;
+        sentry.report("assistant_ledger_guess", { message: "ledger guess failed " + (status || "") }, { kind: "ledger_guess", firm });
+        return reply(502, { ok: false, kind: status === 429 ? "rate_limit" : "other", error: "AI could not be asked just now; the rules' guesses are shown." });
+      }
     }
     if (action !== "ask" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
     const question = action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);

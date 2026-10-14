@@ -66,8 +66,8 @@ function Detail({ n, m, regs, pre }) {
 
 // Change: a small picker in the row; each choice is saved at once and confirmed by this person. A ledger with no answer
 // starts from the check's suggestion, written only when something is chosen (lmSet's pre, in the same step)
-function Editor({ b, n }) {
-  const regs = (GSTR.gstins(b) || []).map((g) => g.slice(0, 2)), mm = (b.map || {})[n] || { n: 0 }, s = LedPage.checkOf(b, n);
+export function Editor({ b, n, seed }) {
+  const regs = (GSTR.gstins(b) || []).map((g) => g.slice(0, 2)), mm = (b.map || {})[n] || { n: 0 }, s = seed || LedPage.checkOf(b, n);
   const fromCheck = !mm.byHand && !mm.what && !!(s && s.what);
   const pre = fromCheck ? (m) => { LedMaster.applyWhat(m, s.what); if (LedMaster.isGst(s.what)) { m.tax = s.tax || m.tax; m.side = s.side || m.side; if (s.rate) m.gstRate = s.rate; } if (LedMaster.isTds(s.what)) m.section = s.section || m.section; return m; } : null;
   const m = fromCheck ? pre(Object.assign({}, mm)) : mm;
@@ -77,11 +77,11 @@ function Editor({ b, n }) {
     <button className="btn small" data-led-done="" onClick={() => { S.ledEdit = ""; S.ledEditPrev = null; render(); }}>Done</button>
   </div>;
 }
-function openEditor(b, n) { S.ledEdit = n; S.ledEditPrev = { cid: b.cid, n, m: (b.map || {})[n] ? LedPage.bare(b.map[n]) : null }; render(); }
+export function openEditor(b, n) { S.ledEdit = n; S.ledEditPrev = { cid: b.cid, n, m: (b.map || {})[n] ? LedPage.bare(b.map[n]) : null }; render(); }
 // the owner of 09-Oct-2026: "if I want to edit the confirm ledger, then I should be able to do that". A confirmed ledger
 // keeps its Change; as changing one used in entries moves the returns, it asks once (not when no entry uses it). The
 // answer before stays on the ledger (prev), so its Undo puts it back
-function changeRow(b, r) {
+export function changeRow(b, r) {
   const n = r.used || 0;
   if (!r.ok || !n) { openEditor(b, r.n); return; }
   askConfirm({ title: "Change a confirmed ledger?", ok: "Change it", body: esc("This ledger is used in " + plural(n, "entry", "entries") + "; your " + (LedMaster.isTds((r.m || {}).what) ? "TDS" : "GST") + " figures will change. Change it?") })
@@ -102,7 +102,7 @@ function RowAct({ b, r }) {
   return <span className="led-act">
     {r.has && r.m.what ? <button className="btn small" data-led-confirm={r.n} onClick={() => LedPage.confirm(b, [r.n], "row")}>Confirm</button> : null}{change}</span>;
 }
-const Example = ({ x }) => x ? <span data-led-example="">{LedPage.exampleSay(x)}</span> : <span className="note" data-led-example-none="">—</span>;
+export const Example = ({ x }) => x ? <span data-led-example="">{LedPage.exampleSay(x)}</span> : <span className="note" data-led-example-none="">—</span>;
 
 // the main table: one row a GST or TDS ledger
 function MainTable({ b, rows }) {
@@ -116,7 +116,7 @@ function MainTable({ b, rows }) {
 }
 
 // Please check: a confirmed answer the check reads otherwise, and what else a person should look at once
-function PleaseCheck({ b, items, lines }) {
+export function PleaseCheck({ b, items, lines }) {
   if (!items.length && !lines.length) return null;
   return <section className="led-needs" data-led-check="" role="status">
     <h3>Please check <span className="sbar-n">{items.length + lines.length}</span></h3>
@@ -136,7 +136,7 @@ function PleaseCheck({ b, items, lines }) {
 }
 
 // the status line: "Ledgers from Tally: 1,248 · updated 2 min ago", Read again now
-function Status({ b }) {
+export function Status({ b }) {
   const cid = b.cid, co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
   const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid), st = Ledgers.status(cid), cur = Ledgers.cur(cid) || {};
   const books = cloud ? [].concat((TCloud.st[cid] || {}).books || []).filter((x) => x && x.book) : [];
@@ -159,7 +159,7 @@ function Status({ b }) {
 }
 
 // the last step, with its Undo
-function UndoLine({ b }) {
+export function UndoLine({ b }) {
   const u = S.ledUndo;
   if (!u || u.cid !== b.cid) return null;
   return <div className="led-undo" data-led-undo-bar="" role="status"><span>{u.text + " Saved."}</span>
@@ -168,7 +168,7 @@ function UndoLine({ b }) {
 }
 
 // the other ledgers (not tax), folded: Change marks one as tax
-function Others({ b, rows }) {
+export function Others({ b, rows }) {
   const shown = rows.slice(0, 300);
   return <details className="led-fold" data-led-other="" open={!!S.ledQ || (!!S.ledEdit && rows.some((r) => r.n === S.ledEdit))}>
     <summary>{"Other ledgers (not tax) · " + rows.length}</summary>
@@ -184,7 +184,7 @@ function Others({ b, rows }) {
 }
 
 // Other notices: moved here from the top of the page, never lost
-function Notices({ b, cid }) {
+export function Notices({ b, cid }) {
   const items = [];
   Ledgers.renamed(cid).forEach((l) => items.push({ key: "rn:" + l.name, n: l.name, kind: "renamed", text: <RenameLine cid={cid} name={l.name} /> }));
   const ch = LedMaster.changesSince(b);
@@ -199,14 +199,10 @@ function Notices({ b, cid }) {
   </details>;
 }
 
-// named LedgersTab, not Ledgers: the global Ledgers (src/js/58, the client's ledger list) is used in this module
-export default function LedgersTab({ b }) {
-  const cid = b.cid, q = String(S.ledQ || "").toLowerCase().trim();
-  const hit = (r) => !q || r.n.toLowerCase().includes(q) || String((r.m || {}).section || "").toLowerCase().includes(q) || String(r.group || "").toLowerCase().includes(q);
-  const main = LedPage.main(b), rows = main.filter(hit), others = LedPage.others(b).filter(hit);
-  const agree = LedPage.agreeing(b), review = LedPage.review(b);
-  // Please check, the plain lines: entries naming a ledger FinCom does not have yet, ledger lines without a GUID (the
-  // masters), a confirmed ledger now used differently
+// Please check, the plain lines: entries naming a ledger FinCom does not have yet, ledger lines without a GUID (the
+// masters), a confirmed ledger now used differently (also on the TDS and GST pages' Ledgers, TaxLedgers.jsx)
+export function pleaseLines(b) {
+  const cid = b.cid;
   const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co), cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid);
   const readAct = (k) => live ? <button className="btn small" data-led-read-need={k} onClick={() => doAct("ledRead")}>Read the ledgers again</button>
     : cloud ? <button className="btn small" data-led-read-need={k} onClick={() => Ledgers.refresh(cid)}>Read the ledgers again</button>
@@ -216,6 +212,18 @@ export default function LedgersTab({ b }) {
   if (typeof Rec === "object" && Rec.flow) Rec.flow().needs.filter((g) => g.cid === cid && g.kind === "masters").forEach((g) => lines.push({ key: "rec:" + g.key, kind: "masters", text: g.text, act: <NeedAction g={g} canApply={Rec.canWrite()} /> }));
   LedCheck.diff(b).changed.forEach((x) => lines.push({ key: "use:" + x.n, n: x.n, kind: "used", text: x.n + ": used differently since it was confirmed (" + x.say + ").",
     act: <button className="btn small" data-led-keep={x.n} onClick={() => LedPage.keepUse(b, x.n)}>Keep as confirmed</button> }));
+  return lines;
+}
+
+// named LedgersTab, not Ledgers: the global Ledgers (src/js/58, the client's ledger list) is used in this module
+export default function LedgersTab({ b }) {
+  const cid = b.cid, q = String(S.ledQ || "").toLowerCase().trim();
+  const hit = (r) => !q || r.n.toLowerCase().includes(q) || String((r.m || {}).section || "").toLowerCase().includes(q) || String(r.group || "").toLowerCase().includes(q);
+  const main = LedPage.main(b), rows = main.filter(hit), others = LedPage.others(b).filter(hit);
+  const agree = LedPage.agreeing(b), review = LedPage.review(b);
+  // Please check, the plain lines: entries naming a ledger FinCom does not have yet, ledger lines without a GUID (the
+  // masters), a confirmed ledger now used differently
+  const lines = pleaseLines(b);
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((x, y) => x.name.localeCompare(y.name));
   const okN = main.filter((r) => r.ok).length;
   return <div className="ledpage" data-ledpage="">
