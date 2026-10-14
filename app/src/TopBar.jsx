@@ -19,7 +19,7 @@ import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { FinComNav } from "./nav.js";
-import { goTallyCard } from "./parts/TallyChip.jsx";
+import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -96,6 +96,8 @@ function ClientHeader() {
   const head = (
     <Title title={title} sub={crumbs} crumb="client-nav">
       <div className="tbar-actions">
+        {/* the client's one Tally chip ("Not linked → Link"), on the title line (it was in the client's row of pages, gone) */}
+        {!S.loadingCo && <TallyChip co={co} where="title" />}
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
       </div>
     </Title>

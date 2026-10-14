@@ -133,17 +133,10 @@
 /* Clients' one bar: the find box takes the room */
 #app .fbar.clients-head .fb-search { flex: 1 1 320px; }
 
-/* the client's strip (ui-tidy): its pages as quiet links, its Tally chip at the end; one line, sideways inside itself on a phone */
-#app .cstrip { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0 0 8px; border-bottom: 1px solid var(--border-subtle, var(--border)); min-width: 0; }
-#app .cstrip .ctabs { display: flex; flex: 1 1 auto; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-#app .cstrip .ctabs::-webkit-scrollbar { display: none; }
-#app .cstrip .ctab { flex: 0 0 auto; height: 30px; padding: 0 10px; border: 0; border-radius: var(--radius-control, 8px); background: none; color: var(--text-secondary, var(--muted)); font-size: 13px; font-weight: 500; cursor: pointer; }
-#app .cstrip .ctab:hover { background: var(--surface-muted); color: var(--foreground); }
-#app .cstrip .ctab[aria-current="page"] { background: var(--surface-muted); color: var(--foreground); font-weight: 600; }
-#app .cstrip .cstrip-tally { flex: 0 0 auto; }
-#app .tchip { cursor: pointer; border: 0; font: inherit; font-size: 12.5px; white-space: nowrap; }
-#app .tchip:hover { filter: brightness(.96); text-decoration: underline; }
-@media (max-width: 600px) { #app .cstrip { gap: 6px; } #app .cstrip .ctab { padding: 0 8px; } #app .cstrip .tchip { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; } }
+/* the Tally chip: on the title line of a client's page (tds-layout: the client's strip of pages is gone), and in lists */
+#app .tchip, #cobar .tchip { cursor: pointer; border: 0; font: inherit; font-size: 12.5px; white-space: nowrap; }
+#app .tchip:hover, #cobar .tchip:hover { filter: brightness(.96); text-decoration: underline; }
+@media (max-width: 600px) { #cobar .tchip { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; } }
 #app .tnotlinked { margin: 0 0 12px; }
 #app .tnl-list { list-style: none; margin: 0; padding: 0; }
 #app .tnl-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--border-subtle, var(--border)); }

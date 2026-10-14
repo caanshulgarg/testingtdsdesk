@@ -36,3 +36,14 @@
 /* a challan's source: small grey words on its number's line (the coordinator's screenshot review, 14-Oct-2026) */
 .ch-src { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 6px; white-space: nowrap; }
 .reg-no { white-space: nowrap; }
+
+/* the TDS grid's returns (the owner, 14-Oct-2026: "Where is the TDS return?"): each a button with its name, its status in
+   colour, "Open →" on hover or focus; an empty return is plain text, not a button */
+[data-tds-grid] .tg-hint { margin: 0 0 8px; font-size: 13px; color: var(--text-secondary, var(--muted)); }
+[data-tds-grid] .rp-cell { position: relative; cursor: pointer; }
+[data-tds-grid] .rp-cell .rp-name { font-weight: 700; font-size: 13px; color: var(--foreground, var(--ink)); }
+[data-tds-grid] .rp-cell .rp-open { position: absolute; top: 7px; right: 9px; font-size: 12px; font-weight: 600; color: var(--brand); opacity: 0; transition: opacity var(--duration-fast, .12s); }
+[data-tds-grid] button.rp-cell:hover .rp-open, [data-tds-grid] button.rp-cell:focus .rp-open, [data-tds-grid] button.rp-cell:focus-visible .rp-open { opacity: 1; }
+[data-tds-grid] button.rp-cell:focus-visible { box-shadow: 0 0 0 2px var(--brand); }
+[data-tds-grid] .rp-cell.rp-empty, [data-tds-grid] .rp-cell.rp-empty:hover { cursor: default; transform: none; box-shadow: none; border-color: var(--rule); border-left-color: var(--rule-strong); }
+[data-tds-grid] .rp-cell.rp-empty .rp-name { color: var(--muted); font-weight: 600; }

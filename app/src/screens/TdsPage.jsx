@@ -125,14 +125,24 @@ function Years({ rows, fys }) {
   );
 }
 
-// one cell of the grid: the status in words and colour, then the counts and amounts as the year's table had them
+// one cell of the grid: a return (the owner, 14-Oct-2026: "Where is the TDS return?"): a button with its name ("26Q · Q2"),
+// its status in words and colour (To fix N red, Ready blue, Filed green), the amount and the counts, and "Open →" on hover
+// or focus. A return with nothing in it says "No entries" and is no button (nothing useful would open)
 function Cell({ fy, q, form, st, n, lines, amount, corr }) {
-  const label = st === "none" ? "Not started" : st === "bad" ? (corr ? "Correction " + corr : "To fix " + n) : st === "filed" ? "Filed" + (n ? " " + n : "") : "Ready";
-  return <td><button className={"rp-cell st-" + st} data-cell={form + "|" + q} data-status={st}
-    aria-label={TDS.formShort(form, fy) + " " + q + ": " + label} onClick={() => tdsGo(fy, q, form)}>
+  const name = (TDS.isNew(fy) && TDS.NEW_FORM[form] ? "Form " + TDS.NEW_FORM[form] : form) + " · " + q;
+  const label = st === "none" ? "No entries" : st === "bad" ? (corr ? "Correction " + corr : "To fix " + n) : st === "filed" ? "Filed" : "Ready";
+  const body = <>
+    <span className="rp-name" data-cell-name="">{name}</span>
     <span className="rp-s">{label}</span>
+    {st === "filed" && n ? <span className="nr">on {n}</span> : null}
     {amount != null && <span className="rp-a">{amount}</span>}
     {lines.map((w, i) => <span key={i} className={"nr" + (w.bad ? " bad" : "")}>{w.t}</span>)}
+  </>;
+  // nothing to open: an empty return (a 24Q with salary TDS in the books still opens, to bring in the salary sheet)
+  if (st === "none" && amount == null && !lines.length) return <td><div className="rp-cell st-none rp-empty" data-cell={form + "|" + q} data-status={st} aria-label={name + ": no entries"}>{body}</div></td>;
+  return <td><button className={"rp-cell st-" + st} data-cell={form + "|" + q} data-status={st}
+    aria-label={TDS.formShort(form, fy) + " " + q + ": " + label + ". Open the return"} onClick={() => tdsGo(fy, q, form)}>
+    {body}<span className="rp-open" aria-hidden="true">Open →</span>
   </button></td>;
 }
 
@@ -193,11 +203,12 @@ function Year() {
   const nCh = TDS.challans().length;
   return <>
   <section className="dash-card" data-tds-grid={fy}>
-    <div className="rp-title"><h3>{TDS.yearWord(fy)} {fy}</h3>
-      <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, the old form in brackets." : "Forms of the Income-tax Act, 1961."} Open a return from its cell.</span>
+    <div className="rp-title"><h3>TDS returns · FY {fy}</h3>
+      <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, the old form in brackets." : "Forms of the Income-tax Act, 1961."}</span>
       {/* the one way to the challan register (the review: no panel beside the grid) */}
       <span className="tg-reglink" data-ch-register="">{nCh ? <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register →</button>
         : <>No challans · <button className="linkbtn" data-ch-add="" onClick={() => { S.regAdding = true; tdsNav("register"); }}>Add challan</button></>}</span></div>
+    <p className="tg-hint" data-grid-hint="">Click a return to open it.</p>
     <div className="bk-tablewrap"><table className="rp-grid gf-off">
       {/* aria-label: the heading's name read out, and on a phone each card's label (src/js/53-phone.js), with the due date
           apart from the months ("Q1 · Apr–Jun, due 31 Jul"; it read "Apr–Jundue 31 Jul" at 390px) */}
@@ -209,7 +220,7 @@ function Year() {
         <td className="n"><b>{yearTotal[k]}</b>{k === "26Q" && <div className="nr">{qs.reduce((a, x) => a + x.deductions, 0)} deductions</div>}</td>
       </tr>)}</tbody>
     </table></div>
-    <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>Not started</span><span style={{ "--k": "var(--info)" }}>Ready</span>
+    <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>No entries</span><span style={{ "--k": "var(--info)" }}>Ready</span>
       <span style={{ "--k": "var(--bad)" }}>To fix</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
   </section></>;
 }

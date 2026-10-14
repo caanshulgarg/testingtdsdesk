@@ -73,6 +73,28 @@ try:
         qt = [INR(pg.locator('[data-q-total="%s"]' % q).inner_text()) for q in ["Q1", "Q2", "Q3", "Q4"]]
         yt = INR(pg.locator('[data-year-total]').inner_text())
         ok(yt > 0 and abs(sum(qt) - yt) < 1, "1. the year's totals in the header row: the quarters %s add up to the year %s" % (qt, yt))
+        # the owner, 14-Oct-2026: "Where is the TDS return?": the grid titled as the returns, a line above it, each return a
+        # clear button with its name, its status in words and colour, "Open →" on hover or focus; a cell with nothing in it
+        # says "No entries" and is no button
+        ok(pg.locator('[data-tds-grid] .rp-title h3').inner_text().strip() == "TDS returns · FY " + fy, "1. the grid's title: TDS returns · FY %s (%r)" % (fy, pg.locator('[data-tds-grid] .rp-title h3').inner_text()))
+        hint = pg.locator('[data-tds-grid] [data-grid-hint]')
+        ok(hint.count() == 1 and hint.inner_text().strip() == "Click a return to open it." and hint.bounding_box()["y"] < pg.locator('[data-tds-grid] table').bounding_box()["y"], "1. a line above the grid: Click a return to open it.")
+        cl = pg.evaluate("""() => [...document.querySelectorAll('[data-tds-grid] [data-cell]')].map(c => ({k: c.dataset.cell, st: c.dataset.status, tag: c.tagName, name: (c.querySelector('[data-cell-name]') || {}).textContent || '',
+          word: (c.querySelector('.rp-s') || {}).textContent || '', open: !!c.querySelector('.rp-open'), cur: getComputedStyle(c).cursor, color: getComputedStyle(c.querySelector('.rp-s') || c).color}))""")
+        btns = [c for c in cl if c["tag"] == "BUTTON"]
+        ok(btns and all(re.fullmatch(r"(\d{2}Q|\d{2}EQ|Form \d{3}) · Q[1-4]", c["name"]) and c["name"].endswith(c["k"].split("|")[1]) and c["open"] for c in btns), "1. each return a button with its name (%s) and Open →" % [c["name"] for c in btns][:4])
+        ok(all(re.fullmatch(r"To fix \d+|Ready|Filed|Correction \d+", c["word"]) for c in btns), "1. the status in words: To fix N, Ready, Filed (%s)" % sorted(set(c["word"] for c in btns)))
+        cols = {}
+        for c in btns: cols.setdefault(c["st"], set()).add(c["color"])
+        ok(all(len(v) == 1 for v in cols.values()) and len(set(next(iter(v)) for v in cols.values())) == len(cols), "1. one colour a status, each its own (%s)" % cols)
+        empty = [c for c in cl if c["st"] == "none" and c["tag"] != "BUTTON"]
+        ok(empty and all(c["word"] == "No entries" and c["cur"] != "pointer" and not c["open"] for c in empty) and not any(c["word"] == "Not started" for c in cl), "1. an empty return: No entries, not a button (%d)" % len(empty))
+        b0 = pg.locator('[data-tds-grid] button[data-cell]').first
+        b0.hover(); pg.wait_for_timeout(250)
+        ok(pg.evaluate("(e) => getComputedStyle(e.querySelector('.rp-open')).opacity", b0.element_handle()) == "1", "1. Open → shows on hover")
+        pg.mouse.move(5, 5); b0.focus(); pg.wait_for_timeout(250)
+        ok(pg.evaluate("(e) => getComputedStyle(e.querySelector('.rp-open')).opacity", b0.element_handle()) == "1", "1. … and on focus")
+        ok("No entries" in pg.locator('[data-tds-page] .rp-key').inner_text(), "1. the legend says No entries")
         cells = pg.locator('[data-tds-grid] [data-cell]').all_inner_texts()
         ok(not any("Errors" in c for c in cells) and any(re.search(r"To fix \d", c) for c in cells) and "To fix" in pg.locator('[data-tds-page] .rp-key').inner_text(), "1. a cell with something to fix says \"To fix N\", as the legend (%s)" % [c.split("\n")[0] for c in cells][:5])
         rowsum = sum(INR(t) for t in pg.locator('[data-tds-grid] tbody td.n b').all_inner_texts())
