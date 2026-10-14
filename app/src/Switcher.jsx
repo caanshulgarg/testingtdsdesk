@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Button from "./parts/Button.jsx";
+import { useDismiss } from "./parts/dismiss.js";
 
 // Ctrl+K, then a question: the switcher's last line asks FinCom Assistant (src/js/75-assistant.js)
 // the last line asks FinCom Assistant: only while the firm has it on (off by default)
@@ -11,7 +12,9 @@ function askFromSwitcher() { const q = S.switcher && S.switcher.q; closeSwitcher
 
 export default function Switcher() {
   const modal = document.getElementById("modal"), sw = S.switcher;
-  const input = useRef(null), selected = useRef(null);
+  const input = useRef(null), selected = useRef(null), box = useRef(null);
+  // a click on the dark area, Esc and (a phone) Back close it (parts/dismiss.js)
+  useDismiss(!!sw, box, () => closeSwitcher());
   useLayoutEffect(() => { modal.classList.toggle("hidden", !sw); });
   const open = !!sw;
   useEffect(() => { if (open && input.current) input.current.focus(); }, [open]);
@@ -41,7 +44,7 @@ export default function Switcher() {
   const list = switcherList(), rec = recentIds();
   sw.idx = Math.max(0, Math.min(sw.idx, list.length - (askOn() ? 0 : 1)));
   return createPortal(
-      <div className="sw" role="dialog" aria-modal="true" aria-label="Select company">
+      <div ref={box} className="sw" role="dialog" aria-modal="true" aria-label="Select company">
         <div className="swhead"><b>Select company</b><span className="note">↑↓ to move, Enter to open, Esc to close</span></div>
         <input ref={input} type="text" placeholder="Type a client name or GSTIN" autoComplete="off" value={sw.q || ""}
           onChange={(e) => { S.switcher.q = e.target.value; S.switcher.idx = 0; renderSwitcher(); }} />

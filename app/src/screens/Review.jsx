@@ -3,6 +3,7 @@
 // actionBar (src/js/27). The column filters (funnel buttons, the chips and their pop-up) are still old pieces, shared
 // with the bank and sales tables.
 import { useRef } from "react";
+import { useDismiss } from "../parts/dismiss.js";
 import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import Msg from "../parts/Msg.jsx";
@@ -214,15 +215,19 @@ export function ActionBar() {
 
 // one bill over the review table; it slides in only when it opens (its host is kept while it stays open)
 export function Drawer() {
-  const first = useRef(true), enter = first.current ? " enter" : "";
+  const first = useRef(true), enter = first.current ? " enter" : "", box = useRef(null);
   first.current = false;
   const e = drawerEntry();
+  // the action bar under it works on the open bill (Approve, "Cannot approve: invoice date" leads into the drawer): inside
+  useDismiss(!!e, box, () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); },
+    { also: () => Array.from(document.querySelectorAll("#app .actionbar")) });
   if (!e) return null;
   const rows = draftRows(), i = rows.findIndex((r) => r.e.id === e.id);
-  const close = () => doAct("drawerClose");
+  // a click outside, Esc and (a phone) Back close it; asked first when a section of the page has unsaved changes (Drafts)
+  const close = () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); };
   return <>
     <button className={"drawer-scrim" + enter} aria-label="Close" onClick={close}></button>
-    <aside className={"drawer" + enter} role="dialog" aria-modal="true" aria-label="Bill">
+    <aside ref={box} className={"drawer" + enter} role="dialog" aria-modal="true" aria-label="Bill">
       <div className="drawer-head">
         {/* ui-tidy: the bill's name is its card's title, once; here its number and place in the list */}
         <div><span className="note" data-drawer-pos="">{e.x.invoiceNo || e.fileName || "Bill"}{i >= 0 ? " · " + (i + 1) + " of " + rows.length : ""}</span></div>
