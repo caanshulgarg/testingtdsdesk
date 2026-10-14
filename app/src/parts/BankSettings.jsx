@@ -9,6 +9,8 @@ import LedgerSelect from "./LedgerSelect.jsx";
 import Confirm, { BankLedger } from "./Confirm.jsx";
 import Loading from "./Loading.jsx";
 import Button from "./Button.jsx";
+import { useRef } from "react";
+import { useDismiss } from "./dismiss.js";
 
 const Btn = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => bankAct(act)}>{children}</button>;
 
@@ -47,7 +49,15 @@ function PanelBody({ b, co, std, pendingNew, nh }) {
 // over the bank screen (a click outside closes it), or inline in Client setup
 export function BankSettings({ inline }) {
   if (inline) return <div className="setup-inline"><div className="bk-overlay"><Panel inline /></div></div>;
-  return <div className="bk-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget) closeSettings(); }}><Panel /></div>;
+  return <OverPanel />;
+}
+
+// over the bank screen: a click outside, Esc or (a phone) Back closes it through closeSettings, which asks "Save your
+// changes?" first when something is not saved (Drafts.guard; app/src/parts/dismiss.js)
+function OverPanel() {
+  const ref = useRef(null);
+  useDismiss(true, ref, () => closeSettings());
+  return <div className="bk-overlay"><div ref={ref} style={{ display: "contents" }}><Panel /></div></div>;
 }
 
 function Suggestions() {

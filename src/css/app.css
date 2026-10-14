@@ -803,7 +803,8 @@ table.led-t th.n,table.led-t td.n{text-align:right;white-space:nowrap}
 @media (max-width:900px){.si-grid{grid-template-columns:1fr}}
 .accreate{color:var(--ledger);font-weight:600}
 @media (max-width:900px){.bk-head{grid-template-columns:1fr}.bk-figs{justify-content:space-between}.bk-search{margin-left:0;width:100%}.bk-table .pn,.bk-table .nr{max-width:200px}.bk-form label{grid-template-columns:1fr}.bk-setup{flex-direction:column;align-items:stretch}.bk-actionbar .lgbox{width:100%}}
-#confirmBox{position:fixed;inset:0;z-index:80;background:rgb(var(--shade) / .45);display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px}
+/* the confirm box is a step above every overlay, a modal dialog included (its "Discard what you typed?"; 14-Oct-2026) */
+#confirmBox{position:fixed;inset:0;z-index:90;pointer-events:auto;background:rgb(var(--shade) / .45);display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px}
 #confirmBox .cbx{background:var(--sheet);border-radius:10px;max-width:480px;width:100%;padding:18px 20px;box-shadow:0 12px 40px rgb(var(--shade) / .25)}
 #confirmBox h2{margin:0 0 8px;font-size:18px}
 .btn.danger-fill{background:var(--bad);border-color:var(--bad);color:var(--sheet)}

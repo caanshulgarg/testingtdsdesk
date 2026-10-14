@@ -6,6 +6,7 @@ import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { ListChecks, FileSpreadsheet } from "lucide-react";
 import Button from "./Button.jsx";
 import "./assistant.css";
+import { useDismiss } from "./dismiss.js";
 
 export function PreFileButton({ kind, form, fy, q, reg, ym }) {
   return <Button className="btn small" data-prefile-btn={kind} title="Every check that applies before this return is filed"
@@ -42,10 +43,13 @@ export function PreFileList({ res, compact }) {
   </div>;
 }
 
+const PF_REF = { get current() { return document.querySelector('[data-overlay="prefile"]'); } };
 export default function PreFilePanel() {
   const p = S.prefile;
+  // a click outside or Esc closes it (app/src/parts/dismiss.js); the button that opens it counts as inside
+  useDismiss(!!(p && p.open), PF_REF, () => PreFile.close(), { also: () => Array.from(document.querySelectorAll("[data-prefile-btn]")) });
   return <Drawer open={!!(p && p.open)} onOpenChange={(o) => { if (!o) PreFile.close(); }} modal={false}>
-    <DrawerContent className="asst-panel" title={p && p.res ? "Check before filing: " + PreFile.title(p.res) : "Check before filing"} closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()}>
+    <DrawerContent className="asst-panel" data-overlay="prefile" title={p && p.res ? "Check before filing: " + PreFile.title(p.res) : "Check before filing"} closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {p && <div className="asst-body" data-prefile-panel="">
         {p.busy ? <p className="note">Running the checks…</p> : p.err ? <p className="asst-error">{p.err}</p> : p.res ? <PreFileList res={p.res} /> : null}
       </div>}

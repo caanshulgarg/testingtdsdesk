@@ -8,6 +8,7 @@
 //   UseBalance: "Use…", the one way a challan's balance goes to a return (TDSReg.useBalance), here and in a return.
 //   TracesCheck: TRACES' consumed amount against FinCom's (a return's After filing).
 import { useEffect, useRef, useState } from "react";
+import { useDismiss } from "../../parts/dismiss.js";
 import ListTable from "../../parts/ListTable.jsx";
 import Filters, { Field as FbField } from "../../parts/Filters.jsx";
 import { Info } from "../../parts/Answer.jsx";
@@ -36,14 +37,8 @@ export function Split({ c, kind, cx }) {
     : [["Tax", b.tax], ["Interest", b.interest], ["Fee, penalty and others", b.fee]];
   const words = parts.map(([l, v]) => l + " " + money(v)).join(" · "), value = kind === "total" ? x.total : b.total;
   const close = () => { if (S.regSplit === kind + c.id) { S.regSplit = ""; render(); } };
-  useEffect(() => {
-    if (!open) return undefined;
-    // Escape closes the split and goes no further (the app's own Escape would leave the page)
-    const key = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
-    const tap = (ev) => { if (ref.current && !ref.current.contains(ev.target)) close(); };
-    window.addEventListener("keydown", key, true); document.addEventListener("pointerdown", tap);
-    return () => { window.removeEventListener("keydown", key, true); document.removeEventListener("pointerdown", tap); };
-  });
+  // Escape (and no further: the app's own would leave the page), a tap outside and (a phone) Back close it (parts/dismiss.js)
+  useDismiss(open, ref, close);
   return <span className="reg-split" ref={ref} onBlur={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) close(); }}>
     <button className={"linkbtn reg-fig" + (kind === "left" && value < -0.005 ? " bad" : "")} title={words} aria-label={(kind === "total" ? "Total challan " : "Balance left ") + money(value) + ": " + words}
       aria-expanded={open} data-split={kind} data-split-of={c.id} data-split-words={words} onClick={() => { S.regSplit = open ? "" : kind + c.id; render(); }}>{money(value)}</button>

@@ -19,6 +19,7 @@ import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { FinComNav } from "./nav.js";
+import { useDismiss } from "./parts/dismiss.js";
 import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help" };
@@ -254,12 +255,15 @@ function TopRight() {
 
 // the Tally panel: Arc's Drawer from the right, open while S.tallyPanel is. It leaves the page usable (not modal): a click
 // elsewhere closes it, except on the Tally sign itself, whose click closes it as before
+const TP_REF = { get current() { return document.querySelector('[data-overlay="tallypanel"]'); } };
 function TallyPanel({ open }) {
   const co = S.view === "company" ? CO() : null, live = bridgeLive(co), st = Bridge.st || {};
   const close = () => { if (S.tallyPanel) doAct("tallyPanelClose"); };
+  // a click outside (the first click only closes), Esc and (a phone) Back (parts/dismiss.js); the Tally sign toggles it
+  useDismiss(!!open, TP_REF, close, { also: () => Array.from(document.querySelectorAll(".tsign-wrap")) });
   return <Drawer open={open} onOpenChange={(o) => { if (!o) close(); }} modal={false}>
-    <DrawerContent className="tallypanel" title="Tally connection" closeLabel="Close" aria-describedby={undefined}
-      onInteractOutside={(ev) => { if (ev.target && ev.target.closest && ev.target.closest(".tsign-wrap")) ev.preventDefault(); }}
+    <DrawerContent className="tallypanel" data-overlay="tallypanel" title="Tally connection" closeLabel="Close" aria-describedby={undefined}
+      onInteractOutside={(ev) => ev.preventDefault()}
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
