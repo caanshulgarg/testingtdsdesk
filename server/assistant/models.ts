@@ -36,8 +36,11 @@ export function plan(task: Task, chatEffort: string = "medium"): Plan {
 }
 
 // what kind of work a question is (decided from its words and attachments; the user is never asked)
-export function taskOf(question: string, hasAttachment: boolean, clientOpen: boolean): Task {
+// uploadKind: what the Upload found the attached file to be (a notice when not said: the notice flow as before); any
+// other upload is asked about as a file (Sonnet), not as a notice (Opus at high effort)
+export function taskOf(question: string, hasAttachment: boolean, clientOpen: boolean, uploadKind?: string): Task {
   const q = String(question || "");
+  if (hasAttachment && uploadKind && uploadKind !== "notice" && !/\b(notice|show cause|intimation|demand order)\b/i.test(q)) return "file";
   if (hasAttachment || /\b(notice|show cause|scn|asmt-?10|drc-?0?1a?|reg-?(17|31)|143\s*\(\s*[12]|148a?|133\s*\(\s*6|intimation|demand order|justification report|penalty u\/?s)\b/i.test(q)) return "notice";
   if (/\b(audit the books|tax audit report|3cd|schedule iii|schedule 3|dcf|valuation)\b/i.test(q)) return "heavy";
   if (/\b(excel|xlsx|spreadsheet|word|docx|pdf|download|letter|file of)\b/i.test(q)) return "file";

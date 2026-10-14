@@ -15,6 +15,7 @@ import { corsFor } from "../_shared/cors.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
 import { Ev, runTurn, TurnCtx } from "./agent.ts";
 import { FREE_SOURCES } from "./citations.ts";
+import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -88,8 +89,8 @@ export function handler(deps: Deps) {
       if (id) sentry.mismatch("user-report", { figureKey: "user_report", tool: tools[0] || "none", id, entries, firm, client: clientId || "" });
       return reply(200, { ok: true, id });
     }
-    if (action !== "ask") return reply(400, { ok: false, error: "Unknown request" });
-    const question = String(body.question || "").trim().slice(0, 4000);
+    if (action !== "ask" && action !== "classify") return reply(400, { ok: false, error: "Unknown request" });
+    const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
 
     // the platform's Claude key (the one bill reading uses)
@@ -97,12 +98,13 @@ export function handler(deps: Deps) {
     try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; key = (k && k[0] && k[0].value) || ""; } catch { key = ""; }
     if (!key) return reply(503, { ok: false, kind: "bad_key", error: "No Claude key is set on the platform yet. Ask the administrator." });
 
-    // a notice the user attached: read from the firm's private bucket with the user's own token
+    // a notice or another upload the user attached: read from the firm's private bucket with the user's own token
     const attachments: Record<string, unknown>[] = [];
     let noticePath = "";
     for (const a of (Array.isArray(body.attachments) ? body.attachments : []).slice(0, 3)) {
       const path = String(a?.path || "");
-      if (!path.startsWith(firm + "/") || !/\/notices\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's notices." });
+      // a notice (…/notices/) or any other upload (…/uploads/) of the firm, read with the user's own token
+      if (!path.startsWith(firm + "/") || !/\/(notices|uploads)\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
       const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
       if (!r.ok) { await r.body?.cancel(); return reply(403, { ok: false, kind: "file", error: "The notice could not be read (" + r.status + ")." }); }
       const buf = new Uint8Array(await r.arrayBuffer());
@@ -112,7 +114,26 @@ export function handler(deps: Deps) {
       const b64 = btoa(Array.from(buf, (c) => String.fromCharCode(c)).join(""));
       if (/pdf/i.test(type) || /\.pdf$/i.test(path)) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: String(a?.name || "notice").slice(0, 120) });
       else if (/^image\/(png|jpeg|webp|gif)$/.test(type)) attachments.push({ type: "image", source: { type: "base64", media_type: type, data: b64 } });
-      else return reply(415, { ok: false, kind: "file", error: "A notice must be a PDF or a picture (PNG, JPEG, WebP)." });
+      // a sheet or a Word file: the text FinCom took out of it on the page (masked by the agent like the question)
+      else if (typeof a?.text === "string" && a.text.trim()) attachments.push({ type: "text", text: "[The file " + String(a?.name || "uploaded").slice(0, 120) + ", as FinCom read it]\n" + String(a.text).slice(0, 20000) });
+      else if (action !== "classify") return reply(415, { ok: false, kind: "file", error: "That file can be asked about as a PDF, a picture (PNG, JPEG, WebP), a sheet or a Word file." });
+    }
+
+    // an upload FinCom's own rules could not tell: what it is, in one line (upload.ts); nothing else is done with it
+    if (action === "classify") {
+      const capTake = async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!r?.ok, cap_inr: Number(r?.cap_inr || 0) }; };
+      const costAdd = (feat: string, usd: number, u: any) => rpc("asst_cost_add", { p_firm: firm, p_feature: feat, p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }, SERVICE);
+      try {
+        const r = await classifyUpload({ client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 120_000 }) as unknown as TurnCtx["client"]),
+          attachments, name: String(body.name || ""), excerpt: String(body.excerpt || "").slice(0, 20000), capTake, costAdd });
+        const u: any = r.ok ? r.usage : {};
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: ["classify_upload"], p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_calls: r.ok ? 1 : 0, p_ms: Date.now() - t0,
+          p_feature: "upload", p_route: "haiku", p_models: r.ok ? ["claude-haiku-5-5"] : [], p_cache_read: 0, p_cache_write: 0, p_cost_inr: 0, p_fell_through: false }, SERVICE); } catch { /* logged best effort */ }
+        return r.ok ? reply(200, { ok: true, kind: r.kind, summary: r.summary }) : reply(r.kind === "cap" ? 429 : 502, { ok: false, kind: r.kind || "other", error: r.error });
+      } catch (e) {
+        const status = (e as any)?.status;
+        return reply(502, { ok: false, kind: status === 429 ? "rate_limit" : "other", error: "The file's kind could not be worked out just now." });
+      }
     }
 
     // the books held (for the prompt's context) and the last entry held (periods are read against it)
@@ -178,7 +199,8 @@ export function handler(deps: Deps) {
         const ctx: TurnCtx = {
           client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]),
           question, history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })),
-          attachments, noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
+          attachments, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
+          noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),
           capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!r?.ok, used: Number(r?.used || 0), cap: Number(r?.cap || 0), spent_inr: Number(r?.spent_inr || 0), cap_inr: Number(r?.cap_inr || 0), warn: !!r?.warn, why: String(r?.why || "") }; },
           costAdd: async (feat, usd, u) => {

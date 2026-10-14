@@ -112,3 +112,16 @@
   .asst-launch { right: 12px; bottom: calc(104px + env(safe-area-inset-bottom)); width: 48px; height: 48px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
   .asst-launch svg { width: 20px; height: 20px; }
 }
+
+/* one Upload (14-Oct-2026): each file's kind, its line and its next steps; the panel takes files dropped on it */
+.asst-body.drag { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.asst-dropzone { position: sticky; top: 0; z-index: 3; padding: 18px; text-align: center; border-radius: 8px; background: color-mix(in oklab, var(--accent) 12%, var(--surface, #fff)); font-weight: 600; }
+.asst-uploads { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.asst-up { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.asst-up.failed { border-color: color-mix(in oklab, var(--danger, #c0392b) 45%, var(--border)); }
+.asst-up header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.asst-up header b { overflow-wrap: anywhere; }
+.asst-up-x { margin-left: auto; }
+.asst-up-sum { margin: 4px 0 6px; }
+.asst-up-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.asst-attached { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

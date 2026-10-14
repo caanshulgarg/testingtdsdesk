@@ -22,6 +22,7 @@ const SCRIPTS: [RegExp, (Block[] | ((p: any) => Block[]))[]][] = [
     { type: "web_search_tool_result", tool_use_id: "srvtoolu_1", content: [{ type: "web_search_result", url: "https://incometaxindia.gov.in/Pages/tds-rates.aspx", title: "TDS rates - Income Tax Department", encrypted_content: "x" }] },
     text("For rent of land, building or furniture paid by a company: TDS at 10% where the rent is more than ₹50,000 in a month - section 194-I of the Income-tax Act, 1961 for payments up to 31-Mar-2026, and section 393(1) (Table, Sl. 2(ii)) of the Income-tax Act, 2025 from 1-Apr-2026. Plant and machinery: 2%.",
       { citations: [{ type: "web_search_result_location", url: "https://incometaxindia.gov.in/Pages/tds-rates.aspx", title: "TDS rates - Income Tax Department", cited_text: "10%", encrypted_index: "x" }] })]]],
+  [/Summarise it/, [[text("A rent agreement (made-up): the godown is let for eleven months at ₹20,000 a month.")]]],
   [/notice/i, [[tool("record_notice", { summary: "The officer says GSTR-3B for February 2026 took ₹11,000 of input tax but GSTR-2B shows ₹5,400, so ₹5,600 is excess and is to be explained.", law: "GST", form: "ASMT-10", kind: "gst_asmt10",
       notice_no: "ZD0711260123456", din: "ZD0711260123456", notice_date: "2026-10-20", section: "Section 61 of the CGST Act, 2017, read with rule 99", period: "February 2026 (FY 2025-26)", id_no: "07AAGCL4827M1Z3",
       amount: 5600, reply_by: "2026-11-15", asked: ["Explain the excess input tax credit of ₹5,600 for February 2026"], issues: [{ type: "itc_mismatch", point: "ITC in 3B more than in 2B", amount: 5600, period: "2026-02" }], months: ["2026-02"], fy: "2025-26" })],
@@ -40,12 +41,26 @@ const SCRIPTS: [RegExp, (Block[] | ((p: any) => Block[]))[]][] = [
     [text("Six customers had sales in 2025-26, ₹15,50,000.00 in all; Quillfeather Weddings LLP is first with ₹9,00,000.00.")]]],
 ];
 let n = 0;
+const SEEN: Record<string, unknown>[] = [];
 function claude() {
   return { beta: { messages: { stream: (p: any) => {
+    // the Upload's AI, asked only when FinCom's rules could not tell (server/assistant/upload.ts): a picture is a photographed
+    // bill, a text it is given is a rent agreement (other). What it was sent is kept for the test (window of the function)
+    if (/^You look at ONE file/.test(String(p.system?.[0]?.text || ""))) {
+      const content = (p.messages[0].content as any[]);
+      const img = content.some((b) => b.type === "image"), txt = content.filter((b) => b.type === "text").map((b) => b.text).join(" ");
+      SEEN.push({ kind: "classify", image: img, masked: !/07AAGCL4827M1Z3/.test(txt), text: txt.slice(0, 400) });
+      const input = img ? { kind: "bill", summary: "A photographed tax invoice (made-up)." } : /RENT AGREEMENT/.test(txt) ? { kind: "other", summary: "A made-up rent agreement for a godown at Rs. 20,000 a month." } : { kind: "other", summary: "A document." };
+      const msg = { content: [{ type: "tool_use", id: "toolu_k" + (++n), name: "record_kind", input }], stop_reason: "tool_use", usage: { input_tokens: 900, output_tokens: 40 } };
+      return { async *[Symbol.asyncIterator]() {}, finalMessage: async () => msg };
+    }
     if (/^You route a question/.test(String(p.system?.[0]?.text || ""))) {
       const msg = { content: [text("NONE")], stop_reason: "end_turn", usage: { input_tokens: 2100, output_tokens: 10 } };
       return { async *[Symbol.asyncIterator]() {}, finalMessage: async () => msg };
     }
+    { const first = (p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content)).pop()?.content as any[] || [];
+      const att = first.filter((b) => b.type === "text" && /^\[The file /.test(String(b.text || "")));
+      if (att.length) SEEN.push({ kind: "ask", model: p.model, fileText: att.map((b) => b.text).join(" ").slice(0, 600), masked: !att.some((b) => /07AAGCL4827M1Z3|AAGCL4827M/.test(b.text)) }); }
     const q = String(((p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b: any) => b.type === "text")).pop()?.content as any[] || []).map((b: any) => b.text || "").join(" "));
     const script = (SCRIPTS.find(([re]) => re.test(q)) || [null, [[text("I can help with the books, tax and notices.")]]])[1];
     const turns = (p.messages as any[]).filter((m) => m.role === "assistant" && Array.isArray(m.content)).length;   // this turn's (history is text)
@@ -68,6 +83,8 @@ const h = handler({ env: (k) => ({ SUPABASE_URL: Deno.env.get("STAND_URL")!, SUP
 Deno.serve({ port: Number(Deno.args[0] || 9477), hostname: "127.0.0.1", onListen: () => console.log("listening") }, async (req) => {
   const u = new URL(req.url);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*" } });
+  if (u.pathname === "/__seen") return new Response(JSON.stringify(SEEN), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  // what the last question's model call was given (the Upload's "Ask about it": the file's text, masked)
   const res = u.pathname.startsWith("/functions/v1/fincom-assistant") ? await h(req)
     : await fetch(Deno.env.get("STAND_URL")! + u.pathname + u.search, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : await req.arrayBuffer() });
   const headers = new Headers(res.headers); headers.set("Access-Control-Allow-Origin", "*"); headers.set("Access-Control-Allow-Headers", "*");

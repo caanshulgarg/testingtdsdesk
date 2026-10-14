@@ -28,7 +28,7 @@ db = A.start(55478)
 try:
     A.migrate(db)
     A.migrate(db)
-    ok(True, "migration 77 (and 82) run twice")
+    ok(True, "migration 77 (and 82, 84) run twice")
     b = A.load_fixture(db)
     J = lambda q, uid=A.ME: A.askj(db, q, uid)
     C = "'larkspur'"
@@ -279,7 +279,25 @@ try:
     ok(st["enabled"] is True and st["consent"] is True, "on again; consent is not asked any more (answered true)")
     ok(db.one("select column_default from information_schema.columns where table_name = 'assistant_settings' and column_name = 'enabled'") == "true", "a new row defaults to on")
     pol = db.one("select count(*) from pg_policies where tablename = 'objects' and policyname like 'assistant files:%'")
-    ok(str(pol) == "2", "the bucket's two policies (read own firm; add notices to own firm)")
+    ok(str(pol) == "3", "the bucket's three policies (read own firm; add notices, add uploads to own firm)")
+    # one Upload (migration 84, 14-Oct-2026): a firm's uploads under <firm>/<client>/uploads/, of its own firm only
+    up = A.FIRM + "/larkspur/uploads/k1-bill.pdf"
+    A.ask(db, "insert into storage.objects (bucket_id, name) values ('assistant-files', '%s');" % up, A.STAFF)
+    ok(A.ask(db, "select count(*) from storage.objects where name = '%s'" % up, A.ME) == "1", "staff store an upload under the firm's uploads/")
+    for who, path, why in [(A.VIEWER, up.replace("k1", "k2"), "a viewer cannot upload"), (A.STRANGER, up.replace("k1", "k3"), "another firm cannot upload into this firm"),
+                           (A.STAFF, A.FIRM + "/larkspur/elsewhere/k4.pdf", "only notices/ and uploads/ take files")]:
+        try: A.ask(db, "insert into storage.objects (bucket_id, name) values ('assistant-files', '%s');" % path, who); ok(False, why)
+        except RuntimeError as e: ok("row-level security" in str(e), why)
+    A.ask(db, "insert into assistant_uploads (client_id, path, name, size, kind, kind_by, summary) values (null, '%s', 'bill.pdf', 1200, 'bill', 'rules', 'A tax invoice');" % up, A.STAFF)
+    ok(A.ask(db, "select kind || '/' || kind_by from assistant_uploads", A.ME) == "bill/rules" and A.ask(db, "select count(*) from assistant_uploads", A.STRANGER) == "0", "an upload's record: the firm reads it, another firm does not")
+    try: A.ask(db, "insert into assistant_uploads (path, name, kind) values ('%s', 'x.pdf', 'weird');" % up, A.STAFF); ok(False, "an unknown kind is refused")
+    except RuntimeError as e: ok("check" in str(e), "an unknown kind is refused")
+    try: A.ask(db, "insert into assistant_uploads (path, name) values ('%s/larkspur/uploads/x.pdf', 'x.pdf');" % A.OTHER, A.STAFF); ok(False, "a record cannot point at another firm's file")
+    except RuntimeError as e: ok("row-level security" in str(e), "a record cannot point at another firm's file")
+    A.ask(db, "update assistant_uploads set action = 'purchase';", A.STAFF)
+    ok(A.ask(db, "select action from assistant_uploads", A.ME) == "purchase", "the step the user picked is kept")
+    A.migrate(db, A.MIG84)
+    ok(A.ask(db, "select count(*) from assistant_uploads", A.ME) == "1", "84 runs twice and keeps what is there")
 finally:
     db.stop()
 print("\n" + ("FAILED: %d" % len(fails) if fails else "all passed"))

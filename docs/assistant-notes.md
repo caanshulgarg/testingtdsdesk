@@ -15,6 +15,24 @@ off stays off. The same day's fix: the Settings page could stay on "Loading…" 
 first read before the sign-in had finished, and on a phone the Ask FinCom button covered the bottom bar's More (so
 Settings could not be reached); the setting is now read again until known, and the button sits above the bar.
 
+## One Upload (the owner's request of 14-Oct-2026)
+
+The panel's "Notice" button is now **Upload** (src/js/81-asst-upload.js, `AUpload`): PDF, pictures, Excel/CSV, Word, JSON,
+several at once or dropped on the panel. Each file is stored in the firm's private folder (a notice with the notices, the
+rest under `uploads/`), recorded in `assistant_uploads` (migration 84) and told by FinCom's own rules first (no AI); only
+when they cannot tell is Haiku asked (server/assistant/upload.ts, masked, against the daily cap). Then the next steps as
+buttons, each the user's own click; nothing is posted or filed by itself:
+
+| Found | Offered |
+|---|---|
+| a tax notice | the notice flow as before (one notice alone is attached to the next question at once) |
+| a bill or invoice | Add to Purchase (or Sales, when the client issued it) for review |
+| a register sheet, a GSTR-1 or GSTR-2B JSON | Import in Purchase/Sales: coming soon (branch upload-pages); the summary meanwhile |
+| a bank statement | Add to Bank for review |
+| 26AS / AIS / TIS | Add to Reconciliations (26AS) |
+| a certificate format | kept with the client's uploads (certificates are branch certificates); its summary |
+| anything else | its summary, and Ask about it (its text goes with the question, masked; Sonnet, not the notice model) |
+
 ## How a question is answered (cheapest first)
 
 1. **Answer cache.** The first question of a conversation, asked again for the same client on the same books (the

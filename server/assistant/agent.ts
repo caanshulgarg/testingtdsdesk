@@ -36,7 +36,8 @@ export type TurnCtx = {
   client: StreamClient,
   question: string,
   history: { role: "user" | "assistant", content: string }[],
-  attachments: Record<string, unknown>[],          // document / image blocks (a notice)
+  attachments: Record<string, unknown>[],          // document / image blocks (a notice), or the text of a sheet or a Word file
+  uploadKind?: string,                             // what the Upload found the file to be (notice when not said)
   noticePath?: string,
   clientId: string | null, clientName: string, firmWide: boolean, today: string, books: string,
   anchor?: string,                                 // the last entry held (periods are read against the earlier of it and today)
@@ -215,7 +216,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   }
 
   // ---------------------------------------------------------------- 2. what kind of work, and Haiku's routing
-  let task: Task = taskOf(ctx.question, ctx.attachments.length > 0, !!ctx.clientId);
+  let task: Task = taskOf(ctx.question, ctx.attachments.length > 0, !!ctx.clientId, ctx.uploadKind);
   if (task !== "notice" && EXT_TOOLS.some((t) => t.task === "heavy" && t.words.test(ctx.question))) task = "heavy";
   const P0 = plan(task, ctx.chatEffort);
   const P: Plan = L.opusOnly ? { ...P0, model: "claude-opus-5-5", effort: "medium", maxTokens: 16000 } : P0;
@@ -261,7 +262,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const tools = claudeTools(ctx.firmWide, { web: P.web, notice: task === "notice", strict: ctx.strict !== false });
   const messages: any[] = [
     ...ctx.history.slice(-20).map((h) => ({ role: h.role, content: mk.text(String(h.content || "").slice(0, 6000)) || "(empty)" })),
-    { role: "user", content: [...ctx.attachments, { type: "text", text: contextBlock(ctx) + mk.text(ctx.question) }] },
+    { role: "user", content: [...ctx.attachments.map((b) => b.type === "text" ? { type: "text", text: mk.text(String(b.text || "")) } : b), { type: "text", text: contextBlock(ctx) + mk.text(ctx.question) }] },
   ];
   const texts: string[] = [];
   let stopped = "", webUsed = false;

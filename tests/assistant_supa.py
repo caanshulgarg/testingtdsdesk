@@ -121,7 +121,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 if method == "POST":
                     if w != "service":
                         firm = run("select my_firm()", w)
-                        if name.split("/")[0] != firm or name.split("/")[2:3] != ["notices"]: return self.send(403, {"message": "new row violates row-level security policy"})
+                        if name.split("/")[0] != firm or name.split("/")[2:3] not in (["notices"], ["uploads"]):   # 77 notices/, 84 uploads/
+                            return self.send(403, {"message": "new row violates row-level security policy"})
                     FILES[key] = (self.body(), self.headers.get("Content-Type") or "application/octet-stream")
                     return self.send(200, {"Key": key})
                 if method == "GET":

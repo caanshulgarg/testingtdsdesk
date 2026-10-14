@@ -8,7 +8,7 @@
 // fields with "Add to due list", and "Wrong answer?". Earlier questions of the session below. Ctrl+J opens it anywhere.
 import { useRef, useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
-import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
+import { Sparkles, Paperclip, Upload as UploadIcon, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus } from "lucide-react";
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
@@ -129,6 +129,31 @@ function Cases({ t }) {
   </section>;
 }
 
+// one Upload (the owner's request of 14-Oct-2026): each file as FinCom found it - its kind (by FinCom's own rules, or by
+// the AI when they could not tell), one line about it, and the next steps as buttons (nothing is done by itself)
+const DONE_OPENS = ["purchase", "sales", "bank", "as26"];
+function Uploads() {
+  const list = AUpload.list();
+  if (!list.length) return null;
+  return <section className="asst-uploads" data-asst-uploads="">
+    {list.slice().reverse().map((u) => <div key={u.id} className={"asst-up " + u.state} data-asst-upload={u.kind || u.state} data-name={u.name}>
+      <header><b>{u.name}</b>
+        {u.state === "ready" && <span className="asst-src neutral" data-asst-kind={u.kind}>{AUpload.KIND[u.kind] || "Other document"}</span>}
+        {u.state === "ready" && <span className="note" data-asst-kind-by={u.by}>{u.by === "ai" ? "told by the AI" : "told by FinCom's rules"}</span>}
+        {u.state === "reading" && <span className="note">Reading…</span>}
+        {u.state === "asking" && <span className="note">FinCom's rules could not tell; asking the AI…</span>}
+        <button type="button" className="iconbtn asst-up-x" title="Take off this list (the file stays stored)" onClick={() => AUpload.remove(u)}>×</button></header>
+      {u.state === "failed" && <p className="asst-error">Not uploaded: {u.error}.</p>}
+      {u.state === "ready" && <p className="asst-up-sum" data-asst-summary="">{u.summary}</p>}
+      {u.state === "ready" && <div className="asst-up-acts">
+        {u.acts.map((x) => u.done[x.id] ? <span key={x.id} className="note asst-up-done" data-asst-done={x.id}>✓ {u.done[x.id]}</span>
+          : <Button key={x.id} className={"btn small" + (x.primary ? " primary" : "")} disabled={!!x.disabled} data-asst-act={x.id} onClick={() => AUpload.act(u, x.id)}>{x.label}</Button>)}
+        {DONE_OPENS.some((k) => u.done[k]) && <Button className="btn small" data-asst-act="open" onClick={() => AUpload.act(u, "open")}>Open</Button>}
+      </div>}
+    </div>)}
+  </section>;
+}
+
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null);
   const verdicts = (t.verdicts || []).filter((v) => v.status === "mismatch");
@@ -205,7 +230,11 @@ export default function Assistant() {
     <AssistantLauncher />
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
       <DrawerContent className="asst-panel" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()}>
-        {a.open && <div className="asst-body" data-asst-panel="">
+        {a.open && <div className={"asst-body" + (a.dragOver ? " drag" : "")} data-asst-panel=""
+          onDragOver={(e) => { if (!cid) return; e.preventDefault(); if (!a.dragOver) { a.dragOver = true; ASST.draw(); } }}
+          onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; a.dragOver = false; ASST.draw(); }}
+          onDrop={(e) => { if (!cid) return; e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
+          {a.dragOver && <div className="asst-dropzone" data-asst-dropzone="">Drop the files to upload them for {co ? co.name : "this client"}</div>}
           <div className="asst-scope">
             {co ? <div className="seg" role="tablist">
               <button role="tab" aria-selected={a.scope === "client"} className={a.scope === "client" ? "on" : ""} onClick={() => ASST.setScope("client")}>{co.name}</button>
@@ -225,12 +254,14 @@ export default function Assistant() {
             <textarea id="asstQ" rows={2} value={a.q} placeholder={cid ? "Ask about " + co.name + "'s books, tax, or a notice…" : "Ask a tax or accounting question…"} disabled={a.busy}
               onChange={(e) => { a.q = e.target.value; ASST.draw(); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ASST.ask(); } }} />
             <div className="asst-askbar">
-              {cid && <><input ref={file} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files[0]; e.target.value = ""; ASST.attach(f); }} />
-                <button type="button" className="iconbtn" title="Attach a notice (PDF or picture)" onClick={() => file.current && file.current.click()} disabled={a.uploading}><Paperclip size={15} /> {a.uploading ? "Storing…" : a.attach ? a.attach.name : "Notice"}</button></>}
+              {cid && <><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
+                <button type="button" className="iconbtn" data-asst-upload-btn="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading}><UploadIcon size={15} /> {a.uploading ? "Reading…" : "Upload"}</button>
+                {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
               <span className="note asst-hint" data-asst-privacy="">Questions may be processed by an AI provider; identifiers are masked. It reads, works out, drafts and exports; it never posts, files or changes anything.</span>
               <Button type="submit" className="btn small primary" disabled={a.busy || !String(a.q || "").trim()}><Send size={14} /> Ask</Button>
             </div>
           </form>
+          <Uploads />
           {!turns.length && <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} className="chip" onClick={() => ASST.ask(s)}>{s}</button>)}</div>}
           {latest && <Turn t={latest} latest />}
           {earlier.length > 0 && <details className="asst-earlier" open={earlier.length < 3}><summary>Earlier in this conversation ({earlier.length})</summary>{earlier.map((t) => <Turn key={t.id} t={t} />)}</details>}

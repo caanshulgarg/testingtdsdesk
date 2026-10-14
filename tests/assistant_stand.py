@@ -15,6 +15,7 @@ ROOT = os.path.join(HERE, "..")
 SQL = os.path.join(ROOT, "server", "tally-cloud")
 MIG77 = os.path.join(ROOT, "server", "assistant", "migration-77-assistant.sql")
 MIG82 = os.path.join(ROOT, "server", "assistant", "migration-82-assistant-default-on.sql")   # on by default (14-Oct-2026)
+MIG84 = os.path.join(ROOT, "server", "assistant", "migration-84-assistant-uploads.sql")      # one Upload (14-Oct-2026)
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -74,6 +75,8 @@ create table if not exists storage.buckets (id text primary key, name text, publ
 create table if not exists storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid, created_at timestamptz default now());
 create or replace function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
 alter table storage.objects enable row level security;
+grant usage on schema storage to authenticated;
+grant select, insert on storage.objects to authenticated;
 """
 
 def function_text(path, name):
@@ -103,10 +106,11 @@ def start(port):
     return db
 
 def migrate(db, path=MIG77):
-    """77, then 82 (the assistant on by default) as staging has them; another path: that file only"""
+    """77, then 82 (the assistant on by default) and 84 (uploads) as staging has them; another path: that file only"""
     if path != MIG77: return db.sql(open(path).read())
     db.sql(open(MIG77).read())
-    return db.sql(open(MIG82).read())
+    db.sql(open(MIG82).read())
+    return db.sql(open(MIG84).read())
 
 def ask(db, query, uid=ME):
     """a query as a signed-in member: role authenticated, auth.uid() = uid (row-level security applies)"""
