@@ -3,7 +3,7 @@
    counts in the tab's pill, Errors in the warning tone. */
 #app nav.statebar { display: flex !important; flex-wrap: nowrap !important; align-items: center; gap: 8px; }
 #app nav.statebar > div { flex: 1 1 auto; min-width: 0; }
-#app nav.statebar .statebar-help { flex: 0 0 auto; display: inline-flex; }
+#app :is(nav.statebar, .statebar-none) .statebar-help { flex: 0 0 auto; display: inline-flex; }
 #app nav.statebar .st-errors { color: var(--warn); }
 /* the "?" as tall as a state's tab, so it sits on the row's one line (centred like the tabs) */
 #app .help-btn.help-q { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 999px; font-weight: 600; font-size: 13px; line-height: 1;
@@ -38,4 +38,4 @@
   #app .upline-fails .upline-acts { margin-left: 0; }
   #app .upline-bar { flex-basis: 100%; }
 }
-#app nav.statebar[data-states-none] { justify-content: flex-end; }
+#app .statebar-none { display: flex; justify-content: flex-end; }

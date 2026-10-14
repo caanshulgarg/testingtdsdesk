@@ -501,8 +501,9 @@ export function PostStep() {
   return (
     <section className="poststep" data-post-page="">
       <PostStyles />
-      <StatusLine co={co} />
-      <RunLine co={co} />
+      {/* the posting's line and the last run: on Ready to post and Errors (In Tally lists what is there) */}
+      {tab !== "posted" && <><StatusLine co={co} />
+      <RunLine co={co} /></>}
       {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
         <Ready co={co} bills={bills} canPost={canPost} more={more} />
         <TestCopies co={co} bills={bills} />

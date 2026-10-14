@@ -28,7 +28,7 @@ export function StateBar() {
   // Bank and Sales with nothing yet: the page is its empty state ("No bank statement yet"), with its one next step, and no
   // row of noughts; Purchase keeps its row (To review's empty state is under it)
   const help = <span className="statebar-help"><HelpButton page small /></span>;
-  if (!states.length || (page !== "bills" && states.every(([, , n]) => !n))) return <div className="sbar-band"><nav className="sbar statebar" aria-label="Status" data-states={page} data-states-none="">{help}</nav></div>;
+  if (!states.length || (page !== "bills" && states.every(([, , n]) => !n))) return <div className="sbar-band statebar-none" data-states={page} data-states-none="">{help}</div>;
   const now = pageState(page), bills = page === "bills";
   return <div className="sbar-band"><nav className="sbar statebar" aria-label="Status" data-states={page} data-post-tabs={bills ? "" : undefined} data-bill-filters={bills ? "" : undefined}>
     <Tabs value={now || ""} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
