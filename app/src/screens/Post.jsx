@@ -25,8 +25,8 @@ const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
 
 // 1. the status line, and a second line only when something is wrong
-function StatusLine({ co }) {
-  const s = postStatusFor(co), p = s.problem;
+function StatusLine({ co, noProblem }) {
+  const s = postStatusFor(co), p = noProblem ? null : s.problem;
   return <>
     <div className="post-status" data-post-line="">
       <span>{"Posting into "}<b>{s.company}</b>{s.on ? <span data-post-on="">{" on " + s.on}</span> : null}</span>
@@ -501,9 +501,9 @@ export function PostStep() {
   return (
     <section className="poststep" data-post-page="">
       <PostStyles />
-      {/* the posting's line and the last run: on Ready to post and Errors (In Tally lists what is there) */}
-      {tab !== "posted" && <><StatusLine co={co} />
-      <RunLine co={co} /></>}
+      {/* under In Tally, what stops a posting is not said (it is said on Ready to post and Errors) */}
+      <StatusLine co={co} noProblem={tab === "posted"} />
+      <RunLine co={co} />
       {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
         <Ready co={co} bills={bills} canPost={canPost} more={more} />
         <TestCopies co={co} bills={bills} />
