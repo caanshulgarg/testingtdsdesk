@@ -136,6 +136,9 @@
 /* the Tally chip: on the title line of a client's page (tds-layout: the client's strip of pages is gone), and in lists */
 #app .tchip, #cobar .tchip { cursor: pointer; border: 0; font: inherit; font-size: 12.5px; white-space: nowrap; }
 #app .tchip:hover, #cobar .tchip:hover { filter: brightness(.96); text-decoration: underline; }
+#cobar .tbar-title .tbar-h { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+#cobar .tbar-title .tbar-h h2 { min-width: 0; }
+#cobar .tbar-title .tbar-h .tchip { flex: 0 0 auto; }
 @media (max-width: 600px) { #cobar .tchip { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; } }
 #app .tnotlinked { margin: 0 0 12px; }
 #app .tnl-list { list-style: none; margin: 0; padding: 0; }

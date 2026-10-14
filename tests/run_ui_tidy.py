@@ -198,6 +198,8 @@ try:
         ok(E("booksTab()") == "gst", "  … and opens from there (GST)")
         chip = E("() => { const c = document.querySelector('#cobar [data-tally-chip]'), h = document.querySelector('#cobar .tbar-title h2'); if (!c || !h) return null; const a = c.getBoundingClientRect(), t = h.getBoundingClientRect(); return {top: Math.round(a.top), bottom: Math.round(a.bottom), ttop: Math.round(t.top), tbottom: Math.round(t.bottom)}; }")
         ok(chip and chip["top"] < chip["tbottom"] + 30 and chip["bottom"] > chip["ttop"] - 30, "the Tally chip on the title line (%s)" % chip)
+        cw = E("() => { const c = document.querySelector('#cobar [data-crumbs]'); return [...c.querySelectorAll('.linkbtn, [data-crumb-page]')].map(e => e.scrollWidth - e.clientWidth).concat([c.scrollWidth - c.clientWidth]); }")
+        ok(max(cw) <= 1 and E("document.querySelector('#cobar [data-crumb-page]').innerText") == "GST", "  … and the breadcrumb is whole beside it, nothing cut (%s)" % cw)
         # Ctrl+K: by name, GSTIN and PAN
         pan = E("CO().gstin.slice(2, 12)"); E("() => { CO().pan = CO().gstin.slice(2, 12); }")
         for q in (E("CO().name.slice(0, 6)"), E("CO().gstin"), pan):
