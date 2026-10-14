@@ -138,8 +138,6 @@
 #app .tchip:hover, #cobar .tchip:hover { filter: brightness(.96); text-decoration: underline; }
 #cobar .tbar-title .tbar-h { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
 #cobar .tbar-title .tbar-h h2 { min-width: 0; }
-/* depreciation follow-up (14-Oct-2026): on a computer the page's name is never cut short ("Accou…" beside the Tally chip) */
-@media (min-width: 900px) { #cobar .tbar-title .tbar-h h2 { min-width: max-content; flex: 0 0 auto; } }
 #cobar .tbar-title .tbar-h .tchip { flex: 0 0 auto; }
 @media (max-width: 600px) { #cobar .tchip { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; } }
 #app .tnotlinked { margin: 0 0 12px; }
@@ -147,7 +145,7 @@
 #app .tnl-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--border-subtle, var(--border)); }
 #app .tnl-list li:first-child { border-top: 0; }
 #app .tnl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room): on a computer the title block is
+/* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room; the one rule for it, the depreciation follow-up's folded in): on a computer the title block is
    as wide as the title and its Tally chip need (never less than the usual share of the row, never more than half); the
    line over it (the breadcrumb, the firm's name) takes the block's width and is cut with … instead of widening it */
 @media (min-width: 901px) {
