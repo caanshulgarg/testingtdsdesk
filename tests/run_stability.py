@@ -19,7 +19,7 @@ build (app/dist-test, or TDSDESK_SITE), with a made-up firm kept in this browser
      the program as tall as the real top and bottom bars (no shift); the sign-in frame's card as tall as the real one;
      offline: no update check (no console error) and "No internet" on the sign-in page;
  10. the service worker (forced on for the local server): FinCom opens without a line; only the site's own files are
-     kept (no Supabase, no build.json); a new build is said ("A newer FinCom is out. Reload"); sign-out clears the kept files.
+     kept (no Supabase, no build.json); a new build is said (the small "New version – Refresh" chip); sign-out clears the kept files.
 Screenshots to tests/out/stability/."""
 import os, sys, json, time, threading, functools, http.server, re
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -287,9 +287,11 @@ try:
             # a new build: another worker, another build.json; the open page says so, quietly, and keeps working
             NEWBUILD[0] = True
             pg.evaluate("() => navigator.serviceWorker.getRegistration().then(r => r.update())")
-            try: pg.wait_for_function("() => (document.getElementById('toast').innerText || '').includes('A newer FinCom is out.')", timeout=12000)
+            try: pg.wait_for_function("() => !!document.querySelector('[data-new-version] [data-new-version-go]')", timeout=12000)
             except Exception: pass
-            ok("A newer FinCom is out." in pg.inner_text("#toast") and pg.locator('#toast [data-toast-act="Reload"]').count() == 1, "a new build: “A newer FinCom is out. Reload”, in the one message region")
+            # quiet refresh (14-Oct-2026): a small chip, "New version – Refresh", not a message that keeps coming back
+            ok(pg.locator("[data-new-version]").count() == 1 and "New version" in pg.inner_text("[data-new-version]") and pg.locator("[data-new-version] [data-new-version-go]").inner_text().strip() == "Refresh"
+               and "A newer FinCom" not in pg.inner_text("#toast"), "a new build: the small “New version – Refresh” chip, nothing in the message region")
             NEWBUILD[0] = False
             # signing out clears what was kept after the first open
             pg.evaluate("() => caches.open('fincom-files:/').then(c => c.put('./assets/x.js', new Response('1')))")

@@ -303,9 +303,10 @@ async function cloudPull(){
       if (rows.length < 200) break;
     }
   }
+  cloudPull.took = 0;
   if (!applied.length) return 0;
   const newest = applied.map(r => r.updated_at).sort().pop();
-  await cloudApply(applied);
+  cloudPull.took = num(await cloudApply(applied));
   Cloud.setCfg({lastPull: newest});
   return got;
 }
@@ -332,7 +333,7 @@ function cleanIds(v, depth){
 function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
 async function cloudApply(rows){
   const was = Live.applying; Live.applying = true;          // what comes from the server is not sent back
-  try { await cloudApplyNow(rows); } finally { Live.applying = was; }
+  try { return await cloudApplyNow(rows); } finally { Live.applying = was; }
 }
 async function cloudApplyNow(rows){
   const marks = Cloud.marks();
@@ -348,7 +349,7 @@ async function cloudApplyNow(rows){
   const baseGet = k => typeof CloudBase === "object" ? CloudBase.get(k) : undefined;
   const waiting = key => typeof pendingEdit === "function" && pendingEdit(key);
   const keepMark = new Map(), inPlace = new Set();
-  let sendAfter = false;
+  let sendAfter = false, took = 0;
   for (let r of rows){
     const k = cloudKey(r);
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
@@ -377,6 +378,8 @@ async function cloudApplyNow(rows){
         r = Object.assign({}, r, {data: clone(data)});
       }
     }
+    // quiet refresh: a removal of something not here changes nothing on screen
+    if (!(r.deleted && !mine.has(k))) took++;
     const markWas = marks[k];
     if (!r.deleted && r.kind !== "client") baseSet(k, JSON.stringify(r.data));
     if (r.kind !== "inbox") marks[k] = r.deleted ? "gone" : fpHash(JSON.stringify(r.data));   // inbox records are office automation's, never tracked for deletion
@@ -428,7 +431,10 @@ async function cloudApplyNow(rows){
     await loadSales(o.cid);
     if (S.sales && S.sales.cid === o.cid) Object.assign(S.sales, {filter: keep.filter, q: keep.q, openId: keep.openId, view: keep.view, sel: new Set([...keep.sel].filter(id => S.sales.list.some(v => v.id === id)))});
   }
-  Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
+  if (took) Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
+  // how many rows changed something here (this computer's own saves coming back are not counted): the page is drawn again
+  // only when one did (quiet refresh, 14-Oct-2026)
+  return took;
 }
 async function cloudFlushListsBefore(rows){
   try {
@@ -490,11 +496,17 @@ async function cloudSync(manual){
   if (!Cloud.st.firm){ try { await Cloud.whoAmI(); } catch (e){ Cloud.st.error = e.message; renderTop(); return; } }
   if (!Cloud.st.firm) return;
   cloudBusy = true;
-  Cloud.st.busy = "Syncing\u2026"; Cloud.st.error = "";
+  // quiet refresh (14-Oct-2026): the look every 45 s with nothing to send said "Saving…" in the top bar each time; it says
+  // so only when asked for, or when there is something of this computer's to send
+  const before = JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]);
+  let toSend = 0; try { toSend = cloudChanges().changes.length; } catch (e){}
+  Cloud.st.busy = manual || toSend ? "Syncing\u2026" : ""; Cloud.st.error = "";
   if (manual) render();
+  let changed = !!Cloud.st.busy;
   try {
     const sent = await cloudPush();
     const got = await cloudPull();
+    if (sent || cloudPull.took) changed = true;
     try { await BookSync.tick(); } catch (e){}
     Cloud.st.lastSync = Date.now();
     Cloud.st.pending = cloudChanges().changes.length;
@@ -506,7 +518,7 @@ async function cloudSync(manual){
     if (manual) toast("Sync failed: " + e.message);
   }
   Cloud.st.busy = ""; cloudBusy = false;
-  render();
+  if (manual || changed || JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]) !== before) render();
 }
 function startCloudSync(){
   clearInterval(cloudTimer);
