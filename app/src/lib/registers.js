@@ -1,5 +1,5 @@
 // Registers on Purchase and Sales (any sheet, a PDF table or JSON) and Reconciliations → Vendors / Customers: the engine.
-// Loaded when first used (window.loadRegisters, app/src/main.jsx; registersLoad in src/js/81-registers.js), so the
+// Loaded when first used (window.loadRegisters, app/src/main.jsx; registersLoad in src/js/82-registers.js), so the
 // program every page loads stays within its budget. It runs on the program's globals (S, CO, num, r2, Market, GST2B,
 // GSTAmend, LK, …) and puts its own on window, where the program and the screens find them.
 // It was src/js/81-sheet-import.js and 82-party-recon.js; the two parts follow as they were.

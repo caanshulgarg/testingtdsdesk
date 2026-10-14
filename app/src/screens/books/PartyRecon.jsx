@@ -75,7 +75,7 @@ function RunView({ run }) {
 }
 
 export default function PartyReconPage({ side }) {
-  // the reconciliation's engine loads the first time the page is opened (registersLoad, src/js/81-registers.js)
+  // the reconciliation's engine loads the first time the page is opened (registersLoad, src/js/82-registers.js)
   const [ready, setReady] = useState(typeof PartyRecon === "object");
   useEffect(() => { if (!ready) registersLoad().then(() => setReady(true), () => {}); }, [ready]);
   if (!ready) return <Loading what="the reconciliations" />;
