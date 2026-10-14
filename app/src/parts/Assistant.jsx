@@ -12,6 +12,8 @@ import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, Exter
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
+import { useDismiss } from "./dismiss.js";
+import { AssistantLauncher } from "./AssistantLauncher.jsx";
 
 const LABELS = {
   books: ["ok", "Checked against the books ✓"],
@@ -189,17 +191,14 @@ function asstDraftFile(d, kind) {
   saveFile(String(d.title || "draft").replace(/[^A-Za-z0-9]+/g, "-") + ".doc", new Blob(["<html><head><meta charset=\"utf-8\"></head><body>" + html + "</body></html>"], { type: "application/msword" }));
 }
 
-export function AssistantLauncher() {
-  const a = ASST.st();
-  if (!S.firm || a.open || typeof Cloud !== "object" || !Cloud.on()) return null;
-  if (a.settings === undefined) { a.settings = null; setTimeout(() => ASST.loadSettings(), 0); }
-  if (!ASST.on()) return null;
-  const co = S.view === "company" && CO();
-  return <button className="asst-launch" data-asst-launch="" onClick={() => ASST.open()} title="FinCom Assistant (Ctrl+J)"><Sparkles size={16} /> {co ? "Ask about " + co.name : "Ask FinCom"}</button>;
-}
+// the launcher lives in the first file (AssistantLauncher.jsx); this panel is loaded the first time it opens (App.jsx)
+export { AssistantLauncher };
 
+const ASST_REF = { get current() { return document.querySelector('[data-overlay="asst"]'); } };
 export default function Assistant() {
   const a = ASST.st();
+  // a click outside or Esc closes it (app/src/parts/dismiss.js); what was typed stays in ASST's state as a draft
+  useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")) });
   const file = useRef(null), upl = useRef(null);
   const co = S.view === "company" ? CO() : null;
   const cid = ASST.cid();
@@ -207,9 +206,8 @@ export default function Assistant() {
   const latest = turns[turns.length - 1], earlier = turns.slice(0, -1).reverse();
   const suggest = cid ? ASST.SUGGEST.client : ASST.SUGGEST.firm;
   return <>
-    <AssistantLauncher />
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
-      <DrawerContent className="asst-panel" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()}>
+      <DrawerContent className="asst-panel" data-overlay="asst" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
         {a.open && <div className="asst-body" data-asst-panel="">
           <div className="asst-scope">
             {co ? <div className="seg" role="tablist">

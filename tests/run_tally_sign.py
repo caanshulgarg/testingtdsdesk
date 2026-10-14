@@ -139,7 +139,8 @@ with sync_playwright() as p:
         pg.evaluate("""(s) => { Cloud.on = () => true; Cloud.st = Object.assign({state: "ok", email: "a@b.c", lastSync: Date.now()}, s.cloud || {}); Live.sv = s.sv; Live.st = "live"; render(); }""", x); pg.wait_for_timeout(500)
         return pg.evaluate("() => { const e = document.querySelector('#cobar [data-save]'); return e ? [e.getAttribute('data-save'), e.innerText.trim(), getComputedStyle(e).color] : null; }")
     r = sv_({"sv": {"state": "saved", "at": 1}})
-    ok(r is None and "Saved" not in hdr() and "live" not in hdr().lower().split(), "all saved: nothing shown (%s)" % (r,))
+    # round 3 A (14-Oct-2026): all saved: a quiet "Saved <time>" (was nothing), the rest in its tooltip; never "live"
+    ok(r and r[0] == "saved" and r[1].startswith("Saved ") and "live" not in hdr().lower().split(), "all saved: a quiet Saved chip (%s)" % (r,))
     r = sv_({"sv": {"state": "saving", "at": 1}})
     ok(r and r[1] == "Saving…", "while saving: “Saving…” (%s)" % (r,))
     r = sv_({"sv": {"state": "error", "at": 1, "err": "duplicate key value violates unique constraint \"bill_items_pkey\""}})

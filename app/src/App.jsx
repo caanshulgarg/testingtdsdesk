@@ -1,6 +1,6 @@
 // The page: the sidebar, the top bar, the client switcher and the main part (Main.jsx), and any React screen placed
 // inside an old piece of HTML (<div data-react>). Each part is guarded: one that fails to draw does not take the others down.
-import { Suspense, useLayoutEffect, useSyncExternalStore } from "react";
+import { Suspense, lazy, useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { subscribe, snapshot, islands } from "./store.js";
 import Guard from "./Guard.jsx";
@@ -9,7 +9,15 @@ import TopBar from "./TopBar.jsx";
 import Switcher from "./Switcher.jsx";
 import FirmSetup from "./parts/FirmSetup.jsx";
 import WhyNotes from "./parts/WhyNotes.jsx";
-import Assistant from "./parts/Assistant.jsx";
+import { AssistantLauncher } from "./parts/AssistantLauncher.jsx";
+// the Assistant's panel: loaded the first time it opens, then kept (so it can slide out)
+const Assistant = lazy(() => import("./parts/Assistant.jsx"));
+let asstEver = false;
+function AssistantSlot() {
+  const a = typeof ASST === "object" ? ASST.st() : {};
+  if (a.open) asstEver = true;
+  return <><AssistantLauncher />{asstEver && <Suspense fallback={null}><Assistant /></Suspense>}</>;
+}
 import PreFilePanel from "./parts/PreFile.jsx";
 import SCREENS from "./screens/index.js";
 import Main from "./Main.jsx";
@@ -43,7 +51,7 @@ export default function App() {
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
       <Guard name="the firm's details" v={v} quiet><FirmSetup /></Guard>
       <WhyNotes />
-      <Guard name="the assistant" v={v} quiet><Assistant /></Guard>
+      <Guard name="the assistant" v={v} quiet><AssistantSlot /></Guard>
       <Guard name="the check before filing" v={v} quiet><PreFilePanel /></Guard>
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];

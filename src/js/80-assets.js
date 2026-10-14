@@ -90,6 +90,10 @@ const FAR = (() => {
     {k: "none", name: "Not depreciable (land; goodwill from AY 2021-22)", rate: 0},
   ];
   X.block = k => X.IT.find(b => b.k === k) || (/^r\d/.test(String(k || "")) ? {k, name: "Block at " + k.slice(1) + "% (from the books' group)", rate: Number(k.slice(1)), custom: true} : null);
+  // The rules and defaults of this file (docs/depreciation.md, the ten points: the Schedule II list, residual 5% and nil for
+  // intangibles, WDV by default with straight line for intangibles, old assets over the remaining life, days counted
+  // inclusive, block-level accumulated depreciation spread by cost, a sale taking the whole asset, the section 32 working,
+  // additional depreciation, the deferred tax rates, the block's opening): approved by the owner on 14-Oct-2026.
   X.DEFAULTS = {method: "WDV", residualPct: 5, addl: false, addlRate: 20, dtRate: null, dtStd: "AS 22"};
 
   // ------------------------------------------------------------ proposing from the names
@@ -184,7 +188,7 @@ const FAR = (() => {
         block: c.block, blockSure: c.blockSure, blockWhy: c.blockWhy, putToUse: null, remLife: null, bookOpen: r2(x.open), bookDr: 0, bookCr: 0, adds: [], moves: [], bookedDep: 0, addlEligible: null, override: null};
     });
     const byL = Object.fromEntries(assets.map(a => [a.id.slice(2), a]));
-    const accDep = accL.map(x => ({ledger: x.l, open: r2(-x.open), match: X.matchAccDep(x.l, assets), booked: 0, group: (x.path || [])[0] || ""}));
+    const accDep = accL.map(x => ({ledger: x.l, open: r2(-x.open), match: X.matchAccDep(x.l, assets), booked: 0, dr: 0, cr: 0, group: (x.path || [])[0] || ""}));
     const accBy = Object.fromEntries(accDep.map(a => [a.ledger, a]));
     (input.vouchers || []).filter(v => v.date >= D.from && v.date <= D.to).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0).forEach(v => {
       v.ent.forEach((e, n) => {
@@ -192,9 +196,11 @@ const FAR = (() => {
         // credit two assets with the year's depreciation: that is no transfer between them)
         const others = v.ent.filter((z, j) => j !== n && (e.a < 0 ? z.a > 0 : z.a < 0)).map(z => z.l), key = (v.id || v.no + "@" + v.date) + "|" + n;
         const cDep = others.some(isDepExp) && !others.some(l => isAsset.has(l)), cFA = others.some(l => isAsset.has(l)), cAcc = others.some(l => isAcc.has(l)), cGL = others.some(l => /(profit|loss|gain)\b.*\b(sale|asset|disposal|discard)|(sale|disposal|discard).*\b(profit|loss|gain)/i.test(l));
-        if (isAcc.has(e.l)){ if (e.a < 0 && others.some(isDepExp)) accBy[e.l].booked = r2(accBy[e.l].booked - e.a); return; }
+        if (isAcc.has(e.l)){ const x = accBy[e.l]; if (e.a < 0){ x.cr = r2(x.cr - e.a); if (others.some(isDepExp)) x.booked = r2(x.booked - e.a); } else x.dr = r2(x.dr + e.a); return; }
         const a = byL[e.l]; if (!a) return;
-        const m = {key, date: v.date, vno: v.no || "", vtype: v.type || "", amount: r2(Math.abs(e.a)), with: others.slice(0, 3).join(", ")};
+        // the other side's largest line: the supplier or the buyer
+        const opp = v.ent.filter((z, j) => j !== n && (e.a < 0 ? z.a > 0 : z.a < 0)).sort((x, y) => Math.abs(y.a) - Math.abs(x.a))[0];
+        const m = {key, date: v.date, vno: v.no || "", vtype: v.type || "", amount: r2(Math.abs(e.a)), with: others.slice(0, 3).join(", "), party: opp ? opp.l : "", narr: v.narr || ""};
         if (e.a > 0){
           a.bookDr = r2(a.bookDr + e.a);
           const kind = cDep || cAcc || cGL ? "ignore" : cFA ? "transfer" : "add";
@@ -212,7 +218,7 @@ const FAR = (() => {
     return out;
   };
   // a new proposal with what the person changed in the saved register kept
-  const USER = ["cls", "clsSure", "life", "lifeWhy", "residualPct", "method", "block", "blockSure", "putToUse", "remLife", "addlEligible", "override", "typedOpen", "openGross", "openAcc", "name", "note"];
+  const USER = ["cls", "clsSure", "life", "lifeWhy", "residualPct", "method", "block", "blockSure", "putToUse", "remLife", "addlEligible", "override", "typedOpen", "openGross", "openAcc", "name", "note", "location", "tag", "remarks", "log"];
   X.merge = function(saved, fresh){
     if (!saved) return fresh;
     const out = Object.assign({}, fresh, {settings: Object.assign({}, saved.settings || {}), blocks: Object.assign({}, saved.blocks || {}), ok: Object.assign({}, saved.ok || {}), depLedger: saved.depLedger || fresh.depLedger});
@@ -245,7 +251,7 @@ const FAR = (() => {
     return Math.min(base, C * rate * d / D.diy);
   };
   const usedYears = (c, D) => { const start = Math.max(D.s, c.put ? dnum(c.put) : D.s); return Math.max(0, D.e - start + 1) / D.diy; };
-  X.assetCalc = function(a, set, D, prevA, accOpen){
+  X.assetCalc = function(a, set, D, prevA, accOpen, basis){
     const cls = X.cls(a.cls), life = a.life != null && a.life !== "" ? num(a.life) : cls ? cls.life : null;
     const resPct = a.residualPct != null && a.residualPct !== "" ? num(a.residualPct) : cls && cls.line === "intang" ? 0 : num(set.residualPct);
     const method = a.method || (cls && cls.line === "intang" ? "SLM" : set.method), noDep = !cls || cls.noDep || !(life > 0);
@@ -293,17 +299,34 @@ const FAR = (() => {
     // what is carried to next year, component by component (the share kept)
     const closeComps = left > 1e-9 ? comps.map((c, j) => ({cost: r2(left * c.cost), acc: r2(left * c.acc + (parts.find(p => p.sale === -1 && p.comp === j) || {v: 0}).v), put: c.put || null,
       rem: Math.max(0, (c.rem || 0) - (c.idle ? 0 : usedYears(c, D)))})) : [];
-    if (cls && cls.line === "intang" && !(life > 0)) flags.push("life");
-    return {id: a.id, ledger: a.ledger, name: a.name || a.ledger, cls: a.cls, clsName: cls ? cls.name : "(class to be chosen)", line: cls ? cls.line : "ppe", life, resPct, method, block: a.block,
+    if (cls && cls.line === "intang" && !(life > 0) && basis !== "it") flags.push("life");
+    // the additions as the Income-tax rate works on them (put to use for 180 days or more, or fewer), and the first one
+    let addFull = 0, addHalf = 0;
+    adds.filter(x => x.kind === "add").forEach(x => { const put = x.putToUse || x.date; if (dnum(put) > D.e) return; if (D.e - dnum(put) + 1 >= 180) addFull += num(x.amount); else addHalf += num(x.amount); });
+    return {id: a.id, kept: left, addFull: r2(addFull), addHalf: r2(addHalf), firstAdd: adds[0] || null, ledger: a.ledger, name: a.name || a.ledger, cls: a.cls, clsName: cls ? cls.name : "(class to be chosen)", line: cls ? cls.line : "ppe", life, resPct, method, block: a.block,
       putToUse: a.putToUse || (adds[0] && (adds[0].putToUse || adds[0].date)) || null, gOpen, gAdd, gDel, gClose, dOpen, dep: depYear, computed, override: a.override && a.override.dep != null && a.override.dep !== "" ? a.override : null,
       dDel, dClose, nOpen: r2(gOpen - dOpen), nClose: r2(gClose - dClose), sales: saleOut, gone: left <= 1e-9 && (gOpen + gAdd) > 0, closeComps, flags, noDep};
   };
 
   // ------------------------------------------------------------ the year: every asset, the classes, the blocks
+  // The entity decides the books' basis (the owner's question of 14-Oct-2026: "If the organisation is a firm or proprietor,
+  // why is the system calculating depreciation as per the Companies Act, and why deferred tax?"):
+  //   company                  "sch2": Schedule II in the books, the blocks for tax, deferred tax (AS 22)
+  //   firm, LLP, proprietor,   "it":   (the default) the books at the Income-tax rates: the block schedule is the books'
+  //   trust, HUF, AOP ...              schedule too; one schedule, so no timing difference and no deferred tax
+  //                            "own":  the firm's own policy (straight line / WDV over the useful lives it sets); deferred
+  //                                    tax only when the entity's ICAI level applies AS 22 (Levels I-III; not Level IV)
+  // o.kind and o.levelIV come from the client (FAR.optsFor: the statements' entity and policies); a register keeps its own
+  // choices (typed lives, overrides) whichever basis applies, so switching the entity changes only the defaults.
+  X.NONCO = {firm: "Partnership firm", llp: "Limited liability partnership", proprietor: "Proprietorship", huf: "Hindu undivided family", aop: "Association of persons / body of individuals", trust: "Trust", other: "Non-corporate entity"};
+  X.basisOf = (kind, set) => kind === "company" || !kind ? "sch2" : (set || {}).bookBasis === "own" ? "own" : "it";
   X.compute = function(reg, prev, o){
     o = o || {};
     const fy = String(reg.fy), D = X.fyDates(fy), set = Object.assign({}, X.DEFAULTS, reg.settings || {});
-    const pr = prev && String(prev.fy) === String(Number(fy) - 1) ? X.compute(prev, null, {inner: true}) : null;
+    const kind = o.kind || reg.kind || "company", co = kind === "company", basis = X.basisOf(kind, set);
+    const levelIV = !!(o.levelIV != null ? o.levelIV : set.levelIV);
+    const dtApplies = co || (basis === "own" && !levelIV);
+    const pr = prev && String(prev.fy) === String(Number(fy) - 1) ? X.compute(prev, null, {inner: true, kind, levelIV}) : null;
     const prA = pr ? Object.fromEntries(pr.assets.map(a => [a.id, a])) : {};
     const list = (reg.assets || []).filter(a => !a.gone || (a.adds || []).length || (a.moves || []).length || prA[a.id]);
     // the opening accumulated depreciation of each asset from the accumulated-depreciation ledgers (per asset, or a block's
@@ -322,14 +345,7 @@ const FAR = (() => {
       else if (m.kind === "group") spread(ad, list.filter(a => a.group === m.group && !own.has(a.id) && !/^(land|cwip)$/.test(a.cls || "")));
       else if (m.kind === "all") spread(ad, list.filter(a => !own.has(a.id) && !/^(land|cwip)$/.test(a.cls || "")));
     });
-    const assets = list.map(a => Object.assign(X.assetCalc(a, set, D, prA[a.id], accOpen[a.id]), {accLedger: accOf[a.id] || null, accOpenBooks: accOpen[a.id] || 0}));
-    // the classes (det.far rows): one per Schedule II class, in the table's order
-    const classes = [];
-    X.SCH2.concat([{k: null, name: "(class to be chosen)", line: "ppe"}]).forEach(c => {
-      const m = assets.filter(a => (a.cls || null) === c.k); if (!m.length) return;
-      const t = k => r2(sum(m, a => a[k]));
-      classes.push({cls: c.name, k: c.k, line: c.line, gOpen: t("gOpen"), gAdd: t("gAdd"), gDel: t("gDel"), gClose: t("gClose"), dOpen: t("dOpen"), dYear: t("dep"), dDel: t("dDel"), dClose: t("dClose"), nOpen: t("nOpen"), nClose: t("nClose"), n: m.length});
-    });
+    const assets = list.map(a => Object.assign(X.assetCalc(a, set, D, prA[a.id], accOpen[a.id], basis), {accLedger: accOf[a.id] || null, accOpenBooks: accOpen[a.id] || 0}));
     // the income-tax blocks (section 32)
     const blocks = [], bks = Array.from(new Set(list.map(a => a.block || null)));
     X.IT.map(b => b.k).concat(bks.filter(k => k && !X.IT.some(b => b.k === k)).sort()).concat(bks.includes(null) ? [null] : []).forEach(k => {
@@ -373,16 +389,48 @@ const FAR = (() => {
       blocks.push({k, name: bk.name, rate, open: openP / 100, openFrom, addGt180: a1 / 100, addLt180: a2 / 100, sale: sale / 100, stcg: stcg / 100, empty, dep: dep / 100, addlRate: ar, addlGt180: e1 / 100, addlLt180: e2 / 100,
         addlBf: bfP / 100, addl: addl / 100, addlCarry: carry / 100, close: close / 100, idle: idle / 100, adds: addRows, assets: mem.map(a => a.ledger)});
     });
-    // deferred tax: the books' carrying amount of the depreciable assets against the blocks' written down value
-    const dtRate = set.dtRate != null && set.dtRate !== "" ? num(set.dtRate) : (reg.kind || "company") === "company" ? 25.168 : 31.2;
-    const inDt = a => a.block && (X.block(a.block) || {}).rate > 0 && !/^(land|cwip)$/.test(a.cls || "");
-    const bookO = r2(sum(assets.filter(inDt), a => a.nOpen)), bookC = r2(sum(assets.filter(inDt), a => a.nClose));
-    const taxO = r2(sum(blocks, b => b.open)), taxC = r2(sum(blocks, b => b.close));
-    const dOpen = r2(bookO - taxO), dClose = r2(bookC - taxC), dtO = r2(dOpen * dtRate / 100), dtC = r2(dClose * dtRate / 100);
-    const dt = {rate: dtRate, rateGiven: set.dtRate != null && set.dtRate !== "", std: set.dtStd, bookOpen: bookO, bookClose: bookC, taxOpen: taxO, taxClose: taxC, diffOpen: dOpen, diffClose: dClose, open: dtO, close: dtC, move: r2(dtC - dtO)};
+    // the books at the Income-tax rates: each block's depreciation (with any additional depreciation) is the books' charge,
+    // shared among the block's assets still held at the end in proportion to what the rate works on (the carrying amount
+    // at the start, additions put to use for 180 days or more, half of those for fewer); the last takes the paise left. An
+    // asset sold gets none (the block method: its sale value comes off the block; no profit or loss on it)
+    if (basis === "it"){
+      assets.forEach(a => { a.dep = 0; a.computed = 0; a.override = null; });
+      blocks.forEach(b => {
+        const charge = P(b.dep + b.addl), held = assets.filter(a => a.block === b.k && !a.gone);
+        const baseOf = a => Math.max(0, P(a.nOpen) * a.kept) + P(a.addFull) + P(a.addHalf) / 2, tot = sum(held, baseOf);
+        if (!charge || !held.length) return;
+        held.sort((x, y) => baseOf(x) - baseOf(y) || P(x.gOpen + x.gAdd) - P(y.gOpen + y.gAdd));
+        let left = charge;
+        held.forEach((a, i) => { const v = i === held.length - 1 ? left : Math.round(tot ? charge * baseOf(a) / tot : 0); left -= v; a.dep = v / 100; });
+      });
+      assets.forEach(a => {
+        a.sales.forEach(s => { s.depTo = 0; s.dDel = s.accAt; s.carrying = r2(s.cost - s.accAt); s.gain = r2(s.value - s.carrying); s.inBlock = true; });
+        a.dDel = r2(sum(a.sales, s => s.dDel)); a.dClose = r2(a.dOpen + a.dep - a.dDel); a.nClose = r2(a.gClose - a.dClose);
+        a.closeComps = a.gone ? [] : [{cost: a.gClose, acc: a.dClose, put: a.putToUse || null, rem: 0}];
+      });
+    }
+    // the classes (det.far rows): one per class, in the table's order
+    const classes = [];
+    X.SCH2.concat([{k: null, name: "(class to be chosen)", line: "ppe"}]).forEach(c => {
+      const m = assets.filter(a => (a.cls || null) === c.k); if (!m.length) return;
+      const t = k => r2(sum(m, a => a[k]));
+      classes.push({cls: c.name, k: c.k, line: c.line, gOpen: t("gOpen"), gAdd: t("gAdd"), gDel: t("gDel"), gClose: t("gClose"), dOpen: t("dOpen"), dYear: t("dep"), dDel: t("dDel"), dClose: t("dClose"), nOpen: t("nOpen"), nClose: t("nClose"), n: m.length});
+    });
+    // deferred tax: the books' carrying amount of the depreciable assets against the blocks' written down value; only where
+    // it applies (a company; a non-corporate entity with its own book policy at ICAI Levels I-III)
+    let dt = null, dtWhy = "";
+    if (dtApplies){
+      const dtRate = set.dtRate != null && set.dtRate !== "" ? num(set.dtRate) : co ? 25.168 : 31.2;
+      const inDt = a => a.block && (X.block(a.block) || {}).rate > 0 && !/^(land|cwip)$/.test(a.cls || "");
+      const bookO = r2(sum(assets.filter(inDt), a => a.nOpen)), bookC = r2(sum(assets.filter(inDt), a => a.nClose));
+      const taxO = r2(sum(blocks, b => b.open)), taxC = r2(sum(blocks, b => b.close));
+      const dOpen = r2(bookO - taxO), dClose = r2(bookC - taxC), dtO = r2(dOpen * dtRate / 100), dtC = r2(dClose * dtRate / 100);
+      dt = {rate: dtRate, rateGiven: set.dtRate != null && set.dtRate !== "", std: set.dtStd, bookOpen: bookO, bookClose: bookC, taxOpen: taxO, taxClose: taxC, diffOpen: dOpen, diffClose: dClose, open: dtO, close: dtC, move: r2(dtC - dtO)};
+    } else dtWhy = basis === "it" ? "The books follow the Income-tax rates block by block: one schedule for the books and for tax, so there is no timing difference and no deferred tax."
+      : "An ICAI Level IV entity accounts only for current tax (AS 22 does not apply): no deferred tax.";
     // the suggested journal entry for the year's depreciation in the books: the year's charge less what is booked already
     const tgt = {};
-    const T = (l, kind) => (tgt[l] = tgt[l] || {ledger: l, kind, charge: 0, booked: 0});
+    const T = (l, kd) => (tgt[l] = tgt[l] || {ledger: l, kind: kd, charge: 0, booked: 0});
     assets.forEach(a => { if (!a.dep) return; T(a.accLedger || a.ledger, a.accLedger ? "accumulated depreciation" : "the asset (no accumulated-depreciation ledger)").charge += a.dep; });
     (reg.accDep || []).forEach(x => { if (x.booked) T(x.ledger, "accumulated depreciation").booked += num(x.booked); });
     list.forEach(a => { if (a.bookedDep) T(a.ledger, "the asset (no accumulated-depreciation ledger)").booked += num(a.bookedDep); });
@@ -390,16 +438,60 @@ const FAR = (() => {
     const depL = reg.depLedger || "Depreciation and amortisation expense", jeTot = r2(sum(lines, t => t.net));
     const je = {ledger: depL, lines: [{ledger: depL, dr: jeTot > 0 ? jeTot : 0, cr: jeTot < 0 ? -jeTot : 0}].concat(lines.map(t => ({ledger: t.ledger, dr: t.net < 0 ? -t.net : 0, cr: t.net > 0 ? t.net : 0, kind: t.kind}))).filter(l => l.dr || l.cr),
       charge: r2(sum(assets, a => a.dep)), booked: r2(sum(Object.values(tgt), t => t.booked)), total: jeTot, date: D.to, posted: false};
-    const res = {fy, D, settings: set, kind: reg.kind || "company", assets, classes, blocks, dt, je, prev: pr, hasPrev: !!pr,
-      totals: {gOpen: r2(sum(classes, c => c.gOpen)), gAdd: r2(sum(classes, c => c.gAdd)), gDel: r2(sum(classes, c => c.gDel)), gClose: r2(sum(classes, c => c.gClose)), dOpen: r2(sum(classes, c => c.dOpen)), dep: r2(sum(classes, c => c.dYear)), dDel: r2(sum(classes, c => c.dDel)), dClose: r2(sum(classes, c => c.dClose)), nClose: r2(sum(classes, c => c.nClose)),
-        itDep: r2(sum(blocks, b => b.dep)), itAddl: r2(sum(blocks, b => b.addl)), itClose: r2(sum(blocks, b => b.close)), gain: r2(sum(assets, a => sum(a.sales, s => s.gain)))}};
-    // the statements' inputs: det.far (Companies Act, by class) and det.itBlocks (income-tax blocks)
-    res.far = classes.map(c => ({cls: c.cls, line: c.line, gOpen: c.gOpen, gAdd: c.gAdd, gDel: c.gDel, dOpen: c.dOpen, dYear: c.dYear, dDel: c.dDel, fromRegister: true}));
+    const res = {fy, D, settings: set, kind, co, basis, levelIV, dtApplies, dtWhy, assets, classes, blocks, dt, je, prev: pr, hasPrev: !!pr,
+      totals: {gOpen: r2(sum(classes, c => c.gOpen)), gAdd: r2(sum(classes, c => c.gAdd)), gDel: r2(sum(classes, c => c.gDel)), gClose: r2(sum(classes, c => c.gClose)), dOpen: r2(sum(classes, c => c.dOpen)), dep: r2(sum(classes, c => c.dYear)), dDel: r2(sum(classes, c => c.dDel)), dClose: r2(sum(classes, c => c.dClose)), nOpen: r2(sum(classes, c => c.nOpen)), nClose: r2(sum(classes, c => c.nClose)),
+        itDep: r2(sum(blocks, b => b.dep)), itAddl: r2(sum(blocks, b => b.addl)), itClose: r2(sum(blocks, b => b.close)), gain: basis === "it" ? 0 : r2(sum(assets, a => sum(a.sales, s => s.gain)))}};
+    // the statements' inputs: det.far (the books, by class) and det.itBlocks (income-tax blocks)
+    res.far = basis === "it" ? [] : classes.map(c => ({cls: c.cls, line: c.line, gOpen: c.gOpen, gAdd: c.gAdd, gDel: c.gDel, dOpen: c.dOpen, dYear: c.dYear, dDel: c.dDel, fromRegister: true}));
     res.itRows = blocks.map(b => ({block: b.name, rate: b.rate, open: b.open, addGt180: b.addGt180, addLt180: b.addLt180, sale: b.sale, stcg: b.stcg, addlRate: b.addlRate,
       addlGt180: b.addlGt180, addlLt180: b.addlLt180, addlBf: b.addlBf, fromRegister: true}));
     res.rows3cd = blocks.map(b => [b.name, b.rate, b.open, r2(b.addGt180 + b.addLt180), b.sale, r2(b.dep + b.addl), b.close]);
+    res.register = X.registerRows(res);
+    res.tie = X.tie(reg, list, res);
     if (!o.inner) res.confirm = X.confirmList(reg, res);
     return res;
+  };
+
+  // ------------------------------------------------------------ the fixed asset register, as auditors read it
+  // one row per asset, grouped by class (by income-tax block where the books follow the Income-tax rates), a subtotal per
+  // group and a grand total: cost (opening, additions, deletions, closing), depreciation (opening, for the year, on
+  // deletions, closing), net block (opening, closing), the income-tax block and its rate
+  X.REG_COLS = ["gOpen", "gAdd", "gDel", "gClose", "dOpen", "dep", "dDel", "dClose", "nOpen", "nClose"];
+  X.registerRows = function(res){
+    const byBlock = res.basis === "it", groups = [];
+    const keyOf = a => byBlock ? (a.block || "") : (a.cls || "");
+    const nameOf = k => byBlock ? (k ? (X.block(k) || {}).name : "(block to be chosen)") : (k ? X.cls(k).name : "(class to be chosen)");
+    const order = byBlock ? X.IT.map(b => b.k).concat(Array.from(new Set(res.assets.map(keyOf))).filter(k => !X.IT.some(b => b.k === k)).sort())
+      : X.SCH2.map(c => c.k).concat([""]);
+    order.forEach(k => {
+      const rows = res.assets.filter(a => keyOf(a) === (k || "")).sort((x, y) => String(x.name).localeCompare(String(y.name)));
+      if (!rows.length) return;
+      const sub = Object.fromEntries(X.REG_COLS.map(c => [c, r2(sum(rows, a => a[c]))]));
+      groups.push({key: k, name: nameOf(k), rows: rows.map(a => X.registerRow(a, res)), sub});
+    });
+    const total = Object.fromEntries(X.REG_COLS.map(c => [c, r2(sum(groups, g => g.sub[c]))]));
+    return {groups, total, by: byBlock ? "block" : "class"};
+  };
+  X.registerRow = function(a, res){
+    const b = X.block(a.block), first = a.firstAdd || null;
+    const c = X.cls(a.cls);
+    return {id: a.id, asset: a.name, group: res.basis === "it" ? (b ? b.name : "") : a.clsName, groupShort: res.basis === "it" ? (b ? "Block " + b.rate + "%" : "") : c ? c.head.replace(/^[IVXL]+\.\s*/, "") : "", purchased: first ? first.date : a.gOpen ? "opening" : "", putToUse: a.putToUse || "",
+      supplier: first ? [first.party || first.with || "", first.vno ? first.vtype + " " + first.vno : ""].filter(Boolean).join(" · ") : a.gOpen ? "Opening balance" : "",
+      gOpen: a.gOpen, gAdd: a.gAdd, gDel: a.gDel, gClose: a.gClose, dOpen: a.dOpen, dep: a.dep, dDel: a.dDel, dClose: a.dClose, nOpen: a.nOpen, nClose: a.nClose,
+      block: b ? b.name : "", rate: b ? b.rate : null, sold: a.sales.length > 0, added: a.gAdd > 0, override: !!a.override, gone: a.gone};
+  };
+  // the register against the books (the trial balance at the end of the year: the asset ledgers and the accumulated-
+  // depreciation ledgers); a difference is usually the year's depreciation not yet posted (the suggested journal)
+  X.tie = function(reg, list, res){
+    const assetBooks = list.filter(a => !a.manual).map(a => ({ledger: a.ledger, close: r2(num(a.bookOpen) + num(a.bookDr) - num(a.bookCr))}));
+    const accBooks = (reg.accDep || []).map(x => ({ledger: x.ledger, close: x.cr != null ? r2(num(x.open) + num(x.cr) - num(x.dr)) : r2(num(x.open) + num(x.booked))}));
+    const books = {gross: r2(sum(assetBooks, x => x.close)), acc: r2(sum(accBooks, x => x.close))};
+    books.net = r2(books.gross - books.acc);
+    const t = res.register.total, mine = {gross: t.gClose, acc: t.dClose, net: t.nClose};
+    const diff = {gross: r2(mine.gross - books.gross), acc: r2(mine.acc - books.acc), net: r2(mine.net - books.net)};
+    const unposted = r2(res.je.total);
+    return {books, register: mine, diff, ok: !diff.net && !diff.gross && !diff.acc, unposted, assetBooks, accBooks,
+      why: !diff.net ? "" : Math.abs(r2(diff.net + unposted)) < 0.005 ? "the year's depreciation is not posted in the books yet (the suggested journal entry)" : "the books differ from the register; see each ledger"};
   };
 
   // ------------------------------------------------------------ what a person is to confirm
@@ -407,19 +499,22 @@ const FAR = (() => {
     const ok = reg.ok || {}, out = [], set = Object.assign({}, X.DEFAULTS, reg.settings || {});
     const amt = v => "\u20b9" + inr(v), dmy = d => String(d || "").split("-").reverse().join("-");
     const add = (key, text, o) => { if (!ok[key]) out.push(Object.assign({key, text}, o || {})); };
-    if (!ok.settings) add("settings", "The client's defaults: " + (set.method === "SLM" ? "straight line" : "written down value") + " method, residual value " + set.residualPct + "% of cost, additional depreciation " + (set.addl ? "on (" + set.addlRate + "%)" : "off") + ".", {kind: "settings"});
+    const it = res.basis === "it", ent = res.co ? "a company" : (X.NONCO[res.kind] || "a non-corporate entity").toLowerCase();
+    if (!ok.settings) add("settings", "The client's defaults (" + ent + "): " + (it ? "the books at the Income-tax rates, block by block (no Schedule II, no deferred tax)"
+      : (res.co ? "" : "the firm's own policy, ") + (set.method === "SLM" ? "straight line" : "written down value") + " method, residual value " + set.residualPct + "% of cost") + ", additional depreciation " + (set.addl ? "on (" + set.addlRate + "%)" : "off") + ".", {kind: "settings"});
+    const lifeWord = res.co ? "Schedule II class" : "class (it sets the useful life)";
     const R = Object.fromEntries(res.assets.map(a => [a.id, a]));
     (reg.assets || []).forEach(a => {
       const c = R[a.id]; if (!c) return;
       const nm = a.name || a.ledger;
-      if (!a.cls) out.push({key: "need:cls:" + a.id, text: nm + ": choose its Schedule II class (" + (a.clsWhy || "no rule matches") + ").", asset: a.id, kind: "need"});
-      else if (!a.clsSure) add("cls:" + a.id, nm + ": " + (X.cls(a.cls) || {}).name + ", " + c.life + " years? (" + a.clsWhy + ")", {asset: a.id, kind: "cls"});
+      if (!it && !a.cls) out.push({key: "need:cls:" + a.id, text: nm + ": choose its " + lifeWord + " (" + (a.clsWhy || "no rule matches") + ").", asset: a.id, kind: "need"});
+      else if (!it && !a.clsSure) add("cls:" + a.id, nm + ": " + (X.cls(a.cls) || {}).name + ", " + c.life + " years? (" + a.clsWhy + ")", {asset: a.id, kind: "cls"});
       if (!a.block) out.push({key: "need:block:" + a.id, text: nm + ": choose its income-tax block.", asset: a.id, kind: "need"});
       else if (!a.blockSure) add("block:" + a.id, nm + ": income-tax block " + (X.block(a.block) || {}).name + "? (" + a.blockWhy + ")", {asset: a.id, kind: "block"});
-      if (c.flags.includes("life")) out.push({key: "need:life:" + a.id, text: nm + ": give its useful life in years (an intangible asset: AS 26 / Ind AS 38, not in Schedule II).", asset: a.id, kind: "need"});
-      if (c.flags.includes("rem")) add("rem:" + a.id, nm + ": no put-to-use date or remaining life; the remaining life is taken as the full " + c.life + " years. Give the date it was put to use, or its remaining life.", {asset: a.id, kind: "rem"});
+      if (c.flags.includes("life")) out.push({key: "need:life:" + a.id, text: nm + ": give its useful life in years (an intangible asset: AS 26 / Ind AS 38" + (res.co ? ", not in Schedule II" : "") + ").", asset: a.id, kind: "need"});
+      if (!it && c.flags.includes("rem")) add("rem:" + a.id, nm + ": no put-to-use date or remaining life; the remaining life is taken as the full " + c.life + " years. Give the date it was put to use, or its remaining life.", {asset: a.id, kind: "rem"});
       if (c.flags.includes("idle")) add("idle:" + a.id, nm + ": an addition is put to use after the year: no depreciation this year; in the income-tax block only once used.", {asset: a.id, kind: "idle"});
-      if (!res.hasPrev && !a.typedOpen && r2(a.bookOpen) > 0 && !c.accLedger && !c.noDep) add("noacc:" + a.id, nm + ": no accumulated-depreciation ledger: its opening " + amt(a.bookOpen) + " is taken as cost with nothing depreciated. If the ledger holds the written down value, give the original cost and the depreciation to date.", {asset: a.id, kind: "noacc"});
+      if (!it && !res.hasPrev && !a.typedOpen && r2(a.bookOpen) > 0 && !c.accLedger && !c.noDep) add("noacc:" + a.id, nm + ": no accumulated-depreciation ledger: its opening " + amt(a.bookOpen) + " is taken as cost with nothing depreciated. If the ledger holds the written down value, give the original cost and the depreciation to date.", {asset: a.id, kind: "noacc"});
       (a.moves || []).forEach(m => {
         if (m.kind === "sale" || m.kind === "scrap" || m.kind === "transfer" || !m.sure) add("move:" + m.key, nm + ": a credit of " + amt(m.amount) + " on " + dmy(m.date) + " (" + m.vtype + " " + m.vno + ") is taken as " + ({sale: "a sale", scrap: "scrapped", transfer: "a transfer", dep: "depreciation booked", ignore: "not a disposal"}[m.kind]) + " (" + m.why + ").", {asset: a.id, kind: "move", move: m.key});
       });
@@ -428,7 +523,7 @@ const FAR = (() => {
       const bookClose = r2(num(a.bookOpen) + num(a.bookDr) - num(a.bookCr));
       if (sold.length && Math.abs(bookClose) >= 1 && !sold.some(m => m.costPart != null && m.costPart !== "")) add("part:" + a.id, nm + ": the ledger still holds " + amt(bookClose) + " after the sale; the whole asset is taken as sold. If only a part was sold, give the cost of the part.", {asset: a.id, kind: "part"});
       if (set.addl && a.block && c.gAdd > 0) add("addl:" + a.id, nm + ": additional depreciation (section 32(1)(iia)) " + ((a.addlEligible != null ? a.addlEligible : /^pm_(general|cpp)$/.test(a.cls || "")) ? "claimed" : "not claimed") + ": new plant or machinery of a manufacturer or power producer, not second-hand, not office or residential, not a vehicle, not under section 115BAA / 115BAB / 115BAC.", {asset: a.id, kind: "addl"});
-      if (a.override && a.override.dep != null && a.override.dep !== "" && !String(a.override.reason || "").trim()) out.push({key: "need:why:" + a.id, text: nm + ": give the reason for the depreciation typed by hand.", asset: a.id, kind: "need"});
+      if (!it && a.override && a.override.dep != null && a.override.dep !== "" && !String(a.override.reason || "").trim()) out.push({key: "need:why:" + a.id, text: nm + ": give the reason for the depreciation typed by hand.", asset: a.id, kind: "need"});
     });
     (reg.accDep || []).forEach(x => {
       const m = x.match;
@@ -436,24 +531,68 @@ const FAR = (() => {
       else if (!x.byHand) add("acc:" + x.ledger, "“" + x.ledger + "” (" + amt(x.open) + ") is accumulated depreciation of " + (m.kind === "asset" ? "the asset “" + m.id.slice(2) + "”" : m.kind === "group" ? "the block “" + m.group + "”, spread over its assets in proportion to cost" : "every asset, spread in proportion to cost") + " (" + m.why + ").", {acc: x.ledger, kind: "acc"});
     });
     res.blocks.forEach(b => { if (b.k && !b.openFrom && b.rate > 0) add("open:" + b.k, "Income-tax block " + b.name + ": no closing for last year in FinCom; give its opening written down value (taken as 0).", {block: b.k, kind: "open"}); });
-    if (!res.dt.rateGiven) add("dt", "Deferred tax at " + res.dt.rate + "% (" + (res.kind === "company" ? "a company under section 115BAA, with surcharge and cess" : "30% with cess") + "): give the rate that applies.", {kind: "dt"});
+    if (res.dt && !res.dt.rateGiven) add("dt", "Deferred tax at " + res.dt.rate + "% (" + (res.kind === "company" ? "a company under section 115BAA, with surcharge and cess" : "30% with cess") + "): give the rate that applies.", {kind: "dt"});
     return out;
   };
 
   // ------------------------------------------------------------ the statements' details, from the register
   // det: the year's "details for you" (FSX); the register's figures replace the typed fixed asset register and blocks
+  // depBasis: "sch2" (a company), "own" (a non-corporate entity's own policy: the gross-block schedule) or "it" (the books at
+  // the Income-tax rates: the block schedule is the fixed-asset note, as in the ICAI format for non-corporate entities)
   X.feedDet = function(det, res){
     if (!res) return det;
     const d = Object.assign({}, det || {});
-    d.far = Object.assign({}, d.far || {}, {cy: res.far}); d.itBlocks = Object.assign({}, d.itBlocks || {}, {cy: res.itRows});
-    if (res.prev){ d.far.py = res.prev.far; d.itBlocks.py = res.prev.itRows; }
-    d.farFrom = "register";
+    d.itBlocks = Object.assign({}, d.itBlocks || {}, {cy: res.itRows});
+    if (res.basis !== "it") d.far = Object.assign({}, d.far || {}, {cy: res.far});
+    if (res.prev){ if (res.basis !== "it") d.far.py = res.prev.far; d.itBlocks.py = res.prev.itRows; }
+    d.farFrom = "register"; d.depBasis = res.basis;
+    // the accounting policy's words follow the books' basis when the statements have not chosen them
+    const sw = (d.policies || {}).switches || {};
+    if (!sw.dep && res.basis === "it") d.policies = Object.assign({}, d.policies, {switches: Object.assign({}, sw, {dep: "it"})});
     return d;
+  };
+  // the client's entity, as the statements take it (the layout chosen there, else Client setup's entity or the PAN)
+  X.entityOf = function(b){
+    const st = b && b.fs && b.fs.rx; if (st && st.kind) return st.kind;
+    const co = typeof S === "object" && S && S.companies && b ? S.companies[b.cid] : null;
+    const e = typeof FS === "object" && FS ? FS.entityOf(co).code : "";
+    return ({C: "company", F: "firm", P: "proprietor", H: "huf", A: "aop", B: "aop", T: "trust", L: "other", J: "other", G: "other"})[e] || "company";
+  };
+  // what the year's computation takes from the client: the entity and the ICAI Level IV switch of the statements' policies
+  X.optsFor = function(b, fy){
+    const det = (((b && b.fs && b.fs.rx) || {}).det || {})[String(fy)] || {}, sw = (det.policies || {}).switches || {};
+    return {kind: X.entityOf(b), levelIV: !!sw.levelIV};
   };
   X.forYear = function(b, fy){
     const all = (b && b.fixedAssets) || {}, reg = all[String(fy)];
     if (!reg || !(reg.assets || []).length) return null;
-    try { return X.compute(reg, all[String(Number(fy) - 1)] || null); } catch (e){ return null; }
+    try { return X.compute(reg, all[String(Number(fy) - 1)] || null, X.optsFor(b, fy)); } catch (e){ return null; }
+  };
+  // an asset's depreciation year by year, from every register kept
+  X.history = function(b, id){
+    const all = (b && b.fixedAssets) || {};
+    return Object.keys(all).sort().map(fy => { let r = null; try { r = X.compute(all[fy], all[String(Number(fy) - 1)] || null, X.optsFor(b, fy)); } catch (e){ return null; }
+      const a = r.assets.find(z => z.id === id); return a ? {fy, basis: r.basis, gOpen: a.gOpen, gAdd: a.gAdd, gDel: a.gDel, dOpen: a.dOpen, dep: a.dep, dClose: a.dClose, nClose: a.nClose} : null; }).filter(Boolean);
+  };
+  // an asset ledger's entries in the year as the books hold them (every debit and credit), with the running balance
+  X.ledgerEntries = function(a){
+    const KIND = {add: "addition", transfer: "transfer", ignore: "not a disposal", sale: "sold", scrap: "scrapped", dep: "depreciation booked"};
+    const list = (a.adds || []).map(x => ({x, dr: num(x.amount), cr: 0})).concat((a.moves || []).map(x => ({x, dr: 0, cr: num(x.amount)})))
+      .sort((p, q) => p.x.date < q.x.date ? -1 : p.x.date > q.x.date ? 1 : String(p.x.key).localeCompare(String(q.x.key)));
+    let bal = r2(a.bookOpen);
+    return [{date: "", vno: "", vtype: "", particulars: "Opening balance", dr: 0, cr: 0, bal, open: true}].concat(list.map(({x, dr, cr}) => { bal = r2(bal + dr - cr);
+      return {key: x.key, date: x.date, vno: x.vno, vtype: x.vtype, particulars: (x.party || x.with || "") + (x.narr ? " · " + x.narr : ""), taken: KIND[x.kind] || x.kind, dr: r2(dr), cr: r2(cr), bal}; }));
+  };
+  // the next year's register from this one: the same assets with what was set by hand, the closing as the opening, no
+  // entries yet (they come when the next year's books are read); the blocks open at this year's closing by themselves
+  X.carryForward = function(reg){
+    const fy = String(Number(reg.fy) + 1), keep = (k) => !/^(move|add|part|idle|need):/.test(k);
+    // an asset sold or scrapped in full this year does not go on
+    const sold = new Set(X.compute(reg, null, {inner: true}).assets.filter(a => a.gone).map(a => a.id));
+    return {v: X.V, fy, kind: reg.kind, settings: Object.assign({}, reg.settings || {}), blocks: {}, depLedger: reg.depLedger || null, at: reg.at || "", carried: reg.fy,
+      ok: Object.fromEntries(Object.entries(reg.ok || {}).filter(([k]) => keep(k))),
+      assets: (reg.assets || []).filter(a => !a.gone && !sold.has(a.id)).map(a => Object.assign({}, a, {bookOpen: r2(num(a.bookOpen) + num(a.bookDr) - num(a.bookCr)), bookDr: 0, bookCr: 0, adds: [], moves: [], bookedDep: 0, typedOpen: false, override: null})),
+      accDep: (reg.accDep || []).map(x => Object.assign({}, x, {open: x.cr != null ? r2(num(x.open) + num(x.cr) - num(x.dr)) : r2(num(x.open) + num(x.booked)), booked: 0, dr: 0, cr: 0}))};
   };
 
   // ------------------------------------------------------------ the app: the books FinCom holds (browser only)
@@ -469,9 +608,9 @@ const FAR = (() => {
     const fa = new Set(ledgers.map(x => x.l));
     const t = d => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
     const vouchers = (b.vouchers || []).filter(v => v.date >= from && v.date <= to && !v.opt && !v.cancel && v.ent.some(e => fa.has(e.l)))
-      .map(v => ({id: v.id, date: t(v.date), no: v.no, type: v.type, ent: v.ent.map(e => ({l: e.l, a: -num(e.a)}))}));
+      .map(v => ({id: v.id, date: t(v.date), no: v.no, type: v.type, narr: v.narr || "", ent: v.ent.map(e => ({l: e.l, a: -num(e.a)}))}));
     const depL = Array.from(names).filter(l => !fa.has(l) && /depreciation|amorti[sz]/i.test(l) && !path(l).some(g => /fixed assets/i.test(g)));
-    const kind = typeof FSX === "object" ? FSX.kindOf(b) : (typeof FS === "object" ? ({C: "company", F: "firm", P: "proprietor"})[FS.entityOf(S.companies && S.companies[b.cid]).code] || "company" : "company");
+    const kind = X.entityOf(b);
     return {fy: String(fy), ledgers, vouchers, depLedger: depL[0] || null, isDepExpense: l => !fa.has(l) && /depreciation|amorti[sz]/i.test(l), kind, at: new Date().toISOString().slice(0, 10)};
   };
   // the year's register proposed again from the books, keeping what was changed by hand; saved with the books
@@ -479,67 +618,111 @@ const FAR = (() => {
     const inp = X.inputFromBooks(fy); if (inp.error) return inp;
     b.fixedAssets = Object.assign({}, b.fixedAssets || {});
     const old = b.fixedAssets[String(fy)], reg = X.merge(old, X.propose(inp));
-    if (old && old.kind) reg.kind = old.kind;
     b.fixedAssets[String(fy)] = reg;
     return reg;
   };
   X.okSet = (reg, key, who) => { reg.ok = Object.assign({}, reg.ok || {}, {[key]: {by: who || "", at: new Date().toISOString().slice(0, 10)}}); };
 
-  // ------------------------------------------------------------ out: print (PDF), Excel (formulas), Word
+  // ------------------------------------------------------------ out: the screen's schedules, print (PDF), Excel, Word
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const inr = v => { const n = r2(v); if (!n) return "-"; const s = Math.abs(n).toFixed(2), [w, p] = s.split("."), l3 = w.slice(-3), rest = w.slice(0, -3);
     const g = (rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," : "") + l3 + "." + p; return n < 0 ? "(" + g + ")" : g; };
   X.inr = inr;
   const yEnd = fy => "March 31, " + (Number(fy) + 1);
+  // the headings by the books' basis: "Companies Act" only for a company
+  X.words = function(res){
+    const it = res.basis === "it", co = res.co;
+    return {
+      books: co ? "Companies Act, 2013: depreciation in the books by class (Schedule II)" : it ? "Depreciation in the books: at the Income-tax rates, block by block (one schedule for the books and for tax)"
+        : "Depreciation in the books: the firm's policy (" + (res.settings.method === "SLM" ? "straight line" : "written down value") + " over the useful lives it sets)",
+      booksShort: co ? "Books schedule (Schedule II)" : it ? "Books schedule (Income-tax rates)" : "Books schedule (the firm's policy)",
+      register: "Fixed asset register, year ended " + yEnd(res.fy),
+      blocks: "Income-tax Act, 1961: depreciation by block (section 32)" + (it ? ", also the books' schedule" : ""),
+      dt: res.dt ? "Deferred tax working (" + res.dt.std + "): a suggestion; no entry is posted" : "",
+      je: "Suggested journal entry for the year's depreciation, " + res.je.date + " (shown only; nothing is posted to Tally)",
+      dep: co ? "Depreciation (Companies Act)" : "Depreciation (books)",
+      rules: co ? X.RULES_TEXT : it ? X.RULES_IT : X.RULES_OWN,
+    };
+  };
+  X.REG_HEAD = [["Asset", 0], ["Group / block", 0], ["Date of purchase", 0], ["Put to use", 0], ["Supplier / voucher", 0], ["Cost: opening", 1], ["Additions", 1], ["Deletions", 1], ["Cost: closing", 1],
+    ["Depreciation: opening", 1], ["For the year", 1], ["On deletions", 1], ["Depreciation: closing", 1], ["Net block: opening", 1], ["Net block: closing", 1], ["Income-tax block", 0], ["Rate %", 0]];
   X.tables = function(res){
-    // the same tables for the screen, the print, the Word and the Assistant: [{title, cols: [[label, numeric]], rows: [[..]], total}]
-    const T = [];
-    T.push({id: "classes", title: "Companies Act, 2013: property, plant and equipment and intangible assets by class (Schedule II)", cols: [["Class", 0], ["Gross at start", 1], ["Additions", 1], ["Deductions", 1], ["Gross at end", 1], ["Depreciation at start", 1], ["For the year", 1], ["On deductions", 1], ["Depreciation at end", 1], ["Net at end", 1], ["Net at start", 1]],
+    // the same tables for the screen, the print, the Word and the Assistant: [{id, title, cols: [[label, numeric]], rows, total, skip}]
+    const W = X.words(res), T = [];
+    if (res.basis !== "it") T.push({id: "classes", title: W.books, cols: [["Class", 0], ["Gross at start", 1], ["Additions", 1], ["Deductions", 1], ["Gross at end", 1], ["Depreciation at start", 1], ["For the year", 1], ["On deductions", 1], ["Depreciation at end", 1], ["Net at end", 1], ["Net at start", 1]],
       rows: res.classes.map(c => [c.cls, c.gOpen, c.gAdd, c.gDel, c.gClose, c.dOpen, c.dYear, c.dDel, c.dClose, c.nClose, c.nOpen]), total: true});
-    T.push({id: "assets", title: "Asset register: Companies Act depreciation, asset by asset", cols: [["Asset", 0], ["Class", 0], ["Put to use", 0], ["Life (years)", 1], ["Method", 0], ["Cost at start", 1], ["Additions", 1], ["Deductions", 1], ["Depreciation for the year", 1], ["Carrying amount at end", 1], ["Sale value", 1], ["Gain / (loss) on sale", 1]],
-      rows: res.assets.map(a => [a.name + (a.override ? " (by hand: " + (a.override.reason || "") + ")" : ""), a.clsName, a.putToUse || "", a.life || "", a.noDep ? "-" : a.method, a.gOpen, a.gAdd, a.gDel, a.dep, a.nClose, r2(sum(a.sales, s => s.value)), r2(sum(a.sales, s => s.gain))]), total: true, skip: [3]});
-    T.push({id: "blocks", title: "Income-tax Act, 1961: depreciation by block (section 32)", cols: [["Block", 0], ["Rate %", 1], ["Opening WDV", 1], ["Added, 180 days or more", 1], ["Added, under 180 days", 1], ["Sale value", 1], ["STCL / (STCG)", 1], ["Depreciation", 1], ["Additional depreciation", 1], ["Closing WDV", 1]],
+    T.push({id: "assets", title: "Asset register: depreciation in the books, asset by asset" + (res.basis === "it" ? " (each block's charge shared among its assets)" : ""), cols: [["Asset", 0], [res.basis === "it" ? "Income-tax block" : "Class", 0], ["Put to use", 0], ["Life (years)", 1], ["Method", 0], ["Cost at start", 1], ["Additions", 1], ["Deductions", 1], ["Depreciation for the year", 1], ["Carrying amount at end", 1], ["Sale value", 1], [res.basis === "it" ? "Left in the block" : "Gain / (loss) on sale", 1]],
+      rows: res.assets.map(a => [a.name + (a.override ? " (by hand: " + (a.override.reason || "") + ")" : ""), res.basis === "it" ? ((X.block(a.block) || {}).name || "") : a.clsName, a.putToUse || "", res.basis === "it" ? "" : a.life || "", res.basis === "it" ? "Block WDV" : a.noDep ? "-" : a.method,
+        a.gOpen, a.gAdd, a.gDel, a.dep, a.nClose, r2(sum(a.sales, s => s.value)), res.basis === "it" ? r2(sum(a.sales, s => s.carrying - s.value)) : r2(sum(a.sales, s => s.gain))]), total: true, skip: [3]});
+    T.push({id: "blocks", title: W.blocks, cols: [["Block", 0], ["Rate %", 1], ["Opening WDV", 1], ["Added, 180 days or more", 1], ["Added, under 180 days", 1], ["Sale value", 1], ["STCL / (STCG)", 1], ["Depreciation", 1], ["Additional depreciation", 1], ["Closing WDV", 1]],
       rows: res.blocks.map(b => [b.name, b.rate, b.open, b.addGt180, b.addLt180, b.sale, b.stcg, b.dep, b.addl, b.close]), total: true, skip: [1]});
     const dt = res.dt;
-    T.push({id: "dt", title: "Deferred tax working (" + dt.std + "): a suggestion; no entry is posted", cols: [["Particulars", 0], ["At the start", 1], ["At the end", 1]],
+    if (dt) T.push({id: "dt", title: W.dt, cols: [["Particulars", 0], ["At the start", 1], ["At the end", 1]],
       rows: [["Carrying amount in the books (depreciable assets)", dt.bookOpen, dt.bookClose], ["Written down value for income tax", dt.taxOpen, dt.taxClose], ["Difference", dt.diffOpen, dt.diffClose],
         ["Deferred tax at " + dt.rate + "% (" + (dt.diffClose >= 0 ? "liability" : "asset") + ")", dt.open, dt.close], ["Movement for the year (" + (dt.move >= 0 ? "charge" : "credit") + " to profit and loss)", "", dt.move]]});
-    T.push({id: "je", title: "Suggested journal entry for the year's depreciation, " + res.je.date + " (shown only; nothing is posted to Tally)", cols: [["Ledger", 0], ["Debit", 1], ["Credit", 1]],
-      rows: res.je.lines.map(l => [l.ledger + (l.kind ? " (" + l.kind + ")" : ""), l.dr, l.cr]), total: true});
+    T.push({id: "je", title: W.je, cols: [["Ledger", 0], ["Debit", 1], ["Credit", 1]], rows: res.je.lines.map(l => [l.ledger + (l.kind ? " (" + l.kind + ")" : ""), l.dr, l.cr]), total: true});
     return T;
   };
-  const cellHtml = (v, n) => n ? (typeof v === "number" ? inr(v) : esc(v)) : esc(v);
-  X.html = function(res, ent){
-    const name = String((ent && ent.name) || "").toUpperCase();
+  // the exports a person can take (the Export menu): what each holds
+  X.EXPORTS = [["register", "Fixed asset register"], ["books", "Depreciation schedule, books"], ["it", "Income-tax block schedule"], ["dt", "Deferred tax working"], ["all", "Everything"]];
+  X.exportsFor = res => X.EXPORTS.filter(([k]) => k !== "dt" || !!res.dt);
+  const pick = (res, which) => {
+    const T = X.tables(res), by = id => T.find(t => t.id === id);
+    return which === "books" ? (res.basis === "it" ? [by("blocks")] : [by("classes"), by("assets")]) : which === "it" ? [by("blocks")] : which === "dt" ? [by("dt")].filter(Boolean) : which === "register" ? [] : T;
+  };
+  const regHtml = (res) => {
+    const R = res.register, n = X.REG_COLS;
+    const cells = (o, b) => n.map(k => '<td class="n">' + (b ? "<b>" + inr(o[k]) + "</b>" : inr(o[k])) + "</td>").join("");
+    return "<h3>" + esc(X.words(res).register) + "</h3><table class=\"reg\"><thead><tr>" + X.REG_HEAD.map(c => "<th>" + esc(c[0]) + "</th>").join("") + "</tr></thead><tbody>" +
+      R.groups.map(g => '<tr class="g"><td colspan="' + X.REG_HEAD.length + '">' + esc(g.name) + "</td></tr>" + g.rows.map(r => "<tr><td>" + esc(r.asset) + "</td><td>" + esc(r.group) + "</td><td>" + esc(r.purchased) + "</td><td>" + esc(r.putToUse) + "</td><td>" + esc(r.supplier) + "</td>" + cells(r) + "<td>" + esc(r.block) + "</td><td class=\"n\">" + (r.rate == null ? "" : r.rate) + "</td></tr>").join("") +
+        '<tr class="t"><td colspan="5">Total: ' + esc(g.name) + "</td>" + cells(g.sub, 1) + "<td></td><td></td></tr>").join("") +
+      '<tr class="t gt"><td colspan="5">Grand total</td>' + cells(R.total, 1) + "<td></td><td></td></tr></tbody></table>";
+  };
+  X.html = function(res, ent, which){
+    which = which || "all";
+    const name = String((ent && ent.name) || "").toUpperCase(), W = X.words(res);
     const tb = t => "<h3>" + esc(t.title) + "</h3><table><thead><tr>" + t.cols.map(c => "<th>" + esc(c[0]) + "</th>").join("") + "</tr></thead><tbody>" +
-      t.rows.map(r => "<tr>" + r.map((v, i) => '<td class="' + (t.cols[i][1] ? "n" : "") + '">' + (t.skip && t.skip.includes(i) ? esc(v) : cellHtml(v, t.cols[i][1])) + "</td>").join("") + "</tr>").join("") +
+      t.rows.map(r => "<tr>" + r.map((v, i) => '<td class="' + (t.cols[i][1] ? "n" : "") + '">' + (t.skip && t.skip.includes(i) ? esc(v) : t.cols[i][1] && typeof v === "number" ? inr(v) : esc(v)) + "</td>").join("") + "</tr>").join("") +
       (t.total && t.rows.length > 1 ? '<tr class="t"><td>Total</td>' + t.cols.slice(1).map((c, j) => '<td class="n">' + (c[1] && !(t.skip || []).includes(j + 1) ? inr(sum(t.rows, r => typeof r[j + 1] === "number" ? r[j + 1] : 0)) : "") + "</td>").join("") + "</tr>" : "") + "</tbody></table>";
-    return '<!doctype html><html><head><meta charset="utf-8"><title>Fixed assets and depreciation ' + esc(X.fyLabel(res.fy)) + '</title><style>@page{size:A4 landscape;margin:12mm;@bottom-right{content:counter(page) " / " counter(pages)}}body{font:9pt Calibri,Arial,sans-serif}table{border-collapse:collapse;width:100%;margin-bottom:10px}td,th{border:.6px solid #000;padding:2px 4px;vertical-align:top}th{background:#f2f2f2}td.n{text-align:right;white-space:nowrap}tr.t td{font-weight:bold;border-top:1.2px solid #000}h1{font-size:13pt;margin:0;text-align:center}h2{font-size:11pt;margin:2px 0;text-align:center}h3{font-size:10pt;margin:10px 0 4px}.u{text-align:center;font-style:italic}.note{font-size:8pt}</style></head><body>' +
-      "<h1>" + esc(name) + "</h1><h2>Fixed assets and depreciation for the year ended " + yEnd(res.fy) + "</h2><div class=\"u\">(All amounts in ₹, unless otherwise stated)</div>" +
-      X.tables(res).map(tb).join("") +
-      '<h3>Basis</h3><p class="note">' + esc(X.SCH2_SOURCE) + "</p><p class=\"note\">" + esc(X.IT_SOURCE) + "</p><p class=\"note\">" + esc(X.RULES_TEXT) + "</p></body></html>";
+    const title = ({register: W.register, books: W.booksShort, it: "Income-tax block schedule", dt: "Deferred tax working", all: "Fixed assets and depreciation"})[which] + " for the year ended " + yEnd(res.fy);
+    return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>@page{size:A4 landscape;margin:12mm;@bottom-right{content:counter(page) " / " counter(pages)}}body{font:9pt Calibri,Arial,sans-serif}table{border-collapse:collapse;width:100%;margin-bottom:10px}td,th{border:.6px solid #000;padding:2px 4px;vertical-align:top}th{background:#f2f2f2}td.n{text-align:right;white-space:nowrap}tr.t td{font-weight:bold;border-top:1.2px solid #000}tr.gt td{border-bottom:2px double #000}tr.g td{font-weight:bold;background:#fafafa}h1{font-size:13pt;margin:0;text-align:center}h2{font-size:11pt;margin:2px 0;text-align:center}h3{font-size:10pt;margin:10px 0 4px}.u{text-align:center;font-style:italic}.note{font-size:8pt}table.reg{font-size:8pt}</style></head><body>' +
+      "<h1>" + esc(name) + "</h1><h2>" + esc(title) + "</h2><div class=\"u\">(All amounts in ₹, unless otherwise stated)</div>" +
+      (which === "register" || which === "all" ? regHtml(res) : "") + pick(res, which).map(tb).join("") +
+      (!res.dt && (which === "all" || which === "books") ? '<p class="note">' + esc(res.dtWhy) + "</p>" : "") +
+      '<h3>Basis</h3><p class="note">' + esc(res.co ? X.SCH2_SOURCE : res.basis === "own" ? "The useful lives and the method are the firm's own accounting policy (no Schedule II for a non-corporate entity)." : "") + "</p><p class=\"note\">" + esc(X.IT_SOURCE) + "</p><p class=\"note\">" + esc(W.rules) + "</p></body></html>";
   };
   X.RULES_TEXT = "Companies Act: straight line = (cost - residual) / useful life; written down value at 1 - (residual / cost) ^ (1 / life); pro-rata by days from the date put to use, and up to the date of sale. An asset held at the start: its carrying amount less the residual over the remaining life. Nothing below the residual value. Gain or loss on sale = sale value - carrying amount at the date of sale. Income tax: opening WDV + additions - sale value; half the rate on additions put to use for less than 180 days; a negative block is a short-term capital gain, a block emptied with value left a short-term capital loss, with no depreciation in either case; depreciation rounded to the rupee.";
-  // Excel: the register and the schedules with live formulas (FSX.xlsx writes the file)
-  X.sheets = function(res, ent){
-    const name = String((ent && ent.name) || "").toUpperCase(), M = (v, s) => ({v: r2(v), s: s || 2}), C = (f, v, s) => ({f, v: r2(v), s: s || 2});
+  X.RULES_IT = "The books follow the Income-tax rates block by block: opening WDV + additions - sale value; half the rate on additions put to use for less than 180 days; a negative block is a short-term capital gain and a block emptied with value left a short-term capital loss, with no depreciation in either case; depreciation rounded to the rupee. Each block's charge is shared among the assets still held, in proportion to what the rate works on; a sold asset's sale value comes off the block (no profit or loss on it). One schedule for the books and for tax: no deferred tax.";
+  X.RULES_OWN = "The firm's policy: straight line = (cost - residual) / useful life; written down value at 1 - (residual / cost) ^ (1 / life); pro-rata by days from the date put to use and up to the date of sale; nothing below the residual value; gain or loss on sale = sale value - carrying amount. Income tax by block as section 32 sets it. Deferred tax under AS 22 only for ICAI Levels I to III.";
+  // Excel: real numbers and formulas (FSX.xlsx writes the file); which: register | books | it | dt | all (one sheet each)
+  X.sheets = function(res, ent, which){
+    which = which || "all";
+    const name = String((ent && ent.name) || "").toUpperCase(), W = X.words(res), M = (v, s) => ({v: r2(v), s: s || 2}), C = (f, v, s) => ({f, v: r2(v), s: s || 2});
     const head = t => [[{v: name, s: 1}], [{v: t, s: 1}], ["(All amounts in ₹, unless otherwise stated)"], []];
-    // 1. assets: J = F+G-H (gross at end), M = I+K-L (depreciation at end), N = J-M
-    const A = {name: "Assets", rows: head("Asset register, year ended " + yEnd(res.fy)).concat([["Asset", "Class", "Put to use", "Life", "Method", "Gross at start", "Additions", "Deductions", "Depreciation at start", "Gross at end", "For the year", "On deductions", "Depreciation at end", "Net at end", "Sale value", "Carrying at sale", "Gain / (loss)", "Hand override, reason"].map(h => ({v: h, s: 7}))]),
-      widths: [30, 34, 12, 6, 7, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 30]};
-    const a0 = A.rows.length + 1;
-    res.assets.forEach((a, i) => { const r = a0 + i, sv = r2(sum(a.sales, s => s.value)), ca = r2(sum(a.sales, s => s.carrying));
-      A.rows.push([a.name, a.clsName, a.putToUse || "", a.life || "", a.noDep ? "-" : a.method, M(a.gOpen), M(a.gAdd), M(a.gDel), M(a.dOpen), C("F" + r + "+G" + r + "-H" + r, a.gClose), M(a.dep), M(a.dDel), C("I" + r + "+K" + r + "-L" + r, a.dClose), C("J" + r + "-M" + r, a.nClose), M(sv), M(ca), C("O" + r + "-P" + r, r2(sv - ca)), a.override ? String(a.override.reason || "") : ""]); });
-    const a1 = A.rows.length, tot = c => C("SUM(" + c + a0 + ":" + c + a1 + ")", sum(res.assets, a => ({F: a.gOpen, G: a.gAdd, H: a.gDel, I: a.dOpen, J: a.gClose, K: a.dep, L: a.dDel, M: a.dClose, N: a.nClose, O: sum(a.sales, s => s.value), P: sum(a.sales, s => s.carrying), Q: sum(a.sales, s => s.gain)})[c]), 3);
-    if (res.assets.length) A.rows.push([{v: "Total", s: 1}, "", "", "", ""].concat("FGHIJKLMNOPQ".split("").map(tot)));
-    // 2. classes: SUMIFS over the assets
-    const K = {name: "Schedule II classes", rows: head("Property, plant and equipment and intangible assets (Companies Act, 2013), year ended " + yEnd(res.fy)).concat([["Class", "Gross at start", "Additions", "Deductions", "Gross at end", "Depreciation at start", "For the year", "On deductions", "Depreciation at end", "Net at end"].map(h => ({v: h, s: 7}))]), widths: [52, 15, 15, 15, 15, 15, 15, 15, 15, 15]};
-    const k0 = K.rows.length + 1, rng = c => "Assets!$" + c + "$" + a0 + ":$" + c + "$" + Math.max(a0, a1), si = (r, c, v) => C("SUMIFS(" + rng(c) + "," + rng("B") + ",$A" + r + ")", v);
-    res.classes.forEach((c, i) => { const r = k0 + i; K.rows.push([c.cls, si(r, "F", c.gOpen), si(r, "G", c.gAdd), si(r, "H", c.gDel), C("B" + r + "+C" + r + "-D" + r, c.gClose), si(r, "I", c.dOpen), si(r, "K", c.dYear), si(r, "L", c.dDel), C("F" + r + "+G" + r + "-H" + r, c.dClose), C("E" + r + "-I" + r, c.nClose)]); });
+    // 1. the register: the group's rows, its subtotal (SUM), the grand total (the subtotals); closings and net blocks as formulas
+    //    A asset, B group / block, C purchased, D put to use, E supplier, F-I cost, J-M depreciation, N-O net block, P block, Q rate
+    const A = {name: "Register", rows: head(W.register).concat([X.REG_HEAD.map(h => ({v: h[0], s: 7}))]), widths: [30, 34, 12, 12, 30, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 34, 7], landscape: true};
+    const subRows = [], R = res.register, rowOf = {};
+    R.groups.forEach(g => {
+      A.rows.push([{v: g.name, s: 1}]);
+      const r0 = A.rows.length + 1;
+      g.rows.forEach(x => { const r = A.rows.length + 1; rowOf[x.id] = r;
+        A.rows.push([x.asset, x.group, x.purchased, x.putToUse, x.supplier, M(x.gOpen), M(x.gAdd), M(x.gDel), C("F" + r + "+G" + r + "-H" + r, x.gClose), M(x.dOpen), M(x.dep), M(x.dDel), C("J" + r + "+K" + r + "-L" + r, x.dClose), C("F" + r + "-J" + r, x.nOpen), C("I" + r + "-M" + r, x.nClose), x.block, x.rate == null ? "" : {v: x.rate, s: 5}]); });
+      const r1 = A.rows.length, rs = A.rows.length + 1; subRows.push(rs);
+      A.rows.push([{v: "Total: " + g.name, s: 1}, "", "", "", ""].concat("FGHIJKLMNO".split("").map((c, j) => C("SUM(" + c + r0 + ":" + c + r1 + ")", g.sub[X.REG_COLS[j]], 3))));
+      A.rows.push([]);
+    });
+    if (R.groups.length) A.rows.push([{v: "Grand total", s: 1}, "", "", "", ""].concat("FGHIJKLMNO".split("").map((c, j) => C(subRows.map(r => c + r).join("+"), R.total[X.REG_COLS[j]], 9))));
+    // 2. the books by class (not where the books follow the Income-tax rates): SUMIFS over the register's rows
+    const K = {name: "Books schedule", rows: head(W.books + ", year ended " + yEnd(res.fy)).concat([["Class", "Gross at start", "Additions", "Deductions", "Gross at end", "Depreciation at start", "For the year", "On deductions", "Depreciation at end", "Net at end"].map(h => ({v: h, s: 7}))]), widths: [52, 15, 15, 15, 15, 15, 15, 15, 15, 15]};
+    const allRows = Object.values(rowOf), lo = allRows.length ? Math.min(...allRows) : 6, hi = allRows.length ? Math.max(...allRows) : 6;
+    const rng = c => "Register!$" + c + "$" + lo + ":$" + c + "$" + hi, si = (r, c, v) => C("SUMIFS(" + rng(c) + "," + rng("B") + ",$A" + r + ")", v);
+    const k0 = K.rows.length + 1;
+    res.classes.forEach((c, i) => { const r = k0 + i; K.rows.push([c.cls, si(r, "F", c.gOpen), si(r, "G", c.gAdd), si(r, "H", c.gDel), C("B" + r + "+C" + r + "-D" + r, c.gClose), si(r, "J", c.dOpen), si(r, "K", c.dYear), si(r, "L", c.dDel), C("F" + r + "+G" + r + "-H" + r, c.dClose), C("E" + r + "-I" + r, c.nClose)]); });
     const k1 = K.rows.length; if (res.classes.length) K.rows.push([{v: "Total", s: 1}].concat("BCDEFGHIJ".split("").map((c, j) => C("SUM(" + c + k0 + ":" + c + k1 + ")", sum(res.classes, x => [x.gOpen, x.gAdd, x.gDel, x.gClose, x.dOpen, x.dYear, x.dDel, x.dClose, x.nClose][j]), 3))));
     // 3. the blocks: the section 32 working as formulas
-    const B = {name: "Income-tax blocks", rows: head("Depreciation under section 32 of the Income-tax Act, 1961, previous year " + X.fyLabel(res.fy)).concat([["Block", "Rate %", "Opening WDV", "Added, 180 days or more", "Added, under 180 days", "Sale value", "Block emptied (1 = yes)", "Total", "STCL / (STCG)", "Depreciation", "Additional rate %", "Eligible, 180 days or more", "Eligible, under 180 days", "Additional brought forward", "Additional depreciation", "Closing WDV"].map(h => ({v: h, s: 7}))]),
-      widths: [52, 8, 15, 15, 15, 15, 10, 15, 15, 15, 9, 15, 15, 15, 15, 15]};
+    const B = {name: "Income-tax blocks", rows: head(W.blocks + ", previous year " + X.fyLabel(res.fy)).concat([["Block", "Rate %", "Opening WDV", "Added, 180 days or more", "Added, under 180 days", "Sale value", "Block emptied (1 = yes)", "Total", "STCL / (STCG)", "Depreciation", "Additional rate %", "Eligible, 180 days or more", "Eligible, under 180 days", "Additional brought forward", "Additional depreciation", "Closing WDV"].map(h => ({v: h, s: 7}))]),
+      widths: [52, 8, 15, 15, 15, 15, 10, 15, 15, 15, 9, 15, 15, 15, 15, 15], landscape: true};
     const b0 = B.rows.length + 1;
     res.blocks.forEach((b, i) => { const r = b0 + i, s1 = "(C" + r + "+D" + r + "-F" + r + ")";
       B.rows.push([b.name, {v: b.rate, s: 5}, M(b.open), M(b.addGt180), M(b.addLt180), M(b.sale), {v: b.empty ? 1 : 0, s: 6}, C("C" + r + "+D" + r + "+E" + r + "-F" + r, r2(b.open + b.addGt180 + b.addLt180 - b.sale)),
@@ -549,31 +732,50 @@ const FAR = (() => {
         C("IF(OR(H" + r + "<0,G" + r + "=1),0,MAX(0,MIN(H" + r + "-J" + r + ",ROUND(L" + r + "*K" + r + "/100+M" + r + "*K" + r + "/200,0)+N" + r + ")))", b.addl),
         C("IF(OR(H" + r + "<0,G" + r + "=1),0,H" + r + "-J" + r + "-O" + r + ")", b.close)]); });
     const b1 = B.rows.length; if (res.blocks.length) B.rows.push([{v: "Total", s: 1}, ""].concat("CDEF".split("").map(c => C("SUM(" + c + b0 + ":" + c + b1 + ")", sum(res.blocks, x => ({C: x.open, D: x.addGt180, E: x.addLt180, F: x.sale})[c]), 3))).concat(["", C("SUM(H" + b0 + ":H" + b1 + ")", sum(res.blocks, x => x.open + x.addGt180 + x.addLt180 - x.sale), 3), C("SUM(I" + b0 + ":I" + b1 + ")", sum(res.blocks, x => x.stcg), 3), C("SUM(J" + b0 + ":J" + b1 + ")", res.totals.itDep, 3), "", "", "", "", C("SUM(O" + b0 + ":O" + b1 + ")", res.totals.itAddl, 3), C("SUM(P" + b0 + ":P" + b1 + ")", res.totals.itClose, 3)]));
-    // 4. deferred tax and 5. the journal entry
-    const dt = res.dt, Tt = {name: "Deferred tax", rows: head("Deferred tax working (" + dt.std + "), a suggestion: no entry is posted").concat([["Particulars", "At the start", "At the end"].map(h => ({v: h, s: 7}))]), widths: [60, 16, 16]};
-    const t0 = Tt.rows.length + 1;
-    Tt.rows.push(["Carrying amount in the books (depreciable assets)", M(dt.bookOpen), M(dt.bookClose)], ["Written down value for income tax", M(dt.taxOpen), M(dt.taxClose)],
-      ["Difference", C("B" + t0 + "-B" + (t0 + 1), dt.diffOpen), C("C" + t0 + "-C" + (t0 + 1), dt.diffClose)], ["Tax rate %", {v: dt.rate, s: 5}, {v: dt.rate, s: 5}],
-      ["Deferred tax liability / (asset)", C("ROUND(B" + (t0 + 2) + "*B" + (t0 + 3) + "/100,2)", dt.open), C("ROUND(C" + (t0 + 2) + "*C" + (t0 + 3) + "/100,2)", dt.close)],
-      ["Movement for the year: charge / (credit) to profit and loss", "", C("C" + (t0 + 4) + "-B" + (t0 + 4), dt.move, 3)]);
-    const J = {name: "Journal (suggested)", rows: head("Suggested journal entry for the year's depreciation, " + res.je.date + ": shown only, nothing is posted to Tally").concat([["Ledger", "Debit", "Credit"].map(h => ({v: h, s: 7}))]), widths: [60, 16, 16]};
+    // 4. deferred tax (where it applies) and 5. the journal entry
+    const dt = res.dt, out = [];
+    let Tt = null;
+    if (dt){
+      Tt = {name: "Deferred tax", rows: head(W.dt.replace(": a suggestion", ", year ended " + yEnd(res.fy) + ": a suggestion")).concat([["Particulars", "At the start", "At the end"].map(h => ({v: h, s: 7}))]), widths: [60, 16, 16]};
+      const t0 = Tt.rows.length + 1;
+      Tt.rows.push(["Carrying amount in the books (depreciable assets)", M(dt.bookOpen), M(dt.bookClose)], ["Written down value for income tax", M(dt.taxOpen), M(dt.taxClose)],
+        ["Difference", C("B" + t0 + "-B" + (t0 + 1), dt.diffOpen), C("C" + t0 + "-C" + (t0 + 1), dt.diffClose)], ["Tax rate %", {v: dt.rate, s: 5}, {v: dt.rate, s: 5}],
+        ["Deferred tax liability / (asset)", C("ROUND(B" + (t0 + 2) + "*B" + (t0 + 3) + "/100,2)", dt.open), C("ROUND(C" + (t0 + 2) + "*C" + (t0 + 3) + "/100,2)", dt.close)],
+        ["Movement for the year: charge / (credit) to profit and loss", "", C("C" + (t0 + 4) + "-B" + (t0 + 4), dt.move, 3)]);
+    }
+    const J = {name: "Journal (suggested)", rows: head(W.je).concat([["Ledger", "Debit", "Credit"].map(h => ({v: h, s: 7}))]), widths: [60, 16, 16]};
     const j0 = J.rows.length + 1; res.je.lines.forEach(l => J.rows.push([l.ledger, M(l.dr), M(l.cr)])); const j1 = J.rows.length;
     if (res.je.lines.length) J.rows.push([{v: "Total", s: 1}, C("SUM(B" + j0 + ":B" + j1 + ")", sum(res.je.lines, l => l.dr), 3), C("SUM(C" + j0 + ":C" + j1 + ")", sum(res.je.lines, l => l.cr), 3)]);
-    const R = {name: "Basis", rows: [[{v: "Basis", s: 1}], [X.SCH2_SOURCE], [X.IT_SOURCE], [X.RULES_TEXT], []].concat([[{v: "Schedule II class", s: 7}, {v: "Useful life (years)", s: 7}]]).concat(X.SCH2.map(c => [c.head + ": " + c.name, c.life == null ? "-" : c.life])), widths: [110, 18]};
-    return [A, K, B, Tt, J, R];
+    const Bs = {name: "Basis", rows: [[{v: "Basis", s: 1}], [res.co ? X.SCH2_SOURCE : res.basis === "own" ? "The useful lives and the method are the firm's own accounting policy (no Schedule II for a non-corporate entity)." : "The books follow the Income-tax rates (no Schedule II for a non-corporate entity)."], [X.IT_SOURCE], [W.rules]].concat(res.dt ? [] : [[res.dtWhy]]).concat([[]])
+      .concat(res.co ? [[{v: "Schedule II class", s: 7}, {v: "Useful life (years)", s: 7}]].concat(X.SCH2.map(c => [c.head + ": " + c.name, c.life == null ? "-" : c.life])) : []), widths: [110, 18]};
+    // the register is the source of the books schedule's SUMIFS: it goes with it
+    if (which === "register") return [A];
+    if (which === "books") return res.basis === "it" ? [B, Bs] : [A, K, Bs];
+    if (which === "it") return [B];
+    if (which === "dt") return Tt ? [Tt] : [];
+    return [A].concat(res.basis === "it" ? [] : [K]).concat([B]).concat(Tt ? [Tt] : []).concat([J, Bs]);
   };
   // Word: the same tables (FSX.docx writes the file); amounts in paise for FSX
-  X.docxBlocks = function(res, ent){
-    const name = String((ent && ent.name) || "").toUpperCase();
-    const items = [];
-    X.tables(res).forEach(t => {
+  X.docxBlocks = function(res, ent, which){
+    which = which || "all";
+    const name = String((ent && ent.name) || "").toUpperCase(), W = X.words(res), items = [];
+    const put = t => {
       items.push({p: t.title, b: 1});
       const rows = t.rows.map(r => ({t: String(r[0]), k: "r", c: r.slice(1).map((v, j) => t.cols[j + 1][1] && typeof v === "number" && !(t.skip || []).includes(j + 1) ? {v: Math.round(v * 100)} : String(v == null ? "" : v))}));
       if (t.total && t.rows.length > 1) rows.push({t: "Total", k: "t", c: t.cols.slice(1).map((c, j) => c[1] && !(t.skip || []).includes(j + 1) ? {v: Math.round(sum(t.rows, r => typeof r[j + 1] === "number" ? r[j + 1] : 0) * 100)} : "")});
       items.push({table: {cols: t.cols.map(c => ({h: c[0], n: c[1]})), rows}});
-    });
-    items.push({p: "Basis", b: 1}, {p: X.SCH2_SOURCE, i: 1}, {p: X.IT_SOURCE, i: 1}, {p: X.RULES_TEXT, i: 1});
-    return [{section: {head: [name, "Fixed assets and depreciation for the year ended " + yEnd(res.fy), "(All amounts in ₹, unless otherwise stated)"], landscape: true}, items}];
+    };
+    if (which === "register" || which === "all"){
+      const R = res.register, cols = [["Asset", 0], ["Put to use", 0]].concat(X.REG_HEAD.slice(5, 15)).concat([["Rate %", 0]]), rows = [];
+      R.groups.forEach(g => { rows.push({t: g.name, k: "h", c: cols.slice(1).map(() => "")}); g.rows.forEach(r => rows.push({t: r.asset, k: "r", c: [r.putToUse].concat(X.REG_COLS.map(k => ({v: Math.round(r[k] * 100)}))).concat([r.rate == null ? "" : String(r.rate)])}));
+        rows.push({t: "Total: " + g.name, k: "s", c: [""].concat(X.REG_COLS.map(k => ({v: Math.round(g.sub[k] * 100)}))).concat([""])}); });
+      rows.push({t: "Grand total", k: "gt", c: [""].concat(X.REG_COLS.map(k => ({v: Math.round(R.total[k] * 100)}))).concat([""])});
+      items.push({p: W.register, b: 1}, {table: {cols: cols.map(c => ({h: c[0], n: c[1]})), rows}});
+    }
+    pick(res, which).forEach(put);
+    if (!res.dt && (which === "all" || which === "books")) items.push({p: res.dtWhy, i: 1});
+    items.push({p: "Basis", b: 1}, {p: res.co ? X.SCH2_SOURCE : "No Schedule II for a non-corporate entity.", i: 1}, {p: X.IT_SOURCE, i: 1}, {p: W.rules, i: 1});
+    return [{section: {head: [name, ({register: W.register, books: W.booksShort, it: "Income-tax block schedule", dt: "Deferred tax working", all: "Fixed assets and depreciation"})[which] + " for the year ended " + yEnd(res.fy), "(All amounts in ₹, unless otherwise stated)"], landscape: true}, items}];
   };
   return X;
 })();

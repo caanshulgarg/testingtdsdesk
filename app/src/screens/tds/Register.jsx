@@ -1,14 +1,17 @@
 // The client's challan register (tds-layout, 14-Oct-2026; the owner's rules approved 13/14-Oct-2026 and his simpler
 // register of 14-Oct): one register per TAN, every return drawing on it. S.tdsView "register" (#/c/<client>/books/tds/<year>/
-// challan-register; the old …/challans opens it). Each challan's row: when deposited, its BSR code and serial, the total
-// challan and the balance left (tax + interest + fee), the split by head on hover (or a tap), and one action, "Use…" (a
-// return to use its balance in). Opened, a challan says where it is used, its interest and fee by return, its trail, and
-// (entered by hand) Change and Delete. Every amount is TDSReg's (src/js/79); nothing is worked out here.
+// challan-register; the old …/challans opens it). Round 3 B (the owner, 14-Oct-2026): each row is Deposited · BSR / serial
+// (its source, "Tally" / "by hand", in small grey words) · Nature (its section, or a small "Set type" link) · Total ·
+// Balance left (the split by head on hover or a tap) · Use…; no filter arrow on the headings (the one filter bar). A row's
+// click opens the challan's drawer (ChallanDetail): everything about it, and Use in a return, Set type, Edit (entered by
+// hand) and Delete with a reason. Every amount is TDSReg's (src/js/79); nothing is worked out here.
 //   AddChallan: a challan entered by hand (here and on a return's Challans tab), or changed.
 //   UseBalance: "Use…", the one way a challan's balance goes to a return (TDSReg.useBalance), here and in a return.
 //   TracesCheck: TRACES' consumed amount against FinCom's (a return's After filing).
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "../../parts/dismiss.js";
 import ListTable from "../../parts/ListTable.jsx";
+import DetailDrawer from "../../parts/DetailDrawer.jsx";
 import Filters, { Field as FbField } from "../../parts/Filters.jsx";
 import { Info } from "../../parts/Answer.jsx";
 import { Lock as LockIcon } from "lucide-react";
@@ -16,7 +19,7 @@ import { Lock as LockIcon } from "lucide-react";
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 // where a challan came from, in small grey words beside its number ("Entered by hand", "From Tally")
-export const SrcBadge = ({ c }) => <span className="ch-src" data-ch-src={TDSReg.srcOf(c)}>{TDSReg.srcWords(c)}</span>;
+export const SrcBadge = ({ c, short }) => <span className="ch-src" data-ch-src={TDSReg.srcOf(c)}>{short ? TDSReg.srcShort(c) : TDSReg.srcWords(c)}</span>;
 export const Notes = ({ list }) => (list && list.length ? <>{list.map((n) => <span key={n} className="tag" data-note={n} style={{ fontWeight: 400 }}>{n}</span>)}</> : null);
 const Lock = () => <span className="tag" data-lock="" title="The return is marked filed: change only through a correction"><LockIcon width={11} height={11} aria-hidden="true" /> filed</span>;
 // the page's own line for a result longer than a toast can hold (S.tdsSaid: {at, words}); kept for two minutes or until closed
@@ -36,14 +39,8 @@ export function Split({ c, kind, cx }) {
     : [["Tax", b.tax], ["Interest", b.interest], ["Fee, penalty and others", b.fee]];
   const words = parts.map(([l, v]) => l + " " + money(v)).join(" · "), value = kind === "total" ? x.total : b.total;
   const close = () => { if (S.regSplit === kind + c.id) { S.regSplit = ""; render(); } };
-  useEffect(() => {
-    if (!open) return undefined;
-    // Escape closes the split and goes no further (the app's own Escape would leave the page)
-    const key = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
-    const tap = (ev) => { if (ref.current && !ref.current.contains(ev.target)) close(); };
-    window.addEventListener("keydown", key, true); document.addEventListener("pointerdown", tap);
-    return () => { window.removeEventListener("keydown", key, true); document.removeEventListener("pointerdown", tap); };
-  });
+  // Escape (and no further: the app's own would leave the page), a tap outside and (a phone) Back close it (parts/dismiss.js)
+  useDismiss(open, ref, close);
   return <span className="reg-split" ref={ref} onBlur={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) close(); }}>
     <button className={"linkbtn reg-fig" + (kind === "left" && value < -0.005 ? " bad" : "")} title={words} aria-label={(kind === "total" ? "Total challan " : "Balance left ") + money(value) + ": " + words}
       aria-expanded={open} data-split={kind} data-split-of={c.id} data-split-words={words} onClick={() => { S.regSplit = open ? "" : kind + c.id; render(); }}>{money(value)}</button>
@@ -153,31 +150,99 @@ export function AddChallan({ form, edit, onDone }) {
   </section>;
 }
 
-/* ---------------------------------------------------------------- one challan opened */
-function Opened({ x, cx }) {
-  const c = x.c, [edit, setEdit] = useState(false);
-  const noEdit = TDSReg.canEdit(c), noDel = TDSReg.canDelete(c), trail = TDSReg.trail(c.id).slice(0, 30), p = TDSReg.portionsUsed(c, cx);
+/* ---------------------------------------------------------------- one challan, in its drawer */
+// round 3 B (the owner, 14-Oct-2026): a row's click opens everything about the challan beside the register (DetailDrawer,
+// kind "challan"; kept in the address, so Refresh opens it again and Back, Esc, ✕ or a click outside close it): its
+// details and source, each head paid, used and left, every return it is used in (each a link), TRACES, notes, who added or
+// changed it and when, and its actions: Use in a return, Set type, Edit (entered by hand only), Delete with a reason.
+const Row = ({ k, children, ...rest }) => <><dt>{k}</dt><dd {...rest}>{children}</dd></>;
+function voucherWords(c) {
+  const vid = c.fromVoucher;
+  if (!vid) return "";
+  const v = ((S.books || {}).vouchers || []).find((x) => x.id === vid);
+  return v ? (v.type || "Entry") + " no. " + (v.no || "—") + " of " + fmtDate(tallyDate(v.date)) + (v.party ? ", " + v.party : "") : "a payment entry in Tally";
+}
+function tracesWords(c) {
+  const l = TDSReg.traces().filter((x) => x.challan && x.challan.id === c.id);
+  if (!l.length) return ["", "Not checked with TRACES yet: read a return's consolidated file or the challan status file (a return's After filing)."];
+  const u = l.find((x) => x.unknown);
+  if (u) return ["bad", "Not known to TRACES" + (u.hint ? ": " + u.hint : "") + "."];
+  const d = l.find((x) => Math.abs(x.diff) >= 0.01);
+  if (d) return ["bad", "Differs: TRACES consumed " + money(d.traces) + ", FinCom uses " + money(d.fincom) + (d.form ? " (" + d.form + " " + d.q + " " + d.fy + ")" : "") + "."];
+  return ["ok", "Agrees with TRACES: consumed " + l.map((x) => money(x.traces) + (x.form ? " in " + x.form + " " + x.q + " " + x.fy : "")).join(", ") + "."];
+}
+function whoWords(c) {
+  const t = TDSReg.trail(c.id), add = t.filter((x) => x.act === "challan-add").pop(), ch = t.find((x) => x.act === "challan-edit" || x.act === "challan-link");
+  const by = (x) => (x.by ? " by " + x.by : "");
+  const added = c.enteredAt ? "Added" + (c.enteredBy ? " by " + c.enteredBy : "") + " on " + fmtDateTime(c.enteredAt)
+    : add ? "Added" + by(add) + " on " + fmtDateTime(add.at) : TDSReg.srcOf(c) === "tally" ? "Added from Tally (when the books were read)" : "Added (when is not recorded)";
+  return added + (ch ? " · changed" + by(ch) + " on " + fmtDateTime(ch.at) + (ch.note ? " (" + ch.note + ")" : "") : "") + ".";
+}
+function SetType({ c, onDone }) {
+  const [v, setV] = useState(TDSReg.natureCode(c) || ""), [msg, setMsg] = useState("");
+  const save = () => {
+    const r = TDSReg.setNature(c.id, v);
+    if (!r.ok) { setMsg(r.why); return; }
+    const p = r.placed;
+    toast("Challan " + TDSCH.label(c) + ": type " + TDSReg.natureCode(c) + (p && p.placed ? "; used in " + p.form + " " + p.q + " " + p.fy + " (draft), " + money(p.tax) : "") + ".");
+    if (p && p.placed) say("Challan " + TDSCH.label(c) + " is " + TDSReg.natureCode(c) + " now and was used in " + p.form + " " + p.q + " " + p.fy + " (draft): " + money(p.tax) + ".");
+    S.regSetType = ""; render(); onDone && onDone();
+  };
+  return <div className="revfilter reg-use" data-set-type-box={c.id}>
+    <input type="text" list="ch-natures" aria-label="Nature of payment" placeholder="94C" value={v} autoFocus onChange={(ev) => { setV(ev.target.value); setMsg(""); }}
+      onKeyDown={(ev) => { if (ev.key === "Enter") save(); }} />
+    <datalist id="ch-natures">{NATURES.map((n) => <option key={n} value={n} />)}</datalist>
+    <button className="btn small primary" data-set-type-save="" onClick={save}>Set type</button>
+    <button className="linkbtn" onClick={() => { S.regSetType = ""; render(); onDone && onDone(); }}>Cancel</button>
+    {msg && <small className="bad" role="alert" data-set-type-err="">{msg}</small>}
+  </div>;
+}
+function ChallanDetail({ x, cx }) {
+  const c = x.c, [act, setAct] = useState(S.regSetType === c.id ? "type" : "");
+  const hand = TDSReg.srcOf(c) === "hand", noEdit = TDSReg.canEdit(c), noDel = TDSReg.canDelete(c), trail = TDSReg.trail(c.id).slice(0, 30);
+  const sp = TDSReg.split(c), pu = TDSReg.portionsUsed(c, cx), bal = TDSReg.balance(c, cx), usedTax = TDSReg.usedTax(c, cx);
+  const feeUsed = r2(Math.min(num(c.fee), pu.fee)), othersUsed = r2(pu.fee - feeUsed);
+  const heads = [["Tax", sp.tax, usedTax, bal.tax], ["Interest", sp.interest, pu.interest, bal.interest], ["Fee", sp.fee, feeUsed, r2(sp.fee - feeUsed)], ["Others", sp.others, othersUsed, r2(sp.others - othersUsed)]];
+  const [tc, tw] = tracesWords(c), ent = voucherWords(c);
   const off = (u) => { const r = TDSReg.removeUse(c.id, u.form, u.fy, u.q); if (!r.ok) { toast(r.why); return; }
     toast("Taken off " + u.form + " " + u.q + " " + u.fy + ".", { actions: [{ label: "Undo", run: () => { TDSReg.undoRemove(r); render(); } }] }); render(); };
-  return <div className="reg-open" data-reg-open={c.id}>
-    <p className="note">{TDSReg.srcWords(c)}{c.enteredBy ? " by " + c.enteredBy : ""}{c.enteredAt ? " on " + fmtDateTime(c.enteredAt) : ""}{c.mode ? " · " + (c.mode === "bank" ? "paid at the bank" : "paid online") : ""}
-      {" · nature " + (TDSReg.natureCode(c) || "not given")}{c.minorHead ? " · minor head " + c.minorHead : ""}{c.note ? " · " + c.note : ""}
-      {c.receipt && <> · <button className="linkbtn" data-reg-receipt={c.id} onClick={() => TDSReg.receipt(c.id)}>Receipt: {c.receipt.name}</button></>}</p>
-    {x.uses.length ? <table className="bk-table gf-off" style={{ margin: "6px 0" }} data-statement="">
-      <thead><tr><th>Used in</th><th className="n">Tax</th><th className="n">Interest · fee in its file</th><th>Notes</th><th className="ac"></th></tr></thead>
-      <tbody>{x.uses.map((u) => <tr key={u.form + u.fy + u.q} data-reg-use={u.form + "|" + u.fy + "|" + u.q}>
-        <td><button className="linkbtn" onClick={() => tdsGoTab(u.fy, u.q, u.form, "challans")}>{u.form} {u.q} {u.fy}</button> {u.locked ? <Lock /> : <span className="nr" style={{ display: "inline" }}>(draft)</span>}</td>
-        <td className="n">{money(u.tax)}<div className="nr">{u.n} deduction{u.n === 1 ? "" : "s"}</div></td><td className="n">{money(u.portion.interest)} · {money(u.portion.fee)}</td><td><Notes list={u.notes} /></td>
-        <td className="ac">{!u.locked && <button className="btn small" data-use-off={u.form + "|" + u.fy + "|" + u.q} onClick={() => off(u)}>Take off</button>}</td></tr>)}</tbody>
-    </table> : <p className="note">No return uses this challan yet.</p>}
-    {(num(c.interest) > 0 || TDSReg.feeOf(c) > 0) && <p className="note" data-portions="">Interest {money(p.interest)} of {money(c.interest)} and fee {money(p.fee)} of {money(TDSReg.feeOf(c))} are in a return's file{TDSReg.explicit(c) ? " (as given)" : " (all in one return; give each return its part with Use… › More)"}.</p>}
-    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-      <button className="btn small" disabled={!!noEdit} title={noEdit || undefined} data-reg-edit={c.id} onClick={() => setEdit(!edit)}>Change</button>
-      <button className="btn small" disabled={!!noDel} title={noDel || undefined} data-reg-del={c.id} onClick={() => challanDelete(c.id)}>Delete…</button>
-      {(noEdit || noDel) && <span className="note" data-reg-noedit="">{noEdit || noDel}</span>}
+  const del = async () => { if (await challanDelete(c.id)) closeDetail(); };
+  const toggle = (k) => { if (act === k) { setAct(""); S.regSetType = ""; } else setAct(k); };
+  return <div className="ch-detail" data-ch-detail={c.id}>
+    <dl className="ch-dl">
+      <Row k="BSR code">{c.bsr}</Row><Row k="Serial">{c.serial}</Row><Row k="Deposited">{day(c.date)}</Row>
+      <Row k="Minor head">{(c.minorHead || "200") + (String(c.minorHead || "200") === "400" ? " · regular assessment" : " · TDS payable by taxpayer")}</Row>
+      <Row k="Nature" data-ch-nature="">{TDSReg.natureCode(c) || "not given"}{TDSReg.homeForm(c) ? " · " + TDSReg.homeForm(c) : ""}</Row>
+      <Row k="Source" data-ch-source="">{TDSReg.srcWords(c)}{ent ? " · " + ent : ""}{c.mode ? " · " + (c.mode === "bank" ? "paid at the bank" : "paid online") : ""}</Row>
+      {c.receipt && <Row k="Receipt"><button className="linkbtn" data-reg-receipt={c.id} onClick={() => TDSReg.receipt(c.id)}>{c.receipt.name}</button></Row>}
+    </dl>
+    <table className="bk-table gf-off ch-heads" data-ch-heads="" data-statement="">
+      <thead><tr><th></th><th className="n">Paid</th><th className="n">Used</th><th className="n">Left</th></tr></thead>
+      <tbody>{heads.map(([l, p, u, left]) => <tr key={l} data-ch-head={l}><td>{l}</td><td className="n">{money(p)}</td><td className="n">{money(u)}</td><td className={"n" + (left < -0.005 ? " bad" : "")}>{money(left)}</td></tr>)}</tbody>
+      <tfoot><tr><td><b>Total</b></td><td className="n"><b>{money(sp.total)}</b></td><td className="n"><b>{money(r2(usedTax + pu.interest + pu.fee))}</b></td><td className="n"><b>{money(bal.total)}</b></td></tr></tfoot>
+    </table>
+    <h4 className="ch-h">Used in</h4>
+    {x.uses.length ? <ul className="ch-uses">{x.uses.map((u) => <li key={u.form + u.fy + u.q} data-ch-use={u.form + "|" + u.fy + "|" + u.q}>
+      <button className="linkbtn" onClick={() => tdsGoTab(u.fy, u.q, u.form, "challans")}>{u.form} {u.q} {u.fy}</button>
+      {" · "}{money(u.tax)}<span className="note">{" (" + u.n + " deduction" + (u.n === 1 ? "" : "s") + (u.portion && (u.portion.interest || u.portion.fee) ? "; interest " + money(u.portion.interest) + ", fee " + money(u.portion.fee) : "") + ")"}</span>
+      {" "}{u.locked ? <Lock /> : <span className="tag" data-draft="">draft</span>}{" "}<Notes list={u.notes} />
+      {!u.locked && <>{" "}<button className="linkbtn" data-use-off={u.form + "|" + u.fy + "|" + u.q} onClick={() => off(u)}>Take off</button></>}</li>)}</ul>
+      : <p className="note">No return uses this challan yet.</p>}
+    <h4 className="ch-h">TRACES</h4>
+    <p className={"note" + (tc ? " " + tc : "")} data-ch-traces="">{tw}</p>
+    {c.note && <><h4 className="ch-h">Notes</h4><p className="note" data-ch-note="">{c.note}</p></>}
+    <p className="note" data-ch-who="">{whoWords(c)}</p>
+    <div className="row ch-acts" style={{ gap: 8, flexWrap: "wrap" }}>
+      <button className="btn small primary" data-ch-act="use" aria-expanded={act === "use"} onClick={() => toggle("use")}>Use in a return…</button>
+      <button className="btn small" data-ch-act="type" aria-expanded={act === "type"} onClick={() => toggle("type")}>Set type</button>
+      {hand && <button className="btn small" data-ch-act="edit" disabled={!!noEdit} title={noEdit || undefined} aria-expanded={act === "edit"} onClick={() => toggle("edit")}>Edit</button>}
+      <button className="btn small" data-ch-act="delete" disabled={!!noDel} title={noDel || undefined} data-reg-del={c.id} onClick={del}>Delete…</button>
     </div>
-    {edit && <AddChallan edit={c} onDone={() => setEdit(false)} />}
-    {trail.length > 0 && <details style={{ marginTop: 6 }} data-reg-trail={c.id}><summary className="note">The trail ({trail.length})</summary>
+    {(noEdit && hand) || noDel ? <p className="note" data-reg-noedit="">{(hand && noEdit) || noDel}</p> : null}
+    {act === "use" && <UseBalance c={c} onDone={() => setAct("")} />}
+    {act === "type" && <SetType c={c} onDone={() => setAct("")} />}
+    {act === "edit" && <AddChallan edit={c} onDone={() => setAct("")} />}
+    {trail.length > 0 && <details style={{ marginTop: 8 }} data-reg-trail={c.id}><summary className="note">The trail ({trail.length})</summary>
       <ul className="note" style={{ margin: "4px 0 0 18px" }}>{trail.map((t) => <li key={t.id}>{fmtDateTime(t.at)} · {t.by || "this computer"} · {t.act}{t.form ? " " + t.form + " " + t.q + " " + t.fy : ""}{t.tax ? " · " + money(t.tax) : ""}{t.note ? " · " + t.note : ""}</li>)}</ul></details>}
   </div>;
 }
@@ -207,7 +272,7 @@ export default function Register() {
   const all = TDSReg.register(), cx = TDSReg.ctx(), [adding, setAdding] = useState(!!S.regAdding), [showDel, setShowDel] = useState(false), up = useRef(null);
   if (S.regAdding) S.regAdding = false;
   // "Needs a return": tax still to be used by a return (a new challan whose type could not be told among them)
-  const f = S.regFl || {}, shown = all.filter((x) => !f.needs || x.bal.tax > 0.005), del = TDSReg.deletedList(), co = CO() || {};
+  const f = S.regFl || {}, shown = all.filter((x) => !f.needs || x.bal.tax > 0.005), del = TDSReg.deletedList(), co = CO() || {}, openId = detailOpen("challan");
   const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added to " + (r.placed === 1 ? "its draft return" : "their draft returns") + " by themselves; open one to see where."); render(); };
   return <div data-register="">
     <p className="note"><button className="linkbtn" onClick={() => tdsGo(S.tdsFy)}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p>
@@ -222,18 +287,26 @@ export default function Register() {
         <button className="btn small" onClick={() => up.current && up.current.click()}>Upload challans</button>
         <input ref={up} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf" onChange={(ev) => { const fs = Array.from(ev.target.files || []); ev.target.value = ""; upload(fs); }} /></>} />
     {adding && <AddChallan onDone={() => setAdding(false)} />}
-    <ListTable name="tdsRegister" id="tdsRegTable" rows={shown} rowKey={(x) => x.c.id} unit={["challan", "challans"]} of={all.length}
-      rowProps={(x) => ({ "data-reg-row": x.c.id })}
-      empty={all.length ? "Every challan is used in full." : "No challan yet. Add one by hand, upload the portal's Payment History, or bring in the books from Tally."}
-      after={(x) => (S.regAddTo === x.c.id || S.regOpen === x.c.id) && <>{S.regAddTo === x.c.id && <UseBalance c={x.c} onDone={() => { S.regAddTo = ""; render(); }} />}{S.regOpen === x.c.id && <Opened x={x} cx={cx} />}</>}
+    <ListTable name="tdsRegister" id="tdsRegTable" className="bk-table gf-off reg-table" rows={shown} rowKey={(x) => x.c.id} unit={["challan", "challans"]} of={all.length}
+      // a row's click opens its drawer; its own controls (BSR link, Set type, the figures, Use…) do their own thing
+      rowProps={(x) => ({ "data-reg-row": x.c.id, className: "reg-row" + (openId === x.c.id ? " on" : ""), tabIndex: 0, "aria-label": "Challan " + TDSCH.label(x.c),
+        onClick: (ev) => { if (ev.target.closest && ev.target.closest("button, a, input, select, label, details, .reg-split-pop")) return; openDetail("challan", x.c.id); },
+        onKeyDown: (ev) => { if (ev.key === "Enter" && ev.target === ev.currentTarget) openDetail("challan", x.c.id); } })}
+      empty={all.length ? "Every challan is used in full." : <span data-reg-empty="">No challans yet · <button className="linkbtn" data-reg-empty-add="" onClick={() => setAdding(true)}>Add challan</button> · or they come from Tally when you pay TDS there</span>}
+      after={(x) => S.regAddTo === x.c.id && <UseBalance c={x.c} onDone={() => { S.regAddTo = ""; render(); }} />}
       cols={[
         { k: "date", role: "date", label: "Deposited", cls: "dt", v: (x) => TDS.ymd(x.c.date), cell: (x) => day(x.c.date) },
-        { k: "no", role: "number", label: "BSR code / serial", v: (x) => x.c.bsr + x.c.serial, cell: (x) => <><span className="reg-no"><button className="linkbtn" onClick={() => tdsToggle("regOpen", x.c.id)}>{S.regOpen === x.c.id ? "▾ " : "▸ "}{x.c.bsr} / {x.c.serial}</button>
-          {" "}<SrcBadge c={x.c} /></span>{!TDSReg.homeForm(x.c) && <> <span className="tag warn" data-type-unknown="">Type unknown</span></>}</> },
-        { k: "total", role: "amount", label: "Total challan", cls: "n", v: (x) => TDSReg.split(x.c).total, fmt: money, cell: (x) => <Split c={x.c} kind="total" cx={cx} /> },
+        { k: "no", role: "number", label: "BSR / serial", v: (x) => x.c.bsr + x.c.serial, cell: (x) => <span className="reg-no"><button className="linkbtn" onClick={() => openDetail("challan", x.c.id)}>{x.c.bsr} / {x.c.serial}</button>
+          {" "}<SrcBadge c={x.c} short /></span> },
+        { k: "nat", role: "party", label: "Nature", v: (x) => TDSReg.natureCode(x.c), cell: (x) => TDSReg.homeForm(x.c) || TDSReg.natureCode(x.c) ? TDSReg.natureCode(x.c)
+          : <button className="linkbtn reg-settype" data-set-type={x.c.id} title="This challan gives no nature of payment: say which, and it goes to its return" onClick={() => { S.regSetType = x.c.id; openDetail("challan", x.c.id); }}>Set type</button> },
+        { k: "total", role: "amount", label: "Total", cls: "n", v: (x) => TDSReg.split(x.c).total, fmt: money, cell: (x) => <Split c={x.c} kind="total" cx={cx} /> },
         { k: "left", role: "status", label: "Balance left", cls: "n", v: (x) => x.bal.total, fmt: money, sum: true, td: (x) => ({ "data-reg-left": x.c.id }), cell: (x) => <Split c={x.c} kind="left" cx={cx} /> },
         { k: "ac", role: "act", cls: "ac", cell: (x) => <button className="btn small" data-reg-addto={x.c.id} onClick={() => { S.regAddTo = S.regAddTo === x.c.id ? "" : x.c.id; render(); }}>Use…</button> },
       ]} />
+    {(() => { const x = openId ? all.find((r) => r.c.id === openId) : null;
+      return <DetailDrawer kind="challan" wide title={x ? "Challan " + x.c.bsr + " / " + x.c.serial : ""} description={x ? day(x.c.date) + " · " + money(TDSReg.split(x.c).total) + " · " + money(x.bal.total) + " left" : ""}>
+        {x ? <ChallanDetail key={x.c.id} x={x} cx={cx} /> : null}</DetailDrawer>; })()}
     {del.length > 0 && <p className="note" style={{ marginTop: 10 }}><button className="linkbtn" data-reg-deleted="" onClick={() => setShowDel(!showDel)}>Deleted ({del.length})</button></p>}
     {showDel && <ul className="note" data-reg-deleted-list="" style={{ margin: "0 0 0 18px" }}>{del.map((c) => <li key={c.id}>{TDSCH.label(c)} · {money(c.tax)} · deleted {fmtDateTime(c.deleted.at)}{c.deleted.by ? " by " + c.deleted.by : ""}: {c.deleted.reason}
       {" "}<button className="linkbtn" data-reg-restore={c.id} onClick={() => { const r = TDSReg.restore(c.id); toast(r.ok ? "Challan " + TDSCH.label(c) + " is back." : r.why); render(); }}>Restore</button></li>)}</ul>}

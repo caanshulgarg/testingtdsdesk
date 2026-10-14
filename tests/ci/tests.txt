@@ -81,6 +81,8 @@ run_mis_ui.py                         120  TDSDESK_SITE=../app/dist-test
 run_multi_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_names_shared.js                   120
 run_no_delete_on_reload.py            120
+run_overlays.py                       240
+run_page_tops.py                      180
 run_pair_ui.py                        120
 run_parts_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_party_hist.js                     120
@@ -296,8 +298,9 @@ run_tds_review.js                     120
 # 3CD clause 18 from the register, migration 81 twice with its row-level security, the Assistant's depreciation_schedule, the screen
 run_depreciation.js                   240
 run_depreciation_books.js             180
+run_depreciation_entity.js            300
 run_dep_tool.py                       300
-run_fixed_assets_ui.py                300  TDSDESK_SITE=../app/dist-test
+run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
 # quiet refresh (14-Oct-2026): idle 60 s on Clients, TDS, Accounts and Bills with heartbeats and syncs: no reload, no loading state, scroll/focus/menu kept
 run_quiet_refresh.py                  900  TDSDESK_SITE=../app/dist-test
 # CA certificates in the Assistant (14-Oct-2026, the owner: turnover and net worth certificates for many clients, chat first):

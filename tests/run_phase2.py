@@ -127,6 +127,7 @@ with sync_playwright() as p:
     ok(pg.locator('#app button:text-is("Excel")').count() == 1 and pg.locator("#app .txntbl th.stick1").count() == 1, "30. Transactions: Excel export and the first columns kept in view")
     pg.click('#app .colpick summary'); pg.click('#app .colpick label:has-text("Voucher") input'); pg.wait_for_timeout(300)
     ok(pg.locator('#app .txntbl th:has-text("Voucher")').count() == 0, "30. a column switched off from Columns")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(150)   # round 3 C: the open Columns picker closes first (a click outside would only close it)
     pg.click("#app [data-txn-download] > summary"); pg.wait_for_timeout(200)   # clean-up batch 2: Excel and CSV under Download
     with pg.expect_download() as dl: pg.click('#app button:text-is("Excel")')
     ok(dl.value.suggested_filename.endswith(".xlsx"), "30. Excel gives an .xlsx file (" + dl.value.suggested_filename + ")")

@@ -96,12 +96,17 @@ with sync_playwright() as p:
     E("() => { window.__rpc = []; }")
     pg.click('#app [data-client-line="%s"] [data-update-now]' % oid); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": oid}] in E("window.__rpc"), "Update now on another client's line asks for that client")
-    # Books as of 15:34 · Update now (MIS)
+    # round 3 A (14-Oct-2026): not on the page (MIS) any more; "Books up to … · read 15:34 · Update now" in the Tally panel,
+    # "Books as of 15:34" and why under its Details
     E("(id) => { S.books = {cid: id, vouchers: [], meta: {}, busy: ''}; goClient('books:mis'); }", cid); pg.wait_for_timeout(800)
-    ao = pg.inner_text("#app [data-books-asof]") if pg.locator("#app [data-books-asof]").count() else ""
-    ok(ao.startswith("Books as of 15:34") and "Update now" in ao, "MIS: %r" % ao)
-    tip = pg.get_attribute("#app [data-books-asof]", "title") if pg.locator("#app [data-books-asof]").count() else ""
-    ok("Tally cannot send its changes by itself" in (tip or ""), "it says why: entries made in Tally come in at the next update")
+    ok(pg.locator("#app [data-books-asof]").count() == 0 and "Books as of" not in pg.inner_text("#app"), "MIS: no 'Books as of' line on the page")
+    E("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(700)
+    PB = '[data-overlay="tallypanel"] [data-panel-books]'
+    ao = pg.inner_text(PB) if pg.locator(PB).count() else ""
+    ok("read 15:34" in ao and "Update now" in ao, "the Tally panel: %r" % ao)
+    tip = pg.get_attribute(PB + " [data-books-asof]", "title") if pg.locator(PB + " [data-books-asof]").count() else ""
+    ok("Tally cannot send its changes by itself" in (tip or ""), "it says why (Details): entries made in Tally come in at the next update")
+    E("() => { S.tallyPanel = false; render(); }"); pg.wait_for_timeout(400)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))

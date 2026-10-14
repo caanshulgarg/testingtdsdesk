@@ -47,3 +47,21 @@
 [data-tds-grid] button.rp-cell:focus-visible { box-shadow: 0 0 0 2px var(--brand); }
 [data-tds-grid] .rp-cell.rp-empty, [data-tds-grid] .rp-cell.rp-empty:hover { cursor: default; transform: none; box-shadow: none; border-color: var(--rule); border-left-color: var(--rule-strong); }
 [data-tds-grid] .rp-cell.rp-empty .rp-name { color: var(--muted); font-weight: 600; }
+/* round 3 B (14-Oct-2026): the register's head row on one line, amounts under their headings; a row opens its drawer */
+#tdsRegTable th { white-space: nowrap; }
+#tdsRegTable th.n, #tdsRegTable td.n { text-align: right; }
+#tdsRegTable tr.reg-row { cursor: pointer; }
+#tdsRegTable tr.reg-row:hover td, #tdsRegTable tr.reg-row.on td { background: var(--surface-hover, rgb(0 0 0 / .03)); }
+#tdsRegTable tr.reg-row:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: -2px; }
+.reg-settype { font-size: 12.5px; }
+.ch-detail .ch-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+.ch-detail .ch-dl dt { color: var(--text-muted); font-size: 13px; }
+.ch-detail .ch-dl dd { margin: 0; }
+.ch-detail .ch-heads { margin: 0 0 12px; width: 100%; }
+.ch-detail .ch-h { margin: 12px 0 4px; font-size: 13px; }
+.ch-detail .ch-uses { margin: 0; padding-left: 18px; }
+.ch-detail .ch-uses li { margin: 2px 0; }
+.ch-detail .ch-acts { margin-top: 12px; }
+.ch-detail .reg-use { margin-top: 8px; }
+/* no column filters here: an amount's heading ends where its figures end */
+#app #tdsRegTable thead th.n > .lt-sort { justify-content: flex-end; padding-right: 10px; }

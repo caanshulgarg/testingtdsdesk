@@ -248,22 +248,23 @@ try:
         J("() => { S.tdsView = 'register'; S.regFl = {}; render(); }"); pg.wait_for_timeout(400)
         ch = J("() => TDS.challans().find(c => c.serial === '00602').id")
         heads = [h.strip().lower() for h in pg.locator('#tdsRegTable thead th').all_inner_texts()]
-        ok("total challan" in heads and "balance left" in heads and not any(h in heads for h in ("used in", "paid for", "home form", "used")), "C8. two figures a row, no Used-in or Paid-for columns (%s)" % heads)
+        # round 3 B (the owner, 14-Oct-2026): Deposited · BSR / serial · Nature · Total · Balance left · [Use…]
+        ok(heads == ["deposited", "bsr / serial", "nature", "total", "balance left", ""], "C8. the columns: Deposited, BSR / serial, Nature, Total, Balance left, Use… (%s)" % heads)
         ok(pg.locator('[data-reg-filter]').count() == 1 and pg.locator('[data-reg-filter="needs"]').count() == 1, "C8. one filter: Needs a return")
-        # the coordinator's screenshot review (14-Oct-2026): the head row on one line, the filter beside each heading (the shared
-        # table, with the column filters a table of 4 rows or more gets), the amounts right-aligned under their headings; the
-        # source in small grey words on the BSR/serial's line ("Type unknown" stays a badge)
+        # round 3 B (the owner, 14-Oct-2026): no filter arrow on each heading (the one filter bar is enough), the head row on one
+        # line, the amounts right-aligned under their headings; the source ("Tally" / "by hand") in small grey words on the
+        # BSR/serial's line; no yellow "Type unknown" badge: the Nature column's small "Set type" link instead
         J("""() => { for (let i = 0; i < 4; i++) S.books.challans.push({id: 'chRow' + i, bsr: '0240020', date: '2026050' + (i + 1), serial: '0090' + i, tax: 100 + i, interest: 0, section: '194C', minorHead: '200', from: 'hand'}); render(); }"""); pg.wait_for_timeout(600)
         hd = J("""() => { const t = document.getElementById('tdsRegTable'), ths = [...t.tHead.rows[t.tHead.rows.length - 1].cells], row = t.tBodies[0].rows[0];
           return {funnels: t.querySelectorAll('.gff').length, ths: ths.map((th, i) => { const r = th.getBoundingClientRect(), kids = [...th.querySelectorAll('.gfl, .gff')].map(e => e.getBoundingClientRect());
             const lab = th.querySelector('.gfl'), lr = lab ? lab.getBoundingClientRect() : null, td = row.cells[i], last = td && td.lastElementChild ? td.lastElementChild.getBoundingClientRect() : null;
             return {label: (lab ? lab.textContent : th.textContent).trim(), h: Math.round(r.height), oneLine: kids.length < 2 || Math.max(...kids.map(k => k.top)) - Math.min(...kids.map(k => k.top)) < 6,
               n: th.classList.contains('n'), right: lr && last ? Math.round(lr.right - last.right) : null}; })}; }""")
-        ok(hd["funnels"] >= 4 and all(h["oneLine"] and h["h"] <= 48 for h in hd["ths"]), "C8. the head row on one line, each filter beside its heading (%s)" % [(h["label"], h["h"], h["oneLine"]) for h in hd["ths"]])
+        ok(hd["funnels"] == 0 and all(h["oneLine"] and h["h"] <= 48 for h in hd["ths"]), "C8. no filter arrows on the headings (%d); the head row on one line (%s)" % (hd["funnels"], [(h["label"], h["h"], h["oneLine"]) for h in hd["ths"]]))
         ok(all(abs(h["right"]) <= 6 for h in hd["ths"] if h["n"] and h["right"] is not None) and sum(1 for h in hd["ths"] if h["n"]) >= 2, "C8. Total challan and Balance left: the amounts right-aligned under their headings (%s)" % [(h["label"], h["right"]) for h in hd["ths"] if h["n"]])
         src = J("""() => { const td = document.querySelector('#tdsRegTable tr[data-reg-row="chRow0"] td:nth-child(2)'), b = td.querySelector('button'), s = td.querySelector('[data-ch-src]');
           return s && {text: s.textContent, tag: s.classList.contains('tag'), dy: Math.abs(s.getBoundingClientRect().top - b.getBoundingClientRect().top), size: parseFloat(getComputedStyle(s).fontSize), grey: getComputedStyle(s).color !== getComputedStyle(b).color}; }""")
-        ok(src and src["text"] == "Entered by hand" and not src["tag"] and src["dy"] < 6 and src["size"] <= 12.5 and src["grey"], "C8. the source in small grey words on the BSR/serial's line (%s)" % src)
+        ok(src and src["text"] == "by hand" and not src["tag"] and src["dy"] < 6 and src["size"] <= 12.5 and src["grey"], "C8. the source in small grey words on the BSR/serial's line (%s)" % src)
         J("() => { S.books.challans = S.books.challans.filter(c => !/^chRow/.test(c.id)); render(); }"); pg.wait_for_timeout(300)
         tot = pg.locator('[data-split="total"][data-split-of="%s"]' % ch)
         ok("Tax ₹26,520" in (tot.get_attribute("title") or "") and "Interest" in tot.get_attribute("title"), "C9. hovering the total shows the split: %s" % tot.get_attribute("title"))
@@ -272,6 +273,7 @@ try:
         left = pg.locator('[data-split="left"][data-split-of="%s"]' % ch)
         ok("Tax ₹0" in (left.get_attribute("title") or ""), "C9. the balance's split by head: %s" % left.get_attribute("title"))
         J("() => { S.books.challans.push({id: 'chFree', bsr: '0240020', date: '20260508', serial: '00701', tax: 2000, interest: 0, section: '194C', minorHead: '200'}); render(); }"); pg.wait_for_timeout(300)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(150)   # the split open above: closed first (a click outside would only close it)
         ok(pg.locator('[data-reg-addto="chFree"]').inner_text().strip() == "Use…", "C10. one button on the row: Use…")
         pg.click('[data-reg-addto="chFree"]'); pg.wait_for_timeout(300)
         box = '[data-use-balance="chFree"] '
@@ -287,6 +289,71 @@ try:
         ok(J("() => TDS.challans().some(c => c.id === 'chDel')"), "B4. a deleted challan comes back with Restore")
         if SHOTS:
             os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "register.png"), full_page=True)
+
+        # ---------------- D. round 3 B (the owner, 14-Oct-2026): Nature, Set type, the challan's drawer, the empty register
+        unk = J("() => (TDS.challans().find(c => c.serial === '00603') || {}).id")
+        J("() => { S.tdsView = 'register'; S.regFl = {}; S.regAddTo = ''; render(); }"); pg.wait_for_timeout(400)
+        row = '#tdsRegTable tr[data-reg-row="%s"]' % unk
+        ok(pg.locator('[data-type-unknown]').count() == 0, "D1. no yellow Type unknown badge")
+        ok(pg.locator(row + ' [data-set-type]').count() == 1 and pg.locator(row + ' [data-set-type]').inner_text().strip() == "Set type", "D1. the Nature column: a small Set type link")
+        ok(pg.locator('#tdsRegTable tr[data-reg-row="%s"] td:nth-child(3)' % ch).inner_text().strip() == "92B", "D1. a typed challan's nature: its section (%s)" % pg.locator('#tdsRegTable tr[data-reg-row="%s"] td:nth-child(3)' % ch).inner_text())
+        # the row's own controls do not open the drawer
+        pg.click('[data-reg-addto="chFree"]'); pg.wait_for_timeout(300)
+        ok(pg.locator('[data-detail="challan"]').count() == 0 and pg.locator('[data-use-balance="chFree"]').count() == 1, "D2. Use… opens Use, not the drawer")
+        J("() => { S.regAddTo = ''; render(); }"); pg.wait_for_timeout(200)
+        pg.locator('[data-split="total"][data-split-of="%s"]' % ch).click(); pg.wait_for_timeout(300)
+        ok(pg.locator('[data-detail="challan"]').count() == 0 and pg.locator('[data-split-open="total"]').count() == 1, "D2. a tap on Total opens its split, not the drawer")
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+        # a row click: the drawer with everything
+        pg.locator('#tdsRegTable tr[data-reg-row="%s"] td:nth-child(1)' % ch).click(); pg.wait_for_timeout(700)
+        dr = '[data-detail="challan"] '
+        ok(pg.locator('[data-detail="challan"]').count() == 1 and pg.get_attribute('[data-detail="challan"]', "data-detail-id") == ch, "D3. a row click opens the challan's drawer")
+        t = pg.inner_text('[data-detail="challan"]') if pg.locator('[data-detail="challan"]').count() else ""
+        for w in ["0240020", "00602", "07-May-2026", "Minor head", "200", "92B", "Source", "by hand"]:
+            ok(w in t, "D3. the drawer says %r" % w)
+        heads2 = pg.locator(dr + '[data-ch-heads] tbody tr').all_inner_texts()
+        ok([h.split("\t")[0].strip() for h in heads2] == ["Tax", "Interest", "Fee", "Others"], "D3. tax, interest, fee and others (%s)" % [h.split("\t")[0] for h in heads2])
+        th = [x.strip().lower() for x in pg.locator(dr + '[data-ch-heads] thead th').all_inner_texts()]
+        ok(th[1:] == ["paid", "used", "left"], "D3. each paid, used and left (%s)" % th)
+        tax_row = pg.locator(dr + '[data-ch-heads] tbody tr').first.inner_text()
+        ok("26,520" in tax_row and "0" in tax_row, "D3. the tax: paid 26,520, used 26,520, left 0 (%s)" % tax_row.replace("\t", " | "))
+        uses = pg.locator(dr + '[data-ch-use]')
+        ok(uses.count() == 1 and "24Q" in uses.first.inner_text() and "Q1" in uses.first.inner_text() and "26,520" in uses.first.inner_text() and "draft" in uses.first.inner_text().lower(), "D3. every return it is used in: form, quarter, amount, draft (%s)" % (uses.first.inner_text() if uses.count() else "none"))
+        ok(pg.locator(dr + '[data-ch-use] button, ' + dr + '[data-ch-use] a').count() >= 1, "D3. each use a link")
+        ok(pg.locator(dr + '[data-ch-traces]').count() == 1, "D3. the TRACES status (%s)" % (pg.inner_text(dr + '[data-ch-traces]') if pg.locator(dr + '[data-ch-traces]').count() else "none"))
+        ok(pg.locator(dr + '[data-ch-who]').count() == 1 and "Added" in pg.inner_text(dr + '[data-ch-who]'), "D3. who added it and when (%s)" % (pg.inner_text(dr + '[data-ch-who]') if pg.locator(dr + '[data-ch-who]').count() else "none"))
+        acts = pg.locator(dr + '[data-ch-act]').evaluate_all("(l) => l.map(e => e.dataset.chAct)")
+        ok(acts == ["use", "type", "edit", "delete"], "D3. the actions: Use in a return, Set type, Edit, Delete (%s)" % acts)
+        pg.click(dr + '[data-ch-use] button'); pg.wait_for_timeout(600)
+        ok(J("S.tdsView") == "return" and J("S.tdsForm") == "24Q" and J("S.tdsQ") == "Q1", "D3. a use's link opens that return (%s %s %s)" % (J("S.tdsView"), J("S.tdsForm"), J("S.tdsQ")))
+        # a Tally challan: no Edit; Delete says why not
+        J("() => { S.books.challans.push({id: 'chT', bsr: '0510308', date: '20260509', serial: '00901', tax: 700, interest: 0, section: '194J', minorHead: '200', from: 'tally', madeBy: 'tally-sync', fromVoucher: 'pay194jMay'}); S.tdsView = 'register'; render(); }"); pg.wait_for_timeout(400)
+        J("() => openDetail('challan', 'chT')"); pg.wait_for_timeout(600)
+        acts = pg.locator(dr + '[data-ch-act]').evaluate_all("(l) => l.map(e => e.dataset.chAct)")
+        ok("edit" not in acts and "use" in acts, "D4. a Tally challan: no Edit (hand-entered only) (%s)" % acts)
+        t = pg.inner_text('[data-detail="challan"]')
+        ok("Tally" in t and "pay194jMay" not in t or "entry" in t.lower(), "D4. its source: Tally, with its entry")
+        J("() => closeDetail()"); pg.wait_for_timeout(500)
+        # Set type: from the row's link, the nature given, then placed as a new challan is
+        pg.click(row + ' [data-set-type]'); pg.wait_for_timeout(600)
+        ok(pg.locator('[data-detail="challan"]').count() == 1 and pg.locator(dr + '[data-set-type-box]').count() == 1, "D5. Set type opens the drawer at its nature")
+        pg.fill(dr + '[data-set-type-box] input', "94C"); pg.click(dr + '[data-set-type-box] [data-set-type-save]'); pg.wait_for_timeout(600)
+        c = J("() => TDS.challans().find(c => c.serial === '00603')")
+        ok(J("(id) => TDSReg.natureCode(TDS.challans().find(c => c.id === id))", unk) == "94C" and c.get("autoPlace") != "unknown", "D5. its nature is 94C, and it is no longer of unknown type (%s)" % c.get("autoPlace"))
+        ok(J("() => TDSReg.trail().some(t => t.act === 'challan-edit' && /type set/.test(t.note))"), "D5. the trail keeps it")
+        J("() => closeDetail()"); pg.wait_for_timeout(500)
+        ok(pg.locator(row + ' [data-set-type]').count() == 0 and "94C" in pg.locator(row + ' td:nth-child(3)').inner_text(), "D5. the row shows 94C")
+        # Esc closes the drawer, the page stays
+        J("(id) => openDetail('challan', id)", ch); pg.wait_for_timeout(600)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+        ok(pg.locator('[data-detail="challan"]').count() == 0 and pg.locator('[data-register]').count() == 1, "D6. Esc closes the drawer; the register stays")
+        # the empty register
+        J(RESET); J("() => { S.tdsView = 'register'; render(); }"); pg.wait_for_timeout(400)
+        em = pg.locator('[data-register] [data-list-empty]')
+        et = em.inner_text() if em.count() else ""
+        ok("No challans yet" in et and "Add challan" in et and "come from Tally when you pay TDS there" in et, "D7. empty: No challans yet · Add challan · or they come from Tally (%r)" % et)
+        pg.click('[data-register] [data-list-empty] [data-reg-empty-add]'); pg.wait_for_timeout(300)
+        ok(pg.locator('[data-add-challan="new"]').count() == 1, "D7. its Add challan opens the form")
         ok(not [e for e in errors if "supabase" not in e.lower()], "no page errors (%s)" % errors[:3])
         br.close()
 finally:
