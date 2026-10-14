@@ -17,7 +17,8 @@ with sync_playwright() as p:
     pg.evaluate("(cid) => openCompany(cid).then(() => goStep('review', 'bills'))", cid); pg.wait_for_timeout(1200)
     app = lambda: pg.inner_text("#app")
     # Purchase opens on the review table (an old screen still); “One at a time” is the list with the bill beside it
-    pg.click('#app button:has-text("One at a time")'); pg.wait_for_timeout(600)
+    # (upload-pages: with no bill at all the review table is its empty state, with its one next step; the list is asked for)
+    pg.evaluate("doAct('revList')"); pg.wait_for_timeout(600)
     E = lambda k: pg.evaluate("(k) => { const e = D().entries[S.selected]; return k ? (k in e.x ? e.x[k] : e[k]) : e; }", k)
     ok("No bills yet for ZZ Zeta Exports" in app(), "no bills: the upload box says so")
     # a bill typed in

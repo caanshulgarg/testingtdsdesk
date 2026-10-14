@@ -128,7 +128,7 @@ with sync_playwright() as p:
     num = lambda t: int((re.findall(r"\d+", t or "") or ["-1"])[0])
     def counts():
         chip = E("tallyStatus(CO()).short"); tab = E("(document.querySelector('nav.sbar [data-step=post] [data-step-n]') || {}).textContent || ''")
-        attn = E("(document.querySelector('nav.sbar [data-step=post] [data-attn-n]') || {}).textContent || ''")
+        attn = E("(document.querySelector('nav.sbar [data-state=errors] [data-state-n]') || {}).textContent || ''")
         btn = txt("#app [data-post-main]")
         E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(300)
         dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Ready to post/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
@@ -137,7 +137,7 @@ with sync_playwright() as p:
     chip, tab, attn, btn, dash = counts()
     ok([num(chip), num(tab), num(btn), num(dash)] == [2, 2, 2, 2] and chip == "2 entries for Tally" and btn == "Post 2 to Tally",
        "4. one count in the four places: chip %r, tab %r, button %r, dashboard %r" % (chip, tab, btn, dash))
-    ok(attn == "4" and E("postAttentionFor(S.coId)") == 4 and E("getComputedStyle(document.querySelector('nav.sbar [data-attn-n]')).backgroundColor") != E("getComputedStyle(document.querySelector('nav.sbar [data-step=post] [data-step-n]')).backgroundColor"),
+    ok(attn == "4" and E("postAttentionFor(S.coId)") == 4 and E("getComputedStyle(document.querySelector('nav.sbar [data-state=errors] [data-state-n]')).backgroundColor") != E("getComputedStyle(document.querySelector('nav.sbar [data-step=post] [data-step-n]')).backgroundColor"),
        "4. what needs attention is a second badge of its own colour: %r (FA/ELEC/013, FA/ELEC/020, T/1, the failed posting)" % attn)
     # ---- 3. each bill once
     rows_of = lambda: E("Array.from(document.querySelectorAll('#app [data-post-page] [data-bill-row]')).map(r => r.getAttribute('data-bill-row'))")
