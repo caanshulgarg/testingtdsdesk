@@ -515,7 +515,8 @@ const Rec = {
       cur.forEach(c => { const b = books.find(x => x.book_id === c.book_id); if (b && b.client_id) (by[b.client_id] = by[b.client_id] || []).push({book: c.book_id, company: b.company || "", gap: c.gap, gapAt: c.gap_at}); });
       g.byClient = by; g.no44 = false;
     } catch (e){ g.byClient = {}; if (this.missing(e)) g.no44 = true; }
-    g.busy = false; g.at = Date.now(); render();
+    // quiet refresh (14-Oct-2026): read again each minute; the page is drawn only when what was read changed
+    g.busy = false; g.at = Date.now(); quietChanged("rec:gaps", [g.byClient, !!g.no44]);
   },
   gapFor(cid){ const g = this.gapsOf(); return ((g.byClient || {})[cid] || []); },
   // gap.words + " (Tally's change number N, received up to M)"; M: the baseline the cloud compared with (the starting
@@ -544,7 +545,7 @@ const Rec = {
     s.busy = true;
     try { const j = await TCloud.rpc("tally_recorder_silent", {p_firm: this.firm()}); s.rows = [].concat((j && j.silent) || []); }
     catch (e){ s.rows = []; if (this.missing(e)) s.none = true; }
-    s.busy = false; s.at = Date.now(); render();
+    s.busy = false; s.at = Date.now(); quietChanged("rec:silent", [s.rows, !!s.none]);
   },
 
   // ---------------------------------------------------------------- round 20 (d.1): alerts (migration 47)
@@ -565,7 +566,7 @@ const Rec = {
       a.rows = [].concat(await Cloud.api("tally_alerts?select=id,client_id,book_id,device_id,kind,day,words,data,at,read_at,read_by&firm_id=eq." + encodeURIComponent(this.firm()) + "&order=at.desc&limit=100") || []);
       a.none = false;
     } catch (e){ a.rows = []; if (this.missing(e)) a.none = true; }
-    a.busy = false; a.at = Date.now(); render();
+    a.busy = false; a.at = Date.now(); quietChanged("rec:alerts", [a.rows, !!a.none]);
   },
   clientAlerts(cid){ return this.alertsOf().filter(x => !x.read_at && cid && String(x.client_id || "") === String(cid)); },
   async alertRead(x){
@@ -580,6 +581,7 @@ const Rec = {
       a.msg = null;
     } catch (e){ a.msg = {err: this.missing(e) ? "Marking an alert read: not available until migration 47 runs." : this.say(e)}; }
     await this.alertsLoad();
+    render();                                   // asked for by the person: drawn, with its words, whatever the list did
   },
   alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); },
 
