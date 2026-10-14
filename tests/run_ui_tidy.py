@@ -146,10 +146,11 @@ try:
         row, opn = E(TOP, '#app [data-cmp-month="202506"]'), E(TOP, '#app [data-cmp-open="202506"]')
         ok(row and opn and abs(opn["top"] - row["bottom"]) <= 2, "GST checks: a month's filed returns open directly under its row (%s, %s)" % (row, opn))
         # TDS: a challan's deductions under its row
+        # tds-layout (14-Oct-2026): the old TDS › Challans address opens the challan register; a challan opens under its row
         go(pg, cid, "#/c/{cid}/books/tds/2026-27/challans/Q1")
-        pg.click('#app table[data-list="tdsChallans"] tbody tr:first-child button.linkbtn:has-text("▸")'); W(600)
-        r1, r2 = E(TOP, '#app table[data-list="tdsChallans"] tbody tr:first-child'), E(TOP, '#app table[data-list="tdsChallans"] tbody tr.lt-open')
-        ok(r1 and r2 and abs(r2["top"] - r1["bottom"]) <= 2, "TDS challans: a challan's deductions open directly under its row (%s, %s)" % (r1, r2))
+        pg.click('#app table[data-list="tdsRegister"] tbody tr:first-child button.linkbtn:has-text("▸")'); W(600)
+        r1, r2 = E(TOP, '#app table[data-list="tdsRegister"] tbody tr:first-child'), E(TOP, '#app table[data-list="tdsRegister"] tbody tr.lt-open')
+        ok(r1 and r2 and abs(r2["top"] - r1["bottom"]) <= 2, "TDS challan register: a challan's details open directly under its row (%s, %s)" % (r1, r2))
 
         print("2. one filter bar, 3. figures right-aligned, 4. one banner")
         bars = {}
@@ -188,10 +189,17 @@ try:
         crumbs = E("() => { const c = document.querySelector('#cobar [data-crumbs]'); return c ? c.innerText.replace(/\\s+/g, ' ').trim() : ''; }")
         ok(crumbs.startswith("Clients ›") and E("CO().name") in crumbs and crumbs.endswith(E("document.querySelector('#cobar .tbar-title h2').innerText")), "the breadcrumb: Clients › the client › the page (%s)" % crumbs)
         ok(pg.locator('#side .side-link[data-side="Clients"]').count() == 1, "inside a client, Clients is in the sidebar")
-        strip = E("() => [...document.querySelectorAll('#app [data-client-strip] .ctab')].map(b => b.innerText)")
-        ok(strip == ["Overview", "Bills", "Bank", "TDS", "GST", "MIS", "Settings"], "the client's own pages in its strip (%s)" % strip)
-        pg.click('#app [data-client-strip] .ctab[data-ctab="gst"]'); W(1000)
-        ok(E("booksTab()") == "gst", "  … and they open (GST)")
+        # tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): the client's row of
+        # pages under the title repeated the sidebar and is gone; the sidebar opens each, the Tally chip is on the title line
+        ok(pg.locator('.ctab, [data-client-strip] nav').count() == 0, "no row of the client's pages under the title (the sidebar lists them)")
+        side = E("() => [...document.querySelectorAll('#side .side-link')].map(b => b.dataset.side || b.innerText.trim())")
+        ok(all(x in side for x in ["Overview", "Purchase", "Bank", "TDS", "GST", "MIS", "Client setup"]), "  … every one of them is in the sidebar (%s)" % side)
+        pg.click('#side .side-link[data-side="GST"]'); W(1000)
+        ok(E("booksTab()") == "gst", "  … and opens from there (GST)")
+        chip = E("() => { const c = document.querySelector('#cobar [data-tally-chip]'), h = document.querySelector('#cobar .tbar-title h2'); if (!c || !h) return null; const a = c.getBoundingClientRect(), t = h.getBoundingClientRect(); return {top: Math.round(a.top), bottom: Math.round(a.bottom), ttop: Math.round(t.top), tbottom: Math.round(t.bottom)}; }")
+        ok(chip and chip["top"] < chip["tbottom"] + 30 and chip["bottom"] > chip["ttop"] - 30, "the Tally chip on the title line (%s)" % chip)
+        cw = E("() => { const c = document.querySelector('#cobar [data-crumbs]'); return [...c.querySelectorAll('.linkbtn, [data-crumb-page]')].map(e => e.scrollWidth - e.clientWidth).concat([c.scrollWidth - c.clientWidth]); }")
+        ok(max(cw) <= 1 and E("document.querySelector('#cobar [data-crumb-page]').innerText") == "GST", "  … and the breadcrumb is whole beside it, nothing cut (%s)" % cw)
         # Ctrl+K: by name, GSTIN and PAN
         pan = E("CO().gstin.slice(2, 12)"); E("() => { CO().pan = CO().gstin.slice(2, 12); }")
         for q in (E("CO().name.slice(0, 6)"), E("CO().gstin"), pan):
@@ -224,7 +232,7 @@ try:
                "%s → Link Co's Link to Tally card (%s %s)" % (where, E2("S.view"), E2("S.tab")))
         scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(1200)
-        tl.click('#app [data-client-strip] [data-tally-chip]'); W2(900); on_card("the client strip's chip")
+        tl.click('#cobar [data-tally-chip]'); W2(900); on_card("the title line's chip")
         E2("navHome('clients')"); W2(900)
         tl.click('#app table[data-list="clients"] tr:has-text("Link Co") [data-tally-chip]'); W2(900); on_card("the Clients list's chip")
         E2("navHome('today')"); W2(900)

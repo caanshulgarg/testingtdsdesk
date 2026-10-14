@@ -76,5 +76,6 @@
  "75-assistant.js",
  "76-prefiling.js",
  "77-audit.js",
- "78-reports.js"
+ "78-reports.js",
+ "79-challan-register.js"
 ]

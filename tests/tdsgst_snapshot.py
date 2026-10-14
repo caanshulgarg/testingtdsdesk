@@ -62,7 +62,8 @@ def snapshot(site, port=8290, shots=None):
         # download to the ledgers page instead)
         pg.evaluate("""() => { window.__files = []; window.ledgersReady = () => true;
           window.saveFile = async (name, data) => { const t = data instanceof Blob ? await data.text() : String(data); window.__files.push({name, text: t}); return true; }; }""")
-        text = lambda: re.sub(r"\s+", " ", pg.evaluate("document.getElementById('app').innerText"))
+        # tds-layout (14-Oct-2026): a challan's split by head is shown on hover (data-split-words): it counts as shown
+        text = lambda: re.sub(r"\s+", " ", pg.evaluate("document.getElementById('app').innerText + ' ' + [...document.querySelectorAll('#app [data-split-words]')].map((e) => e.dataset.splitWords).join(' ')"))
         fys = pg.evaluate("tdsYears(S.books, TDS.rows())")
 
         def take(key):
@@ -76,16 +77,20 @@ def snapshot(site, port=8290, shots=None):
               if (b) b.click(); return !!b; }""", label_re)
 
         for fy in fys:
-            pg.evaluate("(fy) => { S.booksTab = 'tds'; S.tdsFy = fy; S.tdsView = 'year'; S.tdsQ = ''; render(); }", fy); take("tds/%s/year" % fy)
+            # tds-layout (14-Oct-2026): the year opened as the app's own "← year" does (no form picked, no To fix list chosen),
+            # whatever the return opened last left (since tds-layout a return opened sets the form picked, as tdsGo always did)
+            pg.evaluate("(fy) => { S.booksTab = 'tds'; S.tdsFy = fy; S.tdsView = 'year'; S.tdsQ = ''; S.tdsPickForm = ''; S.tdsFix = ''; render(); }", fy); take("tds/%s/year" % fy)
             # round 46 (TDS & GST makeover): the tie-out and the TDS limits, under the year's grid before, are TDS › Checks;
-            # their figures count as the year's page's (a build without Checks shows the grid again: the same figures)
+            # their figures count as the year's page's (a build without Checks shows the grid again: the same figures).
+            # tds-layout (14-Oct-2026): no TDS tabs any more; the old Checks view leads to a return's To fix with that list
+            # (S.tdsView 'checks' is still read), so it is asked for whenever the page has the grid (as every build since round 46)
             for chk in ["tieout", "limits"]:
-                pg.evaluate("([fy, c]) => { S.tdsFy = fy; S.tdsView = typeof tdsNav === 'function' && document.querySelector('[data-tds-sec]') ? 'checks' : 'year'; S.tdsCheck = c; render(); }", [fy, chk]); take("tds/%s/year" % fy)
+                pg.evaluate("([fy, c]) => { S.tdsFy = fy; S.tdsQ = ''; S.tdsView = typeof tdsNav === 'function' && (document.querySelector('[data-tds-sec]') || typeof TDSReg === 'object') ? 'checks' : 'year'; S.tdsCheck = c; render(); }", [fy, chk]); take("tds/%s/year" % fy)
             for q in ["Q1", "Q2", "Q3", "Q4"]:
                 for form in ["26Q", "27Q", "27EQ", "24Q"]:
                     key = "tds/%s/%s/%s" % (fy, q, form)
                     for tab in ["summary", "challans", "deductees", "deductions", "employees", "annex2", "checks", "file"]:
-                        pg.evaluate("([fy, q, form, tab]) => { S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form; S.tdsView = 'return'; S.tdsTab = tab; S.tdsOpen = ''; S.chOpen = ''; render(); }", [fy, q, form, tab])
+                        pg.evaluate("([fy, q, form, tab]) => { S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form; S.tdsView = 'return'; S.tdsTab = tab; S.tdsOpen = ''; S.chOpen = ''; S.tdsFix = ''; render(); }", [fy, q, form, tab])
                         take(key)
                     if form != "24Q":
                         pg.evaluate("() => { window.__files = []; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(60)
@@ -94,6 +99,8 @@ def snapshot(site, port=8290, shots=None):
                             for f in pg.evaluate("window.__files"):
                                 t = re.sub(r"^(\d+\^FH\^NS1\^R\^)\d{8}\^", r"\1DDMMYYYY^", f["text"], flags=re.M)
                                 files["%s/%s" % (key, f["name"])] = {"sha256": hashlib.sha256(t.encode()).hexdigest(), "bytes": len(t.encode())}
+                                if os.environ.get("SNAP_TEXT_DIR"):   # the text itself, to read a difference (tds-layout, 14-Oct-2026)
+                                    o = os.path.join(os.environ["SNAP_TEXT_DIR"], key, f["name"]); os.makedirs(os.path.dirname(o), exist_ok=True); open(o, "w").write(t)
             pg.evaluate("(fy) => { S.tdsFy = fy; S.tdsView = 'certs'; render(); }", fy); take("tds/%s/certs" % fy)
         # GST: each GSTIN and month, each part (the parts and, on the new page, each tab of GSTR-1 and 3B)
         regs = pg.evaluate("GSTR.gstins(S.books).map((g) => g.slice(0, 2))")

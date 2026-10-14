@@ -12,7 +12,9 @@
 // ledger list (as TCloud.load reads it: TallyRead.balances' groups, BookSrc.ledgersInto). `months` may be empty (bridge only).
 const fs = require("fs"), path = require("path"), {load, HTML} = require("./harness"), {restStub} = require("./copy_rest_stub");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "TDS26Q", "TDS_FORMS",
-  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ", "TallyRead", "BookSrc", "TCloud", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH"];
+  "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "GSTSet", "GSTF", "GSTQ", "TallyRead", "BookSrc", "TCloud", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSTally", "AIH",
+  // tds-layout (14-Oct-2026): the section codes' one table (TDS_SEC_CODES); the challan register (TDSReg) that tagging asks
+  "TDS_SEC_CODES", "TDSReg", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 (async () => {
   const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), outPath = process.argv[3];
   const setup = JSON.parse(fs.readFileSync(inp.setup, "utf8"));

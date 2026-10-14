@@ -1,5 +1,5 @@
 """python3 run_26as_recon.py - Form 26AS / AIS / TIS against the books, by upload (TDS/GST round 2, item 2; AS26,
-src/js/69-tds-26as.js; the TDS page › 26AS and AIS).
+src/js/69-tds-26as.js; the client's Reconciliations › TDS receivable vs 26AS since tds-layout, 14-Oct-2026).
 
 The files are made up in the layouts FinCom ASSUMES (tests/fixtures/tds-26as/; the government sites cannot be reached
 from where FinCom is built, so no official sample was read): the 26AS text file (TRACES "Export as Text", fields split
@@ -66,7 +66,7 @@ try:
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500); pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
         ok(pg.evaluate("BOOKS_KEYS.includes('tds26as') && BOOKS_KEYS.includes('tanParty')"), "the files read and the TANs linked are kept with the books (BOOKS_KEYS)")
         pg.evaluate(BOOKS); pg.wait_for_timeout(600)
-        ok(pg.locator("#app [data-as26]").count() == 1 and "Upload 26AS or AIS" in pg.inner_text("#app [data-as26]"), "TDS › 26AS and AIS: the page with its upload")
+        ok(pg.locator("#app [data-as26]").count() == 1 and "Upload 26AS or AIS" in pg.inner_text("#app [data-as26]"), "Reconciliations › TDS receivable vs 26AS: the page with its upload")
         bc = pg.evaluate("AS26.bookCredits().map(x => [x.date, x.party, x.tax])")
         ok(len(bc) == 5 and ["20260331", "", 19000] not in bc, "the books' tax credit: the 5 debits to TDS receivable; the transfer between two receivable ledgers is not one (%s)" % bc)
 

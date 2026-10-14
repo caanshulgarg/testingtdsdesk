@@ -19,20 +19,21 @@ import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
 import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { FinComNav } from "./nav.js";
-import { goTallyCard } from "./parts/TallyChip.jsx";
+import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
 // the Tally ledgers as its tab, and Audit the tie-out with Tally
 const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "From Tally", tieout: "Audit", reports: "Reports", lookup: "Look up",
-  letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit" };
+  letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit", recon: "Reconciliations" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 
 // Arc's page header: the breadcrumb (Clients › <client>, or Firm › <firm>) over the title, then the page's actions
-function Title({ title, sub, crumb, children }) {
+function Title({ title, sub, crumb, children, after }) {
+  // after: beside the page's name on its line (a client's Tally chip), so the breadcrumb above keeps its width
   return (
     <div className="tbar" data-crumb={crumb}>
-      <div className="tbar-title"><h2>{title}</h2>{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
+      <div className="tbar-title">{after ? <div className="tbar-h"><h2>{title}</h2>{after}</div> : <h2>{title}</h2>}{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
       {children}
     </div>
   );
@@ -94,7 +95,8 @@ function ClientHeader() {
     <button type="button" className="linkbtn crumb-co" data-client-switch="" title="Switch client (F3 or Ctrl+K)" aria-label={"Client " + co.name + ": switch client"} onClick={() => openSwitcher()}>{co.name} <span aria-hidden="true">▾</span></button>
     <span aria-hidden="true">›</span><span data-crumb-page="">{title}</span></nav>;
   const head = (
-    <Title title={title} sub={crumbs} crumb="client-nav">
+    // the client's one Tally chip ("Not linked → Link") beside the page's name (it was in the client's row of pages, gone)
+    <Title title={title} sub={crumbs} crumb="client-nav" after={!S.loadingCo ? <TallyChip co={co} where="title" /> : null}>
       <div className="tbar-actions">
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
       </div>

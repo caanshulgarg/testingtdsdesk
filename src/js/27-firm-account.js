@@ -1076,7 +1076,7 @@ function r2Copy(k){
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
-function tdsTabGo(id){ S.tdsTab = id; render(); }
+function tdsTabGo(id){ S.tdsTab = id; S.tdsFix = ""; render(); }
 function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
 function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}}); render(); }
 function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
@@ -1084,26 +1084,28 @@ function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort 
 function tdsToggle(which, key){ S[which] = S[which] === key ? "" : key; render(); }
 // tds-challans (10-Oct-2026): a challan is never used beyond its amount; the tagging goes through TDSCH.tag (src/js/65)
 function tdsAlloc(rowId, chId){
-  if (!chId){ TDSCH.untag([rowId]); render(); return; }
+  if (!chId){ const u = TDSCH.untag([rowId]); if (!u.ok) toast(u.why); render(); return; }
   const r = TDSCH.tag([rowId], chId);
   if (!r.ok) toast(r.why);
   render();
 }
 // many deductions at once (Entries: the ticked ones): to a challan, or off their challans
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
-function tdsUntagMany(ids){ const r = TDSCH.untag(ids); toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
+function tdsUntagMany(ids){ const r = TDSCH.untag(ids); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
 function tdsConfirm(pid, opt){ const r = TDSCH.confirm(pid, Object.assign({form: S.tdsForm || "26Q"}, opt)); toast(r.ok ? r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged." : r.why); render(); return r; }
 function tdsConfirmAll(){ const r = TDSCH.confirmAllExact(S.tdsFy, S.tdsQ, S.tdsForm || "26Q"); toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + "."); render(); return r; }
-function challanAdd(c){
-  const bsr = String(c.bsr || "").trim(), ser = String(c.serial || "").trim(), dt = String(c.date || "").replace(/-/g, ""), tax = num(c.tax);
-  if (!bsr || !ser || !dt || !tax){ toast("Fill the BSR code, serial number, date and tax."); return false; }
-  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr, serial: ser, date: dt, tax, interest: num(c.interest)}]);
-  saveBooks(); toast("Challan added."); render(); return true;
-}
-function challanDelete(id){
-  S.books.challans = (S.books.challans || []).filter(c => c.id !== id);
-  Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === id) delete S.books.alloc[k]; });
-  saveBooks(); render();
+// a challan taken out (tds-layout): a soft delete with its reason, the one dialog; TDSReg.canDelete says when it cannot be
+// (read from Tally, or anything allocated to it); Undo brings it back
+async function challanDelete(id){
+  const c = TDS.challans().find(z => z.id === id), no = TDSReg.canDelete(c);
+  if (no){ toast(no); return false; }
+  const ok = await askConfirm({title: "Delete challan " + TDSCH.label(c) + "?", ok: "Delete", danger: true,
+    body: "It leaves the register; the register keeps it, with your reason, under Deleted.<br><label>Why <input type=\"text\" id=\"chDelWhy\" style=\"width:100%\"></label>",
+    read: () => (document.getElementById("chDelWhy") || {}).value || "", validate: (v) => String(v || "").trim().length < 3 ? "Say why the challan is deleted." : ""});
+  if (!ok || !ok.ok) return false;
+  const r = TDSReg.deleteHand(id, ok.data);
+  if (r.ok) toast("Challan " + TDSCH.label(c) + " deleted.", {actions: [{label: "Undo", run: () => { TDSReg.restore(id); render(); }}]}); else toast(r.why);
+  render(); return r.ok;
 }
 // a TDS payment voucher in Tally becomes a challan, once its BSR code and serial are given, or its CIN (tds-challans:
 // the CIN's own date of deposit then; the voucher's section when it pays one section only)
@@ -1113,12 +1115,13 @@ function challanFromBooks(vid, bsr, ser){
   if (!k && (!String(bsr || "").trim() || !String(ser || "").trim())){ toast("Fill the BSR code and the challan serial number, or the 20-digit CIN, first."); return false; }
   const secs = (p.sections || []).filter(Boolean);
   S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: num(p.interest), fromVoucher: p.vid,
-    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "books"}].map(c => {
+    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "books", autoPlace: "pending"}].map(c => {
       if (k) c.cin = k.cin;
       if (num(p.fee)) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
       if (num(p.others)) c.others = num(p.others);
       return c; }));
-  saveBooks(); toast("Challan added from the books."); render(); return true;
+  const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.placed) : [];
+  saveBooks(); toast("Challan added from the books." + (pl.length ? " Allocated to " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + " (draft)." : "")); render(); return true;
 }
 function certAdd(c){
   const party = String(c.party || "").trim();
@@ -1135,14 +1138,20 @@ function printTable(id, title){
 }
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
 // parts of the books with a sidebar entry of their own, outside "TDS & GST" (MIS, Accounts and Audit moved out: review item 7)
-const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
+const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit", "recon"];
 function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
   S.tdsFy = fy; Smart.keep("tds", {fy, q: q || ""});
-  if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
+  if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = ""; }
   else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
+}
+// tds-layout (14-Oct-2026): a return opened on one of its tabs (the old TDS tabs' addresses lead here: Salary, TRACES files,
+// Checks), with the To fix list or the salary part chosen (S.tdsFix, S.paySub)
+function tdsGoTab(fy, q, form, tab, extra){
+  S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsPickForm = S.tdsForm; S.tdsView = "return"; S.tdsTab = tab || ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = "";
+  Object.assign(S, extra || {}); render(); window.scrollTo(0, 0);
 }
 function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsView === "return") S.tdsView = "year"; render(); }
 // the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
@@ -1150,7 +1159,7 @@ function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsVi
 function tdsPick(fy, q, form){
   const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
   S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; Smart.keep("tds", {fy, q: q || ""});
-  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
+  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = ""; } }
   else S.tdsView = "year";
   render();
 }
@@ -1406,7 +1415,8 @@ function doAct(act, t){
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
-    case "useOffline": Cloud.setCfg({gate: false}); toast("Working on this computer only. Sign in later from Settings to share with the firm."); render(); break;
+    // the coordinator's screenshot review (14-Oct-2026): no floating box; the sidebar's foot says it (Side.jsx FootLine)
+    case "useOffline": Cloud.setCfg({gate: false}); render(); break;
     case "docqReadAll": { const ids = docqFor(S.view === "company" ? S.coId : "").filter(d => d.status === "waiting").map(d => d.id); readDocq(ids, S.view === "company" ? S.coId : ""); break; }
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {
@@ -1769,7 +1779,6 @@ function doAct(act, t){
         " \u00b7 printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (t ? t.outerHTML : ""));
       break;
     }
-    case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
     case "yearExcel26": TDSYear.toExcel(S.tdsFy || "", "26Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;

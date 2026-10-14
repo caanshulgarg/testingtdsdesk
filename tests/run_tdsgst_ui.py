@@ -12,6 +12,13 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
   - a phone's width: nothing wider than the screen;
   - every file the pages make (the TDS text files, the GSTR-1 and 3B JSON) byte for byte, and every amount they show, as
     the build before the redesign made and showed them (tests/fixtures/tdsgst-before.json, by tdsgst_snapshot.py).
+    tds-layout (14-Oct-2026): the fixture was taken again on the new build, every difference explained: the 26Q / Form 140
+    files' challan record (CD) total is now tax + this return's interest and fee (the TDS review, H5; it was the whole
+    challan's tax); a return's Challans tab and card show only what that return uses (the owner's register; the review, M6),
+    so a challan's whole amount (₹9,00,000.00 in the fixture) and other returns' use are on the challan register, not on
+    every return of its quarter.
+    Taken again the same day for H4: the 2026-27 Form 140 files of Q3 and Q4 now carry 194J(b)'s payment code 1027 where
+    the field was empty (docs/tds-codes.md); no other file or figure changed.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -55,8 +62,9 @@ try:
         # round 46: a return opens with its summary card on top and its entries below
         ok(st == ["return", "2025-26", "Q4", "26Q", "deductions"] and pg.locator("#app [data-return-card]").count() == 1, "year → quarter → form opens 26Q Q4 2025-26: the summary card, then its Entries (%s)" % st)
         tabs = pg.evaluate("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
-        ok(tabs == ["Entries", "Deductees", "Challans", "Errors to fix", "Files"], "the return's tabs: %s" % tabs)
-        pg.click('#app nav[aria-label="Return"] button:has-text("Entries")'); pg.wait_for_timeout(400)
+        # tds-layout (14-Oct-2026): the owner's tabs (Deductees is Deductions' "by deductee"; Errors to fix is To fix)
+        ok(tabs == ["Deductions", "Challans", "To fix", "Return file", "After filing"], "the return's tabs: %s" % tabs)
+        pg.click('#app nav[aria-label="Return"] button:has-text("Deductions")'); pg.wait_for_timeout(400)
         t = app(pg)
         ok("194C" in t and "393(" not in t and "Form 140" not in t and "earlier" not in t, "2025-26 entries: the old section alone (194C), no new form or section")
         # 2026-27: the new names with the old ones
@@ -68,7 +76,7 @@ try:
         ok(forms[1:] == ["Form 138 (earlier 24Q) · Salary", "Form 140 (earlier 26Q) · Non-salary, residents", "Form 144 (earlier 27Q) · Non-residents", "Form 143 (earlier 27EQ) · TCS"],
            "2026-27: the new forms with the old ones in brackets (%s)" % forms)
         ok("Form 140 (earlier 26Q)" in pg.inner_text("#app [data-return-title]"), "the return's title: Form 140 (earlier 26Q)")
-        pg.click('#app nav[aria-label="Return"] button:has-text("Entries")'); pg.wait_for_timeout(400)
+        pg.click('#app nav[aria-label="Return"] button:has-text("Deductions")'); pg.wait_for_timeout(400)
         t = pg.inner_text("#tdsDnTable")
         ok("393(1) Sl. 6(i) [old 194C]" in t and "393(1) Sl. 6(iii) [old 194J]" in t and "393(1) Sl. 5(iii) [old 194A]" in t, "2026-27 entries: each section new with the old beside it")
         n0 = pg.locator("#tdsDnTable > tbody > tr").count()
@@ -79,7 +87,7 @@ try:
             rows = pg.locator("#tdsDnTable > tbody > tr").count()
             ok(0 < rows < n0 and "[old 194C]" in pg.inner_text("#tdsDnTable > tbody"), "find by the %s “%s”: %d of %d" % (want, q, rows, n0))
         pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
-        pg.click('#app nav[aria-label="Return"] button:has-text("File")'); pg.wait_for_timeout(300)
+        pg.click('#app nav[aria-label="Return"] button:has-text("Return file")'); pg.wait_for_timeout(300)
         ok(pg.locator('#app button:has-text("Download the Form 140 text file (draft)")').count() == 1 and pg.locator('#app [data-draft="140"]').count() == 1,
            "File: the download (a draft for Form 140) and the warning")
         # the address: Back and Refresh
@@ -141,7 +149,10 @@ try:
                 # ui-tidy (13-Oct-2026): on a phone the grid keeps its columns and scrolls sideways in its own box (it was cards
                 # labelled from the heads); the heads keep the quarter and its due date apart
                 lb = pg.evaluate("[...document.querySelectorAll('#app [data-tds-grid] thead th[aria-label]')].map(c => c.getAttribute('aria-label') || '')")
-                ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}$", x) for x in lb)
+                # tds-layout (14-Oct-2026): the year's total has a head of its own ("Year, ₹…")
+                yl = [x for x in lb if x.startswith("Year")]; lb = [x for x in lb if not x.startswith("Year")]
+                ok(len(yl) == 1 and re.search(r"^Year, ₹[\d,]+(\.\d+)?$", yl[0]), "phone, the TDS grid: the year's total head (%s)" % yl)
+                ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}(, ₹[\d,]+(\.\d+)?)?$", x) for x in lb)
                    and pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0, "phone, the TDS grid: each quarter's label and its due date apart, the page not wider than the phone (%s)" % lb)
         ph.close()
     # every figure and file, as before the redesign

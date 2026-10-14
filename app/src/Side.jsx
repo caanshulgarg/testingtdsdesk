@@ -14,17 +14,17 @@ import { FinComNav } from "./nav.js";
 //           BOOKS Reports · MIS · Accounts · Audit · Look up · Letters / then Client setup · All clients · Help
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
-import { ArrowLeftRight, BookOpen, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
+import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
   Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
   TrendingUp, Users, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug };
+  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal" };
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald" };
 
 function Item({ icon, label, on, count, onClick, title, bar }) {
   const Icon = ICONS[icon] || LayoutDashboard;
@@ -83,8 +83,10 @@ function tree() {
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
     ]],
     ["Returns", [
-      { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns, challans, 26AS and checks" },
+      { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns and the challan register" },
       { icon: "gst", label: "GST", on: bt === "gst", go: () => goClient("books:gst"), title: "GST returns" },
+      // tds-layout (14-Oct-2026): TDS receivable vs 26AS, out of TDS
+      { icon: "recon", label: "Reconciliations", on: bt === "recon", go: () => goClient("books:recon"), title: "TDS receivable vs 26AS" },
     ]],
     ["Books", [
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
@@ -161,7 +163,14 @@ export function FootLine() {
     const st = Cloud.st || {}, sv = (typeof Live === "object" && Live.sv) || {};
     t = sv.state === "offline" || (typeof navigator === "object" && navigator.onLine === false) ? "No internet · work kept on this computer"
       : st.lastSync ? "Synced " + fmtTime(st.lastSync) + " · saved on this computer" : "Saved on this computer · syncing";
-  } else t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
+  } else {
+    // not signed in: the work stays here; one line under it says so and leads to signing in (it was a floating box,
+    // "Working on this computer only…", over the sidebar; the coordinator's screenshot review, 14-Oct-2026)
+    t += " only" + (typeof navigator === "object" && navigator.onLine === false ? " · no internet" : "");
+    const signIn = () => { S.view = "home"; S.homeTab = "rules"; S.settingsTab = "account"; render(); };
+    return <><span className="side-quiet side-one" data-trust-line="" title={t}>{t}</span>
+      <span className="side-quiet side-one" data-local-only="" title="Working on this computer only. Sign in from Settings to share with the firm.">Not shared · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></span></>;
+  }
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }
 
