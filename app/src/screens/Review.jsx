@@ -218,7 +218,9 @@ export function Drawer() {
   const first = useRef(true), enter = first.current ? " enter" : "", box = useRef(null);
   first.current = false;
   const e = drawerEntry();
-  useDismiss(!!e, box, () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); });
+  // the action bar under it works on the open bill (Approve, "Cannot approve: invoice date" leads into the drawer): inside
+  useDismiss(!!e, box, () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); },
+    { also: () => Array.from(document.querySelectorAll("#app .actionbar")) });
   if (!e) return null;
   const rows = draftRows(), i = rows.findIndex((r) => r.e.id === e.id);
   // a click outside, Esc and (a phone) Back close it; asked first when a section of the page has unsaved changes (Drafts)

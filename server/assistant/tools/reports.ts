@@ -16,7 +16,12 @@ const FSX: any = (globalThis as any).FSX;
 const FAR: any = (globalThis as any).FAR;
 // the year's fixed asset register worked out (null when none is kept, or migration 81 has not run)
 async function farFor(ctx: Ctx, fy: string) {
-  try { const g = await ctx.rpc("asst_dep_register", { p_client: ctx.clientId, p_fy: fy }); return g && g.reg && (g.reg.assets || []).length ? FAR.compute(g.reg, g.prev || null) : null; } catch (_e) { return null; }
+  try {
+    const [g, saved] = await Promise.all([ctx.rpc("asst_dep_register", { p_client: ctx.clientId, p_fy: fy }), ctx.rpc("rpt_saved", { p_client: ctx.clientId })]);
+    // the entity and the ICAI level as the statements keep them (the app's FAR.optsFor)
+    const rx = (saved && saved.rx) || {}, sw = ((((rx.det || {})[fy] || {}).policies) || {}).switches || {};
+    return g && g.reg && (g.reg.assets || []).length ? FAR.compute(g.reg, g.prev || null, { kind: rx.kind || g.reg.kind || "company", levelIV: !!sw.levelIV }) : null;
+  } catch (_e) { return null; }
 }
 const enc = new TextEncoder();
 const safe = (s: string) => String(s || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client";

@@ -735,7 +735,9 @@ const FSX = (() => {
     }
     // PPE and intangible assets: the fixed asset register (company) or the income-tax blocks (firm)
     if (["ppe", "intang", "cwip"].some(k => nm["L_" + k + "_CY"] || nm["L_" + k + "_PY"])){
-      if (co || det.depBasis === "sch2"){
+      // a company, or a non-corporate entity whose books follow its own policy (the fixed asset register, 80-assets.js):
+      // the gross-block schedule; otherwise (books at the Income-tax rates) the block schedule
+      if (co || det.depBasis === "sch2" || det.depBasis === "own"){
         const n = note("ppe", "Property, Plant and Equipment and Intangible Assets", {lines: ["ppe", "intang", "cwip"], landscape: true});
         const far = det.far || {}, hdr = ["As at " + "opening", "Additions", "Deductions", "As at closing", "As at opening", "For the year", "On Deductions", "As at closing", "As at closing", "As at opening"];
         ["cy", "py"].forEach(y => {
