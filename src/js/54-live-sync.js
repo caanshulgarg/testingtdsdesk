@@ -374,10 +374,13 @@ const Live = {
     if (!row.deleted && (row.data === undefined || row.data === null)){ this.catchUp(); return; }
     const before = row.kind === "entry" && S.data[row.client_id] && S.data[row.client_id].entries[row.id] ? stableStr(S.data[row.client_id].entries[row.id]) : null;
     this.applying = true;
-    try { await cloudApply([row]); } finally { this.applying = false; }
+    let took = 1;
+    try { took = await cloudApply([row]); } finally { this.applying = false; }
     const changed = row.kind !== "entry" || before !== stableStr(row.data);
-    if (changed && r.updated_by && r.updated_by !== this.me()) this.noteRec(row, r.updated_by, r.updated_at);
-    render();
+    if (changed && took && r.updated_by && r.updated_by !== this.me()) this.noteRec(row, r.updated_by, r.updated_at);
+    // quiet refresh (14-Oct-2026): this computer's own save coming back (Realtime sends each row to every computer, the
+    // saver's too) changes nothing here and draws nothing; a colleague's change is drawn quietly
+    if (took) quietRender();
   },
   // ---------- notes: who changed what
   who(uid){ const m = ((Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid); return m ? (m.name || m.email) : "a colleague"; },
