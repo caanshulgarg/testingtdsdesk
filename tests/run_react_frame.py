@@ -50,8 +50,9 @@ with sync_playwright() as p:
     pg.click('#app .sbar [data-state="ready"]'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#app .sbar [data-state="ready"]', "aria-selected") == "true", "a state switches the list")
     pg.click('#side .side-link:has-text("Client setup")'); pg.wait_for_timeout(800)
-    # review of 02-Oct-2026 (f9b59b7): Remove this client moved under More, so eight sections
-    ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 8, "Client setup: its sections, listed on the left (%d)" % pg.locator('#app nav[aria-label="Client setup"] button').count())
+    # review of 02-Oct-2026 (f9b59b7): Remove this client moved under More, so eight sections; 14-Oct-2026: a ninth,
+    # Register formats (the purchase and sales registers' formats FinCom has learnt)
+    ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 9, "Client setup: its sections, listed on the left (%d)" % pg.locator('#app nav[aria-label="Client setup"] button').count())
     pg.click('#app nav[aria-label="Client setup"] button:has(span:text-is("GST"))'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "gstset", "a section in the list opens it" + " [" + pg.evaluate("S.tab") + "]")
     # clean-up batch 1: no "Back to the work" in the header; the sidebar's Purchase is the way back

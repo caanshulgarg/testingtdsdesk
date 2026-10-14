@@ -71,8 +71,12 @@ try:
         # in here by the stand-in Tally's balance on the day, as the copy would hold it
         pg.evaluate("""() => { TCloud.ledgerAt = async (cid, led, to) => { const nx = isoToTally(addDays(Audit.iso(to), 1));
           const j = await Bridge.call('/ledgerbalance?company=' + encodeURIComponent(CO().name) + '&from=' + nx + '&to=' + nx + '&ledger=' + encodeURIComponent(led) + Bridge.pinQ(), null, 60000); return -r2(num(j.open)); }; }""")
-        ok(pg.locator('button[title^="Match a vendor"]').count() == 1, "the purchase page has 'Reconcile a vendor ledger'")
-        pg.click('button[title^="Match a vendor"]'); pg.wait_for_timeout(300)
+        # 14-Oct-2026 (the owner: vendor reconciliation under the Reconciliations tab): Reconciliations → Vendors, and the
+        # live check against Tally under its More
+        pg.evaluate("reconGo('vendor')"); pg.wait_for_selector('[data-recon-pick="vendor"]', timeout=30000)
+        pg.click('[data-party-recon="vendor"] details.more > summary'); pg.wait_for_timeout(200)
+        pg.click('[data-party-recon="vendor"] .more-item:has-text("Check against Tally directly")'); pg.wait_for_timeout(500)
+        ok(pg.locator('[data-vr-live] .vrec').count() == 1, "Reconciliations → Vendors → More → Check against Tally directly opens the live reconciliation")
         opts = pg.evaluate("Array.from(document.querySelectorAll('#vrLedgers option')).map(o => o.value)")
         ok(LED in opts, "the vendor's ledger can be chosen by typing (a list of %d Tally ledgers, creditors first)" % len(opts))
         pg.fill('input[aria-label="Vendor ledger in Tally"]', LED); pg.fill('input[aria-label="From"]', "2025-04-01"); pg.fill('input[aria-label="Up to"]', "2025-12-31")
