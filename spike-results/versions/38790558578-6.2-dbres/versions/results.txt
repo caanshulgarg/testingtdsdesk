@@ -1,0 +1,35 @@
+INFO TallyPrime 6.2, mode dbres, runner GitHub Actions 1000010024, 2026-10-15T19:19:06
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 17026752 bytes, 2026-10-15, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 6 PRODMINORREL 2 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-15, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+INFO dbres: masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 5000; per gap day 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+INFO dbres: the loop's Day Book form D1 (gives exactly each day: False)
+PASS r1 missing days with Tally closed and reopened: resumed, every day fetched or marked upload, nothing twice: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 2; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; resumed at the same day 1 time(s); over 2 s 0; upload lines 0; harness restarts 0
+INFO dbres r2 events: day 20260601 8 entries (Tally 50) 61 ms | disturb the Day Book's date box (F2) left open | day 20260702 8 entries (Tally 300) 40.6 ms | day 20260831 8 entries (Tally 800) 48.7 ms | day 20260131 8 entries (Tally 0) 41.7 ms | day 20251201 8 entries (Tally 0) 41.2 ms | disturb Esc: the date box closed | day 20260601 8 entries (Tally 50) 62.4 ms | disturb an unsaved Receipt with its date box left open | day 20260702 8 entries (Tally 300) 39.7 ms | day 20260831 8 entries (Tally 800) 41 ms | day 20260131 8 entries (Tally 0) 40.2 ms | day 20251201 8 entries (Tally 0) 40 ms | disturb Esc: the date box closed (the entry screen stays)
+PASS r2 missing days with a modal screen left open: no request held over 2 s unseen, finished after it closed: Day Book date box: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; unsaved entry: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; harness restarts 0
+PASS r3 missing days with Tally not answering: stopped at 2 s, waited, resumed: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; resumed 0; harness restarts 0
+INFO dbres r4close: count 5001, read 288 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+INFO dbres r4modal: count 5001, read 5000 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+INFO dbres r4susp: count 5001, read 5000 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+FAIL r4 the ledger read through close / modal / not answering: every ledger once, progress never back, count right: count 5001 read 288 of 5000 twice 0 back 0 resumed 0; count 5001 read 5000 of 5000 twice 0 back 0 resumed 0; count 5001 read 5000 of 5000 twice 0 back 0 resumed 0
+MEASURE dbres: 99 requests, never more than 1 at Tally; harness restarts for a hung request 0
+HARNESS r5 Tally responsive at the end of every scenario: no result: the harness stopped or timed out (checks step: success)
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.6.2_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 47408904 bytes, Last-Modified Mon, 25 Aug 2025 17:39:02 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.6.2 from https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe : 47408904 bytes in 1 s, SHA-256 41D25C157D20F9796BA216F9777DBCE332B8CC0F0020A233EB65AE33AF1F25DA, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.6.2 product 1.1.6.2

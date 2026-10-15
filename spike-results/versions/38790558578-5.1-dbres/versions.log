@@ -1,0 +1,208 @@
+[19:19:20] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-15, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-15, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.2 s after start, GET 20 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+[19:19:53] ---- dbres: test data
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 40.7 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 2595.5 ms
+[db] dbm-vouchers-01.xml: created 0, altered 0, errors 0, 789.1 ms; Tally said: The date 31-1-2026 is Out of Range!
+[db] dbm-vouchers-02.xml: created 0, altered 0, errors 0, 795.8 ms; Tally said: The date 31-1-2026 is Out of Range!
+[db] dbm-vouchers-03.xml: created 68, altered 0, errors 0, 1250.2 ms; Tally said: The date 31-3-2026 is Out of Range!
+[db] dbm-vouchers-04.xml: created 200, altered 0, errors 0, 2197.5 ms
+[db] dbm-vouchers-05.xml: created 200, altered 0, errors 0, 2414.2 ms
+[db] dbm-vouchers-06.xml: created 200, altered 0, errors 0, 2345.5 ms
+[db] dbm-vouchers-07.xml: created 200, altered 0, errors 0, 2474.5 ms
+[db] dbm-vouchers-08.xml: created 200, altered 0, errors 0, 2325.1 ms
+[db] dbm-vouchers-09.xml: created 194, altered 0, errors 0, 2332.1 ms
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 3448.6 ms
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 3522 ms
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 3607.1 ms
+[db] filler ledgers to 5000: created 890, altered 0, errors 0, 3292.5 ms
+  INFO dbres: masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 5000; per gap day 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+  INFO dbres: the loop's Day Book form D1 (gives exactly each day: False)
+[19:20:27] ---- dbres r1: Tally closed and reopened during the missing days
+[19:20:29] db: Tally (pid 1496) closed
+[19:20:29] db: Tally started (pid 8260), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r1-started (1024x768)
+[dbres r1] day 20260601 8 entries (Tally 50) 67.4 ms
+[dbres r1] disturb Tally closed
+[19:21:04] db: Tally (pid 8260) closed
+[dbres r1] not idle nothing sent
+[dbres r1] wait 5 s
+[dbres r1] not idle nothing sent
+[dbres r1] wait 10 s
+[dbres r1] not idle nothing sent
+[dbres r1] wait 20 s
+[dbres r1] disturb Tally started (port first, no company yet)
+[19:21:29] db: Tally started (pid 4044), not waited for
+[dbres r1] not answered 20260702 7.8 ms 
+[dbres r1] wait 40 s
+[dbres r1] disturb Educational keys (the company loads)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-dbres-reopen-started (1024x768)
+[dbres r1] day 20260702 8 entries (Tally 300) 61.7 ms
+[dbres r1] day 20260831 8 entries (Tally 800) 40.1 ms
+[dbres r1] day 20260131 8 entries (Tally 0) 42.3 ms
+[dbres r1] day 20251201 8 entries (Tally 0) 40.2 ms
+######## PASS r1 missing days with Tally closed and reopened: resumed, every day fetched or marked upload, nothing twice: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 2; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; resumed at the same day 1 time(s); over 2 s 0; upload lines 0; harness restarts 0
+[19:22:28] ---- dbres r2: a modal screen left open during the missing days
+[19:22:30] db: Tally (pid 4044) closed
+[19:22:30] db: Tally started (pid 2668), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r2a-started (1024x768)
+[dbres r2a] day 20260601 8 entries (Tally 50) 63.7 ms
+[dbres r2a] disturb the Day Book's date box (F2) left open
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal-daybook-f2 (1024x768)
+[dbres r2a] day 20260702 8 entries (Tally 300) 46 ms
+[dbres r2a] day 20260831 8 entries (Tally 800) 40 ms
+[dbres r2a] day 20260131 8 entries (Tally 0) 44.2 ms
+[dbres r2a] day 20251201 8 entries (Tally 0) 40.8 ms
+[dbres r2a] disturb Esc: the date box closed
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal-closed (1024x768)
+[19:24:07] db: Tally (pid 2668) closed
+[19:24:07] db: Tally started (pid 2248), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r2b-started (1024x768)
+[dbres r2b] day 20260601 8 entries (Tally 50) 75.8 ms
+[dbres r2b] disturb an unsaved Receipt with its date box left open
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal-entry-f2 (1024x768)
+[dbres r2b] day 20260702 8 entries (Tally 300) 47.9 ms
+[dbres r2b] day 20260831 8 entries (Tally 800) 38.9 ms
+[dbres r2b] day 20260131 8 entries (Tally 0) 39 ms
+[dbres r2b] day 20251201 8 entries (Tally 0) 38.7 ms
+[dbres r2b] disturb Esc: the date box closed (the entry screen stays)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal2-closed (1024x768)
+  INFO dbres r2 events: day 20260601 8 entries (Tally 50) 63.7 ms | disturb the Day Book's date box (F2) left open | day 20260702 8 entries (Tally 300) 46 ms | day 20260831 8 entries (Tally 800) 40 ms | day 20260131 8 entries (Tally 0) 44.2 ms | day 20251201 8 entries (Tally 0) 40.8 ms | disturb Esc: the date box closed | day 20260601 8 entries (Tally 50) 75.8 ms | disturb an unsaved Receipt with its date box left open | day 20260702 8 entries (Tally 300) 47.9 ms | day 20260831 8 entries (Tally 800) 38.9 ms | day 20260131 8 entries (Tally 0) 39 ms | day 20251201 8 entries (Tally 0) 38.7 ms | disturb Esc: the date box closed (the entry screen stays)
+######## PASS r2 missing days with a modal screen left open: no request held over 2 s unseen, finished after it closed: Day Book date box: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; unsaved entry: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; harness restarts 0
+[19:25:37] ---- dbres r3: Tally not answering during the missing days
+[19:25:39] db: Tally (pid 2248) closed
+[19:25:39] db: Tally started (pid 5208), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r3-started (1024x768)
+[dbres r3] day 20260601 8 entries (Tally 50) 62.5 ms
+[dbres r3] disturb Tally not answering (suspended)
+[19:26:12] db: Tally (pid 5208) suspended (not answering)
+[dbres r3] not idle nothing sent
+[dbres r3] wait 5 s
+[dbres r3] not idle nothing sent
+[dbres r3] wait 10 s
+[dbres r3] disturb Tally answering again (resumed)
+[19:26:32] db: Tally resumed
+[dbres r3] day 20260702 8 entries (Tally 300) 38.8 ms
+[dbres r3] day 20260831 8 entries (Tally 800) 38.1 ms
+[dbres r3] day 20260131 8 entries (Tally 0) 38.4 ms
+[dbres r3] day 20251201 8 entries (Tally 0) 38 ms
+######## PASS r3 missing days with Tally not answering: stopped at 2 s, waited, resumed: 20260601 done/day 8 of 50 asked 1; 20260702 done/day 8 of 300 asked 1; 20260831 done/day 8 of 800 asked 1; 20260131 done/day 8 of 0 asked 1; 20251201 done/day 8 of 0 asked 1; resumed 0; harness restarts 0
+[19:26:45] ---- dbres r4: the ledger read through each
+[19:26:47] db: Tally (pid 5208) closed
+[19:26:47] db: Tally started (pid 1316), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r4close-started (1024x768)
+[dbres r4close] count 5001 ledgers (36.8 ms)
+[dbres r4close] progress 290 of 5001
+[dbres r4close] disturb Tally closed
+[19:27:20] db: Tally (pid 1316) closed
+[dbres r4close] not idle nothing sent
+[dbres r4close] wait 5 s
+[dbres r4close] not idle nothing sent
+[dbres r4close] wait 10 s
+[dbres r4close] not idle nothing sent
+[dbres r4close] wait 20 s
+[dbres r4close] disturb Tally started (port first, no company yet)
+[19:27:45] db: Tally started (pid 8692), not waited for
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] progress 290 of 5001
+[dbres r4close] disturb Educational keys (the company loads)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-dbres-reopen-started (1024x768)
+  INFO dbres r4close: count 5001, read 290 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+[19:28:29] db: Tally (pid 8692) closed
+[19:28:29] db: Tally started (pid 9164), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r4modal-started (1024x768)
+[dbres r4modal] count 5001 ledgers (37.8 ms)
+[dbres r4modal] progress 290 of 5001
+[dbres r4modal] disturb the Day Book's date box (F2) left open
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal-daybook-f2 (1024x768)
+[dbres r4modal] progress 790 of 5001
+[dbres r4modal] progress 1290 of 5001
+[dbres r4modal] progress 1790 of 5001
+[dbres r4modal] progress 2290 of 5001
+[dbres r4modal] progress 2790 of 5001
+[dbres r4modal] progress 3290 of 5001
+[dbres r4modal] progress 3790 of 5001
+[dbres r4modal] progress 4290 of 5001
+[dbres r4modal] progress 4790 of 5001
+[dbres r4modal] progress 5000 of 5001
+[dbres r4modal] progress 5000 of 5001
+[dbres r4modal] disturb Esc: the date box closed
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] v-db-modal-closed (1024x768)
+  INFO dbres r4modal: count 5001, read 5000 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+[19:30:04] db: Tally (pid 9164) closed
+[19:30:04] db: Tally started (pid 1504), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-r4susp-started (1024x768)
+[dbres r4susp] count 5001 ledgers (38.8 ms)
+[dbres r4susp] progress 290 of 5001
+[dbres r4susp] disturb Tally not answering (suspended)
+[19:30:35] db: Tally (pid 1504) suspended (not answering)
+[dbres r4susp] not idle nothing sent
+[dbres r4susp] wait 5 s
+[dbres r4susp] not idle nothing sent
+[dbres r4susp] wait 10 s
+[dbres r4susp] disturb Tally answering again (resumed)
+[19:30:55] db: Tally resumed
+[dbres r4susp] progress 790 of 5001
+[dbres r4susp] progress 1290 of 5001
+[dbres r4susp] progress 1790 of 5001
+[dbres r4susp] progress 2290 of 5001
+[dbres r4susp] progress 2790 of 5001
+[dbres r4susp] progress 3290 of 5001
+[dbres r4susp] progress 3790 of 5001
+[dbres r4susp] progress 4290 of 5001
+[dbres r4susp] progress 4790 of 5001
+[dbres r4susp] progress 5000 of 5001
+[dbres r4susp] progress 5000 of 5001
+  INFO dbres r4susp: count 5001, read 5000 of Tally's 5000, twice 0, progress back 0, resumed 0, steps 12, finished True
+######## FAIL r4 the ledger read through close / modal / not answering: every ledger once, progress never back, count right: count 5001 read 290 of 5000 twice 0 back 0 resumed 0; count 5001 read 5000 of 5000 twice 0 back 0 resumed 0; count 5001 read 5000 of 5000 twice 0 back 0 resumed 0
