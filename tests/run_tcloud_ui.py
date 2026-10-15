@@ -94,7 +94,17 @@ def route(r):
             hits.append([d, "Journal", "", "", "", round(sum(v for l, v in ent if v > 0), 2), re.search(r"<GUID>([^<]*)</GUID>", pc).group(1), ent])
         off = a["p_offset"] or 0
         return j({"n": len(hits), "total": round(sum(h[5] for h in hits), 2), "rows": hits[off:off + a["p_limit"]]})
-    if path.endswith("/tally_devices"): return j([{"id": "d1", "name": "OFFICE-PC", "created_at": "2026-09-28T09:00:00Z", "last_seen": "2026-09-28T10:05:00Z", "version": "1.13.0", "info": {"computer": "OFFICE-PC", "user": "accounts"}, "revoked": False}])
+    if path.endswith("/tally_devices"):
+        # 15-Oct-2026: Connect Tally's step 4 offers only the companies open in Tally right now, so OFFICE-PC beats now
+        # (bridge 2.4.4) with CO open in its Tally
+        import datetime; now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        bt = {"at": now, "every": 30, "tally": True, "tallyState": "open", "open": [CO], "paused": False,
+              "ports": [{"port": 9002, "ok": True, "skipped": False, "n": 1, "error": "", "state": "open"}],
+              "companies": [{"name": CO, "open": True, "phase": "live", "waiting": 0, "lastRead": now}]}
+        b = {"at": now, "version": "2.4.4", "computer": "OFFICE-PC", "user": "accounts", "mode": "main", "runMode": "user", "tally": True,
+             "tallyState": "open", "open": [CO], "tallyPort": 9002}
+        return j([{"id": "d1", "name": "OFFICE-PC", "created_at": "2026-09-28T09:00:00Z", "last_seen": now, "version": "2.4.4", "main_bridge": "go-1",
+                   "info": {"computer": "OFFICE-PC", "user": "accounts", "beat": bt, "bridges": {"go-1": b}}, "revoked": False}])
     if path.endswith("/tally_companies"): return j([{"company": CO, "client_id": None, "gstin": books_data.GSTIN, "last_seen": "2026-09-28T10:05:00Z", "linked_at": None}, {"company": "SOMEONE ELSE PVT LTD", "client_id": None, "gstin": "", "last_seen": None, "linked_at": None}])
     if path.endswith("/rpc/tally_company_link"): calls["link"].append(json.loads(body)); return r.fulfill(status=204, body="")
     if path.endswith("/rpc/tally_device_create"): calls["create"] += 1; return j({"id": "d2", "key": "fcd_" + "b" * 48})
@@ -184,10 +194,13 @@ with sync_playwright() as p:
     ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
     # 15-Oct-2026: Settings links nothing itself; its Open Connect Tally leads to the guide's step 4, where the same RPC links
     ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
+    # c_vms already has the cloud's copy of CO's books (so step 4 shows it as linked, with no Link to press); a second
+    # client, not linked yet, is linked here
+    pg.evaluate("() => { const c = newCompany({name: 'New Client Pvt Ltd', gstin: ''}); c.id = 'c_new'; S.companies[c.id] = c; Store.saveCompany(c); }")
     calls["link"].clear(); pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(1200)
-    pg.select_option("#app [data-guide-client]", "c_vms"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
+    pg.select_option("#app [data-guide-client]", "c_new"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
     pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
-    ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_vms"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
+    ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_new"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
     calls["link"].clear()
     # FinCom Bridge 2.3.0 (the owner's condition): no computer key is made or handed over before the bridge proved itself
