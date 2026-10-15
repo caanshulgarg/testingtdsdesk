@@ -1,1 +1,0 @@
-import{j as s}from"./index-DH4Fm_sA.js";function g({selected:e,prefer:t,onPick:r,...n}){return s.jsx("select",{...n,onChange:o=>r(o.target.value),dangerouslySetInnerHTML:{__html:ledgerOptions(e||"",t)}},e||"")}export{g as L};
