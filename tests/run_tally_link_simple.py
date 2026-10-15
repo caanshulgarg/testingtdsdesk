@@ -159,10 +159,13 @@ def main():
 
         # ---- 2b. not linked, nothing seen yet: the guide reads the cloud again by itself
         E("(c) => { S.companies[c].tallyName = 'NEW CO'; }", cid)
-        scene([])
+        # no company open in Tally on any computer (15-Oct-2026: step 4 offers only what is open now)
+        scene([], devs=[dev(1, "NWS144", "anshul", opened=()), dev(2, "LAPTOP", "ravi", opened=())])
         E("(c) => openConnectTally(4, c)", cid); pg.wait_for_timeout(1500)
         ok("open NEW CO in TallyPrime" in txt("#app [data-guide-none]"), "2b. nothing seen: open NEW CO in TallyPrime (%s)" % txt("#app [data-connect-step=\"link\"]"))
-        E("() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()}); }" % D1)
+        # 15-Oct-2026: step 4 offers only the companies open in Tally now, so NEW CO is opened in Tally on NWS144 too
+        E("""() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()});
+            const d = window.__devs.find(x => x.id === '%s'); d.info.beat.open.push('NEW CO'); Object.values(d.info.bridges).forEach(b => b.open.push('NEW CO')); }""" % (D1, D1))
         pg.wait_for_timeout(22500)
         ok([o for o in gopts() if o[0] == "NEW CO"], "2b. a company opened in Tally shows by itself (no click) (%s)" % gopts())
 

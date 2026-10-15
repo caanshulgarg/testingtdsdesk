@@ -571,7 +571,11 @@ function guideState(rows, latest) {
   // the computer the steps speak of: the one furthest along
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
   const fine = st.find(([, x]) => x.fine) || reading[0] || null;
-  return { done, r, s, live, unlinked, fine };
+  // the companies open in Tally right now (an online computer whose Tally answers): the only ones step 4 offers (the owner,
+  // 15-Oct-2026: "there should be companies open in Tally at that time")
+  const openNow = [];
+  tally.forEach(([rr, ss]) => ss.open.forEach((name) => { if (!openNow.some((o) => o.company.toLowerCase() === String(name).toLowerCase())) openNow.push({ company: name, computer: pcName(rr) }); }));
+  return { done, r, s, live, unlinked, fine, openNow };
 }
 function GuideStep({ k, n, title, done, open, children }) {
   return <li data-connect-step={k} data-done={done ? "" : undefined} data-open={open ? "" : undefined} className={done ? "done" : open ? "now" : ""}>
@@ -580,7 +584,7 @@ function GuideStep({ k, n, title, done, open, children }) {
 }
 // step 4's picker: the client (those not linked; or the one a pointer named) and the companies FinCom has seen that no
 // other client has (companiesSeen, the same GSTIN on top), and Link
-function LinkPicker({ unlinked, g }) {
+function LinkPicker({ unlinked, g, openNow = [] }) {
   // the clients not linked first (the one a pointer named on top), then the linked ones, to change their company
   const named = g.cid && S.companies && S.companies[g.cid] && !S.companies[g.cid].deleted ? S.companies[g.cid] : null;
   const linkedCos = Object.values(S.companies || {}).filter((c) => !c.deleted && !unlinked.some((u) => u.id === c.id)).sort((a, c) => a.name.localeCompare(c.name));
@@ -588,20 +592,35 @@ function LinkPicker({ unlinked, g }) {
   const [pick, setPick] = useState({ cid: "", company: "" }), [busy, setBusy] = useState(false);
   if (!clients.length) return <div className="tlink-guide" data-guide-picker=""><span className="note">Add a client first; then link it here.</span> <button className="btn small primary" data-guide-add="" onClick={() => doAct("addCo")}>Add a client</button></div>;
   const cid = clients.some((c) => c.id === pick.cid) ? pick.cid : named ? named.id : clients[0].id, co = S.companies[cid];
-  const list = companiesSeen(co).filter((c) => !c.mine), want = pick.cid === cid && pick.company ? pick.company : (g.cid === cid && g.company) || "";
-  const company = list.some((c) => c.company === want) ? want : list.length ? list[0].company : "";
+  // the companies open in Tally now that no other client has; the same GSTIN (as companiesSeen marks it) on top
+  const seen = companiesSeen(co), isOpen = (name) => openNow.some((o) => o.company.toLowerCase() === String(name || "").toLowerCase());
+  const taken = ((TCloud.pane || {}).companies || []).filter((c) => c.client_id && String(c.client_id) !== String(cid)).map((c) => String(c.company).toLowerCase());
+  const list = openNow.filter((o) => !taken.includes(o.company.toLowerCase())).map((o) => { const x = seen.find((c) => c.company.toLowerCase() === o.company.toLowerCase());
+    return { company: o.company, computer: o.computer, same: !!(x && x.same), mine: !!(x && x.mine) }; }).sort((a, b) => (b.same - a.same) || a.company.localeCompare(b.company));
+  const lk = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, linkedTo = lk && lk.state !== "unlinked" ? lk.company : "";
+  const want = pick.cid === cid && pick.company ? pick.company : (g.cid === cid && g.company) || "";
+  const company = list.some((c) => c.company === want) ? want : (list.find((c) => !c.mine) || list[0] || {}).company || "";
   const may = S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true;
   const link = async () => { if (!company) return; setBusy(true); const ok = await tallyLinkClient(company, cid); setBusy(false);
     if (ok) { setPick({ cid: "", company: "" }); if (S.tallyGuide && S.tallyGuide.cid === cid) S.tallyGuide = Object.assign({}, S.tallyGuide, { cid: "", company: "" }); render(); } };
   return <div className="tlink-guide" data-guide-picker="">
     <label className="f"><span>Client</span><select data-guide-client="" aria-label="Client to link" value={cid} onChange={(ev) => setPick({ cid: ev.target.value, company: "" })}>
-      {clients.map((c) => <option key={c.id} value={c.id}>{c.name + (unlinked.some((u) => u.id === c.id) ? "" : " (linked: change)")}</option>)}</select></label>
+      {clients.map((c) => <option key={c.id} value={c.id}>{c.name + (unlinked.some((u) => u.id === c.id) ? "" : " (linked: change)")}</option>)}</select>
+      {linkedTo && <span className="note" data-guide-linked-to={linkedTo}>{"Linked to " + linkedTo + (isOpen(linkedTo) ? ", open in Tally now ✓" : ", not open in Tally now")}</span>}</label>
     <label className="f"><span>Company in Tally</span>{list.length ? <select data-guide-company="" aria-label="Company in Tally" value={company} onChange={(ev) => setPick({ cid, company: ev.target.value })}>
       {list.map((c) => <option key={c.company} value={c.company}>{c.company + (c.same ? " (same GSTIN)" : "") + (c.computer ? " · " + c.computer : "")}</option>)}</select>
-      : <span className="note" data-guide-none="">{"None seen yet: open " + (co.tallyName || co.name) + " in TallyPrime; it shows here within a minute."}</span>}</label>
-    {may ? <button className="btn small primary" data-guide-link={cid} disabled={!company || busy} onClick={link}>{busy ? "Linking…" : "Link"}</button>
+      : <span className="note" data-guide-none="">{"No company is open in Tally right now: open " + (co.tallyName || linkedTo || co.name) + " in TallyPrime; it shows here within a minute."}</span>}</label>
+    {may ? <button className="btn small primary" data-guide-link={cid} disabled={!company || busy || (!!linkedTo && company.toLowerCase() === linkedTo.toLowerCase())} onClick={link}>{busy ? "Linking…" : linkedTo ? "Change to this company" : "Link"}</button>
       : <span className="note">A member of the firm who may make changes links it.</span>}
   </div>;
+}
+// step 4: each linked client with the Tally company it is linked to, and whether that company is open in Tally now
+function LinkedNow({ openNow, unlinked }) {
+  const rows = Object.values(S.companies || {}).filter((c) => !c.deleted && !unlinked.some((u) => u.id === c.id)).map((c) => ({ c, k: typeof tallyLinkOf === "function" ? tallyLinkOf(c) : null }))
+    .filter((x) => x.k && x.k.company).sort((a, b) => a.c.name.localeCompare(b.c.name));
+  if (!rows.length) return null;
+  return <ul className="tguide-linked" data-guide-linked="">{rows.map(({ c, k }) => { const on = openNow.some((o) => o.company.toLowerCase() === k.company.toLowerCase());
+    return <li key={c.id} data-guide-linked-row={c.name} data-open-now={on ? "" : undefined}>{c.name} is linked to <b>{k.company}</b>{on ? <span className="tag ok">open in Tally now</span> : <span className="note"> · not open in Tally now</span>}</li>; })}</ul>;
 }
 function ConnectGuide({ rows, m, latest, connectStep }) {
   const p = TCloud.pane, g = S.tallyGuide || {};
@@ -655,7 +674,8 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
       <GuideStep k="link" n={4} title="Link each client to its Tally company" done={d.link && !(want === "link" && g.at)} open={want === "link"}>
         {d.link && !(want === "link" && g.at) ? <span className="note">Every client is linked.</span>
           : <>{un.length > 0 && <span className="note" data-guide-unlinked={un.length}>{(un.length === 1 ? un[0].name + " is not linked." : un.length + " clients are not linked: " + un.slice(0, 3).map((c) => c.name).join(", ") + (un.length > 3 ? " and " + (un.length - 3) + " more" : "") + ".")}</span>}
-            <LinkPicker unlinked={un} g={g} /></>}
+            <LinkedNow openNow={x.openNow} unlinked={un} />
+            <LinkPicker unlinked={un} g={g} openNow={x.openNow} /></>}
       </GuideStep>
     </ol>
     {!all && d.install && <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button>}

@@ -156,11 +156,14 @@
 #app .tconnect .tguide-steps { margin: 6px 0 10px; }
 #app .tconnect .tguide-body { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
 #app .tconnect .tguide-say { margin-top: 2px; }
+#app .tconnect .tguide-linked { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 4px; }
+#app .tconnect .tguide-linked .tag { margin-left: 6px; }
 #app .tconnect li.now { background: var(--st-attention-soft); border-radius: 6px; padding: 4px 6px; margin-left: -6px; }
 #app .tconnected { margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--st-done); border-radius: 6px; background: var(--st-done-soft); overflow-wrap: anywhere; }
 #app .tlink-guide { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 8px 0 2px; }
 #app .tlink-guide .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
 #app .tlink-guide select { max-width: 100%; min-width: 0; }
+#app .tlink-guide .f .note { white-space: normal; overflow-wrap: break-word; }
 #app .tallgood, #app .tconnected-x { margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--st-done); border-radius: 6px; background: var(--st-done-soft); }
 #app .tclients, #app .treading { margin: 0 0 12px; }
 #app .tseen-hint { margin: 8px 0 0; overflow-wrap: anywhere; }

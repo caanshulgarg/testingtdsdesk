@@ -262,9 +262,13 @@ def main():
         # 15-Oct-2026: Change company leads to the one place to link, Connect Tally's step 4 with this client
         pg.click(link + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(link + " [data-tally-link-change]"); pg.wait_for_timeout(900)
         opts = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
-        ok(opts == ["ABC LTD"] and E("() => document.querySelector('#app [data-guide-client]').value") == cid, "5. Change company: Connect Tally, this client, the other companies seen (%s)" % opts)
+        # 15-Oct-2026: only the companies open in Tally now (ABC LTD's LAPTOP was last heard 3 hours ago): its own GARG SHEKHAR
+        # (already linked, so Change cannot pick it again) and XYZ, open on TALLYSRV
+        ok(opts == ["GARG SHEKHAR", "XYZ"] and E("() => document.querySelector('#app [data-guide-client]').value") == cid
+           and E("() => document.querySelector('#app [data-guide-company]').value") == "XYZ", "5. Change company: Connect Tally, this client, the companies open in Tally now (%s)" % opts)
+        ok("Linked to GARG SHEKHAR, open in Tally now" in txt("#app [data-guide-linked-to]"), "5. Change company: it says what it is linked to now (%s)" % txt("#app [data-guide-linked-to]"))
         pg.click("#app [data-guide-link]"); pg.wait_for_timeout(800)
-        ok(["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
+        ok(["tally_company_link", {"p_company": "XYZ", "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
         shot("client-linked")
         E("(c) => { S.tallyGuide = {}; openCompany(c); goClient('books:import'); }", cid); pg.wait_for_timeout(1000)
         # held entries: that day's Day Book (and one other held line)
@@ -295,8 +299,9 @@ def main():
         ok(E("document.querySelector('#app [data-tally-link]') && document.querySelector('#app [data-tally-link]').getAttribute('data-tally-link')") == "unlinked", "5. not linked: From Tally's line says so")
         # 15-Oct-2026: the companies to link are in the one place to link, Connect Tally's step 4
         pg.click("#app [data-tally-link-line] [data-open-connect]"); pg.wait_for_timeout(900)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and "ABC LTD" in E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)"),
-           "5. not linked: Open Connect Tally, its step 4 lists the companies seen, with Link (%s)" % txt(link))
+        o5 = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and "GARG SHEKHAR" in o5 and "ABC LTD" not in o5,
+           "5. not linked: Open Connect Tally, its step 4 lists the companies open in Tally now (not ABC LTD, its computer offline) (%s)" % o5)
         E("(c) => { S.tallyGuide = {}; S.view = 'company'; S.coId = c; goClient('books:import'); }", cid); pg.wait_for_timeout(900)
         shot("client-unlinked")
         # Client setup -> Tally: the same line at the top
