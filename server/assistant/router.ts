@@ -69,7 +69,10 @@ const NOT_MINE = /\b(why|how come|explain|should|could|would|advise|advice|sugge
 // list", "what's due this month", "pending compliances") have no law word and stay routed.
 const LAW = /\b(due dates?|last dates?|rates?|section|limit|threshold|applicable|applicability|penalty|late fee|circular|notification|act,? 20(25|17)|act,? 1961|new act|old act)\b/i;
 const BOOK = /\b(my|our|we|us|this client|books?|ledgers?|paid|received|entries|suppliers?|customers?|parties|balances?|total|how much|which|list|payments?|receipts?|sales|purchases?|expenses?|bank|cash|deducted|anyone|who|pending|overdue|crossed|without)\b/i;
-export const lawQuestion = (q: string) => LAW.test(String(q || "")) && !BOOK.test(String(q || ""));
+// a return or form named with a time word is the law too, typos and all ("gst return 9 date", "Gst return due dare")
+const RETURN = /\b(gst ?returns?|gstr[- ]?\d+[a-z]?|itr|income[- ]tax returns?|t[dc]s returns?|24q|26q|27q|27eq|advance tax|tax audit|roc|aoc-?4|mgt-?7|dir-?3|annual returns?)\b/i;
+const WHEN = /\b(dat[a-z]*|deadlines?|last day|when|due)\b/i;
+export const lawQuestion = (q: string) => { const s = String(q || ""); return (LAW.test(s) || (RETURN.test(s) && WHEN.test(s))) && !BOOK.test(s); };
 
 // two questions in one, or a question that is not one tool's table: never routed by words or by Haiku
 export const compound = (q: string) => NOT_MINE.test(String(q || ""));
@@ -131,7 +134,7 @@ export function route(question: string, anchor: string): Route | null {
   if (/\bduplicates?\b|\bentered twice\b|\bdouble entr/.test(s)) return R("duplicates", span, "duplicates");
   if (/\bround (sum|figure|amount)s?\b/.test(s)) return R("round_sums", { ...span, min_amount: amountIn(s) }, "round sums");
   if (/\b(sunday|weekend|holiday)s?\b/.test(s)) return R("weekend_entries", { ...span, saturdays: /\b(saturday|weekend)s?\b/.test(s) }, "weekend entries");
-  if (/\bdue (list|dates?)\b|\bwhat('s| is) due\b|\bpending compliances?\b/.test(s)) return R("due_list", span, "due list");
+  if (/\bdue (list|dates?)\b|\bwhat('s| is) due\b|\bpending compliances?\b|\boverdue (returns?|compliances?|filings?)\b/.test(s)) return R("due_list", span, "due list");
   if (/\b(which|what) books\b|\bbooks held\b|\blast (synced|updated|entry)\b/.test(s)) return R("books_held", {}, "books held");
   // a ledger
   m = q.match(/\bbalance (?:of|in|for)\s+(?:the\s+)?([A-Za-z0-9&.,()' -]{3,60}?)(?:\s+(?:as on|on|at|in|for)\b.*)?[?.]?$/i);

@@ -6,7 +6,8 @@
 //     steps, the audit, 3CD, Schedule III and DCF.
 // Thinking is adaptive on all three (neither Sonnet 5.5 nor Opus 5.5 can switch it off; Haiku is only routing, at low
 // effort). The server-side refusal fallback ("default") is on for Sonnet and Opus; Haiku has none (the API rejects it).
-// Plain module: no Deno, no imports.
+// Plain module: no Deno; its one import is the router's law rule (also plain).
+import { lawQuestion } from "./router.ts";
 
 export type Task = "route" | "book" | "general" | "file" | "notice" | "heavy";
 export type Plan = { task: Task, model: string, effort: "low" | "medium" | "high", maxTokens: number, fallbacks: boolean, feature: string, web: boolean };
@@ -42,11 +43,12 @@ export function taskOf(question: string, hasAttachment: boolean, clientOpen: boo
   const q = String(question || "");
   if (hasAttachment && uploadKind && uploadKind !== "notice" && !/\b(notice|show cause|intimation|demand order)\b/i.test(q)) return "file";
   if (hasAttachment || /\b(notice|show cause|scn|asmt-?10|drc-?0?1a?|reg-?(17|31)|143\s*\(\s*[12]|148a?|133\s*\(\s*6|intimation|demand order|justification report|penalty u\/?s)\b/i.test(q)) return "notice";
+  if (clientOpen && /\bwhat('s| is) due\b/i.test(q)) return "book";     // the client's own dues
+  if (lawQuestion(q)) return "general";                    // the router's own rule (a due date, a rate, a return's date)
   if (/\b(audit the books|tax audit report|3cd|schedule iii|schedule 3|dcf|valuation)\b/i.test(q)) return "heavy";
   if (/\b(excel|xlsx|spreadsheet|word|docx|pdf|download|letter|file of)\b/i.test(q)) return "file";
   if (!clientOpen) return "general";
   // with a client open, a question about the law (rates, sections, due dates) and not the books is general
-  if (/\bwhat('s| is) due\b/i.test(q)) return "book";     // the client's own dues
   if (/\b(rate|section|due dates?|last dates?|limit|threshold|applicable|what is|how to|treatment|circular|notification|act,? 20(25|17)|new act|old act)\b/i.test(q) &&
       !/\b(my|our|we|us|this client|books?|ledgers?|paid|received|entries|suppliers?|customers?|parties|balances?|total|how much|which|list|payments?|receipts?|sales|purchases?|expenses?|bank|cash|deducted|anyone|who)\b/i.test(q)) return "general";
   return "book";

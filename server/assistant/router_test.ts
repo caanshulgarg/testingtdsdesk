@@ -56,13 +56,19 @@ Deno.test("a question about the law goes to a model, not to the client's books (
   for (const q of ["I need gstr 9 due date", "itr due date", "due date of 26Q for Q2", "last date for GSTR-9C", "rate of TDS under 194J", "what is the threshold for 194Q"])
     eq(route(q, ANCHOR), null, q);
   for (const [q, tool] of [["what's due this month", "due_list"], ["due list", "due_list"], ["pending compliances", "due_list"], ["what is due this month", "due_list"],
-    ["194C without TDS", "tds_missed"], ["balance of air Ess exim", "ledger_balance"]] as [string, string][]) {
+    ["194C without TDS", "tds_missed"], ["balance of air Ess exim", "ledger_balance"], ["overdue returns", "due_list"]] as [string, string][]) {
     const r = route(q, ANCHOR) as any;
     assert(r && r.tool === tool, q + " -> " + tool + " (got " + JSON.stringify(r) + ")");
   }
   eq(taskOf("I need gstr 9 due date", false, true), "general", "a due date of a return, client open: general");
   eq(taskOf("itr due date", false, true), "general", "ITR due date: general");
   eq(taskOf("what is due this month", false, true), "book", "the client's own dues: the books");
+  // the owner's own words after round 57 (15-Oct): a return named with a time word is the law, typos and all
+  for (const q of ["gst return 9 date", "Gst return due dare", "gstr 9 last date", "when is ITR due", "advance tax due dates", "deadline for tax audit report"]) {
+    eq(route(q, ANCHOR), null, "router: " + q);
+    eq(taskOf(q, false, true), "general", "task: " + q);
+  }
+  eq(taskOf("overdue returns", false, true), "book", "the client's overdue returns: the books");
 });
 
 Deno.test("the task and the model: Sonnet for chat, Opus at high effort for notices, Haiku only to route", () => {
