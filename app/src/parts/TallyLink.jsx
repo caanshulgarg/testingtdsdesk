@@ -155,9 +155,11 @@ function linkHere(co, where) {
 // clean-up batch 2 (one home for each thing): the Link to Tally card lives in Client setup → Tally; From Tally and the
 // Overview show its status line (the state's word, what it means, its one button) and a link to the card
 export function goTallyLinkHome() { S.step = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
-export function TallyLinkLine({ co, where = "overview", b = null }) {
+// only (round 63, "Tally messages only where needed"): the states it is shown in (the Overview: not linked or Needs you;
+// linked and reading, or waiting, is the top bar's dot)
+export function TallyLinkLine({ co, where = "overview", b = null, only = null }) {
   const k = co ? linkHere(co, where === "books" ? "books" : "setup") : null;
-  if (!co || !k) return null;
+  if (!co || !k || (only && !only.includes(k.state))) return null;
   return <section className="tlink tlink-one" data-tally-link-line={k.state} data-tally-link={k.state} aria-label={"Link to Tally: " + k.word}>
     <StatusLine co={co} k={k} where={where} b={b} plain />
     {k.state !== "unlinked" && <button className="linkbtn tlink-home" data-tally-link-home="" onClick={goTallyLinkHome}>{"Tally in Client setup \u2192"}</button>}

@@ -22,6 +22,7 @@ import Tieout from "./books/Tieout.jsx";
 import Recon from "./books/Recon.jsx";
 import { GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 import { BooksStale } from "../parts/TallyLine.jsx";
+import { booksNeedTally } from "../parts/FreshBar.jsx";
 import HeldBooks from "../parts/HeldBooks.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 import Loading from "../parts/Loading.jsx";
@@ -40,11 +41,14 @@ function lastEntryDate(b) {
 // "Books up to … · read …", Update now and the timing are in the top bar's Tally panel (parts/TallyLine.jsx PanelBooks);
 // here only the books' own warnings, and one amber line when the books are stale or reading has stopped (BooksStale)
 // unknown: false on the ledgers page, whose Needs you lists those ledgers one line each (Ledgers.jsx)
+// round 63 (Tally messages only where needed): with fresh books nothing about Tally; one quiet "Books up to <date>"
+// line instead (the held lines and the unknown ledgers stay: the figures are not complete without them)
 function FreshLine({ b, unknown = true }) {
+  const quiet = !booksNeedTally(b, S.coId), f = quiet && typeof booksFresh === "function" ? booksFresh(b, S.coId) : null;
   return <>
     <HeldBooks cid={S.coId} where="books" />
     {unknown && <UnknownLedgers cid={S.coId} where="books" byBook />}
-    <BooksStale cid={S.coId} /></>;
+    {quiet ? (f && f.last ? <p className="note books-upto" data-books-upto="" style={{ margin: "4px 0 8px" }}>{"Books up to " + fmtDate(tallyDate(f.last))}</p> : null) : <BooksStale cid={S.coId} />}</>;
 }
 
 // what a tab needs before it can show anything, and the button that brings it (review item 7). One name for bringing
@@ -95,7 +99,7 @@ function BooksPage() {
     // the page's title is in the top bar
     return <>
       {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><UnknownLedgers cid={co.id} where="books" byBook /><BooksStale cid={co.id} /></>}
-      <JobsNote cid={co.id} />
+      <JobsNote cid={co.id} active />
       {busy}
       {tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
         : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
@@ -121,7 +125,7 @@ function BooksPage() {
       <button key={id} data-books-tab={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>}
     <SyncNote cid={co.id} tab={tab} />
     {/* From Tally (2.4.0) says the upload's progress and the reading of the books in its own upload part */}
-    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={!(tab === "ledgers" || (tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
+    {tab !== "import" && <><JobsNote cid={co.id} active /><GstDriftNote b={b} /><FreshLine b={b} unknown={!(tab === "ledgers" || (tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
     {tab !== "import" && busy}
     {body}
   </>;

@@ -10,8 +10,9 @@ import { goTallyCard } from "../parts/TallyChip.jsx";
 function NotLinkedLine() {
   const list = sortedCompanies().filter((c) => typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked");
   if (!list.length) return null;
-  return <div className="due-line" data-not-linked-line={list.length}>
-    <span className="warn-text"><b>{list.length}</b>{list.length === 1 ? " client not linked to Tally:" : " clients not linked to Tally:"}</span>
+  // round 63: kept, as one quiet line (not a warning)
+  return <div className="due-line due-quiet" data-not-linked-line={list.length}>
+    <span className="note"><b>{list.length}</b>{list.length === 1 ? " client not linked to Tally:" : " clients not linked to Tally:"}</span>
     {list.slice(0, 3).map((c, i) => <span key={c.id}>{i ? ", " : " "}<button className="linkbtn" data-not-linked-open={c.id} onClick={() => goTallyCard(c.id)}>{c.name + " → Link"}</button></span>)}
     {list.length > 3 && <>{" and "}<button className="linkbtn" data-not-linked-more="" onClick={() => { S.tallyFocus = ""; navHome("tally"); }}>{list.length - 3} more</button></>}
   </div>;

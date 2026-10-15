@@ -266,7 +266,8 @@ def main():
         # (already linked, so Change cannot pick it again) and XYZ, open on TALLYSRV
         ok(opts == ["GARG SHEKHAR", "XYZ"] and E("() => document.querySelector('#app [data-guide-client]').value") == cid
            and E("() => document.querySelector('#app [data-guide-company]').value") == "XYZ", "5. Change company: Connect Tally, this client, the companies open in Tally now (%s)" % opts)
-        ok("Linked to GARG SHEKHAR, open in Tally now" in txt("#app [data-guide-linked-to]"), "5. Change company: it says what it is linked to now (%s)" % txt("#app [data-guide-linked-to]"))
+        # round 63: the client's state in one line ("<client> is linked to GARG SHEKHAR · open in Tally now ✓")
+        ok("is linked to GARG SHEKHAR" in txt("#app [data-guide-client-state]") and "open in Tally now" in txt("#app [data-guide-client-state]"), "5. Change company: it says what it is linked to now (%s)" % txt("#app [data-guide-client-state]"))
         pg.click("#app [data-guide-link]"); pg.wait_for_timeout(800)
         ok(["tally_company_link", {"p_company": "XYZ", "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
         shot("client-linked")

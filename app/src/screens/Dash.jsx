@@ -49,8 +49,9 @@ export default function Dash() {
   return (<>
     <section className="dash">
       <OnbCard co={co} />
-      {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open) */}
-      {!(ONB.steps(co).some((x) => !x.done) && !co.onbHide) && <TallyLinkLine co={co} />}
+      {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open);
+          round 63: only when not linked or it needs the person (linked and reading is the top bar's dot) */}
+      {!(ONB.steps(co).some((x) => !x.done) && !co.onbHide) && <TallyLinkLine co={co} only={["unlinked", "needs"]} />}
       <div className="dash-tiles">
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
         <Tile tone="amber" Icon={ReceiptText} label="To review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />

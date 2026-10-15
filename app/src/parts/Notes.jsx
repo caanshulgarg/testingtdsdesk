@@ -85,11 +85,13 @@ export function MultiUpload() {
 // live; it carries on when this page is closed (TCloud.jobs, migration-13)
 // compact (From Tally, 2.4.0): "Sending DayBook.xml to FinCom’s cloud: 42%", the sizes and what happens if the page is
 // closed on hover
-export function JobsNote({ cid, compact }) {
+// active (round 63: Tally messages only where needed): only a job going on or stopped (the Books tabs other than From
+// Tally); a job done today is said on From Tally only
+export function JobsNote({ cid, compact, active = false }) {
   if (typeof TCloud !== "object" || !TCloud.on()) return null;
   if (TCloud.jobs[cid] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[cid] = []; setTimeout(() => TCloud.jobsLoad(cid), 0); }
   const day = Date.now() - 86400000;
-  const list = (TCloud.jobs[cid] || []).filter((j) => j.status === "queued" || j.status === "running" || Date.parse(j.updated_at) > day).slice(0, 3);
+  const list = (TCloud.jobs[cid] || []).filter((j) => j.status === "queued" || j.status === "running" || (active ? j.status === "failed" && Date.parse(j.updated_at) > day : Date.parse(j.updated_at) > day)).slice(0, 3);
   // round 20 (d.2): a Day Book on its way to Storage from this page: its progress bar
   const up = typeof TCloudUp === "object" && TCloudUp.prog ? TCloudUp.prog[cid] : null;
   const pct = up && up.size ? Math.floor((up.sent * 100) / up.size) : 0;

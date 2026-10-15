@@ -255,6 +255,10 @@ def main():
         # every client linked: the guide folds
         E("() => { const ids = Object.values(S.companies).filter(x => !x.deleted).map(x => x.id); window.__companies = ids.map((id, i) => ({company: 'CO ' + i, client_id: id, device_id: '%s', gstin: ''})); TLight.st.cos = window.__companies; TCloud.pane.companies = window.__companies; render(); }" % D1)
         pg.wait_for_timeout(600)
+        # round 63: and each client's ledgers and this year's Day Book are in FinCom (tally_status: a book with ledgers and days)
+        E("""() => { const rpc = TCloud.rpc, today = new Date().toISOString().slice(0, 10);
+            TCloud.rpc = async (fn, a) => fn === "tally_status" ? (await new Promise(r => setTimeout(r, 5)), [{book: "bk-" + a.p_client, company: "X", from: "2026-04-01", openAsOn: "2026-03-31", ledgersAt: new Date().toISOString(), days: 150, to: today, state: {}}]) : rpc(fn, a);
+            Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
         ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "9. every client linked: the guide folds to one line with 'Connect another computer'")
         # this computer's Tallys (Details): no linking there
         E("""() => { Bridge.cfg = () => ({url: 'http://localhost:1', key: 'k', follow: false, port: 0}); Bridge.blocked = () => false; Bridge.on = () => true; Bridge.up = () => true;

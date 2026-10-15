@@ -223,17 +223,67 @@ const Ledgers = {
     const h = this.cur(cid), bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
     return Math.max(h ? Date.parse(h.srcAt || h.at || h.importedAt || "") || 0 : 0, bk ? Date.parse(bk.ledgersAt || "") || 0 : 0);
   },
-  async staleAsk(cid){
-    cid = cid || this.cid();
-    const co = CO(cid), post = this.lastPost(cid), at = this.listAt(cid);
-    if (!co || !post || at >= post) return null;
-    const here = typeof bridgeLive === "function" && bridgeLive(co) && !!Bridge.openFor(co);
-    const r = {cid, at: Date.now(), post, listAt: at, via: here ? "bridge" : "cloud"};
+  // the ledgers-only wake (no full Update now): the bridge here when it has the company open (POST /ledgers/refresh),
+  // else the client's Tally computer through FinCom's cloud (tally-ingest wake, what "ledgers"). One call. Used by the
+  // bill's chooser (staleAsk) and Connect Tally's step 5 (round 63, Import ledgers)
+  async askTally(cid){
+    const co = CO(cid), r = {cid, at: Date.now(), via: ""};
+    if (!co){ r.err = "no client"; return r; }
+    const here = typeof bridgeLive === "function" && bridgeLive(co) && typeof Bridge === "object" && !!Bridge.openFor(co);
+    r.via = here ? "bridge" : "cloud";
     try {
       if (here) r.ans = await Bridge.call("/ledgers/refresh", {company: tallyCoName(co)}, 30000);
       else if (typeof TCloud === "object" && TCloud.on()) r.ans = await TCloudUp.post({kind: "wake", what: "ledgers", client: cid}, {client: cid});
       else r.via = "";
     } catch (e){ r.err = (e && e.message) || String(e); }
+    return r;
+  },
+  // round 63 (the owner, 16-Oct-2026: "for a big company, upload the masters file"): Tally's List of Accounts exported as
+  // XML (masters), read with the books' own reader (Books.importMasters). The list is this client's ledger list at once
+  // (src "file"), and goes to FinCom's cloud through the existing upload_ledgers declared complete with its count
+  // (migration-34: only then may the cloud mark a ledger missing from it; its guard keeps one with entries or an
+  // opening). No figure moves: the book's own start and openings date are sent back as they are, and each ledger's
+  // opening is the one the cloud holds (a ledger new to the cloud: none), never the masters' books-beginning opening.
+  // Without a book in the cloud yet the list stays here, and the Tally computer's own read brings it later.
+  async fromMasters(cid, file){
+    const co = CO(cid);
+    if (!co || !file) return {ok: false, err: "no client"};
+    let fc = null; try { fc = await Books.fileCompany(file); } catch (e){}
+    const linked = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).company || "" : "";
+    if (fc && fc.name && linked && ledNm(fc.name).toLowerCase() !== ledNm(linked).toLowerCase())
+      return {ok: false, err: file.name + " is " + fc.name + "'s, not " + linked + "'s. Export List of Accounts from " + linked + "."};
+    let res;
+    try { res = await Books.importMasters(file); } catch (e){ return {ok: false, err: "Could not read " + file.name + ": " + ((e && e.message) || e)}; }
+    const by = new Map();
+    Object.entries(res.info || {}).forEach(([name, i]) => { const n = ledNm(name); if (!n || by.has(n.toLowerCase())) return;
+      by.set(n.toLowerCase(), {name: n, group: ledNm((i && i.group) || ""), gstin: String((i && i.gstin) || "").toUpperCase(), pan: String((i && i.pan) || "").toUpperCase(),
+        taxType: (i && i.taxType) || "", dutyHead: (i && i.dutyHead) || "", tdsNature: (i && i.tdsNature) || ""}); });
+    const list = Array.from(by.values());
+    if (!list.length) return {ok: false, err: file.name + " has no ledgers. In Tally: Gateway → Display More Reports → List of Accounts, then Alt+E → XML (masters)."};
+    const parents = {}; Object.entries(res.groups || {}).forEach(([g, p]) => { if (g) parents[ledNm(g)] = ledNm(p || ""); });
+    const now = new Date().toISOString();
+    this.take(cid, {list, parents, at: now, srcAt: now, src: "file", file: file.name});
+    let cloud = "";
+    if (typeof TCloud === "object" && TCloud.on()){
+      try { await TCloud.status(cid, true); } catch (e){}
+      const bk = TCloud.has(cid) ? TCloud.book(cid) : null, d8 = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
+      if (bk && bk.book && /^\d{8}$/.test(d8(bk.from)) && /^\d{8}$/.test(d8(bk.openAsOn))){
+        const open = new Map();
+        try { (await TCloud.restAll("tally_ledgers?select=name,open&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book)) || []).forEach((r) => { if (r && r.name) open.set(ledNm(r.name).toLowerCase(), String(r.open == null ? 0 : r.open)); }); } catch (e){}
+        const rows = list.map((l) => [l.name, l.group, open.get(l.name.toLowerCase()) || "0", l.gstin, l.pan]);
+        const groups = Object.entries(parents).map(([g, p]) => [g, p]);
+        try { await TCloudUp.post({kind: "upload_ledgers", from: d8(bk.from), openAsOn: d8(bk.openAsOn), complete: true, count: rows.length, ledgers: rows, groups, file: file.name}, {client: cid, company: linked || bk.company || tallyCoName(co)});
+          cloud = "sent"; } catch (e){ cloud = "not sent: " + ((e && e.message) || String(e)); }
+      } else cloud = "later";
+    }
+    render();
+    return {ok: true, n: list.length, cloud};
+  },
+  async staleAsk(cid){
+    cid = cid || this.cid();
+    const co = CO(cid), post = this.lastPost(cid), at = this.listAt(cid);
+    if (!co || !post || at >= post) return null;
+    const r = Object.assign(await this.askTally(cid), {post, listAt: at});
     this.asked = r;
     if (r.ans && !r.err) setTimeout(() => { this.seen[cid] = 0; this.watch(cid); }, 60000);
     return r;

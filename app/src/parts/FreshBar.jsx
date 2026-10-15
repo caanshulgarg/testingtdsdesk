@@ -5,7 +5,7 @@
 // the top bar's Tally panel; this keeps what needs the person: the first copy's progress, Tally not answering, the buttons,
 // a check's answer, the offline copy, and the one amber line when the books are stale (parts/TallyLine.jsx BooksStale).
 import Msg from "./Msg.jsx";
-import { BooksStale } from "./TallyLine.jsx";
+import { BooksStale, staleWords } from "./TallyLine.jsx";
 import HeldBooks from "./HeldBooks.jsx";
 
 const hhmm = (s2) => fmtTime(s2);
@@ -27,6 +27,24 @@ function CloudBar({ cid }) {
     {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + fmtTime(st.trouble.at) + "; the bridge carries on by itself."}</span></>}</>;
 }
 
+// round 63 (the owner, 16-Oct-2026: "Tally messages only where they are needed, not on every page"): the Tally part of this
+// bar is shown only when the books need the person: not read yet, read more than 3 days ago, days not read, reading
+// stopped, or the first copy still being made. Fresh books: nothing about Tally here (the top bar's dot and its panel
+// say it); a check's answer, the offline copy and the held lines (the figures are not complete) stay.
+const OLD_MS = 3 * 86400e3;
+export function booksNeedTally(b, cid) {
+  b = b || {}; cid = cid || S.coId;
+  const have = (b.vouchers || []).length > 0 || (typeof TCloud === "object" && TCloud.has(cid));
+  if (!have) return true;
+  if (staleWords(cid) && !/days? ago/.test(staleWords(cid))) return true;
+  const m = (LK.fr() || {}).man || {};
+  if (m.keep && (m.phase === "open" || m.phase === "first")) return true;
+  const st = ((typeof TCloud === "object" && TCloud.book(cid)) || {}).state || {};
+  if (st.phase === "first" || (st.trouble && st.trouble.at)) return true;
+  const f = typeof booksFresh === "function" ? booksFresh(b, cid) : {}, a = typeof booksAsOf === "function" ? booksAsOf(cid) : null;
+  const at = Math.max(Date.parse((f && f.at) || "") || 0, Date.parse((a && a.at) || "") || 0);
+  return !at || Date.now() - at > OLD_MS;
+}
 // held: show the held lines' warning here (Look up leaves it to its answer, which shows it once one is on the page)
 export default function FreshBar({ b, held = true }) {
   const f = LK.fr(), live = LK.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
@@ -36,6 +54,7 @@ export default function FreshBar({ b, held = true }) {
   const off = b && b.offline ? <p className="note warn" data-books-offline="">{"FinCom’s server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."}</p> : null;
   // the cloud's copy: what this page shows when it is the source
   const hb = held && <HeldBooks cid={S.coId} where="fresh" />, hd = typeof booksHeld === "function" && !!booksHeld(S.coId);
+  if (!booksNeedTally(b, S.coId)) return <>{hb}{(chk || off) && <div className="lk-fresh" data-fresh-quiet="">{chk}{off}</div>}</>;
   const stale = <BooksStale cid={S.coId} />;
   if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh">{stale}<span className="note"><CloudBar cid={S.coId} /></span>{chk}{off}</div></>;
   let upTo, btns = null;

@@ -260,12 +260,12 @@ try:
         def card_again():
             E2("() => { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); }"); W2(1500)
         scene([], []); card_again()
-        ok(steps() == [0, 0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
+        ok(steps() == [0, 0, 0, 0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())
         scene([], [TL.dev(1, "NWS144", "anshul", opened=(), tally="closed")]); card_again()
-        ok(steps() == [1, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
+        ok(steps() == [1, 0, 0, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
         scene(TL.SEEN, TL.DEVS); card_again()
         ok(steps()[:3] == [1, 1, 1] and steps()[3] == 0, "Tally open on a company: steps 1 to 3 ticked, not 4 (%s)" % steps())
         E2("(c) => openConnectTally(4, c)", lcid); W2(900)
