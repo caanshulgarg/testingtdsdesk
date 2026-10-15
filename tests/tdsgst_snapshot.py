@@ -44,6 +44,11 @@ CHALLANS = """() => {
 }"""
 
 
+# the day tests/fixtures/tdsgst-before.json was made (14-Oct-2026). The pages show figures worked out to today (the 234E
+# late fee is 200 a day to the date), so the browser's clock is fixed at that day; a real clock made the comparison fail a
+# day later (15-Oct-2026: 24Q Q1 2026-27, 15,000.00 became 15,200.00)
+SNAPSHOT_DAY = "2026-10-14T12:00:00+05:30"
+
 def snapshot(site, port=8290, shots=None):
     from playwright.sync_api import sync_playwright
     from books_data import CACHE
@@ -55,6 +60,7 @@ def snapshot(site, port=8290, shots=None):
     files, figures, errors = {}, {}, []
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
+        pg.clock.set_fixed_time(SNAPSHOT_DAY)
         pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
         pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
