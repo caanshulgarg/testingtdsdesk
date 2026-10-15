@@ -102,6 +102,7 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
   window.__books = {}; Object.entries(fix(books || {})).forEach(([n, b]) => { window.__books[ids[n]] = b; });
   window.__ledgers = window.__ledgers || {};
   Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); Ledgers.st = {}; S.ledImp = null; S.ledFile = null;
+  S.tallyFold = {};
   Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = [];
   TCloud.on = () => true;
   const copy = (o) => JSON.parse(JSON.stringify(o));
@@ -209,6 +210,7 @@ def main():
         ok(txt("#app [data-reading-head]") == "Reading: 0 companies live, 0 waiting for Tally, 0 stopped, 1 paused" and rd() and rd()[0][0] == "GB TEXCOAT" and "Paused" in rd()[0][2]
            and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
         ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
+        ok(n("#app [data-reading][data-folded]") == 1 and n('#app [data-show-all="reading"]') == 0, "Reading: folded; its one row (paused) above the fold, so no Show all")
         # 2. nothing said twice, no Day Book counts
         body = page()
         once = ["Reading is paused on NWS144", "Update to 2.4.4", "garg shekhar & company is not linked", "Open TallyPrime on NWS144", "Connect Tally"]
@@ -216,8 +218,13 @@ def main():
         gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you"]
         ok(not [w for w in gone if w in body], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in body])
         ok(n("#app [data-all-good]") == 0, "something needs him: no All good")
-        # 3. the clients table
+        # 3. the clients table (round 63: folded to its summary; the client not linked above the fold; Show all opens it)
         tb = "#app [data-tally-clients]"
+        fr = E("() => [...document.querySelectorAll('#app [data-tally-clients] [data-client-row]')].map(e => e.getAttribute('data-client-row'))")
+        ok(n(tb + "[data-folded]") == 1 and txt(tb + " [data-clients-head]") == "3 clients \u00b7 2 linked \u00b7 1 not linked" and fr == [G],
+           "Clients: folded, '3 clients \u00b7 2 linked \u00b7 1 not linked', only the client not linked shown (%s / %s)" % (txt(tb + " [data-clients-head]"), fr))
+        ok(txt('#app [data-show-all="clients"]') == "Show all 3", "Clients: Show all 3")
+        pg.click('#app [data-show-all="clients"]'); pg.wait_for_timeout(500)
         heads = E("() => [...document.querySelectorAll('#app [data-tally-clients] thead th')].map(e => e.innerText.trim())")
         ok(n(tb) == 1 and [h for h in heads if h] == ["Client", "Tally company", "Linked", "Last entry received"], "one table: Client, Tally company, Linked, Last entry received (%s)" % heads)
         rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tally-clients] [data-client-row]')].map(e => [e.getAttribute('data-client-row'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())]))")
@@ -381,6 +388,8 @@ def main():
         ok(names == 0, "100 open: no company's name on the page outside the one list (%d)" % names)
         h = E("() => document.querySelector('#app [data-connect-guide]').getBoundingClientRect().height")
         ok(h < 1500, "100 companies, 100 clients: the guide stays compact (%d px high)" % h)
+        pcl = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => e.innerText).join(' ')")
+        ok("Tally open: 100 companies" in pcl and "CO 050" not in pcl, "100 open: the computer line says the count, not the names (%s)" % pcl[:160])
         ok(n(gd100 + " [data-guide-company-q]") == 1 and n(gd100 + " [data-guide-client-q]") == 1, "100: the client and company lists have type-to-search")
         pg.fill(gd100 + " [data-guide-client-q]", "client 042"); pg.wait_for_timeout(300)
         c42 = ids["CLIENT 042"]
@@ -389,6 +398,13 @@ def main():
         ok(E("() => document.querySelector('#app [data-guide-company]').value") == "CO 057" and txt(gd100 + " [data-guide-found]") == "1 match", "100 companies: typing 'co 057' finds it (%s)" % txt(gd100 + " [data-guide-found]"))
         E("() => { window.__calls = []; }"); pg.click(gd100 + " [data-guide-link]"); pg.wait_for_timeout(1200)
         ok([c for c in E("window.__calls") if c[0] == "tally_company_link"] == [["tally_company_link", {"p_company": "CO 057", "p_client": c42}]], "100: Link links CLIENT 042 to CO 057 (%s)" % E("window.__calls"))
+        E("() => window.scrollTo(0, 0)")
+        fr = E("() => document.querySelectorAll('#app [data-tally-clients] [data-client-row]').length")
+        ok(fr == 5 and re.match(r"and 9\d more", txt('#app [data-fold-more="clients"]')) and txt("#app [data-tally-clients] [data-clients-head]").startswith("100 clients"),
+           "100 clients: folded, at most 5 needing a link shown, 'and N more' (%d / %s)" % (fr, txt('#app [data-fold-more="clients"]')))
+        pg.click('#app [data-fold-more="clients"] button'); pg.wait_for_timeout(600)
+        ok(E("() => document.querySelectorAll('#app [data-tally-clients] [data-client-row]').length") > 5, "and N more → Show all: the table opens")
+        E("() => { S.tallyFold = {}; render(); }"); pg.wait_for_timeout(400)
         shot("guide-100-companies")
         # ---- round 63 (the owner): a company linked to another client is offered, "will move", and asked first
         ids = scene([d6], companies(linked=("GB TEXCOAT",), seen=(), d=d6["id"]), books=HELD_ALL)
@@ -425,6 +441,7 @@ def main():
         # ---- Reading in each state
         def rscene(d, lines=()):
             scene([d], companies(d=d["id"]), lines)
+            if n('#app [data-show-all="reading"][aria-expanded="false"]'): pg.click('#app [data-show-all="reading"]'); pg.wait_for_timeout(400)
             return rd()
         live3 = dev(8, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), rec=("GB TEXCOAT",), cos=[{"name": "GB TEXCOAT", "open": True, "phase": "live", "waiting": 0, "lastRead": "ago:30"},
             {"name": "ABC TRADERS", "open": False, "phase": "live", "waiting": 0, "lastRead": "2026-10-10T10:28:00+05:30"}, {"name": "VMS EVENTS", "open": False, "phase": "", "waiting": 0, "lastRead": ""}])

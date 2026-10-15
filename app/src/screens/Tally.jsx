@@ -475,7 +475,7 @@ function PcLine({ r, latest, m, focus, guided = false }) {
   const s = pcState(r, latest), [lv, word] = s.word, owner = isOwner(), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const heard = r.at ? (r.online ? "Online, last heard " + tallyHm(r.at) : "Offline since " + tallyHm(r.at)) : "Never heard";
   const ver = r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge";
-  const tally = !s.live || !r.online ? "" : r.tally === "busy" ? "Tally busy" : s.tallyOk ? "Tally open" + (s.open.length ? ": " + s.open.join(", ") : "") : "Tally not open";
+  const tally = !s.live || !r.online ? "" : r.tally === "busy" ? "Tally busy" : s.tallyOk ? "Tally open" + (s.open.length > 3 ? ": " + nOf(s.open.length, "company", "companies") : s.open.length ? ": " + s.open.join(", ") : "") : "Tally not open";   // round 63: never every company
   const reading = !s.live || !r.online ? "" : s.stopped ? "Reading stopped" : s.paused ? "Reading paused (tray: Resume background reading)" : "Reading on";
   return <div className={"tpc" + (focus ? " tcard-focus" : "")} data-pc-line={r.device.id} data-bridge-user={r.user || ""} data-level={lv} data-pc-state={word} data-focus={focus ? "" : undefined}>
     <div className="tpc-line">
@@ -525,25 +525,48 @@ function readingRows(cards) {
   if (rows) out.forEach((x) => { x.today = rows.filter((l) => l.company === x.c.name && (!l.device_id || l.device_id === x.r.device.id) && l.received_at && istDay(Date.parse(l.received_at)) === today).length; });
   return { list: out, today: !!rows };
 }
+// round 63 (the owner: "don't show every company"): a long list folds to its one summary line; the rows that need the
+// person (a client not linked; reading stopped, waiting or paused) show above the fold, at most 5 ("and N more"), and
+// "Show all" opens the whole table. The fold is remembered while the page is open (S.tallyFold)
+const FOLD_NEEDS = 5;
+const foldOpen = (k) => !!(S.tallyFold && S.tallyFold[k]);
+function setFold(k, v) { S.tallyFold = Object.assign({}, S.tallyFold, { [k]: v }); render(); }
+function FoldToggle({ k, total, shown }) {
+  const open = foldOpen(k);
+  if (!open && shown >= total) return null;   // every row already shown: nothing to open
+  return <button type="button" className="linkbtn" data-show-all={k} aria-expanded={open ? "true" : "false"} onClick={() => setFold(k, !open)}>{open ? "Show less" : "Show all " + total}</button>;
+}
+function foldRows(k, rows, needs) {
+  if (foldOpen(k)) return { shown: rows, more: 0 };
+  const need = rows.filter(needs);
+  return { shown: need.slice(0, FOLD_NEEDS), more: Math.max(0, need.length - FOLD_NEEDS) };
+}
+function FoldMore({ k, more }) {
+  return more ? <p className="note" data-fold-more={k} style={{ margin: "6px 0 0" }}>{"and " + more + " more · "}
+    <button type="button" className="linkbtn" onClick={() => setFold(k, true)}>Show all</button></p> : null;
+}
 function ReadingView({ cards }) {
   const { list, today } = readingRows(cards);
   if (!list.length) return null;
   const n = (k) => list.filter((x) => x.kind === k).length, word = (k) => (k === 1 ? " company" : " companies");
   const head = "Reading: " + n("live") + word(n("live")) + " live, " + n("waiting") + " waiting for Tally, " + n("stopped") + " stopped"
     + (n("paused") ? ", " + n("paused") + " paused" : "") + (n("catching") ? ", " + n("catching") + " catching up" : "");
-  return <section className="pane treading" data-reading="">
+  const { shown, more } = foldRows("reading", list, (x) => x.kind === "stopped" || x.kind === "waiting" || x.kind === "paused");
+  return <section className="pane treading" data-reading="" data-folded={foldOpen("reading") ? undefined : ""}>
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       <h3 style={{ margin: 0 }} data-reading-head="">{head}</h3>
-      <button className="linkbtn" data-reading-activity="" onClick={() => goTab("activity")}>See every entry received</button></div>
+      <span className="row" style={{ gap: 14, flexWrap: "wrap" }}><FoldToggle k="reading" total={list.length} shown={shown.length} />
+        <button className="linkbtn" data-reading-activity="" onClick={() => goTab("activity")}>See every entry received</button></span></div>
     {n("paused") > 0 && <p className="note" data-reading-paused="" style={{ margin: "4px 0 0" }}>{PAUSE_SAYS}</p>}
-    <ListTable name="tallyReading" className="data" rows={list} rowKey={(x) => x.key} unit={["company", "companies"]} rowProps={(x) => ({ "data-reading-row": x.c.name, "data-reading-kind": x.kind })}
+    {shown.length > 0 && <ListTable name="tallyReading" className="data" rows={shown} rowKey={(x) => x.key} unit={["company", "companies"]} rowProps={(x) => ({ "data-reading-row": x.c.name, "data-reading-kind": x.kind })}
       cols={[
         { k: "co", role: "party", label: "Company", v: (x) => x.c.name, cell: (x) => x.c.name },
         { k: "pc", role: "party", label: "Computer", v: (x) => pcWords(x.r), cell: (x) => pcWords(x.r) },
         { k: "st", role: "status", label: "State", v: (x) => x.state, cell: (x) => <span className={"tag " + x.lv} data-reading-state="">{x.state}</span> },
         { k: "last", label: "Last entry received", v: (x) => x.last, cell: (x) => x.last ? shortWhen(x.last) : <span className="note">{"—"}</span> },
         today && { k: "today", label: "Received today", v: (x) => x.today || 0, cell: (x) => String(x.today || 0) },
-      ].filter(Boolean)} />
+      ].filter(Boolean)} />}
+    <FoldMore k="reading" more={more} />
   </section>;
 }
 // ---------------------------------------------------------------------------------------------------------------------
@@ -958,16 +981,21 @@ function ClientsTable() {
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted);
   if (!cos.length || typeof tallyLinkOf !== "function") return null;
   const rows = cos.map((co) => { const k = tallyLinkOf(co) || {}, linked = k.state !== "unlinked"; return { co, k, linked, last: linked ? lastEntry(co, k) : "" }; });
-  return <section className="pane tclients" data-tally-clients="">
-    <h3 style={{ margin: "0 0 6px" }}>Clients and their Tally company</h3>
-    <ListTable name="tallyClients" className="data" rows={rows} rowKey={(x) => x.co.id} unit={["client", "clients"]} rowProps={(x) => ({ "data-client-row": x.co.id, "data-client-linked": x.linked ? "yes" : "no" })}
+  const nl = rows.filter((x) => !x.linked).length, { shown, more } = foldRows("clients", rows, (x) => !x.linked);
+  const sum = nOf(rows.length, "client", "clients") + " · " + (rows.length - nl) + " linked · " + nl + " not linked";
+  return <section className="pane tclients" data-tally-clients="" data-folded={foldOpen("clients") ? undefined : ""}>
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 6px" }}>
+      <h3 style={{ margin: 0 }}>{"Clients and their Tally company"}<span className="note" data-clients-head="" style={{ fontWeight: 400, marginLeft: 10 }}>{sum}</span></h3>
+      <FoldToggle k="clients" total={rows.length} shown={shown.length} /></div>
+    {shown.length > 0 && <ListTable name="tallyClients" className="data" rows={shown} rowKey={(x) => x.co.id} unit={["client", "clients"]} rowProps={(x) => ({ "data-client-row": x.co.id, "data-client-linked": x.linked ? "yes" : "no" })}
       cols={[
         { k: "client", role: "party", label: "Client", v: (x) => x.co.name, cell: (x) => <button className="linkbtn" data-client-open={x.co.id} onClick={() => openCompany(x.co.id)}>{x.co.name}</button> },
         { k: "company", role: "party", label: "Tally company", v: (x) => x.k.company || "", cell: (x) => x.k.company || <span className="note">{"—"}</span> },
         { k: "linked", role: "status", label: "Linked", v: (x) => (x.linked ? "Linked" : "Not linked"), cell: (x) => <span className={"tag " + (x.linked ? "ok" : "warn")} data-client-link-state="">{x.linked ? "Linked" : "Not linked"}</span> },
         { k: "last", label: "Last entry received", v: (x) => x.last || "", cell: (x) => x.last ? shortWhen(x.last) : <span className="note">{"—"}</span> },
         { k: "ac", role: "act", sort: false, cell: (x) => x.linked ? null : <button type="button" className="btn small" data-client-link={x.co.id} onClick={() => openConnectTally(4, x.co.id)}>Link</button> },
-      ]} />
+      ]} />}
+    <FoldMore k="clients" more={more} />
   </section>;
 }
 // "GARG SHEKHAR (Alpha Traders ›)": the client a company read on a computer is linked to, a link to that client
