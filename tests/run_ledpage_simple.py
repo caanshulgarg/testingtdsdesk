@@ -55,8 +55,9 @@ with sync_playwright() as p:
     ok(row194.count() == 1 and "194-C" in row194.inner_text(), "TDS ledgers: the section (%r)" % (row194.inner_text() if row194.count() else ""))
     # ---------- Please check: the masters line (unknown ledger used by entries), one action
     unk = pg.locator("#app [data-led-check] [data-led-line=unknown]")
-    ok(unk.count() == 1 and "'New Party Pvt Ltd' is used by 2 entries" in unk.inner_text() and unk.locator("[data-led-read-need]").count() == 1, "unknown ledger: one line for the ledger (2 entries), Read the ledgers again")
-    ok(pg.locator("#app [data-unknown-ledgers]").count() == 0, "the long one-sentence-an-entry box is not repeated on this page")
+    ok(unk.count() == 1 and "1 ledger used in Tally is not in FinCom yet (New Party Pvt Ltd \u00b7 2 entries)" in unk.inner_text() and unk.locator("[data-unk-read]").count() == 1,
+       "unknown ledger: one line for the client (1 ledger, 2 entries), Read the ledgers now (15-Oct-2026)")
+    ok(pg.locator("#app [data-unknown-ledgers]").count() == 1, "the line is not repeated above this page")
     # ---------- Other notices (2.4.1: moved from Needs you to one fold at the bottom)
     pg.click("#app details[data-led-notices] > summary"); pg.wait_for_timeout(200)
     rn = pg.locator("#app [data-led-notices] tr[data-notice=renamed]")
@@ -102,9 +103,9 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-led-notices] tr[data-notice=gstin]").count() == 0 and E("!!(S.books.ledOk || {})['gstin:%s']" % L.SAME_GSTIN), "Fine as it is: the GSTIN line goes, kept with the books")
     pg.click("#app button[data-rename-confirm='%s']" % L.RENAMED); pg.wait_for_timeout(1200)
     ok(any(c[0] == "tally_ledger_rename_confirm" for c in E("window.__rpc")) and pg.locator("#app [data-renamed='%s']" % L.RENAMED).count() == 0, "rename Confirm: asked of FinCom's cloud, the line goes")
-    E("() => { window.__rest = []; }")
-    pg.click("#app [data-led-check] [data-led-line=unknown] [data-led-read-need]"); pg.wait_for_timeout(1200)
-    ok(any(x.startswith("tally_ledgers") for x in E("window.__rest")), "Read the ledgers again: the cloud copy is read again")
+    # no Tally computer keeps this made-up client: Read the ledgers now cannot run, and says why
+    ok(E("() => { const b = document.querySelector('#app [data-led-line=unknown] [data-unk-read]'); return !!b && b.disabled; }") and "No Tally computer" in pg.locator("#app [data-led-line=unknown] [data-unk-why]").inner_text(),
+       "Read the ledgers now: no Tally computer for this client: cannot run, says why")
     E("() => { window.__rest = []; }")
     pg.click("#app [data-led-read='cloud']"); pg.wait_for_timeout(1200)
     ok(any(x.startswith("tally_ledgers") for x in E("window.__rest")), "Read again now: the cloud copy is read again")

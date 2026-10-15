@@ -10,7 +10,8 @@ name a ledger FinCom does not have; the page says, one sentence an entry and led
   3. none: nothing shown; before migration 56 (the function missing, PGRST202): nothing shown, no error, the rest as before.
 Offline, FinCom's cloud made up in the page (run_sync_activity's SETUP; alerts_seed's and run_held_books' books).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_unknown_ledgers_ui.py
-RED (before the change): no such list anywhere on the page."""
+RED (before the change): no such list anywhere on the page.
+15-Oct-2026: one line a client (run_unknown_ledgers_smart.py has the rest); Sync activity no longer lists them."""
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -61,23 +62,15 @@ with sync_playwright() as p:
     alltxt = lambda s: E("(s) => [...document.querySelectorAll(s)].map(e => e.innerText.replace(/\\s+/g, ' ').trim())", s)
     def activity():
         E("() => { navHome('tally'); S.tallyTab = 'activity'; render(); }"); pg.wait_for_timeout(1500)
-    # ---- 1. Sync activity: every client's
+    # ---- 1. Sync activity: not listed there any more (the owner, 15-Oct-2026: one line a client, on the client's pages; the
+    # bell has the count)
     cid = E(SYNC_SETUP, ["owner", DEVS, LINES, ""]); pg.wait_for_timeout(300)
     other = E("() => { const c = newCompany({name: 'ZZ Other Client', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return c.id; }")
     E(STUB, [rows(cid, other), ""])
     activity()
-    ok(E("window.__unkAsked") and E("window.__unkAsked")[0] == {"p_book": None}, "1. read once through tally_unknown_ledger_entries with p_book null (every book of the firm) (%s)" % E("window.__unkAsked"))
-    lines = alltxt('#app [data-unknown-ledgers="activity"] [data-unknown-ledger]')
-    ok(len(lines) == 4 and lines[0].startswith(S3) and lines[1].startswith(S2) and lines[2].startswith(S1) and lines[3].startswith(S9), "1. Sync activity: one sentence an entry and ledger, in plain words (%s)" % lines)
-    ok(all(l.endswith("(ZZ Test Client)") for l in lines[:3]) and lines[3].endswith("(ZZ Other Client)"), "1. every client's, each with the client's name")
-    head = alltxt('#app [data-unknown-ledgers="activity"] b')
-    ok(head == ["3 entries use a ledger FinCom does not have yet"], "1. the heading counts the entries (%s)" % head)
+    ok(E("document.querySelectorAll('#app [data-unknown-ledgers], #app [data-unknown-ledger]').length") == 0, "1. Sync activity: no unknown-ledger lines")
     ok(len(alltxt("#app [data-sync-line]")) == 1, "1. the lines of Sync activity are there as before")
-    # the client picked: its own only
-    E("(id) => { S.syncClient = id; Rec.act.at = 0; render(); }", cid); pg.wait_for_timeout(1000)
-    lines = alltxt('#app [data-unknown-ledgers="activity"] [data-unknown-ledger]')
-    ok(lines == [S3, S2, S1], "1. a client picked: that client's only, without the name (%s)" % lines)
-    E("() => { S.syncClient = ''; render(); }"); pg.wait_for_timeout(300)
+    ok("2.3.1" not in pg.inner_text("#app"), "1. no '2.3.1' words")
     # ---- 3. none / before migration 56
     E(STUB, [[], ""]); activity()
     ok(E("document.querySelectorAll('#app [data-unknown-ledgers]').length") == 0, "3. none: nothing shown")
@@ -89,9 +82,11 @@ with sync_playwright() as p:
     E(BOOKS, gcid); pg.wait_for_timeout(300)
     E(STUB, [rows(gcid, other), ""])
     E("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'mis'; S.misTab = 'pl'; render(); }"); pg.wait_for_timeout(1500)
-    lines = alltxt('#app [data-unknown-ledgers="books"] [data-unknown-ledger]')
-    ok(lines == [S3, S2, S1], "2. the client's Books page: its own entries in plain words, not another client's (%s)" % lines)
-    ok(E("window.__unkAsked") == [{"p_book": "b1"}], "2. the Books page asks for the client's own book (b1), not the firm's list (%s)" % E("window.__unkAsked"))
+    head = alltxt('#app [data-unknown-ledgers="books"] [data-unk-head]')
+    ok(head == ["3 ledgers used in Tally are not in FinCom yet (Another New One, New Party Pvt Ltd, \u2026 \u00b7 2 entries)"], "2. the client's Books page: ONE line for its own ledgers, not another client's (%s)" % head)
+    ok(E("document.querySelectorAll('#app [data-unknown-ledger]').length") == 0, "2. never a line an entry")
+    # (the bell reads the firm's list for its count since 15-Oct-2026; the page's own line reads the client's book)
+    ok({"p_book": "b1"} in E("window.__unkAsked"), "2. the Books page asks for the client's own book (b1) (%s)" % E("window.__unkAsked"))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()
