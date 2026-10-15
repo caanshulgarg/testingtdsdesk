@@ -3,7 +3,7 @@ its own, trust on localhost only), with the few Supabase pieces FinCom's SQL lea
 setting, the firm and member tables, my_firm(), is_superadmin(), can_write(). The cloud copy's tables are made as on
 staging. Used by run_server_reports.py; nothing of a real database is touched.
     db = pg_stand.start(55432); db.sql("select 1"); db.rows("select ...") -> [dict]; db.stop()"""
-import os, subprocess, shutil, time, json, csv, io
+import sys, os, subprocess, shutil, time, json, csv, io
 BIN = "/usr/lib/postgresql/16/bin"
 HERE = os.path.dirname(os.path.abspath(__file__))
 STUB = r"""
@@ -59,7 +59,16 @@ def start(port=55432):
     shutil.rmtree(data, ignore_errors=True); os.makedirs(os.path.dirname(data), exist_ok=True)
     os.makedirs(data); shutil.chown(data, "postgres", "postgres")
     subprocess.run(["runuser", "-u", "postgres", "--", BIN + "/initdb", "-D", data, "-A", "trust", "-U", "postgres", "--no-sync"], check=True, capture_output=True)
-    subprocess.run(["runuser", "-u", "postgres", "--", BIN + "/pg_ctl", "-D", data, "-o", "-p %d -k /tmp -c listen_addresses=127.0.0.1 -c fsync=off" % port, "-w", "-l", data + "/log", "start"], check=True, capture_output=True)
+    r = subprocess.run(["runuser", "-u", "postgres", "--", BIN + "/pg_ctl", "-D", data, "-o", "-p %d -k /tmp -c listen_addresses=127.0.0.1 -c fsync=off" % port, "-w", "-l", data + "/log", "start"], capture_output=True)
+    if r.returncode != 0:
+        # 15-Oct-2026: CI's runner refused to start one on 55448 twice while it started here; say why (the server's own log)
+        # and take the next free port once, so a port another program holds never fails a test
+        try: tail = open(data + "/log").read()[-1500:]
+        except OSError: tail = "(no log)"
+        print("pg_stand: port %d did not start (%s): %s" % (port, (r.stderr or b"").decode(errors="replace").strip()[-300:], tail), file=sys.stderr)
+        import socket
+        with socket.socket() as so: so.bind(("127.0.0.1", 0)); port = so.getsockname()[1]
+        subprocess.run(["runuser", "-u", "postgres", "--", BIN + "/pg_ctl", "-D", data, "-o", "-p %d -k /tmp -c listen_addresses=127.0.0.1 -c fsync=off" % port, "-w", "-l", data + "/log", "start"], check=True, capture_output=True)
     db = DB(port, data); db.sql(STUB)
     return db
 def migration_body(path):
