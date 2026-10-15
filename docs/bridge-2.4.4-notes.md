@@ -105,3 +105,15 @@ add-on. Prospective only; each bridge reads only its own Windows user's Tally; o
 
 go vet (Linux and Windows), go test, release-check steps 1-6, CI and Windows CI, the real-Tally gate on the committed setup
 (tally-versions upg (from 2.4.3), s235, bankb, selfck and payroll on all five releases; tally-real fast234; tdsgst on 7.1).
+
+## Cloud change after 2.4.4 (15-Oct-2026, the owner's decision; migration 89, branch next-ledger-fetch)
+
+The bridge is not changed and asks Tally nothing new. FinCom's cloud now fills the heartbeat's existing `ledgersWanted`
+also with the ledgers its stored entries use that its ledger list lacks (the bridge asks each with the existing
+FinComLedgerByName, at most 20 a beat, once per 10 minutes a name, idle only), and, when more than 20 are missing or the
+same ones stay missing after three rounds, puts the company in the existing `ledgers` answer (the full ledger list) at
+most once in 30 minutes, never while reading is paused or stopped. A ledger change carrying the Tally GUID of a ledger
+FinCom holds under another name now renames FinCom's ledger as in Tally (changed by the owner's decision of 15-Oct-2026;
+it replaces 2.3.2's "a ledger change renames nothing"), keeping the old name as an alias; refused with words, nothing
+changed, when the trial balance would change. The bridge's log line for that full-list read still says "the ledger chooser
+opened in FinCom" (its own words for the "ledgers" wake).

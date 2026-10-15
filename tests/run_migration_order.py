@@ -29,6 +29,8 @@ for _k, _o in ORDERS.items():
     _o.append((72, "migration-72-gst-type.sql"))   # bridge 2.4.2 (round 44 part B): each entry's GST type, after 62
     _o.append((73, "migration-73-tds-fields.sql"))   # bridge 2.4.3: TDS challans and TDS master settings, after 72
     _o.append((74, "migration-74-payroll.sql"))   # bridge 2.4.4: payroll (employees, pay-head fields, salary paid), after 73
+    _o.append((89, "migration-89-ledger-fetch.sql"))   # 15-Oct-2026 (next-ledger-fetch): the ledgers' automatic fetch and renames as in Tally, after 59 and 41
+    _o.append((90, "migration-90-ledger-fetch-speed.sql"))   # 15-Oct-2026: 89's tally_ledger_fetch_plan made set-based (5 s -> ~20 ms), after 89
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
@@ -57,7 +59,9 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 66 runs in NEXT240 above)
            "tally_recorder_masters_save",
            # 08-Oct-2026 (migration 62, review M1 of 2.4.0 part 2: the TDS details with the rate-worked-out and exempt marks)
-           "tally_tds_details_marked"]
+           "tally_tds_details_marked",
+           # 15-Oct-2026 (migration 89, next-ledger-fetch: the ledgers the entries use fetched by themselves; renames as in Tally)
+           "tally_ledger_loose", "tally_ledger_fetch_plan", "tally_ledger_rename_from_tally"]
 
 texts = {}
 fails = []

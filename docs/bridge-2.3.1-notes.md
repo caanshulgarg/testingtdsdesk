@@ -183,6 +183,17 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
   answer for that very entry is the same ledger is it entered under FinCom's ledger. If the answer is another ledger (the
   ledger renamed again and a new one took the name), that new ledger is added and the entry goes to it. The entry's lines
   must still total zero, and the amounts are exactly Tally's, so the books' total does not change. This needs database migration 59; without it such an entry waits, as before.
+- **Changed by the owner's decision of 15-Oct-2026 (cloud only, migration 89; the bridge is not changed).** A ledger change
+  from Tally (the counter's ledger changes, or a ledger fetched by name) that carries the Tally GUID of a ledger FinCom
+  holds under another name now renames FinCom's ledger as in Tally: its entries, bills and the day totals follow
+  (tally_ledger_rename), the trial balance must stay the same, and the old name is kept as an alias so an entry still
+  using it goes to the same ledger. This replaces the rule "a ledger change renames nothing" (above, and 2.3.2). If the
+  trial balance would change, nothing is changed: the rename is held with words for the owner (tally_ledger_rename_holds)
+  and the entries keep applying under FinCom's name, as before. Also from that date FinCom asks the bridge, in the
+  heartbeat's existing answer, for the ledgers its stored entries use but its ledger list lacks (the "unknown ledger"
+  lines), at most 20 at a time, by name; when more than 20 are missing or the same ones stay missing after three rounds,
+  it asks once for the full ledger list instead (at most once in 30 minutes a company), never while reading is paused or
+  stopped.
 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
