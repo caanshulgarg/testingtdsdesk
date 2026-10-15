@@ -387,7 +387,7 @@ function needOf(r, latest, owner, allStopped) {
     const st = (TCloud.stopFor && TCloud.stopFor(r.device.id)) || {};
     return { kind: "stopped", text: "Reading stopped" + (st.stopped_by ? " by " + who(st.stopped_by) : "") + " on " + pc + ": " + (rd.reason || st.reason || "no reason given"), act: owner ? "resume" : "", say: owner ? "" : "An owner of the firm can resume it." };
   }
-  if (rd.state === "paused") return { kind: "paused", text: "Reading is paused on " + pc + ". Resume it from the FinCom icon near the clock there", act: "check" };
+  if (rd.state === "paused") return { kind: "paused", text: "Reading is paused on " + pc + ". To resume: " + RESUME_TRAY, act: "check" };
   if (r.tally !== "open" && r.tally !== "busy") return { kind: "tally", text: "Tally is not open on " + pc + ". Open TallyPrime and the company there", act: "check" };
   if (!r.main) return { kind: "main", text: pc + " only reads: another bridge on this computer posts", act: owner ? "makeMain" : "", say: owner ? "" : "An owner of the firm can make it the main bridge." };
   const base = (TCloud.baselines ? TCloud.baselines(r.device.id) : []).filter((x) => x.cur && x.cur.state === "needs_baseline");
@@ -439,7 +439,7 @@ function beatOf(r, k) {
 // skipped), else the bridge's Tally port, else Tally's own default
 function tallyPortOf(r) {
   const ports = [].concat(beatOf(r, "ports") || []).filter((x) => x && !x.skipped && x.port);
-  return (ports[0] && ports[0].port) || r.tallyPort || 9000;
+  return (ports[0] && ports[0].port) || r.tallyPort || 9002;
 }
 // "10-Oct 10:28" (IST)
 const shortWhen = (at) => { const s = at ? fmtDateTime(Date.parse(String(at))) : ""; const m = /^(\d\d-[A-Za-z]{3})-\d{4}(?: (\d\d:\d\d))?/.exec(s); return m ? m[1] + (m[2] ? " " + m[2] : "") : ""; };
@@ -476,7 +476,7 @@ function PcLine({ r, latest, m, focus, guided = false }) {
   const heard = r.at ? (r.online ? "Online, last heard " + tallyHm(r.at) : "Offline since " + tallyHm(r.at)) : "Never heard";
   const ver = r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge";
   const tally = !s.live || !r.online ? "" : r.tally === "busy" ? "Tally busy" : s.tallyOk ? "Tally open" + (s.open.length ? ": " + s.open.join(", ") : "") : "Tally not open";
-  const reading = !s.live || !r.online ? "" : s.stopped ? "Reading stopped" : s.paused ? "Reading paused" : "Reading on";
+  const reading = !s.live || !r.online ? "" : s.stopped ? "Reading stopped" : s.paused ? "Reading paused (tray: Resume background reading)" : "Reading on";
   return <div className={"tpc" + (focus ? " tcard-focus" : "")} data-pc-line={r.device.id} data-bridge-user={r.user || ""} data-level={lv} data-pc-state={word} data-focus={focus ? "" : undefined}>
     <div className="tpc-line">
       <span className={"tag " + lv} data-pc-word="">{word}</span>
@@ -488,6 +488,63 @@ function PcLine({ r, latest, m, focus, guided = false }) {
         : !owner ? <span className="note">An owner of the firm can resume it.</span> : null)}
     </div>
   </div>;
+}
+// ---------------------------------------------------------------------------------------------------------------------
+// Reading (15-Oct-2026; the owner: "I need a proper view of reading works.. like what is done in reading.. and still
+// reading"): one row a company each computer heard this week reports in its beat (beat.companies: name, open, phase,
+// waiting, lastRead; the bridge's recorder lastAt), its state in plain words, the last entry received, and (only when this
+// page already holds Sync activity's lines, Rec.act.rows from tally_recorder_lines) the entries received today. Nothing
+// new is asked of the bridge, the cloud or Tally.
+// ---------------------------------------------------------------------------------------------------------------------
+// FinCom Bridge 2.4.4 (bridge-go/mode.go paused() and its callers: wakeOpen, the ledger events, the nightly catch-up and
+// the bank-date night work): a pause stops the background reads only; the live recorder (the add-on's lines) still sends
+// what is saved in Tally, and postings and Update now still work
+const PAUSE_SAYS = "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work.";
+const RESUME_TRAY = "right-click the FinCom icon near the clock → Resume background reading";
+function readingRows(cards) {
+  const p = TCloud.pane, out = [];
+  cards.filter((r) => r.go && !r.old).forEach((r) => {
+    const cos = [].concat(beatOf(r, "companies") || []).filter((c) => c && c.name), rd = r.read || {}, rs = r.readStopped || {};
+    const rc = typeof Rec === "object" && Rec.recOf ? (Rec.recOf(r.device) || {}) : {};
+    cos.forEach((c) => {
+      const stopWhy = rd.state === "fincomstop" ? (rd.reason || "no reason given") : rs.by === "self" ? (rs.reason || "Tally did not answer in time") : "";
+      const waiting = Number(c.waiting) || 0;
+      const [lv, state, kind] = !r.online ? ["bad", "Waiting: " + r.computer + " is offline", "waiting"]
+        : stopWhy ? ["bad", "Stopped: " + stopWhy, "stopped"]
+        : r.paused || rd.state === "paused" ? ["warn", "Paused", "paused"]
+        : !c.open ? ["warn", "Waiting: Tally company not open", "waiting"]
+        : waiting > 0 ? ["warn", "Catching up: " + waiting + " to fetch", "catching"]
+        : c.phase === "live" ? ["ok", "Reading live", "live"]
+        : ["warn", "Catching up: first copy", "catching"];
+      const rec = (rc[c.name] || {}).lastAt || "", last = [rec, c.lastRead || ""].filter(Boolean).sort().pop() || "";
+      out.push({ key: r.device.id + "|" + (r.user || "") + "|" + c.name, r, c, lv, state, kind, last });
+    });
+  });
+  // entries received today: only from the lines this page already holds (Sync activity's, Rec.act.rows)
+  const rows = typeof Rec === "object" && Rec.act && Array.isArray(Rec.act.rows) ? Rec.act.rows : null, today = typeof istDay === "function" ? istDay(Date.now()) : "";
+  if (rows) out.forEach((x) => { x.today = rows.filter((l) => l.company === x.c.name && (!l.device_id || l.device_id === x.r.device.id) && l.received_at && istDay(Date.parse(l.received_at)) === today).length; });
+  return { list: out, today: !!rows };
+}
+function ReadingView({ cards }) {
+  const { list, today } = readingRows(cards);
+  if (!list.length) return null;
+  const n = (k) => list.filter((x) => x.kind === k).length, word = (k) => (k === 1 ? " company" : " companies");
+  const head = "Reading: " + n("live") + word(n("live")) + " live, " + n("waiting") + " waiting for Tally, " + n("stopped") + " stopped"
+    + (n("paused") ? ", " + n("paused") + " paused" : "") + (n("catching") ? ", " + n("catching") + " catching up" : "");
+  return <section className="pane treading" data-reading="">
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <h3 style={{ margin: 0 }} data-reading-head="">{head}</h3>
+      <button className="linkbtn" data-reading-activity="" onClick={() => goTab("activity")}>See every entry received</button></div>
+    {n("paused") > 0 && <p className="note" data-reading-paused="" style={{ margin: "4px 0 0" }}>{PAUSE_SAYS}</p>}
+    <ListTable name="tallyReading" className="data" rows={list} rowKey={(x) => x.key} unit={["company", "companies"]} rowProps={(x) => ({ "data-reading-row": x.c.name, "data-reading-kind": x.kind })}
+      cols={[
+        { k: "co", role: "party", label: "Company", v: (x) => x.c.name, cell: (x) => x.c.name },
+        { k: "pc", role: "party", label: "Computer", v: (x) => pcWords(x.r), cell: (x) => pcWords(x.r) },
+        { k: "st", role: "status", label: "State", v: (x) => x.state, cell: (x) => <span className={"tag " + x.lv} data-reading-state="">{x.state}</span> },
+        { k: "last", label: "Last entry received", v: (x) => x.last, cell: (x) => x.last ? shortWhen(x.last) : <span className="note">{"—"}</span> },
+        today && { k: "today", label: "Received today", v: (x) => x.today || 0, cell: (x) => String(x.today || 0) },
+      ].filter(Boolean)} />
+  </section>;
 }
 // ---------------------------------------------------------------------------------------------------------------------
 // Connect Tally, the ONE place to connect and link Tally (15-Oct-2026; the owner: "multiple pages of Tally connection..
@@ -586,13 +643,13 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
         {d.tally ? <span className="note">{"TallyPrime answers on " + pc + "."}</span>
           : !d.install ? <span className="note">After step 1.</span>
           : r && !r.online ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
-          : <span className="note">{"Open TallyPrime on " + pc + ", signed in as " + user + ". In TallyPrime press F1 (Help) → Settings → Connectivity, set “TallyPrime acts as” to Both and the port to " + (r ? tallyPortOf(r) : 9000) + ", then accept."}</span>}
+          : <span className="note">{"Open TallyPrime on " + pc + ", signed in as " + user + ". In TallyPrime press F1 (Help) → Settings → Connectivity, set “TallyPrime acts as” to Both and choose any free port from 9000 to 9999 (" + (r ? tallyPortOf(r) : 9002) + " is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself."}</span>}
       </GuideStep>
       <GuideStep k="company" n={3} title="Keep a company open" done={d.company} open={want === "company"}>
         {d.company ? <span className="note">{x.fine && x.fine[1].open.length ? x.fine[1].open.join(", ") + " open in Tally on " + x.fine[0].computer + "." : "A company is open."}</span>
           : s && s.stopped ? <span data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
               {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</span>
-          : s && s.paused ? <span data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: right-click the FinCom icon near the clock → Resume reading."}</span>
+          : s && s.paused ? <span data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}</span>
           : <span className="note">{"Leave TallyPrime open on a company" + (r ? " on " + pc : "") + "."}</span>}
       </GuideStep>
       <GuideStep k="link" n={4} title="Link each client to its Tally company" done={d.link && !(want === "link" && g.at)} open={want === "link"}>
@@ -1043,6 +1100,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
       {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
       {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     </section>}
+    {week.length > 0 && <ReadingView cards={week} />}
     <NeedsYou sources={sourcesSlot} />
     <ClientsTable />
     <PageMore rows={rows} latest={latest} m={m} cards={cards} connectStep={connectStep} />

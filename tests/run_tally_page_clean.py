@@ -36,7 +36,7 @@ def ok(c, w):
 PORTS = [{"port": 9002, "ok": False, "skipped": False, "n": 0, "error": "", "state": "closed"},
          {"port": 2929, "ok": False, "skipped": True, "n": 0, "error": "Tally of Windows session 0", "state": ""},
          {"port": 3254, "ok": False, "skipped": True, "n": 0, "error": "Tally of Windows session 0", "state": ""}]
-def dev(n, comp, user, at="ago:0.5", tally="open", opened=("GB TEXCOAT",), version="2.4.1", beat=None, ports=None, rec=("GB TEXCOAT", "ABC TRADERS")):
+def dev(n, comp, user, at="ago:0.5", tally="open", opened=("GB TEXCOAT",), version="2.4.1", beat=None, ports=None, rec=("GB TEXCOAT", "ABC TRADERS"), cos=None):
     i = "d0000000-0000-4000-8000-00000000000%d" % n
     b = {"at": at, "version": version, "computer": comp, "user": user, "mode": "main", "runMode": "user", "tally": tally == "open", "tallyState": tally,
          "open": list(opened), "tallyPort": 9002, "dataFolder": "C:\\Users\\Public\\TallyPrime\\Data",
@@ -44,14 +44,15 @@ def dev(n, comp, user, at="ago:0.5", tally="open", opened=("GB TEXCOAT",), versi
          "recorder": {co: {"seen": True, "lastAt": "ago:7"} for co in set(opened) | set(rec)}}
     bt = {"at": at, "every": 30, "tally": tally == "open", "tallyState": tally, "open": list(opened), "paused": False,
           "ports": ports if ports is not None else [{"port": 9002, "ok": tally == "open", "skipped": False, "n": len(opened), "error": "", "state": tally}],
-          "companies": [{"name": co, "open": True} for co in opened]}
+          "companies": cos if cos is not None else [{"name": co, "open": True, "phase": "live", "waiting": 0, "lastRead": "ago:30"} for co in opened]}
     bt.update(beat or {}); b.update({k: v for k, v in (beat or {}).items() if k in ("readStopped", "paused")})
     info = {"computer": comp, "user": user, "beat": bt, "bridges": {"go-%d" % n: b}}
     return {"id": i, "name": comp, "revoked": False, "last_seen": at, "version": version, "main_bridge": "go-%d" % n, "info": info, "created_at": "2026-09-01T00:00:00Z",
             "post_only": [], "post_batch_bills": 10, "post_batch_bank": 50, "trial_tools": False, "recorder_source": "addon"}
 # the owner's scene: NWS144 (anshul) on 2.4.1, online, reading paused, his Tally not answering on 9002 (2929 and 3254 are
 # Windows session 0's); an older bridge last heard 13 days ago (02-Oct)
-PAUSED = dev(1, "NWS144", "anshul", tally="closed", opened=(), beat={"paused": True}, ports=PORTS)
+PAUSED = dev(1, "NWS144", "anshul", tally="closed", opened=(), beat={"paused": True}, ports=PORTS, rec=(),
+             cos=[{"name": "GB TEXCOAT", "open": False, "phase": "live", "waiting": 0, "lastRead": "2026-10-10T10:28:00+05:30"}])
 OLD = {"id": "d0000000-0000-4000-8000-000000000009", "name": "OLDPC", "revoked": False, "last_seen": "ago:18720", "version": "1.15.0", "main_bridge": None,
        "info": {"computer": "OLDPC", "user": "tally", "beat": {"at": "ago:18720", "version": "1.15.0", "tally": False, "tallyState": "closed", "open": []}}, "created_at": "2026-09-01T00:00:00Z"}
 D1 = PAUSED["id"]
@@ -150,8 +151,11 @@ def main():
         ok(n(gd) == 1 and txt(gd).startswith("Connect Tally"), "one Connect Tally guide")
         ok(steps() == [["install", True], ["tally", False], ["company", False], ["link", False]], "the steps tick from the beat: installed only (%s)" % steps())
         gt = txt(gd)
-        ok("Open TallyPrime on NWS144, signed in as anshul." in gt and "F1 (Help) \u2192 Settings \u2192 Connectivity" in gt and "Both" in gt and "port to 9002" in gt, "step 2: the plain words, with his own port 9002 (%s)" % gt[:300])
-        ok("Reading is paused on NWS144." in gt and "right-click the FinCom icon near the clock \u2192 Resume reading" in gt, "step 3: paused, with how to resume")
+        ok("Open TallyPrime on NWS144, signed in as anshul." in gt and "F1 (Help) \u2192 Settings \u2192 Connectivity" in gt and "Both" in gt
+           and "choose any free port from 9000 to 9999 (9002 is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself." in gt,
+           "step 2: the plain words, any free port, the one found here suggested (%s)" % gt[:400])
+        ok("Reading is paused on NWS144." in gt and "right-click the FinCom icon near the clock \u2192 Resume background reading" in gt
+           and "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work." in gt, "step 3: paused, the tray's own words, what a pause stops")
         ok("garg shekhar & company is not linked." in gt and E("() => (document.querySelector('#app [data-guide-client]') || {}).value") == G
            and E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)") == ["VMS EVENTS"], "step 4: the client not linked and the companies seen (%s)" % gt[-200:])
         ok(n(gd + " [data-check-again]") == 1 and n(gd + " [data-bridge-download]") == 0, "one Check again; installed: no download in the guide")
@@ -161,10 +165,15 @@ def main():
         lines = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => [e.getAttribute('data-pc-line'), e.innerText.replace(/\\s+/g, ' ').trim()])")
         ok(len(lines) == 1 and lines[0][0] == D1 and "OLDPC" not in body and "Older bridge" not in body, "one line per computer heard in 7 days; the old bridge is not on the page (%s)" % lines)
         l1 = lines[0][1] if lines else ""
-        ok("NWS144" in l1 and "anshul" in l1 and re.search(r"Online, last heard \d\d:\d\d IST", l1) and "Tally not open" in l1 and "Reading paused" in l1 and "FinCom Bridge 2.4.1" in l1,
+        ok("NWS144" in l1 and "anshul" in l1 and re.search(r"Online, last heard \d\d:\d\d IST", l1) and "Tally not open" in l1 and "Reading paused (tray: Resume background reading)" in l1 and "FinCom Bridge 2.4.1" in l1,
            "the computer line: online and last heard, Tally, reading, version (%s)" % l1)
         up = "#app [data-pc-line=\"%s\"] [data-pc-update]" % D1
         ok(n(up) == 1 and txt(up) == "Update to 2.4.4" and "2.4.4" in (pg.get_attribute(up, "href") or ""), "an older bridge: Update to 2.4.4, the one download (%s)" % txt(up))
+        # Reading: one row a company the beat reports
+        rd = lambda: E("() => [...document.querySelectorAll('#app [data-reading] [data-reading-row]')].map(e => [e.getAttribute('data-reading-row'), e.getAttribute('data-reading-kind'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())])")
+        ok(txt("#app [data-reading-head]") == "Reading: 0 companies live, 0 waiting for Tally, 0 stopped, 1 paused" and rd() and rd()[0][0] == "GB TEXCOAT" and "Paused" in rd()[0][2]
+           and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
+        ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
         # 2. nothing said twice, no Day Book counts
         body = page()
         once = ["Reading is paused on NWS144", "Update to 2.4.4", "garg shekhar & company is not linked", "Open TallyPrime on NWS144", "Connect Tally"]
@@ -239,6 +248,28 @@ def main():
         ok(n("#app [data-all-good]") == 1 and "All good" in gl and n("#app [data-needs-you]") == 0, "nothing needs him: All good")
         pl = txt("#app [data-pc-line=\"%s\"]" % d)
         ok("Connected" in pl and "Reading on" in pl and "FinCom Bridge 2.4.4" in pl and "Update to" not in pl, "all well: the line says connected, reading on, the version, no update (%s)" % pl)
+        # ---- Reading in each state
+        def rscene(d, lines=()):
+            scene([d], companies(d=d["id"]), lines)
+            return rd()
+        live3 = dev(8, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), rec=("GB TEXCOAT",), cos=[{"name": "GB TEXCOAT", "open": True, "phase": "live", "waiting": 0, "lastRead": "ago:30"},
+            {"name": "ABC TRADERS", "open": False, "phase": "live", "waiting": 0, "lastRead": "2026-10-10T10:28:00+05:30"}, {"name": "VMS EVENTS", "open": False, "phase": "", "waiting": 0, "lastRead": ""}])
+        today = [dict(held(300 + i, "GB TEXCOAT"), state="applied", received_at="ago:5", device_id=live3["id"]) for i in range(4)]
+        rows = rscene(live3, today)
+        ok(txt("#app [data-reading-head]") == "Reading: 1 company live, 2 waiting for Tally, 0 stopped", "Reading: the one line on top (%s)" % txt("#app [data-reading-head]"))
+        k = {r[0]: r for r in rows}
+        ok(k.get("GB TEXCOAT", [0, 0, []])[1] == "live" and "Reading live" in k["GB TEXCOAT"][2] and re.match(r"\d\d-[A-Z][a-z]{2} \d\d:\d\d", k["GB TEXCOAT"][2][3]), "Reading live, its last entry (%s)" % k.get("GB TEXCOAT"))
+        ok("Waiting: Tally company not open" in k.get("ABC TRADERS", [0, 0, []])[2] and "10-Oct 10:28" in k["ABC TRADERS"][2], "Waiting: Tally company not open, last entry from its last read (%s)" % k.get("ABC TRADERS"))
+        heads = E("() => [...document.querySelectorAll('#app [data-reading] thead th')].map(e => e.innerText.trim())")
+        ok("Received today" in heads and k["GB TEXCOAT"][2][heads.index("Received today")] == "4", "Received today: from Sync activity's lines this page holds (%s %s)" % (heads, k["GB TEXCOAT"][2]))
+        pg.click("#app [data-reading-activity]"); pg.wait_for_timeout(900)
+        ok(E("S.tallyTab") == "activity" and n("#app [data-sync-activity]") == 1, "See every entry received: Sync activity")
+        rows = rscene(dev(9, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), cos=[{"name": "GB TEXCOAT", "open": True, "phase": "live", "waiting": 5, "lastRead": "ago:30"}]))
+        ok(rows and rows[0][1] == "catching" and "Catching up: 5 to fetch" in rows[0][2], "Catching up: 5 to fetch (%s)" % rows)
+        rows = rscene(dev(5, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"readStopped": {"by": "fincom", "reason": "Tally hangs", "at": "ago:4"}}))
+        ok(rows and rows[0][1] == "stopped" and "Stopped: Tally hangs" in rows[0][2] and txt("#app [data-reading-head]").endswith("1 stopped"), "Stopped from FinCom: its reason (%s)" % rows)
+        rows = rscene(dev(4, "RANJEET-PC", "ranjeet", version="2.3.0", tally="open", opened=("GB TEXCOAT",), beat={"readStopped": {"by": "self", "reason": "a request to Tally (TDSDeskCompanies) took 21.2 s", "at": "ago:30"}}))
+        ok(rows and rows[0][1] == "stopped" and "Stopped: a request to Tally (TDSDeskCompanies) took 21.2 s" in rows[0][2], "Stopped by the bridge itself (2.3.0): its reason (%s)" % rows)
         # nothing installed: step 1 with the one download
         scene([], [])
         ok(steps() == [["install", False], ["tally", False], ["company", False], ["link", False]] and n('#app [data-connect-step="install"] [data-bridge-download]') == 1

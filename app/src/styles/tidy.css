@@ -162,7 +162,7 @@
 #app .tlink-guide .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
 #app .tlink-guide select { max-width: 100%; min-width: 0; }
 #app .tallgood, #app .tconnected-x { margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--st-done); border-radius: 6px; background: var(--st-done-soft); }
-#app .tclients { margin: 0 0 12px; }
+#app .tclients, #app .treading { margin: 0 0 12px; }
 #app .tseen-hint { margin: 8px 0 0; overflow-wrap: anywhere; }
 /* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room; the one rule for it, the depreciation follow-up's folded in): on a computer the title block is
    as wide as the title and its Tally chip need (never less than the usual share of the row, never more than half); the
