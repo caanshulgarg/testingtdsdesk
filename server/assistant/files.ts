@@ -7,7 +7,10 @@ import { PDFDocument, PDFFont, rgb, StandardFonts } from "npm:pdf-lib@1.17.1";
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 
 export type Col = { k: string, label: string, t?: string };
-export type TableData = { title?: string, columns: Col[], rows: Record<string, unknown>[], basis?: string };
+// fromFile: the table was copied from the user's own sheet (filetable.ts), not computed from the books: no automatic totals
+// (the file's own total rows are copied, marked __b; a sum FinCom adds is a row marked __sum; a group heading is __h) and
+// the note under it says where the figures came from
+export type TableData = { title?: string, columns: Col[], rows: Record<string, unknown>[], basis?: string, fromFile?: string, note?: string };
 export type Section = { heading?: string | null, text?: string | null, table?: TableData | null };
 export type DocSpec = {
   format: "xlsx" | "docx" | "pdf", title: string, client: string, firm: { name: string, lines: string[] },
@@ -31,8 +34,13 @@ export function inr(n: unknown): string {
 }
 const isNum = (t?: string) => t === "amount" || t === "int" || t === "pct";
 const dmy = (v: unknown) => { const s = String(v ?? ""); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + "-" + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(s.slice(5, 7)) - 1] + "-" + s.slice(0, 4) : s; };
-const cellText = (c: Col, v: unknown) => v == null ? "" : c.t === "amount" ? inr(v) : c.t === "date" ? dmy(v) : c.t === "pct" ? String(v) + "%" : String(v);
-export const footerLines = (d: DocSpec) => ["Figures from FinCom's books as of " + d.asOf + ".", ...(d.aiText ? ["AI-drafted text, review before use."] : [])];
+const cellText = (c: Col, v: unknown) => v == null ? "" : c.t === "amount" ? (isFinite(Number(v)) && v !== "" ? inr(v) : String(v)) : c.t === "date" ? dmy(v) : c.t === "pct" ? (typeof v === "number" ? String(v) + "%" : String(v)) : String(v);
+// a file whose tables all come from the user's own sheet does not say its figures are FinCom's books'
+const onlyFromFiles = (d: DocSpec) => d.sections.some((s) => s.table) && d.sections.every((s) => !s.table || !!s.table.fromFile);
+export const footerLines = (d: DocSpec) => [onlyFromFiles(d) ? "Made by FinCom on " + d.asOf + "; figures as in your file, not checked against the books." : "Figures from FinCom's books as of " + d.asOf + ".", ...(d.aiText ? ["AI-drafted text, review before use."] : [])];
+// a row of a file table: a group heading, a total row (the file's own, or a sum FinCom added), or a plain row
+const isHead = (r: Record<string, unknown>) => typeof r.__h === "string";
+const isBold = (r: Record<string, unknown>) => !!(r.__b || r.__sum || r.__h);
 export const safeName = (s: string) => String(s || "FinCom").replace(/[^A-Za-z0-9 ._-]+/g, " ").replace(/\s+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "FinCom";
 
 // ---------------------------------------------------------------- xlsx
@@ -52,14 +60,33 @@ export async function makeXlsx(d: DocSpec): Promise<Uint8Array> {
     const head = ws.addRow(t.columns.map((c) => c.label || c.k));
     head.font = { bold: true }; head.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF3F0" } }; c.border = { bottom: { style: "thin" } }; });
     const first = ws.rowCount + 1;
+    // a file table's total rows: a sum FinCom added is a formula over the copied rows; the file's own total is a formula
+    // only where it equals the sum of the rows above it (since the last total or heading), else its value as in the file
+    let since: number[] = [];
+    const dataAt: number[] = [];
+    const ranges = (rs: number[], L: string) => { const out: string[] = []; let a = -1, b = -1; for (const x of rs) { if (x === b + 1) b = x; else { if (a > 0) out.push(a === b ? L + a : L + a + ":" + L + b); a = b = x; } } if (a > 0) out.push(a === b ? L + a : L + a + ":" + L + b); return out.join(","); };
     for (const r of t.rows) {
-      ws.addRow(t.columns.map((c) => {
+      if (isHead(r)) { ws.addRow([String(r.__h)]).font = { bold: true }; since = []; continue; }
+      const row = ws.addRow(t.columns.map((c) => {
         const v = r[c.k];
         if (v == null || v === "") return null;
         if (isNum(c.t)) { const n = typeof v === "number" ? v : Number(v); return isFinite(n) ? n : String(v); }
         if (c.t === "date" && /^\d{4}-\d{2}-\d{2}$/.test(String(v))) return new Date(String(v) + "T00:00:00Z");
         return String(v);
       }));
+      if (t.fromFile && (r.__b || r.__sum)) {
+        row.font = { bold: true };
+        const over = r.__sum ? dataAt : since;
+        t.columns.forEach((c, i) => {
+          const v = r[c.k];
+          if (c.t !== "amount" || typeof v !== "number" || !over.length) return;
+          const L = ws.getColumn(i + 1).letter;
+          const sum = over.reduce((a, n) => a + (Number(ws.getRow(n).getCell(i + 1).value) || 0), 0);
+          if (r.__sum || Math.abs(sum - v) < 0.5) row.getCell(i + 1).value = { formula: "SUM(" + ranges(over, L) + ")", result: v };
+          row.getCell(i + 1).border = { top: { style: "thin" } };
+        });
+        since = [];
+      } else if (!r.__sum) { since.push(row.number); dataAt.push(row.number); }
     }
     const last = ws.rowCount;
     t.columns.forEach((c, i) => {
@@ -72,7 +99,7 @@ export async function makeXlsx(d: DocSpec): Promise<Uint8Array> {
     });
     // totals of the amount columns, as formulas
     const amountCols = t.columns.map((c, i) => [c, i] as [Col, number]).filter(([c]) => c.t === "amount" && !/balance|side|rate/i.test(c.k));
-    if (t.rows.length > 1 && amountCols.length) {
+    if (t.rows.length > 1 && amountCols.length && !t.fromFile) {
       const tot = ws.addRow(t.columns.map((_c, i) => (i === 0 ? "Total" : null)));
       tot.font = { bold: true };
       for (const [, i] of amountCols) {
@@ -83,6 +110,7 @@ export async function makeXlsx(d: DocSpec): Promise<Uint8Array> {
       }
     }
     ws.addRow([]);
+    if (t.note) ws.addRow([t.note]).font = { italic: true, size: 9, color: { argb: "FF5A6B63" } };
     for (const f of footerLines(d)) ws.addRow([f]).font = { italic: true, size: 9, color: { argb: "FF5A6B63" } };
     ws.views = [{ state: "frozen", ySplit: 4, xSplit: 0 }];
   }
@@ -116,11 +144,12 @@ export async function makeDocx(d: DocSpec): Promise<Uint8Array> {
       const t = s.table;
       const cell = (txt: string, num: boolean, bold = false) => new TableCell({ children: [new Paragraph({ alignment: num ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: txt, bold, size: 18 })] })] });
       const rows = [new TableRow({ tableHeader: true, children: t.columns.map((c) => cell(c.label || c.k, isNum(c.t), true)) }),
-        ...t.rows.map((r) => new TableRow({ children: t.columns.map((c) => cell(cellText(c, r[c.k]), isNum(c.t))) }))];
+        ...t.rows.map((r) => new TableRow({ children: t.columns.map((c, i) => cell(isHead(r) ? (i === 0 ? String(r.__h) : "") : cellText(c, r[c.k]), isNum(c.t) && !isHead(r), isBold(r))) }))];
       const amountCols = t.columns.filter((c) => c.t === "amount" && !/balance|side|rate/i.test(c.k));
-      if (t.rows.length > 1 && amountCols.length) rows.push(new TableRow({ children: t.columns.map((c, i) => cell(i === 0 ? "Total" : amountCols.includes(c) ? inr(t.rows.reduce((a, r) => a + (Number(r[c.k]) || 0), 0)) : "", isNum(c.t), true)) }));
+      if (t.rows.length > 1 && amountCols.length && !t.fromFile) rows.push(new TableRow({ children: t.columns.map((c, i) => cell(i === 0 ? "Total" : amountCols.includes(c) ? inr(t.rows.reduce((a, r) => a + (Number(r[c.k]) || 0), 0)) : "", isNum(c.t), true)) }));
       kids.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
       if (t.basis) kids.push(new Paragraph({ children: [new TextRun({ text: t.basis, italics: true, size: 16, color: "5A6B63" })] }));
+      if (t.note) kids.push(new Paragraph({ children: [new TextRun({ text: t.note, italics: true, size: 16, color: "5A6B63" })] }));
     }
   }
   const doc = new Document({ creator: "FinCom", title: d.title, sections: [{ children: kids,
@@ -197,11 +226,12 @@ export async function makePdf(d: DocSpec, opts: { fetch?: typeof fetch, noFont?:
         page.drawLine({ start: { x: M, y }, end: { x: M + widths.reduce((a, b) => a + b, 0), y }, thickness: 0.3, color: rgb(0.8, 0.84, 0.82) });
       };
       row(cols.map((c) => c.label || c.k), bold, true);
-      for (const r of t.rows) row(cols.map((c) => cellText(c, r[c.k]).replace(/^(-?)(\d)/, c.t === "amount" ? "$1" + "$2" : "$1$2")), font, false);
+      for (const r of t.rows) row(isHead(r) ? cols.map((_c, i) => (i === 0 ? String(r.__h) : "")) : cols.map((c) => cellText(c, r[c.k])), isBold(r) ? bold : font, !!(r.__b || r.__sum));
       const amountCols = cols.filter((c) => c.t === "amount" && !/balance|side|rate/i.test(c.k));
-      if (t.rows.length > 1 && amountCols.length) row(cols.map((c, i) => (i === 0 ? "Total" : amountCols.includes(c) ? inr(t.rows.reduce((a, r) => a + (Number(r[c.k]) || 0), 0)) : "")), bold, true);
+      if (t.rows.length > 1 && amountCols.length && !t.fromFile) row(cols.map((c, i) => (i === 0 ? "Total" : amountCols.includes(c) ? inr(t.rows.reduce((a, r) => a + (Number(r[c.k]) || 0), 0)) : "")), bold, true);
       if (t.basis) { y -= 2; text(t.basis, 7.5, font, rgb(0.35, 0.42, 0.39)); }
-      text("Amounts in " + rupee, 7, font, rgb(0.35, 0.42, 0.39));
+      if (t.note) { y -= 2; text(t.note, 7.5, font, rgb(0.35, 0.42, 0.39)); }
+      else text("Amounts in " + rupee, 7, font, rgb(0.35, 0.42, 0.39));
       y -= 6;
     }
   }

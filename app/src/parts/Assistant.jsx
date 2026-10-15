@@ -32,6 +32,8 @@ const LABELS = {
   // certificates: neutral; each row's "From" says where its figure came from
   confirm: ["neutral", "Figures for the certificate – please confirm"],
   certificate: ["neutral", "Certificate figures – source in each row"],
+  // a file made from the user's own sheet (server/assistant/filetable.ts): the cells copied from it, not the books
+  file: ["neutral", "your file – figures as in it, not checked against the books"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";

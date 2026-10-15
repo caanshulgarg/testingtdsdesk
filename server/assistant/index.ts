@@ -21,6 +21,7 @@ import { classify } from "./failure.ts";
 import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
+import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { costUsd as priceUsd, HAIKU } from "./models.ts";
@@ -171,6 +172,8 @@ export function handler(deps: Deps) {
 
     // a notice or another upload the user attached: read from the firm's private bucket with the user's own token
     const attachments: Record<string, unknown>[] = [];
+    const sheets: SheetFile[] = [];
+    let sf: SheetFile | null = null;
     let noticePath = "";
     // files uploaded in the chat for a tool to read (a signed balance sheet, a certificate format, a letterhead):
     // <firm>/<client or _firm>/uploads/...; never sent to the model as they are (the tool reads them)
@@ -196,7 +199,13 @@ export function handler(deps: Deps) {
       const b64 = btoa(Array.from(buf, (c) => String.fromCharCode(c)).join(""));
       if (/pdf/i.test(type) || /\.pdf$/i.test(path)) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: String(a?.name || "notice").slice(0, 120) });
       else if (/^image\/(png|jpeg|webp|gif)$/.test(type)) attachments.push({ type: "image", source: { type: "base64", media_type: type, data: b64 } });
-      // a sheet or a Word file: the text FinCom took out of it on the page (masked by the agent like the question)
+      // a sheet: FinCom reads it itself (the bytes; else the page's text) and shows it with row numbers and column letters,
+      // so make_file can copy its cells (filetable.ts); masked by the agent like the question
+      else if (isSheetName(String(a?.name || path), type) && (sf = await readSheetFile(sheets.length + 1, String(a?.name || path.split("/").pop() || "sheet").slice(0, 120), type, buf, typeof a?.text === "string" ? a.text : ""))) {
+        sheets.push(sf);
+        attachments.push({ type: "text", text: renderSheetFile(sf) });
+      }
+      // a Word file: the text FinCom took out of it on the page (masked by the agent like the question)
       else if (typeof a?.text === "string" && a.text.trim()) attachments.push({ type: "text", text: "[The file " + String(a?.name || "uploaded").slice(0, 120) + ", as FinCom read it]\n" + String(a.text).slice(0, 20000) });
       else if (action !== "classify") return reply(415, { ok: false, kind: "file", error: "That file can be asked about as a PDF, a picture (PNG, JPEG, WebP), a sheet or a Word file." });
     }
@@ -307,7 +316,7 @@ export function handler(deps: Deps) {
         const ctx: TurnCtx = {
           client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]),
           question, history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })),
-          attachments, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
+          attachments, sheets, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
           noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),
           capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!r?.ok, used: Number(r?.used || 0), cap: Number(r?.cap || 0), spent_inr: Number(r?.spent_inr || 0), cap_inr: Number(r?.cap_inr || 0), warn: !!r?.warn, why: String(r?.why || "") }; },

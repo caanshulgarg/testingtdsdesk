@@ -167,7 +167,7 @@ Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, a r
   eq(r.done.labels, ["books"], "green: checked against the books");
   eq(r.done.unchecked, [], "every figure in the answer is in the tools' results");
   const p = c.calls[0] as any;
-  assert(p.model === "claude-sonnet-5-5" && p.output_config.effort === "medium" && p.thinking.type === "adaptive" && p.fallbacks === "default" && p.betas.includes("server-side-fallback-2026-07-01"), "Sonnet, medium, adaptive, fallbacks");
+  assert(p.model === "claude-sonnet-5-5" && p.output_config.effort === "low" && p.thinking.type === "adaptive" && p.fallbacks === "default" && p.betas.includes("server-side-fallback-2026-07-01"), "Sonnet, low effort for a short answer (no detail asked), adaptive, fallbacks");
   assert(!("tool_choice" in p) || p.tool_choice?.type === "auto", "no forced tool choice");
   assert(p.tools.filter((t: any) => t.name && !t.type).every((t: any) => t.eager_input_streaming === true), "eager input streaming");
   eq(apiShape(p), [], "Sonnet's request is one the API accepts (strict only within its limits)");
@@ -176,7 +176,7 @@ Deno.test("fell through to the model: Sonnet for chat, cached frozen prefix, a r
   eq(p.cache_control, { type: "ephemeral" }, "the turn cached automatically");
   assert(/never post, change, delete or file/.test(p.system[0].text), "says it never changes anything");
   assert(!p.tools.some((t: any) => /post|delete|update|insert|write/i.test(t.name || "") && t.name !== "point_to_screen"), "no tool that writes");
-  assert(p.max_tokens <= 6000, "chat capped at 6,000 tokens out");
+  assert(p.max_tokens === 4000, "a short answer: max_tokens 4,000 (thinking included)");
   const lg = (await svc("/rest/v1/assistant_log?select=route,feature,fell_through,models,calls&question=eq." + encodeURIComponent(q)))[0];
   eq([lg.route, lg.feature, lg.fell_through, lg.models, lg.calls], ["model", "book", true, ["claude-sonnet-5-5"], 2], "the log: fell through, models, calls");
 });
