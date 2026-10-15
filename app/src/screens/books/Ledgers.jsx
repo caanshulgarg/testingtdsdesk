@@ -20,6 +20,7 @@
 // S.ledUndo (the last step, for the Undo line).
 import CommitBox from "../../parts/CommitBox.jsx";
 import NeedAction from "../../parts/NeedAction.jsx";
+import { UnknownBody, unknownGroup } from "../../parts/UnknownLedgers.jsx";
 const plural = (k, one, many) => k + " " + (k === 1 ? one : many);
 
 // migration 39: a ledger renamed in Tally whose saved choices were carried (tally_ledgers.needs_confirm): one line until
@@ -203,12 +204,10 @@ export function Notices({ b, cid }) {
 // masters), a confirmed ledger now used differently (also on the TDS and GST pages' Ledgers, TaxLedgers.jsx)
 export function pleaseLines(b) {
   const cid = b.cid;
-  const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co), cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid);
-  const readAct = (k) => live ? <button className="btn small" data-led-read-need={k} onClick={() => doAct("ledRead")}>Read the ledgers again</button>
-    : cloud ? <button className="btn small" data-led-read-need={k} onClick={() => Ledgers.refresh(cid)}>Read the ledgers again</button>
-    : <button className="btn small" data-led-read-need={k} onClick={() => doAct("mastersPick")}>Bring in from Tally</button>;
   const lines = [];
-  LedPage.unknown(cid).forEach((x) => lines.push({ key: x.key, kind: "unknown", text: x.text, act: readAct("unknown") }));
+  // the ledgers entries use that FinCom does not have yet: ONE line (the owner, 15-Oct-2026), its own action inside
+  const ug = unknownGroup(cid);
+  if (ug) lines.push({ key: "unknown", kind: "unknown", text: <div data-unknown-ledgers="ledgers"><UnknownBody g={ug} where="ledgers" /></div>, act: null });
   if (typeof Rec === "object" && Rec.flow) Rec.flow().needs.filter((g) => g.cid === cid && g.kind === "masters").forEach((g) => lines.push({ key: "rec:" + g.key, kind: "masters", text: g.text, act: <NeedAction g={g} canApply={Rec.canWrite()} /> }));
   LedCheck.diff(b).changed.forEach((x) => lines.push({ key: "use:" + x.n, n: x.n, kind: "used", text: x.n + ": used differently since it was confirmed (" + x.say + ").",
     act: <button className="btn small" data-led-keep={x.n} onClick={() => LedPage.keepUse(b, x.n)}>Keep as confirmed</button> }));

@@ -444,15 +444,12 @@ const LedPage = {
     return out;
   },
   fine(b, key){ Drafts.direct(() => { (b.ledOk = b.ledOk || {})[key] = {by: whoAmI(), at: new Date().toISOString()}; saveBooks(); }, {bypass: true}); render(); },
-  // entries naming a ledger FinCom does not have yet (migration 56, Rec.unkOf), one item a ledger
+  // entries naming a ledger FinCom does not have yet (migration 56; Rec.unkGroups: settled ones left out, worked out live),
+  // one item a ledger, most used first. The pages show them as ONE line a client (parts/UnknownLedgers.jsx)
   unknown(cid){
-    if (typeof Rec !== "object" || !Rec.unkOf || typeof TCloud !== "object" || !TCloud.on() || !cid) return [];
-    const bks = Rec.unkBooks(cid), rows = (Rec.unkOf(bks.length ? bks : null).rows || []).filter(r => String(r.client_id || "") === String(cid)), by = {};
-    rows.forEach(r => { const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
-      names.forEach(n => { (by[n] = by[n] || []).push(r); }); });
-    const one = r => [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "");
-    return Object.keys(by).sort().map(n => { const rs = by[n];
-      return {key: "unk:" + n, n, text: "'" + n + "' is used by " + rs.length + (rs.length === 1 ? " entry" : " entries") + " (" + rs.slice(0, 3).map(one).join(", ") + (rs.length > 3 ? ", …" : "") + "), but FinCom does not have this ledger yet. The entries are in the books; its group comes with the next ledger list."}; });
+    if (typeof Rec !== "object" || !Rec.unkGroups || typeof TCloud !== "object" || !TCloud.on() || !cid) return [];
+    const bks = Rec.unkBooks(cid), g = Rec.unkGroups(cid, bks.length ? bks : null)[0];
+    return g ? g.ledgers.map(x => ({key: "unk:" + x.n, n: x.n, count: x.rows.length, text: "'" + x.n + "': " + Rec.unkN(x.rows.length) + ", not in FinCom's ledger list yet."})) : [];
   },
   // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
   // release-240 review M5: saved at once, as fine() (its own confirm step, not a draft)

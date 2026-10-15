@@ -121,7 +121,7 @@ function BooksPage() {
       <button key={id} data-books-tab={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>}
     <SyncNote cid={co.id} tab={tab} />
     {/* From Tally (2.4.0) says the upload's progress and the reading of the books in its own upload part */}
-    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={!((tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
+    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={!(tab === "ledgers" || (tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
     {tab !== "import" && busy}
     {body}
   </>;

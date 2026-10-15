@@ -407,26 +407,85 @@ const Rec = {
   openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
 
   // ---------------------------------------------------------------- unknown ledgers (the owner, 06-Oct-2026; migration 56)
-  // "An entry using an unknown ledger is applied anyway, with nothing flagged. Until 2.3.1 is out, flag these on the page in
-  // plain words so they are visible." The firm's live entries whose lines name a ledger FinCom's copy does not have
-  // (tally_unknown_ledger_entries(p_book null): every book of the firm; members read). Read once a minute at most; nothing
-  // shown (and no error) while migration 56 has not run
-  unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, at, busy, none, err}
+  // The live entries whose lines name a ledger FinCom's copy does not have (tally_unknown_ledger_entries(p_book null):
+  // every book of the firm; members read). Read once a minute at most; nothing shown (and no error) while migration 56
+  // has not run.
+  // The owner, 15-Oct-2026 (221 near-identical lines for one client: "there should be some smart way to show it..
+  // even after confirming all the ledgers.. all the error is there.. rather it should automatically be removed"):
+  //   - ONE line a client, everywhere: "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327
+  //     entries)"; expanded, one row a ledger with its entry count and its entries (parts/UnknownLedgers.jsx); the bell
+  //     has the count only (AlertHub, src/js/63);
+  //   - worked out live each time, never stored, so a ledger leaves the line by itself the moment it is settled:
+  //     a. FinCom's ledger list has it under Tally's other capitals or spaces (staging, GB TEXCOAT: the entries say
+  //        "INPUT CGST", "PURCHASE @18%", "UFLEX Limited"; Tally's list says "Input CGST", "Purchase@18%", "UFLEX  LIMITED".
+  //        Tally names a ledger without minding capitals or spaces, so these are the same ledger; matched only when
+  //        exactly one ledger of the book has that name so);
+  //     b. Tally renamed it and the bridge said so (tally_ledger_aliases, migration 59: the name Tally gave a ledger FinCom
+  //        holds under another name, same GUID; "SNV AVIATION PRIVATE LIMITED Delhi" for "SNV AVIATION PRIVATE LIMITED"),
+  //        while FinCom still has that ledger;
+  //     c. a person confirmed it on the GST and TDS ledgers page (b.map[name].ok: the answer the returns read);
+  //     d. it arrives in FinCom's list (the ledger list, or a ledger_changes): the next read (a minute) drops it.
+  //   - the one action: Read the ledgers now (unkRead): the existing Update now (tallyUpdateNow: the bridge here, else
+  //     tally_want_update), which reads the ledger list even while background reading is paused in the tray (bridge-go
+  //     keep.go: a "now" run is not held by the pause); what stops it is said before (unkCan).
+  unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, known, at, busy, none, err}
   unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
   unkOf(books){
-    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, known: {}, at: 0, busy: false, none: false, err: ""});
     if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || Date.now() - u.at > 60000)){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
     return u;
   },
   async unkLoad(books){
-    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, known: {}, at: 0, busy: false, none: false, err: ""});
     u.busy = true;
     try {
       const out = [];
       for (const b of (books && books.length ? books : [null])) out.push(...[].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: b}) || []));
+      u.known = await this.unkKnown([...new Set(out.map(r => String((r && r.book_id) || "")).filter(Boolean))]);
       u.rows = out; u.none = false; u.err = "";
     } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
     u.busy = false; u.at = Date.now(); render();
+  },
+  // the name for matching a ledger as Tally does: no capitals, no spaces ("PURCHASE @18%" and "Purchase@18%")
+  unkLoose(n){ return String(typeof ledNm === "function" ? ledNm(n) : n || "").toLowerCase().replace(/\s+/g, ""); },
+  // a book's ledger names in FinCom's cloud (tally_ledgers, the book's live ledgers) by their loose name, and the names Tally
+  // gave a ledger FinCom holds under another name (tally_ledger_aliases, migration 59; not ended). Members read both (their
+  // firm's rows). Nothing on an error (an older cloud): the line is as the function says
+  async unkKnown(books){
+    const out = {}, q = encodeURIComponent;
+    for (const bk of books.slice(0, 60)){
+      const k = {names: new Map(), alias: new Map()};
+      try {
+        [].concat(await TCloud.restAll("tally_ledgers?select=name&merged_into=is.null&deleted_at=is.null&book_id=eq." + q(bk)) || []).forEach(r => {
+          const n = r && r.name ? (typeof ledNm === "function" ? ledNm(r.name) : String(r.name)) : "", l = this.unkLoose(n);
+          if (l){ const a = k.names.get(l) || []; if (!a.includes(n)) a.push(n); k.names.set(l, a); } });
+      } catch (e){}
+      try {
+        [].concat(await TCloud.restAll("tally_ledger_aliases?select=tally_name,fincom_name&ended_at=is.null&book_id=eq." + q(bk)) || []).forEach(r => {
+          if (r && r.tally_name && r.fincom_name) k.alias.set(String(r.tally_name), String(r.fincom_name)); });
+      } catch (e){}
+      out[bk] = k;
+    }
+    return out;
+  },
+  // FinCom has this ledger after all: {as, how} (how: "name" capitals or spaces, "renamed" in Tally, "confirmed" by a
+  // person), else null (not in FinCom yet)
+  unkSettled(known, r, name, cid){
+    const k = known && known[String(r.book_id || "")], l = this.unkLoose(name);
+    const one = (x) => { const a = k && k.names.get(this.unkLoose(x)); return a && a.length === 1 ? a[0] : ""; };
+    if (k){
+      const same = one(name); if (same) return {as: same, how: "name"};
+      const al = k.alias.get(name); if (al && one(al)) return {as: one(al), how: "renamed"};
+    }
+    // the client's ledger list in this browser (the cloud's, or the bridge here): the same rule
+    if (typeof Ledgers === "object" && cid && typeof Ledgers.list === "function"){
+      const hit = (Ledgers.list(cid) || []).filter(x => x && this.unkLoose(x.name) === l);
+      if (hit.length === 1) return {as: hit[0].name, how: "name"};
+    }
+    const b = typeof S === "object" && S.books && S.books.cid === cid ? S.books : null;
+    const m = b && b.map ? (b.map[name] || (typeof ledLook === "function" ? ledLook(b.map, name) : null)) : null;
+    if (m && m.ok) return {as: name, how: "confirmed"};
+    return null;
   },
   // a client's books in FinCom's cloud (TCloud.st[cid].books[].book): its Books page asks for these books only (the
   // firm-wide list stops at 500 entries)
@@ -434,22 +493,72 @@ const Rec = {
     const st = cid && typeof TCloud === "object" && TCloud.st && TCloud.st[cid];
     return [...new Set([].concat((st && st.books) || []).map(b => b && b.book).filter(Boolean).map(String))].sort();
   },
-  // one sentence an entry and ledger: "<type> <number> of <date> uses the ledger '<name>', which FinCom does not have yet. It
-  // is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1."
-  unkWords(r, name){
-    const head = [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry";
-    return head + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "") + " uses the ledger '" + name + "', which FinCom does not have yet. It is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1.";
-  },
-  // the sentences for one client ("" or none: every client), newest entry first: [{key, cid, text}]; books: read those
-  // books only (a client's Books page), else the firm's list
-  unkLines(cid, books){
-    const rows = this.unkOf(books).rows || [];
-    const out = [];
-    rows.filter(r => !cid || String(r.client_id || "") === String(cid)).forEach(r => {
-      const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
-      names.forEach(n => out.push({key: (r.book_id || "") + ":" + r.guid + ":" + n, cid: r.client_id || "", text: this.unkWords(r, n)}));
+  unkNames(r){ return Array.isArray(r.ledgers) ? r.ledgers.map(String) : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean); },
+  // "Sales GBTS2627-09 · 12-Oct-2026"
+  unkEntry(r){ return ([r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry") + (r.day ? " · " + fmtDate(String(r.day).slice(0, 10)) : ""); },
+  // one group a client ("" : every client; books: read those books only, a client's pages), the ledgers FinCom does not
+  // have yet, most used first: [{cid, ledgers: [{n, rows}], entries (distinct), settled: [{n, as, how}]}]
+  unkGroups(cid, books){
+    const u = this.unkOf(books), by = new Map();
+    (u.rows || []).filter(r => r && (!cid || String(r.client_id || "") === String(cid))).forEach(r => {
+      const c = String(r.client_id || ""), g = by.get(c) || {cid: c, map: new Map(), keys: new Set(), settled: new Map()};
+      by.set(c, g);
+      this.unkNames(r).forEach(n => {
+        const s = this.unkSettled(u.known, r, n, c);
+        if (s){ g.settled.set(n, Object.assign({n}, s)); return; }
+        const x = g.map.get(n) || {n, rows: []}; x.rows.push(r); g.map.set(n, x);
+        g.keys.add((r.book_id || "") + ":" + r.guid);
+      });
     });
-    return out;
+    return [...by.values()].filter(g => g.map.size).map(g => ({cid: g.cid, entries: g.keys.size, settled: [...g.settled.values()],
+      ledgers: [...g.map.values()].sort((x, y) => y.rows.length - x.rows.length || x.n.localeCompare(y.n))}));
+  },
+  // "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327 entries)"
+  unkHead(g){
+    const n = g.ledgers.length, names = g.ledgers.slice(0, 2).map(x => x.n).join(", ") + (n > 2 ? ", …" : "");
+    return (n === 1 ? "1 ledger used in Tally is" : n + " ledgers used in Tally are") + " not in FinCom yet (" + names + " \u00b7 " + this.unkN(g.entries) + ")";
+  },
+  unkN(k){ return k + (k === 1 ? " entry" : " entries"); },
+  // can Read the ledgers now run for this client, and what to say: {ok, kind, pc, text}
+  unkCan(cid){
+    const co = S.companies && S.companies[cid], name = (co && (co.tallyName || co.name)) || "this client's company";
+    const l = co && typeof tallyLine === "function" ? tallyLine(co) : null, pc = (l && l.computer) || "the Tally computer";
+    if (!l) return {ok: false, kind: "none", pc, text: "No Tally computer keeps this client's books yet: link one in Client setup → Tally."};
+    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Cannot read now: " + pc + " is offline. Once FinCom Bridge runs there again, press Read the ledgers now."};
+    if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Cannot read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
+    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Cannot read now: Tally is not open on " + pc + ". Open " + name + " in Tally there, then press Read the ledgers now."};
+    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. Read the ledgers now still reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
+    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; the read goes once Tally answers."};
+    return {ok: true, kind: "open", pc, text: "Reads Tally's ledger list on " + pc + " (a few requests, each under 2 seconds)."};
+  },
+  // Read the ledgers now: the existing Update now; the line is read again every 20 s for 4 minutes, and says how it went
+  unkAsk: {},              // cid -> {at, pc, before (ledgers missing then), now, done, checked}
+  unkRead(cid){
+    const c = this.unkCan(cid);
+    if (!c.ok){ toast(c.text); return; }
+    const g = this.unkGroups(cid, this.unkBooks(cid).length ? this.unkBooks(cid) : null)[0];
+    const a = this.unkAsk[cid] = {at: Date.now(), pc: c.pc, before: g ? g.ledgers.length : 0, now: g ? g.ledgers.length : 0, done: false, checked: 0};
+    if (typeof tallyUpdateNow === "function") tallyUpdateNow(cid);
+    render();
+    const tick = async () => {
+      if (this.unkAsk[cid] !== a) return;
+      const bks = this.unkBooks(cid);
+      try { if (typeof Ledgers === "object" && Ledgers.load) await Ledgers.load(cid, {force: true}); } catch (e){}
+      await this.unkLoad(bks.length ? bks : null);
+      const h = this.unkGroups(cid, bks.length ? bks : null)[0];
+      a.now = h ? h.ledgers.length : 0; a.checked = Date.now();
+      if (!a.now || a.now < a.before || Date.now() - a.at > 240000){ a.done = true; render(); return; }
+      render(); setTimeout(tick, 20000);
+    };
+    setTimeout(tick, 20000);
+  },
+  // the progress words under the line ("" when not asked)
+  unkProgress(cid, missing){
+    const a = this.unkAsk[cid]; if (!a) return "";
+    const t = (x) => typeof fmtTime === "function" ? fmtTime(x) : new Date(x).toLocaleTimeString();
+    if (!a.done) return "Asked " + a.pc + " at " + t(a.at) + " to read Tally's ledger list. Waiting for it" + (a.checked ? " (looked again at " + t(a.checked) + ")" : "") + "…";
+    if (missing < a.before) return "Ledger list read: " + (a.before - missing) + " of " + a.before + " came in; " + missing + " still not in Tally's list. Check their names in Tally, or confirm them on Ledgers.";
+    return "No new ledger list from " + a.pc + " in 4 minutes. " + this.unkCan(cid).text;
   },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?

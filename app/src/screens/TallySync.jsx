@@ -4,7 +4,6 @@
 // Apply now on a held line (tally_recorder_release_held; the owner's rule of 05-Oct-2026: any member who may write). New lines come in live (Live.joinRecorder, src/js/54).
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
-import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 import { ClearBtn } from "../parts/Bell.jsx";
 import NeedAction from "../parts/NeedAction.jsx";
 
@@ -70,8 +69,8 @@ export default function SyncActivity() {
     <details className="note" data-sync-meaning="" style={{ margin: "0 0 8px" }}><summary style={{ cursor: "pointer" }}>What does this mean?</summary>
       <div style={{ marginTop: 4 }}><b>Needs you</b>: FinCom cannot settle these by itself; each line says the one thing to do (most often: upload that day’s Day Book). <b>Being fetched</b>: FinCom Bridge is still asking Tally for these entries; they enter the books by themselves. When nothing is said, nothing is waiting.</div></details>
     <SyncFlow flow={flow} canApply={canApply} busy={!!(msg && msg.busy)} />
-    {/* the owner (06-Oct-2026): entries naming a ledger FinCom does not have yet, in plain words (migration 56) */}
-    <UnknownLedgers cid={S.syncClient || ""} where="activity" names />
+    {/* the ledgers entries use that FinCom does not have yet: not here (the owner, 15-Oct-2026: one line a client, on the
+        client's Books page and Ledgers; the bell has the count) */}
     <nav className="sbar" aria-label="Sync activity filter">{FILTERS.map(([id, label]) =>
       <button key={id} data-sync-filter={id} aria-selected={f === id} onClick={() => setF(id)}>{label}</button>)}</nav>
     {a.err && <p className="bk-warn"><Msg text={a.err} /></p>}

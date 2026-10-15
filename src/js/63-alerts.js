@@ -219,6 +219,16 @@ const AlertHub = {
         text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
         fix: "Needs you: upload the Day Book from " + fmtDate(g.day) + " so FinCom has Tally's numbers.",
         ...(g.cid ? {act: {label: "Upload the Day Book from " + fmtDate(g.day), run: () => Rec.uploadFrom(g.cid, g.day)}} : {})}));
+      // ---- the ledgers a client's entries use that FinCom does not have yet (the owner, 15-Oct-2026: "there should be some
+      // smart way to show it"): one item a client, the count only (Rec.unkGroups, settled ones left out); the client's Books
+      // page and Ledgers say which, with Read the ledgers now. Information (no line on the pages from here); gone by itself
+      if (Rec.unkGroups) Rec.unkGroups("", null).forEach(g => {
+        if (!g.cid || !(S.companies || {})[g.cid]) return;
+        const k = g.ledgers.length;
+        out.push({key: "unk:" + g.cid, fp: AlertClear.fp(g.ledgers.map(x => "unk:" + g.cid + ":" + x.n).sort()), sev: "info", cid: g.cid, selfClear: true,
+          text: coName(g.cid) + ": " + (k === 1 ? "1 ledger" : k + " ledgers") + " used in Tally " + (k === 1 ? "is" : "are") + " not in FinCom yet.",
+          fix: "Open the client's Ledgers: Read the ledgers now there, or confirm them.", act: {label: "Ledgers", run: () => Rec.openClientTab(g.cid, "books:ledgers")}});
+      });
       // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();
@@ -302,7 +312,9 @@ const AlertHub = {
 //   held:<client>                the books' "not yet in these books" banner      line:<id>:need|wait for each held line
 //   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
 //   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line
-//   unk:<client or firm>         "uses a ledger FinCom does not have yet"        unk:<the entry's key> for each entry
+//   unk:<client>                 the bell: "N ledgers used in Tally are not in    unk:<client>:<ledger> for each ledger not settled (15-Oct-2026; the
+//                                FinCom yet" (the pages' one line has no Clear:  pages' line goes by itself, src/js/61 unkGroups)
+//                                it goes by itself)
 //   ownwait:<computer>           the bell                                        ownwait:<computer>:<reason>:<company>:<its start> for each of the beat's recorderWaitStarts (release-240 M2-r); else recorderWaitSince; a bridge before 2.4.0: when this browser first saw it
 //   pc:<computer>                the bell                                        pc:<computer>:retry:<IST day of the retry> | :stopped:<its time> |
 //                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
