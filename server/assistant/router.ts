@@ -64,6 +64,13 @@ const amountIn = (s: string): number | null => {
 // a question this router must leave to the model: why, how, should, explain, advice, a draft, a notice, several things
 const NOT_MINE = /\b(why|how come|explain|should|could|would|advise|advice|suggest|draft|reply|letter|notice|compare .* with|and also|what if|is it|are they|can i|can we|reason|excel|xlsx|spreadsheet|word|docx|pdf|download|file of|confirmation)\b|\band (what|how|which|who|when|where|whether|the|its|their)\b|,\s*and\b/i;
 
+// a question about the law (a due date, a rate, a limit, a section) and not about this client's books: never a book tool by
+// its words ("I need gstr 9 due date" is not the client's due list; owner, 15-Oct-2026). The client's own dues ("due
+// list", "what's due this month", "pending compliances") have no law word and stay routed.
+const LAW = /\b(due dates?|last dates?|rates?|section|limit|threshold|applicable|applicability|penalty|late fee|circular|notification|act,? 20(25|17)|act,? 1961|new act|old act)\b/i;
+const BOOK = /\b(my|our|we|us|this client|books?|ledgers?|paid|received|entries|suppliers?|customers?|parties|balances?|total|how much|which|list|payments?|receipts?|sales|purchases?|expenses?|bank|cash|deducted|anyone|who|pending|overdue|crossed|without)\b/i;
+export const lawQuestion = (q: string) => LAW.test(String(q || "")) && !BOOK.test(String(q || ""));
+
 // two questions in one, or a question that is not one tool's table: never routed by words or by Haiku
 export const compound = (q: string) => NOT_MINE.test(String(q || ""));
 
@@ -80,7 +87,7 @@ export function route(question: string, anchor: string): Route | null {
     }
     return { prefile: { form: "GST", fy: null, quarter: null, month: p.from ? p.from.slice(0, 7) : null, reg: null }, why: "a GST month's check before filing" };
   }
-  if (NOT_MINE.test(s)) return null;
+  if (NOT_MINE.test(s) || lawQuestion(s)) return null;
   const p = periodOf(s, anchor), span = { from: p.from, to: p.to };
   const sec = (s.match(/\b(194[a-z]?(?:-?i)?|194-?ib|194j|194c|194h|194a|194q|194i)\b/i) || [])[1];
   const R = (tool: string, input: Record<string, unknown>, why: string): Route => ({ tool, input, why });

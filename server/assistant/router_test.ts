@@ -52,6 +52,19 @@ Deno.test("left to a model: why, how, advice, drafts, files, two things at once,
     "Read this notice", "Nightjar entries above 50000 between June and August"]) eq(route(q, ANCHOR), null, q);
 });
 
+Deno.test("a question about the law goes to a model, not to the client's books (owner, 15-Oct: 'I need gstr 9 due date' got the due list)", () => {
+  for (const q of ["I need gstr 9 due date", "itr due date", "due date of 26Q for Q2", "last date for GSTR-9C", "rate of TDS under 194J", "what is the threshold for 194Q"])
+    eq(route(q, ANCHOR), null, q);
+  for (const [q, tool] of [["what's due this month", "due_list"], ["due list", "due_list"], ["pending compliances", "due_list"], ["what is due this month", "due_list"],
+    ["194C without TDS", "tds_missed"], ["balance of air Ess exim", "ledger_balance"]] as [string, string][]) {
+    const r = route(q, ANCHOR) as any;
+    assert(r && r.tool === tool, q + " -> " + tool + " (got " + JSON.stringify(r) + ")");
+  }
+  eq(taskOf("I need gstr 9 due date", false, true), "general", "a due date of a return, client open: general");
+  eq(taskOf("itr due date", false, true), "general", "ITR due date: general");
+  eq(taskOf("what is due this month", false, true), "book", "the client's own dues: the books");
+});
+
 Deno.test("the task and the model: Sonnet for chat, Opus at high effort for notices, Haiku only to route", () => {
   eq(taskOf("Read this notice", true, true), "notice", "an attachment is a notice");
   eq(taskOf("reply to the DRC-01A", false, true), "notice", "a notice by name");

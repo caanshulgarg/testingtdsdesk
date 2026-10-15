@@ -46,7 +46,8 @@ export function taskOf(question: string, hasAttachment: boolean, clientOpen: boo
   if (/\b(excel|xlsx|spreadsheet|word|docx|pdf|download|letter|file of)\b/i.test(q)) return "file";
   if (!clientOpen) return "general";
   // with a client open, a question about the law (rates, sections, due dates) and not the books is general
-  if (/\b(rate|section|due date|limit|threshold|applicable|what is|how to|treatment|circular|notification|act,? 20(25|17)|new act|old act)\b/i.test(q) &&
+  if (/\bwhat('s| is) due\b/i.test(q)) return "book";     // the client's own dues
+  if (/\b(rate|section|due dates?|last dates?|limit|threshold|applicable|what is|how to|treatment|circular|notification|act,? 20(25|17)|new act|old act)\b/i.test(q) &&
       !/\b(my|our|we|us|this client|books?|ledgers?|paid|received|entries|suppliers?|customers?|parties|balances?|total|how much|which|list|payments?|receipts?|sales|purchases?|expenses?|bank|cash|deducted|anyone|who)\b/i.test(q)) return "general";
   return "book";
 }
