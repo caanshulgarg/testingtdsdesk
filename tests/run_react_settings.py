@@ -113,7 +113,10 @@ with sync_playwright() as p:
     # round 39: this computer's Tallys link nothing (that only set a Tally name); a client is linked on its Link to Tally card
     ok(pg.locator('select[aria-label="Client for ACME LTD"]').count() == 0 and "not linked" in pg.inner_text("#app table.data"), "this computer's Tallys: no 'Link to a client…', the company said not linked")
     pg.evaluate("""() => { window.__tc = []; TCloud.on = () => true; TCloud.refreshPane = async () => {}; TCloud.rpc = async (f, a) => { window.__tc.push([f, a]); return {}; };
-      TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', last_seen: null}], companies: [{company: 'BETA', client_id: null}]}; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"""); pg.wait_for_timeout(400)
+      const nw = new Date().toISOString();
+      // 15-Oct-2026: step 4 offers only the companies open in Tally now: BETA is open on the Office PC
+      TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', last_seen: nw, version: '2.4.4', main_bridge: 'go-1', info: {computer: 'OFFICE', user: 'a', beat: {at: nw, tally: true, tallyState: 'open', open: ['BETA'], paused: false},
+        bridges: {'go-1': {at: nw, version: '2.4.4', computer: 'OFFICE', user: 'a', mode: 'main', tally: true, tallyState: 'open', open: ['BETA']}}}}], companies: [{company: 'BETA', client_id: null, device_id: 'd1'}]}; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"""); pg.wait_for_timeout(400)
     # 15-Oct-2026: Books in the cloud links nothing itself; it points to Connect Tally (step 4), where the same RPC links
     cid1 = pg.evaluate("S.coId")
     ok(pg.locator('select[aria-label="Client for BETA"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")

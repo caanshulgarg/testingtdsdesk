@@ -156,8 +156,14 @@ def main():
            "step 2: the plain words, any free port, the one found here suggested (%s)" % gt[:400])
         ok("Reading is paused on NWS144." in gt and "right-click the FinCom icon near the clock \u2192 Resume background reading" in gt
            and "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work." in gt, "step 3: paused, the tray's own words, what a pause stops")
+        # the owner, 15-Oct-2026: step 4 offered VMS EVENTS, a company seen once but not open in Tally; it offers only the
+        # companies open in Tally now, and says what each linked client is linked to and whether that company is open
         ok("garg shekhar & company is not linked." in gt and E("() => (document.querySelector('#app [data-guide-client]') || {}).value") == G
-           and E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)") == ["VMS EVENTS"], "step 4: the client not linked and the companies seen (%s)" % gt[-200:])
+           and n("#app [data-guide-company]") == 0 and "No company is open in Tally right now" in txt("#app [data-guide-none]"),
+           "step 4: the client not linked; no company open in Tally, so none offered (VMS EVENTS was only seen) (%s)" % gt[-200:])
+        lk = E("() => [...document.querySelectorAll('#app [data-guide-linked-row]')].map(e => e.innerText.replace(/\\s+/g, ' ').trim())")
+        ok(lk == ["ABC TRADERS is linked to ABC TRADERS · not open in Tally now", "GB TEXCOAT is linked to GB TEXCOAT · not open in Tally now"],
+           "step 4: each linked client with its Tally company, not open now (%s)" % lk)
         ok(n(gd + " [data-check-again]") == 1 and n(gd + " [data-bridge-download]") == 0, "one Check again; installed: no download in the guide")
         r0 = E("window.__reads"); pg.click(gd + " [data-check-again]"); pg.wait_for_timeout(1200)
         ok(E("window.__reads") > r0 and [w for w in E("window.__wakes") if w.get("kind") == "wake"], "Check again wakes the bridge (the existing wake) and reads the computers again (%s)" % E("window.__wakes"))
@@ -195,10 +201,8 @@ def main():
         E("() => window.scrollTo(0, 0)"); pg.click(tb + " [data-client-link=\"%s\"]" % G); pg.wait_for_timeout(900)
         ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, G] and n('#app [data-connect-step="link"][data-open]') == 1
            and E("() => document.querySelector('#app [data-guide-client]').value") == G, "Link: the guide's step 4, that client chosen (%s)" % E("[S.view, S.homeTab, S.tallyGuide]"))
-        # linking in step 4: the same tally_company_link as before, and the client's Tally name
-        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1500)
-        lk = [c for c in E("window.__calls") if c[0] == "tally_company_link"]
-        ok(lk and lk[-1][1].get("p_company") == "VMS EVENTS" and lk[-1][1].get("p_client") == G and E("(c) => S.companies[c].tallyName", G) == "VMS EVENTS", "step 4's Link: tally_company_link and the Tally name (%s)" % lk)
+        # nothing open in Tally (his scene): nothing to link to, so Link cannot be pressed (linking is checked below with a company open)
+        ok(E("() => { const b = document.querySelector('#app [data-guide-link]'); return !!b && b.disabled; }"), "his scene: no company open in Tally, Link cannot be pressed")
         # the fold, opened: everything else, nothing removed
         ids = scene([PAUSED, OLD], companies(), DAYBOOK)
         fold(True)
@@ -233,13 +237,22 @@ def main():
         ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: step 3 with the owner's Resume (%s)" % txt(sp))
         pg.click(sp + " [data-read-resume]"); pg.wait_for_timeout(600)
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume"], "Resume calls tally_read_resume")
-        d = guide_scene(dev(6, "NWS144", "anshul", tally="open", opened=("VMS EVENTS",)), companies(seen=("VMS EVENTS",), d="d0000000-0000-4000-8000-000000000006"))
+        d = guide_scene(dev(6, "NWS144", "anshul", tally="open", opened=("VMS EVENTS", "GARG SHEKHAR", "GB TEXCOAT")), companies(seen=("VMS EVENTS",), d="d0000000-0000-4000-8000-000000000006"))
+        opts0 = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
+        ok(opts0 == ["GARG SHEKHAR", "VMS EVENTS"], "step 4: only the companies open in Tally now, none another client has (GB TEXCOAT is GB TEXCOAT's) (%s)" % opts0)
+        lk = E("() => [...document.querySelectorAll('#app [data-guide-linked-row]')].map(e => [e.getAttribute('data-guide-linked-row'), e.hasAttribute('data-open-now')])")
+        ok(lk == [["ABC TRADERS", False], ["GB TEXCOAT", True]], "step 4: GB TEXCOAT's company is open now, ABC TRADERS's is not (%s)" % lk)
         ok(steps() == [["install", True], ["tally", True], ["company", True], ["link", False]], "a company open, a client not linked: three ticked (%s)" % steps())
         # same GSTIN on top of step 4's list
         E("""(c) => { S.companies[c].gstin = '09AANFG3202D1ZR'; window.__companies.push({company: 'GARG SHEKHAR', client_id: null, device_id: 'd0000000-0000-4000-8000-000000000006', gstin: '09AANFG3202D1ZR', last_seen: new Date().toISOString(), linked_at: new Date(Date.now() - 3600e3).toISOString()});
             TCloud.pane.devices = null; TCloud.pane.at = 0; TLight.st.cos = window.__companies; render(); }""", G); pg.wait_for_timeout(1800)
         opts = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.innerText)")
         ok(opts and opts[0].startswith("GARG SHEKHAR (same GSTIN)"), "step 4: the company with the client's GSTIN on top (%s)" % opts)
+        # linking in step 4: the same tally_company_link as before, and the client's Tally name
+        E("() => { window.__calls = []; }"); pg.select_option("#app [data-guide-company]", "VMS EVENTS"); pg.wait_for_timeout(200)
+        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1500)
+        lk = [c for c in E("window.__calls") if c[0] == "tally_company_link"]
+        ok(lk and lk[-1][1].get("p_company") == "VMS EVENTS" and E("(c) => S.companies[c].tallyName", lk[-1][1].get("p_client")) == "VMS EVENTS", "step 4's Link: tally_company_link and the Tally name (%s)" % lk)
         # all well: the guide is one green line, All good
         d6 = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
         d = guide_scene(d6, companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]))
