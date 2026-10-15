@@ -323,4 +323,4 @@ run_quiet_refresh.py                  900  TDSDESK_SITE=../app/dist-test
 run_certificates.py                   300
 run_migration83.py                    180
 run_certificates_ui.py                300  TDSDESK_SITE=../app/dist-test
-tests/run_clients_list_fit.py
+run_clients_list_fit.py                300  TDSDESK_SITE=../app/dist-test
