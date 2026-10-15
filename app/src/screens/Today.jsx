@@ -5,8 +5,8 @@ import ListTable from "../parts/ListTable.jsx";
 import { DueLine } from "../parts/DueList.jsx";
 import { goTallyCard } from "../parts/TallyChip.jsx";
 
-// ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked to Tally, in one line; each name opens its
-// own Link to Tally card, the rest are listed first on the Tally page
+// ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked to Tally, in one line; each name points to
+// the Tally page's Connect Tally, step 4 with that client (15-Oct-2026: the one place to link), the rest are on that page
 function NotLinkedLine() {
   const list = sortedCompanies().filter((c) => typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked");
   if (!list.length) return null;

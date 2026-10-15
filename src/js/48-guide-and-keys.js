@@ -15,7 +15,7 @@ const ONB = {
     const opening = !!((b && b.tb && b.tb.led && Object.keys(b.tb.led).length) || (bk && bk.openAsOn));
     const tallyBank = b && typeof FC === "object" ? Object.keys(Object.assign({}, b.under, b.ledInfo)).filter(l => ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"].some(g => FC.inGroup(l, g))).length : 0;
     return [
-      {id: "link", done: !!linked, t: "Link to Tally", d: "Choose this client's company in Tally, so its books come in and its entries go to the right company.", btn: ["Link to Tally", {act: "coTally"}]},
+      {id: "link", done: !!linked, t: "Link to Tally", d: "Choose this client's company in Tally, so its books come in and its entries go to the right company.", btn: ["Open Connect Tally", {act: "connectTally"}]},
       {id: "books", done: dayBook, t: "Bring in the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Bring in from Tally", {go: "books:import"}]},
       {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Bring in the balances", {go: "books:import", focus: "opening"}]},
       {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},

@@ -1,38 +1,30 @@
-// Link to Tally: one card for each client, the same wherever it shows (Client setup → Tally, From Tally, and where Add
-// client, Getting ready and Post to Tally's "Choose the Tally company" lead). Round 39, 10-Oct-2026 (the owner could not
-// tell whether a client is linked, when it will link, or whether he needs a port; none is needed to link).
-//   One status line, one of four (tallyLinkOf, src/js/49; ui-tidy: "Not linked → Link", "Waiting for Tally", "Linked · reading",
-//   "Needs you"), then, while not linked or waiting for Tally, the three numbered steps (Steps, below):
-//     Not linked          "Choose this client's company in Tally", then the companies FinCom has seen (name · computer ·
-//                         last seen; the one with this client's GSTIN on top, "Same GSTIN"), each with [Link]. A company
-//                         not in the list: "Open it in TallyPrime on the office computer; it appears here within a
-//                         minute": the card reads the cloud again by itself while the client is not linked.
-//     Waiting for Tally   "Linked to X. Open X in TallyPrime on <PC> to read new entries."
+// A client's Tally card (Client setup → Tally; its one status line on the Overview and From Tally). Round 39 made it the
+// place to link a client; 15-Oct-2026 (the owner: "multiple pages of Tally connection.. multiple places to connect.. all
+// this is making Tally connection unreliable... need a very simple connection guide") ONE place connects and links Tally:
+// the Tally page's Connect Tally guide (screens/Tally.jsx, openConnectTally in src/js/52). This card is a pointer to it:
+//   One status line, one of four (tallyLinkOf, src/js/49; "Not linked → Link", "Waiting for Tally", "Linked · reading",
+//   "Needs you"), and while not linked or waiting for Tally, "Open Connect Tally" (the guide at the right step; for a
+//   client not linked, step 4 with this client). Nothing is linked or connected here.
 //     Linked and reading  "Linked to X on <PC> · last entry 10:42", with Update now.
 //     Needs you           one line and one button: reading stopped, that day's Day Book, the starting point, held
-//                         entries, Tally not answering or paused.
+//                         entries; Tally not answering or paused point to the guide.
 //   Then one tick, "Post this client's entries into X": the client's confirmed posting company (choiceConfirm postTo,
 //   asked first). Nothing is posted without it; a company FinCom found by itself stays off until ticked.
-//   More: Change company, Unlink, Name differs in Tally (the client's Tally name, which the bridge here matches by), Tally
-//   page.
-// Linking is a person's click: [Link] calls tally_company_link (TCloud.link, as Settings → Books in the cloud) and sets
-// the client's Tally name to the company (tallyLinkClient). Nothing else is linked here, and nothing is sent to Tally.
-import { useEffect, useState } from "react";
+//   More: Change company (the guide's step 4), Unlink, Name differs in Tally, Tally page.
+// companiesSeen (below) is the list the guide's step 4 offers, the company with this client's GSTIN on top.
+import { useState } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
 import Button from "./Button.jsx";
 import CommitBox from "./CommitBox.jsx";
-import { useSetup, DownloadBtn } from "../screens/Tally.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const sameName = (a, b) => !!a && !!b && ledNm(a).toLowerCase() === ledNm(b).toLowerCase();
-// while the client is not linked, the cloud is read again this often (a computer reports a company within a minute)
-const REFRESH_MS = 20000;
 
 // the Tally companies FinCom's cloud has seen (tally_companies, as TLight and the Tally page read them), not linked to
 // another client: {company, gstin, computer, at, open, same (this client's GSTIN), mine (linked to this client)}
-function companiesSeen(co) {
+export function companiesSeen(co) {
   const tl = (typeof TLight === "object" && TLight.st) || {}, p = (typeof TCloud === "object" && TCloud.pane) || {};
   const devs = [].concat(tl.devs || [], p.devices || []).filter((d) => d && !d.revoked);
   const by = new Map();
@@ -52,54 +44,9 @@ function companiesSeen(co) {
   return out.sort((a, b) => (b.same - a.same) || (sameName(b.company, co.tallyName) - sameName(a.company, co.tallyName)) || (b.open - a.open) || a.company.localeCompare(b.company));
 }
 
-// the list to choose from, each company with its own Link
-function Picker({ co, current = "", onDone }) {
-  const [busy, setBusy] = useState("");
-  const cloud = typeof TCloud === "object" && TCloud.on();
-  if (!cloud) return <p className="note" data-tally-link-signin="">Sign in to the firm account first: the link is kept in FinCom’s cloud, for every computer.</p>;
-  const list = companiesSeen(co).filter((c) => !c.mine && !sameName(c.company, current));
-  const devs = (typeof TLight === "object" && (TLight.st.devs || []).length) || (TCloud.pane.devices || []).length;
-  const link = async (company) => { setBusy(company); const ok = await tallyLinkClient(company, co.id); setBusy(""); if (ok && onDone) onDone(); };
-  const name = co.tallyName || "the client's company";
-  return <div className="tlink-pick" data-tally-link-picker="">
-    {list.length > 0 && <ul className="tlink-list">{list.map((c) => <li key={c.company} data-tally-link-option={c.company} data-same-gstin={c.same ? "" : undefined}>
-      <span className="tlink-co"><b>{c.company}</b>{c.same && <span className="tag ok" data-tally-link-same="">Same GSTIN</span>}
-        <span className="note">{[c.computer, c.open ? "open now" : c.at ? "last seen " + tallyHm(c.at) : ""].filter(Boolean).join(" · ")}</span></span>
-      <Button className={"btn small" + (c.same ? " primary" : "")} data-tally-link-to={c.company} disabled={!!busy || !canWrite()} onClick={() => link(c.company)}>{busy === c.company ? "Linking…" : "Link"}</Button></li>)}</ul>}
-    <p className="note" data-tally-link-hint="" style={{ margin: list.length ? "8px 0 0" : "6px 0 0" }}>
-      {devs ? (list.length ? "Not in the list? " : "No company is waiting to be linked yet. ") + "Open " + name + " in TallyPrime on the office computer; it appears here within a minute."
-        : <>FinCom Bridge is not on any computer yet. Install it on the computer where TallyPrime runs, then open {name} there. <button className="linkbtn" data-tally-link-install="" onClick={() => openTallyFor(co.id)}>How</button></>}
-      {!canWrite() && " A member of the firm who may make changes links it."}</p>
-  </div>;
-}
-
-// ui-tidy (13-Oct-2026; the owner: "still it is very confusing ... how to link tally"): three plain numbered steps, each
-// ticked by itself from what FinCom already reads, the step the client is on marked:
-//   1. Install FinCom Bridge on the office computer   ticked when a bridge beats (a computer heard from in the last 10 minutes)
-//   2. Open the company in TallyPrime                 ticked when a company shows among the companies seen (tallyCompaniesSeen)
-//   3. Choose it here, then press Link                ticked when the client is linked (TCloud.link, by the Link buttons below)
-// Shown while the client is not linked, and while it waits for Tally (linked; the company not open)
-const BEAT_MS = 10 * 60000;
-export function linkSteps(co, k) {
-  const tl = (typeof TLight === "object" && TLight.st) || {}, p = (typeof TCloud === "object" && TCloud.pane) || {};
-  const devs = [].concat(tl.devs || [], p.devices || []).filter((d) => d && !d.revoked);
-  const recent = (t) => { const n = Date.parse(t || ""); return !!n && Date.now() - n < BEAT_MS; };
-  const beat = (typeof Bridge === "object" && typeof Bridge.up === "function" && Bridge.up()) || devs.some((d) => recent(((d.info || {}).beat || {}).at) || recent(d.last_seen));
-  const seen = companiesSeen(co).length > 0 || (typeof tallyCompaniesSeen === "function" && tallyCompaniesSeen().some((c) => !c.client || c.client === String(co.id)));
-  const done = [!!beat, !!seen, !!k && k.state !== "unlinked"];
-  return { done, now: done.indexOf(false) };
-}
-function Steps({ co, k }) {
-  const m = useSetup(), { done, now } = linkSteps(co, k), name = co.tallyName || co.name;
-  const Step = ({ i, title, children }) => <li data-tally-step={i + 1} data-done={done[i] ? "" : undefined} data-now={now === i ? "" : undefined} className={done[i] ? "done" : now === i ? "now" : ""}>
-    <span className="tguide-mark" aria-hidden="true">{done[i] ? "✔" : i + 1}</span>
-    <div><b>{title}</b>{done[i] && <span className="tag ok" style={{ marginLeft: 8 }}>Done</span>}{now === i && !done[i] && <span className="tag info" style={{ marginLeft: 8 }}>Now</span>}
-      {children && !done[i] ? <div className="note">{children}</div> : null}</div></li>;
-  return <ol className="tguide-steps tlink-steps" data-tally-steps={now < 0 ? "done" : now + 1}>
-    <Step i={0} title="Install FinCom Bridge on the office computer">On the computer where TallyPrime runs. <DownloadBtn m={m} primary={now === 0} /></Step>
-    <Step i={1} title="Open the company in TallyPrime">{"Open " + name + " in TallyPrime on that computer; it appears here within a minute."}</Step>
-    <Step i={2} title="Choose it here, then press Link">{now === 2 ? "Its company is in the list below: press Link beside it." : ""}</Step>
-  </ol>;
+// the Tally page's Connect Tally guide, from this client: step 4 (link) while not linked, else the first step not done
+export function OpenConnect({ co, step, primary = true }) {
+  return <Button className={"btn small" + (primary ? " primary" : "")} data-open-connect={String(step || 0)} onClick={() => openConnectTally(step || 0, co ? co.id : "")}>Open Connect Tally</Button>;
 }
 
 // the one status line: the state's word, what it means, and at most one button
@@ -107,9 +54,9 @@ function StatusLine({ co, k, where, b, plain = false }) {
   const l = k.line, x = k.company, pc = k.computer || "the office computer", owner = isOwner();
   const openTally = () => openTallyFor(co.id);
   let text = "", act = null;
-  if (k.state === "unlinked") text = "Choose this client’s company in Tally";
+  if (k.state === "unlinked") { text = "Not linked to its Tally company yet."; act = <OpenConnect co={co} step={4} primary={!plain} />; }
   else if (k.state === "waiting") { text = "Linked to " + x + ". Open " + x + " in TallyPrime on " + pc + " to read new entries.";
-    act = <button className="linkbtn" data-tally-link-open="" onClick={openTally}>Tally page</button>; }
+    act = <OpenConnect co={co} step={0} primary={!plain} />; }
   else if (k.state === "reading") { const last = lastEntry(co, k);
     text = "Linked to " + x + " on " + pc + " · last entry " + (last ? tallyHm(last) : "not received yet");
     act = <Button className="btn small" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>{l && l.reading ? "Reading now…" : "Update now"}</Button>; }
@@ -121,7 +68,7 @@ function StatusLine({ co, k, where, b, plain = false }) {
   </div>;
 }
 // the last entry: Tally's change recorder on the company's computer (its heartbeat), else the bridge's last read
-function lastEntry(co, k) {
+export function lastEntry(co, k) {
   const tl = (typeof TLight === "object" && TLight.st) || {};
   const row = (tl.cos || []).find((c) => String(c.client_id || "") === String(co.id) && c.device_id), dev = row && (tl.devs || []).find((d) => d.id === row.device_id);
   let rec = ""; try { const rc = dev && typeof Rec === "object" && Rec.recOf ? Rec.recOf(dev) : null, y = rc && row.company ? rc[row.company] : null; rec = (y && y.lastAt) || ""; } catch (e) { rec = ""; }
@@ -142,8 +89,8 @@ function needLine(co, n, k, where, b, owner, openTally, plain = false) {
     act: <Button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</Button> };
   if (n.kind === "held") return { text: n.n === 1 ? "1 entry from Tally is held and needs a look" : n.n + " entries from Tally are held and need a look",
     act: <Button className="btn small" data-tally-need-held="" onClick={() => Rec.openActivity(co.id, "held")}>See them</Button> };
-  if (n.kind === "paused") return { text: l.text + ". Resume it from the FinCom icon near the clock there.", act: <Button className="btn small" data-tally-link-open="" onClick={openTally}>Tally page</Button> };
-  return { text: (l.text || "Tally is not answering") + ".", act: <Button className="btn small" data-tally-link-open="" onClick={openTally}>Tally page</Button> };
+  if (n.kind === "paused") return { text: l.text + ".", act: <OpenConnect co={co} step={3} primary={false} /> };
+  return { text: (l.text || "Tally is not answering") + ".", act: <OpenConnect co={co} step={2} primary={false} /> };
 }
 
 // the client's posting company, as one tick: on only when a person confirmed this company (choiceConfirm postTo)
@@ -166,7 +113,7 @@ function PostTick({ co, company }) {
 }
 
 // More: Change company, Unlink, Name differs in Tally, Tally page (the menu Client setup's More uses)
-function More({ co, k, onPick, onName }) {
+function More({ co, k, onName }) {
   const linked = k.state !== "unlinked", cloud = typeof TCloud === "object" && TCloud.on(), may = canWrite();
   const unlink = () => askConfirm({ title: "Unlink " + k.company + " from " + co.name + "?", ok: "Unlink", danger: true,
     body: "<p>Its books stop coming to " + esc(co.name) + " until the client is linked again. Nothing in Tally changes.</p>" }).then((ok) => { if (ok) tallyLinkClient(k.company, null); });
@@ -175,7 +122,7 @@ function More({ co, k, onPick, onName }) {
   return <details className="bk-menu" data-tally-link-more="">
     <summary className="btn small" aria-label={"More about the Tally link of " + co.name}>More</summary>
     <div className="bk-menu-list">
-      {linked && cloud && may && <button data-tally-link-change="" onClick={go(onPick)}>Change company<small>Link another company in Tally to this client instead.</small></button>}
+      {linked && cloud && may && <button data-tally-link-change="" onClick={go(() => openConnectTally(4, co.id))}>Change company<small>In Connect Tally: link another company in Tally to this client instead.</small></button>}
       {linked && cloud && may && <button className="danger" data-tally-link-unlink="" onClick={go(unlink)}>Unlink<small>{k.company + "’s books stop coming to this client."}</small></button>}
       <button data-tally-link-name="" onClick={go(onName)}>Name differs in Tally<small>The company’s name exactly as Tally shows it.</small></button>
       <button data-tally-link-page="" onClick={go(() => openTallyFor(co.id))}>Tally page<small>The computers, and the details for support.</small></button>
@@ -213,33 +160,20 @@ export function TallyLinkLine({ co, where = "overview", b = null }) {
   if (!co || !k) return null;
   return <section className="tlink tlink-one" data-tally-link-line={k.state} data-tally-link={k.state} aria-label={"Link to Tally: " + k.word}>
     <StatusLine co={co} k={k} where={where} b={b} plain />
-    <button className="linkbtn tlink-home" data-tally-link-home="" onClick={goTallyLinkHome}>{(k.state === "unlinked" ? "Link to Tally" : "Link to Tally in Client setup") + " \u2192"}</button>
+    {k.state !== "unlinked" && <button className="linkbtn tlink-home" data-tally-link-home="" onClick={goTallyLinkHome}>{"Tally in Client setup \u2192"}</button>}
   </section>;
 }
 
 export default function TallyLink({ co, where = "setup", b = null }) {
-  const [pick, setPick] = useState(false), [name, setName] = useState(false);
+  const [name, setName] = useState(false);
   const k = co ? linkHere(co, where) : null, unlinked = !!k && k.state === "unlinked";
-  // while not linked, read the cloud again by itself, so a company opened in Tally shows (and a link made elsewhere)
-  useEffect(() => {
-    if (!unlinked || typeof TLight !== "object" || !(typeof TCloud === "object" && TCloud.on())) return;
-    const t = setInterval(() => {
-      TLight.st.at = 0;
-      Promise.resolve(TLight.refresh()).then(() => { const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (!typing) render(); });
-    }, REFRESH_MS);
-    return () => clearInterval(t);
-  }, [unlinked, co && co.id]);
   if (!co || !k) return null;
-  return <section className="tlink" data-tally-link={k.state} data-tally-line-state={k.line ? k.line.state : ""} aria-label={"Link to Tally: " + k.word}>
+  return <section className="tlink" data-tally-link={k.state} data-tally-line-state={k.line ? k.line.state : ""} aria-label={"Tally: " + k.word}>
     <div className="tlink-head">
-      <h3 className="tlink-title">Link to Tally</h3>
-      <More co={co} k={k} onPick={() => setPick(true)} onName={() => setName(true)} />
+      <h3 className="tlink-title">Tally</h3>
+      <More co={co} k={k} onName={() => setName(true)} />
     </div>
     <StatusLine co={co} k={k} where={where} b={b} />
-    {(unlinked || k.state === "waiting") && <Steps co={co} k={k} />}
-    {unlinked && <Picker co={co} />}
-    {!unlinked && pick && <div className="tlink-change" data-tally-link-changebox=""><p className="note" style={{ margin: "8px 0 0" }}>{"Choose the company in Tally instead of " + k.company + ":"}</p>
-      <Picker co={co} current={k.company} onDone={() => setPick(false)} /><button className="linkbtn" onClick={() => setPick(false)}>Cancel</button></div>}
     {k.needs.length > 1 && <ul className="tlink-needs" data-tally-link-needs="">{k.needs.slice(1).map((n) => { const x = needLine(co, n, k, where, b, isOwner(), () => openTallyFor(co.id));
       return <li key={n.kind} data-tally-need={n.kind}><span>{x.text}</span>{x.act}</li>; })}</ul>}
     {!unlinked && <PostTick co={co} company={k.company} />}

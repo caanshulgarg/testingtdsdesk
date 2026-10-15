@@ -1989,17 +1989,17 @@ function tallyHereNow(co){
     at: B && B.okAt ? B.okAt : 0, hint: "", next: [], other}, o || {});
   if (!on) return out("none", "idle", "Tally not on this computer", {short: "Not on this PC", computer: "", user: "",
     hint: "FinCom Bridge is not set up in this browser." + (firm.on ? "" : " Connect this computer to post to Tally from here."),
-    next: [{act: "tallyConnect", label: "Connect this computer"}]});
+    next: [{act: "tallyConnect", label: "Open Connect Tally"}]});
   if (!st.state || st.state === "off") return out("checking", "idle", "Checking Tally…", {short: "Checking…"});
   if (st.state === "key") return out("key", "bad", "Bridge not connected", {hint: "FinCom Bridge on this computer did not accept this browser's key. Connect again with the 6-digit code (right-click the FinCom icon near the clock → Connect FinCom on this computer…).",
-    next: [{act: "bridgeConnect", label: "Connect this computer"}]});
+    next: [{act: "tallyConnect", label: "Open Connect Tally"}]});
   if (st.state !== "ok") return out("stopped", "bad", "Bridge stopped", {hint: "Start FinCom Bridge: its icon near the clock, or FinCom Bridge in the Start menu.", next: [check]});
   const tally = st.tallyState || (st.tallyUp ? "open" : "closed");
   if (tally === "closed") return out("closed", "warn", "Tally closed", {hint: "Open TallyPrime" + (want ? " and load " + want : "") + ".", next: [check]});
   const here = co ? B.openFor(co) : null;
   if (co && !here){
     const linked = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).state !== "unlinked" : true;
-    if (!linked && (st.open || []).length) return out("unlinked", "warn", "Company not linked", {hint: co.name + " is not linked to a Tally company yet.", next: [{act: "coTally", label: "Link to Tally"}]});
+    if (!linked && (st.open || []).length) return out("unlinked", "warn", "Company not linked", {hint: co.name + " is not linked to a Tally company yet.", next: [{act: "connectTally", label: "Open Connect Tally"}]});
     return out("nocompany", "warn", "Company not open", {hint: "Open " + want + " in TallyPrime" + (user ? " (" + user + ")" : "") + ".", next: [check]});
   }
   const company = here ? here.name : (st.open || []).map(x => x.name).join(", ");

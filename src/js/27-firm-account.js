@@ -1845,9 +1845,10 @@ function doAct(act, t){
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
     // the top bar's sign, not ready (the steady sign, 11-Oct-2026): the next step for its state. Connect this computer:
     // the Tally page's install and connect steps, back to this page once connected; Check again: ask now, answer at once
-    case "tallyConnect": Smart.setReturn(); S.tallyConnectBack = !!S.returnTo; S.tallyPanel = false; S.firmMenu = false; S.view = "home"; S.homeTab = "tally"; S.tallyTab = "computers";
-      S.tallyMore = Object.assign({}, S.tallyMore || {}, {page: true}); render(); window.scrollTo(0, 0);
-      setTimeout(() => { const e = document.querySelector("#app [data-connect-section]"); if (e && e.scrollIntoView) e.scrollIntoView({block: "start"}); }, 80); break;
+    // (15-Oct-2026: the one place to connect, the Tally page's Connect Tally guide, at its first step not done)
+    case "tallyConnect": Smart.setReturn(); S.tallyConnectBack = !!S.returnTo; openConnectTally(0, ""); break;
+    // a client's "Link to Tally" (Getting ready, the top bar's sign): the guide's step 4 with that client
+    case "connectTally": Smart.setReturn(); openConnectTally(4, S.coId || ""); break;
     case "tallyCheck": tallyCheckNow(); break;
     case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
@@ -2011,10 +2012,11 @@ function saveNewCompany(v){
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
-  // round 39: the new client opens on its Link to Tally card (Client setup → Tally): linked at once when the company was
-  // chosen and the cloud has it, else the card says what to do and lists the companies as they appear
+  // round 39: the new client opens on its Tally card (Client setup → Tally). 15-Oct-2026 (one place to connect): a Tally
+  // company chosen here is linked in the Tally page's Connect Tally guide, step 4, with the client and that company
+  // already chosen; a person presses Link there (nothing links by itself here)
   openCompany(co.id); S.tab = "cotally"; render();
-  if (tco) linkNewClient(co, tco).catch(() => {});
+  if (tco) openConnectTally(4, co.id, tco);
   return true;
 }
 let pickMode = "company";

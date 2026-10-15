@@ -144,11 +144,26 @@
 #cobar .tbar-title .tbar-h h2 { min-width: 0; }
 #cobar .tbar-title .tbar-h .tchip { flex: 0 0 auto; }
 @media (max-width: 600px) { #cobar .tchip { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; } }
-#app .tnotlinked { margin: 0 0 12px; }
-#app .tnl-list { list-style: none; margin: 0; padding: 0; }
-#app .tnl-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--border-subtle, var(--border)); }
-#app .tnl-list li:first-child { border-top: 0; }
-#app .tnl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the calm Tally page (15-Oct-2026): one line a computer, its Connect Tally card while not connected, All good, the
+   clients' table and the one Advanced fold */
+#app .tpcs { margin: 0 0 12px; }
+#app .tpc { padding: 8px 0; border-top: 1px solid var(--border-subtle, var(--border)); }
+#app .tpc:first-of-type { border-top: 0; padding-top: 2px; }
+#app .tpc-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; overflow-wrap: anywhere; }
+#app .tpc-ok { color: var(--st-done, var(--ok)); font-weight: 600; }
+#app .tpc-facts { min-width: 0; }
+#app .tpc-line .btn { margin-left: auto; }
+#app .tconnect .tguide-steps { margin: 6px 0 10px; }
+#app .tconnect .tguide-body { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
+#app .tconnect .tguide-say { margin-top: 2px; }
+#app .tconnect li.now { background: var(--st-attention-soft); border-radius: 6px; padding: 4px 6px; margin-left: -6px; }
+#app .tconnected { margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--st-done); border-radius: 6px; background: var(--st-done-soft); overflow-wrap: anywhere; }
+#app .tlink-guide { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 8px 0 2px; }
+#app .tlink-guide .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
+#app .tlink-guide select { max-width: 100%; min-width: 0; }
+#app .tallgood, #app .tconnected-x { margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--st-done); border-radius: 6px; background: var(--st-done-soft); }
+#app .tclients { margin: 0 0 12px; }
+#app .tseen-hint { margin: 8px 0 0; overflow-wrap: anywhere; }
 /* the page's title in full (14-Oct-2026: "Purcha…" and "Accou…" with plenty of room; the one rule for it, the depreciation follow-up's folded in): on a computer the title block is
    as wide as the title and its Tally chip need (never less than the usual share of the row, never more than half); the
    line over it (the breadcrumb, the firm's name) takes the block's width and is cut with … instead of widening it */

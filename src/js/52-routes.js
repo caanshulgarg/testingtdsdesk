@@ -193,6 +193,15 @@ function backToClient(){
 }
 // from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
 function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
+// the ONE place to connect Tally (15-Oct-2026; the owner: "multiple pages of Tally connection.. multiple places to
+// connect.. need a very simple connection guide"): the Tally page's Connect Tally guide. Every other place that spoke of
+// connecting or linking is a pointer that lands here: step 1 install, 2 open Tally, 3 keep a company open, 4 link a client
+// (0: the first step not done); for step 4 the client (cid) and, from Add client, the Tally company chosen there
+function openConnectTally(step, cid, company){
+  S.tallyGuide = {step: Number(step) || 0, cid: cid || "", company: company || "", at: Date.now()};
+  S.tallyFocus = ""; S.tallyTab = "computers";
+  navHome("tally");
+}
 if (typeof window !== "undefined"){
   // Back closes the top overlay first, when one is open (app/src/parts/dismiss.js: a phone's step for each overlay)
   window.addEventListener("popstate", () => { if (window.FCOverlay && window.FCOverlay.onBack()) return; if (/^#\//.test(location.hash)) Route.apply(location.hash); });
