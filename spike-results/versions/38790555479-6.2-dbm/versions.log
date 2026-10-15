@@ -1,0 +1,237 @@
+[19:23:53] ---- c1 install and open the company (TallyPrime 6.2)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 17026752 bytes, 2026-10-15, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>6</PRODMAJORREL><PRODMINORREL>2</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 6 PRODMINORREL 2 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-15, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+[19:24:26] ---- dbm: test data
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 36.7 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 3126.9 ms
+[db] dbm-vouchers-01.xml: created 0, altered 0, errors 0, 876.5 ms; Tally said: The date 31-1-2026 is Out of Range!
+[db] dbm-vouchers-02.xml: created 0, altered 0, errors 0, 870.4 ms; Tally said: The date 31-1-2026 is Out of Range!
+[db] dbm-vouchers-03.xml: created 68, altered 0, errors 0, 1260.5 ms; Tally said: The date 31-3-2026 is Out of Range!
+[db] dbm-vouchers-04.xml: created 200, altered 0, errors 0, 2098.1 ms
+[db] dbm-vouchers-05.xml: created 200, altered 0, errors 0, 2294.7 ms
+[db] dbm-vouchers-06.xml: created 200, altered 0, errors 0, 2210.3 ms
+[db] dbm-vouchers-07.xml: created 200, altered 0, errors 0, 2337.8 ms
+[db] dbm-vouchers-08.xml: created 200, altered 0, errors 0, 2223.8 ms
+[db] dbm-vouchers-09.xml: created 194, altered 0, errors 0, 2264.7 ms
+[db] filler ledgers to 1240: created 130, altered 0, errors 0, 537.9 ms
+  INFO dbm: masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 1240; entries in Tally 1264; per test day 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+  INFO dbm: truth 20260601: System.Object[]
+  INFO dbm: truth 20260702: System.Object[]
+  INFO dbm: truth 20260831: System.Object[]
+  INFO dbm: truth 20260131: 
+  INFO dbm: truth 20251201: 
+######## PASS k1 test data made in Tally (ledgers, entries on the test days as Tally holds them): masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 1240; per test day (Tally's own list): 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+[19:24:46] ---- dbm: the Day Book for one day, each date form
+[dbm] daybook D1 20260601: 46.6 ms, 449759 chars; light 1.4 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D1 20260601: 38 ms, 449759 chars; light 1.2 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D2 20260601: 38.8 ms, 449759 chars; light 1.2 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D2 20260601: 38.5 ms, 449759 chars; light 1.6 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D3 20260601: 38 ms, 449759 chars; light 1.1 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D3 20260601: 50.1 ms, 449759 chars; light 1.5 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D4 20260601: 38.9 ms, 449759 chars; light 1.2 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D4 20260601: 37.6 ms, 449759 chars; light 1.3 ms, responding True dates=20260401 got=9 applied=False onDay=0 want=50
+[dbm] daybook D5 20260601: 218.7 ms, 2634173 chars; light 1.5 ms, responding True dates=20260601 got=50 applied=True onDay=50 want=50
+[dbm] daybook D5 20260601: 219.3 ms, 2634173 chars; light 1.5 ms, responding True dates=20260601 got=50 applied=True onDay=50 want=50
+[dbm] daybook D1 20260702: 197.1 ms, 2634173 chars; light 1.3 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D1 20260702: 208.5 ms, 2634173 chars; light 1.5 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D2 20260702: 197.5 ms, 2634173 chars; light 1.4 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D2 20260702: 197.6 ms, 2634173 chars; light 1.9 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D3 20260702: 199.8 ms, 2634173 chars; light 1.2 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D3 20260702: 228.7 ms, 2634173 chars; light 1.3 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D4 20260702: 217.5 ms, 2634173 chars; light 1.2 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D4 20260702: 206.6 ms, 2634173 chars; light 1.3 ms, responding True dates=20260601 got=50 applied=False onDay=0 want=300
+[dbm] daybook D5 20260702: 1645 ms, 16069641 chars; light 1.4 ms, responding True dates=20260702 got=300 applied=True onDay=300 want=300
+[dbm] daybook D5 20260702: 1175.2 ms, 16069641 chars; light 1.3 ms, responding True dates=20260702 got=300 applied=True onDay=300 want=300
+[dbm] daybook D1 20260831: 1174.3 ms, 16069641 chars; light 1.4 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D1 20260831: 1185.8 ms, 16069641 chars; light 1.4 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D2 20260831: 1174.3 ms, 16069641 chars; light 1.4 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D2 20260831: 1200.8 ms, 16069641 chars; light 1.4 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D3 20260831: 1249 ms, 16069641 chars; light 1.7 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D3 20260831: 1192.8 ms, 16069641 chars; light 1.3 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D4 20260831: 1191.6 ms, 16069641 chars; light 1.5 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D4 20260831: 1195 ms, 16069641 chars; light 1.3 ms, responding True dates=20260702 got=300 applied=False onDay=0 want=800
+[dbm] daybook D5 20260831: 5771 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=True onDay=800 want=800
+[dbm] daybook D5 20260831: 3179.9 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=True onDay=800 want=800
+[dbm] daybook D1 20260131: 3181 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D1 20260131: 3168.5 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D2 20260131: 3174.8 ms OVERRUN, 43109277 chars; light 1.7 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D2 20260131: 3195.3 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D3 20260131: 3176.7 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D3 20260131: 3173.9 ms OVERRUN, 43109277 chars; light 1.4 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D4 20260131: 3188.3 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D4 20260131: 3175.3 ms OVERRUN, 43109277 chars; light 1.3 ms, responding True dates=20260831 got=800 applied=False onDay=0 want=0
+[dbm] daybook D5 20260131: 7.6 ms, 364 chars; light 0.9 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D5 20260131: 5.4 ms, 364 chars; light 1 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D1 20251201: 5.2 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D1 20251201: 5.3 ms, 364 chars; light 0.9 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D2 20251201: 5.2 ms, 364 chars; light 0.9 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D2 20251201: 5.1 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D3 20251201: 5.1 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D3 20251201: 5 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D4 20251201: 5 ms, 364 chars; light 0.9 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D4 20251201: 5.1 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D5 20251201: 6.2 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+[dbm] daybook D5 20251201: 5.2 ms, 364 chars; light 0.8 ms, responding True dates= got=0 applied=True onDay=0 want=0
+######## PASS k2 the Day Book for one day: the date forms that give exactly that day: forms that give exactly the day on all five days: D5; the others: D1, D2, D3, D4
+[19:25:49] ---- dbm: the collection date forms for one day
+[dbm] collection C1 20260601: 212.5 ms, 1530505 chars; light 1.3 ms, responding True got=1264 applied=False onDay=50 want=50
+[dbm] collection C1 20260702: 242.3 ms, 1530505 chars; light 1.6 ms, responding True got=1264 applied=False onDay=300 want=300
+[dbm] collection C1 20260831: 252.2 ms, 1530505 chars; light 1.3 ms, responding True got=1264 applied=False onDay=800 want=800
+[dbm] collection C1 20260131: 234.1 ms, 1530505 chars; light 1.4 ms, responding True got=1264 applied=False onDay=0 want=0
+[dbm] collection C1 20251201: 228.5 ms, 1530505 chars; light 1.2 ms, responding True got=1264 applied=False onDay=0 want=0
+[dbm] collection C2 20260601: 238.5 ms, 1530505 chars; light 1.4 ms, responding True got=1264 applied=False onDay=50 want=50
+[dbm] collection C2 20260702: 237.9 ms, 1530505 chars; light 1.3 ms, responding True got=1264 applied=False onDay=300 want=300
+[dbm] collection C2 20260831: 218 ms, 1530505 chars; light 1.5 ms, responding True got=1264 applied=False onDay=800 want=800
+[dbm] collection C2 20260131: 204.1 ms, 1530505 chars; light 1.3 ms, responding True got=1264 applied=False onDay=0 want=0
+[dbm] collection C2 20251201: 215.7 ms, 1530505 chars; light 1.3 ms, responding True got=1264 applied=False onDay=0 want=0
+[dbm] collection C3 20260601: 24.7 ms, 61885 chars; light 1.2 ms, responding True got=51 applied=False onDay=50 want=50
+[dbm] collection C3 20260702: 72.6 ms, 364518 chars; light 1.3 ms, responding True got=301 applied=False onDay=300 want=300
+[dbm] collection C3 20260831: 155.9 ms, 970567 chars; light 1.3 ms, responding True got=801 applied=False onDay=800 want=800
+[dbm] collection C3 20260131: 1.4 ms, 1530 chars; light 1 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C3 20251201: 2 ms, 1530 chars; light 1.1 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C4 20260601: 28.4 ms, 61885 chars; light 1.1 ms, responding True got=51 applied=False onDay=50 want=50
+[dbm] collection C4 20260702: 64.1 ms, 364518 chars; light 1.2 ms, responding True got=301 applied=False onDay=300 want=300
+[dbm] collection C4 20260831: 156.4 ms, 970567 chars; light 1.3 ms, responding True got=801 applied=False onDay=800 want=800
+[dbm] collection C4 20260131: 1.4 ms, 1530 chars; light 0.9 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C4 20251201: 1.2 ms, 1530 chars; light 1 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C5 20260601: 24.4 ms, 61885 chars; light 1 ms, responding True got=51 applied=False onDay=50 want=50
+[dbm] collection C5 20260702: 65.6 ms, 364518 chars; light 1.3 ms, responding True got=301 applied=False onDay=300 want=300
+[dbm] collection C5 20260831: 154.3 ms, 970567 chars; light 1.2 ms, responding True got=801 applied=False onDay=800 want=800
+[dbm] collection C5 20260131: 1.6 ms, 1530 chars; light 0.9 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C5 20251201: 1.2 ms, 1530 chars; light 0.9 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C6 20260601: 20.8 ms, 1530 chars; light 0.9 ms, responding True got=1 applied=False onDay=0 want=50
+[dbm] collection C6 20260702: 43.2 ms, 1530 chars; light 1.3 ms, responding True got=1 applied=False onDay=0 want=300
+[dbm] collection C6 20260831: 88.3 ms, 1530 chars; light 1.2 ms, responding True got=1 applied=False onDay=0 want=800
+[dbm] collection C6 20260131: 1.7 ms, 1530 chars; light 1.1 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C6 20251201: 1.5 ms, 1530 chars; light 1.1 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C7 20260601: 136.3 ms, 61885 chars; light 1.3 ms, responding True got=51 applied=False onDay=50 want=50
+[dbm] collection C7 20260702: 147.8 ms, 364518 chars; light 1.1 ms, responding True got=301 applied=False onDay=300 want=300
+[dbm] collection C7 20260831: 179 ms, 970567 chars; light 1.4 ms, responding True got=801 applied=False onDay=800 want=800
+[dbm] collection C7 20260131: 136.9 ms, 1530 chars; light 1.4 ms, responding True got=1 applied=False onDay=0 want=0
+[dbm] collection C7 20251201: 139.8 ms, 1530 chars; light 1.5 ms, responding True got=1 applied=False onDay=0 want=0
+######## FAIL k3 the collection date forms (FinComDatesProbe) for one day: collection forms that give exactly the day on all five days: NONE
+[19:25:54] ---- dbm: a day split by voucher type
+[dbm] split S1-D1 20260831 Contra: 6.6 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=23
+[dbm] split S1-D1 20260831 Journal: 6.1 ms, 364 chars; light 0.8 ms, responding True got=0 exact=False want=77
+[dbm] split S1-D1 20260831 Payment: 5.8 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=87
+[dbm] split S1-D1 20260831 Purchase: 5.6 ms, 364 chars; light 0.8 ms, responding True got=0 exact=False want=150
+[dbm] split S1-D1 20260831 Receipt: 5.7 ms, 364 chars; light 0.8 ms, responding True got=0 exact=False want=123
+[dbm] split S1-D1 20260831 Sales: 5.7 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=340
+[dbm] split S1-D1 20260702 Contra: 5.5 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=7
+[dbm] split S1-D1 20260702 Journal: 5.9 ms, 364 chars; light 0.7 ms, responding True got=0 exact=False want=28
+[dbm] split S1-D1 20260702 Payment: 5.4 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=47
+[dbm] split S1-D1 20260702 Purchase: 5.6 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=69
+[dbm] split S1-D1 20260702 Receipt: 5.5 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=39
+[dbm] split S1-D1 20260702 Sales: 5.4 ms, 364 chars; light 1.2 ms, responding True got=0 exact=False want=110
+[dbm] split S1-D4 20260831 Contra: 6.3 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=23
+[dbm] split S1-D4 20260831 Journal: 7 ms, 364 chars; light 1.5 ms, responding True got=0 exact=False want=77
+[dbm] split S1-D4 20260831 Payment: 5.5 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=87
+[dbm] split S1-D4 20260831 Purchase: 7.4 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=150
+[dbm] split S1-D4 20260831 Receipt: 7 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=123
+[dbm] split S1-D4 20260831 Sales: 7.6 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=340
+[dbm] split S1-D4 20260702 Contra: 5.7 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=7
+[dbm] split S1-D4 20260702 Journal: 5.7 ms, 364 chars; light 0.8 ms, responding True got=0 exact=False want=28
+[dbm] split S1-D4 20260702 Payment: 5.1 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=47
+[dbm] split S1-D4 20260702 Purchase: 5.6 ms, 364 chars; light 1 ms, responding True got=0 exact=False want=69
+[dbm] split S1-D4 20260702 Receipt: 5.1 ms, 364 chars; light 0.9 ms, responding True got=0 exact=False want=39
+[dbm] split S1-D4 20260702 Sales: 5.8 ms, 364 chars; light 1.4 ms, responding True got=0 exact=False want=110
+[dbm] split S2-D1 20260831 Contra: 123.7 ms, 1097276 chars; light 1.3 ms, responding True got=23 exact=True want=23
+[dbm] split S2-D1 20260831 Journal: 381.6 ms, 4135927 chars; light 6 ms, responding True got=77 exact=True want=77
+[dbm] split S2-D1 20260831 Payment: 380.5 ms, 4204709 chars; light 1.3 ms, responding True got=87 exact=True want=87
+[dbm] split S2-D1 20260831 Purchase: 770.9 ms, 8445022 chars; light 1.4 ms, responding True got=150 exact=True want=150
+[dbm] split S2-D1 20260831 Receipt: 515.4 ms, 5947222 chars; light 1.3 ms, responding True got=123 exact=True want=123
+[dbm] split S2-D1 20260831 Sales: 1821.4 ms, 19280951 chars; light 2 ms, responding True got=340 exact=True want=340
+[dbm] split S2-D1 20260702 Contra: 36.5 ms, 334198 chars; light 0.9 ms, responding True got=7 exact=True want=7
+[dbm] split S2-D1 20260702 Journal: 139.6 ms, 1504154 chars; light 1.6 ms, responding True got=28 exact=True want=28
+[dbm] split S2-D1 20260702 Payment: 211.2 ms, 2270249 chars; light 1.2 ms, responding True got=47 exact=True want=47
+[dbm] split S2-D1 20260702 Purchase: 380.3 ms, 3872022 chars; light 1.3 ms, responding True got=69 exact=True want=69
+[dbm] split S2-D1 20260702 Receipt: 166.8 ms, 1885086 chars; light 1.3 ms, responding True got=39 exact=True want=39
+[dbm] split S2-D1 20260702 Sales: 567.3 ms, 6205762 chars; light 1.2 ms, responding True got=110 exact=True want=110
+[dbm] split S2-D4 20260831 Contra: 101.9 ms, 1097276 chars; light 1.2 ms, responding True got=23 exact=True want=23
+[dbm] split S2-D4 20260831 Journal: 362.8 ms, 4135927 chars; light 1.5 ms, responding True got=77 exact=True want=77
+[dbm] split S2-D4 20260831 Payment: 361.7 ms, 4204709 chars; light 1.4 ms, responding True got=87 exact=True want=87
+[dbm] split S2-D4 20260831 Purchase: 781.4 ms, 8445022 chars; light 1.4 ms, responding True got=150 exact=True want=150
+[dbm] split S2-D4 20260831 Receipt: 512.2 ms, 5947222 chars; light 1.3 ms, responding True got=123 exact=True want=123
+[dbm] split S2-D4 20260831 Sales: 1765.1 ms, 19280951 chars; light 5.4 ms, responding True got=340 exact=True want=340
+[dbm] split S2-D4 20260702 Contra: 36.7 ms, 334198 chars; light 1 ms, responding True got=7 exact=True want=7
+[dbm] split S2-D4 20260702 Journal: 150.9 ms, 1504154 chars; light 1.4 ms, responding True got=28 exact=True want=28
+[dbm] split S2-D4 20260702 Payment: 197.4 ms, 2270249 chars; light 1.3 ms, responding True got=47 exact=True want=47
+[dbm] split S2-D4 20260702 Purchase: 369.8 ms, 3872022 chars; light 1.3 ms, responding True got=69 exact=True want=69
+[dbm] split S2-D4 20260702 Receipt: 186.2 ms, 1885086 chars; light 1.3 ms, responding True got=39 exact=True want=39
+[dbm] split S2-D4 20260702 Sales: 575.8 ms, 6205762 chars; light 1.4 ms, responding True got=110 exact=True want=110
+[dbm] split S3-5 20260831 Contra: 93.3 ms, 29333 chars; light 1.1 ms, responding True got=24 exact=False want=23
+[dbm] split S3-5 20260831 Journal: 95.1 ms, 94842 chars; light 1.4 ms, responding True got=78 exact=False want=77
+[dbm] split S3-5 20260831 Payment: 104.1 ms, 107014 chars; light 1.1 ms, responding True got=88 exact=False want=87
+[dbm] split S3-5 20260831 Purchase: 98.2 ms, 183693 chars; light 1.1 ms, responding True got=151 exact=False want=150
+[dbm] split S3-5 20260831 Receipt: 100 ms, 150643 chars; light 1.1 ms, responding True got=124 exact=False want=123
+[dbm] split S3-5 20260831 Sales: 111.8 ms, 412702 chars; light 1.5 ms, responding True got=341 exact=False want=340
+[dbm] split S3-5 20260702 Contra: 47.2 ms, 9983 chars; light 0.9 ms, responding True got=8 exact=False want=7
+[dbm] split S3-5 20260702 Journal: 44.6 ms, 35427 chars; light 1 ms, responding True got=29 exact=False want=28
+[dbm] split S3-5 20260702 Payment: 47 ms, 58447 chars; light 1.2 ms, responding True got=48 exact=False want=47
+[dbm] split S3-5 20260702 Purchase: 49.5 ms, 85221 chars; light 1 ms, responding True got=70 exact=False want=69
+[dbm] split S3-5 20260702 Receipt: 46 ms, 48756 chars; light 1 ms, responding True got=40 exact=False want=39
+[dbm] split S3-5 20260702 Sales: 47.2 ms, 134344 chars; light 0.9 ms, responding True got=111 exact=False want=110
+[dbm] split S3-7 20260831 Contra: 132.9 ms, 29333 chars; light 1 ms, responding True got=24 exact=False want=23
+[dbm] split S3-7 20260831 Journal: 137.7 ms, 94842 chars; light 1.5 ms, responding True got=78 exact=False want=77
+[dbm] split S3-7 20260831 Payment: 134.6 ms, 107014 chars; light 1 ms, responding True got=88 exact=False want=87
+[dbm] split S3-7 20260831 Purchase: 137.6 ms, 183693 chars; light 1.1 ms, responding True got=151 exact=False want=150
+[dbm] split S3-7 20260831 Receipt: 138.3 ms, 150643 chars; light 1.1 ms, responding True got=124 exact=False want=123
+[dbm] split S3-7 20260831 Sales: 149.7 ms, 412702 chars; light 1.1 ms, responding True got=341 exact=False want=340
+[dbm] split S3-7 20260702 Contra: 130.2 ms, 9983 chars; light 1.1 ms, responding True got=8 exact=False want=7
+[dbm] split S3-7 20260702 Journal: 130 ms, 35427 chars; light 1 ms, responding True got=29 exact=False want=28
+[dbm] split S3-7 20260702 Payment: 135.2 ms, 58447 chars; light 1.1 ms, responding True got=48 exact=False want=47
+[dbm] split S3-7 20260702 Purchase: 128.7 ms, 85221 chars; light 1.2 ms, responding True got=70 exact=False want=69
+[dbm] split S3-7 20260702 Receipt: 129.3 ms, 48756 chars; light 1.1 ms, responding True got=40 exact=False want=39
+[dbm] split S3-7 20260702 Sales: 137.8 ms, 134344 chars; light 1.1 ms, responding True got=111 exact=False want=110
+######## PASS k4 a day split by voucher type: exact per type, each under 2 s: split forms exact and under 2 s for every type on the 800 / 300 / 300 days: S2-D1, S2-D4
+[19:26:13] ---- dbm: the ledger count
+[dbm] ledcount L1 1240: 164.8 ms, 1649 chars; light 1 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L1 1240: 120.3 ms, 1649 chars; light 1.2 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L1 1240: 121.6 ms, 1649 chars; light 1.2 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L2 1240: 121.3 ms, 1660 chars; light 1 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L2 1240: 121.8 ms, 1660 chars; light 1 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L2 1240: 121.9 ms, 1660 chars; light 1.3 ms, responding True requests=1 got=1240 exact=True want=1240
+[dbm] ledcount L3 1240: 11.6 ms, 142546 chars; light 0.9 ms, responding True requests=1 got=1241 exact=False want=1240
+[dbm] ledcount L3 chunked 1240: 15.9 ms, 1516 chars; light 1 ms, responding True requests=2 got=1242 exact=False want=1240
+[dbm] ledcount L3 chunked 1240: 15.4 ms, 1516 chars; light 1 ms, responding True requests=2 got=1242 exact=False want=1240
+[dbm] ledcount L4 1240: 22.9 ms, 391813 chars; light 1.1 ms, responding True requests=1 got=1241 exact=False want=1240
+[dbm] ledcount L4 chunked 1240: 31.1 ms, 1516 chars; light 1.3 ms, responding True requests=2 got=1242 exact=False want=1240
+[dbm] ledcount L4 chunked 1240: 30 ms, 1516 chars; light 1.2 ms, responding True requests=2 got=1242 exact=False want=1240
+[dbm] ledcount L5 1240: 1.3 ms, 1767 chars; light 1.2 ms, responding True requests=1 got=1456 exact=False want=1240
+[dbm] ledcount L5 1240: 1.1 ms, 1767 chars; light 1.3 ms, responding True requests=1 got=1456 exact=False want=1240
+[dbm] ledcount L5 1240: 1.2 ms, 1767 chars; light 1.3 ms, responding True requests=1 got=1456 exact=False want=1240
+[dbm] ledread FinComLedgers 1240: 110.3 ms, 1350705 chars; light 2 ms, responding True rows=1241 soFar=1241 want=1240 chunk=1-2000
+[dbm] ledread FinComLedgers 1240: 8.6 ms, 1516 chars; light 1.4 ms, responding True rows=1 soFar=1242 want=1240 chunk=2001-end
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 4193.9 ms
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 4274.2 ms
+[db] filler ledgers to 5000: created 1000, altered 0, errors 0, 4358.8 ms
+[db] filler ledgers to 5000: created 760, altered 0, errors 0, 3410.3 ms
+[dbm] ledcount L1 5000: 547 ms, 1650 chars; light 1.1 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L1 5000: 492.5 ms, 1650 chars; light 1.8 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L1 5000: 497.7 ms, 1650 chars; light 1.1 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L2 5000: 482.2 ms, 1661 chars; light 1.4 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L2 5000: 477.2 ms, 1661 chars; light 1.2 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L2 5000: 478 ms, 1661 chars; light 1.4 ms, responding True requests=1 got=5000 exact=True want=5000
+[dbm] ledcount L3 5000: 48.6 ms, 574947 chars; light 1 ms, responding True requests=1 got=5001 exact=False want=5000
+[dbm] ledcount L3 chunked 5000: 63.2 ms, 1517 chars; light 1.1 ms, responding True requests=4 got=5004 exact=False want=5000
+[dbm] ledcount L3 chunked 5000: 64 ms, 1517 chars; light 1.1 ms, responding True requests=4 got=5004 exact=False want=5000
+[dbm] ledcount L4 5000: 84.3 ms, 1583734 chars; light 1.1 ms, responding True requests=1 got=5001 exact=False want=5000
+[dbm] ledcount L4 chunked 5000: 116.3 ms, 1517 chars; light 1.2 ms, responding True requests=4 got=5004 exact=False want=5000
+[dbm] ledcount L4 chunked 5000: 118.5 ms, 1517 chars; light 1.4 ms, responding True requests=4 got=5004 exact=False want=5000
+[dbm] ledcount L5 5000: 1.1 ms, 1768 chars; light 1 ms, responding True requests=1 got=5216 exact=False want=5000
+[dbm] ledcount L5 5000: 1.1 ms, 1768 chars; light 0.9 ms, responding True requests=1 got=5216 exact=False want=5000
+[dbm] ledcount L5 5000: 1.1 ms, 1768 chars; light 1.1 ms, responding True requests=1 got=5216 exact=False want=5000
+[dbm] ledread FinComLedgers 5000: 142.2 ms, 1889390 chars; light 1.4 ms, responding True rows=1789 soFar=1789 want=5000 chunk=1-2000
+[dbm] ledread FinComLedgers 5000: 145.4 ms, 1967519 chars; light 1.2 ms, responding True rows=2001 soFar=3790 want=5000 chunk=2001-4000
+[dbm] ledread FinComLedgers 5000: 85.6 ms, 1192915 chars; light 1.2 ms, responding True rows=1213 soFar=5003 want=5000 chunk=4001-6000
+[dbm] ledread FinComLedgers 5000: 10.7 ms, 1517 chars; light 1.4 ms, responding True rows=1 soFar=5004 want=5000 chunk=6001-end
+######## PASS k6 one request at a time, 2 s hard stop: overruns kept, Tally responding after each: 880 requests, at most 1 at Tally at once; 10 overran 2 s (kept in dbm-times.csv); 0 hung; Tally not responding after 0

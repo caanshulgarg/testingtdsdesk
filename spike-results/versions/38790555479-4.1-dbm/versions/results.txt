@@ -1,0 +1,73 @@
+INFO TallyPrime 4.1, mode dbm, runner GitHub Actions 1000010030, 2026-10-15T19:23:55
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-15, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-15, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+INFO dbm: masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 1240; entries in Tally 1264; per test day 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+INFO dbm: truth 20260601: System.Object[]
+INFO dbm: truth 20260702: System.Object[]
+INFO dbm: truth 20260831: System.Object[]
+INFO dbm: truth 20260131: 
+INFO dbm: truth 20251201: 
+PASS k1 test data made in Tally (ledgers, entries on the test days as Tally holds them): masters created 1114 (errors 0); entries created 1262 (errors 0); ledgers 1240; per test day (Tally's own list): 20260601=50, 20260702=300, 20260831=800, 20260131=0, 20251201=0
+MEASURE daybook D1: applied on every day False; overruns 2/10; worst 2733.5 ms; 20260601 got 9/50 on-day 0 worst 41.7 ms; 20260702 got 50/300 on-day 0 worst 184.8 ms; 20260831 got 300/800 on-day 0 worst 1007.7 ms; 20260131 got 800/0 on-day 0 worst 2733.5 ms; 20251201 got 0/0 on-day 0 worst 5.2 ms
+MEASURE daybook D2: applied on every day False; overruns 2/10; worst 2722 ms; 20260601 got 9/50 on-day 0 worst 44 ms; 20260702 got 50/300 on-day 0 worst 180.2 ms; 20260831 got 300/800 on-day 0 worst 1009 ms; 20260131 got 800/0 on-day 0 worst 2722 ms; 20251201 got 0/0 on-day 0 worst 6.3 ms
+MEASURE daybook D3: applied on every day False; overruns 2/10; worst 2704.2 ms; 20260601 got 9/50 on-day 0 worst 35.4 ms; 20260702 got 50/300 on-day 0 worst 203.8 ms; 20260831 got 300/800 on-day 0 worst 1006.1 ms; 20260131 got 800/0 on-day 0 worst 2704.2 ms; 20251201 got 0/0 on-day 0 worst 4.7 ms
+MEASURE daybook D4: applied on every day False; overruns 2/10; worst 2714 ms; 20260601 got 9/50 on-day 0 worst 33.8 ms; 20260702 got 50/300 on-day 0 worst 168.9 ms; 20260831 got 300/800 on-day 0 worst 1015.2 ms; 20260131 got 800/0 on-day 0 worst 2714 ms; 20251201 got 0/0 on-day 0 worst 4.5 ms
+MEASURE daybook D5: applied on every day True; overruns 2/10; worst 5251.5 ms; 20260601 got 50/50 on-day 50 worst 210.6 ms; 20260702 got 300/300 on-day 300 worst 1456.4 ms; 20260831 got 800/800 on-day 800 worst 5251.5 ms; 20260131 got 0/0 on-day 0 worst 6.6 ms; 20251201 got 0/0 on-day 0 worst 5.6 ms
+PASS k2 the Day Book for one day: the date forms that give exactly that day: forms that give exactly the day on all five days: D5; the others: D1, D2, D3, D4
+MEASURE collection C1 (FinComDatesProbe form 1): applied on every day False; overruns 0/5; worst 216.7 ms; got 20260601 1264/50, 20260702 1264/300, 20260831 1264/800, 20260131 1264/0, 20251201 1264/0
+MEASURE collection C2 (FinComDatesProbe form 2): applied on every day False; overruns 0/5; worst 236.4 ms; got 20260601 1264/50, 20260702 1264/300, 20260831 1264/800, 20260131 1264/0, 20251201 1264/0
+MEASURE collection C3 (FinComDatesProbe form 3): applied on every day False; overruns 0/5; worst 133.9 ms; got 20260601 51/50, 20260702 301/300, 20260831 801/800, 20260131 1/0, 20251201 1/0
+MEASURE collection C4 (FinComDatesProbe form 4): applied on every day False; overruns 0/5; worst 133.1 ms; got 20260601 51/50, 20260702 301/300, 20260831 801/800, 20260131 1/0, 20251201 1/0
+MEASURE collection C5 (FinComDatesProbe form 5): applied on every day False; overruns 0/5; worst 140.4 ms; got 20260601 51/50, 20260702 301/300, 20260831 801/800, 20260131 1/0, 20251201 1/0
+MEASURE collection C6 (FinComDatesProbe form 6): applied on every day False; overruns 0/5; worst 87.1 ms; got 20260601 1/50, 20260702 1/300, 20260831 1/800, 20260131 1/0, 20251201 1/0
+MEASURE collection C7 (FinComDatesProbe form 7): applied on every day False; overruns 0/5; worst 180.9 ms; got 20260601 51/50, 20260702 301/300, 20260831 801/800, 20260131 1/0, 20251201 1/0
+FAIL k3 the collection date forms (FinComDatesProbe) for one day: collection forms that give exactly the day on all five days: NONE
+MEASURE split S1-D1: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan False; overruns 0/12; worst 6.5 ms; 20260831 Contra 0/23 6.5ms; 20260831 Journal 0/77 5.1ms; 20260831 Payment 0/87 4.8ms; 20260831 Purchase 0/150 4.4ms; 20260831 Receipt 0/123 4.7ms; 20260831 Sales 0/340 4.4ms; 20260702 Contra 0/7 4.4ms; 20260702 Journal 0/28 4.5ms; 20260702 Payment 0/47 4.4ms; 20260702 Purchase 0/69 4.4ms; 20260702 Receipt 0/39 4.6ms; 20260702 Sales 0/110 4.5ms
+MEASURE split S1-D4: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan False; overruns 0/12; worst 6.9 ms; 20260831 Contra 0/23 5.5ms; 20260831 Journal 0/77 6.9ms; 20260831 Payment 0/87 5.2ms; 20260831 Purchase 0/150 4.7ms; 20260831 Receipt 0/123 4.7ms; 20260831 Sales 0/340 4.5ms; 20260702 Contra 0/7 4.6ms; 20260702 Journal 0/28 4.4ms; 20260702 Payment 0/47 4.4ms; 20260702 Purchase 0/69 4.4ms; 20260702 Receipt 0/39 4.5ms; 20260702 Sales 0/110 4.7ms
+MEASURE split S2-D1: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan True; overruns 0/12; worst 1513.5 ms; 20260831 Contra 23/23 88.7ms; 20260831 Journal 77/77 335.3ms; 20260831 Payment 87/87 319.2ms; 20260831 Purchase 150/150 685.5ms; 20260831 Receipt 123/123 448ms; 20260831 Sales 340/340 1513.5ms; 20260702 Contra 7/7 31.5ms; 20260702 Journal 28/28 127.8ms; 20260702 Payment 47/47 172.6ms; 20260702 Purchase 69/69 314.7ms; 20260702 Receipt 39/39 164.1ms; 20260702 Sales 110/110 494ms
+MEASURE split S2-D4: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan True; overruns 0/12; worst 1521.5 ms; 20260831 Contra 23/23 86.2ms; 20260831 Journal 77/77 312.4ms; 20260831 Payment 87/87 315.9ms; 20260831 Purchase 150/150 676.4ms; 20260831 Receipt 123/123 443.8ms; 20260831 Sales 340/340 1521.5ms; 20260702 Contra 7/7 31.9ms; 20260702 Journal 28/28 117.8ms; 20260702 Payment 47/47 173.4ms; 20260702 Purchase 69/69 312.3ms; 20260702 Receipt 39/39 155.3ms; 20260702 Sales 110/110 494.7ms
+MEASURE split S3-5: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan False; overruns 0/12; worst 109.5 ms; 20260831 Contra 24/23 97.1ms; 20260831 Journal 78/77 93.7ms; 20260831 Payment 88/87 97ms; 20260831 Purchase 151/150 96.3ms; 20260831 Receipt 124/123 95.7ms; 20260831 Sales 341/340 109.5ms; 20260702 Contra 8/7 45.8ms; 20260702 Journal 29/28 44.5ms; 20260702 Payment 48/47 45.1ms; 20260702 Purchase 70/69 49.1ms; 20260702 Receipt 40/39 46.4ms; 20260702 Sales 111/110 49.8ms
+MEASURE split S3-7: exact and under 2 s for every type on 31-Aug / 02-Jul / 31-Jan False; overruns 0/12; worst 152.1 ms; 20260831 Contra 24/23 129.1ms; 20260831 Journal 78/77 132.4ms; 20260831 Payment 88/87 133.1ms; 20260831 Purchase 151/150 140.5ms; 20260831 Receipt 124/123 135.9ms; 20260831 Sales 341/340 152.1ms; 20260702 Contra 8/7 131.9ms; 20260702 Journal 29/28 129.4ms; 20260702 Payment 48/47 138.2ms; 20260702 Purchase 70/69 140.6ms; 20260702 Receipt 40/39 139.2ms; 20260702 Sales 111/110 146.9ms
+MEASURE split S3 entries 20260601: 50 entries by FinComVoucherObject, total 313 ms, worst 9.4 ms, median 6.1 ms, overruns 0, not answered 0
+MEASURE split S3 entries 20260702: 300 entries by FinComVoucherObject, total 1839 ms, worst 9.5 ms, median 6 ms, overruns 0, not answered 0
+MEASURE split S3 entries 20260831: 100 entries by FinComVoucherObject, total 618 ms, worst 8.9 ms, median 6.1 ms, overruns 0, not answered 0
+PASS k4 a day split by voucher type: exact per type, each under 2 s: split forms exact and under 2 s for every type on the 800 / 300 / 300 days: S2-D1, S2-D4
+MEASURE ledcount L1 at 1240 ledgers: exact every time True (got 1240, Tally's list 1240); worst 162.1 ms, median 119.7 ms; requests 1; overruns 0/3
+MEASURE ledcount L2 at 1240 ledgers: exact every time True (got 1240, Tally's list 1240); worst 123 ms, median 122.5 ms; requests 1; overruns 0/3
+MEASURE ledcount L3 at 1240 ledgers: exact every time False (got 1241, Tally's list 1240); worst 13.6 ms, median 13.6 ms; requests 1; overruns 0/1
+MEASURE ledcount L3 chunked at 1240 ledgers: exact every time False (got 1242, Tally's list 1240); worst 22.4 ms, median 19.5 ms; requests 2; overruns 0/2
+MEASURE ledcount L4 at 1240 ledgers: exact every time False (got 1241, Tally's list 1240); worst 26.6 ms, median 26.6 ms; requests 1; overruns 0/1
+MEASURE ledcount L4 chunked at 1240 ledgers: exact every time False (got 1242, Tally's list 1240); worst 32 ms, median 31.7 ms; requests 2; overruns 0/2
+MEASURE ledcount L5 at 1240 ledgers: exact every time False (got 1454, Tally's list 1240); worst 1.2 ms, median 1.2 ms; requests 1; overruns 0/3
+MEASURE ledread FinComLedgers at 1240 ledgers: 2 chunk(s), worst 128.1 ms, total 134 ms, rows read 1242 of 1240, overruns 0
+MEASURE ledcount L1 at 5000 ledgers: exact every time True (got 5000, Tally's list 5000); worst 506.3 ms, median 476.1 ms; requests 1; overruns 0/3
+MEASURE ledcount L2 at 5000 ledgers: exact every time True (got 5000, Tally's list 5000); worst 456.7 ms, median 454.4 ms; requests 1; overruns 0/3
+MEASURE ledcount L3 at 5000 ledgers: exact every time False (got 5001, Tally's list 5000); worst 40.6 ms, median 40.6 ms; requests 1; overruns 0/1
+MEASURE ledcount L3 chunked at 5000 ledgers: exact every time False (got 5004, Tally's list 5000); worst 77.3 ms, median 72.7 ms; requests 4; overruns 0/2
+MEASURE ledcount L4 at 5000 ledgers: exact every time False (got 5001, Tally's list 5000); worst 101.2 ms, median 101.2 ms; requests 1; overruns 0/1
+MEASURE ledcount L4 chunked at 5000 ledgers: exact every time False (got 5004, Tally's list 5000); worst 129.9 ms, median 127.2 ms; requests 4; overruns 0/2
+MEASURE ledcount L5 at 5000 ledgers: exact every time False (got 5214, Tally's list 5000); worst 1 ms, median 0.9 ms; requests 1; overruns 0/3
+MEASURE ledread FinComLedgers at 5000 ledgers: 4 chunk(s), worst 154.5 ms, total 398 ms, rows read 5004 of 5000, overruns 0
+MEASURE dbm rule: 880 requests sent, never more than 1 at Tally; overruns 10; hung 0; Tally not responding after 0
+PASS k6 one request at a time, 2 s hard stop: overruns kept, Tally responding after each: 880 requests, at most 1 at Tally at once; 10 overran 2 s (kept in dbm-times.csv); 0 hung; Tally not responding after 0
+HARNESS k5 the ledger count: candidate forms exact at ~1,240 and ~5,000 ledgers, under 2 s: no result: the harness stopped or timed out (checks step: success)
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.4.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 44673232 bytes, Last-Modified Tue, 12 Mar 2024 09:23:50 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 4 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
