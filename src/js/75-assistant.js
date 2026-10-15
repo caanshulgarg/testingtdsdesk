@@ -56,6 +56,7 @@ const ASST = {
       notice: null, screens: [], verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null, done: false, attach: a.attach};
     const list = this.turns(); list.push(turn);
     a.q = ""; a.busy = true; const attach = a.attach; a.attach = null; this.draw();
+    this.keepCursor();
     let last = 0;
     const tick = () => { const n = Date.now(); if (n - last > 70){ last = n; this.draw(); } };
     try {
@@ -87,12 +88,21 @@ const ASST = {
     turn.done = true; a.busy = false;
     if (!turn.text && turn.live) turn.text = turn.live;
     this.draw();
+    if (a.open && (!document.activeElement || document.activeElement === document.body)) this.keepCursor();
     this.autosave();
+  },
+  // the question box keeps the cursor after a question is asked (the owner, 15-Oct-2026: "the cursor is moving differently":
+  // the box was greyed out while FinCom answered, which threw the cursor out of it, and it never came back); a box the
+  // user is typing in elsewhere (the "Wrong answer?" line, a filed notice's number) keeps it
+  keepCursor(){
+    const box = document.getElementById("asstQ"), on = document.activeElement;
+    if (!box || on === box || (on && on !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(on.tagName))) return;
+    try { box.focus({preventScroll: true}); } catch (e){}
   },
   // one event of the answer's stream (server/assistant/agent.ts)
   take(t, e){
     if (e.t === "text") t.live += e.d;
-    else if (e.t === "tool") t.tools.push({name: e.name, label: e.label});
+    else if (e.t === "tool"){ t.tools.push({name: e.name, label: e.label}); t.toolAt = t.live.length; }   // the step under way, until words come after it
     else if (e.t === "result") t.results.push(e);
     else if (e.t === "slice") t.slices.push(e);
     else if (e.t === "figures") t.verdicts = t.verdicts.concat(e.verdicts || []);

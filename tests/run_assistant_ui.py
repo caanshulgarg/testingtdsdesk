@@ -10,6 +10,11 @@ Checked, with a screenshot of each in tests/out/assistant/:
   notice (PDF) read with the DRAFT reply and "Add to due list" (only on the click); an Excel file made by the function;
   a request to post refused with a link to the screen; "check my Q4 26Q" giving FinCom's checklist; Ctrl+K's last line
   asking the Assistant; "Check before filing" on the TDS return page; "Wrong answer?".
+The look (the owner, 15-Oct-2026: "I cannot distinguish" one answer from the next question; "the cursor is moving
+  differently"): each exchange a unit (the question as a header with You and the time in IST, the answer under FinCom's
+  mark, a rule between exchanges, the older ones quieter); a reply streamed in piece by piece moves nothing above it (the
+  question's place measured at each piece), shows the working line, then a quiet marker at the end of the words, never a
+  raw "**"; the question box keeps the cursor after Ask; light and dark, 1280 and 390 wide, in tests/out/asst-look/after/.
 Run under the lock: flock /tmp/fincom-app.lock python3 tests/run_assistant_ui.py
 Needs Deno (DENO, else on the PATH or /opt/deno/deno); without it: skipped (fails on CI)."""
 # The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
@@ -26,6 +31,7 @@ if not DENO:
 ROOT = os.path.join(HERE, "..")
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(ROOT, "app", "dist-test"))
 OUT = os.path.join(os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")), "assistant"); os.makedirs(OUT, exist_ok=True)
+LOOK = os.path.join(os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")), "asst-look", "after"); os.makedirs(LOOK, exist_ok=True)
 PORT, SUPA_PORT, FN_PORT, PG_PORT = 8178, 9486, 9487, 55479
 fails, errors = [], []
 def ok(c, w):
@@ -166,6 +172,22 @@ try:
         order = pg.evaluate("() => [...document.querySelectorAll('[data-asst-thread] .asst-turn [data-asst-q]')].map(e => e.textContent)")
         ok(len(order) == 2 and order[0].startswith("Which suppliers") and order[1].startswith("Bank payments") and pg.locator(".asst-earlier").count() == 0 and "Earlier in this conversation" not in pg.inner_text("[data-asst-panel]"),
            "chat: the conversation top to bottom, newest at the bottom; no 'Earlier in this conversation' block (%s)" % order)
+        # the owner, 15-Oct-2026: "when an answer is completed and a new question is asked I cannot distinguish it"
+        units = pg.evaluate("""() => [...document.querySelectorAll('[data-asst-thread] > .asst-turn')].map((t) => {
+          const h = t.querySelector(':scope > [data-asst-qhead]'), a = t.querySelector(':scope > [data-asst-answer]'), q = h && h.querySelector('[data-asst-q]');
+          const hb = h ? h.getBoundingClientRect() : null, ab = a ? a.getBoundingClientRect() : null, tb = t.getBoundingClientRect(), cs = getComputedStyle(t);
+          return {latest: t.classList.contains('latest'), you: h ? h.innerText : '', top: tb.top, bottom: tb.bottom, border: parseFloat(cs.borderTopWidth) || 0,
+            headBottom: hb ? hb.bottom : null, ansTop: ab ? ab.top : null, mark: !!(a && a.querySelector('.asst-mark')), fincom: a ? a.innerText.trim().startsWith('FinCom') : false,
+            qColor: q ? getComputedStyle(q).color : '', bar: h ? getComputedStyle(h).borderLeftColor : ''}; })""")
+        ok(len(units) == 2 and all(u["you"].startswith("You") and re.search(r"\b\d{2}:\d{2} IST\b", u["you"]) for u in units),
+           "each exchange: the question as a header, with You and the time in IST (%s)" % [u["you"][:60] for u in units])
+        ok(all(u["mark"] and u["fincom"] and u["ansTop"] is not None and u["headBottom"] is not None and u["ansTop"] >= u["headBottom"] for u in units),
+           "each exchange: the answer below its question, under FinCom's mark")
+        ok(len(units) == 2 and units[1]["border"] >= 1 and units[1]["top"] >= units[0]["bottom"] - 1, "a rule between one exchange and the next (%s)" % [(u["top"], u["bottom"], u["border"]) for u in units])
+        ok(len(units) == 2 and units[1]["latest"] and not units[0]["latest"] and units[0]["qColor"] != units[1]["qColor"] and units[0]["bar"] != units[1]["bar"],
+           "the newest exchange stands out; the older one is quieter (%s)" % [(u["qColor"], u["bar"]) for u in units])
+        pg.evaluate("() => { const s = document.querySelector('[data-asst-scroll]'), l = document.querySelector('.asst-turn.latest'); s.scrollTop = l.offsetTop - s.offsetTop - s.clientHeight * .45; }"); pg.wait_for_timeout(200)
+        shot(pg, os.path.join("..", "asst-look", "after", "two-exchanges-light"))
         ok(pg.locator("[data-asst-panel] .asst-saved").count() == 0, "chat: past conversations only behind the History button")
         pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(800)
         ok(pg.locator("[data-asst-panel] .asst-saved").count() == 1, "chat: the History button shows the saved conversations")
@@ -181,6 +203,66 @@ try:
         pg.set_viewport_size({"width": 1280, "height": 900})
         pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(300)
         shot(pg, "02b-chat")
+        # ---------- the owner, 15-Oct-2026: "the cursor is moving differently". A reply streamed in piece by piece (here
+        # from the page, so each piece is measured): nothing above it moves, the working line then a quiet marker at the
+        # end of the words, never a raw "**"; the question box keeps the cursor after Ask
+        pg.evaluate("""() => { const real = window.fetch; let ctl; const st = new ReadableStream({start(c){ ctl = c; }}), en = new TextEncoder();
+          window.__push = (o) => ctl.enqueue(en.encode('data: ' + JSON.stringify(o) + '\\n\\n')); window.__end = () => ctl.close();
+          window.fetch = (u, o) => String(u) === ASST.url() && o && /"action":"ask"/.test(String(o.body || '')) ? (window.fetch = real, Promise.resolve(new Response(st, {headers: {'content-type': 'text/event-stream'}}))) : real(u, o); }""")
+        sq = "What is the TDS rate on rent of plant and machinery?"
+        pg.fill("#asstQ", sq); pg.keyboard.press("Enter"); pg.wait_for_timeout(400)
+        GEO = """() => { const s = document.querySelector('[data-asst-scroll]'), qs = [...document.querySelectorAll('[data-asst-thread] [data-asst-qhead]')];
+          const l = document.querySelector('.asst-turn.latest'), w = l.querySelector('[data-asst-words]');
+          return {tops: qs.map(q => Math.round(q.getBoundingClientRect().top * 10) / 10), scroll: s.scrollTop, focus: document.activeElement && document.activeElement.id,
+            status: (l.querySelector('[data-asst-busy]') || {}).innerText || '', spin: !!l.querySelector('[data-asst-busy] .asst-spin'), caret: l.querySelectorAll('[data-asst-caret]').length,
+            words: w ? w.innerText : '', rawBold: w ? /[*]{2}/.test(w.innerText) : false, scrollerTop: s.getBoundingClientRect().top, qLatest: l.querySelector('[data-asst-q]').textContent}; }"""
+        g0 = pg.evaluate(GEO)
+        ok(g0["focus"] == "asstQ", "Ask with Enter: the question box keeps the cursor (%s)" % g0["focus"])
+        ok(g0["qLatest"] == sq and g0["tops"][-1] >= g0["scrollerTop"] and g0["tops"][-1] - g0["scrollerTop"] < 40, "the question just asked goes to the top of the panel at once (%s, %s)" % (g0["tops"][-1], g0["scrollerTop"]))
+        pg.evaluate("__push({t: 'tool', name: 'make_file', label: 'Making the file'})"); pg.wait_for_timeout(250)
+        g1 = pg.evaluate(GEO)
+        ok(g1["status"].strip() == "Making the file…" and g1["spin"] and g1["caret"] == 0, "working: a quiet line with a small spinner, 'Making the file…' (%s)" % g1["status"])
+        seen = [g1]
+        for piece in ["Under the Income-tax Act, 1961, rent of plant and machinery is **2", "%** under section 194-I(a).\n\n- On a payment above ", "₹50,000 a month\n- Under the Income-tax Act, 2025, section 393 keeps it at ", "**2%**.", "\n\nCheck the PAN before deducting."]:
+            pg.evaluate("(d) => __push({t: 'text', d})", piece); pg.wait_for_timeout(180)
+            seen.append(pg.evaluate(GEO))
+        mid = seen[1:]
+        ok(all(x["caret"] == 1 and not x["status"] for x in mid), "while the words come in: one marker at their end, the working line gone (%s)" % [(x["caret"], x["status"]) for x in mid])
+        ok(not any(x["rawBold"] for x in mid), "a half-written **bold** never shows its stars (%s)" % [x["words"][-40:] for x in mid if x["rawBold"]][:2])
+        moved = max(abs(a - b) for x in seen for a, b in zip(x["tops"], g0["tops"]))
+        ok(moved <= 1 and all(x["scroll"] == g0["scroll"] for x in seen), "nothing above the reply moves while it streams in: the questions' places (%.1f px) and the scroll (%s)" % (moved, sorted(set(x["scroll"] for x in seen))))
+        ok(all(x["focus"] == "asstQ" for x in seen), "the question box keeps the cursor while FinCom answers")
+        shot(pg, os.path.join("..", "asst-look", "after", "streaming-light"))
+        txt = "Under the Income-tax Act, 1961, rent of plant and machinery is **2%** under section 194-I(a).\n\n- On a payment above ₹50,000 a month\n- Under the Income-tax Act, 2025, section 393 keeps it at **2%**.\n\nCheck the PAN before deducting."
+        pg.evaluate("(text) => { __push({t: 'done', text, labels: ['general'], links: [], citations: {ok: [], dropped: []}, verdicts: [], unchecked: []}); __end(); }", txt)
+        for _ in range(40):
+            if pg.evaluate("ASST.turns().slice(-1)[0].done"): break
+            pg.wait_for_timeout(100)
+        pg.wait_for_timeout(200)
+        g9 = pg.evaluate(GEO)
+        ok(g9["caret"] == 0 and not g9["status"] and pg.locator(".asst-turn.latest [data-asst-source]").count() == 1 and max(abs(a - b) for a, b in zip(g9["tops"], g0["tops"])) <= 1,
+           "done: the marker goes, the Source line comes, nothing above moved (%s)" % [g9["tops"], g0["tops"]])
+        ok(g9["focus"] == "asstQ", "after the reply the cursor is still in the question box (%s)" % g9["focus"])
+        # the Ask button (not Enter): the cursor goes back to the box
+        pg.evaluate("""() => { const real = window.fetch; window.fetch = (u, o) => String(u) === ASST.url() && o && /"action":"ask"/.test(String(o.body || '')) ? (window.fetch = real,
+          Promise.resolve(new Response('data: ' + JSON.stringify({t: 'done', text: 'Yes.', labels: ['general']}) + '\\n\\n', {headers: {'content-type': 'text/event-stream'}}))) : real(u, o); }""")
+        pg.fill("#asstQ", "Is that the same for a company?")
+        ok(pg.evaluate("getComputedStyle(document.querySelector('.asst-send')).opacity") == "1" and not pg.evaluate("document.querySelector('.asst-send').disabled"), "the Ask button, enabled, in full colour (not pale)")
+        pg.click(".asst-send"); pg.wait_for_timeout(600)
+        ok(pg.evaluate("document.activeElement && document.activeElement.id") == "asstQ", "Ask with the button: the cursor goes back to the question box")
+        # light and dark, desktop and phone (tests/out/asst-look/after/)
+        for scheme in ("light", "dark"):
+            pg.emulate_media(color_scheme=scheme); pg.wait_for_timeout(300)
+            pg.set_viewport_size({"width": 1280, "height": 900}); pg.wait_for_timeout(300)
+            shot(pg, os.path.join("..", "asst-look", "after", "desktop-" + scheme), "body")
+            pg.evaluate("() => { const s = document.querySelector('[data-asst-scroll]'), l = document.querySelector('.asst-turn.latest'); s.scrollTop = l.offsetTop - s.offsetTop - s.clientHeight * .45; }"); pg.wait_for_timeout(150)
+            shot(pg, os.path.join("..", "asst-look", "after", "chat-" + scheme))
+            pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
+            ph = pg.evaluate("""() => { const p = document.querySelector('.asst-panel'), s = document.querySelector('[data-asst-scroll]'), f = document.querySelector('.asst-ask').getBoundingClientRect(), r = p.getBoundingClientRect();
+              return {right: r.right, w: innerWidth, side: s.scrollWidth - s.clientWidth, formIn: f.left >= r.left - 1 && f.right <= r.right + 1 && f.bottom <= innerHeight + 1}; }""")
+            ok(ph["right"] <= ph["w"] + 1 and ph["side"] <= 1 and ph["formIn"], "phone (390 wide, %s): the panel fits, no sideways scrolling, the composer in view (%s)" % (scheme, ph))
+            shot(pg, os.path.join("..", "asst-look", "after", "phone-" + scheme), "body")
+        pg.emulate_media(color_scheme="light"); pg.set_viewport_size({"width": 1280, "height": 900}); pg.wait_for_timeout(300)
         # ---------- amber: the Day Book slice, a made-up voucher removed, a wrong figure corrected
         t = ask(pg, "What did we pay Rukmini in March and what was the reverse charge?")
         ok("ai" in t["labels"] and "not checked against the books" in pg.inner_text(".asst-turn.latest [data-asst-source]"), "AI from the Day Book: said in the grey Source line")
