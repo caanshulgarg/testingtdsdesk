@@ -221,12 +221,20 @@ export default function Assistant() {
   const cid = ASST.cid();
   const turns = ASST.turns();
   const thread = useRef(null), last = turns[turns.length - 1];
-  // the newest message in view: after a question is sent, while the reply streams in, and when an upload is added
-  const tick = turns.length + ":" + (last ? String(last.live || last.text || "").length + (last.done ? "d" : "") : "") + ":" + AUpload.list().length;
+  // the newest message in view: after a question is sent, while the reply streams in, and when an upload is added.
+  // A long reply never pushes its own question out of sight (the owner, 15-Oct-2026: "questions vanish while answering"):
+  // the panel follows the reply down only until the question reaches the top, and stops there.
+  const ups = AUpload.list().length;
+  const tick = turns.length + ":" + (last ? String(last.live || last.text || "").length + (last.done ? "d" : "") : "") + ":" + ups;
   useLayoutEffect(() => {
-    let el = thread.current;   // the panel's own scroller (the drawer's body), scrolled to its end
+    let el = thread.current;   // the panel's own scroller (the drawer's body)
     while (el && !(/auto|scroll/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight)) el = el.parentElement;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const end = el.scrollHeight - el.clientHeight;
+    const q = el.querySelector(".asst-turn.latest [data-asst-q]");
+    if (!q || ups) { el.scrollTop = end; return; }
+    const qTop = q.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8;
+    el.scrollTop = Math.min(end, Math.max(0, qTop));
   }, [tick, a.open]);
   const suggest = cid ? ASST.SUGGEST.client : ASST.SUGGEST.firm;
   return <>

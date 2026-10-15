@@ -169,6 +169,16 @@ try:
         ok(pg.locator("[data-asst-panel] .asst-saved").count() == 0, "chat: past conversations only behind the History button")
         pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(800)
         ok(pg.locator("[data-asst-panel] .asst-saved").count() == 1, "chat: the History button shows the saved conversations")
+        # the owner, 15-Oct-2026: "questions vanish while answering": a long reply must not push its own question out of sight
+        pg.set_viewport_size({"width": 1280, "height": 640})
+        lq = "purchase register for 2025-26"
+        tl = ask(pg, lq)
+        qv = pg.evaluate("""() => { const q = document.querySelector('.asst-turn.latest [data-asst-q]'), f = document.querySelector('[data-asst-panel] .asst-ask');
+          let el = q.parentElement; while (el && !(/auto|scroll/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight)) el = el.parentElement;
+          const a = q.getBoundingClientRect(), top = el ? el.getBoundingClientRect().top : 0, b = f.getBoundingClientRect();
+          return {qTop: a.top, qBottom: a.bottom, scrollerTop: top, formTop: b.top, rows: document.querySelectorAll('.asst-turn.latest tr').length}; }""")
+        ok(qv["rows"] > 12 and qv["qTop"] >= qv["scrollerTop"] - 1 and qv["qBottom"] <= qv["formTop"], "chat: after a long reply its question is still in view at the top (%s)" % qv)
+        pg.set_viewport_size({"width": 1280, "height": 900})
         pg.locator("[data-asst-panel] button[title='Saved conversations']").click(); pg.wait_for_timeout(300)
         shot(pg, "02b-chat")
         # ---------- amber: the Day Book slice, a made-up voucher removed, a wrong figure corrected
