@@ -44,7 +44,8 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8367/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
-    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
+    # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold: opened first
+    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(2)]
     def scene(devs, role):
         E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role])
         E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()

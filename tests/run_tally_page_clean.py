@@ -104,7 +104,7 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine]) => {
 }"""
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
     "data-release-rollback-clear", "data-release-withdraw", "data-trial-tools-switch", "data-recorder-source-pick", "data-ps-edit", "data-changes-only-switch",
-    "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear", "data-reparse"]
+    "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear", "data-reparse", "data-pc-resume"]
 FOLD = ["[data-bridge-card]", "[data-install-help]", "[data-connect-section]", '[data-pane="tally-history"]', "[data-release]", "[data-bridges]", "[data-read-stop-all]",
         "[data-client-lines]", "[data-bridge-ps]", "[data-bridge-sha]"]
 

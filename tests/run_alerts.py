@@ -123,7 +123,7 @@ with sync_playwright() as p:
         E(SETUP, ["owner", DEVS, ALERTS, miss, ""]); pg.wait_for_timeout(1800)
         page = txt("#app")
         items = E(BELL); shut()
-        ok(not [x for x in items if x["key"].startswith("alert:")] and "42P01" not in page and "42703" not in page and "does not exist" not in page and pg.locator("#app [data-computer]").count() == 1,
+        ok(not [x for x in items if x["key"].startswith("alert:")] and "42P01" not in page and "42703" not in page and "does not exist" not in page and pg.locator("#app [data-pc-line]").count() == 1,
            "%s: no alert rows, no error, the page as before" % miss.split("(")[-1].rstrip(")"))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()

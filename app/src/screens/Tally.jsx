@@ -470,10 +470,11 @@ function checkAgain() {
   return TCloud.refreshPane();
 }
 // 1. one line a computer: the facts in a few words (how to connect is the guide's, above)
-function PcLine({ r, latest, m, focus }) {
-  const s = pcState(r, latest), [lv, word] = s.word;
+// guided: the guide's step 3 speaks of this computer (its Resume is there, not here)
+function PcLine({ r, latest, m, focus, guided = false }) {
+  const s = pcState(r, latest), [lv, word] = s.word, owner = isOwner(), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const heard = r.at ? (r.online ? "Online, last heard " + tallyHm(r.at) : "Offline since " + tallyHm(r.at)) : "Never heard";
-  const ver = r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge" + (r.version ? " " + r.version : "");
+  const ver = r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge";
   const tally = !s.live || !r.online ? "" : r.tally === "busy" ? "Tally busy" : s.tallyOk ? "Tally open" + (s.open.length ? ": " + s.open.join(", ") : "") : "Tally not open";
   const reading = !s.live || !r.online ? "" : s.stopped ? "Reading stopped" : s.paused ? "Reading paused" : "Reading on";
   return <div className={"tpc" + (focus ? " tcard-focus" : "")} data-pc-line={r.device.id} data-bridge-user={r.user || ""} data-level={lv} data-pc-state={word} data-focus={focus ? "" : undefined}>
@@ -481,8 +482,10 @@ function PcLine({ r, latest, m, focus }) {
       <span className={"tag " + lv} data-pc-word="">{word}</span>
       <b data-pc-name="">{pcWords(r)}</b>
       <span className="tpc-facts note" data-pc-facts="">{[heard, tally, reading, ver].filter(Boolean).join(" · ")}</span>
-      {s.update && <UpdateBtn m={m} />}
+      {s.update && !s.stopped && <UpdateBtn m={m} />}
       {!s.live && <UpdateBtn m={m} label={latest ? "Install FinCom Bridge " + latest : ""} />}
+      {s.stopped && !guided && (owner && !allStopped ? <button className="btn small primary" data-pc-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
+        : !owner ? <span className="note">An owner of the firm can resume it.</span> : null)}
     </div>
   </div>;
 }
@@ -500,7 +503,7 @@ function PcLine({ r, latest, m, focus }) {
 // All four done: one green line. Every other place that spoke of connecting or linking points here (openConnectTally,
 // src/js/52: the step, and for step 4 the client and, from Add client, the company chosen there).
 // ---------------------------------------------------------------------------------------------------------------------
-const GUIDE_KEYS = ["install", "tally", "company", "link"];
+const GUIDE_KEYS = ["install", "tally", "company", "link"], GUIDE_REFRESH_MS = 20000;
 function guideState(rows, latest) {
   const p = TCloud.pane, live = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const st = live.map((r) => [r, pcState(r, latest)]);
@@ -521,10 +524,12 @@ function GuideStep({ k, n, title, done, open, children }) {
 // step 4's picker: the client (those not linked; or the one a pointer named) and the companies FinCom has seen that no
 // other client has (companiesSeen, the same GSTIN on top), and Link
 function LinkPicker({ unlinked, g }) {
+  // the clients not linked first (the one a pointer named on top), then the linked ones, to change their company
   const named = g.cid && S.companies && S.companies[g.cid] && !S.companies[g.cid].deleted ? S.companies[g.cid] : null;
-  const clients = named && !unlinked.some((c) => c.id === named.id) ? [named].concat(unlinked) : unlinked;
+  const linkedCos = Object.values(S.companies || {}).filter((c) => !c.deleted && !unlinked.some((u) => u.id === c.id)).sort((a, c) => a.name.localeCompare(c.name));
+  const clients = [].concat(named ? [named] : [], unlinked, linkedCos).filter((c, i, a) => a.findIndex((x) => x.id === c.id) === i);
   const [pick, setPick] = useState({ cid: "", company: "" }), [busy, setBusy] = useState(false);
-  if (!clients.length) return null;
+  if (!clients.length) return <div className="tlink-guide" data-guide-picker=""><span className="note">Add a client first; then link it here.</span> <button className="btn small primary" data-guide-add="" onClick={() => doAct("addCo")}>Add a client</button></div>;
   const cid = clients.some((c) => c.id === pick.cid) ? pick.cid : named ? named.id : clients[0].id, co = S.companies[cid];
   const list = companiesSeen(co).filter((c) => !c.mine), want = pick.cid === cid && pick.company ? pick.company : (g.cid === cid && g.company) || "";
   const company = list.some((c) => c.company === want) ? want : list.length ? list[0].company : "";
@@ -546,6 +551,15 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
   // a pointer elsewhere opened a step: that step is brought into view
   useEffect(() => { if (!g.at) return; const t = setTimeout(() => { const e = document.querySelector('#app [data-connect-guide] [data-connect-step="' + (GUIDE_KEYS[(g.step || 0) - 1] || "") + '"]') || document.querySelector("#app [data-connect-guide]");
     if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 80); return () => clearTimeout(t); }, [g.at]);
+  // while a step is not done, the computers and companies are read again by themselves every 20 seconds, so a step ticks
+  // (and a company opened in Tally shows in step 4) without a click
+  useEffect(() => { const t = setInterval(() => {
+    if (!document.querySelector("#app [data-connect-step]:not([data-done])") || !TCloud.on() || TCloud.pane.busy) return;
+    const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (typing) return;
+    if (typeof TLight === "object") TLight.st.at = 0;
+    Promise.resolve(TCloud.refreshPane()).then(() => (typeof TLight === "object" ? TLight.refresh() : null)).then(() => render(), () => render());
+  }, GUIDE_REFRESH_MS); return () => clearInterval(t); }, []);
   if (p.devices == null && !p.err) return null;
   const x = guideState(rows, latest), d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
   const now = GUIDE_KEYS.find((k) => !d[k]), want = GUIDE_KEYS[(g.step || 0) - 1] || now;
@@ -581,8 +595,8 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
           : s && s.paused ? <span data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: right-click the FinCom icon near the clock → Resume reading."}</span>
           : <span className="note">{"Leave TallyPrime open on a company" + (r ? " on " + pc : "") + "."}</span>}
       </GuideStep>
-      <GuideStep k="link" n={4} title="Link each client to its Tally company" done={d.link && !(want === "link" && g.cid)} open={want === "link"}>
-        {d.link && !(want === "link" && g.cid) ? <span className="note">Every client is linked.</span>
+      <GuideStep k="link" n={4} title="Link each client to its Tally company" done={d.link && !(want === "link" && g.at)} open={want === "link"}>
+        {d.link && !(want === "link" && g.at) ? <span className="note">Every client is linked.</span>
           : <>{un.length > 0 && <span className="note" data-guide-unlinked={un.length}>{(un.length === 1 ? un[0].name + " is not linked." : un.length + " clients are not linked: " + un.slice(0, 3).map((c) => c.name).join(", ") + (un.length > 3 ? " and " + (un.length - 3) + " more" : "") + ".")}</span>}
             <LinkPicker unlinked={un} g={g} /></>}
       </GuideStep>
@@ -1019,12 +1033,13 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     <PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), f = focusOf(S.tallyFocus), ctl = TCloud.pane.ctl || {};
+  const gx = guideState(rows, latest), guided = gx.r && !gx.done.company ? gx.r.device.id : "";
   return <>
     <ConnectGuide rows={rows} m={m} latest={latest} connectStep={connectStep} />
     <FocusLine f={f} cards={week} />
     {week.length > 0 && <section className="pane tpcs" data-pc-lines="">
       <h3 style={{ margin: "0 0 6px" }}>Tally on your computers</h3>
-      {week.map((r) => <PcLine key={cardKey(r)} r={r} latest={latest} m={m} focus={!!f && !!f.dev && r.device.id === f.dev} />)}
+      {week.map((r) => <PcLine key={cardKey(r)} r={r} latest={latest} m={m} focus={!!f && !!f.dev && r.device.id === f.dev} guided={r.device.id === guided} />)}
       {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
       {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     </section>}

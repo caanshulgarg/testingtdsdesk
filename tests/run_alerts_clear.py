@@ -133,7 +133,8 @@ with sync_playwright() as p:
     ok(b["items"] and all(x["clear"] for x in b["items"]), "the bell: a Clear on every notification (%s)" % [(x["key"], x["clear"]) for x in b["items"]])
     ok(b["clearAll"], "the bell: Clear all at its top")
     pg.evaluate(CLOSE)
-    for where, sel in [("tally", "#app [data-alert-line] [data-alert-clear]"), ("books:reports", "#app [data-alert-line] [data-alert-clear]"),
+    # 15-Oct-2026 (the owner: "why we need gb texcoat info.. unnecessary info is there"): a client's data alerts are not on the Tally page
+    for where, sel in [("books:reports", "#app [data-alert-line] [data-alert-clear]"),
                        ("books:daybook", "#app [data-books-held] [data-alert-clear]"), ("activity", "#app [data-needs-group] [data-alert-clear]")]:
         go(pg, cid, where)
         ok(pg.locator(sel).count() >= 1, "%s: a Clear on %s" % (where, sel.split(" ")[1]))
@@ -294,7 +295,7 @@ with sync_playwright() as p:
     ok(sn and sn["inside"] and sn["onTop"], "phone: 'Cleared 1 notification · Undo' on the screen, above the bottom bar (%s)" % sn)
     pg3.evaluate(CLOSE)
     pg3.evaluate("() => { window.__w.cursor[0].gap.since = new Date(Date.now() - 2 * 86400e3).toISOString(); Rec.gaps.at = 0; AlertHub.reset(); AlertHub.refresh(true); }"); pg3.wait_for_timeout(1500)
-    go(pg3, cid3, "tally")
+    go(pg3, cid3, "books:reports")
     # the alert line at phone width (360 and 390): the sentence on its own full-width line, the buttons on a row below;
     # nothing cut off, no sideways scroll
     LINE = """() => { const l = document.querySelector('#app [data-alert-line]'); if (!l) return null; const t = l.querySelector('.al-line-text');
@@ -303,7 +304,7 @@ with sync_playwright() as p:
         inside: bs.every(b => b.left >= lr.left - 1 && b.right <= lr.right + 1), scroll: document.documentElement.scrollWidth > innerWidth}; }"""
     for W in (360, 390):
         pg3.set_viewport_size({"width": W, "height": 800}); pg3.wait_for_timeout(500)
-        go(pg3, cid3, "tally")
+        go(pg3, cid3, "books:reports")
         g = pg3.evaluate(LINE)
         ok(g and g["textW"] >= 0.8 * g["lineW"], "phone %d: the alert's words get the line's width (%s)" % (W, g and (round(g["textW"]), round(g["lineW"]))))
         ok(g and not g["cut"] and re.search(r"GARG SHEKHAR & COMPANY: .+ not yet in FinCom\. Upload the Day Book for .+\.", g["text"]), "phone %d: the whole sentence shown, nothing cut off (%r)" % (W, g and g["text"]))

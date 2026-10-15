@@ -114,10 +114,12 @@ def main():
         # clean-up batch 1 (11-Oct-2026): the way back is the sidebar's client card, not a link on the page
         back = '#side [data-side-client="back"]'
         ok(pg.get_attribute(back, "aria-label") == "Back to Alpha Traders" and pg.locator("#app [data-back-client]").count() == 0, "1. the sidebar's client card: 'Back to Alpha Traders'; no Back link on the page (%r)" % pg.get_attribute(back, "aria-label"))
-        ok(pg.locator('#app [data-tally-focus="%s"]' % cid).count() == 1 and pg.locator('#app [data-computer="%s"][data-focus]' % D1).count() == 1,
+        ok(pg.locator('#app [data-tally-focus="%s"]' % cid).count() == 1 and pg.locator('#app [data-pc-line="%s"][data-focus]' % D1).count() == 1,
            "C. focused on the client's computer and company (%s)" % txt('#app [data-tally-focus]'))
         ok("GARG SHEKHAR" in txt('#app [data-tally-focus]') and "NWS144" in txt('#app [data-tally-focus]'), "C. the focus line names the company and the computer")
         shot("tally-from-client")
+        # 15-Oct-2026 (the calm page): Sync activity and Everything sent open from the Advanced (for support) fold
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(400)
         for tab in ("activity", "sent"):
             pg.click('#app [data-tally-tab="%s"]' % tab); pg.wait_for_timeout(500)
             ok(pg.locator(back).count() == 1, "1. Back to the client on the %s tab too" % tab)
@@ -153,12 +155,15 @@ def main():
 
         # ---- 2. Your Tally connection: Needs you, cards, Details folded
         ok(txt("#cobar .tbar-title h2").strip() == "Tally", "A. the page is called 'Tally', its sidebar word (clean-up batch 1)")
-        needs = E("() => [...document.querySelectorAll('#app [data-needs-you] li')].map(li => [li.getAttribute('data-need'), li.innerText.replace(/\\s+/g, ' ').trim(), li.querySelectorAll('button, a.btn').length])")
-        kinds = [n[0] for n in needs]
-        ok(set(kinds) >= {"offline", "tally", "stopped"} and all(n[2] <= 1 for n in needs), "A. Needs you: offline, Tally not open, stopped; at most one button each (%s)" % needs)
-        ok(any(n[0] == "tally" and n[1].startswith("Tally is not open on FRONTDESK (tally)") for n in needs), "A. 'Tally is not open on FRONTDESK (tally)'")
-        ok(any(n[0] == "stopped" and "Tally hangs on the bank ledger" in n[1] and n[1].endswith("Resume") for n in needs), "A. 'Reading stopped ... : Resume'")
-        ok(pg.locator("#app [data-computer]").count() == 4, "A. one card a computer and Windows user")
+        # 15-Oct-2026 (the calm page): one line a computer on the page, its state in a word and at most one button; the
+        # cards (with their Details) under the one Advanced (for support) fold
+        pl = lambda d: txt('#app [data-pc-line="%s"]' % d)
+        ok(pg.locator("#app [data-pc-line]").count() == 4 and all(pg.locator('#app [data-pc-line="%s"] button, #app [data-pc-line="%s"] a.btn' % (d, d)).count() <= 1 for d in (D1, D2, D3, D4)),
+           "A. one line a computer, at most one button each")
+        ok("Offline since" in pl(D2) and "Tally not open" in pl(D3), "A. offline and Tally not open said on their lines (%s | %s)" % (pl(D2), pl(D3)))
+        ok("Stopped" in pl(D4) and pg.locator('#app [data-pc-line="%s"] [data-pc-resume]' % D4).count() == 1, "A. reading stopped from FinCom: 'Stopped', with Resume reading (%s)" % pl(D4))
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+        ok(pg.locator("#app [data-computer]").count() == 4, "A. one card a computer and Windows user (under Advanced)")
         c1 = '#app [data-computer="%s"]' % D1
         ok(txt(c1 + " [data-card-name]") == "NWS144 \u00b7 anshul" and pg.get_attribute(c1, "data-card-state") == "Connected", "A. card 'NWS144 \u00b7 anshul', Connected (%s)" % txt(c1 + " [data-card-name]"))
         ok(txt(c1 + " [data-card-companies]") == "Reads GARG SHEKHAR (Alpha Traders \u203a)", "A. the companies it reads, with the client's link (%s)" % txt(c1 + " [data-card-companies]"))
@@ -166,10 +171,11 @@ def main():
         ok(pg.get_attribute('#app [data-computer="%s"]' % D2, "data-card-state") == "Not connected" and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-card-state") == "Needs you",
            "A. Not connected / Needs you in words")
         ok(all(pg.locator('#app [data-computer] [data-status-line]').nth(i).locator("button").count() <= 1 for i in range(4)), "A. at most one main action a card")
+        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(600)
         page = lambda: pg.inner_text("#app")
         ok("9005" not in page() and not re.search(r"\bports?\b", page(), re.I) and pg.locator("#app [data-session0]").count() == 0,
            "2. no port and no session-0 Tally before Details is opened")
-        ok("FinCom Bridge 2.3.4" not in page() and "Last request" not in page(), "2. the version and the requests only under Details")
+        ok("Last request" not in page(), "2. the requests only under Details")
         shot("owner-connection")
         # the session-0 Tallys: this browser's connection (Bridge.st.sessions), under the page's Details
         E("""() => { Bridge.cfg = () => ({url: 'http://localhost:1', key: 'k', follow: false, port: 0}); Bridge.blocked = () => false; Bridge.on = () => true; Bridge.up = () => true;
@@ -195,8 +201,8 @@ def main():
             pg.wait_for_timeout(700)
         pg.click('#app [data-read-stop="%s"]' % D1); confirm("#readStopWhy", "month end")
         ok(["tally_read_stop", {"p_device": D1, "p_reason": "month end"}] in calls("tally_read_stop"), "3. Stop reading -> tally_read_stop")
-        pg.click('#app [data-need-computer="%s"] [data-need-act="resume"]' % D4); pg.wait_for_timeout(700)
-        ok(["tally_read_resume", {"p_device": D4}] in calls("tally_read_resume"), "3. Resume (Needs you) -> tally_read_resume")
+        pg.click('#app [data-pc-line="%s"] [data-pc-resume]' % D4); pg.wait_for_timeout(700)
+        ok(["tally_read_resume", {"p_device": D4}] in calls("tally_read_resume"), "3. Resume (the computer's line) -> tally_read_resume")
         pg.click('#app [data-read-stop-all]'); confirm("#readStopWhy", "update")
         ok(["tally_read_stop", {"p_device": None, "p_reason": "update"}] in calls("tally_read_stop"), "3. Stop reading on all computers -> tally_read_stop(null)")
         E("() => { window.__devs = window.__devs; }")
@@ -233,10 +239,13 @@ def main():
 
         # ---- 4. staff: the same words, no owner button
         scene(DEVS, LINKED, role="staff"); E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-        E("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(700)
-        hooks = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
+        hooks = [h for h in OWNER_HOOKS + ["data-pc-resume"] if pg.locator("#app [%s]" % h).count()]
+        sn = [txt('#app [data-pc-line="%s"]' % D4)]
+        for _ in range(2):   # the Advanced fold, then each card's Details
+            E("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(700)
+        hooks += [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
         ok(not hooks, "4. staff: no owner button, Details open (%s)" % hooks)
-        sn = E("() => [...document.querySelectorAll('#app [data-needs-you] li')].map(li => li.innerText.replace(/\\s+/g, ' ').trim())")
+        sn.append(txt('#app [data-computer="%s"]' % D4))
         ok(any("Tally hangs on the bank ledger" in x and "An owner of the firm can resume it." in x for x in sn), "4. staff: the stop's words, and who can resume it (%s)" % sn)
         ok("Posting settings:" in page() and "Trial tools on this computer: off" in page(), "4. staff: the settings' words")
         shot("staff-details-open")
@@ -250,13 +259,14 @@ def main():
         ok(pg.locator(link + " [data-update-now]").count() == 1 and pg.locator(link + " [data-tally-link-change]").count() == 0, "5. linked: Update now (Change company is on the card in Client setup)")
         ok(pg.locator("#app [data-upload-page] [data-update-now]").count() == 1, "5. From Tally: Update now once (on the link line)")
         E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)   # clean-up batch 2: Change company is on the card, in Client setup -> Tally
-        pg.click(link + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(link + " [data-tally-link-change]"); pg.wait_for_timeout(300)
-        opts = E("() => [...document.querySelectorAll('#app [data-tally-link-changebox] [data-tally-link-option]')].map(o => o.getAttribute('data-tally-link-option'))")
-        ok(opts == ["ABC LTD"], "5. Change company offers the other companies seen (%s)" % opts)
-        pg.click('#app [data-tally-link-changebox] [data-tally-link-to="ABC LTD"]'); pg.wait_for_timeout(800)
+        # 15-Oct-2026: Change company leads to the one place to link, Connect Tally's step 4 with this client
+        pg.click(link + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(link + " [data-tally-link-change]"); pg.wait_for_timeout(900)
+        opts = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
+        ok(opts == ["ABC LTD"] and E("() => document.querySelector('#app [data-guide-client]').value") == cid, "5. Change company: Connect Tally, this client, the other companies seen (%s)" % opts)
+        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(800)
         ok(["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
         shot("client-linked")
-        E("() => goClient('books:import')"); pg.wait_for_timeout(1000)
+        E("(c) => { S.tallyGuide = {}; openCompany(c); goClient('books:import'); }", cid); pg.wait_for_timeout(1000)
         # held entries: that day's Day Book (and one other held line)
         scene(DEVS, LINKED, lines=HELD)
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(2000); E("() => render()"); pg.wait_for_timeout(500)
@@ -283,8 +293,11 @@ def main():
         scene(DEVS, [{"company": "ABC LTD", "client_id": None, "device_id": D2, "gstin": "", "last_seen": "ago:1"}])
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(1500); E("() => render()"); pg.wait_for_timeout(600)
         ok(E("document.querySelector('#app [data-tally-link]') && document.querySelector('#app [data-tally-link]').getAttribute('data-tally-link')") == "unlinked", "5. not linked: From Tally's line says so")
-        pg.click("#app [data-tally-link-home]"); pg.wait_for_timeout(800)   # clean-up batch 2: the companies to link are on the card in Client setup -> Tally
-        ok(E("S.tab") == "cotally" and pg.locator('#app [data-tally-link-option="ABC LTD"]').count() == 1, "5. not linked: the companies seen, each with Link (%s)" % txt(link))
+        # 15-Oct-2026: the companies to link are in the one place to link, Connect Tally's step 4
+        pg.click("#app [data-tally-link-line] [data-open-connect]"); pg.wait_for_timeout(900)
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and "ABC LTD" in E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)"),
+           "5. not linked: Open Connect Tally, its step 4 lists the companies seen, with Link (%s)" % txt(link))
+        E("(c) => { S.tallyGuide = {}; S.view = 'company'; S.coId = c; goClient('books:import'); }", cid); pg.wait_for_timeout(900)
         shot("client-unlinked")
         # Client setup -> Tally: the same line at the top
         scene(DEVS, LINKED); E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(1500); E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)
@@ -298,7 +311,7 @@ def main():
         ph.evaluate(SETUP, [DEVS, STOPS, LINKED, "owner", []]); ph.evaluate("() => navHome('tally')"); ph.wait_for_timeout(1800)
         wide = ph.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
         ok(wide <= 1, "6. phone width: no sideways scroll (%d px)" % wide)
-        ok(ph.locator("#app [data-back-client]").count() == 0 and ph.locator("#app [data-needs-you]").count() == 1, "6. phone: Needs you (the way back is in the menu's More)")
+        ok(ph.locator("#app [data-back-client]").count() == 0 and ph.locator("#app [data-pc-lines]").count() == 1, "6. phone: the computers' lines (the way back is in the menu's More)")
         if SHOTS: ph.screenshot(path=os.path.join(SHOTS, "phone-connection.png"), full_page=True)
         ph.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); ph.wait_for_timeout(600)
         wide = ph.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")

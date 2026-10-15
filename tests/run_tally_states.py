@@ -8,7 +8,7 @@ between connected and disconnected while the bridge was busy with Tally):
     two minutes;
   - Settings → Tally Bridge: the connection history of the last 24 hours.
 Offline, a made-up client, the React test build (app/dist-test)."""
-import os, threading, functools, http.server, datetime
+import os, sys, threading, functools, http.server, datetime
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))); H.log_message = lambda *a: None
@@ -63,6 +63,9 @@ with sync_playwright() as p:
     pg.evaluate("() => { Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now()}; Bridge.on = () => false; }")
     pg.evaluate(setup, [cid, {"at": iso(3), "every": 30, "tally": True, "tallyState": "busy", "busySince": iso(60)[:19], "companies": []}, hist])
     pg.evaluate("(cid) => openCompany(cid).then(() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'bridge'; render(); })", cid); pg.wait_for_timeout(1500)
+    # Settings → FinCom Bridge is one line that opens its home: the Tally page's Advanced (for support), where this
+    # computer's bridge and the connection history are (15-Oct-2026)
+    if pg.locator('[data-home-go="bridge"]').count(): pg.click('[data-home-go="bridge"]'); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok(pg.locator('[data-part="bridge"][data-state="online"]').count() >= 1 and pg.locator('[data-part="tally"][data-state="busy"]').count() >= 1 and pg.locator('[data-part="company"][data-state="linked"]').count() >= 1,
        "Settings → FinCom Bridge: Bridge Online, Tally Busy, Company Linked, apart")
@@ -74,4 +77,4 @@ with sync_playwright() as p:
     ok(top in ("busy", "ok", "unlinked", "waiting"), "the top bar follows: %s, not offline" % top)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
-print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))
+print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

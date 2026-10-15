@@ -10,7 +10,7 @@ Beat sequences played on a made-up clock (Date.now), the React test build (app/d
     once, Tally starting up (closed for 30 s) never change it; "Check again" shows the answer at once;
   - the hover: the computer with its Windows user, the company, "Last confirmed", the next step as a button, and the
     firm's other computers in one quiet line ("Posting goes through NWS144 (Ranjeet).");
-  - the next step for each state: Connect this computer (the Tally page's connect steps), Check again, Link to Tally;
+  - the next step for each state: Open Connect Tally (the Tally page's Connect Tally guide, 15-Oct-2026), Check again;
   - one Windows user's bridge is not taken for another's on the same computer (NWS144: anshul and Ranjeet);
   - the cloud's heartbeats: the last beat of a stopped bridge, first seen late, is not "fresh" (its age is from beat.at);
     tallyStatus never says "Reconnecting…"; a missed beat or two do not change the firm's sign;
@@ -124,9 +124,11 @@ with sync_playwright() as p:
     pg.evaluate("TallySteady.reset()"); put(local(open=[{"name": "MASTERCAD SOLUTIONS"}]), link=False)
     s = watch("unlinked")
     ok(s["code"] == "unlinked" and s["text"] == "Company not linked", "Tally open, the client not linked: “Company not linked” (%s)" % (s,))
-    c = card(); ok(c and c["next"] and c["next"][0][0] == "coTally", "its button opens the client's Link to Tally card (%s)" % ((c or {}).get("next"),))
-    press("coTally"); pg.wait_for_timeout(300)
-    ok(pg.evaluate("S.tab") == "cotally", "Link to Tally: the client's Link to Tally card opens (%s)" % pg.evaluate("S.tab"))
+    # 15-Oct-2026: the one place to link is the Tally page's Connect Tally (step 4, this client)
+    c = card(); ok(c and c["next"] and c["next"][0] == ["connectTally", "Open Connect Tally"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
+    press("connectTally"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid == S.coId]") == ["home", "tally", 4, True], "Open Connect Tally: the guide's step 4 for this client (%s)" % pg.evaluate("[S.view, S.homeTab, S.tallyGuide]"))
+    pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid); pg.wait_for_timeout(300)
     pg.evaluate("(cid) => { S.companies[cid].tallyName = 'TESTING AAD'; S.tab = 'dash'; render(); }", cid)
 
     # 6. no bridge on this computer: grey, never another computer's name in the sign; the other computers in the hover
@@ -137,7 +139,7 @@ with sync_playwright() as p:
     ok("NWS144" not in s["text"] and not re.search(r"\b(via|through)\b", s["text"]), "the sign never names another computer (%s)" % s["text"])
     c = card()
     ok(c and c["other"] == "Posting goes through NWS144 (Ranjeet).", "the hover's quiet second line: “Posting goes through NWS144 (Ranjeet).” (%s)" % ((c or {}).get("other"),))
-    ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Connect this computer"], "its button: Connect this computer (%s)" % ((c or {}).get("next"),))
+    ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Open Connect Tally"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
     dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
     ok(dot not in ("rgb(185, 28, 28)", "rgb(21, 128, 61)"), "grey, not an alarm (%s)" % dot)
     # two computers: still "not on this computer", the second line counts them
@@ -152,7 +154,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { location.hash = '#/c/' + S.coId + '/dash'; }"); pg.wait_for_timeout(200)
     press("tallyConnect"); pg.wait_for_timeout(600)
     ok(pg.evaluate("[S.view, S.homeTab]") == ["home", "tally"], "Connect this computer: the Tally page (%s)" % pg.evaluate("[S.view, S.homeTab]"))
-    ok(pg.locator("#app [data-connect-section]").count() > 0 or pg.locator("#app [data-tally-guide]").count() > 0, "with the install and connect steps on it")
+    ok(pg.locator("#app [data-connect-guide]").count() > 0, "with Connect Tally, the install and connect steps, on it")
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid)
 
     # 7. the same computer, two Windows users: anshul's bridge here is not Ranjeet's

@@ -78,7 +78,10 @@ with sync_playwright() as p:
         t = pg.inner_text("#app")
         ok(not PHRASES.search(t) and pg.locator("#app [data-alert-line]").count() == 0, "%s: no alert text on the page (%s)" % (w, (PHRASES.search(t) or [""])[0]))
     # ---- 3. the client's Books page and the Tally page: ONE slim line
-    for w, sel in [("books:reports", "#app [data-alert-line]"), ("tally", "#app [data-alert-line]")]:
+    # 15-Oct-2026 (the owner: "why we need gb texcoat info.. unnecessary info is there"): a client's data alerts are not on the Tally page: the Tally page has none
+    E("() => navHome('tally')"); pg.wait_for_timeout(1200)
+    ok(pg.locator("#app [data-alert-line]").count() == 0 and "not yet in FinCom" not in pg.inner_text("#app"), "tally: no client's data alert on the Tally page")
+    for w, sel in [("books:reports", "#app [data-alert-line]")]:
         if w == "tally": E("() => navHome('tally')")
         else: E("([cid, w]) => { S.view = 'company'; S.coId = cid; goClient(w); }", [cid, w])
         pg.wait_for_timeout(1200)

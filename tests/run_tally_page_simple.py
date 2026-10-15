@@ -3,11 +3,12 @@ also not able to connect properly").
   - one card per computer and Windows user, each with ONE plain status line: "Connected · Tally open: GARG SHEKHAR (port
     9005) · last entry 2 min ago"; when something is wrong the line names the problem and the ONE thing that fixes it
     (an owner's button when there is one: Resume reading, Make this the main bridge, Download FinCom Bridge);
-  - a 3-step guide at the top until the first Tally company is linked to a client: Install bridge -> Connect -> Link
-    company, each ticked when done (a computer key exists; a bridge's heartbeat was seen; a company linked);
-  - everything else under More (per card: requests, stop reading, changes source, trial tools, PostOnly and posting
-    settings, members; for the page: versions, stop on all computers, every bridge heard from, this browser's connection
-    with its steps (numbered once), the connection history, the install help);
+  - (15-Oct-2026) Connect Tally at the top, the one place to connect: four steps (install; Tally answering; a company
+    open; every client linked), each ticked when done; all done, one green line;
+  - the computers' cards, and everything else, under the one "Advanced (for support)" fold (per card: requests, stop
+    reading, changes source, trial tools, PostOnly and posting settings, members; for the page: versions, stop on all
+    computers, every bridge heard from, this browser's connection with its steps (numbered once), the connection
+    history, the install help);
   - staff see no owner button, More open or not; times in IST, never a bare 14:05.
 Options: --shots DIR  saves the page's screenshots (owner, More closed and open; the guide; staff) into DIR.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_page_simple.py"""
@@ -63,7 +64,7 @@ SETUP = """([devs, stops, companies, role]) => {
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role})});
   TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.err = "";
   document.body.classList.add("is-test"); S.firm.firmName = S.firm.firmName || "Test Firm";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyGuide = {}; navHome("tally");
 }"""
 # Sync activity's flow (the owner: "in tally sync there is a yellow field coming all the time"): lines Tally sent, as
 # tally_recorder_lines keeps them. ENDED: the bridge gave up, a person must upload that day's Day Book; FRESH: still
@@ -156,45 +157,52 @@ def main():
         txt = lambda sel: pg.inner_text(sel).strip() if pg.locator(sel).count() else ""
         card = lambda d: '#app [data-computer="%s"]' % d
         line = lambda d: txt(card(d) + " [data-status-line]")
-        def scene(devs, companies, role="owner", stops=STOPS):
-            E(SETUP, [devs, stops, companies, role]); pg.wait_for_timeout(1800)
+        # 15-Oct-2026 (the calm page): each computer's card, its Details and the page's support parts are under the one
+        # "Advanced (for support)" fold; fold=True opens it, as a person does
+        def scene(devs, companies, role="owner", stops=STOPS, fold=True):
+            E(SETUP, [devs, stops, companies, role]); pg.wait_for_timeout(300)
+            if fold: E("() => { S.tallyMore = {page: true}; render(); }")
+            pg.wait_for_timeout(1500)
         def shot(name):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)
         def open_all():
             E("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
 
-        # ---- 1. the guide: nothing yet -> Install bridge is the step to do, with its download; nothing ticked
-        scene([], [])
-        g = "#app [data-tally-guide]"
-        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-guide-step]").count() == 3, "guide: three steps while no company is linked")
-        steps = E("() => [...document.querySelectorAll('#app [data-tally-guide] [data-guide-step]')].map(e => [e.getAttribute('data-guide-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
-        ok([s[0] for s in steps] == ["install", "connect", "link"], "guide: Install bridge -> Connect -> Link company (%s)" % [s[0] for s in steps])
+        # ---- 1. the guide (15-Oct-2026: Connect Tally, the one place to connect, four steps): nothing yet -> Install is the
+        # step to do, with its download; nothing ticked
+        scene([], [], fold=False)
+        g = "#app [data-connect-guide]"
+        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 4, "guide: four steps while nothing is connected")
+        steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
+        ok([s[0] for s in steps] == ["install", "tally", "company", "link"], "guide: Install -> Open Tally -> Keep a company open -> Link (%s)" % [s[0] for s in steps])
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
-        ok(pg.locator(g + ' [data-guide-step="install"] [data-bridge-download]').count() == 1 and "2.3.4" in txt(g + ' [data-guide-step="install"] [data-bridge-download]'), "guide: step 1 has the download (%s)" % txt(g + ' [data-guide-step="install"]')[:120])
-        ok(pg.locator(g + ' [data-guide-step="connect"] [data-guide-connect-slot]').count() == 1, "guide: step 2 has the mount point for the new connect flow")
-        ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under More, not on the page")
+        ok(pg.locator(g + ' [data-connect-step="install"] [data-bridge-download]').count() == 1 and "2.3.4" in txt(g + ' [data-connect-step="install"] [data-bridge-download]'), "guide: step 1 has the download (%s)" % txt(g + ' [data-connect-step="install"]')[:120])
+        ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
         shot("guide-empty")
-        # step 2 points to today's connect section: it opens the page's More with this browser's connection
-        pg.click(g + ' [data-guide-step="connect"] [data-guide-connect]'); pg.wait_for_timeout(600)
-        ok(pg.locator("#app [data-connect-section]").count() == 1 and pg.locator("#app [data-connect-section]").is_visible(), "guide: Connect opens today's connect section")
+        # this browser's own bridge connect (the 6-digit code) is only under Advanced (for support)
+        ok(pg.locator("#app [data-connect-section]").count() == 0, "guide: no 6-digit code connect on the page")
+        pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
+        ok(pg.locator("#app [data-connect-section]").count() == 1 and pg.locator("#app [data-connect-section]").is_visible(), "Advanced: this browser's connect section")
         # the numbering of "Connect this browser to FinCom Bridge" is written once (was "1. 1.")
         lis = E("() => [...document.querySelectorAll('#app ol.setup > li')].map(li => li.innerText.trim())")
         ok(len(lis) == 3 and not [x for x in lis if re.match(r"^\d+\.", x)], "connect steps: no doubled numbering (%s)" % [x[:30] for x in lis])
         shot("guide-connect-open")
 
-        # ---- 2. a bridge heard from, no company linked: Install and Connect ticked, Link company to do
-        scene([OK_DEV], UNLINKED)
-        steps = E("() => [...document.querySelectorAll('#app [data-tally-guide] [data-guide-step]')].map(e => [e.getAttribute('data-guide-step'), e.hasAttribute('data-done')])")
-        ok(steps == [["install", True], ["connect", True], ["link", False]], "guide: Install and Connect ticked, Link company not (%s)" % steps)
-        ok(pg.locator('#app [data-tally-guide] [data-guide-step="link"] [data-guide-link]').count() == 1, "guide: Link company has its one button")
+        # ---- 2. a bridge heard from, Tally open, no company linked: three ticked, Link to do
+        scene([OK_DEV], UNLINKED, fold=False)
+        steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
+        ok(steps == [["install", True], ["tally", True], ["company", True], ["link", False]], "guide: Install, Tally and the company ticked, Link not (%s)" % steps)
+        ok(pg.locator('#app [data-connect-guide] [data-connect-step="link"] [data-guide-link], #app [data-connect-guide] [data-connect-step="link"] [data-guide-add]').count() == 1, "guide: Link has its one button (Link, or Add a client when there is none)")
         shot("guide-link")
-        # a company linked: the guide goes
-        scene([OK_DEV], LINKED)
-        ok(pg.locator("#app [data-tally-guide]").count() == 0, "guide: gone once a company is linked")
+        # a company linked: Link ticks once no client is left unlinked (5c: each client to a company of its own)
+        scene([OK_DEV], LINKED, fold=False)
+        un = E("Object.values(S.companies).filter(c => !c.deleted && tallyLinkOf(c).state === 'unlinked').length")
+        ok(pg.locator('#app [data-connect-step="link"]%s' % ("[data-done]" if not un else ":not([data-done])")).count() == 1 or pg.locator('#app [data-connect-guide="done"]').count() == 1,
+           "guide: Link ticked only when no client is left unlinked (%d not linked)" % un)
 
         # ---- 3. one card per computer + Windows user, ONE status line each
         scene(DEVS, LINKED)
-        ok(pg.locator("#app [data-computer]").count() == 4, "one card per computer and Windows user (%d)" % pg.locator("#app [data-computer]").count())
+        ok(pg.locator("#app [data-computer]").count() == 4, "one card per computer and Windows user, under Advanced (%d)" % pg.locator("#app [data-computer]").count())
         ok(all(pg.locator(card(d) + " [data-status-line]").count() == 1 for d in (D1, D2, D3, D4)), "each card: exactly one status line")
         ok(all("\n" not in line(d) for d in (D1, D2, D3, D4)), "each status line is one line of words (%s)" % [line(d) for d in (D1, D2, D3, D4)])
         l1 = line(D1)
@@ -219,8 +227,10 @@ def main():
         hidden = ["Posting settings", "Trial tools on this computer", "Changes come from", "Last request", "Posts only to", "Stop reading on this computer"]
         page = pg.inner_text("#app")
         ok(not [w for w in hidden if w in page], "More closed: none of the rest on the page (%s)" % [w for w in hidden if w in page])
-        ok(pg.locator("#app [data-release], #app [data-read-stop-all], #app [data-bridges], #app [data-pane=\"tally-history\"], #app [data-bridge-card]").count() == 0,
-           "page More closed: versions, stop on all, every bridge, connection history and the install help hidden")
+        pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
+        ok(pg.locator("#app [data-release], #app [data-read-stop-all], #app [data-bridges], #app [data-pane=\"tally-history\"], #app [data-bridge-card], #app [data-computer]").count() == 0,
+           "Advanced closed: versions, stop on all, every bridge, connection history, the install help and the computers' cards hidden")
+        pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
         pg.click(card(D1) + " [data-more-toggle]"); pg.wait_for_timeout(400)
         c1 = txt(card(D1))
         ok(all(w in c1 for w in hidden), "card More open: the rest is there (%s)" % [w for w in hidden if w not in c1])
@@ -229,12 +239,12 @@ def main():
         ok("Posting settings" not in txt(card(D2)), "the other cards stay closed")
         pg.click(card(D1) + " [data-more-toggle]"); pg.wait_for_timeout(400)
         ok("Posting settings" not in txt(card(D1)), "card More: closes again")
-        pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
         ok(pg.locator("#app [data-read-stop-all]").count() == 1 and pg.locator("#app [data-bridges]").count() == 1 and pg.locator("#app [data-pane=\"tally-history\"]").count() == 1
            and pg.locator("#app [data-bridge-card]").count() == 1 and pg.locator("#app [data-install-help]").count() == 1, "page More open: stop on all computers, every bridge, connection history, the install help")
         shot("owner-more-open")
         pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-bridges]").count() == 0, "page More: closes again")
+        pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(400)
         # the owner's buttons still call what they called
         pg.click(card(D4) + " [data-status-line] [data-read-resume]"); pg.wait_for_timeout(500)
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume"], "Resume reading calls tally_read_resume (%s)" % E("window.__calls"))
@@ -291,9 +301,9 @@ def main():
         ok("Tally is not open on RO-PC" in l6 and "reads only" in txt(card(ro["id"]) + " [data-card-more]"), "a reads-only bridge: Tally not open said, 'reads only' under Details (%s)" % l6)
         # round 39: the guide folds once every client is linked (here: each client to a company of its own)
         scene([OK_DEV], LINKED + [{"company": "CO " + str(i), "client_id": c, "device_id": D1, "gstin": "", "last_seen": "ago:1"} for i, c in enumerate(E("Object.values(S.companies).filter(c => !c.deleted).map(c => c.id)"))])
-        ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to 'Connect another computer'")
+        ok(pg.locator('#app [data-connect-guide="done"]').count() == 1 and pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to one green line with 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
-        ok(pg.locator("#app [data-tally-guide]").count() == 1 and pg.locator('#app [data-tally-guide] [data-guide-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
+        ok(pg.locator("#app [data-connect-step]").count() == 4 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
         # the Day Book upload; no "waiting" box
         scene(DEVS, LINKED)

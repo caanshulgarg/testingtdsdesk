@@ -103,7 +103,7 @@ with sync_playwright() as p:
     pg.evaluate("""(cid) => { TCloud.rpc = async () => ({}); Cloud.api = async (q) => /tally_devices/.test(q) ? [] : [];
       TCloud.restAll = async () => [{company: "GARG SHEKHAR & COMPANY", client_id: cid, gstin: "09AANFG3202D1ZR", last_seen: new Date().toISOString(), linked_at: new Date().toISOString()}];
       TCloud.pane.devices = null; S.view = "home"; S.homeTab = "rules"; S.settingsTab = "tcloud"; render(); }""", cid); pg.wait_for_timeout(1200)
-    ok("Linked to Testing AAD" in app() and pg.eval_on_selector('#app select[aria-label="Client for GARG SHEKHAR & COMPANY"]', "s => s.options[s.selectedIndex].text") == "Testing AAD",
+    ok("Linked to Testing AAD" in app(),
        "6. Books in the cloud: GARG SHEKHAR & COMPANY shows as linked to Testing AAD")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()

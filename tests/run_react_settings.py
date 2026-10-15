@@ -51,7 +51,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     save()
     nav("Tally"); pg.wait_for_timeout(300)
-    ok(head() == "Tally" and "Link to Tally" in pg.inner_text("#app .setbody"), "Tally section (round 39: the Link to Tally card)")
+    ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 1, "Tally section (the client's Tally card; 15-Oct-2026 it points to Connect Tally)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
@@ -95,7 +95,8 @@ with sync_playwright() as p:
     # company linked, a computer removed (asked first)
     pg.evaluate("""() => { Bridge.refresh = () => Promise.resolve(); window.startBridgePolling = () => {}; window.bridgeTick = () => {}; Bridge.setCfg({key: '', port: 0, follow: false});
       const cid = S.coId; Bridge.st = {state: 'ok', version: '1.14.3', at: Date.now(), mode: 'auto', tallyUp: true, sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'ACME LTD'}]}, {port: 9001, ok: true, mine: false, companies: []}], open: []};
-      S.view = 'home'; S.homeTab = 'tally'; render(); }"""); pg.wait_for_timeout(400)
+      S.view = 'home'; S.homeTab = 'tally'; S.tallyMore = {page: true}; render(); }"""); pg.wait_for_timeout(400)
+    # 15-Oct-2026: this browser's own bridge connect is only under the Tally page's Advanced (for support), opened here
     ok("Connect this browser to FinCom Bridge" in pg.inner_text("#app") and "Tally" in pg.inner_text("#cobar h2"), "the Tally page, with the steps to connect this browser")
     k = pg.locator('input[aria-label="Bridge key"]'); k.fill("abc123"); k.press("Tab"); pg.wait_for_timeout(300)
     ok(pg.evaluate("Bridge.cfg().key") == "abc123" and "Check connection" in pg.inner_text("#app"), "the key typed is kept")
@@ -103,7 +104,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("Bridge.cfg().follow") is True, "following Tally is kept")
     pg.evaluate("render()"); pg.wait_for_timeout(300)
     # round 39: the Tallys found, with their ports, are under Details (for support)
-    pg.click("#app [data-bridge-support]"); pg.wait_for_timeout(300)
+    if pg.locator("#app [data-bridge-support]").count(): pg.click("#app [data-bridge-support]"); pg.wait_for_timeout(300)
     pg.click('tr:has(td:text-is("Port 9001")) button:text-is("Use this Tally")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("Bridge.cfg().port") == 9001 and "In use" in pg.inner_text("#app table.data"), "one Tally chosen")
     pg.click('button:text-is("Automatic")'); pg.wait_for_timeout(400)
@@ -113,12 +114,18 @@ with sync_playwright() as p:
     ok(pg.locator('select[aria-label="Client for ACME LTD"]').count() == 0 and "not linked" in pg.inner_text("#app table.data"), "this computer's Tallys: no 'Link to a client…', the company said not linked")
     pg.evaluate("""() => { window.__tc = []; TCloud.on = () => true; TCloud.refreshPane = async () => {}; TCloud.rpc = async (f, a) => { window.__tc.push([f, a]); return {}; };
       TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', last_seen: null}], companies: [{company: 'BETA', client_id: null}]}; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"""); pg.wait_for_timeout(400)
-    pg.select_option('select[aria-label="Client for BETA"]', pg.evaluate("S.coId")); pg.wait_for_timeout(400)
-    ok(pg.evaluate("window.__tc[0]") == ["tally_company_link", {"p_company": "BETA", "p_client": pg.evaluate("S.coId")}], "the cloud's Tally company linked to a client")
+    # 15-Oct-2026: Books in the cloud links nothing itself; it points to Connect Tally (step 4), where the same RPC links
+    cid1 = pg.evaluate("S.coId")
+    ok(pg.locator('select[aria-label="Client for BETA"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
+    pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(600)
+    pg.select_option("#app [data-guide-client]", cid1); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", "BETA"); pg.wait_for_timeout(200)
+    pg.click("#app [data-guide-link]"); pg.wait_for_timeout(600)
+    ok(pg.evaluate("window.__tc[0]") == ["tally_company_link", {"p_company": "BETA", "p_client": cid1}], "the cloud's Tally company linked to a client, in Connect Tally (%s)" % pg.evaluate("window.__tc"))
+    pg.evaluate("() => { window.__tc = []; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; S.view = 'home'; render(); }"); pg.wait_for_timeout(400)
     pg.click('button:text-is("Remove")'); pg.wait_for_timeout(300)
     ok(pg.locator("#confirmBox .cbx").is_visible(), "removing a computer asks first")
     pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(400)
-    ok(pg.evaluate("window.__tc[1]") == ["tally_device_revoke", {"p_id": "d1"}], "and removes it")
+    ok(pg.evaluate("window.__tc[0]") == ["tally_device_revoke", {"p_id": "d1"}], "and removes it")
     # the firm account: people's buttons, a backup, a drop key switched off, how long before signing out, syncing, documents;
     # the platform page's prices (read from their boxes), a firm's plan
     pg.evaluate("""() => { window.__calls = []; Cloud.on = () => true; Cloud.aal = () => 'aal1'; window.__cc = {url: 'https://x.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => { window.__calls.push(['cfg', o]); Object.assign(window.__cc, o); }; window.startCloudSync = () => {};

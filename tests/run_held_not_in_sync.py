@@ -65,7 +65,8 @@ with sync_playwright() as p:
     ok(not SYNC.search(" ".join(st[:4])) and WHY in st[1], "never 'in sync'; the reason in its words (%s)" % st[1])
     E("() => { S.tallyTab = 'computers'; navHome('tally'); }"); pg.wait_for_timeout(1200)
     t = pg.inner_text("#app")
-    ok(not SYNC.search(t) and HELDW.search(t), "the Tally page: no 'in sync'; its slim line says the held line with its reason (%s)" % txt("#app [data-alert-line]"))
+    # 15-Oct-2026 (the owner: "why we need gb texcoat info.. unnecessary info is there"): a client's data alerts are not on the Tally page
+    ok(not SYNC.search(t) and pg.locator("#app [data-alert-line]").count() == 0, "the Tally page: no 'in sync', and no client's data line (%s)" % txt("#app [data-alert-line]"))
     # the client's pages: the Books page's slim line, the top bar's Tally panel
     E("([cid]) => { S.view = 'company'; S.coId = cid; S.loadingCo = false; goClient('books:reports'); }", [cid]); pg.wait_for_timeout(1500)
     sl = txt("#app [data-alert-line]")

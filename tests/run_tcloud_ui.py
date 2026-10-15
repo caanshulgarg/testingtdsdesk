@@ -182,7 +182,11 @@ with sync_playwright() as p:
     wait_for(pg, "TCloud.pane.devices && TCloud.pane.companies", 20); pg.evaluate("render()"); pg.wait_for_timeout(300)
     t = pg.inner_text("#app")
     ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
-    calls["link"].clear(); pg.select_option('select[aria-label="Client for ' + CO + '"]', "c_vms"); pg.wait_for_timeout(1200)
+    # 15-Oct-2026: Settings links nothing itself; its Open Connect Tally leads to the guide's step 4, where the same RPC links
+    ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
+    calls["link"].clear(); pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(1200)
+    pg.select_option("#app [data-guide-client]", "c_vms"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
+    pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_vms"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
     calls["link"].clear()

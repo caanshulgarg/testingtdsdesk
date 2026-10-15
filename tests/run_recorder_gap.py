@@ -90,13 +90,9 @@ with sync_playwright() as p:
     ok(fd(since) in lim and fd(today) in lim, "the upload part says only those dates are taken from the Day Book (%s)" % lim)
     row = txt('#app [data-need-day="%s"]' % since)
     ok("12 entries made in Tally since then are not in FinCom" in row and row.endswith("Upload"), "the gap is a day row with its Upload (%s)" % row)
-    # ---- the Tally page: the one slim line
+    # ---- the Tally page: no line (15-Oct-2026 (the owner: "why we need gb texcoat info.. unnecessary info is there"): a client's data alerts are not on the Tally page); the bell keeps it
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    tl = txt("#app [data-alert-line]")
-    ok("ZZ Gap Client: 12 entries made in Tally" in tl and pg.locator("#app [data-alert-line] [data-alert-act]").count() == 1, "the Tally page: the slim line with its button (%s)" % tl)
-    E("() => { S.dbFrom = ''; S.dbTo = ''; }")
-    pg.locator("#app [data-alert-line] [data-alert-act]").first.click(); pg.wait_for_timeout(1500)
-    ok(E("S.view") == "company" and E("S.coId") == cid and E("booksTab()") == "import" and E("S.dbFrom") == since, "from the Tally page: the client opens on From Tally with the dates (%s %s)" % (E("S.view"), E("S.dbFrom")))
+    ok(pg.locator("#app [data-alert-line]").count() == 0 and "ZZ Gap Client: 12 entries" not in txt("#app"), "the Tally page: no client's data line (the client's Books page and the bell have it)")
     # ---- no gap: nothing
     E(SETUP, [None, ""]); pg.wait_for_timeout(1500); E("() => AlertHub.refresh(true)"); pg.wait_for_timeout(1200)
     ok(not [x for x in E(BELL) if "ZZ Gap Client" in x["text"]], "no gap: no alert"); shut()

@@ -49,7 +49,8 @@ with sync_playwright() as p:
     card = "#app [data-bridge-card]"
     # 2.3.5: the three steps lead, step 1 with the download; the install card (fingerprint, link, PowerShell, the help when
     # Windows blocks it) is under the page's More
-    GD = '#app [data-tally-guide] [data-guide-step="install"] [data-bridge-download]'
+    # 15-Oct-2026: Connect Tally (the one place to connect), step 1 with the download
+    GD = '#app [data-connect-guide] [data-connect-step="install"] [data-bridge-download]'
     ok(pg.locator(card).count() == 0 and pg.locator(GD).count() == 1 and pg.inner_text(GD) == "Download FinCom Bridge 2.1.1", "1. the steps: Install FinCom Bridge, with its download")
     pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
     ok(pg.locator(card).count() == 1, "1. one FinCom Bridge card, under More")
@@ -62,10 +63,11 @@ with sync_playwright() as p:
     ok("without an administrator" in pg.inner_text(card), "4. it says: just for you, without an administrator")
     # 5. FinCom Bridge heard from: one line, the rest under More
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
-    pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)   # fold the page's More again
-    ln = pg.inner_text("#app [data-bridge-lines]")
-    ok(pg.locator("#app [data-bridge-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "Connected", "Reads ZZ TEST, Testing AAD")),  # the Tally redesign: the version is under Details
-       "5. one line: NWS144 · anshul · FinCom Bridge 2.1.1 · Connected · Tally open: the companies (%s)" % ln.replace("\n", " "))
+    E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)   # fold Advanced (for support) again
+    # 15-Oct-2026 (the calm page): one line a computer on the page; its card (Details) under Advanced
+    ln = pg.inner_text("#app [data-pc-lines]")
+    ok(pg.locator("#app [data-pc-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "FinCom Bridge 2.1.1", "Tally open: ZZ TEST, Testing AAD")),
+       "5. one line: NWS144 (anshul) · Tally open: the companies · FinCom Bridge 2.1.1 (%s)" % ln.replace("\n", " "))
     ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-details]").count() == 1,
        "5. no card and no table: the download and the details behind More")
     t = pg.inner_text("#app")
@@ -79,6 +81,7 @@ with sync_playwright() as p:
     ok("is not connected since" in st and "Sign in to Windows there as anshul" in st and "FinCom Bridge starts by itself" in st, "5. offline: since when, and what to do (%s)" % st.replace("\n", " "))
     # 1.15.0 still main beside a 2.1.0 test install, and a computer with only 1.15.0
     E(SETUP, NWS_BOTH); pg.wait_for_timeout(1200)
+    E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(500)   # the computers' cards: under Advanced
     lines = pg.locator("#app [data-bridge-line]")
     # 2.3.5: the card names the computer and the bridge; its status line says the problem and the one fix
     l1 = pg.inner_text('#app [data-computer]:has([data-bridge-line="go-3fa9c1d2e4b7"])'); l2 = pg.inner_text('#app [data-computer]:has([data-bridge-line="v1"])')
