@@ -61,6 +61,10 @@
 #app table.lt.lt:not(.cards) th[data-role="pick"], #app table.lt.lt:not(.cards) th[data-role="row"] { width: 44px; }
 #app table.lt.lt:not(.cards) td[data-numeric], #app table.lt.lt:not(.cards) td.n { white-space: nowrap; }
 #app table.lt.lt:not(.cards) tbody td { overflow-wrap: anywhere; }
+/* the total row sticks to the foot of the list's own box (the box scrolls, the review banner is outside it): lifted by the
+   banner's height it covered the last row (the owner, 15-Oct-2026). A GSTIN, PAN or TAN is one word, never split. */
+#app .lt-wrap > table.lt.lt tfoot td { bottom: 0; }
+#app table.lt.lt td .code { white-space: nowrap; overflow-wrap: normal; }
 #app .bk-tablewrap > table.bk-table:not(.cards) > thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 
 /* 3. a phone: the table scrolls inside its own box, the page stays put */
