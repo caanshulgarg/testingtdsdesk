@@ -1,7 +1,7 @@
 """python3 run_ledger_fetch_server.py - (15-Oct-2026, the owner's decision; branch next-ledger-fetch, migration 89) through the
 real cloud function (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase (fake_supabase.py), whose
 migration-89 functions (tally_ledger_fetch_plan, tally_ledger_rename_from_tally) are answered by a throwaway PostgreSQL
-(pg_stand, built 32 -> ... -> 59 -> 89 as on staging; never a real database). FinCom Bridge 2.4.4 is not changed: the beat's
+(pg_stand, built 32 -> ... -> 59 -> 89 -> 90 as on staging; never a real database). FinCom Bridge 2.4.4 is not changed: the beat's
 existing ledgersWanted and ledgers answers carry it all.
 Checks:
   A. the beat of a bridge with the company open names, in ledgersWanted, the ledgers the book's live entries use that FinCom's
@@ -33,7 +33,7 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
                                            "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql",
                                            "migration-46-trial-tools.sql", "migration-47-recorder-queue-alerts.sql", "migration-48-day-cache-once.sql", "migration-49-post-row-flags.sql", "migration-50-recorder-held.sql", "migration-51-recorder-ids-mismatch.sql",
                                            "migration-52-recorder-duplicate-needs-same-entry.sql", "migration-53-recorder-placeholder-settled.sql", "migration-54-post-target-bridge.sql", "migration-55-settle-and-lease.sql",
-                                           "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql", "migration-59-ledger-aliases.sql", "migration-89-ledger-fetch.sql")]
+                                           "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql", "migration-59-ledger-aliases.sql", "migration-89-ledger-fetch.sql", "migration-90-ledger-fetch-speed.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)

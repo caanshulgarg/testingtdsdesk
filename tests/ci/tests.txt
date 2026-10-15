@@ -332,3 +332,4 @@ run_clients_list_fit.py                300  TDSDESK_SITE=../app/dist-test
 # the full list after 20 or 3 rounds, never while paused or stopped); a ledger renamed in Tally renamed in FinCom, the old name kept
 run_migration89.py                    120
 run_ledger_fetch_server.py            120
+run_migration90.py                    300

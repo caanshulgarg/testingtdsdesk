@@ -57,11 +57,13 @@ ok(not re.search(r"\bdrop\b", code) and not re.search(r"\btruncate\b", code), "0
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref", low), "0. names no real database")
 made = re.findall(r"create or replace function public\.(\w+)", low)
 ok(sorted(made) == ["tally_ledger_fetch_plan", "tally_ledger_loose", "tally_ledger_rename_from_tally"], "0. three new functions, no existing one replaced (%s)" % made)
-others = [open(os.path.join(SQLDIR, x)).read().lower() for x in os.listdir(SQLDIR) if x.endswith(".sql") and x != os.path.basename(M89)]
+# the migrations before 89 (90 replaces tally_ledger_fetch_plan on purpose: run_migration90.py)
+others = [open(os.path.join(SQLDIR, x)).read().lower() for x in os.listdir(SQLDIR) if x.endswith(".sql") and x != os.path.basename(M89)
+          and not (re.match(r"migration-(\d+)", x) and int(re.match(r"migration-(\d+)", x).group(1)) >= 89)]
 ok(not [m for m in made if any(re.search(r"function (public\.)?%s\s*\(" % m, o) for o in others)], "0. none of the three is defined by another migration (no name taken over)")
 ok(all(re.search(r"create table if not exists public\.%s\b" % t, low) for t in ("tally_ledger_fetch", "tally_ledger_rename_holds")), "0. two new tables, if not exists")
 
-db = pg_stand.start(30890)
+db = pg_stand.start(int(os.environ.get("M89_PORT") or 30890))
 def psql_text(sql):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 def privs(role, t): return [p for p in PRIVS if db.one("select has_table_privilege(%s, %s, %s)::text" % (q(role), q("public." + t), q(p))) == "true"]
@@ -116,6 +118,11 @@ try:
     for rnd in (1, 2):
         r = psql_text(text)
         ok(r.returncode == 0, "0. pass %d: migration 89 runs %s" % (rnd, (r.stderr or "").strip()[-400:] if r.returncode else ""))
+        if r.returncode: raise SystemExit("cannot go on")
+    # run_migration90.py runs these checks again with migration 90's tally_ledger_fetch_plan in force (M89_THEN)
+    for extra in [x for x in (os.environ.get("M89_THEN") or "").split(os.pathsep) if x]:
+        r = psql_text(open(extra).read())
+        ok(r.returncode == 0, "0. then %s runs %s" % (os.path.basename(extra), (r.stderr or "").strip()[-400:] if r.returncode else ""))
         if r.returncode: raise SystemExit("cannot go on")
     c = counts()
     ok(all(c.get(k) == v for k, v in n0.items()) and c.get("tally_ledger_fetch") == 0 and c.get("tally_ledger_rename_holds") == 0, "0. nothing removed or changed by running it twice (%s)" % {k: v for k, v in c.items() if n0.get(k) != v})
