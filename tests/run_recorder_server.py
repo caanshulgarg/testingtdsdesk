@@ -942,15 +942,17 @@ try:
     mem_rows2()
     c, r = beat231()
     ok(c == 200 and "M2" not in [x.get("line_id") for x in (r.get("refetch") or [])], "2.3.1-B. settled: M2 not listed again")
-    # ledger_changes keeps GSTIN, PAN, state and opening current; never renames, never moves a group, never goes back in AlterID
+    # ledger_changes keeps GSTIN, PAN, state and opening current; never moves a group, never goes back in AlterID. A rename by
+    # Tally GUID goes through migration 89 (the owner's decision of 15-Oct-2026: tests/run_ledger_fetch_server.py); this stand-in
+    # has no migration 89, so the name stays and 2.3.1's alias is kept, as on a cloud without it
     c, r = lch([["lg-sal", 12, 90, "Salesify LLP", "Sales Accounts", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka"],
                 ["lg-cash", 1, 5, "CASH", "Cash-in-Hand", "999.00", "", "", 0, ""]])
     sl, cs_ = led("Salesify Marketing LLP") or {}, led("CASH") or {}
     kept = " | ".join(r.get("kept") or [])
     ok(c == 200 and r.get("updated") == 1 and r.get("added") == 0 and led("Salesify LLP") is None and sl.get("parent") == "Sundry Debtors" and sl.get("gstin") == "29AABCS1111C1Z1" and sl.get("pan") == "AABCS1111C"
        and sl.get("state") == "Karnataka" and sl.get("open") == 500 and sl.get("open_sent") == 500 and sl.get("alter_id") == 90,
-       "2.3.1-B. a ledger altered in Tally (GSTIN, PAN, state, opening): kept current; its new name and group NOT taken (2.3.2) (%s; %s)" % (r, sl))
-    ok("rename is left for 2.3.2" in kept and "move is left for 2.3.2" in kept, "2.3.1-B. the rename and the group move said in kept, for the bridge's log (%s)" % kept)
+       "2.3.1-B. a ledger altered in Tally (GSTIN, PAN, state, opening): kept current; its group NOT taken, its name not without migration 89 (%s; %s)" % (r, sl))
+    ok("not renamed (migration 89 is not applied" in kept and "move is left for 2.3.2" in kept, "2.3.1-B. the rename not made (no migration 89) and the group move said in kept, for the bridge's log (%s)" % kept)
     ok(cs_.get("open") == 100 and cs_.get("alter_id") == 10, "2.3.1-B. a row older than FinCom's (AlterID 5 < 10): nothing changed (%s)" % cs_)
     n_led = len(FS.T["tally_ledgers"])
     c, r = lch([["lg-npb", 501, 79, "New Party B", "Sundry Debtors", "-250.00", "27AAACN1234B1Z5", "AAACN1234B", 0, "Maharashtra"]], "counter", after=78, upto=79)
@@ -1022,7 +1024,7 @@ try:
     ok(c == 200 and len(FS.T["tally_ledgers"]) == n_led and led(REN) is None and (led(OLD) or {}).get("tally_guid") == "lg-sal"
        and len(al) == 1 and al[0].get("fincom_name") == OLD and al[0].get("tally_guid") == "lg-sal" and al[0].get("firm_id") == FIRM and al[0].get("seen_at"),
        "2.3.1 rename. the ledger fetched by name has the GUID of '%s': no second ledger, the new name recorded for 2.3.2 (%s)" % (OLD, al))
-    ok(any("rename is left for 2.3.2" in k for k in (r.get("kept") or [])), "2.3.1 rename. the rename itself left for 2.3.2, said in kept (%s)" % r.get("kept"))
+    ok(any("not renamed (migration 89 is not applied" in k for k in (r.get("kept") or [])), "2.3.1 rename. without migration 89 the rename is not made, said in kept (%s)" % r.get("kept"))
     mem_rows2()
     c, r = beat231()
     ids = [x.get("line_id") for x in (r.get("refetch") or [])]

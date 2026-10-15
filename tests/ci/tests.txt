@@ -328,3 +328,8 @@ run_certificates.py                   300
 run_migration83.py                    180
 run_certificates_ui.py                300  TDSDESK_SITE=../app/dist-test
 run_clients_list_fit.py                300  TDSDESK_SITE=../app/dist-test
+# 15-Oct-2026 (next-ledger-fetch, migration 89): the ledgers the entries use fetched by themselves (the beat's ledgersWanted /
+# the full list after 20 or 3 rounds, never while paused or stopped); a ledger renamed in Tally renamed in FinCom, the old name kept
+run_migration89.py                    120
+run_ledger_fetch_server.py            120
+run_migration90.py                    300
