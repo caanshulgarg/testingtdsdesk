@@ -246,7 +246,7 @@ new files `dblib.ps1`, `dbmv.ps1`, `dbresv.ps1`, `dbm/redate.py`, `dbm/req/`).
 - **Runs:** **38790555479** (`dbm`) and **38790558578** (`dbres`). Both use bridge_ref `tax-accuracy` (the 2.4.4
   request builders, which 2.4.5 does not change) on releases 3.0, 4.1, 5.1, 6.2 and 7.1. Each job is limited to 170
   min. Results are committed to `tally-versions` under `spike-results/versions/<run>-<release>-<mode>/` and
-  `<run>-summary.txt`. **Due by Friday 16-Oct-2026, about 01:00 UTC (06:30 IST)**, which leaves the weekend for one
+  `<run>-summary.txt`. **Due by Friday 16-Oct-2026: `dbres` by about 22:30 UTC on 15-Oct; `dbm`, which waits in the queue for Windows runners behind `dbres`, by about 02:00 UTC on 16-Oct (07:30 IST)**, which leaves the weekend for one
   re-run if a job ends as HARNESS.
 - **Known limits:**
   - The company has about 1,800 vouchers, close to the owner's size (2,754 in FY 2025-26). At 30,000 vouchers the
