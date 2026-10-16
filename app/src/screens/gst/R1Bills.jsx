@@ -58,7 +58,7 @@ export function R1Summary({ amendN }) {
   return <div className="bk-tablewrap" data-r1-summary=""><table className="bk-table tg-fit" data-statement="">
     <thead><tr><th>Table</th><th className="n">Records</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th><th className="n">Total tax</th></tr></thead>
     <tbody>{list.length ? list.map((o) => <tr key={o.k} data-r1-table={o.k} className="tg-click" onClick={() => open(o.k)} title="Open the documents of this table">
-      <td><button type="button" className="linkbtn tg-pty" onClick={(ev) => { ev.stopPropagation(); open(o.k); }}>{R1_PARTS[o.k]}</button>{o.k === "7" && <div className="tg-sub">summary by state and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
+      <td><button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); open(o.k); }}>{R1_PARTS[o.k]}</button>{o.k === "7" && <div className="tg-sub">summary by state and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
       <td className="n">{o.n}</td>{o.k === "13" ? <td colSpan={6}></td> : <><td className="n">{money(o.taxable)}</td><td className="n">{money(o.igst)}</td><td className="n">{money(o.cgst)}</td><td className="n">{money(o.sgst)}</td>
       <td className="n">{money(o.cess)}</td><td className="n">{money(taxOf(o))}</td></>}</tr>)
       : <tr><td colSpan={8} className="note">No documents for this month.</td></tr>}
