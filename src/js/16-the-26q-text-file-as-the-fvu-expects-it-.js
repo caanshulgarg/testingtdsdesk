@@ -95,7 +95,7 @@ const TDS26Q = {
         const code = isNew ? this.payCode(r, form) : old;
         if (isNew && !code) missing.add(form === "27EQ" ? r.code || r.ledger : TDS.sec(r.section));
         const tail = form === "27Q" ? this.nrTail(r) : form === "27EQ" ? this.tcsTail(r) : [];
-        put(["DD", "1", String(ci + 1), String(di + 1), "", r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02",
+        put(["DD", "1", String(ci + 1), String(di + 1), "", r.dcode || (r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02"),
           r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
           dmy(r.credit || r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, m.remark, m.certNo, "", "", "", "", "", "", ""].concat(tail));
       });

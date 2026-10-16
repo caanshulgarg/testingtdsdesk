@@ -33,7 +33,9 @@ const NoPan = () => <span className="tag warn">no PAN</span>;
 const Pan = ({ pan }) => (Certs.validPan(pan) ? pan : <NoPan />);
 const Empty = ({ children }) => <div className="bk-none">{children}</div>;
 // a section: from 2026-27 the new provision with the old section beside it and the table entry under it; before, as it was
-export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy); return x.ref ? <span className="rp-sec" data-sec={x.old}><span className="rp-sec-code">{x.ref} [old {x.old}]</span><small>{x.label}</small></span> : <>{s}</>; };
+// (t70, the owner: "section name is not there": before 2026-27 too, its plain name under the code, from the same table)
+export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy), name = x.label || TDS.secName(s); return x.ref ? <span className="rp-sec" data-sec={x.old}><span className="rp-sec-code">{x.ref} [old {x.old}]</span><small>{x.label}</small></span>
+  : name ? <span className="rp-sec" data-sec={x.old}><span className="rp-sec-code">{s}</span><small>{name}</small></span> : <>{s}</>; };
 const secText = (s, fy = S.tdsFy) => TDS.secNew(s, fy).text;
 // bridge 2.4.3: a challan or certificate made from what Tally keeps, and where Tally and FinCom differ (TDSTally, src/js/72)
 const FromTally = ({ on }) => (on ? <span className="tag" data-from-tally="" title="Made from the details Tally keeps">From Tally</span> : null);
@@ -51,21 +53,21 @@ function TallyDiffs({ kind }) {
 
 // the bar above a return's table: the one filter bar (Filters.jsx): month, the other choices, find, Clear; then how many
 // are shown, print, Excel
-function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] }) {
+function FilterBar({ tab, placeholder, table, title, excel, count, selects = [], chip, items, children }) {
   const f = (S.tdsFl || {})[tab] || {};
   const { period, type } = barSelects(selects, f, (k, v) => tdsFilter(tab, k, v));
-  return <Filters className="revfilter" label={"Filter " + title} period={period} type={type}
+  return <Filters className="revfilter" label={"Filter " + title} period={period} type={chip ? <>{type}{chip}</> : type}
     search={<Search value={f.q} placeholder={placeholder} data-fk={"tdsf-" + tab} onChange={(v) => tdsFilter(tab, "q", v, true)} />}
     onClear={() => tdsFilterClear(tab)} active={Object.keys(f).some((k) => f[k])} count={count || ""}
-    tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable(table, title)], excel && ["Excel", () => doAct(excel)]]} />} />;
+    tools={<><More label="Export" data-fb-out="" items={items || [["Print or save as PDF", () => printTable(table, title)], excel && ["Excel", () => doAct(excel)]]} />{children}</>} />;
 }
 
 // tds-layout: the owner's tabs (ReturnParts.jsx: one declaration per form), with the counts the return hands over, and the
 // filed lock above them, said on every tab
 // t70 (16-Oct-2026; the owner: "TDS and GST pages take too much space"): By deduction · By deductee (side) on the tabs' row
+// (the filed lock is said in the card, under the title)
 function Tabs({ counts, side }) {
   return <>
-    <LockLine fy={S.tdsFy} q={S.tdsQ} form={S.tdsForm || "26Q"} />
     <div className="tg-tabrow">
       <nav className="sbar rp-tabs" aria-label="Return" data-return-tabs="">
         {returnTabs(S.tdsForm || "26Q", counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
@@ -83,27 +85,36 @@ const Toggle = ({ which, k, children }) => <button className="linkbtn" onClick={
 // key figures, and one main button; rare actions and the long words under More. The status words are those of the year's
 // grid: filed (with its date), a correction needed, errors to fix, ready; a form of the 2025 Act not yet validated is a draft
 const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
-function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, more = [], words }) {
+// what the TDS page puts in the card's first row: the year, quarter and form, and the ledgers to confirm (TdsPage.jsx)
+export const CardCtx = { node: null, help: null };
+function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, more = [], words, edN }) {
   const st = driftN ? ["bad", "Correction needed"] : filed ? ["ok", "Filed " + day(TDS.ymd(filed.on))] : errN ? ["bad", errN + " to fix"] : ["info", "Ready to file"];
-  // t70: one header row (the way back, the return, what it is and when due, the status and the actions), then the figures
-  // in one slim strip
-  return <section className="ret-card ret-slim" data-return-card={form + "|" + q}>
-    <div className="ret-top">
+  // t70: one card, top to bottom: the way back with the year, quarter and form and the ledgers to confirm; the return's name,
+  // what it is and when due, its status and the filed lock, the actions at the right; the key figures in one strip
+  return <section className="ret-card ret-slim ret-pro" data-return-card={form + "|" + q}>
+    <div className="ret-ctx">
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)}>← {TDS.yearWord(fy)} {fy}</button>
+      {CardCtx.node}
+    </div>
+    <div className="ret-top">
       <div className="ret-name">
-        <h2 data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
-        <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {TDS.dueWords(fy, q, form)}</p>
+        <div className="ret-title">
+          <h2 data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
+          {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft, not yet validated</span>}
+          {errN && !filed ? <button className="tag bad" style={{ cursor: "pointer", border: 0 }} data-status-tag="" onClick={() => tdsTabGo("checks")}>{st[1]}</button>
+            : <span className={"tag " + st[0]} data-status-tag="">{st[1]}</span>}
+          {edN > 0 && <span className="tag info" data-edited-n={edN} title="Corrected here (the Excel brought back); the books from Tally are not changed">{edN} row{edN === 1 ? "" : "s"} edited in FinCom</span>}
+        </div>
+        <div className="ret-sub"><span>{TDS.FORM_ABOUT[form]} · due {TDS.dueWords(fy, q, form)}</span><LockLine fy={fy} q={q} form={form} /></div>
       </div>
       <div className="ret-acts">
-        {draft && <span className="tag warn" title="Not yet matched to Protean's file format: see Files" data-draft-tag="">Draft, not yet validated</span>}
-        {errN && !filed ? <button className="tag bad" style={{ cursor: "pointer", border: 0 }} data-status-tag="" onClick={() => tdsTabGo("checks")}>{st[1]}</button>
-          : <span className={"tag " + st[0]} data-status-tag="">{st[1]}</span>}
         <PreFileButton kind="tds" form={form} fy={fy} q={q} />
         <More items={more} label="More">{words}</More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
+        {CardCtx.help}
       </div>
     </div>
-    <div className="ret-figs">{figs.map((f) => <div key={f.label} className={"ret-fig" + (f.warn ? " warn" : "")}><span>{f.label}</span><b>{f.value}</b>{f.sub && <small>{f.sub}</small>}</div>)}</div>
+    <div className="ret-figs">{figs.map((f) => <div key={f.label} className={"ret-fig" + (f.warn ? " warn" : "")}><span>{f.label}</span><b>{f.value}</b>{f.sub && <>{" "}<small>{f.sub}</small></>}</div>)}</div>
   </section>;
 }
 
@@ -214,7 +225,10 @@ function ChallanPick({ r, chOpts }) {
   </select>;
 }
 // t70: the reason under the rate, in words (it was only on a hover, cut with "…")
-const Rate = ({ r, issue, why }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <div className="tg-sub tg-why bad" title={why ? issue.why : undefined}>should be {issue.expected}%{why && issue.why ? ": " + issue.why : ""}</div>}</>;
+// (in short, two lines at most: "should be 20% (no PAN, 206AA)"; the full reason on a hover and in To fix › Rate questions)
+const shortWhy = (w) => String(w || "").replace(/no valid PAN, section /, "no PAN, ").replace(/, section 206AA/, ", 206AA").replace(/\s*\(higher rate\)/, "").replace(/\s*\(PAN's 4th letter \w\)/, "")
+  .replace(/:\s*[\d.]+%$/, "").replace(/^(certificate [^ (:]+).*$/, "$1").replace(/^the section's higher rate.*$/, "the section's higher rate");
+const Rate = ({ r, issue, why }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <div className="tg-sub tg-why bad" title={issue.why || undefined}>should be {issue.expected}%{why && issue.why ? " (" + shortWhy(issue.why) + ")" : ""}</div>}</>;
 
 function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
   const f = (S.tdsFl || {}).deductees || {}, by = {};
@@ -244,23 +258,68 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
         { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <><Pan pan={p.pan} /><F16Link pan={p.pan} fy={S.tdsFy} q={S.tdsQ} /></> },
         { k: "code", label: "Code", cell: (p) => (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—") },
-        { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).map((x) => secText(x)).join(", ") },
+        { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).map((x) => <Sec key={x} s={x} />) },
         { k: "n", label: "Deductions", cls: "n", v: (p) => p.n, sum: true, fmt: String, cell: (p) => <button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button> },
         { k: "unallocated", label: "Not against a challan", cls: "n", v: (p) => p.unallocated, sum: true, fmt: money, td: (p) => ({ className: p.unallocated ? "bad" : undefined }), cell: (p) => (p.unallocated ? money(p.unallocated) : "—") },
       ]} />
   </>;
 }
 
-function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
+// t70: the corrected Excel brought back: each change, old → new, what is refused and why; nothing applied until Apply
+function ImportPreview({ rows }) {
+  const p = S.tdsImport;
+  if (!p) return null;
+  const close = () => { S.tdsImport = null; render(); };
+  const word = (k) => TDSEdit.WORDS[k] || k, show = (k, v) => (["paid", "tds"].includes(k) && v !== "" ? money(v) : k === "rate" && v !== "" ? v + "%" : v === "" || v == null ? "—" : String(v));
+  const apply = () => { const r = TDSEdit.applyAll(p, rows); S.tdsImport = null; saveBooks(); toast(r.n + " change" + (r.n === 1 ? "" : "s") + " applied" + (r.why.length ? "; not applied: " + r.why.join("; ") : "") + "."); render(); };
+  return <section className="dash-card tg-import" style={{ marginBottom: 10 }} data-imp-preview="">
+    <div className="rp-title"><h3>The corrected Excel: {p.changes.length} change{p.changes.length === 1 ? "" : "s"} to apply</h3></div>
+    {p.error ? <p className="note bad">{p.error}</p> : <>
+    <p className="note">{p.name} · {p.rows} deduction{p.rows === 1 ? "" : "s"} read · {p.changes.length} change{p.changes.length === 1 ? "" : "s"}{p.refused.length ? " · " + p.refused.length + " refused" : ""}{p.unmatched.length ? " · " + p.unmatched.length + " not matched" : ""}. Nothing is changed until you apply. The books from Tally are not changed: these are kept as FinCom’s corrections of the return.</p>
+    {p.changes.length > 0 && <div className="bk-tablewrap"><table className="bk-table tg-fit" data-statement="" data-imp-changes="">
+      <thead><tr><th className="n">Line</th><th>Deduction</th><th>What</th><th>Now</th><th>In the file</th></tr></thead>
+      <tbody>{p.changes.map((c, i) => <tr key={i} data-imp-change={c.field}><td className="n">{c.line}</td><td>{c.who}</td><td>{word(c.field)}</td><td>{show(c.field, c.from)}</td><td><b>{show(c.field, c.to)}</b></td></tr>)}</tbody></table></div>}
+    {p.refused.length > 0 && <><h3 style={{ marginTop: 10 }}>Refused</h3><ul className="note" data-imp-refused="">{p.refused.map((x, i) => <li key={i} data-imp-refused-field={x.field}>Line {x.line}, {x.who}: {word(x.field)} “{x.value}”: {x.why}</li>)}</ul></>}
+    {p.unmatched.length > 0 && <p className="note" data-imp-unmatched="">Not found in this return (FinCom id): {p.unmatched.map((x) => "line " + x.line).join(", ")}.</p>}
+    {p.notes.length > 0 && <ul className="note" data-imp-notes="">{p.notes.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+    </>}
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      {!p.error && p.changes.length > 0 && <button className="btn small primary" data-imp-apply="" onClick={apply}>Apply {p.changes.length} change{p.changes.length === 1 ? "" : "s"}</button>}
+      <button className="btn small" onClick={close}>{p.changes.length && !p.error ? "Cancel" : "Close"}</button></div>
+  </section>;
+}
+async function importExcel(file, rows) {
+  if (!file) return;
+  try {
+    await ensureXlsx();
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    S.tdsImport = Object.assign({ name: file.name }, TDSEdit.read(wb, rows));
+  } catch (e) { S.tdsImport = { name: file.name, error: "Could not read this file: " + ((e && e.message) || e), changes: [], refused: [], unmatched: [], notes: [] }; }
+  render();
+}
+// "edited in FinCom: books ₹X" under an amount corrected in FinCom
+const Edited = ({ r, k }) => (r.books && Math.abs(num(r.books[k]) - num(r[k])) >= 0.005 ? <div className="tg-sub tg-edited" data-edited={k}>edited in FinCom: books {money(r.books[k])}</div> : null);
+
+function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title, probs = {}, unitW, edN = 0 }) {
   const f = (S.tdsFl || {}).deductions || {};
   const shown = tdsSorted("deductions", rows.filter((r) => pass(r, f)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
-  const LIMIT = 500, sum = (k) => money(shown.reduce((a, r) => a + r[k], 0)), sel = S.tdsSel || {};
+  const LIMIT = 500, sel = S.tdsSel || {};
+  const fixN = rows.filter((r) => probs[r.id]).length, file = useRef(null);
+  const chip = <button type="button" className={"btn small fb-chip" + (f.fix ? " on" : "")} data-ded-filter="fix" aria-pressed={!!f.fix} title="Only the deductions with something to fix: no valid PAN, the rate, the section, no challan, the payment code"
+    onClick={() => tdsFilter("deductions", "fix", f.fix ? "" : "1")}>Needs fixing <span className="sbar-n">{fixN}</span></button>;
   return <>
-    <FilterBar tab="deductions" placeholder="Find a deductee, PAN, voucher or ledger" table="tdsDnTable" title={title + " deductions"} excel="tdsExcel"
-      count={shown.length + " of " + rows.length + " deductions · TDS " + sum("tds")}
-      selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) }].concat(common)
-        .concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
+    <FilterBar tab="deductions" placeholder="Find a deductee, PAN, voucher or ledger" table="tdsDnTable" title={title + " deductions"} excel="tdsExcel" chip={chip}
+      items={[["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Excel to correct and bring back (these " + shown.length + ")", () => TDSEdit.toExcel(shown, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
+        ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click()]]}
+      selects={[{ key: "month", label: "Month", options: [["", "Every month", "All months"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) }].concat(common)
+        .concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])}>
+      <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} />
+      <button type="button" className="btn small" data-ded-import-btn="" title="Bring back the Excel exported here, corrected: a preview of each change first" onClick={() => file.current && file.current.click()}>Import</button>
+    </FilterBar>
+    <ImportPreview rows={rows} />
     <TagBar rows={rows} chOpts={chOpts} />
+    {/* t70: how many are shown, the table's caption */}
+    <p className="note tg-dcount" data-ded-count="">{shown.length + " of " + rows.length + " " + (unitW || "deductions") + " · " + (unitW === "collections" ? "TCS " : "TDS ") + money(shown.reduce((a, r) => a + r.tds, 0)) + (edN ? " · " + edN + " edited in FinCom" : "")}</p>
     {/* the one list table (spec K6): date, voucher (number), deductee (party), paid and TDS (amounts), challan (status), then the rest */}
     {/* t70 (the owner: "some columns I can not even see properly without touching them"): every column in view at 1366
         px: the voucher under the date, the PAN under the deductee, the section's words and the rate's reason under them */}
@@ -273,8 +332,8 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
         { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (r, p, i) => i + 1 },
         { k: "date", role: "date", label: "Date · Voucher", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => <>{day(r.date)}{r.voucher ? <div className="tg-sub" data-voucher="">{r.voucher}</div> : null}</> },
         { k: "party", role: "party", label: "Deductee · PAN", cls: "pty", v: (r) => r.party, cell: (r) => <div className="tg-pty">{r.party}<div className="tg-sub" data-pan="">{Certs.validPan(r.pan) ? r.pan : <NoPan />}</div></div> },
-        { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => money(r.paid) },
-        { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => money(r.tds) },
+        { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => <>{money(r.paid)}<Edited r={r} k="paid" /></> },
+        { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => <>{money(r.tds)}<Edited r={r} k="tds" /></> },
         { k: "challan", role: "status", label: "Challan", v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanPick r={r} chOpts={chOpts} /> },
         { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => <Sec s={r.section} fy={fy} /> },
         { k: "rate", label: "Rate", cls: "n", v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} why /> },
@@ -377,9 +436,11 @@ export function Return26({ b, allRows, form = "26Q" }) {
   // earlier period's: allowed, and noted; the owner's rules)
   const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && (TDS.fyOf(c.date) === fy || TDSReg.balance(c).tax > 0.005)));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
-  const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => { const n = TDS.secNew(x, fy); return [x, n.ref ? n.text + " · " + n.label : x]; })) },
+  const common = [{ key: "section", label: "Section", options: [["", "Every section", "All sections"]].concat(secs.map((x) => { const n = TDS.secNew(x, fy); return [x, n.ref ? n.text + " · " + n.label : x, n.ref ? n.ref + " [" + n.old + "]" : undefined]; })) },
     { key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]] },
     { key: "challan", label: "Challan", options: [["", "Challan: any"], ["no", "Not against a challan"], ["yes", "Against a challan"]] }];
+  // t70: what the return already finds wrong, by deduction ("Needs fixing", and the Excel's last column)
+  const probs = TDSEdit.problems(rows, fy, q, form), edN = TDSEdit.edited(rows).length;
   const pass = (r, f) => {
     const qq = String(f.q || "").toLowerCase();
     if (qq && ![r.party, r.pan, TDS.secFind(r.section, fy), r.voucher, r.ledger].join(" ").toLowerCase().includes(qq)) return false;
@@ -391,15 +452,16 @@ export function Return26({ b, allRows, form = "26Q" }) {
     if (f.month && TDS.ymd(r.date).slice(0, 6) !== f.month) return false;
     if (f.rate === "q" && !issueOf[r.id]) return false;
     if (f.rate === "ok" && issueOf[r.id]) return false;
+    if (f.fix && !probs[r.id]) return false;
     return true;
   };
   const checksN = int1A.length || feeErr || issues.length || other.length ? int1A.length + issues.length + other.length + (feeErr ? 1 : 0) : null;
-  const common_ = { rows, issueOf, pass, common, chOpts, title };
+  const common_ = { rows, issueOf, pass, common, chOpts, title, probs };
   const errN = un.length + noPan + issues.length + other.length + int1A.length + (feeErr ? 1 : 0) + driftN;
   const unit = form === "27EQ" ? "collections" : "deductions";
   const toLook = issues.length + noPan + other.length, notCh = r2(un.reduce((a, r) => a + r.tds, 0));
   return <>
-    <ReturnCard fy={fy} q={q} form={form} filed={filed} errN={errN} driftN={driftN} draft={draft}
+    <ReturnCard fy={fy} q={q} form={form} filed={filed} errN={errN} driftN={driftN} draft={draft} edN={edN}
       primary={(filed && !driftN) || S.tdsTab === "file" ? null : ["Make the file", () => tdsTabGo("file")]}
       more={[["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")]]}
       figs={[
@@ -410,12 +472,13 @@ export function Return26({ b, allRows, form = "26Q" }) {
         { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
       ]} />
     <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
-      side={S.tdsTab === "deductions" ? <DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} /> : null} />
+      side={S.tdsTab === "deductions" ? <div className="tg-tabside">
+        <DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} /></div> : null} />
     {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
         <Suggest fy={fy} q={q} form={form} />
         <TallyPays fy={fy} q={q} /></ReturnChallans>
       : S.tdsTab === "deductions" ? <>{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
-        : <><Deductions fy={fy} q={q} {...common_} /><BySection fy={fy} q={q} form={form} /></>}</>
+        : <><Deductions fy={fy} q={q} {...common_} unitW={unit} edN={edN} /><BySection fy={fy} q={q} form={form} /></>}</>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
       : S.tdsTab === "file" ? <>
         {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (earlier {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}

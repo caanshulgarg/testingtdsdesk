@@ -15,7 +15,7 @@
 //
 // State: S.tdsView (years | year | return | notices | register), S.tdsFy, S.tdsQ, S.tdsForm (the return open),
 // S.tdsPickForm (the form chosen in the bar while no quarter is), all kept in the address (Route.booksMore, src/js/52).
-import { Return26, Return24 } from "./TdsReturn.jsx";
+import { Return26, Return24, CardCtx } from "./TdsReturn.jsx";
 import Register from "./tds/Register.jsx";
 import TaxLedgers from "./books/TaxLedgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
@@ -75,7 +75,7 @@ function LedgerLine({ b }) {
 
 // the bar under the tabs: the year, and on Returns the quarter and form (year → quarter → form opens a return), on
 // Challans the quarter
-function Bar({ fys }) {
+function Bar({ fys, inCard }) {
   const fy = S.tdsFy, v = S.tdsView;
   const q = v === "return" || v === "year" ? S.tdsQ || "" : "", form = v === "return" ? S.tdsForm || "26Q" : v === "year" ? S.tdsPickForm || "" : "";
   const setFy = (x) => tdsPick(x, q, form);
@@ -84,7 +84,8 @@ function Bar({ fys }) {
     period={<>
       <Field label={TDS.yearWord(fy)}>
         <select aria-label="Year" value={fy} onChange={(ev) => setFy(ev.target.value)}>
-          {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></Field>
+          {/* t70: the chosen one shows short in the closed box (the year, the form number), the full words in the list */}
+          {fys.map((f) => <option key={f} value={f} label={inCard && f === fy ? f : undefined}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></Field>
       <Field label="Quarter">
         <select aria-label="Quarter" value={q} onChange={(ev) => tdsPick(fy, ev.target.value, form)}>
           <option value="">Every quarter</option>
@@ -93,7 +94,7 @@ function Bar({ fys }) {
     type={<Field label="Form">
       <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
         <option value="">Every form</option>
-        {FORMS.map((k) => <option key={k} value={k}>{TDS.formLabel(k, fy)}</option>)}</select></Field>}
+        {FORMS.map((k) => <option key={k} value={k} label={inCard && k === form ? (TDS.isNew(fy) ? "Form " + TDS.formNo(k, fy) + " (" + k + ")" : k) : undefined}>{TDS.formLabel(k, fy)}</option>)}</select></Field>}
     onClear={v !== "return" ? () => tdsPick(fy, "", "") : null} active={!!(q || form)}
     tools={v !== "return" ? <More items={[
           ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
@@ -104,7 +105,7 @@ function Bar({ fys }) {
           ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
           ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24")],
           ["Download the whole year", () => doAct("yearExcelAll")],
-        ]} /> : <HelpButton />} />;
+        ]} /> : inCard ? null : <HelpButton />} />;
 }
 
 // every year with TDS in the books, a salary sheet or a challan
@@ -265,10 +266,15 @@ export default function Tds({ b }) {
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
   const booksIn = (b.vouchers || []).some((x) => !x.opt && !x.cancel);
   const none = !had.length && v !== "notices" && v !== "register" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
+  // t70 (the owner: "too much information above.. it should look more professional"): a return open, the year, quarter
+  // and form and the ledgers' line go into the return's card, its first row (ReturnCard draws CardCtx.node)
+  const inCard = v === "return" && !none;
+  CardCtx.node = inCard ? <>{fys.length > 0 && <Bar fys={fys} inCard />}<LedgerLine b={b} /></> : null;
+  CardCtx.help = inCard ? <HelpButton /> : null;
   return <div data-phone-scroll="" data-tds-page="">
     {/* the ledgers still to confirm: one line (tds-layout), on the year's page and a return's */}
-    {v !== "register" && v !== "ledgers" && <LedgerLine b={b} />}
-    {!none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && v !== "ledgers" && <Bar fys={fys} />}
+    {!inCard && v !== "register" && v !== "ledgers" && <LedgerLine b={b} />}
+    {!inCard && !none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && v !== "ledgers" && <Bar fys={fys} />}
     {v === "ledgers" ? <TaxLedgers b={b} kind="tds" />
       // round 65: the books are in but hold no TDS: said plainly, with the TDS ledgers that have no entries and what should
       // have been deducted (tds/NoTds.jsx); "Bring in from Tally" only when there are no entries at all

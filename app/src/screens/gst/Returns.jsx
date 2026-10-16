@@ -54,7 +54,7 @@ function Customers({ rows }) {
           <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td className="dt">{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
             <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table></td></tr>]; })}
-        <tr><td><b>Total</b></td><td></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
+        <tr className="tg-tot"><td><b>Total</b></td><td></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
           <td className="n"><TaxCell igst={shown.reduce((a, r) => a + r.igst, 0)} cgst={shown.reduce((a, r) => a + r.cgst, 0)} sgst={shown.reduce((a, r) => a + r.sgst, 0)} /></td></tr>
       </tbody>
     </table>{!parties.length && <div className="bk-none">Nothing matches.</div>}</div>

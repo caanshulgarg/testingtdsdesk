@@ -193,6 +193,17 @@ try:
             const cs = getComputedStyle(e);
             if ((cs.textOverflow === 'ellipsis' || e.classList.contains('dtile')) && e.scrollWidth > e.clientWidth + 1) out.cut.push(e.className + ': ' + e.innerText.trim().slice(0, 40));
           }
+          // the closed value of every box in the card and the filter bars shown whole (a select's chosen words, a find box's
+          // hint); the ledgers' pill on the card's first row with the period; a rate's reason on two lines at most
+          const cv = document.createElement('canvas').getContext('2d'); out.fit = [];
+          for (const e of app.querySelectorAll('[data-return-card] select, [data-return-card] input, [data-filter-bar] select, [data-filter-bar] input[type=search]')) {
+            if (!vis(e)) continue; const cs = getComputedStyle(e); cv.font = cs.font;
+            const t = e.tagName === 'SELECT' ? (e.selectedOptions[0] ? (e.selectedOptions[0].label || e.selectedOptions[0].text) : '') : (e.value || e.placeholder);
+            const need = cv.measureText(t).width, room = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            if (need > room + 1) out.fit.push(t + ' (' + Math.round(need) + '>' + Math.round(room) + ')'); }
+          const pill = app.querySelector('[data-return-card] [data-ledger-banner]'), sel = app.querySelector('[data-return-card] .ret-ctx select');
+          out.pill = pill && sel ? Math.round(Math.abs((pill.getBoundingClientRect().top + pill.getBoundingClientRect().bottom) - (sel.getBoundingClientRect().top + sel.getBoundingClientRect().bottom)) / 2) : null;
+          out.why = [...app.querySelectorAll('.tg-why')].filter(vis).map((e) => [e.innerText, lines(e)]);
           return out; }"""
         AMOUNTS = r"""() => [...new Set((document.querySelector('#app').innerText.match(/₹\s*-?[\d,]+(?:\.\d+)?/g) || []).map((s) => s.replace(/\s/g, '')))].sort()"""
         got = {}
@@ -216,6 +227,10 @@ try:
                 if m.get("secLines"):
                     ok(all(n <= 2 for _, n in m["secLines"]), "%s: each section's code on at most two lines (%s)" % (at, m["secLines"][:3]))
                 ok(not m["cut"], "%s: nothing cut off or hidden behind '…' (%s)" % (at, m["cut"][:4]))
+                ok(not m["fit"], "%s: every box shows its chosen value whole (%s)" % (at, m["fit"][:4]))
+                if m["pill"] is not None:
+                    ok(m["pill"] <= 8, "%s: the ledgers to confirm on the card's first row, beside the period (%d px apart)" % (at, m["pill"]))
+                ok(all(n <= 2 for _, n in m["why"]), "%s: a rate's reason on two lines at most (%s)" % (at, m["why"][:2]))
                 ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
                 ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))
                 ok(m["rr"] == 0, "%s: one ₹ before a figure, never ₹₹" % at)

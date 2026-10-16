@@ -264,6 +264,7 @@ run_gst_checks.py                     180  TDSDESK_SITE=../app/dist-test
 run_tds_smart.py                      180  TDSDESK_SITE=../app/dist-test
 run_due_list.py                       180  TDSDESK_SITE=../app/dist-test
 run_tdsgst_layout.py                  300  TDSDESK_SITE=../app/dist-test
+run_tds_fix_excel.py                  300  TDSDESK_SITE=../app/dist-test
 run_26as_recon.py                     180  TDSDESK_SITE=../app/dist-test
 run_traces_files.py                   180  TDSDESK_SITE=../app/dist-test
 run_supplier_health.py                180  TDSDESK_SITE=../app/dist-test

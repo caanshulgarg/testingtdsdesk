@@ -14,6 +14,8 @@ import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens } from "./screens/lazy.js";
 import "./nav.js";
+// t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
+import "./lib/tdsEdit.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 window.loadRegisters = () => import("./lib/registers.js");
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path

@@ -41,6 +41,9 @@ const TDS = {
     const label = Array.from(new Set(hits.map(r => r.label))).slice(0, 3).join(" / ");
     return {old, ref, label, text: ref + " [old " + old + "]"};
   },
+  // a section's plain name (t70, the owner: "section name is not there"): the words of the table FinCom holds for it
+  // (RULE_DEFAULTS' label, found by the old section), for any year; "" for a section it does not cover
+  secName(section){ return this.secNew(section, "2026-27").label || ""; },
   // what a section can be found by in a search: its old number and, from 2026-27, its new provision and table entry
   secFind(section, fy){ const x = this.secNew(section, fy); return [x.old, x.ref, x.label].join(" "); },
   // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
@@ -187,6 +190,8 @@ const TDS = {
       const hit = TDSInt.lateDeduct(r);
       if (hit && hit.amount > 0){ r.paid = r2(hit.amount); r.credit = hit.date; r.bill = hit.voucher; r.rate = r2(r.tds / r.paid * 100); r.rateFrom = "bill"; }
     });
+    // t70: what was corrected in FinCom (the corrected Excel brought back) over the books' deduction (app/src/lib/tdsEdit.js)
+    if (typeof TDSEdit === "object" && b.tdsEdits) out.forEach(r => TDSEdit.apply(r));
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there

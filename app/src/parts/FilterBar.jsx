@@ -9,7 +9,7 @@ import More from "./More.jsx";
 // the choices of a bar in its slots; each option already says what it is ("PAN: any"), so the box has no name of its own
 export function barSelects(selects, value, set) {
   const one = (sel) => <span key={sel.key} className="fb-f fb-bare"><select aria-label={sel.label || sel.key} value={value[sel.key] || ""} onChange={(ev) => set(sel.key, ev.target.value)}>
-    {sel.options.map(([v, l], i) => <option key={i} value={v}>{l}</option>)}</select></span>;
+    {sel.options.map(([v, l, short], i) => <option key={i} value={v} label={short && v === (value[sel.key] || "") ? short : undefined}>{l}</option>)}</select></span>;
   const isPeriod = (sel) => sel.slot === "period" || (!sel.slot && /^(month|quarter|year|fy|period)$/.test(sel.key));
   const period = selects.filter(isPeriod), rest = selects.filter((s) => !isPeriod(s));
   return { period: period.length ? period.map(one) : null, type: rest.length ? rest.map(one) : null };
