@@ -58,8 +58,10 @@ try:
         # the coordinator's screenshot review (14-Oct-2026): working on this computer only is a line at the sidebar's foot, not
         # a floating box
         ok(pg.evaluate("() => { const t = document.getElementById('toast'); return !t || t.classList.contains('hidden') || !/Working on this computer only/.test(t.textContent); }"), "0. no floating box for working on this computer only")
-        lo = pg.evaluate("() => { const e = document.querySelector('#side [data-local-only]'), f = document.querySelector('#side [data-trust-line]'); return e && f && {text: e.textContent, h: Math.round(e.getBoundingClientRect().height), trust: f.textContent, near: Math.abs(e.getBoundingClientRect().top - f.getBoundingClientRect().bottom) < 8}; }")
-        ok(lo and "Sign in" in lo["text"] and lo["h"] <= 20 and lo["trust"].startswith("Saved on this computer only") and lo["near"], "0. the sidebar's foot: one line under Saved on this computer only, with Sign in (%s)" % lo)
+        # t70 (16-Oct-2026; the owner: "Side bar is also taking too much space"): the foot one small line, "Saved here · Sign in";
+        # the full words (Saved on this computer only, Not shared · Sign in) under its ⓘ
+        lo = pg.evaluate("() => { const l = document.querySelector('#side [data-side-foot]'), e = document.querySelector('#side [data-local-only]'), f = document.querySelector('#side [data-trust-line]'); return l && e && f && {line: l.innerText, h: Math.round(l.getBoundingClientRect().height), text: e.textContent, trust: f.textContent}; }")
+        ok(lo and "Sign in" in lo["line"] and lo["h"] <= 22 and "Sign in" in lo["text"] and lo["trust"].startswith("Saved on this computer only"), "0. the sidebar's foot: one line with Sign in; under ⓘ Saved on this computer only, Not shared · Sign in (%s)" % lo)
         J = lambda e, a=None: pg.evaluate(e, a)
         fy = J("tdsYears(S.books, TDS.rows())[0]")
         J("(fy) => { S.booksTab = 'tds'; S.tdsFy = fy; S.tdsView = 'year'; S.tdsQ = ''; S.tdsPickForm = ''; render(); }", fy); pg.wait_for_timeout(500)

@@ -44,8 +44,8 @@ a { text-underline-offset: 2px; }
 .side-fold { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
 .side-fold:hover { background: var(--surface-muted); color: var(--foreground); }
 @media (min-width: 601px) {
-  .side { width: 236px; padding: 14px 10px; gap: 1px; }
-  .side-link { padding: 0 10px; min-height: 34px; font-size: 14px; }
+  .side { width: 200px; padding: 12px 8px; gap: 0; }
+  .side-link { padding: 0 8px; min-height: 32px; height: 32px; gap: 8px; font-size: 13.5px; }
   /* folded: the icons alone, the words on hover (each item's title) */
   .side.side-folded { width: 64px; }
   .side.side-folded .side-name, .side.side-folded .side-link > span, .side.side-folded .side-co-words, .side.side-folded .side-label,
@@ -57,7 +57,7 @@ a { text-underline-offset: 2px; }
 }
 /* from 901px the sidebar is fixed beside the page (src/css/app.css), so the page starts after it */
 @media (min-width: 901px) {
-  .side:not(.hidden) + .mainwrap { margin-left: 236px; }
+  .side:not(.hidden) + .mainwrap { margin-left: 200px; }
   .side.side-folded:not(.hidden) + .mainwrap { margin-left: 64px; }
 }
 @media (max-width: 600px) {
@@ -255,3 +255,83 @@ header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content);
 /* Clients: the page's one row (find, More, Add client) */
 .clients-head .more { align-self: flex-end; }
 @media (max-width: 640px) { .clients-head > label.f { flex-basis: 100%; } }
+
+/* t70 (16-Oct-2026; the owner: "Side bar is also taking too much space.. we can make good use of that space"): 200 px open
+   (64 folded), each item 32 px with a 16 px icon, the group names small with a 10 px gap, the client's card one line with
+   its GSTIN under it, the foot one small line with the rest under ⓘ. A phone keeps its bar along the bottom. */
+@media (min-width: 601px) {
+  .side .side-chip { width: 22px; height: 22px; border-radius: 6px; }
+  .side .side-label, .side .side-firm-label { font-size: 11px; padding: 10px 8px 2px; }
+  .side .side-sep { margin: 6px 4px; }
+  .side .side-brand { padding: 0 2px 8px 4px; font-size: 16px; }
+  .side .side-client { padding: 0 0 2px; }
+  .side .side-client .side-label { display: none; }
+  .side .side-co { gap: 8px; padding: 8px; margin: 0 0 4px; }
+  .side .side-av { width: 26px; height: 26px; border-radius: 7px; font-size: 11px; }
+  .side .side-co-name { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+  .side .side-co-name b { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .side-co-caret { flex: none; font-size: 11px; color: var(--text-muted); }
+  .side .side-co small { font-size: 11px; white-space: nowrap; }
+  .side.side-folded .side-co-name { display: none; }
+  #side.side .side-ver { margin: 0 -8px 0; padding: 6px 16px 8px; }
+  .side .side-foot { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: var(--text-muted); }
+  .side .side-foot-line { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .side .side-foot-more { position: relative; flex: none; }
+  .side .side-foot-more > summary { list-style: none; cursor: pointer; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; color: var(--text-muted); }
+  .side .side-foot-more > summary::-webkit-details-marker { display: none; }
+  .side .side-foot-more > summary:hover { color: var(--foreground); background: var(--surface-muted); }
+  .side .side-foot-pop { position: absolute; bottom: calc(100% + 6px); left: -150px; z-index: 30; width: 220px; display: grid; gap: 4px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-floating); font-size: 12px; color: var(--foreground); }
+  .side .side-foot-pop .side-quiet { display: block; height: auto; -webkit-line-clamp: unset; white-space: normal; overflow: visible; }
+}
+@media (min-width: 901px) { body:has(.side:not(.hidden):not(.side-folded)) .actionbar { left: 200px; } }
+@media (min-width: 601px) {
+  .is-test .side:not(.side-folded) .side-brand { flex-wrap: nowrap; }
+  .is-test .side:not(.side-folded) .side-brand::after { order: 2; flex-basis: auto; padding-left: 0; font-size: 10px; }
+  .side .side-brand > .side-name { flex: 0 1 auto; }
+  .side .side-brand > .side-fold { margin-left: auto; order: 3; }
+  .side .side-sep { margin: 4px 4px; }
+}
+/* t70, the elegance pass: the sidebar flush with the page (a very light ground), no shadows; the icons plain 16 px strokes
+   in a neutral grey, the active item a soft tint with the accent's words and icon */
+@media (min-width: 601px) {
+  #side.side { background: var(--background, var(--paper)); border-right: 1px solid color-mix(in oklab, var(--border) 70%, transparent); box-shadow: none; }
+  #side.side .side-co { background: transparent; box-shadow: none; border-color: color-mix(in oklab, var(--border) 80%, transparent); }
+  #side.side .side-chip, #side.side .side-link:hover .side-chip { width: 18px; height: 18px; background: transparent; color: var(--text-muted); }
+  #side.side .side-link[aria-current="page"] .side-chip { background: transparent; color: var(--accent); }
+  #side.side .side-link:hover .side-chip { color: var(--foreground); }
+  #side.side .side-link[aria-current="page"] { background: color-mix(in oklab, var(--accent) 9%, transparent); color: var(--accent); }
+  #side.side .side-ver { background: var(--background, var(--paper)); }
+}
+/* t70, round 2 (the owner on the folded screenshot: "only icons make the system unreadable"): the words always shown.
+   Up to 1440 px wide a compact sidebar of 168 px (13 px words, 30 px rows); wider, 200 px. Folded by the person (the
+   button, remembered): a 72 px rail, each item its icon with its words under it (two lines at most), the groups apart
+   by a thin line. */
+@media (min-width: 601px) and (max-width: 1440px) {
+  #side.side:not(.side-folded) { width: 168px; padding: 10px 6px; }
+  #side.side:not(.side-folded) .side-link { height: 30px; min-height: 30px; font-size: 13px; gap: 7px; padding: 0 6px; }
+  #side.side:not(.side-folded) .side-label { padding: 6px 6px 1px; }
+  #side.side:not(.side-folded) .side-sep { margin: 3px 4px; }
+  #side.side:not(.side-folded) .side-co { padding: 6px; gap: 6px; }
+  #side.side:not(.side-folded) .side-av { width: 22px; height: 22px; font-size: 10px; }
+  #side.side:not(.side-folded) .side-co-name b { font-size: 12.5px; }
+  #side.side:not(.side-folded) .side-brand { padding-bottom: 6px; }
+}
+@media (min-width: 901px) and (max-width: 1440px) {
+  .side:not(.hidden):not(.side-folded) + .mainwrap { margin-left: 168px; }
+  body:has(.side:not(.hidden):not(.side-folded)) .actionbar { left: 168px; }
+}
+@media (min-width: 601px) {
+  #side.side.side-folded { width: 72px; padding: 10px 4px; }
+  #side.side.side-folded .side-link { flex-direction: column; justify-content: flex-start; align-items: center; gap: 2px; height: auto; min-height: 44px; padding: 5px 2px; }
+  #side.side.side-folded .side-link > .side-word { display: none; }
+  #side.side.side-folded .side-link > .side-rail-word { display: block; flex: none; max-width: 100%; max-height: 2.4em; overflow: hidden;
+    font-size: 10.5px; line-height: 1.2; text-align: center; white-space: normal; overflow-wrap: normal; word-break: normal; }
+  #side.side.side-folded .side-link > .side-count { top: 2px; right: 6px; }
+  #side.side.side-folded .side-label { display: block; height: 0; margin: 4px 10px; padding: 0; overflow: hidden; border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent); font-size: 0; }
+  #side.side.side-folded .side-sep { margin: 4px 10px; }
+  #side.side.side-folded .side-co { padding: 6px 0; }
+}
+@media (min-width: 901px) { .side.side-folded:not(.hidden) + .mainwrap { margin-left: 72px; } }
+.side-rail-word { display: none; }
+@media (min-width: 601px) { #side.side.side-folded .side-link > .side-rail-word { hyphens: manual; } }

@@ -55,7 +55,10 @@ export default function Bell() {
   // Esc, a click outside and (a phone) Back close the alerts (app/src/parts/dismiss.js); the bell itself toggles them
   useDismiss(!!S.alertsOpen, panel, () => { S.alertsOpen = false; render(); }, { also: () => [btn.current].concat(Array.from(document.querySelectorAll("[data-alerts-undo]"))) });
   if (typeof AlertHub !== "object") return null;
-  const list = AlertHub.list(), n = list.length, worst = n ? list[0].sev : "";
+  // t70: what happened by itself in the last ten minutes ("Audit ran on its own…", toast(…, {background: true})) is read
+  // here (it was the sidebar's foot line)
+  const q = S.quiet && Date.now() - S.quiet.at < 600000 ? S.quiet : null;
+  const list = AlertHub.list(), n = list.length + (q ? 1 : 0), worst = list.length ? list[0].sev : q ? "info" : "";
   const close = () => { S.alertsOpen = false; render(); };
   return <span className="bell-wrap">
     <button ref={btn} className={"bell" + (worst ? " al-" + worst : "")} data-bell="" aria-haspopup="dialog" aria-expanded={!!S.alertsOpen}
@@ -73,7 +76,9 @@ export default function Bell() {
               onClick={() => AlertClear.clear(list)}>Clear all</Button>}
             <button className="icon" onClick={close} aria-label="Close">✕</button></span></div>
         {typeof Rec === "object" && Rec.alerts && Rec.alerts.msg && Rec.alerts.msg.err && <p className="note bad" data-alerts-msg="" style={{ padding: "8px 14px", margin: 0 }}>{Rec.alerts.msg.err}</p>}
-        {n ? <ul className="al-list">{list.map((x) => <Item key={x.key} x={x} />)}</ul>
+        {n ? <ul className="al-list">{q && <li className="al-item al-info" data-quiet-note="" data-sev="info"><span className="al-dot" aria-label="Information" title="Information" />
+          <div className="al-body"><div data-alert-text="">{q.text}</div><div className="al-fix note">{fmtTime(q.at)} · happened by itself</div></div></li>}
+          {list.map((x) => <Item key={x.key} x={x} />)}</ul>
           : <p className="note" style={{ padding: "8px 14px" }}>Nothing needs your attention.</p>}
       </div>
     </>}

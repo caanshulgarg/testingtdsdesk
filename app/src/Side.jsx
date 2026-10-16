@@ -27,20 +27,25 @@ const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sal
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
   help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald" };
 
+const RAIL = { Transactions: "Trans\u00ADactions", Reconciliations: "Reconcil\u00ADiations", Integrations: "Integra\u00ADtions", Compliance: "Compli\u00ADance" };
 function Item({ icon, label, on, count, onClick, title, bar }) {
   const Icon = ICONS[icon] || LayoutDashboard;
   return (
     // a name a screen reader reads out (review item 34): the label, what it is for, and the count beside it
     <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title || label} data-bar={bar ? "" : undefined}
       data-side={label} aria-label={label + (title ? ": " + title : "") + (count ? ", " + count + " waiting" : "")}>
-      <i className="side-chip" data-tone={TONES[icon] || "indigo"} aria-hidden="true"><Icon className="side-ic" width={15} height={15} strokeWidth={2} /></i>
-      <span>{label}</span>
+      <i className="side-chip" data-tone={TONES[icon] || "indigo"} aria-hidden="true"><Icon className="side-ic" width={16} height={16} strokeWidth={1.75} /></i>
+      <span className="side-word">{label}</span>
+      {/* the folded rail's words under the icon: a long word may break at its soft hyphen (t70) */}
+      <span className="side-rail-word" aria-hidden="true">{RAIL[label] || label}</span>
       {count ? <span className="side-count">{count}</span> : null}
     </button>
   );
 }
 
 const FOLD = "fincom:sideFolded";
+// the person's choice, kept in this browser (t70: never folded on its own: "only icons make the system unreadable"; folded
+// is a rail with each item's words under its icon, styles/arc-shell.css)
 const readFold = () => { try { return localStorage.getItem(FOLD) === "1"; } catch (e) { return false; } };
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
@@ -113,9 +118,10 @@ function ClientCard({ open, home, after }) {
   const label = home ? "Back to " + open.name : "Client: " + open.name + ". Change client (F3)";
   return <div className="side-client">
     <span className="side-label">Client</span>
-    <button className="side-co" onClick={go} title={home ? "Back to " + open.name : "Change client (F3)"} aria-label={label} data-side-client={home ? "back" : "change"}>
+    {/* t70: the name on one line with ▾ (change the client; its full name in the title), the GSTIN under it */}
+    <button className="side-co" onClick={go} title={(home ? "Back to " : "") + open.name + (home ? "" : " · change client (F3)")} aria-label={label} data-side-client={home ? "back" : "change"}>
       <span className="side-av" aria-hidden="true">{initials(open.name)}</span>
-      <span className="side-co-words"><b>{open.name}</b><small>{(open.gstin || "No GSTIN") + (home ? " · back to work" : " · change")}</small></span>
+      <span className="side-co-words"><span className="side-co-name"><b>{open.name}</b><span className="side-co-caret" aria-hidden="true">{home ? "↩" : "▾"}</span></span><small>{open.gstin || "No GSTIN"}</small></span>
     </button>
   </div>;
 }
@@ -154,10 +160,9 @@ function yourData() {
     "<p><b>Is it saved?</b> The line above today’s date at the foot of this menu says so: “Saved on this computer”" + (signed ? ", and when it was last synced with the firm account." : ".") + "</p>" });
 }
 
-// the quiet line: a background event of the last ten minutes, or where the work is kept and when it was last synced
+// the quiet line: where the work is kept and when it was last synced (a background event of the last ten minutes is in the
+// bell since t70, parts/Bell.jsx)
 export function FootLine() {
-  const q = S.quiet && Date.now() - S.quiet.at < 600000 ? S.quiet : null;
-  if (q) return <span className="side-quiet" data-quiet-note="" title={q.text}>{q.text}</span>;
   let t = "Saved on this computer";
   if (typeof Cloud === "object" && Cloud.on()) {
     const st = Cloud.st || {}, sv = (typeof Live === "object" && Live.sv) || {};
@@ -172,6 +177,22 @@ export function FootLine() {
       <span className="side-quiet side-one" data-local-only="" title="Working on this computer only. Sign in from Settings to share with the firm.">Not shared · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></span></>;
   }
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
+}
+
+// the foot in one line: "Saved here · Sign in" (or "Synced 10:42"), ⓘ opens the full words, today's date and Your data
+function Foot() {
+  const signed = typeof Cloud === "object" && Cloud.on();
+  const st = signed ? Cloud.st || {} : {}, sv = (typeof Live === "object" && Live.sv) || {};
+  const off = (typeof navigator === "object" && navigator.onLine === false) || sv.state === "offline";
+  const short = signed ? (off ? "Offline · kept here" : st.lastSync ? "Synced " + fmtTime(st.lastSync) : "Syncing…") : off ? "Saved here · offline" : "Saved here";
+  const signIn = () => { S.view = "home"; S.homeTab = "rules"; S.settingsTab = "account"; render(); };
+  return <div className="side-foot" data-side-foot="">
+    <span className="side-foot-line"><span data-trust-short="">{short}</span>{!signed && <> · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></>}</span>
+    <details className="side-foot-more">
+      <summary aria-label="Where your work is kept, and today's date" title="Where your work is kept, and today's date">ⓘ</summary>
+      <div className="side-foot-pop" data-side-foot-more=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" aria-label="Your data: where your work is kept and who can see it" onClick={yourData}>Your data</button></span></div>
+    </details>
+  </div>;
 }
 
 export default function Side() {
@@ -222,7 +243,8 @@ export default function Side() {
       {/* stability batch 3: the foot of the sidebar, two lines in the same place on every page: where the work is kept
           and when it was last synced, or something that happened by itself (a colleague's change, the server not
           answering: toast(…, {background: true})), then today's date */}
-      <div className="side-ver" data-side-date=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" aria-label="Your data: where your work is kept and who can see it" onClick={yourData}>Your data</button></span></div>
+      {/* t70: one small line (where the work is kept, Sign in), the rest under ⓘ */}
+      <div className="side-ver" data-side-date=""><Foot /></div>
     </div>
   );
 }

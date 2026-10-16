@@ -125,7 +125,8 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 1400, "height": 900})
     # 31 (recheck). the sidebar's foot in the same date format
     # owner's spec K1 (04-Oct-2026): the build stamp moved from the sidebar to the About line in Settings
-    foot = pg.inner_text("#side .side-ver")
+    # (t70: the date is under the foot's ⓘ: read as its text)
+    foot = pg.evaluate("document.querySelector('#side .side-ver [data-side-foot-more]').textContent")
     pg.evaluate("() => goSettings(null)"); pg.wait_for_timeout(500); about = pg.inner_text("[data-about]"); pg.evaluate("() => { S.view = 'company'; goClient('txn'); }"); pg.wait_for_timeout(600)
     # (stability batch 5: the date line ends with the "Your data" link)
     ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}( · Your data)?\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", about) and "Sept" not in foot + about and " am" not in foot + about and " pm" not in foot + about,

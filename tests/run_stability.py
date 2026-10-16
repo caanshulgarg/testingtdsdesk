@@ -257,7 +257,10 @@ try:
             print("  (not in this build yet: stability batch 3)")
         else:
             E("() => { toastHide(); toast('Something the colleague did', {background: true}); }"); W(400)
-            ok(E("document.getElementById('toast').classList.contains('hidden')") and "Something the colleague did" in pg.inner_text("#side [data-quiet-note]"), "a background event is no toast: it is in the sidebar's quiet line")
+            # t70 (16-Oct-2026): read in the bell (it was the sidebar's quiet line, which is now one small line)
+            E("() => { S.alertsOpen = true; render(); }"); W(300)
+            ok(E("document.getElementById('toast').classList.contains('hidden')") and "Something the colleague did" in pg.inner_text("[data-alerts-panel] [data-quiet-note]"), "a background event is no toast: it is in the bell")
+            E("() => { S.alertsOpen = false; render(); }"); W(200)
             E("() => toast('A newer FinCom is out.', {stay: true, actions: [{label: 'Reload', run: () => { window.__reloaded = 1; }}]})"); W(300)
             E("() => toast('Saved.')"); W(300)
             ok(pg.locator("#toast").count() == 1 and "Saved." in pg.inner_text("#toast") and pg.locator("#fresh-note").count() == 0, "one message region: the new message replaces the one showing, nothing stacked")

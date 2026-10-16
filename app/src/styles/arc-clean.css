@@ -98,7 +98,7 @@
 
 /* ---------- 5. Purchase's bar: inside the content area, one row ---------- */
 @media (min-width: 901px) {
-  body:has(.side:not(.hidden):not(.side-folded)) .actionbar { left: 236px; }
+  body:has(.side:not(.hidden):not(.side-folded)) .actionbar { left: 200px; }
   body:has(.side.side-folded:not(.hidden)) .actionbar { left: 64px; }
   .actionbar { padding: 8px 32px; flex-wrap: nowrap; }
   .actionbar .ab-left, .actionbar .ab-right { flex-wrap: nowrap; }
