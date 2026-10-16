@@ -334,3 +334,4 @@ run_clients_list_fit.py                300  TDSDESK_SITE=../app/dist-test
 run_migration89.py                    120
 run_ledger_fetch_server.py            120
 run_migration90.py                    300
+run_lazy_fail.py                      120  TDSDESK_SITE=../app/dist-test
