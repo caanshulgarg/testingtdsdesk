@@ -1,6 +1,8 @@
 // node run_audit.js - the audit on the VMS books for 2025-26
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "MIS", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "MIS", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D",
+  // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)
+  "TDSWatch", "TDSRate", "TDSFiled", "noPanRate", "NO_PAN_RATE"];
 let h; try { h = load(HTML, NAMES); } catch (e){ console.log(e.message); process.exit(2); }
 const {ctx, x} = h;
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };

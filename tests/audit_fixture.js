@@ -39,7 +39,7 @@ function makeBooks() {
   v = two("Payment", "20250512", "Epsilon Mart", "Cash", 6000.10, { party: "Epsilon Mart" });
   two("Payment", "20250512", "Epsilon Mart", "Cash", 5000.20, { party: "Epsilon Mart" }); exp("cash40A3", v, 11000.30);   // two the same day
   // the transporter: 35,000 a day
-  const fr1 = two("Journal", "20250602", "Freight", "Sharma Roadways", 30000.25); two("Journal", "20250603", "Freight", "Sharma Roadways", 36000.75); two("Journal", "20250604", "Freight", "Sharma Roadways", 10000.33);
+  const fr1 = two("Journal", "20250602", "Freight", "Sharma Roadways", 30000.25), fr2 = two("Journal", "20250603", "Freight", "Sharma Roadways", 36000.75); two("Journal", "20250604", "Freight", "Sharma Roadways", 10000.33);
   two("Payment", "20250609", "Sharma Roadways", "Cash", 30000.25, { party: "Sharma Roadways" });               // within 35,000
   v = two("Payment", "20250610", "Sharma Roadways", "Cash", 36000.75, { party: "Sharma Roadways" }); exp("cash40A3", v, 36000.75);
 
@@ -56,11 +56,14 @@ function makeBooks() {
   two("Receipt", "20250908", "Cash", "Ramesh Gupta Loan", 19999.00);                                             // under 20,000
 
   // ---------------------------------------------------------------- TDS: not deducted, short deducted, paid late
-  two("Journal", "20251006", "Professional Fees", "Kapoor Associates", 60000.40, { party: "Kapoor Associates" });
-  two("Journal", "20251007", "Professional Fees", "Kapoor Associates", 5000.11, { party: "Kapoor Associates" });
+  const k1 = two("Journal", "20251006", "Professional Fees", "Kapoor Associates", 60000.40, { party: "Kapoor Associates" });
+  const k2 = two("Journal", "20251007", "Professional Fees", "Kapoor Associates", 5000.11, { party: "Kapoor Associates" });
   v = two("Journal", "20251008", "Professional Fees", "Kapoor Associates", 4000.22, { party: "Kapoor Associates" });
-  // not deducted: 194J (69,000.73 over the 50,000 limit), and freight of 76,001.33 to the transporter (194C: a bill of 36,000.75 over 30,000)
-  E.tds = [{ vid: "v" + (n - 2), party: "Kapoor Associates", amount: 69000.73 }, { vid: fr1.id, party: "Sharma Roadways", amount: 76001.33 }];
+  // not deducted: 194J (69,000.73 over the 50,000 limit: every bill), and the transporter's freight (194C: the two bills over
+  // 30,000, 30,000.25 and 36,000.75; the year's 76,001.33 is under 1,00,000). Round 69: the audit's TDS not deducted is
+  // TDSWatch.missed, the TDS page's list, and its entries are the bills that count, one by one
+  E.tds = [{ vid: k1.id, party: "Kapoor Associates", amount: 60000.40 }, { vid: k2.id, party: "Kapoor Associates", amount: 5000.11 }, { vid: v.id, party: "Kapoor Associates", amount: 4000.22 },
+    { vid: fr1.id, party: "Sharma Roadways", amount: 30000.25 }, { vid: fr2.id, party: "Sharma Roadways", amount: 36000.75 }];
   // short: 1% on a company (194C is 2%)
   const short = add({ type: "Journal", date: "20251110", party: "Mehta Contractors Pvt Ltd", ent: [{ l: "Contract Charges", a: -100100 }, { l: "TDS Payable 194C", a: 1001 }, { l: "Mehta Contractors Pvt Ltd", a: 99099 }] });
   E.tds.push({ vid: short.id, party: "Mehta Contractors Pvt Ltd", amount: 1001.00 });

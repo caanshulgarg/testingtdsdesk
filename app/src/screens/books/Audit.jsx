@@ -3,13 +3,14 @@
 // auditTabs, viewAuditRel and viewAudit3cd (src/js/18). The checks are Audit (src/js/06); changes go through
 // auditRangeSet, auditFreqSet, auditFindingSet, relAdd, relSet, relRemove (src/js/23) and doAct (auditRun, auditReport…).
 //
-// State: S.auditTab (find, rel, 3cd), S.auditRange, S.auditArea, S.auditSt (a status), S.auditOpen (a finding opened).
+// State: S.auditTab (find, rel, 3cd), S.auditRange, S.auditArea, S.auditSt (a status), S.auditOpen (a finding opened),
+// S.auditRecheck (round 69: each finding's last Recheck, {[id]: {co, f, busy | failed | still, at, run}}, page state only).
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
-import { ListRows } from "../../parts/ListTable.jsx";
+import ListTable, { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import More from "../../parts/More.jsx";
 // FinCom Assistant step 2: the working papers (AuditWP, src/js/77-audit.js)
@@ -45,7 +46,8 @@ function Head({ b, run }) {
       <label className="f" style={{ minWidth: 120 }}><span>Year</span><select aria-label="Audit year" value={S.auditRange ? "" : (S.auditFy || fsLastFull())} onChange={(ev) => { S.auditFy = ev.target.value; S.auditRange = null; render(); }}>
         {S.auditRange && <option value="">dates chosen</option>}{fsYears().map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select></label>
       <span className="note" style={{ alignSelf: "center" }} data-audit-period="">{fmtDate(range.from) + " to " + fmtDate(range.to) + " · " + entryCount(Audit.ymd(range.from), Audit.ymd(range.to)).text + " in the books"}</span>
-      <Act act="auditRun" className="btn small primary">Run now</Act><AuditButton />
+      {/* round 69: once run, the run again is "Recheck all" (the same doAct) */}
+      <Act act="auditRun" className="btn small primary">{run ? "Recheck all" : "Run now"}</Act><AuditButton />
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
     </div>
     <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings and how it works</summary>
@@ -105,21 +107,55 @@ function FindingBody({ f, st }) {
   </div>;
 }
 
-function Finding({ f }) {
-  const st = Audit.status(f.id), open = S.auditOpen === f.id, [word, col] = SEV[f.sev], solved = Audit.solvedOf(f.id).n;
-  return <section className="dash-card" data-key={f.id} style={{ marginTop: 10, borderLeft: "4px solid " + col }}>
-    <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-      <div style={{ flex: 1, minWidth: 260 }}>
-        <div className="nr" style={{ color: col, fontWeight: 700 }}>{word + " · " + ((Audit.AREAS.find((a) => a[0] === f.area) || [])[1] || "") + (f.clause ? " · " + f.clause : "")}
-          {f.isNew ? <> <span className="tag warn">new</span></> : f.more > 0 ? <> <span className="tag warn">+{f.more}</span></> : null}</div>
-        <button className="linkbtn" style={{ fontSize: 16, fontWeight: 600, textAlign: "left" }} onClick={() => tdsToggle("auditOpen", f.id)}>{(open ? "▾ " : "▸ ") + f.title}</button>
-        <div className="note">{f.problem + (f.amount ? " · " + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "var(--ok)" }}>{solved} put right</span></>}</div>
-      </div>
-      <div><select aria-label={"Status of " + f.title} style={{ width: "auto" }} value={st.s} onChange={(ev) => auditFindingSet(f.id, "s", ev.target.value)}>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        {f.je && <div className="nr">{f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies")}</div>}</div>
-    </div>
-    {open && <FindingBody f={f} st={st} />}
-  </section>;
+// round 69 (the owner, 16-Oct-2026: "audit part should like problem and suggestions and recheck.. and it should be in a
+// table format properly.. so that anyone can read it properly"): the findings are one table, # | Severity | Area | Problem |
+// Suggestion | Status | Recheck, serious first; Details opens what the card showed (FindingBody) under the row
+const SEVTAG = { high: "bad", medium: "warn", low: "no" };
+const areaName = (a) => (Audit.AREAS.find((x) => x[0] === a) || [])[1] || "";
+// a finding's Recheck: the audit again for the same period, quietly (the run of Run now, auditRunFresh, without its
+// message), then on the row: still there, or put right (and then it is under Solved too)
+function recheck(f) {
+  const run = ((S.books || {}).audit || {}).last;
+  if (!run) return;
+  const co = S.coId, keep = (x) => { S.auditRecheck = Object.assign({}, S.auditRecheck, { [f.id]: Object.assign({ co, f }, x) }); render(); };
+  keep({ busy: true });
+  FinComNav.go(() => auditRunFresh(run.from, run.to, "recheck").then((r) => keep({ still: r.findings.some((z) => z.id === f.id), at: new Date().toISOString(), run: r.at }), () => keep({ failed: true })));
+}
+// what a Recheck said holds for the run it made: a later run (Recheck all, another Recheck, a run on its own) clears it
+const lastAt = () => (((S.books || {}).audit || {}).last || {}).at;
+const recheckOf = (id) => { const x = (S.auditRecheck || {})[id]; return x && x.co === S.coId && (x.busy || x.failed || x.run === lastAt()) ? x : null; };
+function RecheckCell({ f }) {
+  const x = recheckOf(f.id);
+  return <div className="audit-recheck">
+    <button type="button" className="btn small" data-audit-recheck={f.id} disabled={!!(x && x.busy)} onClick={() => recheck(f)}>Recheck</button>
+    {x && <small className="audit-sub" data-audit-recheck-say={f.id} style={{ color: x.busy ? "var(--muted)" : x.failed ? "var(--bad)" : x.still ? "var(--warn)" : "var(--ok)" }}>
+      {x.busy ? "Checking…" : x.failed ? "Could not check; try again" : (x.still ? "Still there" : "Put right ✓") + " · checked " + fmtTime(x.at)}</small>}
+  </div>;
+}
+function FindingsTable({ list, gone }) {
+  const rows = list.map((f) => ({ f, gone: false })).concat(gone.map((f) => ({ f, gone: true })));
+  const cols = [
+    { k: "no", label: "#", role: "row", cls: "n", cell: (r, p, i) => i + 1 },
+    { k: "sev", label: "Severity", v: (r) => -Audit.SEV[r.f.sev], cell: (r) => <><span className={"tag " + SEVTAG[r.f.sev]}>{SEV[r.f.sev][0]}</span>
+      {r.f.isNew ? <> <span className="tag warn">new</span></> : r.f.more > 0 ? <> <span className="tag warn">+{r.f.more}</span></> : null}</> },
+    { k: "area", label: "Area", v: (r) => areaName(r.f.area), cell: (r) => <>{areaName(r.f.area)}{r.f.clause && <small className="audit-sub">{r.f.clause}</small>}</> },
+    { k: "prob", label: "Problem", cls: "wrap", cell: (r) => { const f = r.f, open = S.auditOpen === f.id, sv = Audit.solvedOf(f.id).n;
+      return <><b className="audit-ftitle">{f.title}</b><div>{f.problem}</div>
+        {f.amount ? <small className="audit-sub">{"Amount " + m(f.amount)}</small> : null}
+        {sv > 0 && <small className="audit-sub" style={{ color: "var(--ok)" }}>{sv} put right</small>}
+        <button type="button" className="linkbtn" style={{ marginTop: 4 }} data-audit-details={f.id} aria-expanded={open ? "true" : "false"} onClick={() => tdsToggle("auditOpen", f.id)}>{(open ? "▾ " : "▸ ") + "Details"}</button></>; } },
+    { k: "sug", label: "Suggestion", cls: "wrap", cell: (r) => <><div>{r.f.suggestion}</div>{r.f.impact && <small className="audit-sub">{r.f.impact}</small>}</> },
+    { k: "st", label: "Status", cell: (r) => <><select aria-label={"Status of " + r.f.title} style={{ width: "auto", maxWidth: "100%" }} value={Audit.status(r.f.id).s} onChange={(ev) => auditFindingSet(r.f.id, "s", ev.target.value)}>
+      {Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      {r.f.je && <small className="audit-sub">{r.f.je.length + " suggested entr" + (r.f.je.length === 1 ? "y" : "ies")}</small>}</> },
+    { k: "re", label: "Recheck", role: "act", cell: (r) => <RecheckCell f={r.f} /> },
+  ];
+  return <div data-phone-scroll="" className="audit-ftable" data-audit-findings="" style={{ marginTop: 10 }}>
+    <ListTable name="auditFindings" cols={cols} rows={rows} rowKey={(r) => r.f.id} unit={["finding", "findings"]}
+      rowProps={(r) => ({ "data-key": r.f.id, "data-audit-gone": r.gone ? "" : undefined, style: r.gone ? { opacity: 0.75 } : undefined })}
+      after={(r) => (S.auditOpen === r.f.id ? <div style={{ padding: "4px 14px 12px" }} data-audit-body={r.f.id}><FindingBody f={r.f} st={Audit.status(r.f.id)} /></div> : null)}
+      empty="Nothing here. Choose Every status above, or run the audit again." />
+  </div>;
 }
 
 function Findings({ b }) {
@@ -128,7 +164,8 @@ function Findings({ b }) {
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
-  if (Audit.stale(run)) {
+  // (round 69: not while a finding's Recheck is running: that run is the one worked out again, and the table stays meanwhile)
+  if (Audit.stale(run) && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
     if (!Audit._again) { Audit._again = true; setTimeout(() => { try { Audit.run(run.from, run.to, "worked out again (the books changed since the run of " + fmtDate(String(run.at || "").slice(0, 10)) + ")"); saveBooks(); } catch (e) {} finally { Audit._again = false; render(); } }, 0); }
     return <><Head b={b} run={null} /><div className="bk-none" data-audit-again="" style={{ marginTop: 12 }}>{"Working out again for " + d(run.from) + " to " + d(run.to) + ": the books changed since the last run."}</div></>;
   }
@@ -136,6 +173,9 @@ function Findings({ b }) {
   const open = f0.filter((f) => Audit.status(f.id).s === "open").length, fresh = f0.filter((f) => f.isNew).length;
   const area = S.auditArea || "", fs = S.auditSt || "", list = f0.filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
   const gone = (run.solved || []).filter((x) => x.n && !f0.some((f) => f.id === x.id) && (!area || x.area === area));
+  // a finding put right by its Recheck stays on its row, saying so (round 69)
+  const reGone = Object.values(S.auditRecheck || {}).filter((x) => x.co === S.coId && x.f && x.run === run.at && !x.still && !f0.some((f) => f.id === x.f.id)).map((x) => x.f)
+    .filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
   // the period, the last run and the tiles; then the findings with their filters (clean-up batch 3: the areas are a row of
   // chips beside the status, not a second row of tabs)
   return <>
@@ -156,8 +196,7 @@ function Findings({ b }) {
       <div className="chip-filter" role="group" aria-label="Areas" data-audit-areas=""><button aria-pressed={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
         {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-pressed={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</div>
       <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div></div>
-    {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
-    {!list.length && <div className="bk-none lt-empty" data-list-empty="" style={{ marginTop: 10 }}>Nothing here. Choose Every status above, or run the audit again.</div>}
+    <FindingsTable list={list} gone={reGone} />
     {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid var(--ok)" }}><h3 style={{ color: "var(--ok)" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
       <ListRows name="auditGone" unit={["observation", "observations"]} head={[H("Observation"), { label: "Items", cls: "n", sum: true, fmt: String }, H("Amount", "amount", "n"), H("Last put right", "date")]}>
         {gone.map((x, i) => <tr key={x.id + ":" + i}><td>{x.title}</td><td className="n">{x.n}</td><td className="n">{m(x.amount)}</td><td>{fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10))}</td></tr>)}</ListRows></section>}

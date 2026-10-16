@@ -62,11 +62,12 @@ with sync_playwright() as p:
     run = pg.evaluate("S.books.audit && S.books.audit.last && {n: S.books.audit.last.findings.length, from: S.books.audit.last.from}")
     ok(run and run["n"] > 0 and run["from"] == "20250401", "Run now: findings for the period chosen (%s)" % run)
     fid = pg.evaluate("S.books.audit.last.findings[0].id")
-    sec = 'section[data-key=%s]' % json.dumps(fid)
-    pg.click(sec + ' > .row button.linkbtn'); pg.wait_for_timeout(400)
-    ok("Effect." in pg.inner_text(sec), "a finding opens: its effect and what to do")
-    pg.select_option(sec + ' > .row select', "pass"); pg.wait_for_timeout(400)
-    note = pg.locator(sec + ' input[aria-label="Note for the report"]'); note.fill("to reverse"); note.press("Tab"); pg.wait_for_timeout(400)
+    # round 69: the findings are one table; Details opens a finding under its row
+    sec = 'table[data-list=auditFindings] > tbody > tr[data-key=%s]' % json.dumps(fid); body = '[data-audit-body=%s]' % json.dumps(fid)
+    pg.click(sec + ' button[data-audit-details]'); pg.wait_for_timeout(400)
+    ok("Effect." in pg.inner_text(body), "a finding opens: its effect and what to do")
+    pg.select_option(sec + ' select', "pass"); pg.wait_for_timeout(400)
+    note = pg.locator(body + ' input[aria-label="Note for the report"]'); note.fill("to reverse"); note.press("Tab"); pg.wait_for_timeout(400)
     st = pg.evaluate("S.books.audit.st[%s]" % json.dumps(fid))
     ok(st["s"] == "pass" and st["note"] == "to reverse", "its status and note are kept")
     pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")   # settings sit in a closed section

@@ -143,47 +143,31 @@ const Audit = {
         impact: "Cash cannot be negative: entries are missing, dated wrongly, or the cash is not real. Auditors report this, and it can lead to additions as unexplained money.",
         amount: Math.max.apply(null, rows.map(r => r.amount)), suggestion: "Find the receipts or withdrawals that were not entered, or correct the dates.", je: null, rows: rows.slice(0, 300)};
     },
+    // round 69 (the owner, 16-Oct-2026: "Should have deducted" belongs in the audit): one TDS answer. The parties past a TDS
+    // limit with no TDS to cover it are TDSWatch.missed (src/js/66), the TDS page's own list, for each financial year the
+    // period touches: a finding per party, section and year (its id stays the same run to run), the TDS due its amount,
+    // the credits that count its entries. This check had its own working before, and differed from the TDS page (the rate
+    // without a PAN, the 194C bill limit, two years in one line).
     tdsMissed(A, V, ctx){
-      const done = new Set(TDS.allRows().filter(r => r.date >= ctx.from && r.date <= ctx.to).map(r => r.party));
-      const KEY = A.TDS_KEY;
-      const agg = {};
-      V.forEach(v => {
-        if (Books.isSale(v)) return;
-        const parties = v.ent.filter(e => e.a > 0 && (A.isCreditor(e.l) || (!A.mastersIn() && (S.books.pans || {})[e.l])));
-        if (!parties.length) return;
-        v.ent.filter(e => e.a < 0 && A.isExpense(e.l)).forEach(e => {
-          // a section accepted from AI help decides; otherwise the ledger's name
-          const ai = typeof AIH === "object" ? AIH.tdsRule(e.l) : undefined;
-          if (ai === "none") return;
-          const k = ai ? [null, ai] : KEY.find(([re]) => re.test(e.l));
-          if (!k) return;
-          const p = parties[0].l;
-          if (done.has(p) || /\bBANK\b|GOVERNMENT|MUNICIPAL|\bLIC\b/i.test(p)) return;
-          const x = agg[p + "|" + k[1]] = agg[p + "|" + k[1]] || {party: p, rule: k[1], amt: 0, max: 0, months: {}, v, ledger: e.l};
-          x.amt = r2(x.amt - e.a); x.max = Math.max(x.max, -e.a); x.months[v.date.slice(0, 6)] = r2((x.months[v.date.slice(0, 6)] || 0) - e.a);
+      if (typeof TDSWatch !== "object") return null;
+      const y0 = num(TDS.fyOf(ctx.from).slice(0, 4)), y1 = num(TDS.fyOf(ctx.to).slice(0, 4)), out = [], m = v => "\u20b9" + INR.format(r2(v || 0));
+      for (let y = y0; y <= y1; y++){
+        const fy = y + "-" + String(y + 1).slice(2);
+        TDSWatch.missed(fy).forEach(e => {
+          const foreign = /\b(INC|LLC|GMBH|PTE|PTY|IRELAND|SINGAPORE|USA|UK|B\.?V|AG|SARL)\b/i.test(e.party) && !(S.books.gstins || {})[e.party];
+          const led = (e.ledgers || []).join(", "), tl = A.tdsLedger(e.section) || "TDS PAYABLE " + e.section;
+          out.push({key: e.party + "|" + e.section + "|" + fy, party: e.party, section: e.section, fy, base: e.uncovered, area: "tds", sev: e.due >= 10000 ? "high" : "medium",
+            clause: "3CD 21(b), 34(a); section 40(a)(ia)", title: e.section + " not deducted: " + e.party + ", " + fy,
+            problem: "Paid " + m(e.credited) + " in " + fy + " (" + led + "), past the " + e.limitWords + " limit; not covered by TDS " + m(e.uncovered) + "." + (e.pan ? "" : " No PAN in Tally."),
+            impact: "30% of " + m(e.uncovered) + " (" + m(e.disallow) + ") is disallowed under section 40(a)(ia) until the TDS is paid; interest under section 201(1A) runs on the TDS (about " + m(e.interest) + " to today).",
+            suggestion: (foreign ? "Looks non-resident: check section 195 or the equalisation levy first. " : "") + "Deduct TDS at " + e.rate + "% (" + m(e.due) + ") from the next payment, and deposit it with interest; then file the correction statement." +
+              (e.pan ? "" : " Get the PAN: without it the rate is 20%."),
+            amount: e.due, je: foreign ? null : [{date: ctx.to, narr: "TDS under section " + e.section + " not deducted on " + led + " for " + fy, lines: [{l: e.party, dr: e.due}, {l: tl, cr: e.due}]}],
+            rows: e.credits.filter(c => c.counts !== false).map(c => ({vid: c.vid || "", date: c.date, no: c.voucher || "", type: e.section, party: e.party, amount: c.amount,
+              note: "booked to " + (c.ledger || led) + "; " + e.section + " at " + e.rate + "%" + (e.pan ? "" : " (no PAN)")}))});
         });
-      });
-      const rows = [], je = [];
-      Object.values(agg).forEach(x => {
-        const r = RULE_DEFAULTS.find(z => z.id === x.rule);
-        if (!r) return;
-        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "single" ? x.max >= r.single : r.basis === "always" ? x.amt > 0 : r.basis === "never" ? false : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
-        if (!over) return;
-        const pan = (S.books.pans || {})[x.party] || "", rate = /^[A-Z]{3}[PH]/.test(pan) ? r.rateInd : r.rateOth;
-        const tds = r2(x.amt * rate / 100);
-        const foreign = /\b(INC|LLC|GMBH|PTE|PTY|IRELAND|SINGAPORE|USA|UK|B\.?V|AG|SARL)\b/i.test(x.party) && !(S.books.gstins || {})[x.party];
-        rows.push(A.row(x.v, {party: x.party, amount: x.amt, note: (foreign ? "looks non-resident: section 195 or the equalisation levy, not " + r.old + "; " : "") + r.old + " at " + rate + "%: TDS " + A.money(tds) + (pan ? "" : "; no PAN in Tally, so 20%") + " \u00b7 booked to " + x.ledger}));
-        if (foreign) return;
-        const tl = A.tdsLedger(r.old) || "TDS PAYABLE " + r.old;
-        je.push({date: ctx.to, narr: "TDS under section " + r.old + " not deducted on " + x.ledger + " for the period", lines: [{l: x.party, dr: tds}, {l: tl, cr: tds}]});
-      });
-      if (!rows.length) return null;
-      const amt = rows.reduce((s, r) => s + r.amount, 0);
-      return {area: "tds", sev: "high", clause: "3CD 21(b), 34(a); section 40(a)(ia)", title: "Expenses where TDS was due but not deducted",
-        problem: rows.length + " parties crossed the TDS limit for their kind of expense and have no TDS in the books.",
-        impact: "30% of the expense is disallowed under section 40(a)(ia) (\u20b9" + INR.format(r2(amt * 0.3)) + "), with interest under section 201(1A) on the TDS.", amount: amt,
-        suggestion: "Deduct the TDS now from the next payment, deposit it with interest, and file the correction statement. If it is paid before the due date of the return, the expense is allowed this year.",
-        je, rows};
+      }
+      return out;
     },
     tdsLate(A, V, ctx){
       const fy = TDS.fyOf(ctx.to), rows = [];

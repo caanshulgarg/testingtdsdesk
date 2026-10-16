@@ -6,7 +6,9 @@ const fs = require("fs"), path = require("path"), {load, openBlob, HTML, FIXTURE
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "TDS_FORMS", "PAY_CODES", "GSTIN_RE", "Books", "LedMaster", "Audit", "MIS", "TDS", "TDSInt", "TDSFiled", "Certs", "GSTR", "GSTAdv", "GSTRev",
   "GSTAmend", "GST2B", "GSTSet", "GSTF", "GSTQ", "GSTV", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "TDS26Q", "AS26", "PreFile", "D",
   // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
-  "TDS_SEC_CODES", "TDSReg", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
+  "TDS_SEC_CODES", "TDSReg", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday",
+  // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)
+  "TDSWatch", "TDSRate", "noPanRate", "NO_PAN_RATE"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {
   let ld, names = NAMES.slice();
@@ -43,7 +45,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   const L = Object.fromEntries(t.lines.map((l) => [l.id, l]));
   console.log("  26Q Q4: " + t.lines.map((l) => l.id + " " + l.status + (l.count ? " " + l.count : "")).join(" · "));
   ok(t.from === "20260101" && t.to === "20260331", "Q4 2025-26 is 01-Jan-2026 to 31-Mar-2026");
-  ok(L.missed.status === "fix" && L.missed.count === 1 && L.missed.findings[0].rows[0].party === "Ashvattha Transport Co" && L.missed.findings[0].rows[0].amount === 40000, "missed: Ashvattha's freight of 40,000 (194C limit 30,000), no TDS");
+  ok(L.missed.status === "fix" && L.missed.count === 1 && L.missed.findings.length === 1 && L.missed.findings[0].rows[0].party === "Ashvattha Transport Co" && L.missed.findings[0].rows[0].amount === 40000, "missed: Ashvattha's freight of 40,000 (194C limit 30,000), no TDS");
   const unpaid = L.challan.findings.flatMap((f) => f.rows);
   ok(L.challan.status === "fix" && unpaid.length === 3 && unpaid.map((r) => r.amount).sort((a, c) => a - c).join(",") === "2000,3000,3000", "challans: the quarter's three deductions (3,000 Jan, 3,000 Feb, 2,000 Mar) not against a challan");
   const late = L.late.findings[0].rows;

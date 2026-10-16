@@ -10,7 +10,9 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML, OUT} = require("./harness"), {makeBooks, finish} = require("./audit_fixture");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
   "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "AS26", "GSTCMP", "GSTAPI", "TDSRate", "TDSInt", "GSTIN_RE", "TDSFiled", "ClosedP",
-  "BOOKS_KEYS", "AuditWP"];
+  "BOOKS_KEYS", "AuditWP",
+  // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)
+  "TDSWatch", "noPanRate", "NO_PAN_RATE"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const f = makeBooks();

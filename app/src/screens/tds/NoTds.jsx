@@ -2,8 +2,10 @@
 // out from the day book ... once either is in [Bring in from Tally]", as if the Day Book were missing. Now, plainly: no TDS
 // deducted in the client's books over the period they cover; the TDS ledgers that have no entries, by name (not the TDS
 // receivable: TDS deducted by the client's customers); and the existing "should have deducted" check (TDSWatch.missed,
-// src/js/66) over each year of the books, so a missed deduction shows. The salary import stays. Nothing is worked out here
-// that TDSWatch does not already.
+// src/js/66) over each year of the books, so a missed deduction shows (round 69: as one line that opens the Audit's
+// findings, area TDS). The salary import stays. Nothing is worked out here that TDSWatch does not already.
+
+import { FinComNav } from "../../nav.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const d8 = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
@@ -43,32 +45,30 @@ function yearsOf(span) {
   return out;
 }
 
-// round 68 (the owner, 16-Oct-2026: "show it in a box and it should be financial year wise"): "Should have deducted" is one
-// box with a chip a year of the books (its count and total); the chosen year's line and table under them. The figures are
-// TDSWatch.missed's, a year at a time, as before
-function MissedBox({ years }) {
-  const by = years.map((fy) => { let l = []; try { l = TDSWatch.missed(fy) || []; } catch (e) { l = []; }
-    return { fy, l, due: r2(l.reduce((a, x) => a + x.due, 0)), np: new Set(l.map((x) => x.party)).size }; });
-  if (!by.some((y) => y.l.length)) return null;
-  const pick = by.find((y) => y.fy === S.tdsMissFy) || [...by].reverse().find((y) => y.l.length) || by[by.length - 1];
-  const parties = (n) => n + " part" + (n === 1 ? "y" : "ies");
-  return <section className="dash-card" data-missed-box="" style={{ textAlign: "left", marginTop: 14 }}>
-    <h3 style={{ margin: "0 0 8px" }}>Should have deducted</h3>
-    <div className="row" role="group" aria-label="Financial year" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 10px" }}>
-      {by.map((y) => <button key={y.fy} type="button" className={"btn small" + (y.fy === pick.fy ? " primary" : "")} data-missed-fy={y.fy} aria-pressed={y.fy === pick.fy ? "true" : "false"}
-        onClick={() => { S.tdsMissFy = y.fy; render(); }}>{y.fy + " · " + (y.l.length ? parties(y.np) + " · " + money(y.due) : "none")}</button>)}</div>
-    {pick.l.length ? <>
-      <p style={{ margin: "0 0 4px", color: "var(--text)" }} data-missed=""><b>{"Should have deducted in " + pick.fy + ": " + parties(pick.np) + ", TDS " + money(pick.due)}</b></p>
-      <p className="note" style={{ margin: "0 0 6px" }}>Payments past the TDS limit with no TDS entry against them.</p>
-      <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tds-missed="">
-        <thead><tr><th>Party</th><th>Kind</th><th className="n">Paid</th><th className="n">Not covered by TDS</th><th className="n">TDS due</th></tr></thead>
-        <tbody>{pick.l.slice(0, 10).map((x) => <tr key={x.party + "|" + x.rule}>
-          <td>{x.party}</td><td>{x.section}<div className="nr">{x.limitWords}</div></td>
-          <td className="n">{money(x.credited)}</td><td className="n">{money(x.uncovered)}</td><td className="n bad">{money(x.due)}<div className="nr">{"at " + x.rate + "%" + (x.pan ? "" : ", no PAN in Tally")}</div></td></tr>)}</tbody>
-      </table></div>
-      {pick.l.length > 10 && <p className="note">{"and " + (pick.l.length - 10) + " more"}</p>}</>
-      : <p className="note" data-missed-none="" style={{ margin: 0 }}>{"Nothing missed in " + pick.fy + ": no payment went past a TDS limit without TDS."}</p>}
-  </section>;
+// round 69 (the owner, 16-Oct-2026: "should be somewhere else.. it should be the audit part"): the round-68 box is gone.
+// One line says how many parties and how much TDS (TDSWatch.missed over each year of the books, as before), and opens the
+// client's Audit, Findings, area TDS, where each is a row with its problem, suggestion and Recheck (the audit's TDS-not-
+// deducted findings are TDSWatch.missed: one answer)
+function missedOf(years) {
+  const l = years.flatMap((fy) => { try { return TDSWatch.missed(fy) || []; } catch (e) { return []; } });
+  return { n: new Set(l.map((x) => x.party)).size, due: r2(l.reduce((a, x) => a + x.due, 0)), any: l.length > 0 };
+}
+// the Audit for the books' period: run first when no run covers it
+async function openInAudit(span) {
+  const run = ((S.books || {}).audit || {}).last;
+  if (span && !(run && run.from <= span.from && run.to >= span.to)) {
+    S.auditRange = { from: Audit.iso(span.from), to: Audit.iso(span.to) };
+    try { await auditRunFresh(span.from, span.to, "from the TDS page"); } catch (e) {}
+  }
+  S.auditTab = "find"; S.auditArea = "tds"; S.auditSt = "";
+  goClient("books:audit");
+}
+function MissedLine({ span }) {
+  const x = missedOf(yearsOf(span));
+  if (!x.any) return null;
+  return <p className="note" style={{ margin: "8px 0 0", color: "var(--text)" }} data-tds-missed-line="">
+    {"Payments that may have needed TDS: " + x.n + " part" + (x.n === 1 ? "y" : "ies") + ", " + money(x.due) + " — see Audit "}
+    <button type="button" className="btn small" data-tds-to-audit="" onClick={() => FinComNav.go(() => openInAudit(span))}>Open in Audit</button></p>;
 }
 
 export default function NoTds({ b }) {
@@ -76,7 +76,7 @@ export default function NoTds({ b }) {
   return <div className="tg-empty" data-list-empty="" data-tds-none="">
     <p style={{ margin: 0, color: "var(--text)" }}><b>{"No TDS deducted in " + (co.name || "the client") + "’s books" + (span ? " (" + fmtDate(tallyDate(span.from)) + " to " + fmtDate(tallyDate(span.to)) + ")" : "") + "."}</b></p>
     {led.length > 0 && <p className="note" style={{ margin: "6px 0 0" }} data-tds-empty-ledgers="">{"TDS ledgers with no entries: " + led.join(", ")}</p>}
-    {typeof TDSWatch === "object" && <MissedBox years={yearsOf(span)} />}
+    {typeof TDSWatch === "object" && <MissedLine span={span} />}
     <div className="row" style={{ gap: 8, justifyContent: "center", marginTop: 10 }}>
       <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div>
   </div>;

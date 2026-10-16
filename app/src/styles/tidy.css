@@ -289,3 +289,31 @@
   #app .tg2 .tg-pick { flex-wrap: wrap; }
   #app .tg2 .tg-q, #app .tg2 .tg-pick, #app .tg2 .tg-pick select { width: 100%; min-width: 0; }
 }
+
+/* round 69 (the owner, 16-Oct-2026: "in a table format properly.. so that anyone can read it"): the audit's findings, one
+   table (Audit.jsx FindingsTable). Fixed columns, so the problem and the suggestion wrap and nothing runs off the right; on
+   a phone the table keeps its columns at a set width and scrolls in its own box ([data-phone-scroll], above). Only the
+   findings table itself: the tables in a finding's Details keep their own layout */
+#app .audit-ftable > .lt-wrap > table.lt.lt { table-layout: fixed; width: 100%; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(1) { width: 44px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(2) { width: 112px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(3) { width: 132px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(6) { width: 150px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(7) { width: 150px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > tbody > tr > td { vertical-align: top; }
+#app .audit-ftable .audit-sub { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); white-space: normal; }
+#app .audit-ftable .audit-ftitle { display: block; margin-bottom: 2px; }
+#app .audit-ftable > .lt-wrap > table.lt.lt > tbody > tr > td select { width: 100%; max-width: 100%; }
+#app .audit-ftable .audit-recheck .btn { white-space: nowrap; }
+/* a finding's Details sit in a cell of the table: their own tables break words as before (not anywhere, as the list does) */
+#app .audit-ftable [data-audit-body] table td { overflow-wrap: normal; }
+#app .audit-ftable [data-audit-body] table td:first-child { white-space: nowrap; }
+@media (max-width: 600px) {
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt { table-layout: fixed; width: 980px; min-width: 980px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(1) { width: 36px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(2) { width: 100px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(3) { width: 104px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(6) { width: 132px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(7) { width: 116px; }
+  #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > tbody > tr > td { white-space: normal; min-width: 0; }
+}

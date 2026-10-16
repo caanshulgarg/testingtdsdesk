@@ -18,6 +18,7 @@ run_audit2.js                         120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_audit_wp.js                       120
+run_audit_tds.js                      120
 run_audit_wp_tool.py                  300
 run_audit_wp_ui.py                    120  TDSDESK_SITE=../app/dist-test
 run_backup_history_server.py          120

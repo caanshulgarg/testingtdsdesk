@@ -271,17 +271,22 @@ const TDSWatch = {
   yearNow(fy){
     const b = S.books || {}, agg = {}, start = fy.slice(0, 4) + "0401", end = (num(fy.slice(0, 4)) + 1) + "0331";
     (b.vouchers || []).forEach(v => {
-      if (v.opt || v.cancel || !v.party || Books.isSale(v)) return;
+      if (v.opt || v.cancel || Books.isSale(v)) return;
+      // round 69: an entry that names no party (a journal "Freight Dr / Sharma Roadways Cr"): the one supplier it credits, as
+      // the audit's own check took it before the audit came to read this list
+      let party = v.party;
+      if (!party){ const cr = v.ent.filter(e => e.a > 0 && Audit.isCreditor(e.l)); if (cr.length === 1) party = cr[0].l; }
+      if (!party) return;
       const d = TDS.ymd(v.date); if (d < start || d > end) return;
-      const pe = v.ent.find(e => e.l === v.party); if (!pe || !(pe.a > 0)) return;
-      if (/\bBANK\b|GOVERNMENT|MUNICIPAL|\bLIC\b/i.test(v.party)) return;
+      const pe = v.ent.find(e => e.l === party); if (!pe || !(pe.a > 0)) return;
+      if (/\bBANK\b|GOVERNMENT|MUNICIPAL|\bLIC\b/i.test(party)) return;
       v.ent.forEach(e => {
-        if (!(e.a < 0) || e.l === v.party || Books.ledgerOf(e.l).kind) return;
+        if (!(e.a < 0) || e.l === party || Books.ledgerOf(e.l).kind) return;
         if (Audit.mastersIn() && !Audit.isExpense(e.l)) return;
         const rule = this.ruleOf(e.l); if (!rule) return;
-        const k = v.party + "|" + rule, x = agg[k] = agg[k] || {party: v.party, rule, credited: 0, max: 0, months: {}, credits: [], ledgers: new Set()};
+        const k = party + "|" + rule, x = agg[k] = agg[k] || {party, rule, credited: 0, max: 0, months: {}, credits: [], ledgers: new Set()};
         const a = r2(-e.a); x.credited = r2(x.credited + a); x.max = Math.max(x.max, a); x.months[d.slice(0, 6)] = r2((x.months[d.slice(0, 6)] || 0) + a);
-        x.credits.push({date: d, amount: a, voucher: v.no || v.ref || ""}); x.ledgers.add(e.l);
+        x.credits.push({date: d, amount: a, voucher: v.no || v.ref || "", vid: v.id, ledger: e.l}); x.ledgers.add(e.l);
       });
     });
     const rows = TDS.allRows().filter(r => r.fy === fy), today = TDSFiled.todayIst(), out = [];
@@ -315,7 +320,9 @@ const TDSWatch = {
         : R.basis === "always" ? "any amount" : R.basis === "single" ? "₹" + INR.format(R.single) + " a payment" : "₹" + INR.format(R.limit) + " a year";
       const used = R.basis === "monthly" ? Math.max.apply(null, Object.values(x.months)) / R.limit : R.basis === "single_or_annual" ? Math.max(x.credited / R.limit, x.max / R.single) : R.limit ? x.credited / R.limit : 1;
       out.push({party: x.party, rule: x.rule, section: R.old, label: R.label, ledgers: Array.from(x.ledgers), credited: x.credited, limitWords: limitWords + (R.fromTally ? " (Tally: " + R.fromTally + ")" : ""), limitFrom: R.fromTally || "", used: r2(used * 100), over, tds, covered, base, pan, rate,
-        uncovered, due: r2(uncovered * rate / 100), interest: r2(interest), disallow: r2(uncovered * 0.3), credits: x.credits});
+        uncovered, due: r2(uncovered * rate / 100), interest: r2(interest), disallow: r2(uncovered * 0.3),
+        // each credit marked whether it counts towards the TDS (round 69: the audit's entries behind the finding)
+        credits: x.credits.map(c => Object.assign({}, c, {counts: !!over && !!counts(c)}))});
     });
     return out.sort((a, c) => c.used - a.used);
   },

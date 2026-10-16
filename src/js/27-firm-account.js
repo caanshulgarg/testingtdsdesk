@@ -1342,6 +1342,13 @@ document.addEventListener("click", ev => {
   if (t.id === "drop"){ pickFiles("company"); return; }
   if (t.dataset.act) doAct(t.dataset.act, t); else S.arm = null;   // any other button disarms a pending delete
 });
+// the audit run of Run now / Recheck all (doAct "auditRun") and of a finding's Recheck (Audit, round 69): the books in
+// FinCom's cloud first (review of 02-Oct-2026: the audit ran on whatever this browser held), then Audit.run for the period
+async function auditRunFresh(from, to, how){
+  if (typeof TCloud === "object" && TCloud.on()){ try { await TCloud.status(S.coId); if (TCloud.has(S.coId) && await TCloud.load() === "new") TCloud.rework(S.books); } catch (e){} }
+  const run = Audit.run(from, to, how); saveBooks();
+  return run;
+}
 /* ---------- the actions behind the buttons: doAct("name") from React, or a data-act button of an old screen ----------
    t is the button (only a few actions read more of it than its data-act); from React it may be left out */
 function doAct(act, t){
@@ -1665,12 +1672,9 @@ function doAct(act, t){
     case "auditRun": {
       const b = S.books, dr = Audit.defaultRange(b), r = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       if (!r.from || !r.to || r.from > r.to){ toast("Choose a period: from a date to a later one."); break; }
-      // the books in FinCom's cloud first (review of 02-Oct-2026: the audit ran on whatever this browser held)
-      (async () => {
-        if (typeof TCloud === "object" && TCloud.on()){ try { await TCloud.status(S.coId); if (TCloud.has(S.coId) && await TCloud.load() === "new") TCloud.rework(S.books); } catch (e){} }
-        const run = Audit.run(r.from, r.to, "run now"); saveBooks();
+      auditRunFresh(r.from, r.to, "run now").then(run => {
         toast(run.vouchers + " entries from " + fmtDate(Audit.iso(run.from)) + " to " + fmtDate(Audit.iso(run.to)) + ": " + run.findings.length + " findings, " + run.findings.filter(f => f.sev === "high").length + " serious."); render();
-      })();
+      });
       break;
     }
     case "auditReport": {

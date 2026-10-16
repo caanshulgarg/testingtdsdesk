@@ -44,7 +44,7 @@ const PreFile = {
       const inQ = f => Object.assign({}, f, {rows: (f.rows || []).filter(x => !x.date || (x.date >= from && x.date <= to))});
       const L = [];
       L.push(this.line("missed", "Deductions missed: TDS limit crossed, nothing deducted", "Suppliers whose payments crossed the section's limit (by the quarter's end) with no TDS in the books.",
-        () => form !== "26Q" ? null : this.audit("tdsMissed", fyFrom, to).map(inQ)));
+        () => form !== "26Q" ? null : this.audit("tdsMissed", fyFrom, to).map(inQ).filter(f => f.rows.length)));   // round 69: a finding per party and year; those with entries in the quarter
       L.push(this.line("rate", "Wrong section or rate", "Deductions at a lower rate than the section and the deductee's PAN call for.",
         () => form === "24Q" ? null : this.audit("tdsRate", from, to)));
       L.push(this.line("challan", "Challans not matched", "Deductions of the quarter not put against a challan (not deposited, or not matched yet).",

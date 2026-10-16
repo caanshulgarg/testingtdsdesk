@@ -933,8 +933,10 @@ Object.assign(Audit, {
     add("4", "GST registrations", ["GSTIN"], ((b.meta || {}).gstins || []).map(g => [g]));
     const pen = f("penalties");
     add("21(a)", "Penalties, fines and similar amounts debited to profit and loss", ["Ledger", "Amount", "Nature"], pen ? pen.rows.map(r => [r.party, r.amount, r.note]) : [], pen ? "" : "None found in the books.");
-    const tm = f("tdsMissed");
-    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm ? tm.rows.map(r => [r.party, r.amount, r.note]) : [], tm ? "" : "None found.");
+    // round 69: the TDS not deducted is a finding per party, section and year (TDSWatch.missed); its entries, the expense
+    // TDS was due on, as the working papers list them
+    const tm = run.findings.filter(x => x.check === "tdsMissed");
+    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.rows.map(r => [r.party, r.amount, r.note])), tm.length ? "" : "None found.");
     const c3 = f("cash40A3");
     add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
     const ms = f("msme43Bh");
@@ -949,10 +951,10 @@ Object.assign(Audit, {
     add("31(b), 31(c)", "Loans or deposits repaid otherwise than by bank (section 269T)", ["Date", "To", "Amount"], lr ? lr.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lr ? "" : "None found in cash.");
     add("31(ba)", "Receipts of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "From", "Amount"], st ? st.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], st ? "" : "None found.");
     // 34(a): section by section, from the deductions and what was missed
-    const fy = TDS.fyOf(to), rows34 = {}, missed = tm ? tm.rows : [];
+    const fy = TDS.fyOf(to), rows34 = {}, missed = tm.flatMap(x => x.rows);
     TDS.allRows().filter(r => r.date >= from && r.date <= to).forEach(r => { const x = rows34[r.section] = rows34[r.section] || {paid: 0, tds: 0, n: 0, low: 0}; x.paid = r2(x.paid + r.paid); x.tds = r2(x.tds + r.tds); x.n++; });
     ["Q1", "Q2", "Q3", "Q4"].forEach(q => Certs.issues(fy, q).filter(x => x.short > 0 && x.row.date >= from && x.row.date <= to).forEach(x => { const y = rows34[x.row.section]; if (y) y.low++; }));
-    const miss = {}; missed.forEach(r => { const s2 = (r.note.match(/^(?:looks non-resident[^;]*; )?(\S+) at/) || [])[1] || "?"; miss[s2] = r2((miss[s2] || 0) + r.amount); });
+    const miss = {}; missed.forEach(r => { const s2 = r.type || "?"; miss[s2] = r2((miss[s2] || 0) + r.amount); });
     Object.keys(rows34).forEach(k2 => { if (!k2){ rows34["not set (a TDS ledger with no section)"] = rows34[k2]; delete rows34[k2]; } });
     add("34(a)", "Tax deducted at source, section by section", ["Section", "Paid or credited", "On which tax was to be deducted", "Tax deducted", "Deductions at a lower rate", "Paid or credited without deduction"],
       Object.keys(Object.assign({}, rows34, miss)).sort().map(s2 => { const x = rows34[s2] || {paid: 0, tds: 0, low: 0}; return [s2, x.paid + (miss[s2] || 0), x.paid + (miss[s2] || 0), x.tds, x.low, miss[s2] || 0]; }),

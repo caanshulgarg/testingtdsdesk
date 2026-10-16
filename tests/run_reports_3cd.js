@@ -11,7 +11,9 @@
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
   // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
-  "TDS_SEC_CODES", "TDSReg", "TDSInt", "TDSFiled", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
+  "TDS_SEC_CODES", "TDSReg", "TDSInt", "TDSFiled", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday",
+  // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)
+  "TDSWatch", "TDSRate", "noPanRate", "NO_PAN_RATE"];
 // the audit helper's module, when the program has it (after 77-audit.js is merged)
 const names = NAMES.concat(/\nconst AuditWP\b/.test(fs.readFileSync(HTML, "utf8")) ? ["AuditWP", "GSTCMP", "AS26"].filter(n => n === "AuditWP" || new RegExp("\\nconst " + n + "\\b").test(fs.readFileSync(HTML, "utf8"))) : []);
 const {ctx, x} = load(HTML, names);
@@ -41,7 +43,9 @@ const unzip = (buf) => { const out = {}; let i = 0; const b = Buffer.from(buf); 
   ok(C("21(d)").rows.length >= 1 && C("21(d)").rows.length === (viaWp ? r.counts.wp_cash40A3 : cnt("cash40A3")) && C("21(d)").src === "books", "1. 21(d) 40A(3): " + C("21(d)").rows.length + " rows = the audit's cash40A3 count");
   ok(C("31(a)").rows.length >= 1 && C("31(b)").rows.length >= 1 && C("31(a)").rows.length === cnt("cashLoans:269SS") && C("31(b)").rows.length === cnt("cashLoans:269T"), "1. 31(a) 269SS " + C("31(a)").rows.length + ", 31(b) 269T " + C("31(b)").rows.length + " = the audit's counts");
   ok(C("31(ba)").rows.length >= 1 && C("31(ba)").rows.length === cnt("cash269ST"), "1. 31(ba) 269ST: " + C("31(ba)").rows.length + " = the audit's count");
-  ok(C("21(b)").rows.length === cnt("tdsMissed") && C("21(b)").rows.reduce((a, z) => a + z[1], 0) === x.r2((F("tdsMissed") || {amount: 0}).amount), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " parties, the same amount as the audit's TDS-not-deducted finding");
+  // round 69: TDS not deducted is a finding per party, section and year (TDSWatch.missed); 21(b) lists the entries behind them
+  const tm = r.run.findings.filter(f => f.check === "tdsMissed"), tmRows = tm.flatMap(f => f.rows);
+  ok(C("21(b)").rows.length === tmRows.length && x.r2(C("21(b)").rows.reduce((a, z) => a + z[1], 0)) === x.r2(tmRows.reduce((a, z) => a + z.amount, 0)), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " entries of " + tm.length + " parties, the same amount as the audit's TDS-not-deducted findings");
   ok(C("22").rows.length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "43B(h) MSME").length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "statutory dues").length === cnt("balances:43B"), "1. 22 and 26: 43B(h) " + cnt("msme43Bh") + " bills, 43B " + cnt("balances:43B") + " dues = the audit's counts");
   const c34 = C("34(a)");
   ok(c34.rows.length > 0 && c34.rows.every(z => Math.abs(z[1] - z[2]) < 0.01), "1. 34(a): " + c34.rows.length + " sections from FinCom's TDS");

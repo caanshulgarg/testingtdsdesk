@@ -4,8 +4,9 @@ and "Tds Receivable FY 25-26" under Loans & Advances (TDS deducted by its custom
 "TDS is worked out from the day book ... once either is in [Bring in from Tally]", as if the Day Book were missing. Now:
   - books in, no TDS: "No TDS deducted in GB TEXCOAT's books (01-Apr-2025 to 12-Oct-2026)." and "TDS ledgers with no
     entries: TDS194J Professional" (not the receivable); the salary import kept, no "Bring in from Tally";
-  - the "should have deducted" check (TDSWatch.missed): CA Firm's professional fees past the 194J limit with no TDS, with
-    the TDS due;
+  - round 69: the "should have deducted" box is gone; one line "Payments that may have needed TDS: 1 party, ₹… — see
+    Audit" and "Open in Audit", which lands on the client's Audit findings, area TDS, CA Firm's rows there with the TDS due
+    of TDSWatch.missed (a row a year);
   - no entries at all: the old wording and "Bring in from Tally".
 A fresh browser, TDS opened directly (goClient("books:tds")), against a stand-in for FinCom's cloud (as run_gb_pages).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tds_empty.py [--shots DIR]"""
@@ -121,30 +122,40 @@ with sync_playwright() as p:
        "books in: 'No TDS deducted in GB TEXCOAT's books (%s to %s).' (%s)" % (d1, d2, box[:160].replace("\n", " ")))
     led = re.search(r"TDS ledgers with no entries: ([^\n]*)", box)
     ok(led and "TDS194J Professional" in led.group(1) and "Receivable" not in led.group(1), "the TDS ledger with no entries named, the customers' TDS receivable not (%s)" % (led.group(0) if led else box[:300]))
-    miss = pg.evaluate("(() => [...document.querySelectorAll('#app [data-tds-none] [data-tds-missed] tr')].map(t => t.innerText.replace(/\\s+/g, ' ')))()")
-    ok(any("CA Firm" in r and re.search(r"[1-9][\d,]*\.\d\d", r) for r in miss), "should have deducted: CA Firm's professional fees past the 194J limit, with the amounts (%s)" % miss[:3])
-    # round 68 (the owner: "show it in a box and it should be financial year wise"): one box, a chip per year of the books,
-    # the latest year with an item chosen, its rows only, no Year column; the other chip shows that year
-    chips = pg.evaluate("[...document.querySelectorAll('#app [data-missed-box] [data-missed-fy]')].map(c => [c.getAttribute('data-missed-fy'), c.getAttribute('aria-pressed'), c.innerText.replace(/\\s+/g, ' ')])")
-    ok(pg.locator("#app [data-tds-none] [data-missed-box]").count() == 1 and [c[0] for c in chips] == ["2025-26", "2026-27"], "round 68: one box, a chip per year of the books (%s)" % chips)
-    per = pg.evaluate("(() => ['2025-26', '2026-27'].map(y => TDSWatch.missed(y).length))()")
-    want = "2026-27" if per[1] else "2025-26"
-    ok([c[0] for c in chips if c[1] == "true"] == [want], "round 68: the latest year with an item is chosen (%s; items per year %s)" % ([c[0] for c in chips if c[1] == "true"], per))
-    heads = pg.evaluate("[...document.querySelectorAll('#app [data-tds-missed] thead th')].map(t => t.innerText.trim())")
-    ok("Year" not in heads and heads[:1] == ["Party"], "round 68: no Year column, the chip says it (%s)" % heads)
-    ok(re.search(r"Should have deducted in " + want + r": \d+ part(y|ies), TDS ₹[\d,]+\.\d\d", txt := pg.inner_text("#app [data-missed-box]")) is not None, "round 68: the year's line (%s)" % txt[:200].replace("\n", " "))
-    other = "2026-27" if want == "2025-26" else "2025-26"
-    pg.click('#app [data-missed-fy="%s"]' % other); pg.wait_for_timeout(400)
-    t2 = pg.inner_text("#app [data-missed-box]")
-    ok(pg.get_attribute('#app [data-missed-fy="%s"]' % other, "aria-pressed") == "true" and (("Nothing missed in " + other) in t2 if not per[["2025-26", "2026-27"].index(other)] else ("Should have deducted in " + other) in t2),
-       "round 68: the other chip shows its year (%s)" % t2[:160].replace("\n", " "))
-    pg.click('#app [data-missed-fy="%s"]' % want); pg.wait_for_timeout(300)
+    # round 69 (the owner, 16-Oct-2026: "it should be the audit part.. problem and suggestions and recheck.. in a table"): the
+    # "Should have deducted" box is gone from the TDS page; one line says how many parties and how much, and opens the
+    # client's Audit findings, area TDS, where each is a row of the findings table (the same figures: TDSWatch.missed)
+    ok(pg.locator("#app [data-missed-box]").count() == 0 and pg.locator("#app [data-missed-fy]").count() == 0 and pg.locator("#app [data-tds-missed]").count() == 0,
+       "round 69: no 'Should have deducted' box on the TDS page")
+    W = pg.evaluate("""(() => { const l = ['2025-26', '2026-27'].flatMap(fy => TDSWatch.missed(fy).map(e => ({fy, party: e.party, section: e.section, due: e.due})));
+      return {l, n: new Set(l.map(e => e.party)).size, due: Math.round(l.reduce((a, e) => a + e.due, 0) * 100) / 100, words: '₹' + INR.format(Math.round(l.reduce((a, e) => a + e.due, 0) * 100) / 100)}; })()""")
+    line = pg.evaluate("(() => { const x = document.querySelector('#app [data-tds-none] [data-tds-missed-line]'); return x ? x.innerText.replace(/\\s+/g, ' ') : ''; })()")
+    want_n = "%d part%s" % (W["n"], "y" if W["n"] == 1 else "ies")
+    ok(W["l"] and any(e["party"] == "CA Firm" for e in W["l"]) and ("Payments that may have needed TDS: " + want_n + ", " + W["words"] + " — see Audit") in line,
+       "round 69: the one line 'Payments that may have needed TDS: %s, %s — see Audit' (%s)" % (want_n, W["words"], line))
+    ok(pg.locator("#app [data-tds-none] button[data-tds-to-audit]").count() == 1 and pg.inner_text("#app [data-tds-none] button[data-tds-to-audit]").strip() == "Open in Audit", "round 69: its button 'Open in Audit'")
     pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
-    ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "round 68: phone width, no sideways scroll")
+    ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "round 69: phone width, no sideways scroll")
+    if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tds-empty-line-phone.png"), full_page=True)
     pg.set_viewport_size({"width": 1400, "height": 1000}); pg.wait_for_timeout(300)
-    btns = pg.evaluate("[...document.querySelectorAll('#app [data-tds-none] button:not([data-missed-fy])')].map(b => b.innerText)")
+    btns = pg.evaluate("[...document.querySelectorAll('#app [data-tds-none] button')].map(b => b.innerText)")
     ok("Import salary for 24Q" in btns and "Bring in from Tally" not in btns, "the salary import kept, no 'Bring in from Tally' (%s)" % btns)
     if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tds-empty-books-in.png"), full_page=True)
+    # Open in Audit: the client's Audit, Findings, area TDS; the audit run for the books' period when no run covers it
+    pg.click("#app [data-tds-none] button[data-tds-to-audit]")
+    wait_for(pg, "document.querySelector('#app table[data-list=auditFindings]')", 30); pg.wait_for_timeout(800)
+    st = pg.evaluate("({tab: S.tab, books: S.booksTab, audit: S.auditTab || 'find', area: S.auditArea, run: S.books.audit && S.books.audit.last && [S.books.audit.last.from, S.books.audit.last.to]})")
+    ok(st["tab"] == "books" and st["books"] == "audit" and st["audit"] == "find" and st["area"] == "tds" and st["run"] and st["run"][0] <= "20250401" and st["run"][1] >= "20261012",
+       "round 69: Open in Audit lands on Audit, Findings, area TDS, with a run over the books' period (%s)" % st)
+    ok(pg.evaluate("document.querySelector('#app [data-audit-areas] button[aria-pressed=true]').innerText").startswith("TDS"), "round 69: the TDS chip is the one chosen")
+    rows = pg.evaluate("""[...document.querySelectorAll('#app table[data-list=auditFindings] > tbody > tr[data-key]')].map(t => ({key: t.getAttribute('data-key'), text: t.innerText.replace(/\\s+/g, ' ')}))""")
+    tm = [r for r in rows if r["key"].startswith("tdsMissed:")]
+    same = all(any(r["key"] == "tdsMissed:%s|%s|%s" % (e["party"], e["section"], e["fy"]) and pg.evaluate("'₹' + INR.format(%r)" % e["due"]) in r["text"] for r in tm) for e in W["l"])
+    ok(len(tm) == len(W["l"]) and same and all("CA Firm" in r["text"] for r in tm),
+       "round 69: the Audit table lists CA Firm, a row a year, with the TDS due of TDSWatch.missed (%s)" % [r["text"][:120] for r in tm])
+    areas = pg.evaluate("(keys) => keys.map(k => (S.books.audit.last.findings.find(f => f.id === k) || {}).area)", [r["key"] for r in rows])
+    ok(rows and all(a == "tds" for a in areas), "round 69: only the TDS area's findings shown (%s)" % areas)
+    if SHOTS: pg.screenshot(path=os.path.join(SHOTS, "tds-empty-to-audit.png"), full_page=True)
     ctx.close()
     # ---- no entries at all: as before
     EMPTY[0] = True
