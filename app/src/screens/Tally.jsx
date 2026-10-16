@@ -610,11 +610,12 @@ function linkedClients() {
 const cloudBook = (cid) => (typeof TCloud === "object" && TCloud.on() && TCloud.book ? TCloud.book(cid) : null);
 // round 64 (the owner's test of 16-Oct-2026: GB TEXCOAT's 224 ledgers in the cloud, step 5 never ticked): the cloud's own
 // count of a client's ledgers (tally_ledgers of its book, the firm's read: one count, no rows), kept a minute
-const LED_N = {};
+// kept with the client's cloud books (TCloud.st[cid].ledN), so it goes when they are read afresh
+const LED_N = { get: (cid) => (TCloud.st[cid] || {}).ledN, set: (cid, v) => { (TCloud.st[cid] = TCloud.st[cid] || {}).ledN = v; } };
 async function cloudLedgerCount(cid, force, maxAge) {
   const bk = cloudBook(cid);
   if (!bk || !bk.book) return null;
-  const k = LED_N[cid];
+  const k = LED_N.get(cid);
   if (!force && k && k.book === bk.book && Date.now() - k.at < (maxAge || 60000)) return k.n;
   const path = "tally_ledgers?select=name&merged_into=is.null&limit=1&book_id=eq." + encodeURIComponent(bk.book);
   const ask = (pp) => Cloud.api(pp, { headers: { Prefer: "count=exact" }, count: true });
@@ -622,10 +623,10 @@ async function cloudLedgerCount(cid, force, maxAge) {
   try { n = await ask(path + (TCloud.hasDel === false ? "" : "&deleted_at=is.null")); }
   catch (e) { if (!/deleted_at|42703/i.test(String((e && e.message) || e))) throw e; n = await ask(path); }
   n = Array.isArray(n) ? n.length : Math.max(0, Math.floor(Number(n) || 0));    // a stand-in without the count: its rows
-  LED_N[cid] = { n, at: Date.now(), book: bk.book };
+  LED_N.set(cid, { n, at: Date.now(), book: bk.book });
   return n;
 }
-const ledgersOf = (cid) => Math.max(typeof Ledgers === "object" ? Ledgers.status(cid).n : 0, (LED_N[cid] && LED_N[cid].n) || 0);
+const ledgersOf = (cid) => Math.max(typeof Ledgers === "object" ? Ledgers.status(cid).n : 0, (LED_N.get(cid) || {}).n || 0);
 const ledgersHeld = (cid) => ledgersOf(cid) > 0 || !!(cloudBook(cid) || {}).ledgersAt;
 // "Mastercad and Posterity" / "A, B, C and 2 more": the other clients a note names
 const namesOf = (cs) => { const n = cs.map((c) => c.name); return n.length <= 3 ? n.join(", ").replace(/, ([^,]*)$/, " and $1") : n.slice(0, 3).join(", ") + " and " + (n.length - 3) + " more"; };
@@ -852,7 +853,7 @@ function LedgersStep({ x, owner }) {
     setBusy(true); const r = await Ledgers.fromMasters(cid, f); setBusy(false);
     S.ledFile = Object.assign({ cid, name: f.name, at: Date.now() }, r);
     if (r.ok && S.ledImp && S.ledImp.cid === cid) { S.ledImp.got[cid] = r.n; S.ledImp.end = Date.now(); S.ledImp.late = false; S.ledImp.err = ""; }
-    if (r.ok) LED_N[cid] = { n: r.n, at: Date.now(), book: ((cloudBook(cid) || {}).book) || "" };
+    if (r.ok) LED_N.set(cid, { n: r.n, at: Date.now(), book: ((cloudBook(cid) || {}).book) || "" });
     render();
   };
   const masters = <span className="tg-alt">

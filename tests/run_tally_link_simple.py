@@ -239,6 +239,10 @@ def main():
         # outside Details
         E("() => { const o = newCompany({name: 'ZZ Other', gstin: ''}); S.companies[o.id] = o; S.data[o.id] = {parties: {}, entries: {}, loaded: true}; o.stats = {}; }")
         scene(LINKED(D1)); E("() => { S.tallyFocus = ''; S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1800)
+        # round 64: the client worked on (Link Co, open last) is linked: step 4 is done for it; ZZ Other is named in its note
+        g = txt('#app [data-connect-step="link"]')
+        ok(pg.locator('#app [data-connect-step="link"][data-done]').count() == 1 and "Not linked yet: ZZ Other." in g, "9. round 64: the client worked on linked: step 4 done, ZZ Other named (%s)" % g[-160:])
+        E("() => { S.coId = null; render(); }"); pg.wait_for_timeout(900)
         g = txt('#app [data-connect-step="link"]')
         ok("ZZ Other" in g and "not linked" in g and pg.locator("#app [data-guide-link]").count() == 1, "9. the guide's step 4 while a client is not linked, with Link (%s)" % g[-160:])
         E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
