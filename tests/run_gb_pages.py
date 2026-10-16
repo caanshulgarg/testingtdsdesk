@@ -28,7 +28,7 @@ def vch(d, i, typ, lines):
 DAY = {}
 k = 0
 for j, d in enumerate(ALL):
-    if j % 3: continue                                   # entries every third day; the rest empty
+    if j % 3 or d > "20260331": continue                 # entries every third day of FY 2025-26; the rest (and FY 2026-27) empty
     k += 1; vs = []
     vs.append(vch(d, k * 10 + 1, "Sales", [("Buyer One", -11800), ("Sales", 10000), ("Output IGST", 1800)]))
     vs.append(vch(d, k * 10 + 2, "Purchase", [("Supplier One", 5900), ("Purchase", -5000), ("Input IGST", -900)]))
@@ -95,8 +95,27 @@ OPEN = """async ([name, gstin, stale]) => {
   S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "tds"; render();
   return c.id;
 }"""
+DIRECT = """async ([name, gstin]) => {
+  Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600}); Cloud.st.firm = "f1"; Cloud.st.state = "on";
+  const c = newCompany({name, gstin}); c.id = "c_gb"; c.tallyName = name; S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true};
+  // the owner's way: the sidebar's client, then TDS (goClient("books:tds")): nothing of the books opened before
+  S.coId = c.id; S.view = "company"; render(); goClient("books:tds");
+}"""
 with sync_playwright() as p:
     br = p.chromium.launch()
+    # ---- the owner's way (16-Oct-2026 ~10:15 IST): a fresh browser, the client's TDS opened directly; the 2025-26 returns
+    # show the books' TDS (not "TDS is worked out from the day book ... once either is in")
+    ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route(STAGE + "/**", route); pg.goto("http://localhost:8477/" + os.environ.get("TDSDESK_PATH", "")); pg.wait_for_timeout(2000)
+    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate(DIRECT, [CO, GSTIN])
+    wait_for(pg, "S.books && S.books.cid === 'c_gb' && (S.books.vouchers || []).length > 0 && !S.books.busy", 90); pg.wait_for_timeout(2500)
+    body = pg.inner_text("#app")
+    grid = pg.evaluate("(() => { const g = document.querySelector('#app [data-tds-grid]'); return g ? [g.getAttribute('data-tds-grid'), g.innerText.replace(/\\s+/g, ' ').slice(0, 300)] : null; })()")
+    ok("once either is in" not in body and grid and grid[0] == "2025-26" and re.search(r"[1-9][\d,]*\.\d\d", grid[1] or ""),
+       "direct: a fresh browser, the client's TDS opened at once: the 2025-26 returns with the books' TDS (%s | %s)" % (grid, body[:160].replace("\n", " ")))
+    if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "gb-direct-tds.png"), full_page=False)
+    ctx.close()
     for stale in (False, True):
         ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
         pg.on("pageerror", lambda e: errors.append(str(e)))

@@ -1172,7 +1172,7 @@ function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsVi
 // return; either left at "every" shows the year's grid of forms and quarters
 function tdsPick(fy, q, form){
   const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
-  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; Smart.keep("tds", {fy, q: q || ""});
+  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; S.tdsAutoFy = ""; Smart.keep("tds", {fy, q: q || ""});
   if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = ""; } }
   else S.tdsView = "year";
   render();

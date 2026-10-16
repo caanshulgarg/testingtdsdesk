@@ -240,7 +240,14 @@ export default function Tds({ b }) {
   // smart moves round 1 (the owner's choice of 09-Oct-2026, "due now"): opened afresh, the page shows the year and the
   // quarter whose return is due now (Q2 of 2026-27 on 09-Oct-2026, due 31-Oct), or the person's last choice for this
   // client. The quarter's own tax year names its forms (Form 140 from 2026-27, 26Q before: TDS.formLabel)
-  if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = ""; }
+  if (!S.tdsView && !S.tdsFy) { const k = Smart.recall("tds"), p = k && k.fy && fys.includes(k.fy) ? k : Smart.tdsDue(); S.tdsView = "year"; S.tdsFy = p.fy; S.tdsQ = p.q || ""; S.tdsPickForm = "";
+    S.tdsAutoFy = p === k ? "" : (S.coId || "") + "|" + p.fy; }
+  // round 64 (the owner's GB TEXCOAT, 16-Oct-2026: its books' TDS is all in 2025-26; TDS opened on 2026-27, due now, with
+  // nothing): a year picked by itself (not the person's choice) that holds no TDS, once the books are in, gives way to the
+  // latest year that does, the whole year shown; the person's own choice is kept (tdsPick clears the mark)
+  if (S.tdsAutoFy && S.tdsAutoFy === (S.coId || "") + "|" + S.tdsFy && had.length && !had.includes(S.tdsFy) && S.tdsView === "year") {
+    S.tdsFy = had[0]; S.tdsQ = ""; S.tdsPickForm = ""; S.tdsAutoFy = (S.coId || "") + "|" + had[0];
+  }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
   if (["year", "return", "register"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices", "register", "ledgers"].includes(S.tdsView)) S.tdsView = "years";
