@@ -11,7 +11,11 @@ import SrcTag from "../../parts/SrcTag.jsx";
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const SetLink = ({ children = "change in GST settings" }) => <button className="linkbtn" onClick={() => goGstSettings()}>{children}</button>;
-const Box = ({ label, s, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{s.n}</b><small>{money(s.taxable)} + {money(s.igst + s.cgst + s.sgst)} tax</small></div>;
+// t70: the taxable value and the tax each on a line of its own (they were one line, cut off in a narrow box)
+const Box = ({ label, s, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{s.n}</b><small>Taxable {money(s.taxable)}</small><small>Tax {money(s.igst + s.cgst + s.sgst)}</small></div>;
+// t70 (the owner: "in GST the tax amount is not coming properly"): the tax of a customer, and under it its heads
+const TaxCell = ({ igst, cgst, sgst }) => <><b>{money(igst + cgst + sgst)}</b>
+  {(r2(igst) !== 0 || r2(cgst) !== 0 || r2(sgst) !== 0) && <small className="tg-heads">{[r2(igst) !== 0 && "IGST " + money(igst), (r2(cgst) !== 0 || r2(sgst) !== 0) && "CGST " + money(cgst) + " · SGST " + money(sgst)].filter(Boolean).join(" · ")}</small>}</>;
 
 export function Checks() {
   const list = GSTR.checks(S.gstYm || "", S.gstReg || "");
@@ -31,27 +35,27 @@ function Customers({ rows }) {
   const by = {};
   shown.forEach((r) => {
     const k = r.gstin || normName(r.party) || "retail";
-    const p = by[k] = by[k] || { party: r.party || "Retail customers", gstin: r.gstin, n: 0, taxable: 0, tax: 0, rows: [] };
-    p.n++; p.taxable = r2(p.taxable + r.taxable); p.tax = r2(p.tax + r.igst + r.cgst + r.sgst); p.rows.push(r);
+    const p = by[k] = by[k] || { party: r.party || "Retail customers", gstin: r.gstin, n: 0, taxable: 0, tax: 0, igst: 0, cgst: 0, sgst: 0, rows: [] };
+    p.n++; p.taxable = r2(p.taxable + r.taxable); p.tax = r2(p.tax + r.igst + r.cgst + r.sgst); p.igst = r2(p.igst + r.igst); p.cgst = r2(p.cgst + r.cgst); p.sgst = r2(p.sgst + r.sgst); p.rows.push(r);
   });
   const parties = Object.values(by).sort((a, b) => b.taxable - a.taxable);
   return <>
     <FilterBar id="r1F" placeholder="Find a customer, invoice or GSTIN" table="r1Table" title={CO().name + " GSTR-1 " + GSTR.label(S.gstYm || "")} excel="gstExcel"
       count={parties.length + " customers · " + shown.length + " of " + rows.length + " documents"}
       selects={[{ key: "part", label: "Part", options: [["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]] }]} />
-    <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="r1Table">
-      <thead><tr><th>Customer</th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
+    <div className="bk-tablewrap"><table className="bk-table tg-fit" data-statement="" id="r1Table">
+      <thead><tr><th className="pty">Customer</th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
       <tbody>
         {parties.map((p, i) => { const key = p.gstin || normName(p.party), open = S.r1Open === key; return [<tr key={key + ":" + i}>
-          <td><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></td><td>{p.gstin || "—"}</td>
-          <td className="n"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{p.n}</button></td><td className="n">{money(p.taxable)}</td><td className="n"><b>{money(p.tax)}</b></td>
-        </tr>, open && <tr key={key + ":open:" + i}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" data-statement="" style={{ margin: 0 }}>
+          <td className="pty"><div className="tg-pty"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></div></td><td className="code">{p.gstin || "—"}</td>
+          <td className="n"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{p.n}</button></td><td className="n">{money(p.taxable)}</td><td className="n"><TaxCell igst={p.igst} cgst={p.cgst} sgst={p.sgst} /></td>
+        </tr>, open && <tr key={key + ":open:" + i}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table tg-fit" data-statement="" style={{ margin: 0 }}>
           <thead><tr><th>Part</th><th className="dt">Date</th><th>Invoice</th><th>Place of supply</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th>From</th></tr></thead>
-          <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td>{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
+          <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td className="dt">{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
             <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table></td></tr>]; })}
         <tr><td><b>Total</b></td><td></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
-          <td className="n"><b>{money(shown.reduce((a, r) => a + r.igst + r.cgst + r.sgst, 0))}</b></td></tr>
+          <td className="n"><TaxCell igst={shown.reduce((a, r) => a + r.igst, 0)} cgst={shown.reduce((a, r) => a + r.cgst, 0)} sgst={shown.reduce((a, r) => a + r.sgst, 0)} /></td></tr>
       </tbody>
     </table>{!parties.length && <div className="bk-none">Nothing matches.</div>}</div>
   </>;
@@ -171,10 +175,10 @@ export function Gstr3b({ b, sub }) {
         <Row label="(A)(1) Import of goods" x={t.impGoods} /><Row label="(A)(2) Import of services" x={t.impServ} />
         <Row label="(A)(3) Inward supplies on reverse charge" x={t.rcmIn} /><Row label="(A)(5) All other ITC" x={t.other} />
         {heldNote ? <tr><td colSpan={5} className="nr" style={{ whiteSpace: "normal" }}>
-          {t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", ₹" + money(all4(t.held)) + ". " : ""}
-          {t.released.n ? "Taken now, booked earlier and in this month’s 2B: " + t.released.n + ", ₹" + money(all4(t.released)) + ". " : ""}
-          {t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", ₹" + money(all4(t.rejBack)) + ". " : ""}
-          {t.cn2b && t.cn2b.n ? "Less suppliers’ credit notes in 2B, not in Tally: " + t.cn2b.n + ", ₹" + money(all4(t.cn2b)) + ". " : ""}
+          {t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + ". " : ""}
+          {t.released.n ? "Taken now, booked earlier and in this month’s 2B: " + t.released.n + ", " + money(all4(t.released)) + ". " : ""}
+          {t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", " + money(all4(t.rejBack)) + ". " : ""}
+          {t.cn2b && t.cn2b.n ? "Less suppliers’ credit notes in 2B, not in Tally: " + t.cn2b.n + ", " + money(all4(t.cn2b)) + ". " : ""}
           <button className="linkbtn" onClick={() => gstPartGo("follow")}>See them</button></td></tr> : null}
         <Gap /><Row label="(B)(1) Reversed: rules 38, 42, 43 and section 17(5)" x={tax(t.rev1)} />
         <tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div className="nr">type any here</div></td><td className="n"></td><Typed b={b} grp="rev2" /></tr>

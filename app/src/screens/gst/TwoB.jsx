@@ -240,7 +240,7 @@ export default function TwoB({ b }) {
       <div className="dtile"><span>ITC in Tally</span><b>{money(sumTx(booksIn))}</b><small>{booksIn.length} documents</small></div>
       <div className={"dtile" + (Math.abs(sumTx(avl) - sumTx(booksIn)) > 1 ? " warn" : "")}><span>Gap, 2B less Tally</span><b>{money(r2(sumTx(avl) - sumTx(booksIn)))}</b><small>{sc.timing.length} matched in another month</small></div>
     </div>
-    {rjs.length > 0 && <p className="note">{"Rejected in IMS: " + rjs.length + " document" + (rjs.length === 1 ? "" : "s") + ", tax ₹" + money(r2(rjs.reduce((a, x) => a + x.p.dir * tx(x.p), 0))) + " — no credit from them" + (rjs.some((x) => x.books.length) ? "; " + rjs.filter((x) => x.books.length).length + " booked in Tally" : "") + ". "}
+    {rjs.length > 0 && <p className="note">{"Rejected in IMS: " + rjs.length + " document" + (rjs.length === 1 ? "" : "s") + ", tax " + money(r2(rjs.reduce((a, x) => a + x.p.dir * tx(x.p), 0))) + " — no credit from them" + (rjs.some((x) => x.books.length) ? "; " + rjs.filter((x) => x.books.length).length + " booked in Tally" : "") + ". "}
       <button className="linkbtn" onClick={() => gstPartGo("follow")}>See them under ITC follow-up</button></p>}
     {(sk.setOff || sk.taxOnly) ? <p className="note">{"Left out of Tally’s side: " + [sk.setOff ? sk.setOff + " set-off entr" + (sk.setOff === 1 ? "y" : "ies") + " (output tax against credit)" : "", sk.taxOnly ? sk.taxOnly + " tax-only entr" + (sk.taxOnly === 1 ? "y" : "ies") + " with no supplier GSTIN or value (rounding, reversals)" : ""].filter(Boolean).join(" and ") + "."}</p> : null}
     <div className="dash-tiles">

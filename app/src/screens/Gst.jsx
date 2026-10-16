@@ -159,7 +159,7 @@ function OptionalNote() {
 
 // a GSTR-1 or 3B open: its summary card (round 46) — the return and period, its status as the year's grid says it, the
 // one download, and More
-function GstCard({ part, months, gNow, ftype, noReturn, sub }) {
+function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile }) {
   const reg = S.gstReg || "", ym = S.gstYm || "", have = new Set(months), last = (S.books.meta || {}).to ? String(S.books.meta.to).slice(0, 6) : "";
   const inBooks = (S.books.vouchers || []).length > 0 && have.has(ym) && (!last || ym <= last);
   const iff = part === "r1" && ftype === "qrmp" && !GSTSet.isQEnd(ym);
@@ -167,16 +167,19 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub }) {
   const words = c.st === "none" ? "Not started" : c.st === "bad" ? (c.errors ? c.n + " to fix" : "Differs from the books: " + c.n) : c.st === "filed" ? "Filed " + c.on : "Ready to file";
   const name = part === "r1" ? (iff ? "IFF" : "GSTR-1") : "GSTR-3B", forWhat = ftype === "qrmp" ? " for the quarter" : "";
   const primary = noReturn || c.st === "filed" || sub === "file" ? null : part === "r1" ? ["Download GSTR-1 JSON" + forWhat, () => doAct("gstJson")] : ["Download GSTR-3B JSON" + forWhat, () => doAct("gst3bJson")];
-  return <section className="ret-card" data-return-card={part + "|" + ym}>
-    <button className="linkbtn ret-back" onClick={() => gstViewGo("year")}>← GST {GSTF.fyOf(ym)}</button>
+  // t70 (16-Oct-2026; the owner: "TDS and GST pages take too much space"): one header row: the way back, the return, its
+  // GSTIN, the status, Check before filing (was a bar of its own under the card), More and the one download
+  return <section className="ret-card ret-slim" data-return-card={part + "|" + ym}>
     <div className="ret-top">
-      <div>
+      <button className="linkbtn ret-back" onClick={() => gstViewGo("year")}>← GST {GSTF.fyOf(ym)}</button>
+      <div className="ret-name">
         <h2 data-return-title="">{name} · {periodLabel(ym, reg)}</h2>
         <p className="ret-sub">{gNow} · {GSTRegs.state(gNow)} · {GSTSet.typeLabel(ftype)}
           {ftype === "qrmp" && (GSTSet.isQEnd(ym) ? " · the downloads cover the whole of " + GSTSet.qLabel(ym) : " · for reference: this month has no GSTR-1 or 3B, see “This quarter”")}</p>
       </div>
       <div className="ret-acts">
         <span className={"tag " + (c.st === "filed" ? "ok" : c.st === "bad" ? "bad" : c.st === "none" ? "no" : "info")} data-status-tag="">{words}</span>
+        {prefile && <span data-prefile-bar="">{prefile}</span>}
         <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")]]}>
           <p>Check the JSON in the portal’s offline tool before filing.</p></More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
@@ -237,12 +240,12 @@ export default function Gst() {
       {sec === "returns" && !noBooks && <button data-part="year" aria-selected={S.gstView === "year"} onClick={() => gstViewGo("year")}>Year</button>}
       {subParts.map(([id, l]) => <button key={id} data-part={id} aria-selected={S.gstView === "return" && part === id} onClick={() => gstPartGo(id)}>{l}</button>)}</nav>}
     {S.gstView === "year" ? <Grid months={months} reg={S.gstReg || ""} /> : <>
-    {subs && <GstCard part={part} months={months} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} />}
-    {!noBooks && S.gstYm && <div className="revfilter" data-prefile-bar=""><PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /></div>}
+    {subs && <GstCard part={part} months={months} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} prefile={!noBooks && S.gstYm ? <PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /> : null} />}
+    {!subs && !noBooks && S.gstYm && <div className="revfilter" data-prefile-bar=""><PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /></div>}
     {part === "amend" && ftype === "monthly" && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON with these</button></div>}
     {!subs && part === "r1" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button></div>}
     {!subs && part === "r3b" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button></div>}
-    {subs && <nav className="sbar rp-tabs" aria-label="Return" style={{ margin: "0 0 12px" }}>{subs.map(([k, l]) => <button key={k} data-sub={k} aria-selected={S.gstSub === k} onClick={() => gstSubGo(k)}>{l}</button>)}</nav>}
+    {subs && <nav className="sbar rp-tabs" aria-label="Return">{subs.map(([k, l]) => <button key={k} data-sub={k} aria-selected={S.gstSub === k} onClick={() => gstSubGo(k)}>{l}</button>)}</nav>}
     {!noBooks && (part === "r1" || part === "r3b" || part === "qtr") && <OptionalNote />}
     {noBooks && <p className="note" style={{ margin: "0 0 10px" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally”.</p>}
     {sub === "file" && <section className="dash-card" style={{ marginBottom: 12 }} data-file={part}><h3>{part === "r1" ? "GSTR-1" : "GSTR-3B"} for {periodLabel(S.gstYm || "", S.gstReg || "")}</h3>

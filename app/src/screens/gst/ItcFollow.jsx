@@ -66,7 +66,7 @@ export default function ItcFollow() {
         {miss.length > 0 && <>{" "}<span className="bad">{"No 2B here for " + (miss.length > 4 ? miss.length + " months (" + GSTR.label(miss[0]) + " to " + GSTR.label(miss[miss.length - 1]) + ")" : miss.map(GSTR.label).join(", ")) + ": bills of those months cannot be checked."}</span></>}</p>
       <div className="gf-chips">{Object.entries(ITCT.CATS).map(([k, c]) => { const l = base.filter((x) => x.cat === k); if (!l.length) return null;
         const t = l.reduce((a, x) => a + (x.cat === "diff" ? Math.abs(x.gap) : x.tax), 0);
-        return <button key={k} className={"gf-chip" + (c.warn ? " warn" : "") + (cat === k ? " on" : "")} onClick={() => setAndShow("itctCat", cat === k ? "" : k)}>{c.label + " "}<b>{l.length}</b>{" · ₹" + money(t)}</button>; })}</div>
+        return <button key={k} className={"gf-chip" + (c.warn ? " warn" : "") + (cat === k ? " on" : "")} onClick={() => setAndShow("itctCat", cat === k ? "" : k)}>{c.label + " "}<b>{l.length}</b>{" · " + money(t)}</button>; })}</div>
       <details style={{ margin: "6px 0 10px" }}><summary className="linkbtn">How each kind is handled, and why</summary><div className="bk-tablewrap"><table className="bk-table gf-off" data-statement=""><tbody>
         {Object.values(ITCT.CATS).map((c) => <tr key={c.label}><td style={{ width: 220 }}><b>{c.label}</b></td><td>{c.law}</td></tr>)}</tbody></table></div></details>
       <ListTable name="itct" className="bk-table compact fixed" rows={list} rowKey={(x, i) => x.key + ":" + i} unit={["bill", "bills"]} limit={gfN(3000)} rowProps={(x) => ({ "data-key": x.key })}

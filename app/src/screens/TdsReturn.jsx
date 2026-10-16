@@ -33,7 +33,7 @@ const NoPan = () => <span className="tag warn">no PAN</span>;
 const Pan = ({ pan }) => (Certs.validPan(pan) ? pan : <NoPan />);
 const Empty = ({ children }) => <div className="bk-none">{children}</div>;
 // a section: from 2026-27 the new provision with the old section beside it and the table entry under it; before, as it was
-export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy); return x.ref ? <span className="rp-sec" data-sec={x.old}>{x.ref} [old {x.old}]<small>{x.label}</small></span> : <>{s}</>; };
+export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy); return x.ref ? <span className="rp-sec" data-sec={x.old}><span className="rp-sec-code">{x.ref} [old {x.old}]</span><small>{x.label}</small></span> : <>{s}</>; };
 const secText = (s, fy = S.tdsFy) => TDS.secNew(s, fy).text;
 // bridge 2.4.3: a challan or certificate made from what Tally keeps, and where Tally and FinCom differ (TDSTally, src/js/72)
 const FromTally = ({ on }) => (on ? <span className="tag" data-from-tally="" title="Made from the details Tally keeps">From Tally</span> : null);
@@ -62,12 +62,16 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] 
 
 // tds-layout: the owner's tabs (ReturnParts.jsx: one declaration per form), with the counts the return hands over, and the
 // filed lock above them, said on every tab
-function Tabs({ counts }) {
+// t70 (16-Oct-2026; the owner: "TDS and GST pages take too much space"): By deduction · By deductee (side) on the tabs' row
+function Tabs({ counts, side }) {
   return <>
     <LockLine fy={S.tdsFy} q={S.tdsQ} form={S.tdsForm || "26Q"} />
-    <nav className="sbar rp-tabs" aria-label="Return" style={{ marginTop: 4 }} data-return-tabs="">
-      {returnTabs(S.tdsForm || "26Q", counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
-    </nav></>;
+    <div className="tg-tabrow">
+      <nav className="sbar rp-tabs" aria-label="Return" data-return-tabs="">
+        {returnTabs(S.tdsForm || "26Q", counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
+      </nav>
+      {side}
+    </div></>;
 }
 
 // the shared list table (spec K6, round 2) with the return's own order (S.tdsSort, tdsSortBy): same headers and arrows
@@ -81,10 +85,12 @@ const Toggle = ({ which, k, children }) => <button className="linkbtn" onClick={
 const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
 function ReturnCard({ fy, q, form, filed, errN, driftN, draft, figs, primary, more = [], words }) {
   const st = driftN ? ["bad", "Correction needed"] : filed ? ["ok", "Filed " + day(TDS.ymd(filed.on))] : errN ? ["bad", errN + " to fix"] : ["info", "Ready to file"];
-  return <section className="ret-card" data-return-card={form + "|" + q}>
-    <button className="linkbtn ret-back" onClick={() => tdsGo(fy)}>← {TDS.yearWord(fy)} {fy}</button>
+  // t70: one header row (the way back, the return, what it is and when due, the status and the actions), then the figures
+  // in one slim strip
+  return <section className="ret-card ret-slim" data-return-card={form + "|" + q}>
     <div className="ret-top">
-      <div>
+      <button className="linkbtn ret-back" onClick={() => tdsGo(fy)}>← {TDS.yearWord(fy)} {fy}</button>
+      <div className="ret-name">
         <h2 data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
         <p className="ret-sub">{TDS.FORM_ABOUT[form]} · due {TDS.dueWords(fy, q, form)}</p>
       </div>
@@ -207,7 +213,8 @@ function ChallanPick({ r, chOpts }) {
     <option value="">— not yet —</option>{chOpts.map((x) => <option key={x.id} value={x.id}>{x.bsr + "/" + x.serial + " · " + day(x.date)}</option>)}
   </select>;
 }
-const Rate = ({ r, issue, why }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <div className="nr bad" title={why ? issue.why : undefined}>should be {issue.expected}%</div>}</>;
+// t70: the reason under the rate, in words (it was only on a hover, cut with "…")
+const Rate = ({ r, issue, why }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <div className="tg-sub tg-why bad" title={why ? issue.why : undefined}>should be {issue.expected}%{why && issue.why ? ": " + issue.why : ""}</div>}</>;
 
 function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
   const f = (S.tdsFl || {}).deductees || {}, by = {};
@@ -224,7 +231,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
     <FilterBar tab="deductees" placeholder="Find a deductee, PAN or voucher" table="tdsDeTable" title={title + " deductees"} excel="tdsExcel" count={list.length + " of " + deductees + " deductees"}
       selects={common.concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
     {/* the one list table (spec K6): deductee (party), paid and TDS (amounts), then the rest */}
-    <ListTable name="tdsDeductees" id="tdsDeTable" rows={list} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
+    <ListTable name="tdsDeductees" id="tdsDeTable" className="bk-table tg-fit" rows={list} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
       empty="No deductee matches these filters. Use Clear filters above to see all."
       after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th><th>From</th></tr></thead>
@@ -232,7 +239,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
             <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table>}
       cols={[
-        { k: "party", role: "party", label: "Deductee", v: (p) => p.party, cell: (p) => <><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</> },
+        { k: "party", role: "party", label: "Deductee", cls: "pty", v: (p) => p.party, cell: (p) => <div className="tg-pty"><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</div> },
         { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (p) => p.paid, fmt: money, cell: (p) => money(p.paid) },
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
         { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <><Pan pan={p.pan} /><F16Link pan={p.pan} fy={S.tdsFy} q={S.tdsQ} /></> },
@@ -255,20 +262,20 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
         .concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
     <TagBar rows={rows} chOpts={chOpts} />
     {/* the one list table (spec K6): date, voucher (number), deductee (party), paid and TDS (amounts), challan (status), then the rest */}
-    <ListTable name="tdsDeductions" id="tdsDnTable" rows={shown} rowKey={(r) => r.id} unit={["deduction", "deductions"]} of={rows.length} sortVia={via("deductions")} limit={LIMIT}
+    {/* t70 (the owner: "some columns I can not even see properly without touching them"): every column in view at 1366
+        px: the voucher under the date, the PAN under the deductee, the section's words and the rate's reason under them */}
+    <ListTable name="tdsDeductions" id="tdsDnTable" className="bk-table tg-fit" rows={shown} rowKey={(r) => r.id} unit={["deduction", "deductions"]} of={rows.length} sortVia={via("deductions")} limit={LIMIT}
       more={<p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
       empty="No deduction matches these filters. Use Clear filters above to see all."
       cols={[
         { k: "pick", role: "pick", cls: "ck", sort: false, head: <input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((r) => sel[r.id])} onChange={(ev) => selSet(shown.map((r) => r.id), ev.target.checked)} />,
           cell: (r) => <input type="checkbox" aria-label={"Select " + r.party} checked={!!sel[r.id]} onChange={(ev) => selSet([r.id], ev.target.checked)} /> },
         { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (r, p, i) => i + 1 },
-        { k: "date", role: "date", label: "Date", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => day(r.date) },
-        { k: "voucher", role: "number", label: "Voucher", v: (r) => r.voucher || "", cell: (r) => r.voucher || "" },
-        { k: "party", role: "party", label: "Deductee", v: (r) => r.party, cell: (r) => r.party },
+        { k: "date", role: "date", label: "Date · Voucher", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => <>{day(r.date)}{r.voucher ? <div className="tg-sub" data-voucher="">{r.voucher}</div> : null}</> },
+        { k: "party", role: "party", label: "Deductee · PAN", cls: "pty", v: (r) => r.party, cell: (r) => <div className="tg-pty">{r.party}<div className="tg-sub" data-pan="">{Certs.validPan(r.pan) ? r.pan : <NoPan />}</div></div> },
         { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => money(r.paid) },
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => money(r.tds) },
         { k: "challan", role: "status", label: "Challan", v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanPick r={r} chOpts={chOpts} /> },
-        { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => <Pan pan={r.pan} /> },
         { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => <Sec s={r.section} fy={fy} /> },
         { k: "rate", label: "Rate", cls: "n", v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} why /> },
         { k: "src", label: "From", title: "Where the entry came from: the bridge, or the Day Book uploaded", v: (r) => srcWords(r), cell: (r) => <SrcTag r={r} /> },
@@ -402,11 +409,12 @@ export function Return26({ b, allRows, form = "26Q" }) {
         { label: "Not against a challan", value: money(notCh), sub: un.length + " " + unit, warn: un.length > 0 },
         { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
       ]} />
-    <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }} />
+    <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
+      side={S.tdsTab === "deductions" ? <DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} /> : null} />
     {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
         <Suggest fy={fy} q={q} form={form} />
         <TallyPays fy={fy} q={q} /></ReturnChallans>
-      : S.tdsTab === "deductions" ? <><DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} />{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
+      : S.tdsTab === "deductions" ? <>{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
         : <><Deductions fy={fy} q={q} {...common_} /><BySection fy={fy} q={q} form={form} /></>}</>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
       : S.tdsTab === "file" ? <>

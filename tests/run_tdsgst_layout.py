@@ -149,6 +149,84 @@ try:
         E("(c) => openCompany(c)", cid); W(500); E("() => { S.books = window.__bk; render(); }"); W(300)
         ok(E("RPT.LIST.some(r => r[0] === 'mis-comp' && r[2] === 'GST and TDS by month')"), "Reports keeps MIS's GST and TDS by month, named for what it is")
 
+        # t70 (16-Oct-2026; the owner: "TDS and GST pages take too much space.. column alignment is also not good.. in GST the
+        # tax amount is not coming properly and the customer name has excess space.. some columns I can not even see"): the
+        # table starts high on the page, every column in view at 1366 without an inner sideways scroll, the figures to the
+        # right on one line, the party column not wider than ~32 characters, one ₹, and every figure shown before still shown
+        print("7. space and columns (t70)")
+        views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-details", "/books/gst/07/202603/r1/details", None, "#r1Table"),
+                 ("gst-details-open", "/books/gst/07/202603/r1/details", "#r1Table tbody tr td button >> nth=0", "#r1Table"), ("gst-3b", "/books/gst/07/202603/r3b/summary", None, None),
+                 ("tds-deductions", "/books/tds/2026-27/Q1/26Q/deductions", None, "#tdsDnTable"), ("tds-deductees", "/books/tds/2026-27/Q1/26Q/deductions", "[data-ded-switch=deductees]", "#tdsDeTable")]
+        FIX = os.path.join(HERE, "fixtures", "tdsgst-t70-amounts.json")
+        capture = os.environ.get("TDSGST_CAPTURE") == "1"
+        before = {} if capture else json.load(open(FIX))
+        LAYOUT = r"""(main) => { const app = document.querySelector('#app'), vis = (e) => !!e.offsetParent;
+          // the lines a piece of text takes (a figure, a name), by the boxes of its text
+          const lines = (node) => { if (!node) return 0; const r = document.createRange(); r.selectNodeContents(node); return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size; };
+          const texts = (el) => { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), out = []; let n; while ((n = w.nextNode())) if (n.textContent.trim()) out.push(n); return out; };
+          const isNum = (h) => h && (h.classList.contains('n') || h.hasAttribute('data-numeric') || h.dataset.role === 'amount');
+          const out = {top: null, wrap: null, party: null, cut: [], nums: [], heads: [], wrapped: [], partyLines: [], rr: (app.innerText.match(/₹\s*₹/g) || []).length};
+          const t = main && document.querySelector(main);
+          if (t) { out.top = Math.round(t.querySelector('thead').getBoundingClientRect().top - app.getBoundingClientRect().top);
+            const w = t.closest('.lt-wrap, .bk-tablewrap'); out.wrap = [w.scrollWidth, w.clientWidth];
+            const hs = [...t.querySelector(':scope > thead > tr').children], pi = hs.findIndex((h) => /^(Customer|Deductee|Buyer)/.test(h.innerText.trim()));
+            if (pi >= 0) { out.party = Math.round(hs[pi].getBoundingClientRect().width);
+              [...t.querySelectorAll(':scope > tbody > tr')].filter((tr) => tr.children.length === hs.length).forEach((tr) => { const ts = texts(tr.children[pi]).sort((a, b) => b.textContent.length - a.textContent.length);
+                if (ts[0]) out.partyLines.push([ts[0].textContent.trim().slice(0, 30), lines(ts[0])]); }); }
+            // a section's code (393(1) Sl. 6(i) [old 194C]) is read at a glance: not squeezed onto three or more lines
+            const si = hs.findIndex((h) => /^Section/.test(h.innerText.trim()));
+            out.secLines = si < 0 ? [] : [...t.querySelectorAll(':scope > tbody > tr')].filter((tr) => tr.children.length === hs.length).map((tr) => { const f = texts(tr.children[si])[0]; return f ? [f.textContent.trim(), lines(f)] : ['', 0]; }); }
+          for (const tb of [...app.querySelectorAll('table')].filter(vis)) {
+            const hs = [...tb.querySelectorAll(':scope > thead > tr:last-child > th')];
+            hs.forEach((h) => { if (isNum(h) && h.innerText.trim() && !/right|end/.test(getComputedStyle(h).textAlign)) out.heads.push(h.innerText.trim()); });
+            for (const c of tb.querySelectorAll(':scope > thead > tr > th, :scope > tbody > tr > td, :scope > tfoot > tr > td'))
+              if (vis(c) && c.scrollWidth > c.clientWidth + 1) out.cut.push(c.innerText.trim().slice(0, 30) + ' (' + c.scrollWidth + '>' + c.clientWidth + ')');
+            tb.querySelectorAll(':scope > tbody > tr').forEach((tr) => { if (tr.children.length !== hs.length) return; [...tr.children].forEach((td, i) => {
+              const h = hs[i], first = texts(td)[0];
+              if (!first) return;
+              const dt = h.classList.contains('dt') || h.dataset.role === 'date';
+              if (isNum(h) && /\d/.test(first.textContent) && !/right|end/.test(getComputedStyle(td).textAlign)) out.nums.push(first.textContent.trim());
+              if ((isNum(h) || dt) && /\d/.test(first.textContent) && lines(first) > 1) out.wrapped.push(first.textContent.trim()); }); }); }
+          // text cut with an ellipsis (or clipped in a figure box) in the tables, the filter bars, the card and the tiles
+          for (const e of app.querySelectorAll('table *, [data-filter-bar] *, [data-return-card] *, .dash-tiles *, .ret-card *')) {
+            if (!vis(e) || /^(SELECT|INPUT|OPTION|svg|path)$/i.test(e.tagName)) continue;
+            const cs = getComputedStyle(e);
+            if ((cs.textOverflow === 'ellipsis' || e.classList.contains('dtile')) && e.scrollWidth > e.clientWidth + 1) out.cut.push(e.className + ': ' + e.innerText.trim().slice(0, 40));
+          }
+          return out; }"""
+        AMOUNTS = r"""() => [...new Set((document.querySelector('#app').innerText.match(/₹\s*-?[\d,]+(?:\.\d+)?/g) || []).map((s) => s.replace(/\s/g, '')))].sort()"""
+        got = {}
+        for (vw, vh) in ((1440, 900), (1366, 768)):
+            pg.set_viewport_size({"width": vw, "height": vh})
+            for name, h, click, main in views:
+                hash_go("#/c/%s%s" % (cid, h), 1300)
+                E("() => { S.tdsDedView = ''; S.r1Open = ''; S.tdsSel = {}; render(); }"); W(300)
+                if click: pg.click(click); W(500)
+                E("window.scrollTo(0, 0)"); W(100)
+                m, amts = E(LAYOUT, main), E(AMOUNTS)
+                at = "%s at %d×%d" % (name, vw, vh)
+                if vw == 1440: got[name] = amts
+                if name in ("gst-details", "tds-deductions") and vw == 1440:
+                    ok(m["top"] is not None and m["top"] <= 330, "%s: the table's header %s px below the top of the page (at most 330)" % (at, m["top"]))
+                if name in ("gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
+                    ok(m["wrap"] and m["wrap"][0] <= m["wrap"][1] + 1, "%s: every column in view, no sideways scroll inside the table (%s)" % (at, m["wrap"]))
+                if m["party"] is not None:
+                    ok(m["party"] <= 340, "%s: the %s column at most ~32 characters wide (%d px)" % (at, "customer" if "gst" in name else "deductee", m["party"]))
+                    ok(m["partyLines"] and all(n <= 2 for _, n in m["partyLines"]), "%s: each name on at most two lines (%s)" % (at, m["partyLines"][:4]))
+                if m.get("secLines"):
+                    ok(all(n <= 2 for _, n in m["secLines"]), "%s: each section's code on at most two lines (%s)" % (at, m["secLines"][:3]))
+                ok(not m["cut"], "%s: nothing cut off or hidden behind '…' (%s)" % (at, m["cut"][:4]))
+                ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
+                ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))
+                ok(m["rr"] == 0, "%s: one ₹ before a figure, never ₹₹" % at)
+                if not capture:
+                    miss = [a for a in before.get(name, []) if a not in amts]
+                    ok(not miss and before.get(name), "%s: every figure shown before is still shown (%d; missing %s)" % (at, len(before.get(name, [])), miss[:5]))
+                pg.screenshot(path=os.path.join(HERE, "out", "t70-%s-%dx%d.png" % (name, vw, vh)))
+        if capture:
+            json.dump(got, open(FIX, "w"), indent=1, ensure_ascii=False); print("  captured the figures to", FIX)
+        pg.set_viewport_size({"width": 1440, "height": 1000})
+
         print("6. phone")
         pg.set_viewport_size({"width": 390, "height": 844})
         for h in ["#/compliance", "#/c/%s/books/tds/2026-27" % cid, "#/c/%s/books/tds/2026-27/Q1/26Q" % cid, "#/c/%s/books/gst/07/202603/year" % cid, "#/c/%s/books/tds/2025-26/26as" % cid]:

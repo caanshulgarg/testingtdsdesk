@@ -57,8 +57,8 @@ export default function CustIms() {
       <div className="row" style={{ gap: 8, margin: "8px 0", flexWrap: "wrap" }}>
         <input type="search" aria-label="Invoice or credit note number" data-fk="custimsq" value={q} placeholder="Invoice or credit note number" style={{ width: 260 }} onChange={(ev) => setAndShow("custImsQ", ev.target.value, true)} /></div>
       {q && <Found hits={CustIMS.find(reg, q)} reg={reg} />}
-      {(mo.add.n || mo.back.n) ? <p className="note"><b>{GSTR.label(ym) + ", 3.1(a):"}</b>{" " + (mo.add.n ? "credit notes rejected by customers added back ₹" + money(all4(mo.add)) + " (" + mo.add.n + ")" : "") + (mo.add.n && mo.back.n ? "; " : "")
-        + (mo.back.n ? "accepted later, taken out again ₹" + money(all4(mo.back)) + " (" + mo.back.n + ")" : "") + "."}</p> : null}
+      {(mo.add.n || mo.back.n) ? <p className="note"><b>{GSTR.label(ym) + ", 3.1(a):"}</b>{" " + (mo.add.n ? "credit notes rejected by customers added back " + money(all4(mo.add)) + " (" + mo.add.n + ")" : "") + (mo.add.n && mo.back.n ? "; " : "")
+        + (mo.back.n ? "accepted later, taken out again " + money(all4(mo.back)) + " (" + mo.back.n + ")" : "") + "."}</p> : null}
       {list.length > 0 && <Marked list={list} />}
       {cs.length > 0 && <p className="note" style={{ marginTop: 8 }}>Customers to write to, asking them to accept: {cs.map((c, i) => <span key={c.gstin}>{i > 0 && "; "}{c.party + " (" + c.items.length + ") "}
         <button className="linkbtn" onClick={() => custImsLetter(c.gstin)}>copy letter</button>

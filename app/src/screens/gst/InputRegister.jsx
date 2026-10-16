@@ -45,11 +45,11 @@ function TieOut({ R }) {
   const reg = tot(R.rows.filter((r) => r.kindL !== "Not to be taken")), gap = r2(tax4(reg) - tax4(t3));
   let tail;
   if (Math.abs(gap) < 1) tail = " — they agree.";
-  else if (Math.abs(gap - r2(hr.held - hr.rel)) < 1) tail = " — held for 2B ₹" + money(hr.held) + (hr.rel ? ", taken from earlier ₹" + money(hr.rel) : "") + ".";
-  else tail = <>{" "}<span className="bad">{"Difference ₹" + money(gap) + (hr.held || hr.rel ? ": held back for 2B ₹" + money(hr.held - hr.rel) + ", the rest from reversals under rules 42 and 43." : ", from reversals under rules 42 and 43 taken in 3B.")}</span></>;
+  else if (Math.abs(gap - r2(hr.held - hr.rel)) < 1) tail = " — held for 2B " + money(hr.held) + (hr.rel ? ", taken from earlier " + money(hr.rel) : "") + ".";
+  else tail = <>{" "}<span className="bad">{"Difference " + money(gap) + (hr.held || hr.rel ? ": held back for 2B " + money(hr.held - hr.rel) + ", the rest from reversals under rules 42 and 43." : ", from reversals under rules 42 and 43 taken in 3B.")}</span></>;
   return (
     <p className="note" style={{ margin: "4px 0 8px" }}>
-      {"Register ₹" + money(tax4(reg)) + "; 3B table 4 ₹" + money(tax4(t3))}{tail}
+      {"Register " + money(tax4(reg)) + "; 3B table 4 " + money(tax4(t3))}{tail}
       {!R.loaded.size && <>{" "}<span className="bad">No 2B for this registration yet; bring it in under 2B reconciliation.</span></>}
       {" "}<details style={{ display: "inline" }}><summary className="linkbtn" style={{ display: "inline" }}>What is in it</summary>Every document in Tally that takes input tax for this registration: purchase bills, and journals or payments that carry input tax (reverse charge on rent, bank charges, an expense booked in a journal). GSTR-3B table 4 is made from it, and it is what is matched against 2B. Use the funnel on any column heading to filter.</details>
     </p>

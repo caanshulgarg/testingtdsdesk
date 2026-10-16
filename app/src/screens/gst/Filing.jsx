@@ -14,7 +14,7 @@ const H4 = ({ children }) => <h4 style={{ margin: "12px 0 4px" }}>{children}</h4
 // a date filed, or a figure as the portal shows it
 const DateIn = ({ k, v }) => <CommitBox type="date" aria-label={k === "r1" ? "GSTR-1 filed on" : "GSTR-3B filed on"} value={v || ""} style={{ width: "auto" }} onCommit={(x) => gstfSet(k, x)} />;
 const Portal = ({ k, v }) => <CommitBox type="number" step="0.01" aria-label={k} value={v === undefined || v === "" ? "" : String(v)} placeholder="as on the portal" style={{ width: 140 }} onCommit={(x) => gstfSet(k, x)} />;
-const Agrees = ({ est, portal }) => portal === undefined || portal === "" ? null : Math.abs(num(est) - num(portal)) < 1 ? <div className="nr">agrees</div> : <div className="bad">{"estimate ₹" + money(est)}</div>;
+const Agrees = ({ est, portal }) => portal === undefined || portal === "" ? null : Math.abs(num(est) - num(portal)) < 1 ? <div className="nr">agrees</div> : <div className="bad">{"estimate " + money(est)}</div>;
 
 function ReturnRow({ label, nil, due, k, rec, f, feeKey, est }) {
   return <tr>
@@ -75,12 +75,12 @@ export function Filing({ b, t }) {
       </table></div>
       <div className="dash-row"><span>Interest under section 50, from the portal (table 5.1)</span><b><Portal k="portalInt" v={rec.portalInt} />{est && <Agrees est={it.total} portal={rec.portalInt} />}</b></div>
       <p className="note">Late fee and interest are the portal’s own figures. They will be fetched from the portal once the GST API is connected; until then type what the portal shows. GSTR-1’s late fee is charged by the portal in the next 3B.</p>
-      {est && <p className="note"><b>FinCom’s estimate</b> (<SetLink>switched on in GST settings</SetLink>){"): late fee under section 47, ₹50 a day (₹20 for nil), capped at ₹" + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before"
+      {est && <p className="note"><b>FinCom’s estimate</b> (<SetLink>switched on in GST settings</SetLink>){"): late fee under section 47, ₹50 a day (₹20 for nil), capped at " + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before"
         + (a.from === "part" || a.from === "none" ? " (not all of that year is in the books; type it in GST settings)" : "") + "."
-        + (it.days && it.total ? " Interest under section 50(1), 18% a year on ₹" + money(t.quarter ? t.payable : t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + (t.quarter ? " still to pay after PMT-06" : " paid in cash") + " for " + it.days + " days" + (it.estimated ? " if filed today" : "") + ": ₹" + money(it.total) + "." : "")}</p>}
+        + (it.days && it.total ? " Interest under section 50(1), 18% a year on " + money(t.quarter ? t.payable : t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + (t.quarter ? " still to pay after PMT-06" : " paid in cash") + " for " + it.days + " days" + (it.estimated ? " if filed today" : "") + ": " + money(it.total) + "." : "")}</p>}
       <H4>Checks the portal runs</H4>
-      <Flag on={dr.b.flag}>{"DRC-01B: tax in GSTR-1 (" + (dr.b.from === "filed" ? "as filed" : "from the books") + ") ₹" + money(dr.b.r1) + " against 3B ₹" + money(dr.b.r3) + ", short by ₹" + money(Math.max(0, dr.b.gap)) + " (limit ₹" + money(dr.b.lim) + ")"}</Flag>
-      {dr.c.have2b ? <Flag on={dr.c.flag}>{"DRC-01C: credit in 3B 4(A)(5) ₹" + money(dr.c.claimed) + " against 2B ₹" + money(dr.c.avl) + ", above 2B by ₹" + money(Math.max(0, dr.c.gap)) + " (limit ₹" + money(dr.c.lim) + ")"}</Flag>
+      <Flag on={dr.b.flag}>{"DRC-01B: tax in GSTR-1 (" + (dr.b.from === "filed" ? "as filed" : "from the books") + ") " + money(dr.b.r1) + " against 3B " + money(dr.b.r3) + ", short by " + money(Math.max(0, dr.b.gap)) + " (limit " + money(dr.b.lim) + ")"}</Flag>
+      {dr.c.have2b ? <Flag on={dr.c.flag}>{"DRC-01C: credit in 3B 4(A)(5) " + money(dr.c.claimed) + " against 2B " + money(dr.c.avl) + ", above 2B by " + money(Math.max(0, dr.c.gap)) + " (limit " + money(dr.c.lim) + ")"}</Flag>
         : <div className="dash-row"><span>DRC-01C: credit against 2B</span><b className="nr">no 2B for this month</b></div>}
       <p className="note">Limits as notified under rules 88C and 88D (the higher of an amount and a percentage); a difference is not wrong in itself — reclaims, credit of earlier months and 2B timing explain most — but be ready to explain it.</p>
       <Rule37 b={b} reg={reg} r={t.r37} />

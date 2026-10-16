@@ -131,3 +131,77 @@ details.more .more-words p{margin:0 0 6px}
   nav.sbar[aria-label="Return"]>button{flex:0 0 auto;white-space:nowrap}
 }
 @media (max-width:640px){ .tg-head>nav.sbar>button{white-space:nowrap;flex:0 0 auto} .tg-head .tg-tools{width:100%} }
+/* ------------------------------------------------------------------ t70 (16-Oct-2026; the owner: "TDS and GST pages take
+   too much space.. column alignment is also not good.. the customer name has excess space.. some columns I can not even
+   see properly without touching them"). Nothing taken away: the same words and figures, placed more compactly.
+   1. The top of a return: the page's rows 6–8 px apart; the return's card one header row and a slim strip of figures. */
+#app [data-gst-page] .tg-head, #app [data-tds-page] .tg-head { margin: 0 0 6px; }
+@media (min-width:641px) {
+  #app [data-gst-page] .tg-head, #app [data-tds-page] .tg-head { flex-wrap: nowrap; align-items: center; }
+  #app [data-gst-page] .tg-head > nav.sbar, #app [data-tds-page] .tg-head > nav.sbar { flex: 1 1 auto; min-width: 0; width: auto; }
+  #app [data-gst-page] .tg-head .tg-tools, #app [data-tds-page] .tg-head .tg-tools { flex: 0 0 auto; padding-bottom: 0; }
+}
+#app [data-gst-page] [data-ledger-banner], #app [data-tds-page] [data-ledger-banner] { margin-bottom: 6px !important; }
+#app [data-gst-page] .fbar.tg-bar, #app [data-tds-page] .fbar.tg-bar { margin: 0 0 6px; }
+#app [data-gst-page] nav.sbar.subnav.subnav.subnav[aria-label], #app [data-tds-page] nav.sbar.subnav.subnav.subnav[aria-label] { margin: 0 0 6px; }
+#app [data-gst-page] .fbar, #app [data-tds-page] .fbar { margin-bottom: 6px; }
+#app [data-gst-page] nav.sbar.rp-tabs[aria-label="Return"] { margin: 0 0 6px; }
+#app [data-tds-page] .tg-lock { margin: 0 0 4px; }
+#app [data-tds-page] .tg-tabrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 0 0 6px; }
+#app [data-tds-page] .tg-tabrow > nav.sbar { margin: 0 !important; min-width: 0; }
+#app [data-tds-page] .tg-tabrow > nav.sbar.subnav.subnav.subnav[aria-label] { margin: 0; }
+.ret-card.ret-slim { padding: 8px 16px; margin: 0 0 8px; }
+.ret-card.ret-slim .ret-top { flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.ret-card.ret-slim .ret-back { margin: 0; font-size: 13px; white-space: nowrap; }
+.ret-card.ret-slim .ret-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; flex: 1 1 260px; min-width: 0; }
+.ret-card.ret-slim h2 { font-size: 17px; line-height: 1.3; }
+.ret-card.ret-slim .ret-sub { margin: 0; font-size: 12.5px; }
+.ret-card.ret-slim .ret-acts { margin-left: auto; gap: 6px; }
+.ret-card.ret-slim .ret-figs { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 8px 0 0; padding: 8px 0 0; }
+.ret-card.ret-slim .ret-fig { min-width: 0; }
+.ret-card.ret-slim .ret-fig span, .ret-card.ret-slim .ret-fig small { font-size: 11.5px; margin: 0; }
+.ret-card.ret-slim .ret-fig b { display: inline; font-size: 15px; margin: 0 8px 0 0; line-height: 1.4; }
+.ret-card.ret-slim .ret-fig small { display: inline; }
+/* GSTR-1's Summary: smaller boxes, the taxable value and the tax each on its own line, nothing cut */
+#app [data-gst-page] .dash-tiles { gap: 10px; margin: 0 0 10px; }
+#app [data-gst-page] .dash-tiles .dtile { padding: 10px 14px; overflow: visible; }
+#app [data-gst-page] .dash-tiles .dtile b { margin-top: 4px; font-size: 20px; }
+#app [data-gst-page] .dash-tiles .dtile small { margin-top: 2px; font-size: 12.5px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#app [data-gst-page] .dash-tiles .dtile b + small { margin-top: 6px; }
+/* 2. The tables of these pages (table.tg-fit): each figure, date and count column as wide as what it shows, on one line, to
+   the right with its header; the name column at most ~32 characters, wrapping between words; the PAN, voucher, a
+   section's words and a rate's reason in small type under the cell's main line. Scoped so no other page's table moves. */
+#app table.bk-table.tg-fit th.n, #app table.bk-table.tg-fit td.n, #app table.bk-table.tg-fit [data-numeric],
+#app table.lt.lt.tg-fit:not(.cards) th[data-role], #app table.bk-table.tg-fit th.dt, #app table.bk-table.tg-fit td.dt { white-space: nowrap; }
+/* (a computer only: on a phone the table is as wide as it needs and scrolls in its box, where a % width would blow up) */
+@media (min-width:601px) {
+  #app table.bk-table.tg-fit th.n, #app table.bk-table.tg-fit td.n, #app table.bk-table.tg-fit [data-numeric],
+  #app table.lt.lt.tg-fit:not(.cards) th[data-role]:not([data-role=""]), #app table.bk-table.tg-fit th.dt, #app table.bk-table.tg-fit td.dt { width: 1%; }
+  /* the name column a set ~28 characters; what room is left goes to a column of words (GSTIN, sections), not to the name */
+  #app table.lt.lt.tg-fit:not(.cards) th[data-role="party"]:not([data-role=""]), #app table.bk-table.tg-fit th.pty { width: 28ch; }
+  #app table#tdsDnTable.lt.lt.tg-fit:not(.cards) th[data-role="party"] { width: 22ch; }
+}
+#app table.bk-table.tg-fit th.n, #app table.bk-table.tg-fit td.n, #app table.bk-table.tg-fit [data-numeric] { text-align: right; font-variant-numeric: tabular-nums; }
+#app table.bk-table.tg-fit thead th.n, #app table.bk-table.tg-fit thead th[data-numeric] { text-align: right; }
+#app table.bk-table.tg-fit td.dt { color: inherit; }
+#app table.bk-table.tg-fit .tg-pty { min-width: 14ch; max-width: 32ch; white-space: normal; overflow-wrap: normal; word-break: normal; }
+#app table.bk-table.tg-fit td.pty { white-space: normal; overflow-wrap: normal; }
+#app table.bk-table.tg-fit .tg-sub, #app table.bk-table.tg-fit .tg-heads { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--muted); line-height: 1.35; }
+#app table.bk-table.tg-fit .tg-sub.bad { color: var(--bad); }
+#app table.bk-table.tg-fit td.n .tg-why { white-space: normal; min-width: 15ch; max-width: 22ch; margin-left: auto; text-align: right; overflow-wrap: normal; }
+#app table.bk-table.tg-fit td.n .tg-heads { white-space: nowrap; }
+#app table.bk-table.tg-fit td .code, #app table.bk-table.tg-fit td.code, #app table.bk-table.tg-fit [data-pan] { white-space: nowrap; overflow-wrap: normal; }
+#app table.bk-table.tg-fit .rp-sec { display: block; min-width: 13ch; max-width: 24ch; overflow-wrap: normal; }
+#app table.bk-table.tg-fit .rp-sec-code { font-weight: 600; }
+#app table.bk-table.tg-fit .rp-sec small { font-size: 12px; line-height: 1.35; }
+#app table.bk-table.tg-fit td select { width: 124px; max-width: 124px; min-width: 0; }
+#app table.bk-table.tg-fit td [data-src] { white-space: nowrap; }
+#app table.lt.lt.tg-fit:not(.cards) tbody td { overflow-wrap: normal; }
+/* the list's box on these pages: no height of its own, the page scrolls (the header was below the fold, a sideways
+   scrollbar under it) */
+#app [data-tds-page] .lt-wrap, #app [data-gst-page] .lt-wrap { max-height: none; }
+/* the count beside the filters wraps, never "…" */
+#app [data-tds-page] .fbar .fb-count, #app [data-gst-page] .fbar .fb-count { overflow: visible; text-overflow: clip; white-space: normal; contain: none; flex: 0 1 auto; line-height: 1.3; }
+/* the filter bar's choices as wide as what they say (they were 150 px each), so the count fits beside them */
+#app [data-tds-page] .fbar .fb-f.fb-bare select, #app [data-gst-page] .fbar .fb-f.fb-bare select { width: auto; max-width: 124px; }
+#app [data-tds-page] .fbar .fb-search, #app [data-gst-page] .fbar .fb-search { flex: 0 1 180px; }
