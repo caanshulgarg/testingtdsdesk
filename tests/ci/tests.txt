@@ -344,3 +344,5 @@ run_round64_pages.py                  120  TDSDESK_SITE=../app/dist-test
 # 16-Oct-2026 (round 64, the owner's recheck): GB TEXCOAT's shape from the cloud copy (empty and stale browser) on every Books page;
 run_gb_pages.py                       300  TDSDESK_SITE=../app/dist-test
 run_lazy_fail.py                      120  TDSDESK_SITE=../app/dist-test
+# 16-Oct-2026 (round 65): the TDS page when the books are in but hold no TDS (GB TEXCOAT): said plainly, empty TDS ledgers, should have deducted
+run_tds_empty.py                      300  TDSDESK_SITE=../app/dist-test

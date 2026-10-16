@@ -22,6 +22,7 @@ import HelpButton from "../parts/HelpButton.jsx";
 import More from "../parts/More.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import NotRead from "../parts/NotRead.jsx";
+import NoTds from "./tds/NoTds.jsx";
 import "../parts/returns.css";
 import Filters, { Field } from "../parts/Filters.jsx";
 
@@ -262,12 +263,16 @@ export default function Tds({ b }) {
   const notRead = end ? <NotRead end={end} what={"TDS " + (S.tdsQ ? S.tdsQ + " (" + Q_MONTHS[S.tdsQ] + ") " : "") + S.tdsFy} read={S.tdsFy}
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
+  const booksIn = (b.vouchers || []).some((x) => !x.opt && !x.cancel);
   const none = !had.length && v !== "notices" && v !== "register" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
   return <div data-phone-scroll="" data-tds-page="">
     {/* the ledgers still to confirm: one line (tds-layout), on the year's page and a return's */}
     {v !== "register" && v !== "ledgers" && <LedgerLine b={b} />}
     {!none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && v !== "ledgers" && <Bar fys={fys} />}
     {v === "ledgers" ? <TaxLedgers b={b} kind="tds" />
+      // round 65: the books are in but hold no TDS: said plainly, with the TDS ledgers that have no entries and what should
+      // have been deducted (tds/NoTds.jsx); "Bring in from Tally" only when there are no entries at all
+      : none && booksIn ? <NoTds b={b} />
       : none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
       <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => goClient("books:import")}>Bring in from Tally</button>
         <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div></Calm>
