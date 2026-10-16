@@ -51,14 +51,24 @@ export function r1Tables(j) {
 }
 const taxOf = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 
+// the portal's GSTR-1 summary names and grouping (B2B, reverse charge and SEZ / deemed exports are ONE table there)
+const R1_PORTAL = { B2B: "4A, 4B, 6B, 6C – B2B, SEZ, DE invoices", "5": "5A – B2C (Large) invoices", "6A": "6A – Exports invoices", "7": "7 – B2C (Others)",
+  "8": "8A, 8B, 8C, 8D – Nil rated supplies", "9BR": "9B – Credit / Debit notes (Registered)", "9BU": "9B – Credit / Debit notes (Unregistered)",
+  "11A": "11A(1), 11A(2) – Tax liability (Advances received)", "11B": "11B(1), 11B(2) – Adjustment of advances", "12": "12 – HSN-wise summary", "13": "13 – Documents issued" };
+function portalRows(list) {
+  const out = [], b2b = list.filter((o) => o.k === "4A" || o.k === "4B" || o.k === "6B");
+  if (b2b.length) { const g = blank("B2B"); g.parts = b2b.map((o) => o.k); b2b.forEach((o) => { g.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { g[f] = r2(g[f] + o[f]); }); }); out.push(g); }
+  list.filter((o) => !["4A", "4B", "6B"].includes(o.k)).forEach((o) => out.push(o));
+  return out;
+}
 export function R1Summary({ amendN }) {
-  const j = GSTR.toJson(S.gstYm || "", S.gstReg || "", { plain: true }), list = r1Tables(j);
+  const j = GSTR.toJson(S.gstYm || "", S.gstReg || "", { plain: true }), list = portalRows(r1Tables(j));
   const tot = blank("all"); list.filter((o) => o.k !== "12" && o.k !== "13").forEach((o) => { tot.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { tot[f] = r2(tot[f] + o[f]); }); });
-  const open = (k) => { if (k === "11A" || k === "11B") { gstPartGo("adv"); return; } S.r1F = k === "12" || k === "13" ? {} : { part: k }; S.r1View = ""; gstSubGo("details"); };
+  const open = (k) => { if (k === "11A" || k === "11B") { gstPartGo("adv"); return; } S.r1F = k === "12" || k === "13" ? {} : k === "B2B" ? { parts: ["4A", "4B", "6B"] } : { part: k }; S.r1View = ""; gstSubGo("details"); };
   return <div className="bk-tablewrap" data-r1-summary=""><table className="bk-table tg-fit" data-statement="">
     <thead><tr><th>Table</th><th className="n">Records</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th><th className="n">Total tax</th></tr></thead>
     <tbody>{list.length ? list.map((o) => <tr key={o.k} data-r1-table={o.k} className="tg-click" onClick={() => open(o.k)} title="Open the documents of this table">
-      <td><button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); open(o.k); }}>{R1_PARTS[o.k]}</button>{o.k === "7" && <div className="tg-sub">summary by state and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
+      <td><button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); open(o.k); }}>{R1_PORTAL[o.k] || R1_PARTS[o.k]}</button>{o.k === "7" && <div className="tg-sub">summary by state and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
       <td className="n">{o.n}</td>{o.k === "13" ? <td colSpan={6}></td> : <><td className="n">{money(o.taxable)}</td><td className="n">{money(o.igst)}</td><td className="n">{money(o.cgst)}</td><td className="n">{money(o.sgst)}</td>
       <td className="n">{money(o.cess)}</td><td className="n">{money(taxOf(o))}</td></>}</tr>)
       : <tr><td colSpan={8} className="note">No documents for this month.</td></tr>}
@@ -71,13 +81,13 @@ export function R1Summary({ amendN }) {
 export function r1Lists(rows) {
   const f = S.r1F || {}, qq = String(f.q || "").toLowerCase();
   const bills = rows.filter((r) => partOf(r) !== "7");
-  const pass = (r) => (!f.part || partOf(r) === f.part) && (!f.party || (r.gstin || normName(r.party || "")) === f.party) && (!f.pos || String(r.pos || "") === f.pos)
+  const pass = (r) => (!f.part || partOf(r) === f.part) && (!f.parts || f.parts.includes(partOf(r))) && (!f.party || (r.gstin || normName(r.party || "")) === f.party) && (!f.pos || String(r.pos || "") === f.pos)
     && (!f.rate || String(r.rate) === f.rate) && (!f.month || String(r.date).slice(0, 6) === f.month)
     && (!qq || (r.no + " " + r.party + " " + (r.gstin || "")).toLowerCase().includes(qq));
   const j = GSTR.toJson(S.gstYm || "", S.gstReg || "", { plain: true });
   const stName = (c) => (Object.keys(STATE_CODES).find((k) => STATE_CODES[k] === c) || c);
   const b2cs = (j.b2cs || []).map((x, i) => ({ id: "b2cs" + i, pos: stName(x.pos), rate: x.rt, taxable: num(x.txval), igst: num(x.iamt), cgst: num(x.camt), sgst: num(x.samt), cess: num(x.csamt), sply: x.sply_ty }));
-  const sumPass = (x) => (!f.part || f.part === "7") && !f.party && !f.month && !qq && (!f.pos || x.pos === f.pos) && (!f.rate || String(x.rate) === f.rate);
+  const sumPass = (x) => (!f.part || f.part === "7") && !f.parts && !f.party && !f.month && !qq && (!f.pos || x.pos === f.pos) && (!f.rate || String(x.rate) === f.rate);
   return { all: bills, shown: bills.filter(pass), b2cs: b2cs.filter(sumPass), b2csAll: b2cs };
 }
 const total = (x) => r2(num(x.taxable) + num(x.igst) + num(x.cgst) + num(x.sgst) + num(x.cess));

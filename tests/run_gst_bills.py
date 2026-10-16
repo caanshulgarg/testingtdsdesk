@@ -34,7 +34,7 @@ for i in range(N):
     books["vouchers"].append(c)
 SUMJ = """() => { const j = GSTR.toJson('202603', '07', {plain: true}), t = {}; const add = (k, n, x, sg) => { const o = t[k] = t[k] || {n: 0, taxable: 0, tax: 0}; o.n += n;
     o.taxable = r2(o.taxable + sg * num(x.txval)); o.tax = r2(o.tax + sg * (num(x.iamt) + num(x.camt) + num(x.samt) + num(x.csamt))); };
-  (j.b2b || []).forEach(p => p.inv.forEach(v => { add(v.rchrg === 'Y' ? '4B' : '4A', 1, {}, 1); v.itms.forEach(x => add(v.rchrg === 'Y' ? '4B' : '4A', 0, x.itm_det, 1)); }));
+  (j.b2b || []).forEach(p => p.inv.forEach(v => { add('B2B', 1, {}, 1); v.itms.forEach(x => add('B2B', 0, x.itm_det, 1)); }));
   (j.b2cl || []).forEach(p => p.inv.forEach(v => { add('5', 1, {}, 1); v.itms.forEach(x => add('5', 0, x.itm_det, 1)); }));
   (j.b2cs || []).forEach(x => add('7', 1, x, 1));
   (j.cdnr || []).forEach(p => p.nt.forEach(v => { add('9BR', 1, {}, 1); v.itms.forEach(x => add('9BR', 0, x.itm_det, v.ntty === 'C' ? -1 : 1)); }));
@@ -56,15 +56,15 @@ try:
         print("1. Summary: the portal's tables")
         go("r1/summary")
         rows, want = E(PAGE), E(SUMJ)
-        ok(rows and [r["k"] for r in rows][:1] == ["4A"], "a row per GSTR-1 table, 4A first (%s)" % [r["k"] for r in rows])
+        ok(rows and [r["k"] for r in rows][:1] == ["B2B"] and "4A, 4B, 6B, 6C" in E("() => document.querySelector('[data-r1-table=B2B]').innerText"), "a row per GSTR-1 table as the portal groups them, '4A, 4B, 6B, 6C – B2B, SEZ, DE invoices' first (%s)" % [r["k"] for r in rows])
         for r in rows:
             w = want.get(r["k"])
             if w: ok(r["n"] == w["n"] and abs(r["taxable"] - w["taxable"]) < 0.01 and abs(r["tax"] - w["tax"]) < 0.01, "table %s: records, taxable and tax as the JSON (%s / %s)" % (r["k"], r, w))
         grand = E("() => document.querySelector('[data-r1-grand]').innerText")
         tot = sum(r["taxable"] for r in rows if r["k"] not in ("12", "13"))
         ok(E("INR.format(%s)" % round(tot, 2)) in grand, "the grand total: tables 4 to 11 (%s)" % grand.replace("\n", " "))
-        pg.click("[data-r1-summary] tr[data-r1-table='4A'] button"); W(1000)
-        ok(E("S.gstSub") == "details" and E("(S.r1F || {}).part") == "4A" and E("S.r1View || ''") == "", "a row opens Details by bill, filtered to its table (%s)" % E("[S.gstSub, S.r1F]"))
+        pg.click("[data-r1-summary] tr[data-r1-table='B2B'] button"); W(1000)
+        ok(E("S.gstSub") == "details" and E("(S.r1F || {}).parts") == ["4A", "4B", "6B"] and E("S.r1View || ''") == "", "a row opens Details by bill, filtered to its table (%s)" % E("[S.gstSub, S.r1F]"))
         E("() => { clearFilter('r1F'); }"); W(500)
 
         print("2. Details by bill")

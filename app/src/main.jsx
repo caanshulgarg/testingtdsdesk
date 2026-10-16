@@ -71,4 +71,16 @@ if (!window.__fincomOld) {
   // the line going and coming back: said in the sidebar's quiet line at once ("No internet · work kept on this computer")
   const redrawNow = () => { try { if (window.S && S.firm && typeof window.render === "function") window.render(); } catch (e) { /* the next drawing shows it */ } };
   window.addEventListener("online", redrawNow); window.addEventListener("offline", redrawNow);
+  // t70: a <details> menu (.bk-menu-list, right-aligned to its button) whose button sits near the left edge opened past
+  // the window's left side (the Post page's More with the narrower sidebar): when opened, it is kept inside the window
+  document.addEventListener("toggle", (ev) => {
+    const d = ev.target;
+    if (!d || d.tagName !== "DETAILS" || !d.open) return;
+    const m = d.querySelector(":scope > .bk-menu-list");
+    if (!m) return;
+    m.style.left = ""; m.style.right = "";
+    const r = m.getBoundingClientRect();
+    if (r.left < 8) { m.style.left = "0"; m.style.right = "auto"; }
+    else if (r.right > window.innerWidth - 8) { m.style.right = "0"; m.style.left = "auto"; }
+  }, true);
 }
