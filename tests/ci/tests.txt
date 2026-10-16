@@ -340,6 +340,7 @@ run_migration90.py                    300
 run_book_start_server.py              120
 run_order_vouchers.py                 300
 run_migration91.py                    120
+run_migration92.py                    300
 run_round64_pages.py                  120  TDSDESK_SITE=../app/dist-test
 # 16-Oct-2026 (round 64, the owner's recheck): GB TEXCOAT's shape from the cloud copy (empty and stale browser) on every Books page;
 run_gb_pages.py                       300  TDSDESK_SITE=../app/dist-test
