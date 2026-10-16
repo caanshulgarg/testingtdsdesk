@@ -44,6 +44,8 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
    it, then the bell, the Tally sign and the firm */
 @media (max-width: 760px) {
   :root { --slot-tally: 150px; --slot-firm: 132px; }
+  /* (t70: the Inbox tray beside the bell; the Tally sign a little narrower so the line fits a 390 px phone) */
+  @media (max-width: 420px) { :root { --slot-tally: 118px; --slot-firm: 120px; } header.top .topright > .tb-global { gap: 8px; } }
   header.top .headrow, header.top .headrow:not(:has(> .sbar)) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t p" "g g"; align-items: center; gap: 8px 12px; }
   header.top .headrow > .tbar { grid-area: t; min-width: 0; }
   header.top .headrow > .topright { display: contents; }

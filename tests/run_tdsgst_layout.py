@@ -134,7 +134,10 @@ try:
             shown = E("[...document.querySelectorAll('#app nav[aria-label=GST] [data-part]')].map(b => b.dataset.part)")
             for part in parts:
                 if len(parts) > 1 or sec == "returns":
-                    pg.click("#app nav[aria-label=GST] [data-part='%s']" % part); W(500)
+                    # (round 6: a GSTR-1 or 3B open chooses the return in its title; the chips' row is gone there)
+                    if pg.locator("#app nav[aria-label=GST] [data-part='%s']" % part).count(): pg.click("#app nav[aria-label=GST] [data-part='%s']" % part)
+                    else: pg.select_option("#app [data-return-card] select[aria-label=Return]", part)
+                    W(500)
                 ok(E("S.gstPart") == part and E("S.gstView") == "return" and ("/" + part) in E("location.hash") and (sec == "returns") == (pg.locator("#app [data-ledger-banner]").count() == 1),
                    "GST › %s › %s (%s)" % (sec, part, E("location.hash").split("/books/")[-1]))
         hash_go("#/c/%s/books/gst/07/202603/r3b/summary" % cid)
@@ -202,8 +205,18 @@ try:
             const t = e.tagName === 'SELECT' ? (e.selectedOptions[0] ? (e.selectedOptions[0].label || e.selectedOptions[0].text) : '') : (e.value || e.placeholder);
             const need = cv.measureText(t).width, room = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
             if (need > room + 1) out.fit.push(t + ' (' + Math.round(need) + '>' + Math.round(room) + ')'); }
-          const pill = app.querySelector('[data-return-card] [data-ledger-banner]'), sel = app.querySelector('[data-return-card] .ret-ctx select');
-          out.pill = pill && sel ? Math.round(Math.abs((pill.getBoundingClientRect().top + pill.getBoundingClientRect().bottom) - (sel.getBoundingClientRect().top + sel.getBoundingClientRect().bottom)) / 2) : null;
+          const pill = app.querySelector('[data-return-card] [data-ledger-banner]'), sel = app.querySelector('[data-return-card] .ret-head select');
+          out.pill = pill && sel ? Math.round(pill.getBoundingClientRect().top - sel.getBoundingClientRect().bottom) : null;
+          // round 4 (the owner: one row for the return and its period): the period's boxes are the title, on one line with the
+          // actions; no filter row of boxes under the tabs (the filters are in the table's headers); the find box, Needs
+          // fixing, Export and Import at the right of the tabs' row
+          const acts = app.querySelector('[data-return-card] .ret-acts'), cy = (e) => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+          out.oneLine = sel && acts ? Math.round(Math.abs(cy(sel) - cy(acts))) : null;
+          out.rowBars = [...app.querySelectorAll('[data-filter-bar]')].filter((b) => vis(b) && !b.closest('[data-return-card]') && !b.closest('.tg-tabrow') && b.querySelector('select')).length;
+          out.hfs = t ? [...t.querySelectorAll(':scope > thead select')].map((e) => e.getAttribute('aria-label')) : [];
+          out.chips = app.querySelectorAll('[data-return-card] ~ * nav[aria-label=GST], .tg-tabrow nav[aria-label=GST]').length;
+          out.sub2 = (app.querySelector('[data-return-card] .ret-line2') || {}).innerText || '';
+          out.inTabs = [...app.querySelectorAll('.tg-tabrow input[type=search], .tg-tabrow [data-ded-filter], .tg-tabrow [data-fb-out], .tg-tabrow [data-ded-import-btn]')].filter(vis).length;
           out.why = [...app.querySelectorAll('.tg-why')].filter(vis).map((e) => [e.innerText, lines(e)]);
           return out; }"""
         AMOUNTS = r"""() => [...new Set((document.querySelector('#app').innerText.match(/₹\s*-?[\d,]+(?:\.\d+)?/g) || []).map((s) => s.replace(/\s/g, '')))].sort()"""
@@ -219,7 +232,8 @@ try:
                 at = "%s at %d×%d" % (name, vw, vh)
                 if vw == 1440: got[name] = amts
                 if name in ("gst-details", "tds-deductions") and vw == 1440:
-                    ok(m["top"] is not None and m["top"] <= 330, "%s: the table's header %s px below the top of the page (at most 330)" % (at, m["top"]))
+                    lim = 260 if name == "tds-deductions" else 230
+                    ok(m["top"] is not None and m["top"] <= lim, "%s: the table's header %s px below the top of the page (at most %d)" % (at, m["top"], lim))
                 if name in ("gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
                     ok(m["wrap"] and m["wrap"][0] <= m["wrap"][1] + 1, "%s: every column in view, no sideways scroll inside the table (%s)" % (at, m["wrap"]))
                 if m["party"] is not None:
@@ -230,7 +244,17 @@ try:
                 ok(not m["cut"], "%s: nothing cut off or hidden behind '…' (%s)" % (at, m["cut"][:4]))
                 ok(not m["fit"], "%s: every box shows its chosen value whole (%s)" % (at, m["fit"][:4]))
                 if m["pill"] is not None:
-                    ok(m["pill"] <= 8, "%s: the ledgers to confirm on the card's first row, beside the period (%d px apart)" % (at, m["pill"]))
+                    ok(m["pill"] >= 0, "%s: the ledgers to confirm on the card's second line, under the title (%d)" % (at, m["pill"]))
+                if m["oneLine"] is not None:
+                    ok(m["oneLine"] <= 6, "%s: the return's period boxes and its actions on one line (%d px apart)" % (at, m["oneLine"]))
+                if name.startswith("gst-"):
+                    ok(m["chips"] == 0, "%s: no row of the return's parts under the card (the title chooses the return) (%d)" % (at, m["chips"]))
+                    ok("07AAGCL4827M1Z3" not in m["sub2"], "%s: the GSTIN once, in the title (%s)" % (at, m["sub2"][:60]))
+                if name in ("gst-details", "tds-deductions", "tds-deductees"):
+                    ok(m["rowBars"] == 0, "%s: no row of filter boxes over the table (%d)" % (at, m["rowBars"]))
+                    want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": ["PAN", "Section", "Challan", "Rate"], "gst-details": ["Part"]}[name]
+                    ok(sorted(m["hfs"]) == sorted(want), "%s: the filters in the table's headers (%s)" % (at, m["hfs"]))
+                    ok(m["inTabs"] >= (3 if name == "tds-deductions" else 2), "%s: find and Export (and Needs fixing, Import) at the right of the tabs' row (%d)" % (at, m["inTabs"]))
                 ok(all(n <= 2 for _, n in m["why"]), "%s: a rate's reason on two lines at most (%s)" % (at, m["why"][:2]))
                 ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
                 ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))
@@ -239,6 +263,18 @@ try:
                     miss = [a for a in before.get(name, []) if a not in amts]
                     ok(not miss and before.get(name), "%s: every figure shown before is still shown (%d; missing %s)" % (at, len(before.get(name, [])), miss[:5]))
                 pg.screenshot(path=os.path.join(HERE, "out", "t70-%s-%dx%d.png" % (name, vw, vh)))
+        pg.set_viewport_size({"width": 1440, "height": 900})
+        hash_go("#/c/%s/books/tds/2026-27/Q1/26Q/deductions" % cid, 1300); E("() => { S.tdsDedView = ''; S.tdsFl = {}; render(); }"); W(300)
+        pg.select_option("#tdsDnTable thead select[aria-label=PAN]", "no"); W(400)
+        th = E("(() => { const s = document.querySelector('#tdsDnTable thead select[aria-label=PAN]'); return s ? [s.closest('th').className, s.className] : null; })()")
+        ok(th and "th-filtered" in th[0] and " on" in " " + th[1], "a header's filter set: its header tinted, its ▾ filled (%s)" % th)
+        ok(pg.locator("#app [data-ded-clear]").count() == 1, "Clear filters beside the count while a filter is on")
+        pg.click("#app [data-ded-clear]"); W(400)
+        ok(pg.locator("#app [data-ded-clear]").count() == 0 and E("Object.values((S.tdsFl || {}).deductions || {}).every(v => !v)"), "… and gone once cleared")
+        pg.select_option("#tdsDnTable thead select[aria-label=PAN]", "inop"); W(400)
+        ok(pg.locator("#tdsDnTable thead select[aria-label=PAN]").count() == 1 and pg.locator("#app [data-list-empty]").count() == 1 and pg.locator("#app [data-ded-clear]").count() == 1,
+           "nothing matching: the headers and their filters stay, with Clear filters")
+        pg.click("#app [data-ded-clear]"); W(400)
         if capture:
             json.dump(got, open(FIX, "w"), indent=1, ensure_ascii=False); print("  captured the figures to", FIX)
         pg.set_viewport_size({"width": 1440, "height": 1000})

@@ -317,3 +317,84 @@ details.more .more-words p{margin:0 0 6px}
 #app table.bk-table.tg-fit .tg-edited { color: color-mix(in oklab, var(--warn) 75%, var(--foreground)); }
 #app :is([data-tds-page], [data-gst-page]) .dash-tiles .dtile { box-shadow: none; border-color: var(--border); }
 #app :is([data-tds-page], [data-gst-page]) .dash-tiles .dtile b { font-weight: 600; }
+/* ------------------------------------------------------------------ t70, round 4 (the owner: "one row for context and title";
+   "filters in the column headers"). The card's first line: ← · the period's boxes as the title (Form · Quarter · Year;
+   GST: the return · Month · Year · GSTIN), no boxes, title type · the actions at the right; the second line small: what
+   it is, the status, the lock, the ledgers to confirm. The tabs' row ends with find, Needs fixing, Export and Import. A
+   filter is a ▾ in its column's header, filled on a tint when set. */
+.ret-card.ret-one .ret-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 8px 16px 0; }
+.ret-card.ret-one .ret-back { margin: 0; padding: 0 6px 0 0; font-size: 18px; line-height: 1; text-decoration: none; color: var(--muted); }
+.ret-card.ret-one .ret-back:hover { color: var(--accent); }
+.ret-card.ret-one .ret-name-h { margin: 0 2px 0 0; font-size: 18px; font-weight: 600; line-height: 36px; }
+.ret-card.ret-one .ret-title-text { font-size: 18px; font-weight: 600; }
+#app .ret-card.ret-one .ret-head > .fbar { flex: 0 1 auto; flex-wrap: wrap; gap: 0 2px; margin: 0 !important; min-width: 0; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f { border-color: transparent; background: transparent; box-shadow: none; padding-left: 2px; gap: 0; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:hover, #app .ret-card.ret-one .ret-head > .fbar .fb-f:focus-within { border-color: var(--border); background: var(--surface); }
+#app .ret-card.ret-one .ret-head > .fbar .fb-l { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#app .ret-card.ret-one .ret-head > .fbar.fbar .fb-f.fb-f select { font-size: 18px; font-weight: 600; color: var(--foreground); padding: 0 22px 0 4px; letter-spacing: -.01em; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f::before { content: "·"; margin: 0 2px 0 0; color: var(--muted); font-weight: 600; font-size: 18px; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Form"])::before, #app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Month"])::before { content: none; }
+#app [data-gst-page] .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Month"])::before { content: "·"; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Form"]) { order: 1; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Quarter"]) { order: 2; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Year"]) { order: 3; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Month"]) { order: 1; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="Financial year"]) { order: 2; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-f:has(select[aria-label="GSTIN"]) { order: 3; }
+#app .ret-card.ret-one .ret-head > .fbar .fb-slot[data-fb-slot="clear"], #app .ret-card.ret-one .ret-head > .fbar .fb-end:empty { display: none; }
+.ret-card.ret-one .ret-acts { margin-left: auto; }
+.ret-card.ret-one .ret-line2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0 16px 0; font-size: 12.5px; color: var(--muted); }
+.ret-card.ret-one .ret-line2:last-child { padding-bottom: 10px; }
+.ret-card.ret-one .ret-line2 .tg-lock { margin: 0; font-size: 12.5px; }
+#app .ret-card.ret-one .ret-line2 .tg-ledline { min-height: 22px; margin: 0; padding: 0 8px; font-size: 12px; }
+.ret-card.ret-one .ret-figs { margin-top: 8px; }
+/* the tabs' row: the tools at its end */
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools { margin: 0 !important; flex-wrap: nowrap; gap: 6px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.fbar.tg-tools .fb-search { flex: 0 1 210px; min-width: 190px; max-width: 240px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools .fb-end { margin-left: 0; flex: 0 0 auto; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabrow { align-items: center; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabrow > nav.sbar.rp-tabs[aria-label="Return"] > button { padding: 0 8px; }
+/* a column's filter: a ▾ in its header */
+#app table .hf-sel { appearance: none; -webkit-appearance: none; flex: none; width: 18px; height: 18px; min-width: 0; margin: 0 0 0 4px; padding: 0; border: 0; border-radius: 4px; cursor: pointer; vertical-align: middle;
+  color: transparent; font-size: 12px; background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 3.5h7L5 7.5z' fill='%2394a3b8'/%3E%3C/svg%3E") center / 10px no-repeat; box-shadow: none; }
+#app table .hf-sel:hover { background-color: color-mix(in oklab, var(--foreground) 7%, transparent); }
+#app table .hf-sel.on { background-color: var(--accent); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 3.5h7L5 7.5z' fill='%23ffffff'/%3E%3C/svg%3E"); }
+#app table .hf-sel option { color: var(--foreground); background: var(--surface); }
+#app table thead th.th-filtered, #app table.lt.lt thead th.th-filtered { background: color-mix(in oklab, var(--accent) 9%, var(--surface)) !important; color: var(--accent); }
+#app table thead th .colh { display: inline-flex; align-items: center; gap: 0; }
+/* the tabs' row's parts (GST) small, so the row stays one line */
+#app [data-gst-page] .tg-tabrow .tg-tabside nav.sbar.subnav.subnav.subnav[aria-label="GST"] { gap: 4px; flex-wrap: nowrap; }
+#app [data-gst-page] .tg-tabrow .tg-tabside nav.sbar.subnav.subnav.subnav[aria-label="GST"] > button { min-height: 28px; padding: 0 8px; font-size: 12.5px; }
+#app [data-gst-page] .tg-tabside .fbar.fbar.tg-tools .fb-search { flex: 0 1 170px; min-width: 160px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside { gap: 6px 8px; flex-wrap: nowrap; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabrow > nav.sbar.rp-tabs[aria-label="Return"] > button { padding: 0 7px; }
+@media (max-width: 1100px) { #app :is([data-tds-page], [data-gst-page]) .tg-tabside { flex-wrap: wrap; } }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabrow .tg-tabside { display: flex; align-items: center; justify-content: flex-end; margin-left: auto; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabrow { margin-bottom: 6px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-dcount { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
+/* a phone: the title's boxes as wide as their words; the tabs' row tools wrap under the tabs */
+@media (max-width: 600px) {
+  #app .ret-card.ret-one .ret-head > .fbar.fbar .fb-f.fb-f select { field-sizing: content; max-width: none; font-size: 16px; }
+  #app .ret-card.ret-one .ret-head > .fbar .fb-f { flex: 0 0 auto; width: auto; }
+  #app :is([data-tds-page], [data-gst-page]) .tg-tabrow .tg-tabside { flex-wrap: wrap; justify-content: flex-start; overflow: visible; }
+  #app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools { flex-wrap: wrap; }
+}
+/* round 5 (the owner on the 1366 shot): the tools on the tabs' row at 1366 (Import is in Export's menu up to 1440 wide);
+   the switch small; the find box 180 px with its magnifier; a right-aligned header's ▾ after its words; the count in the
+   table's foot */
+#app [data-tds-page] .tg-tabrow nav.sbar.subnav.subnav.subnav[aria-label="Show"] > button { min-height: 26px; padding: 0 8px; font-size: 12.5px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.fbar.tg-tools .fb-search { flex: 0 0 180px; min-width: 180px; max-width: 180px; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools .fb-search input { padding-left: 28px; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") 9px center / 14px no-repeat; }
+#app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools .btn, #app :is([data-tds-page], [data-gst-page]) .tg-tabside .fbar.tg-tools .more-btn { padding: 0 10px; font-size: 13px; }
+#app [data-tds-page] .tg-tabside .fb-chip { padding: 0 8px; font-size: 13px; }
+@media (max-width: 1440px) { #app [data-tds-page] .tg-tabside [data-ded-import-btn] { display: none; } }
+#app table thead th.n .colh, #app table thead th[data-numeric] .colh { flex-direction: row; justify-content: flex-end; }
+#app table.lt.lt tfoot td.lt-count .tg-dcount { margin: 0; font-weight: 400; font-size: 12.5px; }
+#app table.lt.lt tfoot td.lt-count { white-space: normal; }
+/* round 6: GST's return chosen in the title (as the period's boxes) */
+#app .ret-card.ret-one .ret-head > select.ret-pick { appearance: none; -webkit-appearance: none; field-sizing: content; height: 36px; margin: 0; padding: 0 22px 0 4px; border: 1px solid transparent; border-radius: 8px; box-shadow: none;
+  font-size: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--foreground); cursor: pointer;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 3.5h7L5 7.5z' fill='%2394a3b8'/%3E%3C/svg%3E") right 6px center / 10px no-repeat; }
+#app .ret-card.ret-one .ret-head > select.ret-pick:hover, #app .ret-card.ret-one .ret-head > select.ret-pick:focus { border-color: var(--border); background-color: var(--surface); }
+#app table.bk-table.tg-fit tr.tg-tot .tg-dcount { font-weight: 400; margin: 0; }
+#app .ret-card.ret-one .ret-head > select.ret-pick { width: auto; min-width: 0; max-width: none; flex: 0 0 auto; }

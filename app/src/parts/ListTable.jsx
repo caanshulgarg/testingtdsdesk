@@ -82,9 +82,10 @@ function Head({ name, c, s, via }) {
 }
 
 // the foot: the count over the first columns, then each total under its column
-function Foot({ cols, rows, unit, of }) {
+function Foot({ cols, rows, unit, of, note }) {
   const [one, many] = unit, n = rows.length;
-  const count = <><b>{n + " " + (n === 1 ? one : many)}</b>{of != null && of !== n ? " of " + of : ""}</>;
+  // note (t70): a page's own words for the count (how many of how many, the total, Clear filters) in place of the plain count
+  const count = note || <><b>{n + " " + (n === 1 ? one : many)}</b>{of != null && of !== n ? " of " + of : ""}</>;
   const cells = [];
   let placed = false;
   for (let i = 0; i < cols.length; i++) {
@@ -109,12 +110,16 @@ export function ListWrap({ children, className }) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, tail, sortVia }) {
+  className = "bk-table", wrap, style, foot = true, id, after, tail, sortVia, footNote, keepHead }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
   const Wrap = wrap || ListWrap;
   if (loading) return <Loading what={typeof loading === "string" ? loading : unit[1]} rows={4} cols={cs.length} />;
+  // keepHead (t70): a list whose filters are in its headers keeps its headers when nothing matches, so they can be changed
+  if (!rows.length && keepHead) return <Wrap><table className={className + " lt"} data-list={name} style={style} id={id}>
+    <thead><tr>{cs.map((c) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} />)}</tr></thead>
+    <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />{keepHead !== true ? keepHead : null}</td></tr></tbody></table></Wrap>;
   if (!rows.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
   const sorted = sortVia ? sortVia.state : s;
   const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
@@ -133,7 +138,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
           const open = after && after(r, p);
           return open ? [tr, <tr key={k + ":open"} className="lt-open"><td colSpan={cs.length} style={{ background: "var(--paper)", padding: 0 }}>{open}</td></tr>] : tr;
         })}{tail}</tbody>
-        {foot && <Foot cols={cs} rows={all} unit={unit} of={of} />}
+        {foot && <Foot cols={cs} rows={all} unit={unit} of={of} note={footNote} />}
       </table>
     </Wrap>
     {limit && all.length > shown.length ? more : null}

@@ -269,7 +269,8 @@ export default function Tds({ b }) {
   // t70 (the owner: "too much information above.. it should look more professional"): a return open, the year, quarter
   // and form and the ledgers' line go into the return's card, its first row (ReturnCard draws CardCtx.node)
   const inCard = v === "return" && !none;
-  CardCtx.node = inCard ? <>{fys.length > 0 && <Bar fys={fys} inCard />}<LedgerLine b={b} /></> : null;
+  CardCtx.node = inCard && fys.length > 0 ? <Bar fys={fys} inCard /> : null;
+  CardCtx.ledger = inCard ? <LedgerLine b={b} /> : null;
   CardCtx.help = inCard ? <HelpButton /> : null;
   return <div data-phone-scroll="" data-tds-page="">
     {/* the ledgers still to confirm: one line (tds-layout), on the year's page and a return's */}

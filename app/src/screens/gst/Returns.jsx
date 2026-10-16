@@ -2,7 +2,6 @@
 // Was viewGstr1, viewGstr3b and viewGstChecks (src/js/18). The figures are GSTR.one() and GSTR.threeB() (src/js/12);
 // the customers' IMS rejections are CustIms.jsx; filing is Filing.jsx. Since 09-Oct-2026 each return is shown a tab at
 // a time (sub: summary, details, diff, file; Gst.jsx draws the tabs and the File tab's downloads); without sub, all of it.
-import FilterBar from "../../parts/FilterBar.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
 import CustIms from "./CustIms.jsx";
@@ -40,11 +39,13 @@ function Customers({ rows }) {
   });
   const parties = Object.values(by).sort((a, b) => b.taxable - a.taxable);
   return <>
-    <FilterBar id="r1F" placeholder="Find a customer, invoice or GSTIN" table="r1Table" title={CO().name + " GSTR-1 " + GSTR.label(S.gstYm || "")} excel="gstExcel"
-      count={parties.length + " customers · " + shown.length + " of " + rows.length + " documents"}
-      selects={[{ key: "part", label: "Part", options: [["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]] }]} />
+    {/* round 4: the part is the Customer header's ▾; find and Export at the right of the return's tabs (Gst.jsx); the count
+        the table's caption, with Clear filters while one is on */}
+
     <div className="bk-tablewrap"><table className="bk-table tg-fit" data-statement="" id="r1Table">
-      <thead><tr><th className="pty">Customer</th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
+      <thead><tr><th className={"pty" + (f.part ? " th-filtered" : "")}><span className="colh"><span>Customer</span>
+        <select className={"hf-sel" + (f.part ? " on" : "")} aria-label="Part" title={"Filter: Part" + (f.part ? " · " + f.part : "")} value={f.part || ""} onChange={(ev) => setFilter("r1F", "part", ev.target.value)}>
+          {[["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></span></th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
       <tbody>
         {parties.map((p, i) => { const key = p.gstin || normName(p.party), open = S.r1Open === key; return [<tr key={key + ":" + i}>
           <td className="pty"><div className="tg-pty"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></div></td><td className="code">{p.gstin || "—"}</td>
@@ -54,7 +55,8 @@ function Customers({ rows }) {
           <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td className="dt">{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
             <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table></td></tr>]; })}
-        <tr className="tg-tot"><td><b>Total</b></td><td></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
+        <tr className="tg-tot"><td colSpan={2}><b>Total</b><span className="note tg-dcount" data-r1-count="">{" · " + parties.length + " customer" + (parties.length === 1 ? "" : "s") + ", " + shown.length + (shown.length === rows.length ? "" : " of " + rows.length) + " document" + (rows.length === 1 ? "" : "s")}
+          {Object.values(f).some(Boolean) && <> · <button type="button" className="linkbtn" data-r1-clear="" onClick={() => clearFilter("r1F")}>Clear filters</button></>}</span></td><td className="n">{shown.length}</td><td className="n">{money(shown.reduce((a, r) => a + r.taxable, 0))}</td>
           <td className="n"><TaxCell igst={shown.reduce((a, r) => a + r.igst, 0)} cgst={shown.reduce((a, r) => a + r.cgst, 0)} sgst={shown.reduce((a, r) => a + r.sgst, 0)} /></td></tr>
       </tbody>
     </table>{!parties.length && <div className="bk-none">Nothing matches.</div>}</div>

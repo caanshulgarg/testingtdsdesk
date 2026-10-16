@@ -51,7 +51,7 @@ export function DedSwitch({ unit = "Deductee" }) {
 }
 
 /* ---------------------------------------------------------------- the filed lock, in the return's header on every tab */
-export function LockLine({ fy, q, form }) {
+export function LockLine({ fy, q, form, short }) {
   const filed = TDSReg.filed(fy, q, form), open = TDSReg.corrOpen(fy, q, form);
   if (!filed) return null;
   const openIt = async () => {
@@ -62,6 +62,7 @@ export function LockLine({ fy, q, form }) {
   };
   return <p className={"tg-lock" + (open ? " open" : "")} data-ret-lock={open ? "correction" : "locked"}>
     {open ? <><b>A correction is open:</b> this return’s challans may change. <button className="linkbtn" onClick={() => { TDSReg.closeCorrection(fy, q, form); render(); }}>Close the correction</button></>
+      : short ? <span title={"Filed " + day(filed.on) + ": its challans are locked."}><LockIcon width={13} height={13} aria-hidden="true" /> Challans locked · <button className="linkbtn" data-open-correction="" onClick={openIt}>Open a correction…</button></span>
       : <><LockIcon width={13} height={13} aria-hidden="true" /> Filed {day(filed.on)}: its challans are locked. <button className="linkbtn" data-open-correction="" onClick={openIt}>Open a correction…</button></>}
   </p>;
 }
