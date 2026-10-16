@@ -67,10 +67,15 @@ with sync_playwright() as p:
     l = E("(id) => tallyLine(S.companies[id])", cid)
     ok(l and l["state"] == "stopped" and l["text"] in ["Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m) for m in (40, 41)], "tallyLine: state stopped, 'Reading stopped by <name> at <time>: <reason>' (%s)" % l)
     E("() => { S.homeTab = 'tally'; S.tallyMore = {page: true}; navHome('tally'); }")  # the Tally redesign: the clients' lines are under the page's Details; pg.wait_for_timeout(1200)
-    cl = lambda c: txt('#app [data-client-line="%s"]' % c)
-    ok(any(("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) in cl(cid) for m in (40, 41)) and ("Reading stopped by Anshul" in cl(oid)), "Tally page: every client of that computer says so (%s | %s)" % (cl(cid), cl(oid)))
-    ok(pg.locator('#app [data-client-line="%s"] [data-update-now]' % cid).count() == 0 and txt('#app [data-client-line="%s"] [data-read-resume-line]' % cid) == "Resume", "the line has Resume, not Update now (owner)")
-    pg.click('#app [data-client-line="%s"] [data-read-resume-line]' % cid); pg.wait_for_timeout(600)
+    # round 66: the outdated "Clients' Tally" lines on the Tally page are gone; the client's own line (the top bar's Tally
+    # panel) says the stop, with Resume (owner)
+    def cl(c):   # the client's own line, in the top bar's Tally panel
+        E("async (id) => { await openCompany(id); S.tallyPanel = true; render(); }", c); pg.wait_for_timeout(900)
+        return txt("[data-panel-tally-line]") if pg.locator("[data-panel-tally-line]").count() else ""
+    pl = cl(cid)
+    ok(any(("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) in pl for m in (40, 41)), "the client's Tally line says so (%s)" % pl)
+    ok(pg.locator("[data-panel-tally-line] [data-update-now]").count() == 0 and txt("[data-panel-tally-line] [data-read-resume-line]") == "Resume", "the line has Resume, not Update now (owner)")
+    pg.click("[data-panel-tally-line] [data-read-resume-line]"); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": DEV}] in E("window.__rpc"), "Resume -> tally_read_resume(p_device) for the computer (%s)" % E("window.__rpc"))
     # Update now, while stopped: nothing is asked, the toast says who and why
     E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; tallyUpdateNow(S.companies['%s'].id); }" % oid); pg.wait_for_timeout(400)
@@ -90,13 +95,13 @@ with sync_playwright() as p:
     refresh()
     E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
     ok(any(("Reading stopped by neha@fincom.in at %s: Bridge update" % hm(m)) in cl(cid) for m in (2, 3)), "a stop for all computers: said with who and when (%s)" % cl(cid))
-    E("() => { window.__rpc = []; }"); pg.click('#app [data-client-line="%s"] [data-read-resume-line]' % cid); pg.wait_for_timeout(600)
+    E("() => { window.__rpc = []; }"); pg.click("[data-panel-tally-line] [data-read-resume-line]"); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__rpc"), "Resume on an all-computers stop -> tally_read_resume(null)")
     # ---- a member: the words, no Resume; Update now refused the same way
     cid, oid = E(SETUP, ["member"]); pg.wait_for_timeout(600)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}]; }""")
     refresh(); E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
-    ok("Reading stopped by Anshul" in cl(cid) and pg.locator('#app [data-client-line="%s"] [data-read-resume-line], #app [data-client-line="%s"] [data-update-now]' % (cid, cid)).count() == 0, "a member: the words, no Resume, no Update now (%s)" % cl(cid))
+    ok("Reading stopped by Anshul" in cl(cid) and pg.locator("[data-panel-tally-line] [data-read-resume-line], [data-panel-tally-line] [data-update-now]").count() == 0, "a member: the words, no Resume, no Update now (%s)" % cl(cid))
     # ---- no tally_read_stops rows readable (before migration-35): the beat's readStop alone, without a name
     E("""() => { Cloud.api = async (p) => { if (/^tally_devices/.test(p)) return [JSON.parse(JSON.stringify(window.__dev))]; if (/^tally_read_stops/.test(p)) throw new Error("relation public.tally_read_stops does not exist"); return []; };
       TCloud.pane.stops = []; TCloud.pane.noControl = true;   // the Tally page read nothing either on that cloud

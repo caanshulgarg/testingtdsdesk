@@ -248,7 +248,7 @@ try:
         tl.click('#cobar [data-tally-sign]'); W2(900); on_card("the top bar's Tally sign (not linked)")
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
         tl.click('#app [data-tally-link] [data-open-connect]'); W2(900); on_card("the client's Tally card")
-        E2("() => { S.tallyFocus = ''; S.tallyGuide = {}; navHome('tally'); }"); W2(1200)
+        E2("() => { S.tallyFocus = ''; S.tallyGuide = {}; S.tallyMore = {page: true}; navHome('tally'); }"); W2(1200)   # round 66: the clients' table is in Help & support
         ok(tl.locator('#app [data-tally-clients] [data-client-link="%s"]' % lcid).count() == 1, "the firm's Tally page: the client not linked, with Link")
         tl.click('#app [data-tally-clients] [data-client-link="%s"]' % lcid); W2(900); on_card("the Tally page's Link")
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
