@@ -88,13 +88,13 @@ with sync_playwright() as p:
     pl = line("[data-panel-tally-line] [data-tally-line-text]")
     ok(pl == "Connected · Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
-    # the Tally page: one line a client, each with Update now
-    E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(800)  # the Tally redesign: the clients' lines are under the page's Details
-    rows = pg.locator("#app [data-client-lines] [data-client-line]")
-    first = pg.inner_text("#app [data-client-lines] [data-client-line]") if rows.count() else ""
-    ok(rows.count() == 2 and "ZZ Test Client" in first and "Tally open on NWS144" in first, "the Tally page: one line a client, the open client first (%s)" % first.replace("\n", " "))
+    # round 66: the outdated "Clients' Tally" lines on the Tally page are gone; another client's own line (its Tally panel)
+    # has Update now, for that client
+    E("async (id) => { await openCompany(id); S.tallyPanel = true; render(); }", oid); pg.wait_for_timeout(900)
+    ol = line("[data-panel-tally-line] [data-tally-line-text]")
+    ok("Tally open on NWS144" in ol, "another client's Tally panel: its line (%r)" % ol)
     E("() => { window.__rpc = []; }")
-    pg.click('#app [data-client-line="%s"] [data-update-now]' % oid); pg.wait_for_timeout(400)
+    pg.locator('[data-overlay="tallypanel"] [data-update-now]').first.click(); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": oid}] in E("window.__rpc"), "Update now on another client's line asks for that client")
     # round 3 A (14-Oct-2026): not on the page (MIS) any more; "Books up to … · read 15:34 · Update now" in the Tally panel,
     # "Books as of 15:34" and why under its Details
