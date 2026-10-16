@@ -90,7 +90,14 @@ with sync_playwright() as p:
     ok(wait_for(pg, "document.body.innerText.includes('25 of 30 days')", 8), "closed and opened again: the job is still going on the server (25 of 30)")
     n0 = CALLS.count("status")
     job.update(status="done", done=30, updated_at=now()); push(job)
-    ok(wait_for(pg, "document.body.innerText.includes('done, 30 days')", 5), "done: " + (re.search(r"Reading the day book[^\n]*done[^\n]*", pg.inner_text("body")) or [""])[0])
+    # round 63 (Tally messages only where needed): a job done is said once (the toast) and on Books > From Tally only; the
+    # other Books tabs show only a job going on or stopped
+    ok(wait_for(pg, "window.__toasts.some(t => t.includes('the server has finished reading the day book'))", 5)
+       and wait_for(pg, "!document.body.innerText.includes('25 of 30 days') && !document.body.innerText.includes('done, 30 days')", 5),
+       "done: said once (" + pg.evaluate("window.__toasts.find(t => t.includes('has finished')) || ''") + "); the TDS tab no longer shows the job")
+    pg.evaluate("() => { S.booksTab = 'import'; render(); }")
+    ok(wait_for(pg, "document.body.innerText.includes('done, 30 days')", 5), "and Books > From Tally says it is done: " + (re.search(r"Reading the day book[^\n]*done[^\n]*", pg.inner_text("body")) or [""])[0])
+    pg.evaluate("() => { S.booksTab = 'tds'; render(); }")
     ok(wait_for(pg, "true", 1) and CALLS.count("status") > n0, "and the books here ask the cloud copy again for what the server read")
     # Read the kept day books again: through the queue
     pg.evaluate("() => { S.account = S.account || {}; S.account.me = {role: 'owner'}; }")
