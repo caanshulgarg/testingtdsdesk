@@ -8,6 +8,8 @@ import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
+import { Inbox as InboxIcon } from "lucide-react";
+import { needDays } from "./screens/books/FromTally.jsx";
 // Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
 // style (Radix's menu, as Arc's DropdownMenu, whose trigger and items do not fit the firm button and its menu)
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
@@ -206,6 +208,26 @@ function TallySign() {
   </span>;
 }
 
+// t70 (16-Oct-2026; the owner: the sidebar's Inbox and From Tally out): the Inbox as a tray beside the bell, with what is
+// waiting (the open client's, or every client's on the firm's pages); it opens what the sidebar's Inbox opened
+function InboxBtn() {
+  const co = S.view === "company" ? CO() : null;
+  const n = typeof docqCount === "function" ? (co ? docqCount(co.id) : Object.values(S.docq || {}).filter((d) => d.status === "waiting").length) : 0;
+  const words = "Inbox" + (n ? ", " + n + " waiting" : "") + (co ? ": documents that arrived for this client" : ": documents that arrived, every client");
+  return <button type="button" className="bell tb-inbox-btn" data-topbar-inbox="" aria-label={words} title={words} aria-current={(co ? S.tab === "clientInbox" : S.view === "home" && S.homeTab === "inbox") ? "page" : undefined}
+    onClick={() => (co ? goClient("inbox") : navHome("inbox"))}>
+    <InboxIcon width={16} height={16} strokeWidth={1.75} aria-hidden="true" />{n > 0 && <span className="bell-n" data-inbox-count="">{n}</span>}</button>;
+}
+
+// t70: in the Tally panel, the way to From Tally's upload (a Day Book, the masters), and the days that need a Day Book
+function PanelUpload({ co }) {
+  if (!co) return null;
+  const b = S.books && S.books.cid === co.id ? S.books : null, days = b ? needDays(b, co.id) : [], nd = days.reduce((a, x) => a + x.days, 0);
+  return <p className="tp-upload" data-tp-upload-line="">
+    <button type="button" className="btn small" data-tp-upload="" onClick={() => { doAct("tallyPanelClose"); goClient("books:import"); }}>Upload Day Book or masters</button>
+    {nd > 0 && <span className="note" data-tp-days=""> {nd} day{nd === 1 ? "" : "s"} need a Day Book</span>}</p>;
+}
+
 function TopRight() {
   const bal = accountBalance(), plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
   const inCo = S.view === "company" && CO();
@@ -223,6 +245,7 @@ function TopRight() {
       {inCo && !isSetupTab(S.tab) && <MainAction />}
       </span>
       <span className="tb-global">
+      <span className="tb-slot tb-inbox"><InboxBtn /></span>
       <span className="tb-slot tb-bell"><Bell /></span>
       <span className="tb-slot tb-tally"><TallySign /></span>
       <span className="tb-slot tb-firm">
@@ -260,7 +283,7 @@ function TallyPanel({ open }) {
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} update={!panelBooksShown(co.id)} /></p>}
         {/* round 3 A: the client's books, Books up to … · read …, Update now; the rest under Details */}
-        {co && <PanelBooks cid={co.id} />}<p className="note">{tallyStatus(co).say}</p>
+        {co && <PanelBooks cid={co.id} />}<PanelUpload co={co} /><p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
           <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>

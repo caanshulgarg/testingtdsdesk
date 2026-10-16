@@ -71,7 +71,8 @@ try:
         pg.click('#side button[data-side="TDS"]'); W(800)
         ok(E("booksTab()") == "tds" and E("S.tdsView") in ("year", "years"), "the sidebar's TDS opens TDS Returns, not From Tally (%s)" % E("booksTab()"))
         side = E("[...document.querySelectorAll('#side .side-link')].map(b => b.dataset.side)")
-        ok(all(w in side for w in ["TDS", "GST", "From Tally", "Audit"]) and side.index("From Tally") < side.index("TDS") < side.index("GST"), "TDS and GST in the sidebar; From Tally before them (%s)" % side)
+        # (t70: From Tally is reached from the top bar's Tally panel, not the sidebar)
+        ok(all(w in side for w in ["TDS", "GST", "Audit"]) and "From Tally" not in side and side.index("TDS") < side.index("GST"), "TDS and GST in the sidebar (%s)" % side)
         # tds-layout (14-Oct-2026, the owner: "too many tabs; salary, challans, 26AS and TRACES don't belong as top tabs"): the
         # TDS page has no tabs; Challans is the challan register, 26AS the client's Reconciliations, TRACES files a return's
         # After filing, Checks a return's To fix (run_tds_newlayout.py checks the rest of the new layout)
@@ -197,7 +198,7 @@ try:
           // hint); the ledgers' pill on the card's first row with the period; a rate's reason on two lines at most
           const cv = document.createElement('canvas').getContext('2d'); out.fit = [];
           for (const e of app.querySelectorAll('[data-return-card] select, [data-return-card] input, [data-filter-bar] select, [data-filter-bar] input[type=search]')) {
-            if (!vis(e)) continue; const cs = getComputedStyle(e); cv.font = cs.font;
+            if (!vis(e)) continue; const cs = getComputedStyle(e); cv.font = [cs.fontStyle, cs.fontWeight, cs.fontSize, cs.fontFamily].join(' ');
             const t = e.tagName === 'SELECT' ? (e.selectedOptions[0] ? (e.selectedOptions[0].label || e.selectedOptions[0].text) : '') : (e.value || e.placeholder);
             const need = cv.measureText(t).width, room = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
             if (need > room + 1) out.fit.push(t + ' (' + Math.round(need) + '>' + Math.round(room) + ')'); }

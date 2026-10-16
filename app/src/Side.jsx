@@ -76,11 +76,8 @@ function tree() {
   return [
     [null, [{ icon: "clients", label: "Clients", on: false, go: () => navHome("clients"), bar: true, title: "Every client: find one, open it" },
       { icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
-    ["Bring in", [
-      { icon: "inbox", label: "Inbox", on: inCo && S.tab === "clientInbox", count: docqCount(open.id), go: () => goClient("inbox"), title: "Documents that arrived for this client" },
-      // the client's Tally data (Day Book, masters, balances) and its Tally ledgers, a tab of the same page
-      { icon: "fromtally", label: "From Tally", on: bt === "import" || bt === "ledgers", go: () => goClient("books:import"), title: "Bring in from Tally: Day Book, ledger masters, balances" },
-    ]],
+    // t70 (16-Oct-2026; the owner): no "Bring in": the Inbox is the top bar's tray (TopBar.jsx InboxBtn), From Tally
+    // (books:import, its address kept) is reached from the Tally panel's Upload and Connect Tally's step 6
     ["Work", [
       { icon: "bills", label: "Purchase", count: st.drafts || 0, go: () => goClient("bills"), bar: true, on: work && mod === "bills" },
       { icon: "bank", label: "Bank", on: work && mod === "bank", go: () => goClient("bank"), bar: true,

@@ -279,7 +279,7 @@ details.more .more-words p{margin:0 0 6px}
    chosen option shows short where its full words are long: the list keeps them), the find box at least 200 px */
 @media (min-width: 601px) {
   #app :is([data-tds-page], [data-gst-page]) .fbar.fbar .fb-f.fb-f select { field-sizing: content; width: auto; max-width: none; min-width: 0; padding-right: 26px; text-overflow: clip; }
-  #app :is([data-tds-page], [data-gst-page]) .fbar.fbar .fb-search { flex: 1 1 214px; min-width: 214px; max-width: 320px; }
+  #app :is([data-tds-page], [data-gst-page]) .fbar.fbar .fb-search { flex: 1 1 270px; min-width: 270px; max-width: 340px; }
 }
 @supports not (field-sizing: content) {
   #app :is([data-tds-page], [data-gst-page]) .fbar .fb-f select { width: auto; }

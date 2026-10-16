@@ -21,7 +21,7 @@ with sync_playwright() as p:
     ok(pg.locator('#app nav[aria-label="Books"], #app nav[aria-label="From Tally"]').count() == 0 and pg.inner_text("#cobar .tbar-title h2") == "TDS", "TDS: a page of its own, titled TDS, no row of book tabs")
     ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Bring in from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
        "no day book and no salary: the TDS tab says what to bring in, with a button for each")
-    pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(400)
+    pg.evaluate("goClient('books:import')"); pg.wait_for_timeout(400)   # (t70: From Tally is reached from the Tally panel, not the sidebar)
     # ledger-confirm (14-Oct-2026): no Tally ledgers tab; the TDS and GST ledgers are on the TDS and GST pages
     ok(pg.locator('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")').count() == 0, "From Tally: no Tally ledgers tab")
     for side, say in [["MIS", "MIS is worked out from the day book"], ["Accounts", "The accounts (balance sheet"], ["Audit", "The audit checks run over the day book"]]:
@@ -29,7 +29,7 @@ with sync_playwright() as p:
         ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Accounts": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="From Tally"]').count() == 0,
            "%s: a page of its own in the sidebar, with its own empty message" % side)
     pg.evaluate("booksTabGo('tds')"); pg.wait_for_timeout(400)
-    pg.click('#side button:has-text("From Tally")'); pg.wait_for_timeout(500)
+    pg.evaluate("goClient('books:import')"); pg.wait_for_timeout(500)
     ok(pg.evaluate("booksTab()") == "import", "From Tally: the books brought in")
     # a salary sheet for 2026-27, two employees, two quarters
     pg.evaluate("""() => { S.books.salary = [["2026-05-31", "Asha Rao", "ABCPR1234K", 60000, 5000], ["2026-05-31", "Vikram Das", "ABCPD5678L", 45000, 2500], ["2026-08-31", "Asha Rao", "ABCPR1234K", 60000, 5000]]

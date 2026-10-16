@@ -57,7 +57,7 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [],
   const f = (S.tdsFl || {})[tab] || {};
   const { period, type } = barSelects(selects, f, (k, v) => tdsFilter(tab, k, v));
   return <Filters className="revfilter" label={"Filter " + title} period={period} type={chip ? <>{type}{chip}</> : type}
-    search={<Search value={f.q} placeholder={placeholder} data-fk={"tdsf-" + tab} onChange={(v) => tdsFilter(tab, "q", v, true)} />}
+    search={<Search value={f.q} placeholder={placeholder.replace(/^Find a /, "Find ").replace(/ or /, ", ")} label={placeholder} data-fk={"tdsf-" + tab} onChange={(v) => tdsFilter(tab, "q", v, true)} />}
     onClear={() => tdsFilterClear(tab)} active={Object.keys(f).some((k) => f[k])} count={count || ""}
     tools={<><More label="Export" data-fb-out="" items={items || [["Print or save as PDF", () => printTable(table, title)], excel && ["Excel", () => doAct(excel)]]} />{children}</>} />;
 }

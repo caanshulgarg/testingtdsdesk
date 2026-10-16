@@ -335,3 +335,9 @@ header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content);
 @media (min-width: 901px) { .side.side-folded:not(.hidden) + .mainwrap { margin-left: 72px; } }
 .side-rail-word { display: none; }
 @media (min-width: 601px) { #side.side.side-folded .side-link > .side-rail-word { hyphens: manual; } }
+.side .side-brand > .side-mark { flex: none; }
+/* the compact sidebar: the test site's TEST under the name (it pushed the fold button out of the 168 px) */
+@media (min-width: 601px) and (max-width: 1440px) {
+  .is-test .side:not(.side-folded) .side-brand { flex-wrap: wrap; }
+  .is-test .side:not(.side-folded) .side-brand::after { order: 4; flex-basis: 100%; padding-left: 38px; margin-top: -4px; }
+}

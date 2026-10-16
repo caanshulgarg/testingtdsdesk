@@ -8,7 +8,7 @@
      the top of the page itself, kept in view under the header while the page scrolls (--head-h, TopBar.jsx);
    - the sidebar's date line stays at the foot of the sidebar;
    - a page's shape while its data comes (PageSkeleton.jsx), the same as the frame index.html draws before the program loads. */
-:root { --slot-bell: 34px; --slot-tally: 232px; --slot-firm: 196px; }
+:root { --slot-bell: 34px; --slot-inbox: 34px; --slot-tally: 232px; --slot-firm: 196px; }
 
 /* ---------- the top bar's places ---------- */
 header.top .topright { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; margin-left: auto; }
@@ -17,6 +17,9 @@ header.top .topright > .tb-page:empty { display: none; }
 header.top .topright > .tb-global { display: flex; flex: none; align-items: center; gap: 10px; }
 .tb-slot { display: flex; flex: none; align-items: center; justify-content: flex-end; min-width: 0; }
 .tb-slot.tb-bell { width: var(--slot-bell); justify-content: center; }
+.tb-slot.tb-inbox { width: var(--slot-inbox); justify-content: center; }
+.tb-inbox-btn[aria-current="page"] { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--border)); }
+.tallypanel .tp-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; }
 .tb-slot.tb-tally { width: var(--slot-tally); justify-content: flex-start; }
 .tb-slot.tb-firm { width: var(--slot-firm); }
 .tb-slot.tb-tally .tsign-wrap { display: inline-flex; max-width: 100%; min-width: 0; }
