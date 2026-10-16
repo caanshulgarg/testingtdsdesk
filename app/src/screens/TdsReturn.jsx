@@ -259,7 +259,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title, fo }
   const list = tdsSorted("deductees", Object.values(by).sort((a, c) => c.tds - a.tds), (p, k) => k === "secs" ? Array.from(p.secs).join(",") : p[k]);
   return <>
     {/* the one list table (spec K6): deductee (party), paid and TDS (amounts), then the rest */}
-    <ListTable name="tdsDeductees" id="tdsDeTable" className="bk-table tg-fit" rows={list} footNote={<span className="note tg-dcount" data-dee-count="">{list.length + " of " + deductees + " deductees"}<ClearLink tab="deductees" /></span>} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
+    <ListTable name="tdsDeductees" id="tdsDeTable" className="bk-table tg-fit gf-off" rows={list} footNote={<span className="note tg-dcount" data-dee-count="">{list.length + " of " + deductees + " deductees"}<ClearLink tab="deductees" /></span>} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
       empty="No deductee matches these filters. Use Clear filters to see all." keepHead={rows.length ? <p className="note" style={{ textAlign: "center" }}><ClearLink tab="deductees" bare /></p> : null}
       after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th><th>From</th></tr></thead>
@@ -326,7 +326,7 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title, probs =
     {/* the one list table (spec K6): date, voucher (number), deductee (party), paid and TDS (amounts), challan (status), then the rest */}
     {/* t70 (the owner: "some columns I can not even see properly without touching them"): every column in view at 1366
         px: the voucher under the date, the PAN under the deductee, the section's words and the rate's reason under them */}
-    <ListTable name="tdsDeductions" id="tdsDnTable" className="bk-table tg-fit" rows={shown}
+    <ListTable name="tdsDeductions" id="tdsDnTable" className="bk-table tg-fit gf-off" rows={shown}
       footNote={<span className="note tg-dcount" data-ded-count="">{shown.length + " of " + rows.length + " " + (unitW || "deductions") + " · " + (unitW === "collections" ? "TCS " : "TDS ") + money(shown.reduce((a, r) => a + r.tds, 0)) + (edN ? " · " + edN + " edited in FinCom" : "")}<ClearLink tab="deductions" /></span>} rowKey={(r) => r.id} unit={["deduction", "deductions"]} of={rows.length} sortVia={via("deductions")} limit={LIMIT}
       more={<p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
       empty="No deduction matches these filters. Use Clear filters to see all." keepHead={rows.length ? <p className="note" style={{ textAlign: "center" }}><ClearLink tab="deductions" bare /></p> : null}

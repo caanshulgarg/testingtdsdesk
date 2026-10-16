@@ -6,6 +6,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
 import CustIms from "./CustIms.jsx";
 import SrcTag from "../../parts/SrcTag.jsx";
+import { Bills, R1Summary, partOf, R1_PARTS, R1_ORDER } from "./R1Bills.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -30,7 +31,7 @@ export function Checks() {
 // the documents of the month by customer; one opened shows its invoices
 function Customers({ rows }) {
   const f = S.r1F || {}, qq = String(f.q || "").toLowerCase();
-  const shown = rows.filter((r) => (!qq || (r.party + " " + r.no + " " + r.gstin).toLowerCase().includes(qq)) && (!f.part || r.kind === f.part));
+  const shown = rows.filter((r) => (!qq || (r.party + " " + r.no + " " + r.gstin).toLowerCase().includes(qq)) && (!f.part || partOf(r) === f.part));
   const by = {};
   shown.forEach((r) => {
     const k = r.gstin || normName(r.party) || "retail";
@@ -42,10 +43,10 @@ function Customers({ rows }) {
     {/* round 4: the part is the Customer header's ▾; find and Export at the right of the return's tabs (Gst.jsx); the count
         the table's caption, with Clear filters while one is on */}
 
-    <div className="bk-tablewrap"><table className="bk-table tg-fit" data-statement="" id="r1Table">
+    <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="" id="r1Table">
       <thead><tr><th className={"pty" + (f.part ? " th-filtered" : "")}><span className="colh"><span>Customer</span>
         <select className={"hf-sel" + (f.part ? " on" : "")} aria-label="Part" title={"Filter: Part" + (f.part ? " · " + f.part : "")} value={f.part || ""} onChange={(ev) => setFilter("r1F", "part", ev.target.value)}>
-          {[["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></span></th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
+          {[["", "Every part"]].concat(R1_ORDER.filter((k) => rows.some((r) => partOf(r) === k)).map((k) => [k, R1_PARTS[k]])).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></span></th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
       <tbody>
         {parties.map((p, i) => { const key = p.gstin || normName(p.party), open = S.r1Open === key; return [<tr key={key + ":" + i}>
           <td className="pty"><div className="tg-pty"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></div></td><td className="code">{p.gstin || "—"}</td>
@@ -71,17 +72,17 @@ export function Gstr1({ b, sub }) {
   const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   const ECO = { amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify" }, NAT = { 1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes" };
   return <>
+    {/* t70 (the owner: "check the schema of GSTN, make it user friendly to see"): the portal's summary, a row per GSTR-1
+        table, each opening its documents; the books' own total under it (every document of the month, as the boxes had) */}
     {on("summary") && <>
-    <div className="dash-tiles"><Box label="B2B (4A)" s={GSTR.sum(g.b2b)} /><Box label="B2C large (5)" s={GSTR.sum(g.b2cl)} /><Box label="B2C small (7)" s={GSTR.sum(g.b2c)} /><Box label="Notes (9B)" s={GSTR.sum(g.cdnr)} /></div>
-    <div className="dash-tiles"><Box label="Exports and SEZ (6)" s={GSTR.sum(g.exp)} /><Box label="Nil, exempt, non-GST (8)" s={GSTR.sum(g.nil)} /><Box label="Reverse charge (4B)" s={GSTR.sum(g.rcm)} /><Box label="All outward" s={g.total} /></div>
-    {amend.length > 0 && <div className="dash-tiles"><div className="dtile warn"><span>Earlier months to amend</span><b>{amend.length}</b>
-      <small><button className="linkbtn" onClick={() => gstPartGo("amend")}>See them</button>; they go into this month’s JSON</small></div></div>}
-    {adv && (adv.at.length > 0 || adv.txpd.length > 0) && <div className="dash-tiles"><Box label="Advances received (11A)" s={adv.atSum} /><Box label="Advances adjusted (11B)" s={adv.txpdSum} />
-      <div className="dtile"><span>Advances</span><b><button className="linkbtn" onClick={() => gstPartGo("adv")}>See them</button></b><small>in the JSON as at and txpd</small></div></div>}
+    <R1Summary amendN={amend.length} />
+    <p className="note" data-r1-books="" style={{ margin: "8px 2px 0" }}>In the books this month: {g.total.n} document{g.total.n === 1 ? "" : "s"} · taxable {money(g.total.taxable)} · tax {money(g.total.igst + g.total.cgst + g.total.sgst)}
+      {adv && (adv.at.length > 0 || adv.txpd.length > 0) ? <> · advances: <button className="linkbtn" onClick={() => gstPartGo("adv")}>see them</button></> : null}</p>
     </>}
     {on("details") && <>
-    <Customers rows={rows} />
-    <section className="dash-card" style={{ marginTop: 12 }}><h3>HSN summary (12)</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    {/* t70: one row a bill by default (the owner: "not able to identify the total bills"); By customer the grouped table */}
+    {S.r1View === "customer" ? <Customers rows={rows} /> : <Bills rows={rows} />}
+    <section className="dash-card" style={{ marginTop: 12 }}><h3>12 HSN summary</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>HSN</th><th>Goods or services</th><th className="n">Rate</th><th className="n">Invoices</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>{g.hsn.map((x, i) => <tr key={i}><td>{x.hsn ? x.hsn : <span className="tag warn">no HSN</span>}</td><td>{x.supply || ""}</td><td className="n">{x.rate}%</td><td className="n">{x.n}</td>
         <td className="n">{money(x.taxable)}</td><td className="n">{money(x.igst)}</td><td className="n">{money(x.cgst)}</td><td className="n">{money(x.sgst)}</td></tr>)}</tbody>
@@ -93,7 +94,7 @@ export function Gstr1({ b, sub }) {
           <td className="n">{money(e.cgst)}</td><td className="n">{money(e.sgst)}</td><td className="n">{money(e.tcs)}</td></tr>)}</tbody>
       </table></div>
       <p className="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>}
-    <section className="dash-card" style={{ marginTop: 12 }}><h3>Documents issued (13)</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    <section className="dash-card" style={{ marginTop: 12 }}><h3>13 Documents issued</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th className="n">Total</th><th className="n">Cancelled</th><th className="n">Net issued</th></tr></thead>
       <tbody>{g.series.slice().sort((a, c) => a.nat - c.nat).map((x, i) => <tr key={i}><td>{NAT[x.nat]}</td><td>{x.pre || "—"}</td><td>{x.from}</td><td>{x.to}</td>
         <td className="n">{x.n}</td><td className="n">{x.cancelled}</td><td className="n">{x.n - x.cancelled}</td></tr>)}</tbody>

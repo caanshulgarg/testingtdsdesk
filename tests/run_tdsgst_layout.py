@@ -158,8 +158,10 @@ try:
         # table starts high on the page, every column in view at 1366 without an inner sideways scroll, the figures to the
         # right on one line, the party column not wider than ~32 characters, one ₹, and every figure shown before still shown
         print("7. space and columns (t70)")
-        views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-details", "/books/gst/07/202603/r1/details", None, "#r1Table"),
-                 ("gst-details-open", "/books/gst/07/202603/r1/details", "#r1Table tbody tr td button >> nth=0", "#r1Table"), ("gst-3b", "/books/gst/07/202603/r3b/summary", None, None),
+        # (t70, round 7: GSTR-1's Details by bill by default; "gst-details" is By customer, as the figures were captured)
+        views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-bills", "/books/gst/07/202603/r1/details", None, "#r1Bills"),
+                 ("gst-details", "/books/gst/07/202603/r1/details", "[data-r1-switch=customer]", "#r1Table"),
+                 ("gst-details-open", "/books/gst/07/202603/r1/details", ["[data-r1-switch=customer]", "#r1Table tbody tr td button >> nth=0"], "#r1Table"), ("gst-3b", "/books/gst/07/202603/r3b/summary", None, None),
                  ("tds-deductions", "/books/tds/2026-27/Q1/26Q/deductions", None, "#tdsDnTable"), ("tds-deductees", "/books/tds/2026-27/Q1/26Q/deductions", "[data-ded-switch=deductees]", "#tdsDeTable")]
         FIX = os.path.join(HERE, "fixtures", "tdsgst-t70-amounts.json")
         capture = os.environ.get("TDSGST_CAPTURE") == "1"
@@ -225,16 +227,16 @@ try:
             pg.set_viewport_size({"width": vw, "height": vh})
             for name, h, click, main in views:
                 hash_go("#/c/%s%s" % (cid, h), 1300)
-                E("() => { S.tdsDedView = ''; S.r1Open = ''; S.tdsSel = {}; render(); }"); W(300)
-                if click: pg.click(click); W(500)
+                E("() => { S.tdsDedView = ''; S.r1Open = ''; S.r1View = ''; S.tdsSel = {}; render(); }"); W(300)
+                for c in ([click] if isinstance(click, str) else click or []): pg.click(c); W(500)
                 E("window.scrollTo(0, 0)"); W(100)
                 m, amts = E(LAYOUT, main), E(AMOUNTS)
                 at = "%s at %d×%d" % (name, vw, vh)
                 if vw == 1440: got[name] = amts
-                if name in ("gst-details", "tds-deductions") and vw == 1440:
+                if name in ("gst-bills", "gst-details", "tds-deductions") and vw == 1440:
                     lim = 260 if name == "tds-deductions" else 230
                     ok(m["top"] is not None and m["top"] <= lim, "%s: the table's header %s px below the top of the page (at most %d)" % (at, m["top"], lim))
-                if name in ("gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
+                if name in ("gst-bills", "gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
                     ok(m["wrap"] and m["wrap"][0] <= m["wrap"][1] + 1, "%s: every column in view, no sideways scroll inside the table (%s)" % (at, m["wrap"]))
                 if m["party"] is not None:
                     ok(m["party"] <= 340, "%s: the %s column at most ~32 characters wide (%d px)" % (at, "customer" if "gst" in name else "deductee", m["party"]))
@@ -250,16 +252,16 @@ try:
                 if name.startswith("gst-"):
                     ok(m["chips"] == 0, "%s: no row of the return's parts under the card (the title chooses the return) (%d)" % (at, m["chips"]))
                     ok("07AAGCL4827M1Z3" not in m["sub2"], "%s: the GSTIN once, in the title (%s)" % (at, m["sub2"][:60]))
-                if name in ("gst-details", "tds-deductions", "tds-deductees"):
+                if name in ("gst-bills", "gst-details", "tds-deductions", "tds-deductees"):
                     ok(m["rowBars"] == 0, "%s: no row of filter boxes over the table (%d)" % (at, m["rowBars"]))
-                    want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": ["PAN", "Section", "Challan", "Rate"], "gst-details": ["Part"]}[name]
+                    want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": ["PAN", "Section", "Challan", "Rate"], "gst-details": ["Part"], "gst-bills": ["Customer", "Part", "Place of supply", "Rate"]}[name]
                     ok(sorted(m["hfs"]) == sorted(want), "%s: the filters in the table's headers (%s)" % (at, m["hfs"]))
                     ok(m["inTabs"] >= (3 if name == "tds-deductions" else 2), "%s: find and Export (and Needs fixing, Import) at the right of the tabs' row (%d)" % (at, m["inTabs"]))
                 ok(all(n <= 2 for _, n in m["why"]), "%s: a rate's reason on two lines at most (%s)" % (at, m["why"][:2]))
                 ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
                 ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))
                 ok(m["rr"] == 0, "%s: one ₹ before a figure, never ₹₹" % at)
-                if not capture:
+                if not capture and name in before:
                     miss = [a for a in before.get(name, []) if a not in amts]
                     ok(not miss and before.get(name), "%s: every figure shown before is still shown (%d; missing %s)" % (at, len(before.get(name, [])), miss[:5]))
                 pg.screenshot(path=os.path.join(HERE, "out", "t70-%s-%dx%d.png" % (name, vw, vh)))

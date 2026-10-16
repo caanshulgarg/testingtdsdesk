@@ -39,6 +39,7 @@ import Recon from "./gst/Recon.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
 import "../parts/returns.css";
 import Filters, { Field, Search } from "../parts/Filters.jsx";
+import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
 import { Answer } from "../parts/Answer.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -195,10 +196,19 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
 
 // round 4: GSTR-1's Details: find and Export at the right of the return's tabs (the part is the Customer header's ▾)
 function R1Tools() {
-  const f = S.r1F || {}, title = CO().name + " GSTR-1 " + GSTR.label(S.gstYm || "");
-  return <Filters className="revfilter tg-tools" label={"Filter " + title}
-    search={<Search value={f.q} placeholder="Find a customer" label="Find a customer, invoice or GSTIN" data-fk="r1Fq" onChange={(v) => setFilter("r1F", "q", v, true)} />}
-    tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable("r1Table", title)], ["Excel", () => doAct("gstExcel")]]} />} />;
+  const f = S.r1F || {}, title = CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), byCust = S.r1View === "customer";
+  const g = GSTR.one(S.gstYm || "", S.gstReg || ""), rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
+  const view = (v) => { S.r1View = v; render(); };
+  return <>
+    {/* By bill / By customer, as TDS's By deduction / By deductee */}
+    <nav className="sbar subnav" aria-label="GSTR-1 view" data-r1-view={byCust ? "customer" : "bill"}>
+      <button aria-selected={!byCust} data-r1-switch="bill" onClick={() => view("")}>By bill</button>
+      <button aria-selected={byCust} data-r1-switch="customer" onClick={() => view("customer")}>By customer</button></nav>
+    <Filters className="revfilter tg-tools" label={"Filter " + title}
+    search={<Search value={f.q} placeholder="Find invoice, customer" label="Find an invoice, customer or GSTIN" data-fk="r1Fq" onChange={(v) => setFilter("r1F", "q", v, true)} />}
+    tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable(byCust ? "r1Table" : "r1Bills", title)],
+      ["Excel: these bills, with totals", () => { const L = r1Lists(rows); return r1BillsExcel(L.shown, L.b2cs, title).then(() => toast("Downloaded.")); }],
+      ["Excel: GSTR-1 and 3B working", () => doAct("gstExcel")]]} />} /></>;
 }
 
 // t70: the ledgers still to confirm, as a pill in the return card's first row (the full sentence was a banner above)

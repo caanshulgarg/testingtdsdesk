@@ -398,3 +398,13 @@ details.more .more-words p{margin:0 0 6px}
 #app .ret-card.ret-one .ret-head > select.ret-pick:hover, #app .ret-card.ret-one .ret-head > select.ret-pick:focus { border-color: var(--border); background-color: var(--surface); }
 #app table.bk-table.tg-fit tr.tg-tot .tg-dcount { font-weight: 400; margin: 0; }
 #app .ret-card.ret-one .ret-head > select.ret-pick { width: auto; min-width: 0; max-width: none; flex: 0 0 auto; }
+/* GSTR-1 by bill (t70): the view switch small; table 7's lines a group of their own; a summary row opens its documents */
+#app [data-gst-page] .tg-tabrow nav.sbar.subnav.subnav.subnav[aria-label="GSTR-1 view"] { gap: 0; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin: 0; }
+#app [data-gst-page] .tg-tabrow nav.sbar.subnav.subnav.subnav[aria-label="GSTR-1 view"] > button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 6px; font-size: 12.5px; }
+#app [data-gst-page] .tg-tabrow nav.sbar.subnav.subnav.subnav[aria-label="GSTR-1 view"] > button[aria-selected="true"] { background: var(--accent-subtle); }
+#app table.bk-table.tg-fit tr.tg-group td { background: color-mix(in oklab, var(--foreground) 3%, var(--surface)); font-size: 12.5px; }
+#app table.bk-table.tg-fit tr.tg-click { cursor: pointer; }
+#app table.bk-table.tg-fit .tg-part { white-space: nowrap; font-size: 12.5px; color: var(--muted); }
+#app table.bk-table.tg-fit tfoot tr.tg-tot td { background: color-mix(in oklab, var(--foreground) 2.5%, var(--surface)); border-top: 1px solid var(--border); }
+#app [data-gst-page] .tg-tabside .fbar.fbar.tg-tools .fb-search { flex: 0 0 200px; min-width: 200px; max-width: 200px; }
+#app [data-r1-summary] td .linkbtn.tg-pty { display: inline; min-width: 0; text-align: left; padding: 0; }
