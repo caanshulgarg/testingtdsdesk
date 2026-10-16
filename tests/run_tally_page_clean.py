@@ -100,7 +100,7 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
   window.__lines = fix(lines).map(l => Object.assign(l, {client_id: cid(l.client_id)}));
   // round 63: each client's book in the cloud (tally_status) and its ledgers (tally_ledgers), by the client's name
   window.__books = {}; Object.entries(fix(books || {})).forEach(([n, b]) => { window.__books[ids[n]] = b; });
-  window.__ledgers = window.__ledgers || {};
+  window.__ledgers = {}; window.__wakeAns = {ok: true, woken: 1, debounced: 0, asked: 1};
   Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); Ledgers.st = {}; S.ledImp = null; S.ledFile = null;
   S.tallyFold = {};
   Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = [];
@@ -121,13 +121,13 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
     if (fn === "tally_status") { await new Promise(r => setTimeout(r, 5)); return copy(window.__books[a.p_client] || []); }
     return {ok: true}; };
   Cloud.rpc = async (fn, a) => { window.__calls.push([fn, JSON.parse(JSON.stringify(a || {}))]); return {ok: true}; };
-  if (typeof TCloudUp === "object") TCloudUp.post = async (body) => { window.__wakes.push(body); return {}; };
+  if (typeof TCloudUp === "object") TCloudUp.post = async (body) => { window.__wakes.push(body); return body && body.kind === "wake" && body.what === "ledgers" ? copy(window.__wakeAns) : {}; };
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role})});
   TCloud.pane.devices = null; TCloud.pane.companies = null; TCloud.pane.at = 0; TCloud.pane.err = "";
   TLight.st.at = Date.now(); TLight.st.devs = window.__devs.filter(d => !d.revoked); TLight.st.cos = window.__companies; TLight.st.stops = [];
   Rec.act = {rows: window.__lines, at: Date.now()};
   document.body.classList.add("is-test"); S.firm.firmName = "ABC";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyFocus = ""; S.tallyGuide = {}; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
   return ids;
 }"""
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
@@ -325,7 +325,7 @@ def main():
         pg.click(s5 + " [data-guide-ledgers-import]"); pg.wait_for_timeout(1500)
         wk = E("window.__wakes")
         ok(wk == [{"kind": "wake", "what": "ledgers", "client": T}], "Import ledgers: the ledgers-only wake, one call, for the client without ledgers (%s)" % wk)
-        ok(n(s5 + " [data-guide-ledgers-bar]") == 1 and re.match(r"Reading ledgers from Tally\u2026 0:0\d", txt(s5 + " [data-guide-ledgers-reading]")),
+        ok(n(s5 + " [data-guide-ledgers-bar]") == 1 and re.match(r"Reading GB TEXCOAT\u2019s ledgers from Tally\u2026 0:0\d", txt(s5 + " [data-guide-ledgers-reading]")),
            "while reading: the moving bar and the time (%s)" % txt(s5 + " [data-guide-ledgers-reading]"))
         ok(not [c for c in E("window.__calls") if c[0] in ("tally_update_now",)] and "keepNow" not in str(E("window.__fx || []")), "not the full Update now")
         shot("guide-step5-reading")
@@ -333,16 +333,18 @@ def main():
         E("""(t) => { window.__books[t][0].ledgersAt = new Date().toISOString();
             window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 1240}, (_, i) => ({name: 'Ledger ' + (i + 1), parent: 'Sundry Creditors'})); }""", T)
         pg.wait_for_timeout(11500)
-        ok(txt(s5 + " [data-guide-ledgers-done]").startswith("1,240 ledgers imported \u2713") and " took 0:" in txt(s5) and steps()[4] == ["ledgers", True],
-           "the list arrives: '1,240 ledgers imported \u2713' with the time; step 5 done (%s / %s)" % (txt(s5)[-80:], steps()[4]))
+        ok(txt(s5 + " [data-guide-ledgers-done]").startswith("1,240 ledgers of GB TEXCOAT imported \u2713") and " took 0:" in txt(s5) and steps()[4] == ["ledgers", True],
+           "the list arrives (the cloud's count of the client's ledgers): '1,240 ledgers of GB TEXCOAT imported \u2713' with the time; step 5 done (%s / %s)" % (txt(s5)[-80:], steps()[4]))
         shot("guide-step5-done")
         # nothing in 10 minutes: Tally must be open, Try again, the masters file offered
         ids = scene([d6], all3, books=five); T = ids["GB TEXCOAT"]
         pg.click(s5 + " [data-guide-ledgers-import]"); pg.wait_for_timeout(800)
         E("() => { S.ledImp.at = Date.now() - 11 * 60000; render(); }"); pg.wait_for_timeout(1500)
-        ok(txt(s5 + " [data-guide-ledgers-reading]").startswith("Not received yet; Tally must be open on NWS144") and n(s5 + " [data-guide-ledgers-again]") == 1
-           and n(s5 + " [data-guide-masters]") == 1 and E("(s) => document.querySelector(s + ' [data-guide-masters-how]').open", s5),
-           "nothing in 10 minutes: 'Not received yet; Tally must be open on NWS144', Try again, the masters file offered with how (%s)" % txt(s5)[:160])
+        ok(txt(s5 + ' [data-guide-ledgers-stop="late"]').startswith("Not received in 10 minutes. TallyPrime must be open on NWS144 with GB TEXCOAT open") and n(s5 + " [data-guide-ledgers-bar]") == 0
+           and n(s5 + " [data-guide-ledgers-again]") == 1 and n(s5 + " [data-guide-masters]") == 1 and E("(s) => document.querySelector(s + ' [data-guide-masters-how]').open", s5),
+           "round 64: at 10 minutes the bar stops: 'Not received in 10 minutes. TallyPrime must be open on NWS144 with GB TEXCOAT open', Try again, the masters file with how (%s)" % txt(s5)[:160])
+        ok(n('#app [data-strip-step="ledgers"].done') == 0 and steps()[4] == ["ledgers", False], "round 64: stopped: the strip and the card agree, step 5 not done")
+        shot("guide-r64-step5-stop-10min")
         E("() => { window.__wakes = []; }"); pg.click(s5 + " [data-guide-ledgers-again]"); pg.wait_for_timeout(800)
         ok(len([w for w in E("window.__wakes") if w.get("what") == "ledgers"]) == 1, "Try again: the wake once more")
         # the masters file (Master.xml, List of Accounts): the link opens the file picker; the file marks step 5 done with the count
@@ -371,6 +373,41 @@ def main():
         ok(n('#app [data-connect-guide="done"]') == 1, "every linked client's ledgers and this year's Day Book held: all six done")
         E("() => openConnectTally(6, '')"); pg.wait_for_timeout(900)
         ok(n('#app [data-connect-step="daybook"][data-done]') == 0 or n('#app [data-connect-step="daybook"] [data-guide-daybook-open]') == 1, "opened on step 6 by a pointer: its Upload again")
+        # ---- round 64 (the owner's test of 16-Oct-2026): steps 4 to 6 judge the client worked on; the others are named
+        r64 = {"GB TEXCOAT": book("GB TEXCOAT", ledgers=False, days=True), "ABC TRADERS": book("ABC TRADERS", ledgers=False, days=False)}
+        two = companies(linked=("GB TEXCOAT", "ABC TRADERS"), seen=(), d=d6["id"])
+        ids = scene([d6], two, books=r64); T = ids["GB TEXCOAT"]
+        # GB TEXCOAT's 224 ledgers are in the cloud (tally_ledgers), its ledger time never set (the bridge's whole list did not set it)
+        E("() => { window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 224}, (_, i) => ({name: 'L' + i, parent: 'Sundry Debtors'})); }")
+        E("(t) => { S.tallyGuide = {cid: t, at: Date.now()}; TCloud.st = {}; render(); }", T); pg.wait_for_timeout(2500)
+        ok(steps()[3:] == [["link", True], ["ledgers", True], ["daybook", True]] and all(n('#app [data-strip-step="%s"].done' % k) == 1 for k in ("link", "ledgers", "daybook")),
+           "round 64: GB TEXCOAT worked on: steps 4 to 6 green (strip and cards), though garg shekhar & company is not linked and ABC TRADERS has no ledgers (%s)" % steps())
+        ok(not E("window.__wakes").__len__() or not [w for w in E("window.__wakes") if w.get("what") == "ledgers"], "round 64: no click: nothing asked of Tally")
+        ok(txt('#app [data-connect-step="ledgers"] [data-guide-ledgers-held]').startswith("224 ledgers of GB TEXCOAT are in FinCom."),
+           "round 64: step 5 from the cloud's count of the client's ledgers: '224 ledgers of GB TEXCOAT are in FinCom.' (%s)" % txt('#app [data-connect-step="ledgers"]'))
+        ok("Not linked yet: garg shekhar & company." in txt('#app [data-connect-step="link"]') and "ABC TRADERS" in txt('#app [data-connect-step="ledgers"] [data-guide-others="ledgers"]')
+           and "ABC TRADERS" in txt('#app [data-connect-step="daybook"]'),
+           "round 64: the others named in a note: garg shekhar & company not linked; ABC TRADERS without ledgers and this year's entries (%s | %s)" % (txt('#app [data-connect-step="link"]'), txt('#app [data-connect-step="daybook"]')))
+        shot("guide-r64-gbtexcoat-steps4to6")
+        E("() => { S.tallyGuide = Object.assign({}, S.tallyGuide, {at: 0}); render(); }"); pg.wait_for_timeout(600)
+        gl = txt('#app [data-connect-guide="done"]')
+        ok(n('#app [data-connect-guide="done"]') == 1 and "Not linked yet: garg shekhar & company." in gl and "Without ledgers: ABC TRADERS." in gl,
+           "round 64: all six done for GB TEXCOAT: the one green line, the other clients named (%s)" % gl)
+        # step 5 stops at once with the reason: nobody asked (woken 0), asked a moment ago (debounced), FinCom Bridge did not start
+        r64b = dict(r64, **{"GB TEXCOAT": book("GB TEXCOAT", ledgers=False, days=True)})
+        for ans, why, words in (({"ok": True, "woken": 0, "debounced": 0, "asked": 0}, "woken 0", "No computer with Tally was asked"),
+                                ({"ok": True, "woken": 0, "debounced": 1, "asked": 0}, "debounced", "Tally was asked for GB TEXCOAT\u2019s ledgers a moment ago"),
+                                (None, "not started", "FinCom Bridge did not read GB TEXCOAT\u2019s ledgers: background reading is paused in the tray")):
+            ids = scene([d6], two, books=r64b); T = ids["GB TEXCOAT"]
+            E("(t) => { S.tallyGuide = {cid: t}; render(); }", T); pg.wait_for_timeout(1500)
+            if ans: E("(a) => { window.__wakeAns = a; }", ans)
+            else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update now still reads the ledger list)'}}); }")
+            pg.click(s5 + " [data-guide-ledgers-import]"); pg.wait_for_timeout(1200)
+            st = txt(s5 + ' [data-guide-ledgers-stop="%s"]' % why)
+            ok(st.startswith(words) and n(s5 + " [data-guide-ledgers-bar]") == 0 and n(s5 + " [data-guide-ledgers-import]") == 1 and steps()[4] == ["ledgers", False],
+               "round 64: the reply '%s': the bar stops at once with the reason, Try again (%s)" % (why, st))
+            if why == "woken 0": shot("guide-r64-step5-stop-nobody")
+        E("() => { if (window.__askT) Ledgers.askTally = window.__askT; }")
         # light / dark / phone of the guide (step 5)
         if SHOTS:
             for scheme, w, h, name in (("dark", 1440, 900, "guide-step5-desktop-dark"), ("light", 390, 844, "guide-step5-phone-light")):

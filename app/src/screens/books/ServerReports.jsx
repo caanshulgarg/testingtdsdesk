@@ -13,6 +13,13 @@ function period(cid) {
   const fy = TCloud.fyOf(cid), r = S.misRange;
   return r && r.from && r.to ? { from: d8(r.from), to: d8(r.to) } : fy;
 }
+// round 64: the financial years the cloud copy covers, one click each (the latest with entries shown first: TCloud.fyOf)
+function FyPick({ cid, p }) {
+  if (!p || !p.first || p.latest <= p.first) return null;
+  const ys = []; for (let y = p.latest; y >= p.first && ys.length < 6; y--) ys.push(y);
+  return <span className="row" style={{ gap: 6, flexWrap: "wrap" }} data-srv-fy={p.y}>{ys.map((y) => <button key={y} className={"btn small" + (y === p.y ? " primary" : "")} data-srv-fy-pick={y} aria-pressed={y === p.y ? "true" : "false"}
+    onClick={() => { S.srvFy = Object.assign({}, S.srvFy || {}, { [cid]: y }); render(); }}>{"FY " + y + "-" + String(y + 1).slice(2)}</button>)}</span>;
+}
 function Wait({ x, what }) {
   if (x.missing) return <p className="note">The server cannot work out {what} yet (its database is being updated). It shows here once the books are in on this computer.</p>;
   if (x.err) return <p className="note bad">Could not ask the server for {what}: <Msg text={x.err} /></p>;
@@ -58,7 +65,7 @@ export function ServerTds({ b }) {
   const cid = b.cid, p = TCloud.fyOf(cid), x = TCloud.report("tds", cid, p.from, p.to), r = x.res;
   if (!r) return <section className="dash-card"><h3>TDS, from the server</h3><Wait x={x} what="the TDS summary" /></section>;
   if (r.none) return null;
-  return <section className="dash-card" data-srv-tds><h3>{"TDS, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3>
+  return <section className="dash-card" data-srv-tds><h3>{"TDS, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3><FyPick cid={cid} p={p} />
     {!r.mapped ? <p className="note">No ledger is marked as TDS or TCS yet in the client’s ledger list.</p> : <>
       <div className="dash-tiles"><Tile l="Deducted" v={m(r.deducted)} sub="TDS and TCS payable ledgers" /><Tile l="Paid" v={m(r.paid)} sub="to the government" /><Tile l="Receivable" v={m(r.receivable)} sub="deducted by customers" /></div>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="srvTds"><thead><tr><th>Ledger</th><th className="n">Opening</th><th className="n">Deducted</th><th className="n">Paid</th><th className="n">Closing</th></tr></thead><tbody>
@@ -88,7 +95,7 @@ export function ServerGst({ b }) {
   if (!r) return <section className="dash-card"><h3>GST, from the server</h3><Wait x={x} what="the GST summary" /></section>;
   if (r.none) return null;
   const sum = (o) => r2((o.CGST || 0) + (o.SGST || 0) + (o.IGST || 0) + (o.CESS || 0));
-  return <section className="dash-card" data-srv-gst><h3>{"GST by month, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3>
+  return <section className="dash-card" data-srv-gst><h3>{"GST by month, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3><FyPick cid={cid} p={p} />
     {!r.mapped ? <p className="note">No ledger is marked as GST yet in the client’s ledger list.</p> :
       <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="srvGst"><thead><tr><th>Month</th><th className="n">Taxable sales</th><th className="n">Output tax</th><th className="n">Input tax</th><th className="n">Reverse charge</th><th className="n">Net</th></tr></thead><tbody>
         {r.months.map((x2) => <tr key={x2.ym}><td>{GSTR.label(x2.ym)}</td><td className="n">{m(x2.taxableSales)}</td><td className="n">{m(sum(x2.out))}</td><td className="n">{m(sum(x2.in))}</td><td className="n">{m(x2.rcmOut)}</td><td className="n">{m(sum(x2.out) + x2.rcmOut - sum(x2.in))}</td></tr>)}</tbody></table></div>}

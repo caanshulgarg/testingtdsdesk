@@ -193,7 +193,24 @@ const LK = {
   async tbTally(asOn){ return this.copyAns(await TCloud.tb(S.coId, asOn)); },
   async groupTally(grp, from, to){ return this.copyAns(await TCloud.group(S.coId, grp, from, to)); },
   async monthlyTally(led, from, to){ return this.copyAns(await TCloud.monthly(S.coId, led, "", from, to)); },
+  // round 64 (the owner's GB TEXCOAT: its ledgers' openings in Tally total Rs 12,750.76 Dr, which Tally shows as "Difference
+  // in opening balances"): the books' own opening difference, as Tally shows it: the sum of the ledgers' openings (credit
+  // less debit, the trial balance's way: + is more debit); null when the openings are not known
+  openOff(){
+    const b = S.books || {}, tb = b.tb;
+    if (tb && tb.led) return r2(-Object.values(tb.led).reduce((t, x) => t + num(x && x.open), 0));
+    const info = b.ledInfo || {};
+    if (!Object.values(info).some(x => x && x.ob != null)) return null;
+    return r2(-Object.values(info).reduce((t, x) => t + num(x && x.ob), 0));
+  },
   tbShape(r){
+    // round 64: a trial balance out by exactly the difference in the ledgers' openings (Tally's "Difference in opening
+    // balances") is shown as Tally shows it: that line, on the other side, and said plainly; not refused
+    const off0 = r2(r.rows.reduce((t, x) => t + num(x.bal), 0)), od = r.openOff == null ? (r.src === "books" ? this.openOff() : null) : r.openOff;
+    if (od != null && Math.abs(od) >= 0.01 && Math.abs(off0 - od) < 1 && !r.rows.some(x => x.openDiff)){
+      r.rows = r.rows.concat([{l: "Difference in opening balances", top: "Difference in opening balances", sub: "", bal: -od, openDiff: true}]);
+      r.openDiff = od;
+    }
     const ORDER = ["Capital Account", "Loans (Liability)", "Current Liabilities", "Fixed Assets", "Investments", "Current Assets", "Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses", "Suspense A/c", "Branch / Divisions", "Misc. Expenses (ASSET)"];
     const by = {};
     r.rows.forEach(x => { (by[x.top] = by[x.top] || []).push(x); });
@@ -204,7 +221,7 @@ const LK = {
     // ledgers with entries but no master in the copy (their group and opening are not known), and whether the trial
     // balance totals zero: one that does not is not shown as a trial balance (review of 02-Oct-2026)
     const groups = (S.books || {}).groups || {}, under = (S.books || {}).under || {};
-    r.noMaster = r.rows.filter(x => x.noMaster || (r.src === "books" && !under[x.l] && !/^profit & loss a\/c$/i.test(x.l) && !groups[x.l]));
+    r.noMaster = r.rows.filter(x => !x.openDiff && (x.noMaster || (r.src === "books" && !under[x.l] && !/^profit & loss a\/c$/i.test(x.l) && !groups[x.l])));
     r.off = r2(r.dr - r.cr);
     r.refused = Math.abs(r.off) >= 1;
     return r;

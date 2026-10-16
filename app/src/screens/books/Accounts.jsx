@@ -82,6 +82,14 @@ function Mapping({ c, d }) {
   </Confirm>;
 }
 
+// round 64 (the owner's GB TEXCOAT: books from Day Book uploads, openings from Tally's ledger masters): where the openings
+// are taken from, and what to do when the company's books begin earlier (FinCom cannot know when they begin)
+function OpenAsOnNote({ cid }) {
+  const bk = cid && typeof TCloud === "object" && TCloud.on() && TCloud.book ? TCloud.book(cid) : null, on = bk && bk.openAsOn ? String(bk.openAsOn).replace(/-/g, "").slice(0, 8) : "";
+  if (!/^\d{8}$/.test(on)) return null;
+  const d = fmtDate(tallyDate(on));
+  return <p className="note" data-open-as-on={on}>{"Opening balances are taken as on " + d + " from Tally’s ledgers. If the company’s books begin earlier, upload the Trial Balance as on " + d + "."}</p>;
+}
 export default function Accounts({ b }) {
   const c = FS.cfg(b), years = fsYears(), fy = fsYearNow();
   const d = fy && S.fsRun && S.fsRun.fy === fy && S.fsRun.kind === c.kind ? S.fsRun.d : null, tab = S.fsTab || "st";
@@ -105,6 +113,7 @@ export default function Accounts({ b }) {
   return <>
     <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"], ["dep", "Fixed assets & depreciation"]].map(([id, l]) => <button key={id} data-fs-tab={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
     <HowPage page="fs" />
+    <OpenAsOnNote cid={b && b.cid} />
     {tab !== "dep" && <Head c={c} years={years} fy={fy} d={d} />}
     {body}
   </>;

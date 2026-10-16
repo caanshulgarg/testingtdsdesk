@@ -579,15 +579,18 @@ function ReadingView({ cards }) {
 //   4. Link the client              the client worked on (the pointer's, else the open client), its state in one line,
 //                                   one type-to-search list of the companies open in Tally now (one linked to another
 //                                   client is offered too, "will move", asked first); tallyLinkClient (tally_company_link)
-//                                                                            done: no client unlinked
+//                                                                            done: the client worked on is linked (round 64:
+//                                                                            the others not linked are named in a note)
 //   5. Import ledgers               the ledgers-only wake (Ledgers.askTally: the bridge's /ledgers/refresh, or the cloud's
 //                                   wake "ledgers"), a moving bar with the time while reading (the bridge sends no count
 //                                   up front), then "1,240 ledgers imported ✓"; nothing in 10 minutes: Tally must be
 //                                   open, Try again, or upload the masters file (Ledgers.fromMasters)
-//                                                                            done: each linked client's ledgers held
+//                                                                            done: the client worked on has ledgers in
+//                                                                            FinCom (round 64: the cloud's count of its
+//                                                                            ledgers, tally_ledgers; the others named)
 //   6. Bring in this year's entries the Day Book: three lines on exporting it, and Open Upload (Books › From Tally)
-//                                                                            done: each linked client's book has days of
-//                                                                            this financial year
+//                                                                            done: the client worked on has days of this
+//                                                                            financial year in FinCom's cloud
 // A strip across the top (Install → … → Day Book); one card a step: a done step folds to its green line (open on click),
 // the current one is marked, the later ones muted. All six done: one green line (owner, 15-Oct: "the company we are
 // working on, and the number of companies open in Tally": counts, never a list of names). Every other place that spoke of
@@ -605,8 +608,27 @@ function linkedClients() {
   return Object.values(S.companies || {}).filter((c) => !c.deleted && typeof tallyLinkOf === "function" && tallyLinkOf(c).state !== "unlinked").sort((a, c) => a.name.localeCompare(c.name));
 }
 const cloudBook = (cid) => (typeof TCloud === "object" && TCloud.on() && TCloud.book ? TCloud.book(cid) : null);
-const ledgersOf = (cid) => (typeof Ledgers === "object" ? Ledgers.status(cid).n : 0);
+// round 64 (the owner's test of 16-Oct-2026: GB TEXCOAT's 224 ledgers in the cloud, step 5 never ticked): the cloud's own
+// count of a client's ledgers (tally_ledgers of its book, the firm's read: one count, no rows), kept a minute
+const LED_N = {};
+async function cloudLedgerCount(cid, force, maxAge) {
+  const bk = cloudBook(cid);
+  if (!bk || !bk.book) return null;
+  const k = LED_N[cid];
+  if (!force && k && k.book === bk.book && Date.now() - k.at < (maxAge || 60000)) return k.n;
+  const path = "tally_ledgers?select=name&merged_into=is.null&limit=1&book_id=eq." + encodeURIComponent(bk.book);
+  const ask = (pp) => Cloud.api(pp, { headers: { Prefer: "count=exact" }, count: true });
+  let n;
+  try { n = await ask(path + (TCloud.hasDel === false ? "" : "&deleted_at=is.null")); }
+  catch (e) { if (!/deleted_at|42703/i.test(String((e && e.message) || e))) throw e; n = await ask(path); }
+  n = Array.isArray(n) ? n.length : Math.max(0, Math.floor(Number(n) || 0));    // a stand-in without the count: its rows
+  LED_N[cid] = { n, at: Date.now(), book: bk.book };
+  return n;
+}
+const ledgersOf = (cid) => Math.max(typeof Ledgers === "object" ? Ledgers.status(cid).n : 0, (LED_N[cid] && LED_N[cid].n) || 0);
 const ledgersHeld = (cid) => ledgersOf(cid) > 0 || !!(cloudBook(cid) || {}).ledgersAt;
+// "Mastercad and Posterity" / "A, B, C and 2 more": the other clients a note names
+const namesOf = (cs) => { const n = cs.map((c) => c.name); return n.length <= 3 ? n.join(", ").replace(/, ([^,]*)$/, " and $1") : n.slice(0, 3).join(", ") + " and " + (n.length - 3) + " more"; };
 function daybookHeld(cid) {
   const bk = cloudBook(cid), fy = fyStart();
   if (bk && Number(bk.days) > 0 && d8Of(bk.to) >= fy) return true;
@@ -618,20 +640,30 @@ function daybookHeld(cid) {
 let guideBooksBusy = false;
 function guideBooksLoad() {
   if (guideBooksBusy || typeof TCloud !== "object" || !TCloud.on()) return Promise.resolve();
-  const want = linkedClients().filter((c) => { const s = TCloud.st[c.id]; return !s || !s.at || Date.now() - s.at > 300000; }).slice(0, 25);
+  const cur = guideClient(S.tallyGuide || {}, unlinkedClients());
+  // the client worked on first, read again after 15 seconds (the guide asks every 20 while a step is open); the others after 5 minutes
+  const want = linkedClients().filter((c) => { const s = TCloud.st[c.id]; return !s || !s.at || Date.now() - s.at > (c.id === cur ? 15000 : 300000); })
+    .sort((a, c) => (c.id === cur) - (a.id === cur)).slice(0, 25);
   if (!want.length) return Promise.resolve();
   guideBooksBusy = true;
-  return Promise.all(want.map((c) => Promise.resolve(TCloud.status(c.id)).catch(() => null))).finally(() => { guideBooksBusy = false; render(); });
+  return Promise.all(want.map((c) => Promise.resolve(TCloud.status(c.id, c.id === cur)).then(() => (ledgersOf(c.id) > 0 && c.id !== cur ? null : cloudLedgerCount(c.id, false, c.id === cur ? 15000 : 60000))).catch(() => null)))
+    .finally(() => { guideBooksBusy = false; render(); });
 }
 function guideState(rows, latest) {
   const p = TCloud.pane, live = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const st = live.map((r) => [r, pcState(r, latest)]);
   const on = st.filter(([r]) => r.online), tally = on.filter(([, s]) => s.tallyOk), open = tally.filter(([, s]) => s.open.length);
   const reading = open.filter(([, s]) => !s.paused && !s.stopped);
-  const unlinked = unlinkedClients(), anyLink = (p.companies || []).some((c) => c.client_id);
-  const linked = linkedClients(), ledMiss = linked.filter((c) => !ledgersHeld(c.id)), dayMiss = linked.filter((c) => !daybookHeld(c.id));
-  const done = { install: live.length > 0, tally: tally.length > 0, company: reading.length > 0, link: anyLink && !unlinked.length,
-    ledgers: linked.length > 0 && !ledMiss.length, daybook: linked.length > 0 && !dayMiss.length };
+  const unlinked = unlinkedClients();
+  // round 64 (the owner, 16-Oct-2026): steps 4 to 6 judge the client worked on (guideClient), not every client of the firm;
+  // the other clients' gaps are named in a note (only those whose book FinCom has read)
+  const cid = guideClient(S.tallyGuide || {}, unlinked), cur = cid && S.companies && S.companies[cid] ? S.companies[cid] : null;
+  const curLinked = !!(cur && typeof tallyLinkOf === "function" && tallyLinkOf(cur).state !== "unlinked");
+  const linked = linkedClients(), read = (c) => !!(TCloud.st[c.id] && TCloud.st[c.id].at);
+  const ledMiss = linked.filter((c) => c.id !== cid && read(c) && !ledgersHeld(c.id)), dayMiss = linked.filter((c) => c.id !== cid && read(c) && !daybookHeld(c.id));
+  const imp = S.ledImp, importing = !!(imp && imp.cid === cid && !imp.end && !imp.err && !imp.late && Date.now() - imp.at <= LED_WAIT_MS);
+  const done = { install: live.length > 0, tally: tally.length > 0, company: reading.length > 0, link: curLinked,
+    ledgers: curLinked && ledgersHeld(cid) && !importing, daybook: curLinked && daybookHeld(cid) };
   // the computer the steps speak of: the one furthest along
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
   const fine = st.find(([, x]) => x.fine) || reading[0] || null;
@@ -640,7 +672,7 @@ function guideState(rows, latest) {
   const openNow = [];
   tally.forEach(([rr, ss]) => ss.open.forEach((name) => { if (!openNow.some((o) => lc(o.company) === lc(name))) openNow.push({ company: name, computer: pcName(rr) }); }));
   const pcs = Array.from(new Set(openNow.map((o) => o.computer)));
-  return { done, r, s, live, on, tally, unlinked, fine, openNow, pcs, linked, ledMiss, dayMiss };
+  return { done, r, s, live, on, tally, unlinked, fine, openNow, pcs, linked, ledMiss, dayMiss, cid, cur, curLinked };
 }
 // "3 companies open in Tally on NWS144" / "12 companies open in Tally on 2 computers": a count, never the names
 function openWords(x) {
@@ -685,7 +717,12 @@ function SearchPick({ hook, label, value, items, onPick, placeholder }) {
 // this client (migration-2: it sets the company's client; the other client is then not linked)
 function guideClient(g, unlinked) {
   const ok = (id) => id && S.companies && S.companies[id] && !S.companies[id].deleted;
-  return ok(g.cid) ? g.cid : ok(S.coId) ? S.coId : unlinked.length ? unlinked[0].id : (Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name))[0] || {}).id || "";
+  if (ok(g.cid)) return g.cid;
+  if (ok(S.coId)) return S.coId;
+  if (unlinked.length) return unlinked[0].id;
+  // round 64: all linked: the first whose ledgers or this year's entries are not in FinCom yet, else the first
+  const linked = linkedClients(), gap = linked.find((c) => TCloud.st[c.id] && TCloud.st[c.id].at && (!ledgersHeld(c.id) || !daybookHeld(c.id)));
+  return (gap || linked[0] || Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name))[0] || {}).id || "";
 }
 function LinkPicker({ x, g }) {
   const unlinked = x.unlinked, openNow = x.openNow;
@@ -715,7 +752,8 @@ function LinkPicker({ x, g }) {
       if (!ans) return;
     }
     setBusy(true); const ok = await tallyLinkClient(company, cid); setBusy(false);
-    if (ok) { setPick({ cid: "", company: "" }); setGen(gen + 1); if (S.tallyGuide && S.tallyGuide.cid === cid) S.tallyGuide = Object.assign({}, S.tallyGuide, { cid: "", company: "" }); render(); }
+    // round 64: the client just linked is the one steps 5 and 6 speak of
+    if (ok) { setPick({ cid: "", company: "" }); setGen(gen + 1); S.tallyGuide = { cid }; render(); }
   };
   const others = unlinked.filter((c) => c.id !== cid).length;
   // nothing to offer: say why (no company open / the open ones all linked elsewhere is said below the list / the computer)
@@ -731,7 +769,8 @@ function LinkPicker({ x, g }) {
       {others > 0 && <span className="note" data-guide-unlinked={unlinked.length}>{" " + (others === 1 ? "1 other client is" : others + " other clients are") + " not linked."}</span>}</p>
     <label className="f"><span>Client</span>
       <SearchPick key={"c" + gen} hook="client" label="Client to link" placeholder="Type a client's name" value={cid}
-        items={all.map((c) => ({ value: c.id, label: c.name + (unlinked.some((u) => u.id === c.id) ? "" : " (linked)") }))} onPick={(v) => setPick({ cid: v, company: "" })} /></label>
+        items={all.map((c) => ({ value: c.id, label: c.name + (unlinked.some((u) => u.id === c.id) ? "" : " (linked)") }))}
+          onPick={(v) => { setPick({ cid: v, company: "" }); S.tallyGuide = Object.assign({}, S.tallyGuide || {}, { cid: v, company: "", step: 4, at: Date.now() }); render(); }} /></label>
     <label className="f"><span>Company open in Tally</span>{list.length
       ? <SearchPick key={"o" + gen} hook="company" label="Company in Tally" placeholder="Type a company's name" value={company}
           items={list.map((c) => ({ value: c.company, label: c.company + (c.same ? " (same GSTIN)" : "") + (c.mine ? " (linked here)" : c.other ? " (linked to " + c.other.name + " — will move)" : "") + (c.computer && x.pcs.length > 1 ? " · " + c.computer : c.computer ? " · " + c.computer : "") }))}
@@ -744,31 +783,47 @@ function LinkPicker({ x, g }) {
       + " Open " + co.name + "’s own company in TallyPrime, or move one here."}</p>}
   </div>;
 }
-// step 5: the ledgers import. S.ledImp = {at, cids, base: {cid: ledgersAt}, via: {cid}, got: {cid: n}, end, err}
-async function ledImportStart(cids) {
-  const base = {};
-  cids.forEach((cid) => { base[cid] = (cloudBook(cid) || {}).ledgersAt || ""; });
-  const x = S.ledImp = { at: Date.now(), cids: cids.slice(), base, via: {}, got: {}, end: 0, err: "" };
+// step 5: the ledgers import, for the client worked on. S.ledImp = {cid, name, at, base: {at: ledgersAt, n: count}, via, ans,
+// got: {cid: n}, end, err, late}. Round 64 (the owner's test of 16-Oct-2026: the bar ran on for ever): the answer to the ask
+// is read (the bridge here: started false and why; the cloud: none asked, debounced, not linked) and the bar stops at once
+// with the reason; the arrival is seen in the cloud's count of the client's ledgers (or their time, tally_books.ledgers_at,
+// which the bridge's whole list now sets too); at 10 minutes the bar stops: Try again, or the masters file
+async function ledImportStart(cid, hint) {
+  const co = S.companies[cid] || {}, name = co.name || "this client";
+  const company = (typeof tallyLinkOf === "function" && (tallyLinkOf(co) || {}).company) || co.tallyName || name;
+  const x = S.ledImp = { cid, cids: [cid], name, at: Date.now(), base: { at: (cloudBook(cid) || {}).ledgersAt || "", n: ledgersOf(cid) }, via: "", ans: null, got: {}, end: 0, err: "", late: false };
   render();
-  const rs = await Promise.all(cids.map((cid) => Ledgers.askTally(cid)));
-  rs.forEach((r) => { x.via[r.cid] = r.via; });
-  const bad = rs.filter((r) => r.err || !r.via);
-  if (bad.length === rs.length) x.err = bad[0].err ? "Could not ask Tally: " + bad[0].err : "Neither FinCom Bridge here nor FinCom’s cloud reaches the Tally computer. Sign in to the firm account.";
+  try { const n0 = await cloudLedgerCount(cid, true); if (n0 != null) x.base.n = n0; } catch (e) {}
+  // reading paused on the Tally computer: the bridge reads no list while paused (FinCom Bridge: "background reading is
+  // paused in the tray"); said at once, nothing asked
+  if (hint && hint.paused) { x.err = "Reading is paused on " + hint.pc + ", so FinCom Bridge does not read the ledgers. To resume: " + RESUME_TRAY + ". Then Try again."; x.why = "paused"; render(); return; }
+  const r = await Ledgers.askTally(cid), a = (r && r.ans) || {};
+  x.via = r.via || ""; x.ans = a;
+  const soon = "Tally was asked for " + name + "’s ledgers a moment ago; they show here as soon as they arrive. If they do not, Try again in a few minutes.";
+  if (r.err) { x.err = "Could not ask Tally: " + r.err; x.why = "error"; }
+  else if (!r.via) { x.err = "Neither FinCom Bridge here nor FinCom’s cloud reaches the Tally computer. Sign in to the firm account."; x.why = "none"; }
+  else if (r.via === "bridge" && a.started === false) { x.err = a.debounced ? soon : "FinCom Bridge did not read " + company + "’s ledgers: " + (a.why || "it did not start") + "."; x.why = a.debounced ? "debounced" : "not started"; }
+  else if (r.via === "cloud" && a.notLinked) { x.err = name + " is not linked to a company in Tally yet: link it in step 4 first."; x.why = "not linked"; }
+  else if (r.via === "cloud" && !Number(a.woken) && Number(a.debounced) > 0 && !Number(a.asked)) { x.err = soon; x.why = "debounced"; }
+  else if (r.via === "cloud" && a.woken !== undefined && !Number(a.woken) && (a.asked === undefined ? !Number(a.debounced) : !Number(a.asked))) {
+    x.err = "No computer with Tally was asked: FinCom has no computer that holds " + company + " now. Open " + company + " in TallyPrime on the Tally computer, with FinCom Bridge running; then Try again.";
+    x.why = "woken 0";
+  }
   render();
 }
 let ledPolling = false;
 async function ledImportPoll() {
   const x = S.ledImp;
-  if (!x || x.end || x.err || ledPolling) return;
+  if (!x || x.end || x.err || x.late || ledPolling) return;
   ledPolling = true;
   try {
-    for (const cid of x.cids.filter((c) => x.got[c] == null)) {
-      try { if (typeof TCloud === "object" && TCloud.on()) await TCloud.status(cid, true); } catch (e) {}
-      const at = (cloudBook(cid) || {}).ledgersAt || "";
-      if (at && at !== x.base[cid]) { await Ledgers.load(cid, { fresh: true }); if (ledgersOf(cid) > 0) x.got[cid] = ledgersOf(cid); }
-      else if (x.via[cid] === "bridge") { const r = await Ledgers.load(cid, { force: true }); if (r && r.ok && r.n) x.got[cid] = r.n; }
-    }
-    if (x.cids.every((c) => x.got[c] != null)) x.end = Date.now();
+    const cid = x.cid;
+    try { if (typeof TCloud === "object" && TCloud.on()) await TCloud.status(cid, true); } catch (e) {}
+    const at = (cloudBook(cid) || {}).ledgersAt || "";
+    let n = null; try { n = await cloudLedgerCount(cid, true); } catch (e) {}
+    if ((n != null && n > (x.base.n || 0)) || (at && at !== x.base.at && n)) { x.got[cid] = n; try { if (cid === S.coId) await Ledgers.load(cid, { fresh: true }); } catch (e) {} }
+    else if (x.via === "bridge") { const r = await Ledgers.load(cid, { force: true }); if (r && r.ok && r.n) x.got[cid] = r.n; }
+    if (x.got[cid] != null) x.end = Date.now();
   } finally { ledPolling = false; render(); }
 }
 function pickFile(onFile) {
@@ -782,57 +837,63 @@ function MastersHow({ open }) {
       <li>Choose that file with <b>Or upload the masters file</b> above.</li></ol></details>;
 }
 function LedgersStep({ x, owner }) {
-  const [, tick] = useState(0), [mcid, setMcid] = useState(""), [busy, setBusy] = useState(false);
-  const imp = S.ledImp, reading = !!(imp && !imp.end && !imp.err), late = reading && Date.now() - imp.at > LED_WAIT_MS;
+  const [, tick] = useState(0), [busy, setBusy] = useState(false);
+  const cid = x.cid, co = x.cur, raw = S.ledImp && S.ledImp.cid === cid ? S.ledImp : null;
+  const late = !!(raw && !raw.end && !raw.err && (raw.late || Date.now() - raw.at > LED_WAIT_MS));
+  if (late && raw && !raw.late) raw.late = true;              // at 10 minutes the bar stops (round 64)
+  const imp = raw, reading = !!(imp && !imp.end && !imp.err && !late);
   // the clock while reading (once a second) and the read again (every 10 seconds)
   useEffect(() => { if (!reading) return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, [reading]);
   useEffect(() => { if (!reading) return; const t = setInterval(() => { ledImportPoll(); }, LED_POLL_MS); return () => clearInterval(t); }, [reading, imp && imp.at]);
-  if (!x.linked.length) return <span className="note">After step 4: link a client first.</span>;
-  const miss = x.ledMiss, targets = miss.length ? miss : x.linked;
-  const pc = x.r ? x.r.computer : "the Tally computer";
-  const fileCid = targets.some((c) => c.id === mcid) ? mcid : targets[0].id;
+  if (!co || !x.curLinked) return <span className="note">{co ? "After step 4: link " + co.name + " first." : "After step 4: link a client first."}</span>;
+  const pc = x.r ? x.r.computer : "the Tally computer", company = (typeof tallyLinkOf === "function" && (tallyLinkOf(co) || {}).company) || co.name;
+  const start = () => ledImportStart(cid, { paused: !!(x.s && x.s.paused), pc });
   const upload = async (f) => {
-    setBusy(true); const r = await Ledgers.fromMasters(fileCid, f); setBusy(false);
-    S.ledFile = Object.assign({ cid: fileCid, name: f.name, at: Date.now() }, r);
-    if (r.ok && S.ledImp && S.ledImp.cids.includes(fileCid)) { S.ledImp.got[fileCid] = r.n; if (S.ledImp.cids.every((c) => S.ledImp.got[c] != null)) S.ledImp.end = Date.now(); }
+    setBusy(true); const r = await Ledgers.fromMasters(cid, f); setBusy(false);
+    S.ledFile = Object.assign({ cid, name: f.name, at: Date.now() }, r);
+    if (r.ok && S.ledImp && S.ledImp.cid === cid) { S.ledImp.got[cid] = r.n; S.ledImp.end = Date.now(); S.ledImp.late = false; S.ledImp.err = ""; }
+    if (r.ok) LED_N[cid] = { n: r.n, at: Date.now(), book: ((cloudBook(cid) || {}).book) || "" };
     render();
   };
   const masters = <span className="tg-alt">
     <label className="btn small tg-linkbtn" data-guide-masters="">{busy ? "Reading the file…" : "Or upload the masters file"}
-      <input type="file" accept=".xml" hidden data-guide-masters-in="" onChange={pickFile(upload)} /></label>
-    {targets.length > 1 && <SearchPick hook="masters-client" label="Client the masters file is for" placeholder="Type a client's name" value={fileCid}
-      items={targets.map((c) => ({ value: c.id, label: c.name }))} onPick={setMcid} />}</span>;
-  const f = S.ledFile && Date.now() - S.ledFile.at < 3600e3 ? S.ledFile : null;
+      <input type="file" accept=".xml" hidden data-guide-masters-in="" onChange={pickFile(upload)} /></label></span>;
+  const f = S.ledFile && S.ledFile.cid === cid && Date.now() - S.ledFile.at < 3600e3 ? S.ledFile : null;
   const fileLine = f ? <p className={"tg-result" + (f.ok ? " ok" : " bad")} data-guide-masters-result={f.ok ? "ok" : "bad"} role="status">
     {f.ok ? nOf(f.n, "ledger", "ledgers") + " imported from " + f.name + " ✓" + (f.cloud === "sent" ? "" : f.cloud === "later" ? " (kept here; FinCom’s cloud takes them with the books)" : f.cloud ? " (kept here; FinCom’s cloud: " + f.cloud.replace(/^not sent: /, "") + ")" : "") : f.err}</p> : null;
+  const others = x.ledMiss.length ? <p className="note tg-others" data-guide-others="ledgers">{"Also without ledgers in FinCom: " + namesOf(x.ledMiss) + ". Open each of them here once " + co.name + " is done."}</p> : null;
   let body;
   if (reading) body = <>
-    <div className="tg-bar" data-guide-ledgers-bar="" role="progressbar" aria-label="Reading ledgers from Tally" aria-busy="true"><i /></div>
-    <p className="tg-progress" data-guide-ledgers-reading="">{late ? "Not received yet; Tally must be open on " + pc + " with the company open. " : "Reading ledgers from Tally… "}<b className="tg-clock">{mmss(Date.now() - imp.at)}</b>
-      {imp.cids.length > 1 && <span className="note">{" · " + Object.keys(imp.got).length + " of " + imp.cids.length + " clients in"}</span>}</p>
-    {late && <div className="tg-acts"><button className="btn small primary" data-guide-ledgers-again="" onClick={() => ledImportStart(imp.cids)}>Try again</button>{masters}</div>}
-    {late && <MastersHow open />}</>;
+    <div className="tg-bar" data-guide-ledgers-bar="" role="progressbar" aria-label={"Reading " + co.name + "’s ledgers from Tally"} aria-busy="true"><i /></div>
+    <p className="tg-progress" data-guide-ledgers-reading="">{"Reading " + co.name + "’s ledgers from Tally… "}<b className="tg-clock">{mmss(Date.now() - imp.at)}</b>
+      <span className="note">{imp.via === "cloud" ? " · asked through FinCom’s cloud; the Tally computer picks it up within a minute or two" : imp.via === "bridge" ? " · FinCom Bridge on this computer is reading" : ""}</span></p></>;
+  else if (late) body = <>
+    <p className="tg-result bad" data-guide-ledgers-stop="late" role="status">{"Not received in 10 minutes. TallyPrime must be open on " + pc + " with " + company + " open, and reading not paused."}</p>
+    <div className="tg-acts"><button className="btn small primary" data-guide-ledgers-again="" onClick={start}>Try again</button>{masters}</div>
+    <MastersHow open /></>;
   else if (imp && imp.end) {
-    const n = imp.cids.reduce((a, c) => a + (imp.got[c] || 0), 0);
-    body = <p className="tg-result ok" data-guide-ledgers-done={n} role="status">{nOf(n, "ledger", "ledgers") + " imported ✓"}<span className="note">{" · took " + mmss(imp.end - imp.at)}</span></p>;
+    const n = imp.got[cid] || 0;
+    body = <p className="tg-result ok" data-guide-ledgers-done={n} role="status">{nOf(n, "ledger", "ledgers") + " of " + co.name + " imported ✓"}<span className="note">{" · took " + mmss(imp.end - imp.at)}</span></p>;
   } else body = <>
-    {imp && imp.err && <p className="tg-result bad" data-guide-ledgers-err="">{imp.err}</p>}
-    <p className="tg-text">{miss.length && miss.length < x.linked.length ? miss.length + " of " + x.linked.length + " linked clients have no ledgers in FinCom yet." : "Bring each linked client’s list of ledgers from Tally into FinCom, once. It takes a minute or two while the company is open in Tally."}</p>
-    <div className="tg-acts"><button className="btn small primary" data-guide-ledgers-import="" onClick={() => ledImportStart(targets.map((c) => c.id))}>{imp && imp.err ? "Try again" : "Import ledgers"}</button>{masters}</div>
+    {imp && imp.err && <p className="tg-result bad" data-guide-ledgers-err="" data-guide-ledgers-stop={imp.why || "error"} role="status">{imp.err}</p>}
+    <p className="tg-text">{ledgersHeld(cid) ? nOf(ledgersOf(cid), "ledger", "ledgers") + " of " + co.name + " are in FinCom. Import again to bring the list up to date with Tally."
+      : "Bring " + co.name + "’s list of ledgers from Tally into FinCom, once. It takes a minute or two while " + company + " is open in Tally."}</p>
+    <div className="tg-acts"><button className="btn small primary" data-guide-ledgers-import={cid} onClick={start}>{imp && imp.err ? "Try again" : ledgersHeld(cid) ? "Import again" : "Import ledgers"}</button>{masters}</div>
     <MastersHow /></>;
-  return <>{body}{fileLine}</>;
+  return <>{body}{fileLine}{others}</>;
 }
 // step 5 done, folded: what was just imported (the read, with its time; or the masters file), else what FinCom holds
 function LedgersDone({ x }) {
-  const imp = S.ledImp, f = S.ledFile && S.ledFile.ok && Date.now() - S.ledFile.at < 3600e3 ? S.ledFile : null;
-  if (imp && imp.end) { const n = imp.cids.reduce((a, c) => a + (imp.got[c] || 0), 0);
-    return <span className="tg-result ok" data-guide-ledgers-held="" data-guide-ledgers-done={n}>{nOf(n, "ledger", "ledgers") + " imported ✓"}<span className="note">{" · took " + mmss(imp.end - imp.at)}</span></span>; }
-  if (f) return <span className="tg-result ok" data-guide-ledgers-held="" data-guide-masters-result="ok">{nOf(f.n, "ledger", "ledgers") + " imported from " + f.name + " ✓"}</span>;
-  return <span className="note" data-guide-ledgers-held="">{ledgersLine(x)}</span>;
+  const imp = S.ledImp && S.ledImp.cid === x.cid ? S.ledImp : null, f = S.ledFile && S.ledFile.ok && S.ledFile.cid === x.cid && Date.now() - S.ledFile.at < 3600e3 ? S.ledFile : null;
+  const others = x.ledMiss.length ? <span className="note" data-guide-others="ledgers">{" Also without ledgers: " + namesOf(x.ledMiss) + "."}</span> : null;
+  if (imp && imp.end) { const n = imp.got[x.cid] || 0;
+    return <span className="tg-result ok" data-guide-ledgers-held="" data-guide-ledgers-done={n}>{nOf(n, "ledger", "ledgers") + " of " + x.cur.name + " imported ✓"}<span className="note">{" · took " + mmss(imp.end - imp.at)}</span>{others}</span>; }
+  if (f) return <span className="tg-result ok" data-guide-ledgers-held="" data-guide-masters-result="ok">{nOf(f.n, "ledger", "ledgers") + " imported from " + f.name + " ✓"}{others}</span>;
+  return <span className="note" data-guide-ledgers-held="" data-guide-ledgers-n={ledgersOf(x.cid)}>{ledgersLine(x)}{others}</span>;
 }
 function ledgersLine(x) {
-  if (x.linked.length === 1) { const n = ledgersOf(x.linked[0].id); return (n ? nOf(n, "ledger", "ledgers") + " of " + x.linked[0].name : "The ledgers of " + x.linked[0].name) + " are in FinCom."; }
-  return "The ledgers of every linked client (" + x.linked.length + ") are in FinCom.";
+  const n = ledgersOf(x.cid);
+  return (n ? nOf(n, "ledger", "ledgers") + " of " + x.cur.name : "The ledgers of " + x.cur.name) + " are in FinCom.";
 }
 // step 6: the Day Book of this financial year, through Books › From Tally's Upload (its JobsNote says how far the server
 // has read it: "143 of 365 days read")
@@ -850,13 +911,12 @@ const DAYBOOK_ART = <svg className="tg-art" viewBox="0 0 220 64" role="img" aria
     <text x="28" y="34">Gateway</text><text x="92" y="29">Display More</text><text x="92" y="39">Reports</text><text x="152" y="34">Day Book</text>
     <text x="201" y="41" fontWeight="700">XML</text></g></svg>;
 function DaybookStep({ x }) {
-  if (!x.linked.length) return <span className="note">After step 4: link a client first.</span>;
-  const miss = x.dayMiss, c = (miss[0] || x.linked[0]);
+  if (!x.cur || !x.curLinked) return <span className="note">{x.cur ? "After step 4: link " + x.cur.name + " first." : "After step 4: link a client first."}</span>;
+  const c = x.cur;
   if (typeof TCloud === "object" && TCloud.on() && TCloud.jobs && TCloud.jobs[c.id] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[c.id] = []; setTimeout(() => TCloud.jobsLoad(c.id), 0); }
   const job = ((typeof TCloud === "object" && TCloud.jobs && TCloud.jobs[c.id]) || []).find((j) => j && j.kind === "upload" && j.status !== "failed");
   return <>
-    <p className="tg-text">{(miss.length > 1 ? miss.length + " linked clients need this year’s Day Book; start with " + c.name + ". " : "")
-      + "Upload this financial year’s Day Book from Tally once; after that FinCom reads new entries by itself."}</p>
+    <p className="tg-text">{"Upload " + c.name + "’s Day Book of this financial year from Tally once; after that FinCom reads new entries by itself."}</p>
     {job && <p className="tg-progress" data-guide-daybook-job={job.status}>{TCloud.jobLine(job)}</p>}
     <div className="tg-daybook">
       <ol className="tg-lines" data-guide-daybook-how="">
@@ -864,12 +924,14 @@ function DaybookStep({ x }) {
         <li>Press <b>F2</b> and set the period: 1 April to today.</li>
         <li>Press <b>Alt+E</b> (Export), choose <b>XML (Data Interchange)</b>, and export. Then upload the file here.</li></ol>
       {DAYBOOK_ART}</div>
-    <div className="tg-acts"><button className="btn small primary" data-guide-daybook-open={c.id} onClick={() => openFromTally(c.id)}>{"Open Upload" + (x.linked.length > 1 ? " for " + c.name : "")}</button></div>
+    <div className="tg-acts"><button className="btn small primary" data-guide-daybook-open={c.id} onClick={() => openFromTally(c.id)}>{"Open Upload for " + c.name}</button></div>
+    {x.dayMiss.length > 0 && <p className="note tg-others" data-guide-others="daybook">{"Also without this year’s entries in FinCom: " + namesOf(x.dayMiss) + "."}</p>}
   </>;
 }
 function daybookLine(x) {
-  if (x.linked.length === 1) { const bk = cloudBook(x.linked[0].id); return "This year’s entries of " + x.linked[0].name + " are in FinCom" + (bk && bk.to ? " (up to " + fmtDate(tallyDate(d8Of(bk.to))) + ")." : "."); }
-  return "This year’s entries of every linked client (" + x.linked.length + ") are in FinCom.";
+  const bk = cloudBook(x.cid);
+  return "This year’s entries of " + x.cur.name + " are in FinCom" + (bk && bk.to ? " (up to " + fmtDate(tallyDate(d8Of(bk.to))) + ")." : ".")
+    + (x.dayMiss.length ? " Also without them: " + namesOf(x.dayMiss) + "." : "");
 }
 function ConnectGuide({ rows, m, latest, connectStep }) {
   const p = TCloud.pane, g = S.tallyGuide || {};
@@ -895,7 +957,9 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
     const f = x.fine && x.fine[0], last = f ? lastEntryAt(f) : "", calm = !needsItems().length;
     return <div className="tconnected" data-connect-guide="done" data-all-good={calm ? "" : undefined}>
       <span className="tpc-ok" data-connected-line="">{"● Connected" + (x.openNow.length ? " · " + nOf(x.openNow.length, "company", "companies") + " open in Tally" : "") + " · last entry " + (last ? tallyHm(last) : "none yet")}</span>
-      {calm && <span className="note">{" All good."}</span>}
+      {calm && <span className="note">{" All good" + (x.cur ? " for " + x.cur.name : "") + "."}</span>}
+      {(x.unlinked.length > 0 || x.ledMiss.length > 0 || x.dayMiss.length > 0) && <span className="note" data-guide-others="all">{[x.unlinked.length ? " Not linked yet: " + namesOf(x.unlinked) + "." : "",
+        x.ledMiss.length ? " Without ledgers: " + namesOf(x.ledMiss) + "." : "", x.dayMiss.length ? " Without this year’s entries: " + namesOf(x.dayMiss) + "." : ""].join("")}</span>}
       {" "}<button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button></div>;
   }
   const owner = isOwner(), r = x.r, s = x.s, pc = r ? r.computer : "the Tally computer", user = (r && r.user) || "the Tally user", allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
@@ -933,13 +997,14 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
           : <span className="note">{"Leave TallyPrime open on a company" + (r ? " on " + pc : "") + "."}</span>}
       </GuideStep>
       <GuideStep k="link" n={4} title="Link the client" done={d.link && !forced("link")} open={want === "link"} later={later("link")}
-        line={d.link && !forced("link") ? <span className="note">Every client is linked.</span> : null} more={<LinkPicker x={x} g={g} />}>
+        line={d.link && !forced("link") ? <span className="note" data-guide-link-held={x.cid}>{x.cur.name + " is linked to " + ((typeof tallyLinkOf === "function" && tallyLinkOf(x.cur).company) || x.cur.name) + "."}
+          {x.unlinked.length > 0 && <span data-guide-others="link">{" Not linked yet: " + namesOf(x.unlinked) + "."}</span>}</span> : null} more={<LinkPicker x={x} g={g} />}>
         {!(d.link && !forced("link")) && <LinkPicker x={x} g={g} />}
       </GuideStep>
-      <GuideStep k="ledgers" n={5} title="Import ledgers" done={d.ledgers && !forced("ledgers") && !(S.ledImp && !S.ledImp.end && !S.ledImp.err)} open={want === "ledgers"} later={later("ledgers")}
+      <GuideStep k="ledgers" n={5} title="Import ledgers" done={d.ledgers && !forced("ledgers")} open={want === "ledgers"} later={later("ledgers")}
         line={d.ledgers && !forced("ledgers") ? <LedgersDone x={x} /> : null}
         more={<LedgersStep x={x} owner={owner} />}>
-        {!(d.ledgers && !forced("ledgers")) || (S.ledImp && !S.ledImp.end && !S.ledImp.err) ? <LedgersStep x={x} owner={owner} /> : null}
+        {!(d.ledgers && !forced("ledgers")) ? <LedgersStep x={x} owner={owner} /> : null}
       </GuideStep>
       <GuideStep k="daybook" n={6} title="Bring in this year’s entries" done={d.daybook && !forced("daybook")} open={want === "daybook"} later={later("daybook")}
         line={d.daybook && !forced("daybook") ? <span className="note" data-guide-daybook-held="">{daybookLine(x)}</span> : null} more={<DaybookStep x={x} />}>

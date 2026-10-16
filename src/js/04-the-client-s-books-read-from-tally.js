@@ -2,6 +2,25 @@
 /* The client's books, read from Tally: vouchers, ledgers, mapping    */
 /* ================================================================== */
 const Books = {
+  // round 64 (the owner's GB TEXCOAT, 16-Oct-2026): an entry of a voucher type with no accounting effect in Tally (an order, a
+  // delivery or receipt note, a rejection, material in or out, a memorandum, a reversing journal) never moves a ledger in
+  // Tally's books. Tally's export carries no field saying so, so it is read from the voucher type: Tally's own predefined
+  // type by name (VCHTYPE, VOUCHERTYPENAME or VOUCHERTYPEORIGNAME), else no accounting effect itself (lines that do not total
+  // zero, with order details on the items). Such an entry is kept marked not in the books (opt), as an Optional entry is.
+  // The same rule as the cloud's reader (server/tally-cloud/parse.js nonAccounting; tests/run_order_vouchers.py)
+  NON_ACC_TYPES: ["purchase order", "sales order", "job work in order", "job work out order", "delivery note", "receipt note",
+    "rejections in", "rejections out", "material in", "material out", "memorandum", "reversing journal"],
+  nonAccounting(s, amts){
+    const tag = (t) => { const m = s.match(new RegExp("<" + t + "(?:\\s[^<>]*[^/<>])?\\s*>([^<]*)</" + t + "\\s*>")); return m ? namesClean(m[1]) : ""; };
+    const names = [namesClean((s.match(/VCHTYPE="([^"]*)"/) || [])[1] || ""), tag("VOUCHERTYPENAME"), tag("VOUCHERTYPEORIGNAME")].map(x => String(x || "").trim());
+    const hit = names.find(x => x && this.NON_ACC_TYPES.includes(x.toLowerCase()));
+    if (hit) return hit;
+    if (amts && amts.length && /<ORDERNO(?:\s[^<>]*)?>\s*[^<\s]|<ORDERDUEDATE[\s>]/.test(s)){
+      const sum = Math.round(amts.reduce((t, a) => t + (Number(a) || 0), 0) * 100) / 100;
+      if (Math.abs(sum) > 0.01) return (names.find(Boolean) || "an order") + " (no accounting effect: its lines do not total zero)";
+    }
+    return "";
+  },
   // Tally exports can be very large, so the file is read in pieces and only what we use is kept
   async importDayBook(file, onProgress){
     const dec = await this.decoder(file);
@@ -171,6 +190,8 @@ const Books = {
       const rate = this.one(s, "GSTRATE");
       if (rate) v.rate = num(rate);
     }
+    // round 64: no accounting effect in Tally (an order, a delivery or receipt note): kept, marked not in the books
+    if (!v.cancel){ const na = this.nonAccounting(s, v.ent.map(e => e.a)); if (na){ v.opt = true; v.nonAcc = na.slice(0, 120); } }
     // a cancelled voucher has no entries; it is kept for the documents issued (GSTR-1 table 13)
     if (v.ent.length || (v.cancel && v.no)) out.push(v);
   },

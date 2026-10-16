@@ -86,7 +86,9 @@ const TCloud = {
       else { x.closing = r2(x.closing + num(r.closing)); if (r.parent){ x.parent = x.parent || r.parent; x.master = true; } } });
     const rows = Array.from(by.values());
     const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing)), noMaster: !r.master && !/^profit & loss a\/c$/i.test(r.ledger)}));
-    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: this.noteFor("From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid), noteOf: ["From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid]});
+    // round 64: the ledgers' openings' own difference (Tally's "Difference in opening balances"), when the rows carry openings
+    const openOff = raw.some(r => r && r.open != null) ? r2(-raw.reduce((t, r) => t + num(r.open), 0)) : null;
+    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, openOff, line: copyLine(cid), note: this.noteFor("From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid), noteOf: ["From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid]});
   },
   // the top group of a ledger, from the groups FinCom knows, else the ledger's own group
   top(l, rows){ try { const t = FC.top(l); if (t) return t; } catch (e){} const r = rows.find(x => x.ledger === l); return (r && r.parent) || "Other"; },
@@ -206,9 +208,35 @@ const TCloud = {
     return what + " on FinCom’s server: " + j.done + " of " + pl(n) + (j.sealed ? "" : " handed over so far") + ". It carries on if this page is closed.";
   },
   // the period a client's cloud copy covers: the financial year of its last entry
+  // round 64 (the owner's GB TEXCOAT): the year shown first is the latest financial year that has entries (a book's last
+  // day may be an empty day of an upload's period: tally_days keeps every day of it), and a year chosen on the page
+  // (S.srvFy[cid], the start year) is kept; {from, to, y, latest, first}
   fyOf(cid){
-    const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
-    return {from: y + "0401", to: last < (y + 1) + "0331" ? last : (y + 1) + "0331"};
+    const bk = this.book(cid) || {}, s = this.st[cid] || {}, le = s.lastEntry, yOf = (d) => num(d.slice(0, 4)) - (num(d.slice(4, 6)) < 4 ? 1 : 0);
+    const last = this.d8(bk.to || "") || Audit.today();
+    let lastIn = last;
+    if (bk.book && bk.to){ if (le && le.book === bk.book && le.to === bk.to){ if (le.day) lastIn = le.day; } else this.lastEntryLoad(cid, bk); }
+    const y0 = yOf(lastIn), first = bk.from ? yOf(this.d8(bk.from)) : y0, pick = num((S.srvFy || {})[cid]);
+    const y = pick && pick >= first && pick <= yOf(last) ? pick : y0, end = (y + 1) + "0331";
+    return {from: y + "0401", to: last < end ? last : end, y, latest: yOf(last), first};
+  },
+  // the last day with entries (tally_days_list: the year of the book's last day, else the year before), read once per book
+  // and last day
+  async lastEntryLoad(cid, bk){
+    const s = this.st[cid] = this.st[cid] || {};
+    if (s.lastBusy || !this.on()) return;
+    s.lastBusy = true;
+    let day = "";
+    try {
+      const to = this.d8(bk.to), y = num(to.slice(0, 4)) - (num(to.slice(4, 6)) < 4 ? 1 : 0);
+      for (const fy of [y, y - 1]){
+        const list = await this.rpc("tally_days_list", {p_book: bk.book, p_from: fy + "-04-01", p_to: fy === y ? this.iso(to) : (fy + 1) + "-03-31"}, "?limit=1000");
+        const hit = (Array.isArray(list) ? list : []).filter(x => x && num(x.n) > 0).map(x => this.d8(x.day)).sort().pop();
+        if (hit){ day = hit; break; }
+      }
+    } catch (e){ day = ""; }
+    s.lastEntry = {book: bk.book, to: bk.to, day}; s.lastBusy = false;
+    if (day && day.slice(0, 4) + day.slice(4, 6) !== this.d8(bk.to).slice(0, 6)) render();
   },
   // "From the books (GARG SHEKHAR & COMPANY), in step with Tally as of 05-Oct-2026 13:59 IST.": never while a line Tally
   // sent for these books is held (the owner's finding of 05-Oct-2026); then "From the books (…)." and the held line

@@ -1104,7 +1104,7 @@ async function bookFor(firm: string, company: string) {
 
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
-const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
+const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, ...(v.nonAcc ? { nonAcc: v.nonAcc } : {}), gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
   ...partA(v), ...(v.gst ? { gst: v.gst } : {}), ...(v.tdsx ? { tdsx: v.tdsx } : {}),   // bridge 2.4.2 (migration 72): the entry's GST type, only when the text carried it; 2.4.3 (migration 73): the TDS challan and references, likewise
   ...(Array.isArray(v.salpay) ? { salpay: v.salpay.slice(0, 5000).map((x: any) => ({ n: x.n, ledger: cleanName(String(x.ledger || "")), employee: cleanName(String(x.employee || "")), amt: x.amt, date: x.date })) } : {}) }));   // 2.4.4 (migration 74): the salary paid to each employee, only from an entry with bank details
 // bridge 2.3.1 part A (migration 57): the rest of the entry, read by parse.js the same way on both paths (the days path and
@@ -1419,6 +1419,13 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
       if (data?.note) notes.push("round " + round + ": " + String(data.note).slice(0, 300));
     }
   }
+  // round 64: the list's time on the book (tally_books.ledgers_at), as the trial balance's "ledgers" call sets it, on the
+  // last batch of a round (or a call with no round, a bridge before 2.1.5): the app sees that the ledgers came (Ledgers.watch,
+  // Connect Tally's step 5)
+  if (body.last === true || !round) {
+    const { error } = await db.from("tally_books").update({ ledgers_at: now }).eq("book_id", book);
+    if (error) notes.push("ledgers_at not set: " + String(error.message || "").slice(0, 160));
+  }
   // 5. the year's openings worked out again (a ledger added, an opening or a group changed)
   if (fresh.length || opened.length || body.last) {
     const { error } = await db.rpc("tally_year_openings", { p_book: book });
@@ -1705,7 +1712,9 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     // the line is held for want of its body (migrations 50-51) with these words as heldWhy (in the payload too). A
     // cancelled voucher with no lines is kept as before. The Day Book upload (days) is read as before and settles it
     const bv = (line.vouchers as any[])[0], bl = line.lines as any[];
-    if (bv && !(bv.cancel && !bl.length)) {
+    // round 64: an entry with no accounting effect in Tally (an order, a delivery note: parse.js nonAccounting) is taken as it
+    // is, marked not in the books (opt): its lines need not total zero
+    if (bv && !(bv.cancel && !bl.length) && !bv.nonAcc) {
       const sum = Math.round(bl.reduce((a: number, l: any) => a + (Number(l[2]) || 0), 0) * 100) / 100;
       if (bl.length < 2 || Math.abs(sum) > 0.01) {
         const why = "the entry's details from Tally are incomplete (" + (bl.length < 2 ? "fewer than two ledger lines came"
@@ -2712,6 +2721,28 @@ async function work(budgetMs: number) {
   }
   return n;
 }
+// round 64 (the owner's GB TEXCOAT, 16-Oct-2026: 3 uploads, 560 days held, every page empty): a book filled only by Day Book
+// uploads had no start (tally_books.from_date) nor openings date (open_as_on), and every report asks for the start
+// (tally_pick). An upload sets them when the book has none: from = the upload's first day, openings as on the day before
+// (Tally's ledger openings are as at the books' beginning). A start already there is never moved (a bridge's later
+// "ledgers" call cannot move it forward either: ingestLedgers keeps it when entries lie before). Never fails the upload
+async function bookStartFromUpload(book: string, from: string) {
+  if (!book || !realDay(from)) return;
+  try {
+    const { data: bk, error } = await db.from("tally_books").select("from_date, open_as_on").eq("book_id", book).maybeSingle();
+    if (error || !bk) { if (error) console.log("tally-ingest upload_done: the book's start not read", book, String(error.message || "").slice(0, 160)); return; }
+    const t = new Date(Date.UTC(+from.slice(0, 4), +from.slice(4, 6) - 1, +from.slice(6, 8) - 1)).toISOString().slice(0, 10);
+    if (!bk.from_date) {
+      const { error: e1 } = await db.from("tally_books").update({ from_date: iso(from), ...(bk.open_as_on ? {} : { open_as_on: t }) }).eq("book_id", book).is("from_date", null);
+      if (e1) console.log("tally-ingest upload_done: the book's start not set", book, String(e1.message || "").slice(0, 160));
+      else console.log("tally-ingest upload_done: the book's start set from the upload", book, iso(from), bk.open_as_on ? "" : "openings as on " + t);
+    } else if (!bk.open_as_on) {
+      const f = String(bk.from_date).slice(0, 10), d = new Date(f + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 1);
+      const { error: e2 } = await db.from("tally_books").update({ open_as_on: d.toISOString().slice(0, 10) }).eq("book_id", book).is("open_as_on", null);
+      if (e2) console.log("tally-ingest upload_done: the openings date not set", book, String(e2.message || "").slice(0, 160));
+    }
+  } catch (e) { console.log("tally-ingest upload_done: the book's start not set", book, String((e as Error)?.message || e).slice(0, 160)); }
+}
 // a person hands over work: a day book (its days, a part at a time) or the kept day books to be read again
 async function queueJob(firm: string, client: string, book: string, user: string, body: any, isOwner: () => Promise<boolean>) {
   if (body.kind === "job_new") {
@@ -2787,6 +2818,7 @@ async function queueJob(firm: string, client: string, book: string, user: string
       throw dbFail("upload_done", error, "The upload could not be queued just now; try again.");
     }
     console.log("tally-ingest upload_done: the split queued", j.id, up.path, head.size, "bytes", up.from + "-" + up.to);
+    await bookStartFromUpload(jb, String(up.from || ""));
     later(work(110000));
     return reply(200, { ok: true, job: j.id, queued: true, size: head.size, days: j.total });
   }
@@ -2825,7 +2857,7 @@ async function wakeFor(firm: string, body: any, userId = "") {
   if (what === "open" || what === "ledgers") {
     const { data } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("client_id", String(body.client || ""));
     links = ((data || []) as any[]).filter((r: any) => r.device_id || r.company);
-    if (!links.length) return reply(200, { ok: true, woken: 0 });
+    if (!links.length) return reply(200, { ok: true, woken: 0, ...(what === "ledgers" ? { asked: 0, notLinked: true } : {}) });
   }
   const { data: all } = await db.from("tally_devices").select("*").eq("firm_id", firm);
   // the companies of this client a key is woken for: its own (the company's computer), those open there, all for the caller's own key
@@ -2837,7 +2869,9 @@ async function wakeFor(firm: string, body: any, userId = "") {
   // ("ledgers", {company, at}); the time kept in info.ledgers for the heartbeat's answer. At most one a minute per
   // company here; the bridge itself reads at most once every few minutes
   if (what === "ledgers") {
-    let debounced = 0;
+    // round 64: asked, the computers told to read the list (in their record, which their next beat reads, and woken now
+    // where they listen): Connect Tally's step 5 stops at once, with the reason, when none was
+    let debounced = 0, asked = 0;
     for (const d of (devs || []).filter((x: any) => !x.revoked)) {
       const prev = (d.info && typeof d.info === "object") ? d.info : {};
       const led: Record<string, string> = {};
@@ -2846,10 +2880,11 @@ async function wakeFor(firm: string, body: any, userId = "") {
       debounced += mineCos.length - cos.length;
       if (!cos.length) continue;
       cos.forEach((c) => { led[c] = at; });
-      await db.from("tally_devices").update({ info: { ...prev, ledgers: led, activityAt: at } }).eq("id", d.id);
+      const { error: ue } = await db.from("tally_devices").update({ info: { ...prev, ledgers: led, activityAt: at } }).eq("id", d.id);
+      if (!ue) asked++;
       if (d.wake_token) for (const c of cos) if (await broadcast("tb-" + d.wake_token, "ledgers", { company: c, at })) woken++;
     }
-    return reply(200, { ok: true, woken, debounced });
+    return reply(200, { ok: true, woken, debounced, asked });
   }
   for (const d of (devs || []).filter((x: any) => !x.revoked)) {
     const prev = (d.info && typeof d.info === "object") ? d.info : {};

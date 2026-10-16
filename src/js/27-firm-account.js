@@ -90,6 +90,8 @@ const Cloud = {
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
     if (!r.ok) throw new Error((j && (j.message || j.hint)) || ("Cloud error " + r.status));
+    // round 64: {count: true} with Prefer count=exact: the number of rows that match (PostgREST's Content-Range "0-0/224")
+    if (opts.count){ const m = /\/(\d+)\s*$/.exec(r.headers.get("content-range") || ""); if (m) return Number(m[1]); }
     return j;
   },
   async changePassword(pw){

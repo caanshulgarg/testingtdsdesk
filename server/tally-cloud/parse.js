@@ -185,6 +185,29 @@ function tdsChallanOf(q){
     chq: tx(q, "TAXCHEQUENUMBER", 40), chqDate: d8(one(q, "TAXCHEQUEDATE")), bank: tx(q, "TAXBANKNAME", 100), branch: tx(q, "TAXBANKBRANCHNAME", 100)};
   return Object.values(c).some(Boolean) ? c : null;
 }
+// round 64 (the owner's GB TEXCOAT, 16-Oct-2026: two "Job Work In Order" entries stored with ledger lines that do not
+// balance): an entry of a voucher type that has no accounting effect in Tally (an order, a delivery or receipt note, a
+// rejection, material in or out, a memorandum, a reversing journal) never moves a ledger in Tally's books. Tally's export
+// carries no field saying so (the 7.1 / 6.2 / 5.1 / 4.1 / 3.0 captures in bridge-go/testdata/fast234kinds: a Delivery Note
+// and a Sales invoice differ only in ISINVOICE, which a Journal also has as No), so it is read from the voucher type
+// itself: Tally's own predefined type (VCHTYPE, VOUCHERTYPENAME or VOUCHERTYPEORIGNAME exactly one of Tally's
+// non-accounting types; a type made under one, with its own name, carries the parent only in the voucher type master,
+// which a Day Book does not hold), else the absence of accounting effect itself: the lines do not total zero (no entry
+// of Tally's books can) and the entry carries order details (ORDERNO / ORDERDUEDATE on its items). Such an entry is kept
+// marked as not in the books (opt: true, the mark every total of FinCom's already leaves out, as Tally does for an
+// Optional entry) with nonAcc naming why. The same rule is in the browser (src/js/04, Books.nonAccounting)
+const NON_ACC_TYPES = ["purchase order", "sales order", "job work in order", "job work out order", "delivery note", "receipt note",
+  "rejections in", "rejections out", "material in", "material out", "memorandum", "reversing journal"];
+function nonAccounting(s, lines){
+  const names = [(s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "", one(s, "VOUCHERTYPENAME"), one(s, "VOUCHERTYPEORIGNAME")].map((x) => unesc(x).trim());
+  const hit = names.find((x) => x && NON_ACC_TYPES.includes(x.toLowerCase()));
+  if (hit) return hit;
+  if (lines && lines.length && /<ORDERNO(?:\s[^<>]*)?>\s*[^<\s]|<ORDERDUEDATE[\s>]/.test(s)){
+    const sum = Math.round(lines.reduce((t, l) => t + (Number(l[2]) || 0), 0) * 100) / 100;
+    if (Math.abs(sum) > 0.01) return (names.find(Boolean) || "an order") + " (no accounting effect: its lines do not total zero)";
+  }
+  return "";
+}
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
   const narrFull = one(s, "NARRATION");
@@ -504,6 +527,9 @@ function takeVoucher(s){
     }
   }
   v.checks = checks.map((c) => c.slice(0, 300)).slice(0, 20);
+  // round 64: an entry with no accounting effect in Tally: kept, marked as not in the books, no balance check said
+  const na = v.cancel ? "" : nonAccounting(s, lines);
+  if (na){ v.opt = true; v.nonAcc = na.slice(0, 120); v.checks = v.checks.filter((c) => !/^its lines do not add up to zero/.test(c)); }
   return {v, lines};
 }
 
@@ -556,4 +582,4 @@ function dropBankDetails(x) {
   return x;
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType, tdsChallanOf, dropBankDetails };
+export { parseDay, nonAccounting, NON_ACC_TYPES, amt, one, unesc, igstRate, cleanName, namesKey, d8, gstType, tdsChallanOf, dropBankDetails };

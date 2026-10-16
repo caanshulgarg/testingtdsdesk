@@ -77,11 +77,14 @@ function Body({ r, x }) {
     if (r.refused) return <>{masters}<div className="bk-none" data-tb-refused="">
       <b>Not shown: this trial balance does not total zero.</b> Debits {FC.amt(r.dr)}, credits {FC.amt(r.cr)}, out by {FC.amt(Math.abs(diff))}.
       {nm.length ? " The ledgers above have entries but no master; once their masters are read, it is worked out again." : " Read the day book and balances again from Tally, or bring in last night’s copy."}</div></>;
-    return <>{masters}
-      <div className="dash-tiles"><Tile l="Debit balances" v={FC.amt(r.dr)} /><Tile l="Credit balances" v={FC.amt(r.cr)} /><Tile l="Difference" v={agrees ? "agrees" : FC.amt(diff)} cls={agrees ? "" : "warn"} /><Tile l="Ledgers" v={String(r.rows.length)} /></div>
+    // round 64: the ledgers' openings in Tally do not agree by this much: shown as Tally shows it, said plainly
+    const od = r.openDiff ? <p className="note" data-tb-opendiff={Math.abs(r.openDiff).toFixed(2)}><b>{"Difference in opening balances " + money(Math.abs(r.openDiff)) + " (as in Tally)."}</b>
+      {" The ledgers’ opening balances in Tally do not agree by this amount (" + (r.openDiff > 0 ? "more debit" : "more credit") + "); Tally shows the same line in its trial balance. Correct an opening balance in Tally to clear it."}</p> : null;
+    return <>{masters}{od}
+      <div className="dash-tiles"><Tile l="Debit balances" v={FC.amt(r.dr)} /><Tile l="Credit balances" v={FC.amt(r.cr)} /><Tile l="Difference" v={agrees ? (r.openDiff ? "agrees, with the opening difference" : "agrees") : FC.amt(diff)} cls={agrees ? "" : "warn"} /><Tile l="Ledgers" v={String(r.rows.length - (r.openDiff ? 1 : 0))} /></div>
       <Wrap head={<><th>Ledger</th><th>Under</th><th className="n">Debit</th><th className="n">Credit</th></>}>
         {r.groups.map((g, gi) => <Fragment key={g.g + ":" + gi}><tr className="lk-grp"><td colSpan={2}><b>{g.g}</b></td><td className="n"><b>{FC.amt(g.dr)}</b></td><td className="n"><b>{FC.amt(g.cr)}</b></td></tr>
-          {g.rows.map((z, i) => <tr key={z.l + ":" + i}><td style={{ paddingLeft: 22 }}><LedBtn l={z.l} /></td><td>{z.sub}</td><td className="n">{z.bal > 0 ? FC.amt(z.bal) : ""}</td><td className="n">{z.bal < 0 ? FC.amt(-z.bal) : ""}</td></tr>)}</Fragment>)}
+          {g.rows.map((z, i) => <tr key={z.l + ":" + i} data-tb-row-opendiff={z.openDiff ? "" : undefined}><td style={{ paddingLeft: 22 }}>{z.openDiff ? <span>{z.l}</span> : <LedBtn l={z.l} />}</td><td>{z.sub}</td><td className="n">{z.bal > 0 ? FC.amt(z.bal) : ""}</td><td className="n">{z.bal < 0 ? FC.amt(-z.bal) : ""}</td></tr>)}</Fragment>)}
         <tr className="lk-tot"><td><b>Total</b></td><td></td><td className="n"><b>{FC.amt(r.dr)}</b></td><td className="n"><b>{FC.amt(r.cr)}</b></td></tr>
       </Wrap></>;
   }
