@@ -106,7 +106,7 @@ function firmGroups() {
         status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
-      { id: "bridge", label: "FinCom Bridge", about: "The small program that lets FinCom read from and post into TallyPrime: it is set up and checked on the Tally page.",
+      { id: "bridge", label: "Connect Tally", about: "Connecting Tally (six steps), its status, and help: all on the one Tally page in the sidebar.",
         status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
       { id: "tcloud", label: "Books in the cloud", about: "Computers that send Tally’s books to the firm account, and which Tally company is which client.",
         status: "Tally: " + tallyStatus(null).label },
@@ -154,7 +154,7 @@ export function FirmSettings() {
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
     plan: () => <><PlanCredit /><RecordsUsed /></>,
     // clean-up batch 2: one home each, the Tally page; here one line that leads there
-    bridge: () => <Card><HomeLink id="bridge" text="One place for this computer and the firm’s other computers." link="Open it on the Tally page" go={() => goTallyPage("computers", { bridgeDetails: true })} /></Card>,
+    bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (six steps, its status, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
     tcloud: () => <CloudBooks />,
     postlog: () => <Card><HomeLink id="sent" text="One record for every client: what was sent, by whom and when." link="Open it on the Tally page" go={() => { goTallyPage("sent"); S.logAll = true; render(); }} /></Card>,
     gstapi: () => <GstApiAll />,

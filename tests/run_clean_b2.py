@@ -146,7 +146,7 @@ try:
         ok(pg.locator("#app [data-confirm-foot]").count() == 0, "  … and no Save bar beside 'Nothing to save'")
         pg.screenshot(path=os.path.join(OUT, "desk-settings-bridge.png"))
         pg.click("#app [data-home-go=bridge]"); W(1300)
-        ok(E("S.homeTab") == "tally" and title() == "Tally" and pg.locator("#app [data-connect-section]").count() == 1, "  … its link opens the Tally page, where FinCom Bridge on this computer is")
+        ok(E("S.homeTab") == "tally" and title() == "Tally" and pg.locator("#app [data-connect-guide]").count() == 1, "  … its link opens the Tally page at its six steps (round 66: Connect Tally)")
         go("() => goSettings('postlog')")
         ok(pg.locator("#app [data-home-link=sent]").count() == 1 and "Everything sent to Tally" not in E("[...document.querySelectorAll('#app h2')].map(e => e.innerText).join('|')"), "Settings → Sent to Tally: one line, no copy of the log")
         pg.click("#app [data-home-go=sent]"); W(1300)

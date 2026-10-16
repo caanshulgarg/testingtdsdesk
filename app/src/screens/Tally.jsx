@@ -7,7 +7,6 @@
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
-import TallyLine from "../parts/TallyLine.jsx";
 import SyncActivity from "./TallySync.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
@@ -956,29 +955,34 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
   if (p.devices == null && !p.err) return null;
   const x = guideState(rows, latest), d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
   const now = GUIDE_KEYS.find((k) => !d[k]), want = GUIDE_KEYS[(g.step || 0) - 1] || now, nowAt = GUIDE_KEYS.indexOf(now);
+  const go = (i) => { S.tallyGuide = Object.assign({}, g, { step: i + 1, at: Date.now() }); render(); };
+  // round 66 (the owner, 16-Oct-2026: "all 6 steps are not visible anywhere"): the six steps stay on the page, always; all
+  // done, they show as six green ticks with one line under them (never folded away to a single line)
+  const strip = <ol className="tg-strip" data-guide-strip="" aria-label="The six steps">
+    {GUIDE_KEYS.map((k, i) => <li key={k} data-strip-step={k} className={d[k] ? "done" : k === now ? "now" : "later"} aria-current={k === now ? "step" : undefined}>
+      <button type="button" data-guide-strip-go={k} onClick={() => go(i)} aria-label={"Step " + (i + 1) + ": " + GUIDE_STRIP[k] + (d[k] ? ", done" : "")}>
+        <span className="tg-dot" aria-hidden="true">{d[k] ? TICK : i + 1}</span><span className="tg-lab">{GUIDE_STRIP[k]}</span></button></li>)}</ol>;
+  const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
+  const head = <div className="tg-top"><h3>Connect Tally</h3>
+    <span className="tg-count" data-guide-count={doneN}>{all ? <>{"All 6 done" + (x.cur ? " for " + x.cur.name : "") + " "}{TICK}</> : doneN + " of " + GUIDE_KEYS.length + " done"}</span>
+    <GuideClientPick x={x} g={g} />
+    {all && !!g.at && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = { cid: g.cid }; render(); }}>Hide the steps</button>}</div>;
   if (all && !g.at) {
     const f = x.fine && x.fine[0], last = f ? lastEntryAt(f) : "", calm = !needsItems().length;
-    return <div className="tconnected" data-connect-guide="done" data-all-good={calm ? "" : undefined}>
-      <span className="tpc-ok" data-connected-line="">{"● Connected" + (x.openNow.length ? " · " + nOf(x.openNow.length, "company", "companies") + " open in Tally" : "") + " · last entry " + (last ? tallyHm(last) : "none yet")}</span>
-      {calm && <span className="note">{" All good" + (x.cur ? " for " + x.cur.name : "") + "."}</span>}
-      {(x.unlinked.length > 0 || x.ledMiss.length > 0 || x.dayMiss.length > 0) && <span className="note" data-guide-others="all">{[x.unlinked.length ? " Not linked yet: " + namesOf(x.unlinked) + "." : "",
-        x.ledMiss.length ? " Without ledgers: " + namesOf(x.ledMiss) + "." : "", x.dayMiss.length ? " Without this year’s entries: " + namesOf(x.dayMiss) + "." : ""].join("")}</span>}
-      {" "}<button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button></div>;
+    return <section className="pane tguide tconnect tg2" data-connect-guide="done" data-all-good={calm ? "" : undefined}>
+      {head}{strip}
+      <p className="tconnected" style={{ margin: "10px 0 0" }}>
+        <span className="tpc-ok" data-connected-line="">{"● Connected" + (x.openNow.length ? " · " + nOf(x.openNow.length, "company", "companies") + " open in Tally" : "") + " · last entry " + (last ? tallyHm(last) : "none yet")}</span>
+        {calm && <span className="note">{" All good" + (x.cur ? " for " + x.cur.name : "") + "."}</span>}
+        {" "}<button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button></p>
+      <GuideOthers x={x} /></section>;
   }
   const owner = isOwner(), r = x.r, s = x.s, pc = r ? r.computer : "the Tally computer", user = (r && r.user) || "the Tally user", allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const stop = s && s.stopped ? ((TCloud.stopFor && TCloud.stopFor(r.device.id)) || {}) : null;
-  const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
   const forced = (k) => want === k && !!g.at;
   const later = (k) => !d[k] && nowAt >= 0 && GUIDE_KEYS.indexOf(k) > nowAt && want !== k;
-  const go = (i) => { S.tallyGuide = Object.assign({}, g, { step: i + 1, at: Date.now() }); render(); };
   return <section className="pane tguide tconnect tg2" data-connect-guide={all ? "open" : now}>
-    <div className="tg-top"><h3>Connect Tally</h3>
-      <span className="tg-count" data-guide-count={doneN}>{doneN + " of " + GUIDE_KEYS.length + " done"}</span>
-      {all && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide</button>}</div>
-    <ol className="tg-strip" data-guide-strip="" aria-label="The six steps">
-      {GUIDE_KEYS.map((k, i) => <li key={k} data-strip-step={k} className={d[k] ? "done" : k === now ? "now" : "later"} aria-current={k === now ? "step" : undefined}>
-        <button type="button" data-guide-strip-go={k} onClick={() => go(i)} aria-label={"Step " + (i + 1) + ": " + GUIDE_STRIP[k] + (d[k] ? ", done" : "")}>
-          <span className="tg-dot" aria-hidden="true">{d[k] ? TICK : i + 1}</span><span className="tg-lab">{GUIDE_STRIP[k]}</span></button></li>)}</ol>
+    {head}{strip}
     <ol className="tguide-steps">
       <GuideStep k="install" n={1} title="Install FinCom Bridge" done={d.install && !forced("install")} open={want === "install"} later={later("install")}
         line={d.install && !forced("install") ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + "."}</span> : null}
@@ -1016,6 +1020,23 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
     </ol>
     {!all && d.install && <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button>}
   </section>;
+}
+// round 66: which client the steps are about (the client worked on: the pointer's, else the open client), changed here;
+// only when the firm has more than one client
+function GuideClientPick({ x, g }) {
+  const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
+  if (cos.length < 2) return null;
+  return <label className="note tg-client" data-guide-client-wrap="" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>{"Client"}
+    <select data-guide-client-pick="" aria-label="The client these steps are about" value={x.cid || ""} onChange={(ev) => { S.tallyGuide = { cid: ev.target.value }; render(); }}>
+      {cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>;
+}
+// the other clients' gaps, one line, each name a button that opens the steps for that client
+function GuideOthers({ x }) {
+  const parts = [["Not linked yet", x.unlinked, 4], ["Without ledgers", x.ledMiss, 5], ["Without this year’s entries", x.dayMiss, 6]].filter(([, l]) => l.length);
+  if (!parts.length) return null;
+  return <p className="note" data-guide-others="all" style={{ margin: "6px 0 0" }}>{"Other clients: "}
+    {parts.map(([w, l, step], i) => <span key={w}>{i > 0 && " · "}{w + ": "}{l.map((c, j) => <span key={c.id}>{j > 0 && ", "}
+      <button type="button" className="linkbtn" data-guide-other={c.id} onClick={() => openConnectTally(step, c.id)}>{c.name}</button></span>)}</span>)}</p>;
 }
 // 2. Needs you: only what neither the guide nor a computer's line says (reading stopped on all computers, a computer key
 // refused). sources: the slot for 2.4.1's card of a book open in two data locations (SourceCards on next-241), drawn
@@ -1165,21 +1186,34 @@ function FocusLine({ f, cards }) {
 // clients' lines, connect another computer, this browser's own connection (its Connect steps, the Tallys found with their
 // ports and Windows sessions, Check my Tally, the reading test, the bridge's log), the connection history, and FinCom
 // Bridge's install again (fingerprint, direct link, PowerShell, Windows blocked it?)
-function PageMore({ rows, latest, m, cards, connectStep }) {
+// round 66 (the owner, 16-Oct-2026: "3 or 4 pages of Tally things.. need a very simple Tally page"): the fold is "Help &
+// support", closed by default, its parts under small headings: the reading table and the clients' table (folded as
+// before), activity, each computer heard this week (a bridge not heard for 7 days is only counted here, and listed in
+// Every bridge), versions, this browser's own bridge, install on another computer. The outdated "Clients' Tally" lines
+// ("reads only when needed… nightly catch-up", wrong since 2.2) are gone: Update now is on each client's pages.
+function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
   const owner = isOwner(), open = moreOpen("page");
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
+  const H = ({ children, id }) => <h4 className="tadv-h" data-help-part={id} style={{ margin: "16px 0 6px" }}>{children}</h4>;
   return <div className="pane tadvanced" data-page-more="" data-advanced="" style={{ padding: "8px 16px" }}>
-    <MoreToggle k="page" data-bridge-details="" label="Advanced (for support)" less="Hide advanced" />
-    {open && <div data-bridge-more="" style={{ marginTop: 10 }}>
-      <nav className="row tadv-links" aria-label="Tally, for support" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 10px" }}>
+    <MoreToggle k="page" data-bridge-details="" label="Help & support" less="Hide help & support" />
+    {open && <div data-bridge-more="" style={{ marginTop: 6 }}>
+      {cards.length > 0 && <ReadingView cards={cards} />}
+      <ClientsTable />
+      <H id="activity">Activity</H>
+      <nav className="row tadv-links" aria-label="Tally, for support" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 4px" }}>
         {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav>
-      {cards.length > 0 && <><div className="tcard-sub">Each computer</div><BridgeLines cards={cards} latest={latest} m={m} /></>}
+      {(cards.length > 0 || old > 0) && <H id="computers">Each computer</H>}
+      {cards.length > 0 && <BridgeLines cards={cards} latest={latest} m={m} />}
+      {old > 0 && <p className="note" data-old-computers={old} style={{ margin: "4px 0" }}>{nOf(old, "older bridge", "older bridges") + " not heard from for over 7 days: hidden here (listed under Every bridge below)."}</p>}
+      <H id="versions">Versions</H>
       <Release rows={rows} latest={latest} owner={owner} />
       {owner && TCloud.on() && !allStopped && <div className="row" style={{ gap: 8, margin: "6px 0 10px" }}>
         <button className="btn small" data-read-stop-all="" onClick={() => TCloud.readStop(null)}>Stop reading on all computers</button></div>}
       <BridgesHeard />
-      <ClientLines />
+      <H id="this-computer">This computer</H>
       <BridgeSettings inDetails />
+      <H id="install">Install on another computer</H>
       <BridgeDownload m={m} again={rows.length > 0} />
     </div>}
   </div>;
@@ -1456,30 +1490,12 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     <ConnectGuide rows={rows} m={m} latest={latest} connectStep={connectStep} />
     <FocusLine f={f} cards={week} />
     {week.length > 0 && <section className="pane tpcs" data-pc-lines="">
-      <h3 style={{ margin: "0 0 6px" }}>Tally on your computers</h3>
+      <h3 style={{ margin: "0 0 6px" }}>Status</h3>
       {week.map((r) => <PcLine key={cardKey(r)} r={r} latest={latest} m={m} focus={!!f && !!f.dev && r.device.id === f.dev} guided={r.device.id === guided} />)}
       {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
       {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     </section>}
-    {week.length > 0 && <ReadingView cards={week} />}
     <NeedsYou sources={sourcesSlot} />
-    <ClientsTable />
-    <PageMore rows={rows} latest={latest} m={m} cards={cards} connectStep={connectStep} />
+    <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
   </>;
-}
-// FinCom Bridge 2.1.3 reads Tally only after an event: one line a client whose Tally company a computer keeps, from
-// that computer's heartbeat ("Tally open on NWS144 · last read 15:34", closed, offline, not answering, paused), each with
-// Update now; the open client first
-function ClientLines() {
-  if (typeof tallyLine !== "function") return null;
-  const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => (c.id === S.coId) - (a.id === S.coId) || a.name.localeCompare(c.name));
-  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([co, l]) => l);
-  if (!rows.length) return null;
-  return <div className="pane" data-client-lines="">
-    <h3 style={{ marginTop: 0 }}>Clients’ Tally</h3>
-    <p className="note" style={{ margin: "0 0 8px" }}>The bridge reads Tally only when needed: when a client is opened here, on Update now, for a posting, and in its nightly catch-up. Entries made in Tally show here after the next of these.</p>
-    {rows.map(([co]) => <div key={co.id} data-client-line={co.id} style={{ margin: "2px 0" }}>
-      <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}><button className="linkbtn" data-client-open={co.id} onClick={() => openCompany(co.id)}><b>{co.name}</b></button><span className="note">·</span><TallyLine co={co} /></div>
-</div>)}
-  </div>;
 }

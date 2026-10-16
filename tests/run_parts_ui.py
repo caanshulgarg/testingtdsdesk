@@ -43,7 +43,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.books.meta.parts.every(p => p.to <= '20250930' || p.from >= '20251001')") and "Read " in pg.inner_text("#app [data-up-result]"), "each part kept with its own dates; the result said in words (%s)" % pg.inner_text("#app [data-up-result]"))
     ok(pg.evaluate("S.books.meta.parts.length") == 2, "two parts kept (the repeat replaced the first)")
     st = pg.inner_text("#app [data-up-status]")
-    ok(st.startswith("Books from Tally: FY 2025-26 · entries up to ") and "ledger masters not uploaded" in st and "opening balances not uploaded" in st and "cloud" not in st.lower(), "the status line says what is missing, and nothing of the cloud (%s)" % st)
+    ok(st.startswith("Books from Tally: FY 2025-26 · entries ") and "ledger masters not uploaded" in st and "opening balances not uploaded" in st and "cloud" not in st.lower(), "the status line says what is missing, and nothing of the cloud (%s)" % st)
     # opening balances from a trial balance exported from Tally (ledgers shown), as on 31 March 2025
     led = pg.evaluate("Object.keys(S.books.map).slice(0, 3)")
     tb = ("<ENVELOPE><DSPACCNAME><DSPDISPNAME>Capital Account</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA></DSPCLDRAMTA></DSPCLDRAMT><DSPCLCRAMT><DSPCLCRAMTA>500.00</DSPCLCRAMTA></DSPCLCRAMT></DSPACCINFO>"

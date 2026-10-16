@@ -134,7 +134,7 @@ OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data
     "data-release-rollback-clear", "data-release-withdraw", "data-trial-tools-switch", "data-recorder-source-pick", "data-ps-edit", "data-changes-only-switch",
     "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear", "data-reparse", "data-pc-resume"]
 FOLD = ["[data-bridge-card]", "[data-install-help]", "[data-connect-section]", '[data-pane="tally-history"]', "[data-release]", "[data-bridges]", "[data-read-stop-all]",
-        "[data-client-lines]", "[data-bridge-ps]", "[data-bridge-sha]"]
+        "[data-bridge-ps]", "[data-bridge-sha]"]   # round 66: the outdated "Clients' Tally" lines ([data-client-lines]) are gone
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -166,7 +166,7 @@ def main():
         ids = scene([PAUSED, OLD], companies(), DAYBOOK)
         G = ids["garg shekhar & company"]
         body = page()
-        ok(n("#app [data-advanced]") == 1 and n("#app [data-advanced] [data-bridge-more]") == 0 and "Advanced (for support)" in body, "one Advanced (for support) fold, closed")
+        ok(n("#app [data-advanced]") == 1 and n("#app [data-advanced] [data-bridge-more]") == 0 and "Help & support" in body, "one Help & support fold, closed")
         inside = [s for s in FOLD if n("#app " + s)]
         ok(not inside, "fold closed: install, this browser's connect, history, versions, every bridge, clients' lines all inside it (%s)" % inside)
         ok(not [w for w in ["127.0.0.1", "PowerShell", "Fingerprint", "Every bridge FinCom has heard from", "Connection history", "Roll back", "Hold version", "Stop reading on all computers", "Bridge key", "6-digit"] if w in body],
@@ -205,12 +205,6 @@ def main():
            "the computer line: online and last heard, Tally, reading, version (%s)" % l1)
         up = "#app [data-pc-line=\"%s\"] [data-pc-update]" % D1
         ok(n(up) == 1 and txt(up) == "Update to 2.4.4" and "2.4.4" in (pg.get_attribute(up, "href") or ""), "an older bridge: Update to 2.4.4, the one download (%s)" % txt(up))
-        # Reading: one row a company the beat reports
-        rd = lambda: E("() => [...document.querySelectorAll('#app [data-reading] [data-reading-row]')].map(e => [e.getAttribute('data-reading-row'), e.getAttribute('data-reading-kind'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())])")
-        ok(txt("#app [data-reading-head]") == "Reading: 0 companies live, 0 waiting for Tally, 0 stopped, 1 paused" and rd() and rd()[0][0] == "GB TEXCOAT" and "Paused" in rd()[0][2]
-           and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
-        ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
-        ok(n("#app [data-reading][data-folded]") == 1 and n('#app [data-show-all="reading"]') == 0, "Reading: folded; its one row (paused) above the fold, so no Show all")
         # 2. nothing said twice, no Day Book counts
         body = page()
         once = ["Reading is paused on NWS144", "Update to 2.4.4", "garg shekhar & company is not linked", "Open TallyPrime on NWS144", "Connect Tally"]
@@ -218,6 +212,15 @@ def main():
         gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you"]
         ok(not [w for w in gone if w in body], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in body])
         ok(n("#app [data-all-good]") == 0, "something needs him: no All good")
+        # round 66: the reading table and the clients' table are in Help & support (closed by default): open it
+        ok(n("#app [data-reading]") == 0 and n("#app [data-tally-clients]") == 0, "round 66: fold closed: no reading table, no clients' table on the page")
+        pg.click("#app [data-advanced] [data-bridge-details]"); pg.wait_for_timeout(700)
+        # Reading: one row a company the beat reports
+        rd = lambda: E("() => [...document.querySelectorAll('#app [data-reading] [data-reading-row]')].map(e => [e.getAttribute('data-reading-row'), e.getAttribute('data-reading-kind'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())])")
+        ok(txt("#app [data-reading-head]") == "Reading: 0 companies live, 0 waiting for Tally, 0 stopped, 1 paused" and rd() and rd()[0][0] == "GB TEXCOAT" and "Paused" in rd()[0][2]
+           and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
+        ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
+        ok(n("#app [data-reading][data-folded]") == 1 and n('#app [data-show-all="reading"]') == 0, "Reading: folded; its one row (paused) above the fold, so no Show all")
         # 3. the clients table (round 63: folded to its summary; the client not linked above the fold; Show all opens it)
         tb = "#app [data-tally-clients]"
         fr = E("() => [...document.querySelectorAll('#app [data-tally-clients] [data-client-row]')].map(e => e.getAttribute('data-client-row'))")
@@ -391,8 +394,29 @@ def main():
         shot("guide-r64-gbtexcoat-steps4to6")
         E("() => { S.tallyGuide = Object.assign({}, S.tallyGuide, {at: 0}); render(); }"); pg.wait_for_timeout(600)
         gl = txt('#app [data-connect-guide="done"]')
-        ok(n('#app [data-connect-guide="done"]') == 1 and "Not linked yet: garg shekhar & company." in gl and "Without ledgers: ABC TRADERS." in gl,
+        ok(n('#app [data-connect-guide="done"]') == 1 and "Not linked yet: garg shekhar & company" in gl and "Without ledgers: ABC TRADERS" in gl,
            "round 64: all six done for GB TEXCOAT: the one green line, the other clients named (%s)" % gl)
+        # ---- round 66 (the owner, 16-Oct-2026: "all 6 steps are not visible anywhere"): all done, the six steps stay on
+        # the page as six green ticks, the count says "All 6 done for <client>", the client can be changed there, and each
+        # other client named opens the steps for that client
+        ok(n('#app [data-connect-guide="done"] [data-guide-strip] li') == 6 and n('#app [data-connect-guide="done"] [data-guide-strip] li.done') == 6
+           and n("#app [data-connect-step]") == 0 and n('#app [data-connect-guide="done"] [data-connected-line]') == 1,
+           "round 66: all done: the strip of six ticks stays, the cards folded, the green line under it (%s)" % gl)
+        ok(txt('#app [data-connect-guide="done"] [data-guide-count]').startswith("All 6 done for GB TEXCOAT"), "round 66: 'All 6 done for GB TEXCOAT' (%s)" % txt('#app [data-guide-count]'))
+        ok(n('#app [data-connect-guide="done"] [data-guide-client-pick]') == 1, "round 66: the client the steps are about can be changed in the guide")
+        ok("[object Object]" not in txt("#app [data-connect-guide]") and txt('#app [data-connect-guide="done"] [data-guide-count]') == "All 6 done for GB TEXCOAT"
+           and not re.search(r"(^|\n)0(\n|$)", txt("#app [data-connect-guide]")), "round 66: the count reads 'All 6 done for GB TEXCOAT' (a tick drawn, no stray text) (%s)" % txt("#app [data-guide-count]"))
+        shot("guide-r66-all-done-strip")
+        fold(True); shot("guide-r66-help-open"); fold(False)
+        pg.click('#app [data-connect-guide="done"] [data-guide-strip-go="ledgers"]'); pg.wait_for_timeout(700)
+        ok(n('#app [data-connect-step="ledgers"]') == 1 and n("#app [data-guide-hide]") == 1, "round 66: a tick pressed opens the steps at that step, with 'Hide the steps'")
+        pg.click("#app [data-guide-hide]"); pg.wait_for_timeout(600)
+        ok(n('#app [data-connect-guide="done"]') == 1 and n("#app [data-connect-step]") == 0, "round 66: Hide the steps: back to the six ticks")
+        abc = E("() => Object.values(S.companies).find(c => c.name === 'ABC TRADERS').id")
+        pg.click('#app [data-guide-other="%s"]' % abc); pg.wait_for_timeout(900)
+        ok(E("(S.tallyGuide || {}).cid") == abc and n('#app [data-connect-step="ledgers"]') == 1 and txt("#app [data-guide-count]").endswith("done") and not txt("#app [data-guide-count]").startswith("All"),
+           "round 66: ABC TRADERS pressed in the note: the steps for ABC TRADERS (%s)" % txt("#app [data-guide-count]"))
+        E("(t) => { S.tallyGuide = {cid: t}; render(); }", T); pg.wait_for_timeout(600)
         # step 5 stops at once with the reason: nobody asked (woken 0), asked a moment ago (debounced), FinCom Bridge did not start
         r64b = dict(r64, **{"GB TEXCOAT": book("GB TEXCOAT", ledgers=False, days=True)})
         for ans, why, words in (({"ok": True, "woken": 0, "debounced": 0, "asked": 0}, "woken 0", "No computer with Tally was asked"),
@@ -436,6 +460,7 @@ def main():
         E("() => { window.__calls = []; }"); pg.click(gd100 + " [data-guide-link]"); pg.wait_for_timeout(1200)
         ok([c for c in E("window.__calls") if c[0] == "tally_company_link"] == [["tally_company_link", {"p_company": "CO 057", "p_client": c42}]], "100: Link links CLIENT 042 to CO 057 (%s)" % E("window.__calls"))
         E("() => window.scrollTo(0, 0)")
+        fold(True)   # round 66: the clients' table is in Help & support
         fr = E("() => document.querySelectorAll('#app [data-tally-clients] [data-client-row]').length")
         ok(fr == 5 and re.match(r"and 9\d more", txt('#app [data-fold-more="clients"]')) and txt("#app [data-tally-clients] [data-clients-head]").startswith("100 clients"),
            "100 clients: folded, at most 5 needing a link shown, 'and N more' (%d / %s)" % (fr, txt('#app [data-fold-more="clients"]')))
@@ -478,6 +503,7 @@ def main():
         # ---- Reading in each state
         def rscene(d, lines=()):
             scene([d], companies(d=d["id"]), lines)
+            fold(True)   # round 66: the reading table is in Help & support
             if n('#app [data-show-all="reading"][aria-expanded="false"]'): pg.click('#app [data-show-all="reading"]'); pg.wait_for_timeout(400)
             return rd()
         live3 = dev(8, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), rec=("GB TEXCOAT",), cos=[{"name": "GB TEXCOAT", "open": True, "phase": "live", "waiting": 0, "lastRead": "ago:30"},

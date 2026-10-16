@@ -66,6 +66,8 @@ with sync_playwright() as p:
     # Settings → FinCom Bridge is one line that opens its home: the Tally page's Advanced (for support), where this
     # computer's bridge and the connection history are (15-Oct-2026)
     if pg.locator('[data-home-go="bridge"]').count(): pg.click('[data-home-go="bridge"]'); pg.wait_for_timeout(1500)
+    # round 66: the link opens the Tally page at its six steps; this computer's bridge is in Help & support (opened here)
+    if pg.locator('#app [data-advanced] [data-bridge-details][aria-expanded="false"]').count(): pg.click('#app [data-advanced] [data-bridge-details]'); pg.wait_for_timeout(800)
     t = pg.inner_text("#app")
     ok(pg.locator('[data-part="bridge"][data-state="online"]').count() >= 1 and pg.locator('[data-part="tally"][data-state="busy"]').count() >= 1 and pg.locator('[data-part="company"][data-state="linked"]').count() >= 1,
        "Settings → FinCom Bridge: Bridge Online, Tally Busy, Company Linked, apart")

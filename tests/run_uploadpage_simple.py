@@ -47,7 +47,7 @@ with sync_playwright() as p:
     # ---------------------------------------------------------------- 1. the page: one status line, four parts
     cid = U.open_page(pg, "owner")
     st = txt("#app [data-up-status]")
-    ok(st.startswith("Books from Tally: FY 2025-26 · entries up to 31-Mar-2026 · ") and re.search(r"· 33 days need a Day Book$", st), "1. one status line (%s)" % st)
+    ok(st.startswith("Books from Tally: FY 2025-26 · entries 01-Apr-2025 to 31-Mar-2026 · ") and re.search(r"· 33 days need a Day Book$", st), "1. one status line (%s)" % st)
     ok(pg.locator("#app [data-up-status]").count() == 1, "1. exactly one status line")
     heads = E("() => [...document.querySelectorAll('#app [data-upload-page] h3')].map(h => h.innerText.trim())")
     ok(heads[:2] == ["Bring in from Tally", "Days that need a Day Book"], "the parts in order: Upload Tally data, Days that need a Day Book (%s)" % heads)
@@ -153,7 +153,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-need-days]").count() == 0 and pg.locator("#app [data-up-drop]").count() == 1, "no days list; the one drop area")
     res = up(JUL)
     ok(E("S.books.vouchers.length") == JUL_N and res.startswith("Read %d entr" % JUL_N), "a first Day Book month on a new client (%s)" % res)
-    ok(txt("#app [data-up-status]").startswith("Books from Tally: FY 2025-26 · entries up to "), "the status line follows (%s)" % txt("#app [data-up-status]"))
+    ok(txt("#app [data-up-status]").startswith("Books from Tally: FY 2025-26 · entries "), "the status line follows (%s)" % txt("#app [data-up-status]"))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close(); srv.shutdown()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

@@ -30,7 +30,7 @@ with sync_playwright() as p:
     save()
     ok("Saved ·" in foot() and "this computer" in foot(), "review 18: after Save, “Saved · <time> · this computer” (%s)" % foot())
     # clean-up batch 2: FinCom Bridge and Sent to Tally have one home, the Tally page; their sections link there
-    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("FinCom Bridge", "Open it on the Tally page"), ("Books in the cloud", "Books in the cloud"),
+    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("Connect Tally", "Open the Tally page"), ("Books in the cloud", "Books in the cloud"),
                         ("Sent to Tally", "Open it on the Tally page"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
         nav(label); pg.wait_for_timeout(350)
         ok(head() == label and text in pg.inner_text("#app .setbody") and pg.get_attribute('#app .setnav button[aria-current="page"]', "aria-current") == "page", "Settings → " + label)
@@ -106,12 +106,12 @@ with sync_playwright() as p:
     # round 39: the Tallys found, with their ports, are under Details (for support)
     if pg.locator("#app [data-bridge-support]").count(): pg.click("#app [data-bridge-support]"); pg.wait_for_timeout(300)
     pg.click('tr:has(td:text-is("Port 9001")) button:text-is("Use this Tally")'); pg.wait_for_timeout(400)
-    ok(pg.evaluate("Bridge.cfg().port") == 9001 and "In use" in pg.inner_text("#app table.data"), "one Tally chosen")
+    ok(pg.evaluate("Bridge.cfg().port") == 9001 and "In use" in pg.inner_text("#app [data-connect-section] table.data"), "one Tally chosen")
     pg.click('button:text-is("Automatic")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("Bridge.cfg().port") == 0, "and back to automatic")
     name = pg.evaluate("CO().name")
     # round 39: this computer's Tallys link nothing (that only set a Tally name); a client is linked on its Link to Tally card
-    ok(pg.locator('select[aria-label="Client for ACME LTD"]').count() == 0 and "not linked" in pg.inner_text("#app table.data"), "this computer's Tallys: no 'Link to a client…', the company said not linked")
+    ok(pg.locator('select[aria-label="Client for ACME LTD"]').count() == 0 and "not linked" in pg.inner_text("#app [data-connect-section] table.data"), "this computer's Tallys: no 'Link to a client…', the company said not linked")
     pg.evaluate("""() => { window.__tc = []; TCloud.on = () => true; TCloud.refreshPane = async () => {}; TCloud.rpc = async (f, a) => { window.__tc.push([f, a]); return {}; };
       const nw = new Date().toISOString();
       // 15-Oct-2026: step 4 offers only the companies open in Tally now: BETA is open on the Office PC

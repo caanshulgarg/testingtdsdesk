@@ -21,6 +21,8 @@ const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
 // the books' last entry (yyyymmdd)
 function lastEntry(b) { let l = ""; (b.vouchers || []).forEach((v) => { if (v && !v.cancel && String(v.date) > l) l = String(v.date); }); return l; }
+// round 66 (the owner, 16-Oct-2026: "FY 2026-27" was said of books that start on 01-Apr-2025): the books' first entry
+function firstEntry(b) { let f = ""; (b.vouchers || []).forEach((v) => { if (v && !v.cancel && v.date && (!f || String(v.date) < f)) f = String(v.date); }); return f; }
 function fyOf(d8) { const y = +String(d8).slice(0, 4), m = +String(d8).slice(4, 6), s = m < 4 ? y - 1 : y; return s + "-" + String(s + 1).slice(2); }
 
 // the days that need a Day Book: [{from, to (yyyymmdd), days, say}], newest first
@@ -66,8 +68,9 @@ export function needDays(b, cid) {
 // 1. the one status line
 function Status({ b, days }) {
   const n = (b.vouchers || []).length, last = lastEntry(b), m = b.meta || {};
-  const bits = ["Books from Tally: " + (n && last ? "FY " + fyOf(last) : "nothing yet")];
-  if (n && last) bits.push("entries up to " + d(last));
+  const first = firstEntry(b), span = fyOf(first) === fyOf(last) ? "FY " + fyOf(last) : "FY " + fyOf(first) + " to " + fyOf(last);
+  const bits = ["Books from Tally: " + (n && last ? span : "nothing yet")];
+  if (n && last) bits.push("entries " + d(first) + " to " + d(last));
   else bits.push("upload the Day Book XML exported from Tally");
   if (n && !b.ledInfoAt && !Object.keys(b.pans || {}).length) bits.push("ledger masters not uploaded");
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
@@ -133,13 +136,23 @@ function Upload({ b }) {
 }
 
 // 3. the days that need a Day Book, each with its Upload
+// round 66 (the owner: 29 lines one under another): more than 3 rows say it in ONE line with ONE Upload for the whole span
+// (the period guard takes only those dates from the file); "Show days" opens the list
+const DAYS_FOLD = 3;
 function Days({ days }) {
+  const [open, setOpen] = useState(false);
   if (!days.length) return null;
-  return <section className="dash-card" data-need-days="" style={{ marginBottom: 12 }}><h3>Days that need a Day Book</h3>
-    <ul className="up-days" style={{ listStyle: "none", margin: 0, padding: 0 }}>{days.map((x) =>
+  const from = days.reduce((a, x) => (!a || x.from < a ? x.from : a), ""), to = days.reduce((a, x) => (x.to > a ? x.to : a), "");
+  const k = days.reduce((a, x) => a + x.days, 0), fold = days.length > DAYS_FOLD;
+  return <section className="dash-card" data-need-days="" data-folded={fold && !open ? "" : undefined} style={{ marginBottom: 12 }}><h3>Days that need a Day Book</h3>
+    {fold && <p className="row" data-need-days-one="" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 6px" }}>
+      <span style={{ minWidth: 0, flex: "1 1 220px" }}>{plural(k, "day", "days") + " between " + d(from) + " and " + d(to) + " need that day’s Day Book. Upload one Day Book for " + d(from) + " to " + d(to) + "; FinCom takes only those days from it."}</span>
+      <span className="row" style={{ gap: 8 }}><button className="btn small primary" data-need-days-upload="" onClick={() => tallyPickFor(tallyDate(from), tallyDate(to))}>Upload</button>
+        <button className="linkbtn" data-need-days-show="" aria-expanded={open ? "true" : "false"} onClick={() => setOpen(!open)}>{open ? "Hide days" : "Show days"}</button></span></p>}
+    {(!fold || open) && <ul className="up-days" style={{ listStyle: "none", margin: 0, padding: 0 }}>{days.map((x) =>
       <li key={x.from + x.to} data-need-day={tallyDate(x.from)} className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid var(--rule)" }}>
         <span style={{ minWidth: 0, flex: "1 1 220px" }}><b>{d(x.from) + (x.to !== x.from ? " to " + d(x.to) : "")}</b>{" · " + x.say}</span>
-        <button className="btn small" onClick={() => tallyPickFor(tallyDate(x.from), tallyDate(x.to))}>Upload</button></li>)}</ul>
+        <button className="btn small" onClick={() => tallyPickFor(tallyDate(x.from), tallyDate(x.to))}>Upload</button></li>)}</ul>}
   </section>;
 }
 
