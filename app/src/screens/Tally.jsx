@@ -663,7 +663,9 @@ function guideState(rows, latest) {
   const linked = linkedClients(), read = (c) => !!(TCloud.st[c.id] && TCloud.st[c.id].at);
   const ledMiss = linked.filter((c) => c.id !== cid && read(c) && !ledgersHeld(c.id)), dayMiss = linked.filter((c) => c.id !== cid && read(c) && !daybookHeld(c.id));
   const imp = S.ledImp, importing = !!(imp && imp.cid === cid && !imp.end && !imp.err && !imp.late && Date.now() - imp.at <= LED_WAIT_MS);
-  const done = { install: live.length > 0, tally: tally.length > 0, company: reading.length > 0, link: curLinked,
+  // no client in the firm at all: as before, a company linked and none left unlinked
+  const anyLink = (p.companies || []).some((c) => c.client_id);
+  const done = { install: live.length > 0, tally: tally.length > 0, company: reading.length > 0, link: curLinked || (!cur && anyLink && !unlinked.length),
     ledgers: curLinked && ledgersHeld(cid) && !importing, daybook: curLinked && daybookHeld(cid) };
   // the computer the steps speak of: the one furthest along
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
@@ -998,7 +1000,7 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
           : <span className="note">{"Leave TallyPrime open on a company" + (r ? " on " + pc : "") + "."}</span>}
       </GuideStep>
       <GuideStep k="link" n={4} title="Link the client" done={d.link && !forced("link")} open={want === "link"} later={later("link")}
-        line={d.link && !forced("link") ? <span className="note" data-guide-link-held={x.cid}>{x.cur.name + " is linked to " + ((typeof tallyLinkOf === "function" && tallyLinkOf(x.cur).company) || x.cur.name) + "."}
+        line={d.link && !forced("link") ? !x.cur ? <span className="note">Every client is linked.</span> : <span className="note" data-guide-link-held={x.cid}>{x.cur.name + " is linked to " + ((typeof tallyLinkOf === "function" && tallyLinkOf(x.cur).company) || x.cur.name) + "."}
           {x.unlinked.length > 0 && <span data-guide-others="link">{" Not linked yet: " + namesOf(x.unlinked) + "."}</span>}</span> : null} more={<LinkPicker x={x} g={g} />}>
         {!(d.link && !forced("link")) && <LinkPicker x={x} g={g} />}
       </GuideStep>
