@@ -134,7 +134,7 @@ export function Bills({ rows }) {
         <td className="n">{i + 1}</td><td className="dt">{day(r.date)}<div className="tg-sub code">{r.no}</div><div className="tg-sub"><SrcTag r={r} /></div></td>
         <td className="pty"><div className="tg-pty">{r.party}<div className="tg-sub">{r.gstin || "no GSTIN"}</div></div></td>
         <td><span className="tg-part" data-part-of={partOf(r)} title={R1_PARTS[partOf(r)]}>{R1_SHORT[partOf(r)]}</span></td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
-        <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td className="n">{money(total(r))}</td></tr>)}
+        <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td className="n">{money(total(r))}<div className="tg-sub">tax {money(r2(num(r.igst) + num(r.cgst) + num(r.sgst) + num(r.cess)))}</div></td></tr>)}
       {shown.length > list.length && <tr className="lt-more"><td colSpan={11} style={{ textAlign: "center" }}>
         <span className="note">{list.length} of {shown.length} bills shown · </span>
         <button type="button" className="linkbtn" data-r1-more="" onClick={() => setMore(more + 100)}>Show 100 more</button> · <button type="button" className="linkbtn" data-r1-all="" onClick={() => setMore(shown.length)}>Show all {shown.length}</button></td></tr>}
