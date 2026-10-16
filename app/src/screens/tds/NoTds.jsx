@@ -43,25 +43,40 @@ function yearsOf(span) {
   return out;
 }
 
+// round 68 (the owner, 16-Oct-2026: "show it in a box and it should be financial year wise"): "Should have deducted" is one
+// box with a chip a year of the books (its count and total); the chosen year's line and table under them. The figures are
+// TDSWatch.missed's, a year at a time, as before
+function MissedBox({ years }) {
+  const by = years.map((fy) => { let l = []; try { l = TDSWatch.missed(fy) || []; } catch (e) { l = []; }
+    return { fy, l, due: r2(l.reduce((a, x) => a + x.due, 0)), np: new Set(l.map((x) => x.party)).size }; });
+  if (!by.some((y) => y.l.length)) return null;
+  const pick = by.find((y) => y.fy === S.tdsMissFy) || [...by].reverse().find((y) => y.l.length) || by[by.length - 1];
+  const parties = (n) => n + " part" + (n === 1 ? "y" : "ies");
+  return <section className="dash-card" data-missed-box="" style={{ textAlign: "left", marginTop: 14 }}>
+    <h3 style={{ margin: "0 0 8px" }}>Should have deducted</h3>
+    <div className="row" role="group" aria-label="Financial year" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 10px" }}>
+      {by.map((y) => <button key={y.fy} type="button" className={"btn small" + (y.fy === pick.fy ? " primary" : "")} data-missed-fy={y.fy} aria-pressed={y.fy === pick.fy ? "true" : "false"}
+        onClick={() => { S.tdsMissFy = y.fy; render(); }}>{y.fy + " · " + (y.l.length ? parties(y.np) + " · " + money(y.due) : "none")}</button>)}</div>
+    {pick.l.length ? <>
+      <p style={{ margin: "0 0 4px", color: "var(--text)" }} data-missed=""><b>{"Should have deducted in " + pick.fy + ": " + parties(pick.np) + ", TDS " + money(pick.due)}</b></p>
+      <p className="note" style={{ margin: "0 0 6px" }}>Payments past the TDS limit with no TDS entry against them.</p>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tds-missed="">
+        <thead><tr><th>Party</th><th>Kind</th><th className="n">Paid</th><th className="n">Not covered by TDS</th><th className="n">TDS due</th></tr></thead>
+        <tbody>{pick.l.slice(0, 10).map((x) => <tr key={x.party + "|" + x.rule}>
+          <td>{x.party}</td><td>{x.section}<div className="nr">{x.limitWords}</div></td>
+          <td className="n">{money(x.credited)}</td><td className="n">{money(x.uncovered)}</td><td className="n bad">{money(x.due)}<div className="nr">{"at " + x.rate + "%" + (x.pan ? "" : ", no PAN in Tally")}</div></td></tr>)}</tbody>
+      </table></div>
+      {pick.l.length > 10 && <p className="note">{"and " + (pick.l.length - 10) + " more"}</p>}</>
+      : <p className="note" data-missed-none="" style={{ margin: 0 }}>{"Nothing missed in " + pick.fy + ": no payment went past a TDS limit without TDS."}</p>}
+  </section>;
+}
+
 export default function NoTds({ b }) {
   const co = CO() || {}, span = booksSpan(b), led = emptyTdsLedgers(b);
-  let missed = [];
-  try { missed = typeof TDSWatch === "object" ? [].concat(...yearsOf(span).map((y) => TDSWatch.missed(y).map((x) => Object.assign({ fy: y }, x)))) : []; } catch (e) { missed = []; }
-  const due = r2(missed.reduce((a, x) => a + x.due, 0)), np = new Set(missed.map((x) => x.party)).size;
   return <div className="tg-empty" data-list-empty="" data-tds-none="">
     <p style={{ margin: 0, color: "var(--text)" }}><b>{"No TDS deducted in " + (co.name || "the client") + "’s books" + (span ? " (" + fmtDate(tallyDate(span.from)) + " to " + fmtDate(tallyDate(span.to)) + ")" : "") + "."}</b></p>
     {led.length > 0 && <p className="note" style={{ margin: "6px 0 0" }} data-tds-empty-ledgers="">{"TDS ledgers with no entries: " + led.join(", ")}</p>}
-    {missed.length > 0 && <div style={{ textAlign: "left", marginTop: 14 }}>
-      <p style={{ margin: "0 0 6px", color: "var(--text)" }} data-missed=""><b>{"Should have deducted: " + np + " part" + (np === 1 ? "y" : "ies") + ", TDS " + money(due)}</b></p>
-      <p className="note" style={{ margin: "0 0 6px" }}>Payments past the TDS limit with no TDS entry against them.</p>
-      <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tds-missed="">
-        <thead><tr><th>Party</th><th>Year</th><th>Kind</th><th className="n">Paid</th><th className="n">Not covered by TDS</th><th className="n">TDS due</th></tr></thead>
-        <tbody>{missed.slice(0, 10).map((x) => <tr key={x.fy + "|" + x.party + "|" + x.rule}>
-          <td>{x.party}</td><td>{x.fy}</td><td>{x.section}<div className="nr">{x.limitWords}</div></td>
-          <td className="n">{money(x.credited)}</td><td className="n">{money(x.uncovered)}</td><td className="n bad">{money(x.due)}<div className="nr">{"at " + x.rate + "%" + (x.pan ? "" : ", no PAN in Tally")}</div></td></tr>)}</tbody>
-      </table></div>
-      {missed.length > 10 && <p className="note">{"and " + (missed.length - 10) + " more"}</p>}
-    </div>}
+    {typeof TDSWatch === "object" && <MissedBox years={yearsOf(span)} />}
     <div className="row" style={{ gap: 8, justifyContent: "center", marginTop: 10 }}>
       <button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div>
   </div>;

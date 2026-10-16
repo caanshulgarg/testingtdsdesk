@@ -99,6 +99,7 @@ def route_any(r):
         u = urlparse(r.request.url)
         return r.fulfill(status=200, content_type="application/json", body="[]")
     return route(r)
+def txt_(pg, sel): return pg.inner_text(sel)
 def fresh(br):
     ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route(STAGE + "/**", route_any); pg.goto("http://localhost:8479/"); pg.wait_for_timeout(2000)
@@ -122,7 +123,26 @@ with sync_playwright() as p:
     ok(led and "TDS194J Professional" in led.group(1) and "Receivable" not in led.group(1), "the TDS ledger with no entries named, the customers' TDS receivable not (%s)" % (led.group(0) if led else box[:300]))
     miss = pg.evaluate("(() => [...document.querySelectorAll('#app [data-tds-none] [data-tds-missed] tr')].map(t => t.innerText.replace(/\\s+/g, ' ')))()")
     ok(any("CA Firm" in r and re.search(r"[1-9][\d,]*\.\d\d", r) for r in miss), "should have deducted: CA Firm's professional fees past the 194J limit, with the amounts (%s)" % miss[:3])
-    btns = pg.evaluate("[...document.querySelectorAll('#app [data-tds-none] button')].map(b => b.innerText)")
+    # round 68 (the owner: "show it in a box and it should be financial year wise"): one box, a chip per year of the books,
+    # the latest year with an item chosen, its rows only, no Year column; the other chip shows that year
+    chips = pg.evaluate("[...document.querySelectorAll('#app [data-missed-box] [data-missed-fy]')].map(c => [c.getAttribute('data-missed-fy'), c.getAttribute('aria-pressed'), c.innerText.replace(/\\s+/g, ' ')])")
+    ok(pg.locator("#app [data-tds-none] [data-missed-box]").count() == 1 and [c[0] for c in chips] == ["2025-26", "2026-27"], "round 68: one box, a chip per year of the books (%s)" % chips)
+    per = pg.evaluate("(() => ['2025-26', '2026-27'].map(y => TDSWatch.missed(y).length))()")
+    want = "2026-27" if per[1] else "2025-26"
+    ok([c[0] for c in chips if c[1] == "true"] == [want], "round 68: the latest year with an item is chosen (%s; items per year %s)" % ([c[0] for c in chips if c[1] == "true"], per))
+    heads = pg.evaluate("[...document.querySelectorAll('#app [data-tds-missed] thead th')].map(t => t.innerText.trim())")
+    ok("Year" not in heads and heads[:1] == ["Party"], "round 68: no Year column, the chip says it (%s)" % heads)
+    ok(re.search(r"Should have deducted in " + want + r": \d+ part(y|ies), TDS ₹[\d,]+\.\d\d", txt := pg.inner_text("#app [data-missed-box]")) is not None, "round 68: the year's line (%s)" % txt[:200].replace("\n", " "))
+    other = "2026-27" if want == "2025-26" else "2025-26"
+    pg.click('#app [data-missed-fy="%s"]' % other); pg.wait_for_timeout(400)
+    t2 = pg.inner_text("#app [data-missed-box]")
+    ok(pg.get_attribute('#app [data-missed-fy="%s"]' % other, "aria-pressed") == "true" and (("Nothing missed in " + other) in t2 if not per[["2025-26", "2026-27"].index(other)] else ("Should have deducted in " + other) in t2),
+       "round 68: the other chip shows its year (%s)" % t2[:160].replace("\n", " "))
+    pg.click('#app [data-missed-fy="%s"]' % want); pg.wait_for_timeout(300)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
+    ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "round 68: phone width, no sideways scroll")
+    pg.set_viewport_size({"width": 1400, "height": 1000}); pg.wait_for_timeout(300)
+    btns = pg.evaluate("[...document.querySelectorAll('#app [data-tds-none] button:not([data-missed-fy])')].map(b => b.innerText)")
     ok("Import salary for 24Q" in btns and "Bring in from Tally" not in btns, "the salary import kept, no 'Bring in from Tally' (%s)" % btns)
     if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tds-empty-books-in.png"), full_page=True)
     ctx.close()
