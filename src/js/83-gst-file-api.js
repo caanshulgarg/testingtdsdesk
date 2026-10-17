@@ -161,5 +161,7 @@ const GSTFILE = {
 };
 if (typeof gstFileRoute !== "undefined") globalThis.gstFileRoute = gstFileRoute;
 if (typeof GSTFILE !== "undefined") globalThis.GSTFILE = GSTFILE;
+if (typeof gstSignWith !== "undefined") globalThis.gstSignWith = gstSignWith;
+if (typeof GST_PORTAL_RETURNS !== "undefined") globalThis.GST_PORTAL_RETURNS = GST_PORTAL_RETURNS;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
 /* @react-lazy: end */
