@@ -1,7 +1,7 @@
 // node run_seed.js - FinCom cuts a day book file into pieces for the bridge's copy: whole days, never across a month,
 // every entry sent once, and the pieces follow one another with no gap
 const {load, HTML} = require("./harness");
-const {ctx, x} = load(HTML, ["num", "BridgeSeed"]);
+const {ctx, x} = load(HTML, ["num", "Books", "BridgeSeed"]);   // BridgeSeed.send reads the file through Books.text (UTF-16 too)
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const sent = [];
@@ -15,7 +15,8 @@ for (let t = new Date(2025, 3, 1); t <= new Date(2026, 2, 31); t.setDate(t.getDa
   for (let k = 0; k < 90; k++) days.push('<VOUCHER VCHTYPE="Sales"><DATE>' + d + "</DATE><GUID>g" + d + k + "</GUID><NARRATION>" + pad + "</NARRATION></VOUCHER>");
 }
 const text = "<ENVELOPE><BODY><DATA>" + days.map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
-x.BridgeSeed.send({text: async () => text}).then(r => {
+// a real file, read as the page reads one (Books.text: UTF-16 too, which file.text() is not)
+x.BridgeSeed.send(new Blob([text])).then(r => {
   ok(r.entries === days.length, "every entry sent once: " + r.entries + " of " + days.length);
   ok(sent.length > 12, "in pieces: " + sent.length);
   ok(sent.every(p => p.from.slice(0, 6) === p.to.slice(0, 6) && p.from <= p.to), "no piece crosses a month");
