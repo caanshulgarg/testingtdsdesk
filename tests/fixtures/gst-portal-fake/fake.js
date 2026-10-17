@@ -28,10 +28,28 @@
       el.addEventListener("input", up); el.addEventListener("change", up);
     });
   }
-  function head(title) {
+  // the portal's own rule, as the owner met it on 17-Oct-2026: the returns, payment and 2B sites open only when reached
+  // from the portal's own pages after login (its home page, its menu, its buttons); a typed address, or a tab moved
+  // before the login has settled, gets "Access Denied". Here: a session cookie set at login, and a page of the portal as
+  // the referrer.
+  const cookie = (k) => new RegExp("(^|; )" + k + "=1").test(document.cookie);
+  const setCookie = (k) => { document.cookie = k + "=1; domain=gst.gov.in; path=/; secure"; };
+  const fromPortal = () => /^https:\/\/[a-z0-9.-]*gst\.gov\.in\//.test(document.referrer || "");
+  const MENU = '<nav class="menu" id="menu"><button id="m-services">Services</button><div class="drop" id="d-services" hidden>' +
+    '<button id="m-returns">Returns</button><div class="drop" id="d-returns" hidden><a href="https://return.gst.gov.in/returns/auth/dashboard">Returns Dashboard</a> <a href="https://return.gst.gov.in/returns/auth/trackreturnstatus">Track Return Status</a></div>' +
+    '<button id="m-ledgers">Ledgers</button><div class="drop" id="d-ledgers" hidden><a href="https://payment.gst.gov.in/payment/auth/ledger/cashledger">Electronic Cash Ledger</a> <a href="https://payment.gst.gov.in/payment/auth/ledger/creditledger">Electronic Credit Ledger</a></div>' +
+    '</div> <a href="https://services.gst.gov.in/services/auth/fowelcome" id="m-home">Home</a></nav>';
+  function head(title, menu) {
     document.title = title + " | GST Portal (look-alike)";
-    document.body.insertAdjacentHTML("afterbegin", '<header><b>Goods and Services Tax (test look-alike)</b><span>' + esc(get("user", "")) + "</span></header>");
+    document.body.insertAdjacentHTML("afterbegin", '<header><b>Goods and Services Tax (test look-alike)</b><span>' + esc(get("user", "")) + "</span></header>" + (menu ? MENU : ""));
+    if (menu) [["m-services", "d-services"], ["m-returns", "d-returns"], ["m-ledgers", "d-ledgers"]].forEach(([b, d]) => { $("#" + b).onclick = () => { $("#" + d).hidden = !$("#" + d).hidden; }; });
   }
+  function denied() {
+    document.title = "Access Denied | GST Portal (look-alike)";
+    set("deniedAt", (get("deniedAt", 0) || 0) + 1);
+    document.body.insertAdjacentHTML("beforeend", '<main id="denied"><h3>Access Denied!</h3><p>Your session is expired or you don\'t have permission to access the requested page. <a id="relogin" href="https://services.gst.gov.in/services/login">Click here to Login.</a></p></main>');
+  }
+  if (page !== "login" && !(cookie("fakeauth") && (page === "home" || fromPortal()))) { denied(); return; }
   const posOpts = '<option value="">Select</option>' + STATES.map(([c, n]) => '<option value="' + c + '">' + c + "-" + esc(n) + "</option>").join("");
   const sel = (id, opts, k) => '<select id="' + id + '"' + (k ? ' data-k="' + k + '"' : "") + '><option value="">Select</option>' + opts.map((o) => '<option value="' + esc(o) + '">' + esc(o) + "</option>").join("") + "</select>";
   const MONTHS = ["042025", "052025", "062025", "072025", "082025", "092025", "102025", "112025", "122025", "012026", "022026", "032026"];
@@ -50,14 +68,23 @@
       if (!m.username || !m.user_pass) { $("#lerr").textContent = "Enter username and password."; return; }
       if (m.captcha !== "ABC123") { $("#lerr").textContent = "Enter valid Letters shown."; return; }
       set("user", m.username); set("loggedIn", { username: m.username, passLen: String(m.user_pass).length });   // never the password itself
-      location.href = "https://return.gst.gov.in/returns/auth/dashboard";
+      setCookie("fakeauth");
+      location.href = "https://services.gst.gov.in/services/auth/fowelcome";
     };
+    drop(); return;
+  }
+
+  /* ---------- the portal's home page after login ---------- */
+  if (page === "home") {
+    head("Welcome", true);
+    document.body.insertAdjacentHTML("beforeend", '<main><h3>Welcome ' + esc(get("user", "")) + '</h3><button id="rdash">RETURN DASHBOARD</button></main>');
+    $("#rdash").onclick = () => { location.href = "https://return.gst.gov.in/returns/auth/dashboard"; };
     drop(); return;
   }
 
   /* ---------- returns dashboard ---------- */
   if (page === "dashboard") {
-    head("Returns dashboard");
+    head("Returns dashboard", true);
     const m = {};
     document.body.insertAdjacentHTML("beforeend", '<main><h3>File Returns</h3><div class="form">' +
       '<label>Financial Year * ' + sel("fin", ["2025-26", "2024-25"]).replace('id="fin"', 'id="fin" name="fin"') + "</label>" +
@@ -178,7 +205,7 @@
 
   if (page === "gstr1" || page === "iff") {
     const iff = page === "iff";
-    head(iff ? "IFF" : "GSTR-1");
+    head(iff ? "IFF" : "GSTR-1", true);
     const shown = T1.filter((d) => !iff || IFF_TABLES.includes(d[0]));
     const p = period();
     document.body.insertAdjacentHTML("beforeend", "<main><h3>" + (iff ? "IFF - Invoice Furnishing Facility" : "GSTR-1 - Details of outward supplies of goods or services") + '</h3><p>Tax period: <b id="ret-period">' + p.slice(0, 2) + "-" + p.slice(2) + '</b></p><div id="view"></div><div id="filebox"></div></main>');
@@ -234,7 +261,7 @@
 
   /* ---------- offline upload ---------- */
   if (page === "upload") {
-    head("Offline upload");
+    head("Offline upload", true);
     const p = period();
     document.body.insertAdjacentHTML("beforeend", '<main><h3>Upload JSON file (GSTR-1)</h3><p>Tax period ' + p + '</p><input type="file" accept=".json,.zip" id="up"><table id="upload-history"><thead><tr><th>Date</th><th>Reference</th><th>Status</th></tr></thead><tbody>' +
       get("uploads:" + p, []).map((u) => "<tr><td>" + u.at + "</td><td>" + u.ref + '</td><td class="status">' + u.status + "</td></tr>").join("") + "</tbody></table></main>");
@@ -254,7 +281,7 @@
 
   /* ---------- GSTR-3B ---------- */
   if (page === "gstr3b") {
-    head("GSTR-3B");
+    head("GSTR-3B", true);
     const p = period(), K = "3b:" + p, saved = get(K, {}), m = Object.assign({}, saved.m || {}), r32 = JSON.parse(JSON.stringify(saved.r32 || { unreg_details: [], comp_details: [], uin_details: [] }));
     const inp = (id) => '<input id="' + id + '" value="' + esc(m[id] === undefined ? "0.00" : m[id]) + '">';
     const ro = (id) => '<input id="' + id + '" readonly value="0.00">';
@@ -316,13 +343,13 @@
 
   /* ---------- GSTR-2B, ledgers, return status ---------- */
   if (page === "gstr2b") {
-    head("GSTR-2B");
+    head("GSTR-2B", true);
     const p = period();
     document.body.insertAdjacentHTML("beforeend", '<main><h3>GSTR-2B - Auto-drafted ITC Statement</h3><p>Return period <b id="ret-period">' + p + '</b></p><a id="json-download" href="/gstr2b/auth/download?period=' + p + '">DOWNLOAD GSTR-2B DETAILS (JSON)</a></main>');
     drop(); return;
   }
   if (page === "cashledger" || page === "creditledger") {
-    head(page === "cashledger" ? "Electronic cash ledger" : "Electronic credit ledger");
+    head(page === "cashledger" ? "Electronic cash ledger" : "Electronic credit ledger", true);
     const bal = get(page, page === "cashledger" ? { igst: "1000.00", cgst: "250.50", sgst: "250.50", cess: "0.00" } : { igst: "380.50", cgst: "0.00", sgst: "12.00", cess: "0.00" });
     document.body.insertAdjacentHTML("beforeend", page === "cashledger"
       ? '<main><h3>Electronic Cash Ledger - balance</h3><table id="cash-balance"><tr><th>Head</th><th>Tax</th><th>Interest</th><th>Penalty</th><th>Fee</th><th>Others</th><th>Total</th></tr>' + ["igst", "cgst", "sgst", "cess"].map((h) => '<tr data-head="' + h + '"><td>' + h.toUpperCase() + '</td><td>' + bal[h] + "</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td class=\"total\">" + bal[h] + "</td></tr>").join("") + "</table></main>"
@@ -330,7 +357,7 @@
     drop(); return;
   }
   if (page === "status") {
-    head("Track return status");
+    head("Track return status", true);
     document.body.insertAdjacentHTML("beforeend", '<main><h3>Track Return Status</h3><table id="return-status"><thead><tr><th>Return type</th><th>Financial year</th><th>Tax period</th><th>Date of filing</th><th>Status</th><th>ARN</th></tr></thead><tbody>' +
       get("filed", []).map((f) => "<tr><td>" + f.form + "</td><td>" + f.fy + "</td><td>" + f.period + "</td><td>" + f.date + "</td><td>" + f.status + "</td><td>" + f.arn + "</td></tr>").join("") + "</tbody></table></main>");
     drop(); return;

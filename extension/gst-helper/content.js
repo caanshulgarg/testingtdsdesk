@@ -75,6 +75,23 @@
   const C = {
     ping: async () => ({ ok: true, page: pageOf(), url: location.href, selectors: SEL.version }),
 
+    // the way to another page: the portal's own menu, item after item (Services → Returns → Returns Dashboard …), or
+    // its home page's RETURN DASHBOARD button. Never an address typed.
+    menu: async ({ path }) => {
+      const step = "Go through the portal's menu", M = SEL.menu.fields;
+      if (path[path.length - 1] === "returnsDashboard" && pageOf() === "home") {
+        const b = find(P.home.fields.returnDashboard);
+        if (b) { setTimeout(() => press(step, "returnDashboard", b), 50); return { ok: true, message: "RETURN DASHBOARD pressed on the portal's home page." }; }
+      }
+      for (let i = 0; i < path.length; i++) {
+        const k = path[i], el = await waitFor(() => { const e = find(M[k]); return e && visible(e) ? e : null; }, 5000);
+        if (!el) need(step, k, M[k], null, null, "the menu item “" + M[k].text + "”");
+        if (i === path.length - 1) { setTimeout(() => press(step, k, el), 50); break; }
+        press(step, k, el);
+      }
+      return { ok: true, message: "Opened through the menu: " + path.map((k) => M[k].text).join(" → ") + "." };
+    },
+
     // the login page: user id and password typed in; the cursor left in the captcha box for the person
     fillLogin: async ({ username, password }) => {
       const step = "Log in", f = P.login.fields;
@@ -261,7 +278,12 @@
       return { ok: !!arn, arn, status: cell(hit, cols.status), filed: cell(hit, cols.filed), message: arn ? "ARN " + arn : "The status row has no ARN yet." };
     },
   };
-  function pageOf() { return Object.keys(P).find((k) => P[k].match && new RegExp(P[k].match).test(location.href)) || ""; }
+  // the portal's refusal page first ("Access Denied! Your session is expired…"), whatever its address
+  function pageOf() {
+    const words = (document.body && document.body.innerText) || "";
+    if (SEL.denied.words.some((w) => words.toLowerCase().includes(w.toLowerCase()))) return "denied";
+    return Object.keys(P).find((k) => P[k].match && new RegExp(P[k].match).test(location.href)) || "";
+  }
 
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (!msg || !msg.cmd || !C[msg.cmd] || sender.id !== chrome.runtime.id) return false;

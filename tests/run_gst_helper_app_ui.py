@@ -105,7 +105,9 @@ with sync_playwright() as p:
     job = panel.evaluate("chrome.storage.session.get('job')")["job"]
     mine = pg.evaluate("(ym) => GSTR.toJson(ym, '%s')" % REG, YM)
     ok(job["r1json"] == mine and job["gstin"] == GSTIN and job["ym"] == YM, "“Open the portal for this return” hands the helper the very GSTR-1 JSON FinCom's download gives (%d tables)" % len([k for k in mine if isinstance(mine[k], (list, dict))]))
-    ok(stand.wait(pg, lambda: stand.portal_tab(ctx), 10000) is not None, "the portal opens in a tab of the person's own browser")
+    pt = stand.wait(pg, lambda: stand.portal_tab(ctx), 10000)
+    ok(pt is not None and "/services/login" in pt.url, "the portal opens at its login page in a tab of the person's own browser")
+    pt.wait_for_load_state(); pt.fill("#username", "fx_user"); pt.fill("#user_pass", "typed-by-the-person"); pt.fill("#captcha", "ABC123"); pt.click("#login"); pt.wait_for_url("**/services/auth/fowelcome")
     status = lambda sid: panel.get_attribute('[data-step="%s"]' % sid, "data-status") if panel.query_selector('[data-step="%s"]' % sid) else None
     panel.bring_to_front(); panel.click("#runAll")
     stand.wait(panel, lambda: status("file") in ("done", "stopped") or any(panel.eval_on_selector_all('[data-step][data-status="stopped"]', "e => e.map(x => 1)")), 180000)
@@ -167,6 +169,7 @@ with sync_playwright() as p:
     # "Log in to GST portal": the login page filled, waiting on the captcha
     go("r1")
     stand.wait(pg, lambda: pg.query_selector("[data-helper-login]"), 10000)
+    pt = stand.portal_tab(ctx); pt.goto("https://services.gst.gov.in/services/login")   # the person logged out; the login page open
     before = len(wire)
     pg.click("[data-helper-login]")
     stand.wait(pg, lambda: (stand.portal_tab(ctx) and "/services/login" in stand.portal_tab(ctx).url and stand.portal_tab(ctx).evaluate("document.querySelector('#user_pass') && document.querySelector('#user_pass').value")), 20000)

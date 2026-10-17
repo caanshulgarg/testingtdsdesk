@@ -66,8 +66,8 @@ with sync_playwright() as p:
     def send(j, open_="dashboard"):
         fc.evaluate("(m) => fc.send(m)", {"type": "job", "job": j, "open": open_})
         stand.wait(panel, lambda: panel.query_selector("#steps:not([hidden]) [data-step]") and j["id"] in json.dumps(panel.evaluate("chrome.storage.session.get('job')")), 15000)
-    def run_all(last, ms=120000):
-        panel.click("#runAll")
+    def run_all(last, ms=120000, click=True):
+        if click: panel.click("#runAll")
         stand.wait(panel, lambda: status(last) in ("done", "stopped") or any(status(s) == "stopped" for s in panel.eval_on_selector_all("[data-step]", "els => els.map(e => e.dataset.step)")), ms)
     def fake_state(key):
         pt = stand.portal_tab(ctx); return pt.evaluate("(k) => JSON.parse(localStorage.getItem('fake:' + k) || 'null')", key)
@@ -77,10 +77,16 @@ with sync_playwright() as p:
     # ---------- 1. GSTR-1 by the portal's offline upload (FinCom's own JSON) ----------
     j1 = job("R1", "112025", tag="up")
     send(j1)
-    ok(stand.wait(fc, lambda: stand.portal_tab(ctx), 10000) is not None, "“Open the portal” opens the portal in the person's own browser (a tab of its own)")
+    pt = stand.wait(fc, lambda: stand.portal_tab(ctx), 10000)
+    ok(pt is not None and "/services/login" in pt.url, "no portal tab yet: “Open the portal” opens the portal's login page (the only address the helper ever opens)")
     fig = panel.inner_text("#figures")
     ok("4A, 4B, 6B, 6C - B2B" in fig and "₹17,000.42" in fig and "13 - Documents issued" in fig, "the panel shows FinCom's figures for the client and period, table by table")
-    run_all("file")
+    panel.click("#runAll"); panel.wait_for_timeout(3000)
+    ok(status("login") == "running" and "/services/login" in pt.url and pt.input_value("#username") == "" and pt.input_value("#captcha") == "",
+       "while the login page is open the helper waits and does not touch the tab (%s)" % panel.inner_text('[data-step="login"] .msg'))
+    # the person logs in; the portal shows its home page, and the helper goes on through RETURN DASHBOARD
+    pt.fill("#username", "fx_user"); pt.fill("#user_pass", "typed-by-the-person"); pt.fill("#captcha", "ABC123"); pt.click("#login")
+    run_all("file", click=False)
     st = {s: status(s) for s in ["login", "period", "upload", "process", "open", "summary", "file", "you"]}
     ok(all(v == "done" for k, v in st.items() if k != "you") and st["you"] == "you", "upload way: log in, period, upload, processed, open, summary, File page all done; the last step is the person's (%s)" % st)
     r1st = fake_state("r1:112025") or {}
@@ -172,6 +178,20 @@ with sync_playwright() as p:
     pt.evaluate("() => localStorage.removeItem('fake:drop')")
     panel.screenshot(path=OUT + "/gst-helper-panel-stopped.png", full_page=True)
 
+    # ---------- 4b. a typed address: the portal refuses it; the helper stops with plain words and never types one ----------
+    pt = stand.portal_tab(ctx)
+    pt.goto("https://return.gst.gov.in/returns/auth/dashboard")
+    ok("Access Denied" in pt.inner_text("body"), "the look-alike refuses a typed address with “Access Denied”, as the real portal did on 17-Oct-2026")
+    send(job("R1", "022026", tag="denied"))
+    pt.wait_for_timeout(1000)
+    ok("/returns/auth/dashboard" in pt.url and "Access Denied" in pt.inner_text("body"), "a new return reuses the portal tab and does not move it")
+    run_all("summary", 30000)
+    m = panel.inner_text('[data-step="login"] .msg')
+    ok(status("login") == "stopped" and "opened from its own menu" in m and "RETURN DASHBOARD" in m, "on the refusal page the helper stops and says what to do: " + m[:150])
+    ok(panel.query_selector("[data-relogin]") is not None, "it offers to open the portal's login page")
+    panel.click("[data-relogin]"); stand.wait(pt, lambda: "/services/login" in pt.url, 10000)
+    ok("/services/login" in pt.url and pt.input_value("#username") == "", "… which opens the login page only, in the same tab, nothing typed")
+
     # ---------- 5. login: user id and password typed, the captcha left to the person ----------
     secret = "Fx#S3cret-pass-0101"
     fc.evaluate("(m) => fc.send(m)", {"type": "login", "gstin": GSTIN, "username": "fx_user", "password": secret})
@@ -183,8 +203,14 @@ with sync_playwright() as p:
        "user id and password in their boxes; the captcha box empty with the cursor in it; nothing pressed")
     kept = panel.evaluate("async () => JSON.stringify([await chrome.storage.session.get(null), await chrome.storage.local.get(null)])")
     ok(secret not in kept and secret not in json.dumps(fc.evaluate("__msgs")) and not any(secret in u for u in ctx.portal_seen), "the password is kept nowhere: not in the helper's storage, not in what it sends back, not in any address")
-    pt.fill("#captcha", "ABC123"); pt.click("#login"); pt.wait_for_url("**/returns/auth/dashboard", timeout=10000)
-    ok("/returns/auth/dashboard" in pt.url, "the person types the captcha, presses LOGIN, and is on the returns dashboard")
+    pt.fill("#captcha", "ABC123"); pt.click("#login"); pt.wait_for_url("**/services/auth/fowelcome", timeout=10000)
+    ok("/services/auth/fowelcome" in pt.url, "the person types the captcha, presses LOGIN, and is on the portal's home page")
+    fc.evaluate("(m) => fc.send(m)", {"type": "login", "gstin": GSTIN, "username": "fx_user", "password": secret})
+    stand.wait(fc, lambda: len(msgs("login")) > 1, 20000); pt.wait_for_timeout(500)
+    ok("already" in msgs("login")[-1]["message"].lower() and "/services/auth/fowelcome" in pt.url, "asked to log in again while logged in: the tab is reused, not moved, nothing typed (%s)" % msgs("login")[-1]["message"])
+    panel.click('[data-run="login"]'); stand.wait(panel, lambda: status("login") == "done", 20000)
+    panel.click('[data-run="period"]'); stand.wait(panel, lambda: status("period") in ("done", "stopped"), 30000)
+    ok(status("period") == "done" and "/returns/auth/gstr/offlineupload" in pt.url, "after the person logs in, Run goes on through the portal's own RETURN DASHBOARD (%s)" % panel.inner_text('[data-step="period"] .msg')[:100])
 
     # ---------- 6. 2B, ledgers, return status ----------
     send(job("2B", "112025", tag="2b"))

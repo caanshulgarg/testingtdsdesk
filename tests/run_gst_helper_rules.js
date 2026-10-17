@@ -63,5 +63,16 @@ const opens = [].concat(...Object.values(SEL.pages).map((p) => Object.values(p.f
 ok(opens.length === 1 && opens[0].text === "FILE STATEMENT" && SEL.pages.gstr1.fields.fileDsc && !SEL.pages.gstr1.fields.fileDsc.click && !SEL.pages.gstr1.fields.fileEvc.click,
   "the one 'File' button it presses only opens the File page; FILE WITH DSC and FILE WITH EVC are named only to be found, never pressed");
 
+// the owner's report of 17-Oct-2026 ("Access Denied" after login): no address typed after login, only the portal's menu
+const fs = require("fs"), src = (f) => fs.readFileSync(path.join(__dirname, "..", "extension", "gst-helper", f), "utf8");
+const moves = [].concat(...["sw.js", "panel.js", "content.js"].map((f) => src(f).split("\n").map((l, i) => [f + ":" + (i + 1), l])))
+  .filter(([, l]) => /tabs\.(update|create|reload)\(|location\.(href|assign|replace)\s*=|window\.open\(/.test(l) && !/^\s*\/\//.test(l));
+const bad = moves.filter(([, l]) => !/LOGIN_URL/.test(l) && !/\{ active: true \}/.test(l));
+ok(!bad.length && moves.length > 0, "the helper moves a tab by address only to the login page (" + moves.map(([w]) => w).join(", ") + ")" + (bad.length ? "; NOT: " + bad.map(([w, l]) => w + " " + l.trim()).join(" | ") : ""));
+ok(!/P\[[^\]]+\]\.url|P\.\w+\.url|pages\.(?!login)\w+\.url/.test(src("panel.js") + src("sw.js")), "no page address but the login page's is used by the panel or the background");
+ok(Object.values(SEL.menu.paths).every((p) => p.every((k) => SEL.menu.fields[k] && SEL.menu.fields[k].text)) && SEL.pages.home.fields.returnDashboard.text === "RETURN DASHBOARD",
+  "the portal's menu items (Services → Returns → Returns Dashboard / Track Return Status; Services → Ledgers → Electronic Cash / Credit Ledger) and RETURN DASHBOARD are in the selectors file");
+ok(!Object.values(SEL.menu.fields).some((s) => R.forbidden(s.text)), "no menu item is a filing or payment button");
+ok(SEL.denied.words.includes("Access Denied") && SEL.denied.words.includes("session is expired"), "the portal's refusal page is known by its words");
 console.log("\n" + (fails ? fails + " FAILED" : "all passed"));
 process.exit(fails ? 1 : 0);
