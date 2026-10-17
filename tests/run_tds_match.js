@@ -244,8 +244,10 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   ok(sh && /^No challan paid yet for 194I, April 2026: pay ₹[\d,.]+ \(TDS ₹[\d,.]+ \+ interest ₹[\d,.]+ to 17-10-2026\)/.test(sh.words) || (sh && /used up: pay/.test(sh.words)), "M. the short one: " + (sh || {}).words);
   const tot = new Set(rowsM.map(r => r.id)); ok(all.every(s => s.ids.every(id => tot.has(id))), "M. suggestions name only these deductions");
 }
-// reasons: other section, a split short, a 400 challan
+// reasons: other section, a split short, a 400 challan, a nil deduction
 {
+  const rn = x.tmReasons([Object.assign(R("n1", "194J", "20260410", 0), {remark: "A", cert: "ABCDE1234F"}), R("n2", "194C", "20260411", 0)], [], [], {fy: "2026-27", q: "Q1"});
+  ok(rn.length === 2 && rn.every(z => z.step === "check") && /remark A, certificate ABCDE1234F/.test(rn[0].words) && /15G\/15H \(B\)/.test(rn[1].words), "R. a nil deduction: its remark from the books (A and the certificate), or what to check, and that FinCom does not make nil challans yet");
   const rs = x.tmReasons([R("o1", "194C", "20260410", 500)], [C("OJ", "194J", "20260507", 800)], [], {fy: "2026-27", q: "Q1", today: "20260601"});
   ok(rs[0].step === "move" && /OJ \(194J\) has ₹800 left, but this is 194C: if it was paid for this, use Move to challan/.test(rs[0].words), "R. another section's challan with room: " + rs[0].words);
   const r4 = x.tmReasons([R("o2", "194C", "20260410", 500)], [C("O4", "194C", "20260507", 800, {minor: "400"})], [], {fy: "2026-27", q: "Q1", today: "20260601"});

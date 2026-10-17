@@ -192,7 +192,7 @@ export function ChallanMatch({ fy, q, form, children }) {
 export function ChallanCell({ r }) {
   const c = r.challan ? TDS.challans().find((x) => x.id === r.challan) : null;
   return <button type="button" className={"linkbtn cm-cell" + (c ? "" : " bad")} data-ch-cell={r.id} aria-label={"Challan for " + (r.party || "")} title={c ? TDSMatch.matchedBy(r.id).words : "On no challan: choose one"} onClick={() => tdsMoveOpen([r.id])}>
-    {c ? c.bsr + " · " + day(c.date) + " · " + (chSec(c) || "no section") : "— not matched —"}{r.splitOf ? " (part " + r.part + ")" : ""}</button>;
+    {c ? <>{c.bsr + " · " + day(c.date)}<small className="cm-cell-s">{" · " + (chSec(c) || "no section") + (r.splitOf ? " (part " + r.part + ")" : "")}</small></> : "— not matched —"}</button>;
 }
 
 // the Move dialog and the Split dialog, once per return page

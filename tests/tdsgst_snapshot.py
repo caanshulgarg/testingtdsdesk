@@ -40,7 +40,13 @@ LOAD = """(bk) => {
 CHALLANS = """() => {
   const by = {}; TDS.rows().concat(TDS.nrRows(), TDS.tcsRows()).forEach((r) => { const k = r.fy + r.q; if (!by[k]) by[k] = r; });
   S.books.challans = Object.values(by).map((r, i) => ({id: "ch" + i, bsr: "0240020", serial: String(10000 + i), date: r.date, tax: 900000, interest: i % 2 ? 150 : 0}));
-  TDS.autoAllocate(); render();
+  TDS.autoAllocate();
+  // next-challan-match (17-Oct-2026): a challan's interest is written only as allocated to a return; as a person does on the
+  // Challans tab, it is allocated to the return that uses it (the one the files of 14-Oct-2026 gave it to by themselves)
+  if (typeof TDSMatch === "object") TDS.challans().forEach(c => { if (!num(c.interest)) return; const m = TDSReg.uses()[c.id] || {};
+    const k = Object.keys(m).sort((a, b) => (m[a].fy + m[a].q + m[a].form).localeCompare(m[b].fy + m[b].q + m[b].form))[0];
+    if (k) TDSReg.setPortion(c.id, m[k].form, m[k].fy, m[k].q, num(c.interest), 0, {nosave: true}); });
+  render();
 }"""
 
 

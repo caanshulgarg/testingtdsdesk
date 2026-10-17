@@ -155,7 +155,7 @@ try:
         # ---- the Deductions tab's Challan column: the same Move dialog, no silent re-tag
         pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedView = ''; render(); }"); pg.wait_for_timeout(600)
         cell = pg.locator("#app [data-ch-cell]").first
-        ok(cell.count() == 1 and re.search(r"0510308 · .* · 194[CJ]", cell.inner_text()), "the Deductions tab's Challan column: BSR · date · section (%s)" % cell.inner_text())
+        ok(cell.count() == 1 and re.search(r"0510308 · .*·\s*194[CJ]", cell.inner_text(), re.S), "the Deductions tab's Challan column: BSR · date · section (%s)" % cell.inner_text())
         ok(pg.locator("#app select[aria-label^='Challan for']").count() == 0, "no dropdown that re-tags silently")
         cell.click(); pg.wait_for_timeout(400)
         ok(pg.locator("[data-cm-move-dialog]").count() == 1, "it opens the Move dialog")

@@ -124,7 +124,8 @@
 .cm-pick { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow: auto; }
 .cm-pick li { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--rule, var(--border)); font-size: 13px; }
 .cm-pick small.bad { color: var(--bad); }
-.cm-cell { white-space: nowrap; font-size: 12.5px; }
+.cm-cell { white-space: normal; font-size: 12.5px; text-align: left; }
+.cm-cell-s { display: block; font-size: 11.5px; }
 .cm-cell.bad { color: var(--bad); }
 .cm-split input { min-width: 0; max-width: 100%; }
 @media (max-width: 760px) {

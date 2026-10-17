@@ -100,7 +100,7 @@ const TDSMatch = {
     const k = "rs" + form + fy + q;
     const f = () => {
       if (!S.books) return [];
-      const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx).concat(TDS.formRows(form).filter(r => r.fy === fy && r.q === q && !r.challan && !(r.tds > 0.005)).map(r => ({id: r.id, sec: this.sec(r), date: TDS.ymd(r.date), tds: 0, party: r.party})));
+      const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx).concat(TDS.formRows(form).filter(r => r.fy === fy && r.q === q && !r.challan && !(r.tds > 0.005)).map(r => { const m = form === "24Q" ? {} : TDS26Q.remark(r, form) || {}; return {id: r.id, sec: this.sec(r), date: TDS.ymd(r.date), tds: 0, party: r.party, remark: m.remark === "A" ? "A" : "", cert: m.certFull || m.certNo || ""}; }));
       let today = ""; try { today = istToday(); } catch (e){}
       return tmReasons(rows, this.chs(cx, "any"), this.suggestNow(form, fy, q).filter(s => s.ids.length), {fy, q, today, pct: form === "27EQ" ? 1 : 1.5});
     };

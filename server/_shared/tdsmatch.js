@@ -220,7 +220,11 @@ function tmReasons(rows, chs, sugg, opt){
   // the deductions with no challan at all, by section and month: one "pay" line each (the amount for all of them)
   const groups = {};
   rest.forEach(r => {
-    if (!(tmP(r.tds) > 0)){ out.push({rowId: r.id, step: "check", words: "No tax deducted on this (" + r.sec + "): a nil deduction is reported with a nil challan and a remark (A certificate, B Form 15G/15H, T transporter, Y below the limit). FinCom does not make nil challans: it is not in the file; check whether it needs reporting.", pay: 0}); return; }
+    if (!(tmP(r.tds) > 0)){
+      // r.remark / r.cert: what the books show (a certificate under 197 / 395: remark A)
+      const flag = r.remark === "A" ? "remark A, certificate " + (r.cert || "?") + " (from the books)" : "no certificate or declaration in the books: if it is covered by Form 15G/15H (B), a transporter's PAN (T) or is below the limit (Y), that is its remark";
+      out.push({rowId: r.id, step: "check", words: "No tax deducted on this (" + r.sec + "): " + flag + ". A nil deduction is reported under a nil challan; FinCom does not make nil challans yet, so it is not in the file: add it in Protean's RPU if it must be reported.", pay: 0, remark: r.remark || ""}); return;
+    }
     const own = (chs || []).filter(c => tmYearOk(c, fy, q) && (!c.sec || tmSecOk(c.sec, r.sec)));
     const ok = own.filter(tmTdsHead), after = ok.filter(c => tmYmd(c.date) >= tmYmd(r.date));
     // the challans for this deduction's month (deposited in it or the next) with something left
