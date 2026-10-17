@@ -158,8 +158,9 @@ try:
         # table starts high on the page, every column in view at 1366 without an inner sideways scroll, the figures to the
         # right on one line, the party column not wider than ~32 characters, one ₹, and every figure shown before still shown
         print("7. space and columns (t70)")
-        # (t70, round 7: GSTR-1's Details by bill by default; "gst-details" is By customer, as the figures were captured)
-        views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-bills", "/books/gst/07/202603/r1/details", None, "#r1Bills"),
+        # (t70, round 7: GSTR-1's Details by bill by default; "gst-details" is By customer, as the figures were captured;
+        # round 72: Details opens on the portal's tables, By bill a click away)
+        views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-bills", "/books/gst/07/202603/r1/details", "[data-r1-switch=bill]", "#r1Bills"),
                  ("gst-details", "/books/gst/07/202603/r1/details", "[data-r1-switch=customer]", "#r1Table"),
                  ("gst-details-open", "/books/gst/07/202603/r1/details", ["[data-r1-switch=customer]", "#r1Table tbody tr td button >> nth=0"], "#r1Table"), ("gst-3b", "/books/gst/07/202603/r3b/summary", None, None),
                  ("tds-deductions", "/books/tds/2026-27/Q1/26Q/deductions", None, "#tdsDnTable"), ("tds-deductees", "/books/tds/2026-27/Q1/26Q/deductions", "[data-ded-switch=deductees]", "#tdsDeTable")]

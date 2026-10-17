@@ -64,8 +64,9 @@ try:
         tot = sum(r["taxable"] for r in rows if r["k"] not in ("12", "13"))
         ok(E("INR.format(%s)" % round(tot, 2)) in grand, "the grand total: tables 4 to 11 (%s)" % grand.replace("\n", " "))
         pg.click("[data-r1-summary] tr[data-r1-table='B2B'] button"); W(1000)
-        ok(E("S.gstSub") == "details" and E("(S.r1F || {}).parts") == ["4A", "4B", "6B"] and E("S.r1View || ''") == "", "a row opens Details by bill, filtered to its table (%s)" % E("[S.gstSub, S.r1F]"))
-        E("() => { clearFilter('r1F'); }"); W(500)
+        # round 72 (GST in the portal's layout): a row opens its table as the portal shows it; the bills are "By bill"
+        ok(E("S.gstSub") == "details" and E("S.r1T") == "b2b" and E("S.r1View || ''") == "" and pg.locator("[data-r1p=b2b]").count() == 1, "a row opens Details at its portal table (%s)" % E("[S.gstSub, S.r1T]"))
+        E("() => { clearFilter('r1F'); S.r1View = 'bill'; S.r1T = ''; render(); }"); W(500)
 
         print("2. Details by bill")
         f = E(FOOT)

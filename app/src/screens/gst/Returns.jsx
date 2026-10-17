@@ -7,6 +7,8 @@ import { Filing } from "./Filing.jsx";
 import CustIms from "./CustIms.jsx";
 import SrcTag from "../../parts/SrcTag.jsx";
 import { Bills, R1Summary, partOf, R1_PARTS, R1_ORDER } from "./R1Bills.jsx";
+import R1Portal from "./R1Portal.jsx";
+import R3bPortal from "./R3bPortal.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -80,13 +82,14 @@ export function Gstr1({ b, sub }) {
       {adv && (adv.at.length > 0 || adv.txpd.length > 0) ? <> · advances: <button className="linkbtn" onClick={() => gstPartGo("adv")}>see them</button></> : null}</p>
     </>}
     {on("details") && <>
-    {/* t70: one row a bill by default (the owner: "not able to identify the total bills"); By customer the grouped table */}
-    {S.r1View === "customer" ? <Customers rows={rows} /> : <Bills rows={rows} />}
-    <section className="dash-card" style={{ marginTop: 12 }}><h3>12 HSN summary</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    {/* round 72 (the owner: "should match the GSTN schema"): the portal's tables first; t70's one row a bill, and By
+        customer, beside them */}
+    {S.r1View === "customer" ? <Customers rows={rows} /> : S.r1View === "bill" ? <Bills rows={rows} /> : <R1Portal ym={S.gstYm || ""} reg={S.gstReg || ""} />}
+    {(S.r1View === "customer" || S.r1View === "bill") && <section className="dash-card" style={{ marginTop: 12 }}><h3>12 HSN summary</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>HSN</th><th>Goods or services</th><th className="n">Rate</th><th className="n">Invoices</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>{g.hsn.map((x, i) => <tr key={i}><td>{x.hsn ? x.hsn : <span className="tag warn">no HSN</span>}</td><td>{x.supply || ""}</td><td className="n">{x.rate}%</td><td className="n">{x.n}</td>
         <td className="n">{money(x.taxable)}</td><td className="n">{money(x.igst)}</td><td className="n">{money(x.cgst)}</td><td className="n">{money(x.sgst)}</td></tr>)}</tbody>
-    </table></div></section>
+    </table></div></section>}
     {g.ecoBy && g.ecoBy.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Supplies through an e-commerce operator (14)</h3>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="">
         <thead><tr><th>Operator</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">TCS collected</th></tr></thead>
@@ -94,12 +97,12 @@ export function Gstr1({ b, sub }) {
           <td className="n">{money(e.cgst)}</td><td className="n">{money(e.sgst)}</td><td className="n">{money(e.tcs)}</td></tr>)}</tbody>
       </table></div>
       <p className="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>}
-    <section className="dash-card" style={{ marginTop: 12 }}><h3>13 Documents issued</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    {(S.r1View === "customer" || S.r1View === "bill") && <section className="dash-card" style={{ marginTop: 12 }}><h3>13 Documents issued</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th className="n">Total</th><th className="n">Cancelled</th><th className="n">Net issued</th></tr></thead>
       <tbody>{g.series.slice().sort((a, c) => a.nat - c.nat).map((x, i) => <tr key={i}><td>{NAT[x.nat]}</td><td>{x.pre || "—"}</td><td>{x.from}</td><td>{x.to}</td>
         <td className="n">{x.n}</td><td className="n">{x.cancelled}</td><td className="n">{x.n - x.cancelled}</td></tr>)}</tbody>
     </table></div>
-      <p className="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>
+      <p className="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>}
     </>}
     {on("diff") && <>
     <Checks />
@@ -136,7 +139,7 @@ function Unclaimed({ reg, ym }) {
 }
 
 export function Gstr3b({ b, sub }) {
-  const on = (k) => !sub || sub === k;
+  const onW = !sub || sub === "details";
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
   const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
   const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm;
@@ -151,7 +154,9 @@ export function Gstr3b({ b, sub }) {
       <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink /></span>
       <span className="note">{t.basis === "2b" ? "This month’s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked."}</span>
     </div>
-    {on("summary") && <div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    {/* round 72: Summary is the return as the portal lays it out; Details how FinCom works it out (the steps, the typing) */}
+    {(!sub || sub === "summary") && <R3bPortal b={b} t={t} />}
+    {onW && <div className="bk-tablewrap" style={{ marginTop: sub ? 0 : 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>
         <Row label="(a) Outward taxable supplies, other than zero rated, nil and exempt" x={t.sale} />
@@ -166,7 +171,7 @@ export function Gstr3b({ b, sub }) {
         <Gap /><Row label="Net outward, taxable" x={t.net} bold />
       </tbody>
     </table></div>}
-    {on("details") && <>
+    {onW && <>
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>3.2 Of 3.1(a), inter-state supplies to unregistered persons, by place of supply</th><th className="n">Taxable</th><th className="n">IGST</th></tr></thead>
       <tbody>{t.unregPos.length ? t.unregPos.map((x) => <tr key={x.pos}><td>{x.pos + " " + stateName(x.pos)}</td><td className="n">{money(x.taxable)}</td><td className="n">{money(x.igst)}</td></tr>)
@@ -200,7 +205,7 @@ export function Gstr3b({ b, sub }) {
       </tbody>
     </table></div>
     </>}
-    {on("summary") && <>
+    {onW && <>
     {/* 6.1: how the tax is paid, in the order the law sets, and the credit carried to next month */}
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>6.1 Payment of tax</th><th className="n">Tax payable</th><th className="n">Through IGST credit</th><th className="n">CGST credit</th><th className="n">SGST credit</th><th className="n">Cess credit</th><th className="n">In cash</th><th className="n">Reverse charge, in cash</th></tr></thead>

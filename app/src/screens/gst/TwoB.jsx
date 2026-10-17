@@ -9,6 +9,8 @@ import GstApiCard from "../GstApiCard.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Only2bNote } from "./InputRegister.jsx";
 import ListTable from "../../parts/ListTable.jsx";
+import Reco2b from "./Reco2b.jsx";
+import TwoBPortal from "./TwoBPortal.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -179,6 +181,7 @@ export default function TwoB({ b }) {
   const booksIn = sc.pairs.flatMap((x) => x.books).filter((d) => inSpan(d.ym)).concat(sc.onlyBooks);
   const rjs = sc.rejected || [], sk = GST2B.skipped || {};
   const tab = S.r2Tab || (sc.probable.length ? "probable" : "suppliers");
+  const view = S.r2View || (S.r2Tab ? "work" : "reco");
   // the filters of this tab
   const f = ((S.r2F || {})[tab]) || {}, qq = String(f.q || "").toLowerCase();
   const pass = (p, bk, x) => {
@@ -235,6 +238,14 @@ export default function TwoB({ b }) {
         <button className="btn small" onClick={() => doAct("twoBExcel")}>Download the reconciliation</button>
       </div>
     </section>
+    {/* round 72: the reconciliation one row an invoice (the owner: "2B reco should be clear to understand"), the 2B as the
+        portal shows it, and the workbench of before (tiles, tabs, linking by hand) */}
+    <nav className="sbar" aria-label="GSTR-2B view" data-r2-views={view}>{[["reco", "Reconciliation"], ["portal", "GSTR-2B"], ["work", "Workbench"]].map(([k, l]) =>
+      <button key={k} data-r2-view={k} aria-selected={view === k} onClick={() => { S.r2View = k; render(); }}>{l}</button>)}</nav>
+    {(sk.setOff || sk.taxOnly) && view !== "work" ? <p className="note">{"Left out of Tally’s side: " + [sk.setOff ? sk.setOff + " set-off entr" + (sk.setOff === 1 ? "y" : "ies") + " (output tax against credit)" : "", sk.taxOnly ? sk.taxOnly + " tax-only entr" + (sk.taxOnly === 1 ? "y" : "ies") + " with no supplier GSTIN or value (rounding, reversals)" : ""].filter(Boolean).join(" and ") + "."}</p> : null}
+    {view === "reco" && <Reco2b sc={sc} months={sc0.months} reg={reg} label={sc0.label} tol={set.tol} />}
+    {view === "portal" && <TwoBPortal reg={reg} months={sc0.months} label={sc0.label} />}
+    {view === "work" && <>
     <div className="dash-tiles" style={{ marginTop: 12 }}>
       <div className="dtile"><span>ITC in 2B, {sc0.label}</span><b>{money(sumTx(avl))}</b><small>{avl.length + " documents" + (S2b.length > avl.length ? ", " + (S2b.length - avl.length) + " not available" : "")}</small></div>
       <div className="dtile"><span>ITC in Tally</span><b>{money(sumTx(booksIn))}</b><small>{booksIn.length} documents</small></div>
@@ -252,6 +263,7 @@ export default function TwoB({ b }) {
     </div>
     <nav className="sbar" aria-label="2B reconciliation">{TABS.map(([id, l, n]) => <button key={id} aria-selected={tab === id} onClick={() => r2TabGo(id)}>{l}{n != null && <>{" "}<span className="sbar-n">{n}</span></>}</button>)}</nav>
     {body}
+    </>}
   </>;
 }
 
