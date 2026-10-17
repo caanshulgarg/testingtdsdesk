@@ -46,8 +46,7 @@ function registerWorker() {
   } catch (e) { /* never in the way of the page */ }
 }
 
-// an old browser was told it is not supported (public/oldcheck.js): nothing more is started
-if (!window.__fincomOld) {
+function start() {
   // error reports to Sentry: in a test build only (never in a live build: the import is dropped), and src/sentry.js
   // starts only on staging.fincom.live (docs/sentry.md)
   // stability batch 2: loaded once the page is drawn and the computer is idle (it was 35 KB on the way of the first open);
@@ -83,4 +82,14 @@ if (!window.__fincomOld) {
     if (r.left < 8) { m.style.left = "0"; m.style.right = "auto"; }
     else if (r.right > window.innerWidth - 8) { m.style.right = "0"; m.style.left = "auto"; }
   }, true);
+}
+
+// an old browser was told it is not supported (public/oldcheck.js): nothing more is started. 17-Oct-2026: nor on a page
+// that index.html's build check is swapping for a newer build; and on the service worker's kept copy of the page
+// (data-boot-kept, sw/sw.js: the line was too slow to bring the page), not before that check has answered (6 s at most),
+// so an older build is never drawn and then replaced
+if (!window.__fincomOld && !window.__fincomSwapping) {
+  const check = document.documentElement.hasAttribute("data-boot-kept") && window.__fincomBootCheck;
+  if (!check) start();
+  else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) start(); }, start);
 }

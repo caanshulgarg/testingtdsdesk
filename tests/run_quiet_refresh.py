@@ -9,7 +9,7 @@ its Bills, with the page scrolled, a box being typed in, and a menu (<details>) 
   - a background heartbeat that changes nothing on screen does not draw the page again; the cloud's own copy of this
     computer's save (its echo) does not either; a periodic sync that brings nothing new does not either;
   - a colleague's change made meanwhile still shows (background data changes appear, quietly);
-  - a newer build is offered as a small "New version - Refresh" chip, never a reload while someone works.
+  - a newer build is offered as a calm bar, "A new version of FinCom is ready · Reload", never a reload while someone works.
 Made-up client and books only. Run on the React build, under the lock:
   flock /tmp/fincom-app.lock env TDSDESK_SITE=../app/dist-test python3 tests/run_quiet_refresh.py
 QUIET_MEASURE=1 only prints what was counted (no pass/fail), for a before/after comparison."""
@@ -271,11 +271,11 @@ with sync_playwright() as p:
     # the one drawing asked for, and at most one more when the firm's sync sends it meanwhile (its "Saving…" comes and goes)
     ok(c["renders"] <= 2, "this computer's own save coming back through Realtime is not drawn again (%d extra, at most the sync's own)" % (c["renders"] - 1))
     pg.evaluate("() => { clearInterval(window.__qw.iv); window.__qw.mo.disconnect(); }")
-    # a newer build: a small chip, never a reload while the page is in use
+    # a newer build: a calm bar (17-Oct-2026: "A new version of FinCom is ready · Reload"), never a reload while the page is in use
     navs.clear(); BUILD["id"] = "zz-newer-build"
     pg.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
-    seen = wait_for(pg, "[...document.querySelectorAll('button, a')].some((b) => /^\\s*Refresh\\s*$/.test(b.textContent) && b.closest('[data-new-version]'))", 6)
-    ok(seen is not None, "a newer build: the small “New version – Refresh” chip shows")
+    seen = wait_for(pg, "[...document.querySelectorAll('button, a')].some((b) => b.closest('[data-new-version]') && /^\\s*Reload\\s*$/.test(b.textContent) && /A new version of FinCom is ready/.test(b.closest('[data-new-version]').textContent))", 6)
+    ok(seen is not None, "a newer build: the calm “A new version of FinCom is ready · Reload” bar shows")
     ok(not navs, "and the page is not reloaded while it is in use")
     for e in errors[:5]: print("    error:", e)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

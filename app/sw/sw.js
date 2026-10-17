@@ -25,19 +25,31 @@ self.addEventListener("message", (e) => {
   if (e.data === "fincom:signed-out") e.waitUntil(caches.delete(RUNTIME));
 });
 
-// the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s)
+// the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
+// A page asked for by its build (?v=…: index.html's check found a newer build than the page it was given) waits for the
+// network as long as it takes (17-Oct-2026: on a slow line the 4 s wait handed back the old page again)
 async function page(req) {
   const cache = await caches.open(SHELL);
   const net = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) cache.put("./", r.clone()); return r; });
+  const byBuild = new URL(req.url).searchParams.has("v");
   try {
-    const r = await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
+    const r = byBuild ? await net : await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
     if (r) return r;
-    return (await cache.match("./")) || (await net);
+    const c = await cache.match("./");
+    return c ? kept(c) : await net;
   } catch (e) {
     const c = await cache.match("./");
-    if (c) return c;
+    if (c) return kept(c);
     throw e;
   }
+}
+// the kept copy is marked (data-boot-kept on <html>): its program waits for index.html's build check before it starts,
+// so an older build is swapped before it is drawn (src/main.jsx)
+async function kept(c) {
+  try {
+    const t = await c.clone().text();
+    return new Response(t.replace("<html ", '<html data-boot-kept="" '), { status: c.status, statusText: c.statusText, headers: c.headers });
+  } catch (e) { return c; }
 }
 
 self.addEventListener("fetch", (e) => {
