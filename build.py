@@ -17,6 +17,8 @@ import json, os, re, sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 def read(p): return open(os.path.join(ROOT, p), encoding="utf-8").read()
 NAMES_JS = "server/_shared/names.js"
+# plain JavaScript shared with the server functions, put at the head of the app without its export line, in this order
+SHARED_JS = [NAMES_JS, "server/_shared/match2b.js"]
 
 def assemble():
     shell = read("src/shell.html")
@@ -25,11 +27,15 @@ def assemble():
     if missing: sys.exit("These program files are not in src/js/ORDER.json: " + ", ".join(missing))
     # the one rule for Tally names (server/_shared/names.js), shared with the cloud reader: put first, without its
     # export line, so src/js/00-core.js and the rest call the same functions the cloud's parse.js imports
-    names = read(NAMES_JS)
-    if len(re.findall(r"(?m)^export \{[^}]*\};\s*$", names)) != 1: sys.exit(NAMES_JS + " must end with one export { ... }; line")
-    names = re.sub(r"(?m)^export \{[^}]*\};\s*$", "", names)
-    if re.search(r"(?m)^\s*(import|export)\b", names): sys.exit(NAMES_JS + " must have no imports and only its one export line")
-    srcs = [(NAMES_JS, names)] + [("src/js/" + f, read("src/js/" + f)) for f in order]
+    # (server/_shared/match2b.js: the 2B matching rules, shared with the gst-2b-match function the same way)
+    shared = []
+    for f in SHARED_JS:
+        t = read(f)
+        if len(re.findall(r"(?m)^export \{[^}]*\};\s*$", t)) != 1: sys.exit(f + " must end with one export { ... }; line")
+        t = re.sub(r"(?m)^export \{[^}]*\};\s*$", "", t)
+        if re.search(r"(?m)^\s*(import|export)\b", t): sys.exit(f + " must have no imports and only its one export line")
+        shared.append((f, t))
+    srcs = shared + [("src/js/" + f, read("src/js/" + f)) for f in order]
     js = "".join(t for _, t in srcs)
     # every file shares one scope: a second top-level function or const with the same name silently replaces the first
     # (two tallyDate()s once emptied every date sent to Tally), so a clash stops the build

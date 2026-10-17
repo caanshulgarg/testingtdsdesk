@@ -1285,6 +1285,7 @@ function booksChange(t){
       return GSTR.label(x.ym) + " (" + x.rows.length + ")";
     }).catch(() => "not read: " + f.name))).then(list => {
       delete b.twoB; S.r2Tab = ""; saveBooks();
+      if (typeof M2B === "object") M2B.next = "uploaded";        // the 2B screen matches it by itself (src/js/85)
       toast("2B brought in: " + list.join(", ") + ".");
       render();
     });

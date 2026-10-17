@@ -43,6 +43,7 @@
 //   {action:"track", gstin, form, period}                       the portal's status of the return (RETTRACK), ARN
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
+import { after2b } from "./automatch.ts";
 import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText } from "./filing.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -254,6 +255,14 @@ async function fetchStore(firm: string, gstin: string, form: string, period: str
   }
   const { error } = await admin.from("gst_returns").upsert(row);
   if (error) throw new Error("Could not keep it: " + error.message);
+  // a 2B fetched: matched against the books by itself (round 72b; automatch.ts, gst-2b-match), never holding up the fetch
+  if (form === "2B" && row.status === "ok") {
+    const p = after2b({
+      rpc: async (fn, args) => { const { data, error: e } = await admin.rpc(fn, args); if (e) throw new Error(e.message); return data; },
+      poke: () => fetch(SB_URL + "/functions/v1/gst-2b-match", { method: "POST", headers: { Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify({ action: "queue" }) }).then((r) => r.body?.cancel()),
+    }, firm, gstin, form, period, "ok");
+    (globalThis as any).EdgeRuntime?.waitUntil?.(p);
+  }
   return { status: row.status, error: row.error, data: row.data };
 }
 // MMYYYY of the month n months before this one (India time)

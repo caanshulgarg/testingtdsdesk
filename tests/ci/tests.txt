@@ -375,3 +375,9 @@ run_gst_helper_rules.js               120
 run_gst_browser_helper.py             600
 run_migration93.py                    120
 run_gst_helper_app_ui.py              600  TDSDESK_SITE=../app/dist-test
+# round 72b (17-Oct-2026): 2B matched by itself - the shared rules (app = server), the AI step and the function with Claude
+# faked, the trigger after a fetch, migration 95 on pg_stand, the 2B page
+run_2b_automatch.js                   120
+run_2b_automatch_server.py            120
+run_migration95.py                    120
+run_2b_automatch_ui.py                300  TDSDESK_SITE=../app/dist-test
