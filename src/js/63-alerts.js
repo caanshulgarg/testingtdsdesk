@@ -139,20 +139,14 @@ const AlertHub = {
       const latest = new Map();
       rows.forEach(x => { const k = [x.kind, x.client_id || "", x.book_id || "", x.device_id || ""].join("|"); const h = latest.get(k); if (!h || String(x.at || "") > String(h.at || "")) latest.set(k, x); });
       const unread = [...latest.values()].filter(x => !x.read_at);
-      // ---- one problem a book: the cursor's gap, the lines waiting, the computer not recording, the gap alert rows
+      // ---- one problem a book: the cursor's gap, the lines waiting, the gap alert rows
       const books = new Map();
-      const book = (cid, company, bookId) => { const k = cid + "|" + (bookId || norm(company || "")); if (!books.has(k)) books.set(k, {cid, company: company || "", bookId, gap: null, ours: [], other: [], off: [], rows: []}); return books.get(k); };
+      const book = (cid, company, bookId) => { const k = cid + "|" + (bookId || norm(company || "")); if (!books.has(k)) books.set(k, {cid, company: company || "", bookId, gap: null, ours: [], other: [], rows: []}); return books.get(k); };
       Object.entries(g.byClient || {}).forEach(([cid, list]) => list.forEach(x => { book(cid, x.company, x.book).gap = x.gap; }));
       held.filter(l => l.client_id).forEach(l => { const b = book(l.client_id, l.company, l.book_id); (this.oursHeld(l) ? b.ours : b.other).push(l); });
-      // the computers keeping a client's company open in Tally without recording its changes (as Rec.clientNotRecording,
-      // with the computer's id for its name)
-      const tl = (typeof TLight === "object" && TLight.st) || {};
-      (tl.cos || []).filter(c => c.client_id && c.device_id && (S.companies || {})[c.client_id]).forEach(c => {
-        const d = (tl.devs || []).find(x => x.id === c.device_id && !x.revoked);
-        if (!d || !Rec.notRecording(d).includes(c.company)) return;
-        const b = [...books.values()].find(y => y.cid === c.client_id && (!y.company || norm(y.company) === norm(c.company))) || book(c.client_id, c.company, null);
-        b.off.push({deviceId: d.id, pc: Rec.pcOf(d), company: c.company});
-      });
+      // 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option.. it should not ask the
+      // clients"): FinCom Bridge 2.4.5 puts the add-on into Tally itself, so a computer not recording is no alert of its
+      // own and adds nothing to one (no "turn on the recorder"); a real gap still asks for the Day Book of those days
       // a gap alert row speaks for its book only while the cause cannot be read from FinCom's cloud; else the book's
       // own state decides (and the row goes when the gap goes)
       unread.filter(x => x.kind === "gap" && x.client_id).forEach(x => {
@@ -163,7 +157,7 @@ const AlertHub = {
         const who = coName(b.cid) || b.company || "A client";
         const gapN = b.gap ? Number(b.gap.missingMax || b.gap.missing || 0) : 0;
         const since = (b.gap && (b.gap.since || b.gap.last_match_at)) || (b.ours[0] && b.ours[b.ours.length - 1].received_at) || "";
-        const pcs = [...new Set(b.off.map(x => this.pc(x.deviceId, x.pc)).concat(b.ours.concat(b.other).map(l => this.pc(l.device_id, l.pc))))];
+        const pcs = [...new Set(b.ours.concat(b.other).map(l => this.pc(l.device_id, l.pc)))];
         const det = [];
         if (b.gap){
           const base = [b.gap.start_point, b.gap.recorder_max, b.gap.day_max].map(x => x == null || x === "" ? NaN : Number(x)).filter(x => !Number.isNaN(x));
@@ -171,15 +165,13 @@ const AlertHub = {
         }
         b.ours.concat(b.other).slice(0, 5).forEach(l => det.push("Line " + (l.line_id || l.id) + ": " + [l.vch_type, l.vch_no].filter(Boolean).join(" ") + (l.held_why ? " — " + l.held_why : " — " + l.state)));
         if (pcs.length) det.push("Computer" + (pcs.length > 1 ? "s" : "") + ": " + pcs.join(", "));
-        if (b.off.length) det.push("Not recording its changes for FinCom: " + b.off.map(x => x.company).join(", "));
         if (b.bookId) det.push("Book " + b.bookId);
         const at = [].concat(b.rows.map(x => x.at), b.gap ? [b.gap.at || ""] : [], b.ours.concat(b.other).map(l => l.received_at)).filter(Boolean).sort().pop() || "";
-        const recFix = "Turn on FinCom's recorder in Tally on that computer (the details say which).";
-        // the fingerprint: the gap by the day it started (never its count, which ticks), each line waiting, each computer not recording
+        // the fingerprint: the gap by the day it started (never its count, which ticks), each line waiting
         const gapFrom = b.gap ? (b.gap.since || b.gap.last_match_at || b.gap.at) : b.rows.length ? b.rows[0].at : "";
         // (the book by FinCom's cloud id, the same on every computer; the client and company when it has none)
         const fp = AlertClear.fp([b.gap || b.rows.length ? "gap:" + (b.bookId || k) + ":" + (istDay(gapFrom) || "?") : ""]
-          .concat(b.ours.concat(b.other).map(l => this.lineAtom(l)), b.off.map(x => "off:" + x.deviceId + ":" + norm(x.company))));
+          .concat(b.ours.concat(b.other).map(l => this.lineAtom(l))));
         const base = {key: "book:" + k, fp, cid: b.cid, details: det.join(" · "), at, selfClear: true};
         const waiting = b.ours.length + b.other.length;
         // 2.3.5: lines a person must settle (b.other) are said first; "nothing to do" only when nothing else waits
@@ -195,7 +187,7 @@ const AlertHub = {
           const gap = b.gap || {since: b.rows[0] && b.rows[0].at};
           const words = gapN ? this.n(gapN) : "Entries";
           out.push(Object.assign(base, {sev: "bad", text: who + ": " + words + " made in Tally" + (gap.since ? " since " + this.when(gap.since) : "") + (gapN === 1 ? " is" : " are") + " not yet in FinCom.",
-            fix: "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in." + (b.off.length ? " " + recFix : ""),
+            fix: "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in.",
             act: {label: "Upload Day Book", run: () => Rec.uploadDays(b.cid, gap)}}));
         } else if (b.other.length){
           const locked = b.other.filter(l => /^month locked/i.test(String(l.held_why || "")));
@@ -208,9 +200,6 @@ const AlertHub = {
               : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
               ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
               : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
-        } else if (b.off.length){
-          out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
-            fix: recFix}));
         }
       });
       // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again
@@ -308,7 +297,7 @@ const AlertHub = {
 //   key                          shown on                                        fingerprint items
 //   book:<client>|<book>         the bell; the alert line (Tally page, Books)    gap:<book id>:<IST day the gap started (the cursor's since or last
 //                                                                                  match, else the gap alert row's time)>; line:<id>:need|wait for each
-//                                                                                  line waiting; off:<computer>:<company> for each computer not recording it
+//                                                                                  line waiting (a computer not recording is no part of it since 17-Oct-2026)
 //   held:<client>                the books' "not yet in these books" banner      line:<id>:need|wait for each held line
 //   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
 //   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line

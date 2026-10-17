@@ -215,15 +215,15 @@
 @media (max-width: 900px) { #app .actionbar { flex-wrap: wrap; } #app .actionbar .cannot-approve { max-width: 100%; } }
 #cobar .tbar[data-crumb="client-nav"] .tbar-title { min-width: 0; max-width: 100%; }
 @media (max-width: 900px) { #cobar .tbar-title .crumbs .crumb-co { max-width: 44vw; } #cobar .tbar[data-crumb="client-nav"] { min-width: 0; max-width: 100%; overflow: hidden; } }
-/* Connect Tally, seven steps (round 63, 16-Oct-2026; the owner: "redesign the guide so people want to read it", the same calm
-   Arc look as Ask FinCom; 17-Oct-2026: + the add-on): a strip of the seven steps on top, one card a step (its number, a short title, one plain line, one
+/* Connect Tally, six steps (round 63, 16-Oct-2026; the owner: "redesign the guide so people want to read it", the same calm
+   Arc look as Ask FinCom): a strip of the six steps on top, one card a step (its number, a short title, one plain line, one
    button); a done step folds to a green tick line, the current one is marked with the accent, the later ones are quiet */
 #app .tg2 { padding: 18px 20px 16px; }
 #app .tg2 .tg-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
 #app .tg2 .tg-top h3 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: var(--tracking-display); }
 #app .tg2 .tg-count { font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 #app .tg2 .tg-top [data-guide-hide] { margin-left: auto; }
-#app .tg2 .tg-strip { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; }
+#app .tg2 .tg-strip { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; }
 #app .tg2 .tg-strip li { position: relative; min-width: 0; background: none; padding: 0; margin: 0; box-shadow: none; border: 0; }
 #app .tg2 .tg-strip li + li::before { content: ""; position: absolute; top: 12px; right: calc(50% + 15px); left: calc(-50% + 15px); height: 2px; border-radius: 2px; background: var(--border); }
 #app .tg2 .tg-strip li.done + li::before { background: var(--st-done, var(--success)); }
@@ -270,17 +270,6 @@
 #app .tg2 .tguide-steps .tg-lines li { display: list-item; margin: 0; }
 #app .tg2 .tg-lines { margin: 6px 0 4px; padding-left: 20px; display: grid; gap: 3px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
 #app .tg2 .tg-lines b { color: var(--foreground); font-weight: 600; }
-/* step 3, the add-on (17-Oct-2026): the path to type in a box with its Copy button; each computer's own state, one line each */
-#app .tg2 .tg-path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 4px 0 2px; min-width: 0; max-width: 100%; }
-#app .tg2 .tg-path code { flex: 0 1 auto; min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted);
-  color: var(--foreground); font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12.5px; overflow-wrap: anywhere; user-select: all; }
-#app .tg2 .tg-pcs { list-style: none; margin: 2px 0 6px; padding: 0; display: grid; gap: 2px; font-size: 13px; }
-#app .tg2 .tguide-steps .tg-pcs li { display: block; margin: 0; overflow-wrap: anywhere; }
-#app .tg2 .tg-pcs li.ok { color: var(--st-done, var(--success)); }
-#app .tg2 .tg-pcs li.bad b, #app .tg2 .tg-pcs li.bad { color: var(--danger); }
-#app .tg2 .tg-pcs li .btn { margin-left: 6px; }
-#app .tg2 .tg-check { margin: 2px 0 4px; }
-#app .tpc-addon { margin: 4px 0 0; font-size: 13px; color: var(--danger); overflow-wrap: anywhere; }
 #app .tg2 .tg-daybook { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
 #app .tg2 .tg-daybook .tg-lines { flex: 1 1 300px; }
 #app .tg2 .tg-art { flex: 0 0 auto; width: 220px; max-width: 100%; height: auto; color: var(--text-secondary); }

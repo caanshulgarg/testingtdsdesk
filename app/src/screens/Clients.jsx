@@ -63,7 +63,7 @@ function TallyLight({ cid }) {
   // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
   // round 39: the chip says the client's link in the same four words as its Link to Tally card and the top bar's sign
   const l = typeof tallyLine === "function" ? tallyLine(co) : null, k = tallyLinkOf(co);
-  // ui-tidy (13-Oct-2026); 15-Oct-2026: a client not linked points to Connect Tally, step 5 (goTallyCard, parts/TallyChip.jsx)
+  // ui-tidy (13-Oct-2026); 15-Oct-2026: a client not linked points to Connect Tally, step 4 (goTallyCard, parts/TallyChip.jsx)
   return <button type="button" className={"tag tchip " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
     data-tally={t.state} data-tally-link-chip={k.state} data-tally-chip={k.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
     onClick={(ev) => { ev.stopPropagation(); goTallyCard(cid); }}>{MARK[k.level] + k.word}</button>;

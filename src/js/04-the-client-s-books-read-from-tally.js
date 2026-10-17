@@ -69,11 +69,27 @@ const Books = {
     const gstin = ((head.match(/<CMPGSTIN>([0-9A-Z]{15})<\/CMPGSTIN>/i) || [])[1] || "").toUpperCase();
     return {name, guid, gstin};
   },
+  // the file's text encoding: UTF-16 by its byte-order mark, else (the owner, 17-Oct-2026: a new company's Day Book refused)
+  // UTF-16 without the mark, told by the zero bytes at every other place in its first bytes (ASCII text in UTF-16LE has
+  // the zero second: "<" is 3C 00), as FinCom's server tells it (server/tally-cloud, uploadPiece); else UTF-8
   async decoder(file){
-    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-    if (head[0] === 0xFF && head[1] === 0xFE) return new TextDecoder("utf-16le");
-    if (head[0] === 0xFE && head[1] === 0xFF) return new TextDecoder("utf-16be");
-    return new TextDecoder("utf-8");
+    return new TextDecoder(this.encodingOf(new Uint8Array(await file.slice(0, 64).arrayBuffer())));
+  },
+  encodingOf(head){
+    if (head[0] === 0xFF && head[1] === 0xFE) return "utf-16le";
+    if (head[0] === 0xFE && head[1] === 0xFF) return "utf-16be";
+    const n = head.length & ~1, half = n / 2;
+    if (n >= 2){
+      let odd = 0, even = 0;
+      for (let i = 0; i < n; i++) if (!head[i]){ if (i % 2) odd++; else even++; }
+      if (head[1] === 0 && head[0] !== 0 && odd >= half * 0.6 && even <= half * 0.2) return "utf-16le";
+      if (head[0] === 0 && head[1] !== 0 && even >= half * 0.6 && odd <= half * 0.2) return "utf-16be";
+    }
+    return "utf-8";
+  },
+  // a whole file's text in its own encoding (Blob.text() reads UTF-8 only; a Tally export is often UTF-16LE)
+  async text(file){
+    return (await this.decoder(file)).decode(new Uint8Array(await file.arrayBuffer()));
   },
   // Tally writes "Applicable" or "Not Applicable", sometimes with a stray character in front
   yesFlag(v){ const t = String(v || "").replace(/[^A-Za-z ]/g, " ").trim().toLowerCase(); return /\bapplicable\b/.test(t) && !/\bnot\b/.test(t); },

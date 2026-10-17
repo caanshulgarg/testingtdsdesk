@@ -3,8 +3,10 @@ The fault of 05-Oct: the same warning three times on every page ("Tally changes 
 "Changes not received: GARG SHEKHAR & COMPANY: up to 1 changes not received since …  Mark read"; "up to 1 changes not
 received since … (Tally's change number 54396, received up to 54395) Upload the Day Book for these days").
 Checked here, offline with FinCom's cloud made up in the page (Cloud.api / TCloud.rpc answered by the test):
-  - one problem -> one alert: the cursor's gap, the tally_alerts gap rows (two days of them) and the computer that is not
-    recording are ONE alert for the book, in the bell in the top bar (with its count);
+  - one problem -> one alert: the cursor's gap and the tally_alerts gap rows (two days of them) are ONE alert for the
+    book, in the bell in the top bar (with its count); a computer not recording is no alert and adds nothing to one
+    (17-Oct-2026, the owner: "why it is asking to update add on.. pls remove that option": FinCom Bridge 2.4.5 puts the
+    add-on into Tally itself), and nothing in the bell asks to load, update or turn on the add-on or recorder;
   - nowhere else: no alert text on a client's pages; the only exceptions are the Tally page and that client's Books page,
     with ONE slim line (one row, never wrapping) and its button;
   - plain words (what, why, what to do); the change numbers, the computer and the ids only behind "details";
@@ -25,6 +27,9 @@ SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []
+# 17-Oct-2026: an ask to load, update or turn on FinCom's add-on (TDL) or recorder, in any words the app used
+ADDON_ASK = re.compile(r"\b(load|loaded|update|turn on|switch on|enable|install)\b[^.\n]{0,60}\b(add-on|addon|TDLs?|recorder)\b"
+                       r"|\b(add-on|addon|TDLs?|recorder)\b[^.\n]{0,40}\b(not loaded|not recording|load|update|turn on)\b|not recording|Manage Local TDLs", re.I)
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
@@ -61,11 +66,15 @@ with sync_playwright() as p:
     cid = scene({"devs": [dev(recording=False)], "alerts": ALERTS, "gap": GAP})
     b = E(BELL) or {"count": "", "items": []}
     garg = [x for x in b["items"] if "GARG" in x["text"]]
-    ok(len(garg) == 1, "the cursor's gap, two days of gap alerts and the computer not recording: ONE alert for the book (%s)" % [x["text"] for x in b["items"]])
+    ok(len(garg) == 1, "the cursor's gap, two days of gap alerts (the computer not recording too): ONE alert for the book (%s)" % [x["text"] for x in b["items"]])
     g = garg[0] if garg else {"text": "", "fix": "", "act": "", "details": "", "sev": "", "dot": "", "read": True}
     ok(re.search(r"GARG SHEKHAR & COMPANY: 1 entry made in Tally since 08:00 IST today is not yet in FinCom\.", g["text"]), "in plain words: what (%s)" % g["text"])
     ok(re.search(r"Upload the Day Book for \d{2}-[A-Z][a-z]{2}", g["fix"]) and g["act"].startswith("Upload"), "what to do, with its button (%s | %s)" % (g["fix"], g["act"]))
-    ok(not re.search(r"NWS144|54396|54395|change number|AlterID", g["text"] + " " + g["fix"]) and "54396" in g["details"] and "NWS144" in g["details"], "the change numbers and the computer only behind details (%s)" % g["details"][:160])
+    ok(not re.search(r"NWS144|54396|54395|change number|AlterID", g["text"] + " " + g["fix"]) and "54396" in g["details"], "the change numbers only behind details (%s)" % g["details"][:160])
+    # 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option"): the computer not recording adds
+    # no ask to the gap's alert (FinCom Bridge 2.4.5 puts the add-on into Tally itself): the Day Book of those days only
+    ok(not ADDON_ASK.search(g["text"] + " " + g["fix"] + " " + g["details"]) and "recorder" not in (g["text"] + g["fix"] + g["details"]).lower(),
+       "no word of turning on the recorder or loading the add-on, in the alert or its details (%s | %s)" % (g["fix"], g["details"][:120]))
     ok(g["sev"] == "bad" and g["dot"] == tok["bad"], "a real gap: red, the books may be wrong and something is to be done (%s %s)" % (g["sev"], g["dot"]))
     ok(not g["read"], "it clears itself, so no Mark read")
     ok(b["count"] == str(len(b["items"])) and len(b["items"]) == 2, "the bell counts them: the book's alert and the daily summary (%s, %s)" % (b["count"], [x["text"][:40] for x in b["items"]]))
@@ -114,12 +123,16 @@ with sync_playwright() as p:
     b = E(BELL)
     ok(not [x for x in b["items"] if "GARG" in x["text"]], "the held line applied: the alert is gone by itself")
     E(CLOSE)
-    # ---- 7. not recording alone: amber, plain words, the computer behind details
+    # ---- 7. not recording alone (17-Oct-2026): no alert at all, no Needs you, nothing in the bell about the add-on or recorder
     cid = scene({"devs": [dev(recording=False)], "alerts": [], "gap": None})
     b = E(BELL); garg = [x for x in b["items"] if "GARG" in x["text"]]
-    g = garg[0] if garg else {"text": "", "fix": "", "details": "", "sev": ""}
-    ok(len(garg) == 1 and g["sev"] == "warn" and "recorder" in (g["text"] + g["fix"]).lower() and "NWS144" not in g["text"] + g["fix"] and "NWS144" in g["details"], "Tally not recording, no gap yet: one amber alert, the computer behind details (%s | %s | %s)" % (g["text"], g["fix"], g["details"][:60]))
+    ok(not garg, "Tally not recording, no gap: no alert for it (%s)" % [x["text"] for x in garg])
+    words = " ".join(x["text"] + " " + x["fix"] + " " + x["details"] for x in b["items"])
+    ok(not ADDON_ASK.search(words) and "recorder" not in words.lower(), "the bell: no ask to load, update or turn on the add-on, TDL or recorder (%s)" % [m.group(0) for m in ADDON_ASK.finditer(words)][:3])
     E(CLOSE)
+    E("([cid]) => { S.view = 'company'; S.coId = cid; goClient('books:reports'); }", [cid]); pg.wait_for_timeout(1200)
+    t = pg.inner_text("#app")
+    ok(not ADDON_ASK.search(t) and pg.locator("#app [data-alert-line]").count() == 0, "the client's Books page: no alert line, no add-on ask (%s)" % [m.group(0) for m in ADDON_ASK.finditer(t)][:3])
     # ---- 8. the app's own warnings are in the bell too, not on the pages
     E("() => { S.storeKind = 'local'; window.__con = Cloud.on; Cloud.on = () => false; render(); }"); pg.wait_for_timeout(500)
     E("([cid]) => { S.view = 'company'; S.coId = cid; goClient('dash'); }", [cid]); pg.wait_for_timeout(600)
