@@ -37,6 +37,7 @@ import ReturnsFiled from "./gst/ReturnsFiled.jsx";
 import FiledCompare from "./gst/FiledCompare.jsx";
 import Recon from "./gst/Recon.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
+import FileApi from "./gst/FileApi.jsx";
 import "../parts/returns.css";
 import Filters, { Field, Search } from "../parts/Filters.jsx";
 import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
@@ -296,7 +297,10 @@ export default function Gst() {
         {part === "r1" && !noReturn && <button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button>}
         {part === "r3b" && !noReturn && <button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button>}
       </div>
-      <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p></section>}
+      <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p>
+      {/* 17-Oct-2026: filing through the GST API, or the browser helper (the client's choice) */}
+      {!noReturn && (part === "r1" || part === "r3b") && <FileApi form={part === "r3b" ? "3B" : ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || "") ? "IFF" : "R1"} ym={S.gstYm || ""} reg={S.gstReg || ""}
+        label={part === "r3b" ? "GSTR-3B" + (ftype === "qrmp" ? " for the quarter" : "") : ftype === "qrmp" ? (GSTSet.isQEnd(S.gstYm || "") ? "GSTR-1 for the quarter" : "IFF") : "GSTR-1"} />}</section>}
     {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
     </>}

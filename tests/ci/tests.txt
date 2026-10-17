@@ -353,3 +353,9 @@ run_gb_pages.py                       300  TDSDESK_SITE=../app/dist-test
 run_lazy_fail.py                      120  TDSDESK_SITE=../app/dist-test
 # 16-Oct-2026 (round 65): the TDS page when the books are in but hold no TDS (GB TEXCOAT): said plainly, empty TDS ledgers, should have deducted
 run_tds_empty.py                      300  TDSDESK_SITE=../app/dist-test
+# 17-Oct-2026 (next-gst-file; the owner: "Both, API first", "Prepare, you file"): GSTR-1, IFF and 3B filed through the GST
+# API against a stand-in TaxPro (sandbox answers): save, the portal's summary beside FinCom's, a person confirms, proceed /
+# 3B set-off (rule 88A), EVC OTP, File, ARN; the OTP kept nowhere; every call logged; migration 94 twice; the steps on screen
+run_gst_file_server.py                120
+run_migration94.py                    120
+run_gst_file_ui.py                    180  TDSDESK_SITE=../app/dist-test
