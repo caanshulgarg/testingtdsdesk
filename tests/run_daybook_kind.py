@@ -55,6 +55,7 @@ EMPTY_PERIOD = write("DayBook-empty.xml", b"\xff\xfe" + (HEAD + FOOT).encode("ut
 z = io.BytesIO()
 with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zz: zz.writestr("DayBook.xml", raw)
 ZIP = write("DayBook-zip.xml", z.getvalue())
+BLANK = write("insurance-blank.xml", bytes(3 * 1048576))   # the owner's insurance.xml of 17-Oct-2026: 18 MB of zero bytes
 HTML = write("DayBook-page.xml", b"<!doctype html><html><body><p>Day Book</p></body></html>")
 ADDON_ASK = re.compile(r"\b(load|loaded|update|turn on|switch on|enable|install)\b[^.\n]{0,60}\b(add-on|addon|TDLs?|recorder)\b"
                        r"|\b(add-on|addon|TDLs?|recorder)\b[^.\n]{0,40}\b(not loaded|not recording|load|update|turn on)\b|not recording|Manage Local TDLs", re.I)
@@ -117,6 +118,9 @@ with sync_playwright() as p:
         res = up(path)
         ok(all(w in res for w in PLAIN) and res.endswith(PLAIN[1]) and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1,
            "%s: refused in plain words, ending with the support line (%s)" % (what, res))
+    res = up(BLANK)
+    ok(res.startswith("insurance-blank.xml is blank: it holds no Tally data at all") and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1,
+       "a file of only zero bytes: said to be blank, export again (%s)" % res[:80])
     res = up(BE_NOBOM)
     ok(res.startswith("DayBook-be-nobom.xml is saved as UTF-16 big-endian") and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1,
        "UTF-16BE (FinCom's server refuses it): refused in the browser, plainly (%s)" % res)

@@ -1184,6 +1184,9 @@ async function bringMastersFile(f, opts){
 const KIND_PIECE = 1048576, KIND_OVERLAP = 512;
 async function tallyFileKind(f){
   if (!f || !f.size) return {kind: "", why: (f ? f.name : "The file") + " is empty. Export it again from Tally."};
+  // a file of nothing but zero bytes (an export or a copy that never finished, or a cloud copy not downloaded)
+  const raw0 = new Uint8Array(await f.slice(0, 65536).arrayBuffer());
+  if (raw0.every(x => x === 0)) return {kind: "", why: f.name + " is blank: it holds no Tally data at all (only empty bytes), which happens when an export or a copy did not finish, or the file is an online-only cloud copy. Export it again from TallyPrime (Day Book, F2 for the whole period, Alt+E (Export) \u2192 Format XML), wait until Tally says it is done, and upload that file."};
   const dec = await Books.decoder(f), enc = dec.encoding, wide = /utf-16/.test(enc);
   if (enc === "utf-16be") return {kind: "", why: f.name + " is saved as UTF-16 big-endian text, which TallyPrime does not write and FinCom cannot read. Export it again from TallyPrime (Alt+E (Export) \u2192 Format XML) and upload that file."};
   const head = dec.decode(new Uint8Array(await f.slice(0, 262144).arrayBuffer()));
