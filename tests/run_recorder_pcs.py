@@ -1,13 +1,15 @@
 """python3 run_recorder_pcs.py - phase 2, F36 + N102 (is each PC recording Tally's changes?), J64 (silent today) and H52
 (Tally not responding). From the heartbeat (tally_devices.info.bridges[id].recorder = {<company>: {seen, lastAt}}, FinCom
-Bridge 2.1.9 on): the Tally page says per company on each computer "recording · last line <time>" or "not recording". Since
+Bridge 2.1.9 on): since 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option") each computer's
+details say one neutral fact, "Add-on lines last received: <date>" (or "none in 7 days"), and nothing asks to load or turn
+on the add-on or recorder: a computer not recording is no alert. Since
 round 3 of the UI pass (05-Oct-2026) the warnings are in the bell in the top bar, one per problem, the computer behind
 "details" (run_alerts_one_place.py): a client whose company a computer keeps open without recording it -> one amber alert
 for that client (no banner on its pages); tally_recorder_silent(p_firm) -> information "No change recorded today on one
 computer"; beat.notAnsweringSince -> "Tally is not answering on one computer since <time>". No word at all while no bridge
 reports a recorder (before 2.1.9).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_recorder_pcs.py"""
-import json, os, threading, functools, http.server
+import json, os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -68,17 +70,19 @@ with sync_playwright() as p:
     hmIn = lambda text, m: any(hm(x) in text for x in (m, m + 1))
     E(SETUP, ["owner", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800); more()
     comp = lambda d: '#app [data-computer="%s"]' % d
-    # ---- F36: per company on each computer
-    zz = txt(comp(D1) + ' [data-recorder-co="ZZ TEST"]'); abc = txt(comp(D1) + ' [data-recorder-co="ABC LTD"]')
-    ok(zz.startswith("ZZ TEST: recording") and "last line" in zz and hmIn(zz, 3), "NWS144, ZZ TEST: recording · last line <time> (%s)" % zz)
-    ok(abc.startswith("ABC LTD: not recording"), "NWS144, ABC LTD: not recording (%s)" % abc)
+    # ---- F36, since 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option"): one neutral fact a
+    # computer in its details (for support), never "not recording"
+    rl = txt(comp(D1) + " [data-recorder]")
+    ok(rl.startswith("Add-on lines last received: ") and "none in 7 days" not in rl and re.search(r"\d", rl)
+       and pg.locator("#app [data-recorder-co]").count() == 0, "NWS144: 'Add-on lines last received: <date>', no per-company 'not recording' (%s)" % rl)
+    ok("not recording" not in txt("#app"), "the Tally page: never 'not recording'")
     BELL = """() => { const b = document.querySelector('#cobar [data-bell]'); if (!b) return []; if (!document.querySelector('[data-alerts-panel]')) b.click();
       const r = [...document.querySelectorAll('[data-alerts-panel] [data-alert-key]')].map(e => ({key: e.getAttribute('data-alert-key'), sev: e.getAttribute('data-sev'), text: (e.querySelector('[data-alert-text]') || {}).innerText || '',
         fix: (e.querySelector('[data-alert-fix]') || {}).innerText || '', details: (e.querySelector('[data-alert-details]') || {}).textContent || ''})); S.alertsOpen = false; render(); return r; }"""
     ok(pg.locator("#app [data-recorder-off], #app [data-not-responding], #app [data-recorder-silent]").count() == 0 and "not being recorded" not in txt("#app"), "the Tally page: the computers' state, no warnings printed (they are in the bell)")
     items = E(BELL)
     abc_ = [x for x in items if x["text"].startswith("ABC Client:")]
-    ok(len(abc_) == 1 and abc_[0]["sev"] == "warn" and "not recording" in abc_[0]["text"] and "NWS144" in abc_[0]["details"] and "NWS144" not in abc_[0]["text"], "F36: ABC LTD open on NWS144, not recorded: one amber alert for ABC Client, the computer behind details (%s)" % abc_)
+    ok(not abc_ and not [x for x in items if "record" in (x["text"] + x["fix"]).lower() and "No change recorded today" not in x["text"]], "F36 (17-Oct-2026): ABC LTD open on NWS144, not recorded: no alert, nothing asks to turn the recorder on (%s)" % abc_)
     ok(not [x for x in items if x["text"].startswith("ZZ Test Client:")], "ZZ TEST is recorded: no alert for it")
     # ---- H52
     nr = [x for x in items if "not answering" in x["text"]]
@@ -89,20 +93,20 @@ with sync_playwright() as p:
     ok(len(sl) == 1 and sl[0]["sev"] == "info" and "TALLYSRV" in sl[0]["details"], "J64: silent today, as information, TALLYSRV behind details (%s)" % sl)
     E(SETUP, ["staff", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800); more()
     items = E(BELL)
-    ok([x for x in items if "No change recorded today" in x["text"]] and [x for x in items if x["text"].startswith("ABC Client:")], "J64, F36: staff see them too")
+    ok([x for x in items if "No change recorded today" in x["text"]] and not [x for x in items if x["text"].startswith("ABC Client:")], "J64: staff see it too (and no recorder alert, as for the owner)")
     E(SETUP, ["owner", DEVS, SILENT, "Could not find the function public.tally_recorder_silent(p_firm) in the schema cache (PGRST202)", ""]); pg.wait_for_timeout(1800); more()
     ok(not [x for x in E(BELL) if "No change recorded today" in x["text"]] and pg.locator("#app [data-computer]").count() == 3 and "PGRST202" not in txt("#app"), "J64: the function missing: nothing said, the page as before")
     # ---- a client's pages: no banner (the bell has it)
     E(SETUP, ["owner", DEVS, SILENT, "", "abc"]); pg.wait_for_timeout(1500); more()
     ok(pg.locator("#app [data-recorder-banner]").count() == 0 and "not being recorded" not in txt("#app") and "not recording" not in txt("#app"), "ABC Client's pages: no banner")
     E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(800)
-    ok(pg.locator("#app [data-alert-line]").count() == 1 and "not recording" in txt("#app [data-alert-line]"), "ABC Client's books: the one slim line (%s)" % txt("#app [data-alert-line]"))
+    ok(pg.locator("#app [data-alert-line]").count() == 0 and "not recording" not in txt("#app"), "ABC Client's books: no line about recording (%s)" % txt("#app [data-alert-line]"))
     # no bridge reports a recorder at all (every bridge before 2.1.9): no alert, no word on the Tally page
     OLD = [dev(D1, "NWS144", ["ZZ TEST", "ABC LTD"]), dev(D2, "TALLYSRV", ["OTHER CO"])]
     E(SETUP, ["owner", OLD, {"ok": True, "silent": []}, "", "abc"]); pg.wait_for_timeout(1500); more()
     ok(not [x for x in E(BELL) if "not recording" in x["text"]], "bridges before 2.1.9: no alert")
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
-    ok(pg.locator("#app [data-recorder-co], #app [data-recorder-off], #app [data-recorder-silent]").count() == 0, "bridges before 2.1.9: nothing on the Tally page")
+    ok(pg.locator("#app [data-recorder], #app [data-recorder-co], #app [data-recorder-off], #app [data-recorder-silent]").count() == 0, "bridges before 2.1.9: nothing on the Tally page")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()

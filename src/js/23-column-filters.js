@@ -1117,7 +1117,7 @@ async function bringTbFile(f, on, opts){
   opts = opts || {}; const loud = opts.toast !== false, b = S.books;
   const no = why => { if (loud) toast(why); return {refused: why}; };
   if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance (the day before the first date of the books) first.");
-  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  let text; try { text = await Books.text(f); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
   const r = TBFile.read(text, b);
   const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
   if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML.");
@@ -1142,7 +1142,7 @@ async function checkTbFile(f, on, opts){
   opts = opts || {}; const loud = opts.toast !== false, b = S.books;
   const no = why => { if (loud) toast(why); return {refused: why}; };
   if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance first.");
-  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  let text; try { text = await Books.text(f); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
   const r = TBFile.read(text, b);
   const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
   if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ".");
@@ -1176,14 +1176,31 @@ async function bringMastersFile(f, opts){
 // from its content, never asked: a Day Book (vouchers), the ledger masters (groups and ledgers) or a trial balance
 // (Tally's report lines; its date is not in the file, so only that is asked, on the page). Refused, changing nothing:
 // an empty file, a file cut short (a Tally export ends with </ENVELOPE>), a file of no known kind.
+// The owner, 17-Oct-2026 ("I tried to upload daybook xml of new company.. it has denied and said that it is not day book"):
+// UTF-16LE without the byte-order mark is UTF-16LE (Books.decoder); the vouchers are looked for in the WHOLE file, 1 MB at a
+// time (the pieces overlap, so a tag across a piece's end is found), stopping at the first: a Day Book whose ledger masters
+// come first is a Day Book. A Tally export with no entries says so (with how to export the whole period), never "not a
+// Day Book". UTF-16BE is refused here, as FinCom's server refuses it
+const KIND_PIECE = 1048576, KIND_OVERLAP = 512;
 async function tallyFileKind(f){
   if (!f || !f.size) return {kind: "", why: (f ? f.name : "The file") + " is empty. Export it again from Tally."};
-  const dec = await Books.decoder(f), wide = /utf-16/.test(dec.encoding);
+  // a file of nothing but zero bytes (an export or a copy that never finished, or a cloud copy not downloaded)
+  const raw0 = new Uint8Array(await f.slice(0, 65536).arrayBuffer());
+  if (raw0.every(x => x === 0)) return {kind: "", why: f.name + " is blank: it holds no Tally data at all (only empty bytes), which happens when an export or a copy did not finish, or the file is an online-only cloud copy. Export it again from TallyPrime (Day Book, F2 for the whole period, Alt+E (Export) \u2192 Format XML), wait until Tally says it is done, and upload that file."};
+  const dec = await Books.decoder(f), enc = dec.encoding, wide = /utf-16/.test(enc);
+  if (enc === "utf-16be") return {kind: "", why: f.name + " is saved as UTF-16 big-endian text, which TallyPrime does not write and FinCom cannot read. Export it again from TallyPrime (Alt+E (Export) \u2192 Format XML) and upload that file."};
   const head = dec.decode(new Uint8Array(await f.slice(0, 262144).arrayBuffer()));
   let at = Math.max(0, f.size - 4096); if (wide && at % 2) at++;
-  const tail = new TextDecoder(dec.encoding).decode(new Uint8Array(await f.slice(at).arrayBuffer()));
-  const kind = /<VOUCHER[\s>]/.test(head) ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
-  if (!kind) return {kind, why: f.name + " is not a Tally Day Book, ledger masters or trial balance XML. In Tally, export the report with Ctrl+E as XML."};
+  const tail = new TextDecoder(enc).decode(new Uint8Array(await f.slice(at).arrayBuffer()));
+  const VCH = /<VOUCHER[\s>]/;
+  let vch = VCH.test(head);
+  for (let from = 262144 - KIND_OVERLAP; !vch && from < f.size; from += KIND_PIECE){
+    vch = VCH.test(new TextDecoder(enc).decode(new Uint8Array(await f.slice(from, from + KIND_PIECE + KIND_OVERLAP).arrayBuffer())));
+  }
+  const kind = vch ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
+  if (!kind && /<ENVELOPE[\s>]/i.test(head) && /<SVCURRENTCOMPANY>|<TALLYMESSAGE[\s>]|<IMPORTDATA>|<TALLYREQUEST>|Day ?Book/i.test(head))
+    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Format XML, and upload that file."};
+  if (!kind) return {kind, why: f.name + " is not a file FinCom can read: it is not a Tally Day Book, ledger masters or trial balance saved as XML. In TallyPrime open the report, then Alt+E (Export) \u2192 Format XML, and upload that file. If it is a Day Book, send the file to FinCom support so we can see why."};
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};
 }

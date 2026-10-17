@@ -1514,7 +1514,7 @@ const BridgeSeed = {
     if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
-    const pieces = this.pieces(await file.text(), range || {});
+    const pieces = this.pieces(await Books.text(file), range || {});   // UTF-16 too (file.text() is UTF-8 only)
     if (!pieces.length) return {skipped: "no entries in the file for those dates"};
     let n = 0;
     for (let i = 0; i < pieces.length; i++){

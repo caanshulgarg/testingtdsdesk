@@ -199,7 +199,7 @@ function TallySign() {
   return <span className="tsign-wrap">
     <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
       aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")}
-      // ui-tidy; 15-Oct-2026: while the client is not linked, the sign points to the Tally page's Connect Tally, step 5 with this
+      // ui-tidy; 15-Oct-2026: while the client is not linked, the sign points to the Tally page's Connect Tally, step 4 with this
       // client (goTallyCard, parts/TallyChip.jsx), as every Tally chip does
       onClick={() => (co && k && k.state === "unlinked" ? goTallyCard(co.id) : doAct("tallyPanel"))}>
       <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>

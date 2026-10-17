@@ -61,10 +61,10 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tab") == "invoices", "the sidebar's Purchase leaves Client setup")
     # the Tally panel and the firm menu
     # ui-tidy (13-Oct-2026); 15-Oct-2026: while the client is not linked, the Tally sign points to the one place to link, the
-    # Tally page's Connect Tally (step 5, this client); once linked it opens the Tally panel, as before
+    # Tally page's Connect Tally (step 4, this client); once linked it opens the Tally panel, as before
     cid0 = pg.evaluate("S.coId")
     pg.click("#cobar .tallychip"); pg.wait_for_timeout(600)
-    ok(pg.evaluate("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 5, cid0] and pg.locator("#app [data-connect-guide]").count() == 1, "the Tally sign of a client not linked opens Connect Tally, step 5")
+    ok(pg.evaluate("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid0] and pg.locator("#app [data-connect-guide]").count() == 1, "the Tally sign of a client not linked opens Connect Tally, step 4")
     pg.evaluate("(c) => { S.view = 'company'; S.coId = c; S.tab = 'cotally'; render(); }", cid0); pg.wait_for_timeout(600)
     pg.evaluate("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally panel opens")

@@ -301,7 +301,7 @@ def main():
         # 15-Oct-2026: the companies to link are in the one place to link, Connect Tally's step 4
         pg.click("#app [data-tally-link-line] [data-open-connect]"); pg.wait_for_timeout(900)
         o5 = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 5] and "GARG SHEKHAR" in o5 and "ABC LTD" not in o5,
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and "GARG SHEKHAR" in o5 and "ABC LTD" not in o5,
            "5. not linked: Open Connect Tally, its step 4 lists the companies open in Tally now (not ABC LTD, its computer offline) (%s)" % o5)
         E("(c) => { S.tallyGuide = {}; S.view = 'company'; S.coId = c; goClient('books:import'); }", cid); pg.wait_for_timeout(900)
         shot("client-unlinked")

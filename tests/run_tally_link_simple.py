@@ -136,13 +136,13 @@ def main():
         # where the companies seen are listed, the same GSTIN on top, with Link
         scene(SEEN)
         line = one_line("Not linked → Link", "1. not linked")
-        ok("Not linked to its Tally company yet" in line and pg.locator(card + ' [data-open-connect="5"]').count() == 1 and pg.locator(card + " [data-tally-link-to], " + card + " select").count() == 0,
+        ok("Not linked to its Tally company yet" in line and pg.locator(card + ' [data-open-connect="4"]').count() == 1 and pg.locator(card + " [data-tally-link-to], " + card + " select").count() == 0,
            "1. not linked: said, with Open Connect Tally; nothing to link with on the card (%s)" % line)
         ok(pg.locator(card + " [data-tally-link-post]").count() == 0, "1. no posting tick before the client is linked")
         no_port("1. the card, not linked")
         shot(pg, "card-1-not-linked-desktop-light")
-        pg.click(card + ' [data-open-connect="5"]'); pg.wait_for_timeout(1200)
-        ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 5, cid] and E("() => document.querySelector('#app [data-guide-client]').value") == cid,
+        pg.click(card + ' [data-open-connect="4"]'); pg.wait_for_timeout(1200)
+        ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, cid] and E("() => document.querySelector('#app [data-guide-client]').value") == cid,
            "1. Open Connect Tally: the guide's step 4, this client chosen (%s)" % E("S.tallyGuide"))
         gopts = lambda: E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => [o.value, o.innerText])")
         opts = gopts()
@@ -161,7 +161,7 @@ def main():
         E("(c) => { S.companies[c].tallyName = 'NEW CO'; }", cid)
         # no company open in Tally on any computer (15-Oct-2026: step 4 offers only what is open now)
         scene([], devs=[dev(1, "NWS144", "anshul", opened=()), dev(2, "LAPTOP", "ravi", opened=())])
-        E("(c) => openConnectTally(5, c)", cid); pg.wait_for_timeout(1500)
+        E("(c) => openConnectTally(4, c)", cid); pg.wait_for_timeout(1500)
         ok("open NEW CO in TallyPrime" in txt("#app [data-guide-none]"), "2b. nothing seen: open NEW CO in TallyPrime (%s)" % txt("#app [data-connect-step=\"link\"]"))
         # 15-Oct-2026: step 4 offers only the companies open in Tally now, so NEW CO is opened in Tally on NWS144 too
         E("""() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()});
@@ -205,7 +205,7 @@ def main():
         items = E("() => [...document.querySelectorAll('#app [data-tally-link-more] .bk-menu-list button')].map(b => b.firstChild.textContent.trim())")
         ok(items == ["Change company", "Unlink", "Name differs in Tally", "Tally page"], "6. More: %s" % items)
         pg.click(card + " [data-tally-link-change]"); pg.wait_for_timeout(1200)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 5, cid] and [o for o in E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)") if o == "ABC LTD"],
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid] and [o for o in E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)") if o == "ABC LTD"],
            "6. Change company: Connect Tally's step 4 with this client, listing the other companies seen")
         E("(c) => { S.tallyGuide = {}; openCompany(c); S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(900)
         n0 = len(calls("tally_company_link"))
@@ -285,7 +285,7 @@ def main():
         st = E("ONB.steps(CO()).map(s => [s.id, s.done])")
         ok([s[0] for s in st if s[0] in ("tally", "bridge", "link")] == ["link"] and dict(st)["link"] is False, "11. one step, Link to Tally; a Tally name alone does not tick it (%s)" % st)
         pg.click('#app [data-onb-step="link"] button'); pg.wait_for_timeout(800)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 5, cid] and pg.locator("#app [data-guide-link]").count() == 1, "11. Link to Tally opens Connect Tally, step 4, this client (%s)" % E("S.tallyGuide"))
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid] and pg.locator("#app [data-guide-link]").count() == 1, "11. Link to Tally opens Connect Tally, step 4, this client (%s)" % E("S.tallyGuide"))
         scene(LINKED(D3))
         ok(E("ONB.steps(CO()).find(s => s.id === 'link').done") is True, "11. linked in the cloud (its computer off): ticked")
 

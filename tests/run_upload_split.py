@@ -274,6 +274,16 @@ try:
         ok(rgs and rgs[0] == (0, PIECE_B - 1) and second == want2, "B %s: the first range [0, %d] ended inside %s; the next range starts at its start, byte %s (%s)"
            % (tag, PIECE_B - 1, "a UTF-8 character" if enc == "utf-8" else "a surrogate pair (and between a code unit's two bytes)", want2, rgs[:3]))
         pieces_ms.append(("B " + tag + ", 1,000,003-byte pieces", piece_times(job)))
+    # 17-Oct-2026 (the owner: a new company's Day Book refused): a Day Book whose ledger masters come first (1.5 MB of them
+    # before the first voucher, more than a piece), UTF-16LE without the BOM: read as every other
+    text = make_book(2 * 1024 * 1024, seed=9, tag="m"); i = text.index("<TALLYMESSAGE")
+    mast = "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">\r\n<LEDGER NAME="Supplier %05d" RESERVEDNAME="">\r\n<PARENT>Sundry Creditors</PARENT>\r\n</LEDGER>\r\n</TALLYMESSAGE>\r\n' % k for k in range(6200))
+    text = text[:i] + mast + text[i:]
+    data = encode(text, "utf-16le", False); p = os.path.join(TMP, "m.xml"); open(p, "wb").write(data)
+    ok(data.index("<VOUCHER ".encode("utf-16-le")) > PIECE_B, "M the first voucher is past the first piece (byte %d)" % data.index("<VOUCHER ".encode("utf-16-le")))
+    c, r, c2, r2, job, path = upload("m.xml", data)
+    ok(work_until_done(job) and jrow(job).get("status") == "done" and jrow(job).get("done") == 365, "M masters first, UTF-16LE without the BOM (%.1f MB): the job done, %s of %s days" % (len(data) / 1048576, jrow(job).get("done"), jrow(job).get("total")))
+    same_as_browser("M masters first", p, job)
     text = make_book(3 * 1024 * 1024, seed=5, shuffle=True, tag="s")
     dates = re.findall(r"<VOUCHER\b[\s\S]*?<DATE>(\d{8})</DATE>", text)
     ok(any(dates[i] < dates[i - 1] for i in range(1, len(dates))), "the out-of-order file has entries of earlier days further on")
