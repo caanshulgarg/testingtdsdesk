@@ -132,6 +132,27 @@ console.log(JSON.stringify(out));
     if r.returncode: raise SystemExit("the browser split under Deno failed: " + r.stderr[-800:])
     return json.loads(r.stdout)
 
+def daycut(path, rng, piece=None):
+    """the browser's cut (DayCut.plan in src/js/49-tally-cloud.js) of a Day Book, under Deno: {pieces: [{from, to, days,
+    vouchers, size, path}]} (each piece written next to the file), or {error, final}"""
+    js = os.path.join(TMP, "daycut.mjs")
+    code = src[src.index("// ---- DayCut (begin)"):src.index("// ---- DayCut (end)")]
+    open(js, "w").write(code + """
+const f = new Blob([Deno.readFileSync(Deno.args[0])]);
+try {
+  const ps = await DayCut.plan(f, { from: Deno.args[1], to: Deno.args[2] }, null, Deno.args[3] ? +Deno.args[3] : 0);
+  const out = [];
+  for (let i = 0; i < ps.length; i++) {
+    const p = Deno.args[0] + ".piece" + (i + 1); Deno.writeFileSync(p, new Uint8Array(await ps[i].blob.arrayBuffer()));
+    out.push({ from: ps[i].from, to: ps[i].to, days: ps[i].days, vouchers: ps[i].vouchers, size: ps[i].blob.size, path: p });
+  }
+  console.log(JSON.stringify({ pieces: out }));
+} catch (e) { console.log(JSON.stringify({ error: String(e && e.message || e), final: !!(e && e.final) })); }
+""")
+    r = subprocess.run([DENO, "run", "--allow-read", "--allow-write", js, path, rng[0], rng[1], str(piece or "")], capture_output=True, text=True)
+    if r.returncode: return {"error": r.stderr[-800:]}
+    return json.loads(r.stdout)
+
 # ---------------------------------------------------------------- the cloud function and its stand-ins
 FS.USERS["tok-owner"] = {"id": "u-owner", "email": "owner@zz.test"}; FS.USERS["tok-other"] = {"id": "u-other", "email": "x@yy.test"}
 FS.T["members"] += [{"user_id": "u-owner", "firm_id": FIRM, "role": "owner", "active": True}, {"user_id": "u-other", "firm_id": "f-2", "role": "owner", "active": True}]
@@ -378,6 +399,71 @@ try:
     FS.STORAGE_FAIL.clear()
     ok(c2 == 500 and "secret-detail" not in json.dumps(r2) and r2.get("error"), "L5. Storage answering 500 with its own text: the person reads plain words (%s)" % r2.get("error"))
 
+    # ---------------------------------------------------------------- (F) 17-Oct-2026: a Day Book larger than Storage takes
+    print("== F. 17-Oct-2026: a 120 MB UTF-16LE Day Book cut in the browser (DayCut) into whole-day pieces of at most 45 MB; upload_fail")
+    ok(start_fn(4 * 1024 * 1024) is not None, "the cloud function again, pieces of 4 MB")
+    # F1. upload_fail: the job never left 'queued'
+    c, r = call({"kind": "upload_new", "client": CID, "name": "big.xml", "size": 170536990, "from": "20250401", "to": "20261012"})
+    jf = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = b"part of it"
+    ok(jrow(jf).get("status") in ("queued", None) or jrow(jf).get("status") == "queued", "F1. upload_new: the job is queued (%s)" % jrow(jf).get("status"))
+    c2, r2 = call({"kind": "upload_fail", "client": "c-9", "job": jf, "reason": "x"}, tok="tok-other")
+    ok(c2 == 404 and jrow(jf).get("status") != "failed", "F1. another firm's upload_fail: no such upload (%s)" % c2)
+    c2, r2 = call({"kind": "upload_fail", "client": CID, "job": jf, "path": r.get("path"), "reason": "FinCom’s cloud refused the file as too large (162.6 MB; it takes at most 50 MB a file)"})
+    jr = jrow(jf)
+    ok(c2 == 200 and r2.get("failed") is True and jr.get("status") == "failed" and jr.get("sealed") is False and "Not sent to FinCom's cloud: FinCom’s cloud refused the file as too large" in (jr.get("message") or ""),
+       "F1. upload_fail: the job failed with the reason, not left queued (%s: %s)" % (jr.get("status"), jr.get("message")))
+    ok("tally-uploads/" + str(r.get("path")) not in FS.FILES, "F1. upload_fail: what was in Storage of it is removed")
+    c, r = call({"kind": "upload_new", "client": CID, "name": "s.xml", "size": len(small), "from": "20260401", "to": "20270331"})
+    js_ = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = small
+    call({"kind": "upload_done", "client": CID, "job": js_, "path": r.get("path")})
+    c2, r2 = call({"kind": "upload_fail", "client": CID, "job": js_, "reason": "late"})
+    ok(c2 == 200 and r2.get("already") is True and jrow(js_).get("status") != "failed", "F1. upload_fail on a sealed job: nothing changes (%s, %s)" % (r2, jrow(js_).get("status")))
+    work_until_done(js_, 120)
+    # F2. 120 MB UTF-16LE (BOM), a year: the browser's cut (DayCut.plan, src/js/49-tally-cloud.js, under Deno)
+    text = make_book(106 * 1024 * 1024, seed=31, tag="big")          # about 120 MB in UTF-16LE
+    data = encode(text, "utf-16le", True); del text
+    pF = os.path.join(TMP, "big.xml"); open(pF, "wb").write(data)
+    cut = daycut(pF, ("20260401", "20270331"))
+    ok(115 * 1048576 <= len(data) <= 125 * 1048576 and cut.get("pieces") and len(cut["pieces"]) == 3, "F2. a %.1f MB UTF-16LE Day Book: cut into 3 pieces (%s)" % (len(data) / 1048576, [(p_["from"], p_["to"], round(p_["size"] / 1048576, 1)) for p_ in cut.get("pieces", [])] or cut))
+    pcs = cut.get("pieces") or []
+    s0 = data.index("<VOUCHER".encode("utf-16-le")); e9 = data.rindex("</VOUCHER>".encode("utf-16-le")) + len("</VOUCHER>".encode("utf-16-le"))
+    ok(all(p_["size"] <= 45 * 1024 * 1024 for p_ in pcs), "F2. each piece at most 45 MB (%s)" % [p_["size"] for p_ in pcs])
+    ok(all(open(p_["path"], "rb").read(s0) == data[:s0] for p_ in pcs) and all(open(p_["path"], "rb").read()[-(len(data) - e9):] == data[e9:] for p_ in pcs),
+       "F2. each piece: the original's envelope (BOM, header, company) before its first entry and the original closing after its last; UTF-16LE with the BOM")
+    ok(pcs and pcs[0]["from"] == "20260401" and pcs[-1]["to"] == "20270331" and all(day_list(pcs[i]["to"], pcs[i]["to"]) and pcs[i + 1]["from"] == day_list(pcs[i]["to"], "20270331")[1] for i in range(len(pcs) - 1)),
+       "F2. the pieces' periods follow one another and make the period (%s)" % [(p_["from"], p_["to"]) for p_ in pcs])
+    days_in = []
+    for p_ in pcs:
+        t_ = open(p_["path"], "rb").read().decode("utf-16")
+        ds_ = set(re.findall(r"<VOUCHER\b[\s\S]*?<DATE>(\d{8})</DATE>", t_))
+        days_in.append(set(d for d in ds_ if p_["from"] <= d <= p_["to"]))
+        ok(all(p_["from"] <= d <= p_["to"] or not ("20260401" <= d <= "20270331") for d in ds_), "F2. piece %s-%s holds only its own days' entries" % (p_["from"], p_["to"]))
+    ok(all(not (days_in[i] & days_in[k]) for i in range(len(pcs)) for k in range(i + 1, len(pcs))), "F2. whole days: no day in two pieces")
+    ok(sum(p_["vouchers"] for p_ in pcs) == len(re.findall(rb"<\x00V\x00O\x00U\x00C\x00H\x00E\x00R\x00[ >]\x00", data)), "F2. every entry of the file is in one piece (%d)" % sum(p_["vouchers"] for p_ in pcs))
+    jobsF = []
+    for p_ in pcs:
+        c, r, c2, r2, jb_, path_ = upload(os.path.basename(p_["path"]), open(p_["path"], "rb").read(), (p_["from"], p_["to"]))
+        ok(c == 200 and c2 == 200, "F2. piece %s-%s: upload_new and upload_done (%s %s)" % (p_["from"], p_["to"], c, c2))
+        jobsF.append(jb_)
+    t0 = time.time()
+    ok(all(work_until_done(j_, 900) for j_ in jobsF) and all(jrow(j_).get("status") == "done" for j_ in jobsF), "F2. the server read the 3 pieces (%.0f s)" % (time.time() - t0))
+    want = browser_days(pF, ("20260401", "20270331"))
+    got = {}
+    for j_ in jobsF:
+        for d, v in server_days(j_).items(): got.setdefault(d, []).extend(v)
+    ok(set(got) == set(want) and len(want) == 365, "F2. every day of the year queued once over the 3 jobs, the empty ones too (%d; browser %d)" % (len(got), len(want)))
+    ok(all(len(v) == 1 for v in got.values()), "F2. no day queued by two pieces (%s)" % [d for d, v in got.items() if len(v) > 1][:5])
+    diff = [d for d in want if (got.get(d) or [""])[-1] != want[d]]
+    ok(not diff, "F2. the union of the server's split of the pieces equals the browser's split of the whole file, byte for byte (%d differ: %s)" % (len(diff), diff[:5]))
+    ok(sum(jrow(j_).get("total") for j_ in jobsF) == 365 and sum(jrow(j_).get("done") for j_ in jobsF) == 365, "F2. the jobs' totals: %s days, 365 in all" % [jrow(j_).get("total") for j_ in jobsF])
+    # F3. a day larger than a piece: said plainly, no piece
+    tb = make_book(3 * 1024 * 1024, seed=33, tag="h"); k_ = tb.index("<NARRATION>", len(tb) // 2) + len("<NARRATION>")
+    pH = os.path.join(TMP, "h.xml"); open(pH, "wb").write(encode(tb[:k_] + "y" * 700000 + tb[k_:], "utf-16le", True))
+    bad = daycut(pH, ("20260401", "20270331"), piece=1024 * 1024)
+    ok(not bad.get("pieces") and re.search(r"^the entries of \d\d-[A-Z][a-z]{2}-\d{4} alone come to [\d.]+ MB, more than FinCom’s cloud takes in one piece \(1\.0 MB\), and a day is never cut in two", bad.get("error") or "") and bad.get("final") is True,
+       "F3. a day larger than a piece: '%s'" % bad.get("error"))
+    del data
+    ok(start_fn(PIECE_B) is not None, "the cloud function again, pieces of 1,000,003 bytes")
     # ---------------------------------------------------------------- (C) the same file twice through the real day path
     print("== C. the same file twice, through tally_ingest_day on a throwaway PostgreSQL")
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))

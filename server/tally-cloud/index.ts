@@ -2789,6 +2789,25 @@ async function queueJob(firm: string, client: string, book: string, user: string
     if (error) throw dbFail("upload_new", error, "The upload could not be started just now; try again.");
     return reply(200, { ok: true, job: id, path, bucket: UPLOAD_BUCKET, days: total });
   }
+  // 17-Oct-2026 (staging: a 170 MB Day Book refused by Storage with 413; its job stayed 'queued', sealed false, for ever):
+  // upload_fail {job, reason}: the browser could not put the file in Storage (or start the job). The job (kind upload, this
+  // client's, not sealed) is marked failed with the reason; whatever of its file is in Storage is removed (the job's own
+  // path only). A sealed job is never touched (answered 'already'). A later upload_done of the same job (the browser goes
+  // on with the same upload) starts it as before
+  if (body.kind === "upload_fail") {
+    const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, kind, sealed, upload").eq("id", String(body.job || "")).maybeSingle();
+    const up = (j as any)?.upload;
+    if (!j || j.firm_id !== firm || j.client_id !== client || j.kind !== "upload" || !up || typeof up.path !== "string") return reply(404, { ok: false, error: "No such upload for this client." });
+    if (j.sealed) return reply(200, { ok: true, job: j.id, already: true });
+    const why = String(body.reason || "").replace(/\s+/g, " ").trim().slice(0, 240) || "the file could not be sent";
+    const { error } = await db.from("tally_jobs").update({ status: "failed", message: ("Not sent to FinCom's cloud: " + why).slice(0, 300), updated_at: new Date().toISOString() })
+      .eq("id", j.id).eq("sealed", false);
+    if (error) throw dbFail("upload_fail", error, "The upload's state could not be kept just now.");
+    const { error: rmErr } = await db.storage.from(UPLOAD_BUCKET).remove([up.path]);
+    if (rmErr) console.log("tally-ingest upload_fail: the file not removed", j.id, String(rmErr.message || "").slice(0, 160));
+    console.log("tally-ingest upload_fail", j.id, why.slice(0, 160));
+    return reply(200, { ok: true, job: j.id, failed: true });
+  }
   // upload_done: the file is in Storage; the job sealed and its first piece queued (once: a second call changes nothing)
   if (body.kind === "upload_done") {
     const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, book_id, kind, sealed, total, upload").eq("id", String(body.job || "")).maybeSingle();
