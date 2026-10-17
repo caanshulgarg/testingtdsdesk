@@ -161,7 +161,7 @@
 .asst-rep input { border: 1px solid var(--border); border-radius: var(--radius-control); padding: 4px 8px; font: inherit; font-size: 12.5px; width: 260px; background: var(--surface); color: var(--foreground); }
 .asst-earlier > summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; margin-top: 6px; }
 .asst-saved { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); padding: 8px; }
-.asst-launch { position: fixed; right: 22px; bottom: calc(var(--bottom-banner-h, 0px) + 22px); z-index: 60; display: inline-flex; align-items: center; gap: 7px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border));
+.asst-launch { position: fixed; right: 22px; bottom: calc(var(--bottom-banner-h, 0px) + 22px + var(--ask-fab-lift, 0px)); z-index: 60; display: inline-flex; align-items: center; gap: 7px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border));
   background: var(--surface); color: var(--foreground); border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 600; font-size: 13.5px; box-shadow: var(--shadow-floating); cursor: pointer; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asst-launch:hover { border-color: var(--accent); }
 .asst-launch svg { color: var(--accent); flex: 0 0 auto; }
@@ -203,7 +203,7 @@
 /* the owner's report of 14-Oct-2026: on a phone the launcher sat on the bottom bar and covered More, so Settings could not
    be reached. On a phone it is a round button above the bar (the bar about 64 px, on the testing strip if any), words hidden */
 @media (max-width: 600px) {
-  .asst-launch { right: 12px; bottom: calc(var(--bottom-banner-h, 0px) + 80px + env(safe-area-inset-bottom)); width: 48px; height: 48px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .asst-launch { right: 12px; bottom: calc(var(--bottom-banner-h, 0px) + 80px + env(safe-area-inset-bottom) + var(--ask-fab-lift, 0px)); width: 48px; height: 48px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
   .asst-launch svg { width: 20px; height: 20px; }
 }
 
@@ -250,3 +250,19 @@
 .asst-body > .asst-dropzone { position: absolute; inset: 8px; z-index: 5; display: grid; place-items: center; border: 2px dashed var(--accent); }
 /* the box inside the composer has no frame of its own: the composer is the frame, and it shows the focus */
 .asst-panel .asst-ask textarea, .asst-panel .asst-ask textarea:focus, .asst-panel .asst-ask textarea:focus-visible { border: 0; border-radius: 0; box-shadow: none; outline: none; background: transparent; padding: 4px 2px; }
+
+/* the owner's report of 17-Oct-2026 ("ask fincom is coming in approving"): the launcher never sits over anything to press
+   (AssistantLauncher.jsx places it: data-asst-place). "full" is the button as always, lifted onto any bar at the foot by
+   --ask-fab-lift; "tab" is a small tab at the window's right edge while a row of the page is under it; "away" while a
+   drawer, sheet or confirm box is open, or nothing else fits (Ctrl+J still opens the panel). */
+.asst-launch[data-asst-place="tab"] { right: 0; width: 30px; height: 36px; min-width: 0; padding: 0 0 0 8px; gap: 0; font-size: 0; justify-content: flex-start;
+  border-right: 0; border-radius: 999px 0 0 999px; }
+.asst-launch[data-asst-place="tab"] .asst-launch-txt { display: none; }
+.asst-launch[data-asst-place="tab"] svg { width: 16px; height: 16px; }
+.asst-launch[data-asst-place="away"] { visibility: hidden; pointer-events: none; }
+@media (max-width: 600px) {
+  .asst-launch[data-asst-place="tab"] { right: 0; width: 30px; height: 40px; padding: 0 0 0 8px; }
+}
+/* the room the launcher takes at the foot (set on :root while it is shown): the page can always be scrolled clear of it */
+main, #app.wrap { padding-bottom: max(calc(140px + var(--bottom-banner-h, 0px)), var(--ask-fab-space, 0px)); }
+html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var(--ask-fab-space, 0px)); }

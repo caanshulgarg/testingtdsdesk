@@ -57,6 +57,13 @@ buttons, each the user's own click; nothing is posted or filed by itself:
   in the panel, `summaryLabels` beside each result the model reads (it is told to use those words), and a last pass over the
   model's answer (`relabelText`). "Disallowance u/s 40(a)(ia) – 30%", "payments in cash (%)" and so on.
 - **A long client name on Ask FinCom** is cut with an ellipsis inside the button's width; the tooltip has the whole name.
+- **Ask FinCom covered Approve** (the owner, 17-Oct-2026: "ask fincom is coming in approving.. same thing is happening
+  everywhere"). One rule, in `parts/AssistantLauncher.jsx`, for every page: the launcher never sits over anything that can
+  be pressed or typed in. Put away (`data-asst-place="away"`) while a drawer, sheet, confirm box or other modal is open;
+  lifted onto any bar fixed or stuck to the foot (`--ask-fab-lift`: the action bars, sticky Save bars, toasts, "A new
+  version … Reload"); tucked into a small tab at the right edge (`tab`) while a row of the page is under it; put away if
+  even the tab would cover something. Ctrl+J opens the panel throughout. `--ask-fab-space` on `:root` pads the page's foot.
+  Test: tests/run_ask_fab_overlap.py (every sidebar page and the states with bars, at 1366, 1440 and a phone).
 
 ## How a question is answered (cheapest first)
 
