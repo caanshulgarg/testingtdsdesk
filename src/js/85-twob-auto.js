@@ -112,7 +112,7 @@ const M2B = {
 };
 // The 2B reconciliation's hook (app/src/screens/gst/reco.js autoFor): the automatic run's pairs for the registration, in
 // its shape {results: [{key2b, books, status, reason, confidence, id}]}; mismatches stay with the reconciliation's own rules.
-window.GSTAutoMatch = {
+const GSTAutoMatch = {
   result(reg){
     const s = M2B.st[M2B.key(reg, M2B.fyNow())], res = s && s.run && s.run.result;
     if (!res) return null;
@@ -123,6 +123,7 @@ window.GSTAutoMatch = {
   },
   decide(reg, id, decision){ if (id) m2bDecide(reg, [id], decision); }
 };
+if (typeof window !== "undefined") window.GSTAutoMatch = GSTAutoMatch;
 function m2bAgain(reg){ M2B.sync(reg, "match again", true); }
 function m2bDecide(reg, ids, decision){
   const s = M2B.st[M2B.key(reg, M2B.fyNow())], rows = ((s && s.run && s.run.result && s.run.result.rows) || []).filter(r => r.st === "probable" && ids.includes(r.id));
