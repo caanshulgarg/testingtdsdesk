@@ -3068,20 +3068,20 @@
 "sha256": "6dfb0e2a265a064ff0aca69265ee8b6629acbd9e14001a9d7949260344d201bc"
 },
 "tds/2025-26/Q1/26Q/DELZ12345A_26Q_Q1_202526.txt": {
-"bytes": 546,
-"sha256": "5b2a6bbbd03f68b8d0bd317cf741d5d4318890f2bb492dcdff0cefc4e9b09e9f"
+"bytes": 677,
+"sha256": "d6830f3859ea822e69b1781f96344e6b6e9f3b41b1919afa6bf51e9ffbc44c97"
 },
 "tds/2025-26/Q2/26Q/DELZ12345A_26Q_Q2_202526.txt": {
-"bytes": 401,
-"sha256": "082acccb5efdaff418118ffbfa71a0a4fed26f704d7ad667f5e4fd076e83cfe1"
+"bytes": 504,
+"sha256": "a139a642de8f1938d214266a3d35019ebdbfeb047cccb7b3039e5c5f6ea0544b"
 },
 "tds/2025-26/Q3/26Q/DELZ12345A_26Q_Q3_202526.txt": {
-"bytes": 403,
-"sha256": "1cb51d82d5dba19ededdfa08302de27c67ab7183b3faa6329edfd06b3826c6c1"
+"bytes": 504,
+"sha256": "5f0515d467a79df42c35b645e753d487ea11611c5ee7163fba4adbdebf3e78c7"
 },
 "tds/2025-26/Q4/26Q/DELZ12345A_26Q_Q4_202526.txt": {
-"bytes": 688,
-"sha256": "026031142331a7a65e57a8155156bea883b55446be08c176bc3b4f5181a845bd"
+"bytes": 851,
+"sha256": "d557d33eb05c86129b3f7c6add87b79dcf25ffae803675ff14ede46f0e0cec08"
 },
 "tds/2026-27/Q1/26Q/DELZ12345A_Form140_Q1_202627_DRAFT.txt": {
 "bytes": 540,

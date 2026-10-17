@@ -1811,7 +1811,8 @@ function doAct(act, t){
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
       toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
-        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") + (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
+        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") +
+        (r.firmMissing && r.firmMissing.length ? ". The deductor's details the FVU asks are missing: " + r.firmMissing.join(", ") : "") + (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
       break;
     }
     case "tdsFvu": { if (!ledgersReady("tds")) break;

@@ -52,7 +52,8 @@ ok(!f.error && lines(f.text, "DD").length === 2 && lines(f.text, "CD").some(l =>
 b = books([V("v3", "20260320", "Alpha Ltd", 100000, 2000, "TDS 194C")]);
 b.challans = [{id: "c3", bsr: "0240020", serial: "00003", date: "20260430", tax: 2000, interest: 0}]; b.alloc = {"v3|TDS 194C": "c3"};
 f = x.TDS26Q.build("2025-26", "Q4", firm, "26Q");
-ok(!f.error && lines(f.text, "DD").length === 1 && lines(f.text, "CD").some(l => /\^30042026\^00003\^/.test(l)), "H1. March's deduction paid on 30-April: the Q4 2025-26 file is built with it (" + (f.error || "ok") + ")");
+// (a 2025-26 file is laid out as Protean's format, run_fvu_layout.js: the challan's serial is field 12, its date field 18)
+ok(!f.error && lines(f.text, "DD").length === 1 && lines(f.text, "CD").some(l => l.split("^")[11] === "00003" && l.split("^")[17] === "30042026"), "H1. March's deduction paid on 30-April: the Q4 2025-26 file is built with it (" + (f.error || "ok") + ")");
 
 // ---------------- H2
 ok(x.TDS.returnDue("2026-27", "Q1", "27EQ") === "20260731" && x.TDS.returnDue("2026-27", "Q3", "27EQ") === "20270131" && x.TDS.returnDue("2026-27", "Q4", "27EQ") === "20270531",
@@ -82,7 +83,8 @@ b.challans = [{id: "t1", bsr: "0240020", serial: "00009", date: "20260607", tax:
 f = x.TDS26Q.build("2025-26", "Q1", firm, "27EQ");
 b.vouchers[0].date = "20250510";
 f = x.TDS26Q.build("2025-26", "Q1", firm, "27EQ");
-ok(!f.error && lines(f.text, "DD").some(l => /\^6CE\^/.test(l)), "H3. the 27EQ file writes scrap as 6CE (" + (f.error || lines(f.text, "DD")[0]) + ")");
+// (Protean's 27EQ file carries the code's letter in field 33: 6CE is E, as FVU 8.7 reads it)
+ok(!f.error && lines(f.text, "DD").some(l => l.split("^")[32] === "E"), "H3. the 27EQ file writes scrap as 6CE, E in the file (" + (f.error || lines(f.text, "DD")[0]) + ")");
 b = books([], {tcsCodes: {"TCS Old Scrap": "6CF", "TCS Old Tendu": "6CB"}});
 x.TCS27EQ.fixCodes && x.TCS27EQ.fixCodes(b);
 ok(b.tcsCodes["TCS Old Scrap"] === "6CE" && b.tcsCodes["TCS Old Tendu"] === "6CI" && b.tcsCodesFixed, "H3. a code chosen from the old list moves to the same nature (scrap 6CF -> 6CE, tendu 6CB -> 6CI), once (" + J(b.tcsCodes) + ")");
