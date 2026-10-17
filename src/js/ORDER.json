@@ -81,5 +81,6 @@
  "80-assets.js",
  "81-tax-ledgers.js",
  "82-registers.js",
- "83-gst-file-api.js"
+ "83-gst-file-api.js",
+ "84-gst-browser.js"
 ]

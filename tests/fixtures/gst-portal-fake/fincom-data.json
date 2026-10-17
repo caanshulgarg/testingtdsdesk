@@ -1,0 +1,79 @@
+{
+ "_note": "A made-up client's GSTR-1 and GSTR-3B for November 2025 in the shape FinCom builds them (GSTR.toJson, GSTR.threeBJson), with the totals worked out by hand (hand.r1 in paise, hand.r3b in rupees). Used by run_gst_helper_rules.js and run_gst_browser_helper.py.",
+ "client": {"id": "fx-client", "name": "ZZ Made-up Traders"},
+ "gstin": "07AABCF1234K1Z5", "ym": "202511", "fp": "112025",
+ "r1json": {
+  "gstin": "07AABCF1234K1Z5", "fp": "112025", "version": "GST3.2.1", "hash": "hash",
+  "b2b": [
+   {"ctin": "27AAACM5678P1Z2", "inv": [
+     {"inum": "A/101", "idt": "03-11-2025", "val": 11800, "pos": "27", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 10000, "csamt": 0, "iamt": 1800}}]},
+     {"inum": "A/102", "idt": "07-11-2025", "val": 2360.5, "pos": "27", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 2000.42, "csamt": 0, "iamt": 360.08}}]}]},
+   {"ctin": "07AAACN9999Q1Z3", "inv": [
+     {"inum": "A/103", "idt": "12-11-2025", "val": 5530, "pos": "07", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 5, "txval": 1000, "csamt": 0, "camt": 25, "samt": 25}}, {"num": 2, "itm_det": {"rt": 12, "txval": 4000, "csamt": 0, "camt": 240, "samt": 240}}]}]}
+  ],
+  "b2ba": [{"ctin": "07AAACN9999Q1Z3", "inv": [{"oinum": "A/090", "oidt": "05-10-2025", "inum": "A/090", "idt": "05-10-2025", "val": 1180, "pos": "07", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 1000, "csamt": 0, "camt": 90, "samt": 90}}]}]}],
+  "b2cl": [{"pos": "29", "inv": [{"inum": "A/104", "idt": "20-11-2025", "val": 300000, "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 254237.29, "csamt": 0, "iamt": 45762.71}}]}]}],
+  "exp": [
+   {"exp_typ": "WPAY", "inv": [{"inum": "E/1", "idt": "10-11-2025", "val": 50000, "sbpcode": "INDEL4", "sbnum": "1234567", "sbdt": "10-11-2025", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 42372.88, "csamt": 0, "iamt": 7627.12}}]}]},
+   {"exp_typ": "WOPAY", "inv": [{"inum": "E/2", "idt": "25-11-2025", "val": 20000, "itms": [{"num": 1, "itm_det": {"rt": 0, "txval": 20000, "csamt": 0, "iamt": 0}}]}]}
+  ],
+  "b2cs": [
+   {"sply_ty": "INTRA", "pos": "07", "typ": "OE", "rt": 18, "txval": 8474.58, "iamt": 0, "camt": 762.71, "samt": 762.71, "csamt": 0},
+   {"sply_ty": "INTER", "pos": "09", "typ": "OE", "rt": 5, "txval": 1000, "iamt": 50, "camt": 0, "samt": 0, "csamt": 0}
+  ],
+  "nil": {"inv": [{"sply_ty": "INTRAB2B", "expt_amt": 0, "nil_amt": 1500, "ngsup_amt": 0}, {"sply_ty": "INTRAB2C", "expt_amt": 2500.5, "nil_amt": 0, "ngsup_amt": 300}]},
+  "cdnr": [{"ctin": "27AAACM5678P1Z2", "nt": [
+    {"ntty": "C", "nt_num": "CN/1", "nt_dt": "15-11-2025", "val": 1180, "pos": "27", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 1000, "csamt": 0, "iamt": 180}}]},
+    {"ntty": "D", "nt_num": "DN/1", "nt_dt": "20-11-2025", "val": 590, "pos": "27", "rchrg": "N", "inv_typ": "R", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 500, "csamt": 0, "iamt": 90}}]}]}],
+  "cdnur": [{"typ": "B2CL", "ntty": "C", "nt_num": "CN/2", "nt_dt": "18-11-2025", "val": 11800, "pos": "29", "itms": [{"num": 1, "itm_det": {"rt": 18, "txval": 10000, "csamt": 0, "iamt": 1800}}]}],
+  "at": [{"pos": "07", "sply_ty": "INTRA", "itms": [{"rt": 18, "ad_amt": 20000, "camt": 1800, "samt": 1800, "csamt": 0}]}],
+  "txpd": [{"pos": "07", "sply_ty": "INTRA", "itms": [{"rt": 18, "ad_amt": 5000, "camt": 450, "samt": 450, "csamt": 0}]}],
+  "hsn": {
+   "hsn_b2b": [
+    {"num": 1, "hsn_sc": "8471", "desc": "Computers", "uqc": "NOS", "qty": 3, "rt": 18, "txval": 12000.42, "iamt": 2160.08, "camt": 0, "samt": 0, "csamt": 0},
+    {"num": 2, "hsn_sc": "998313", "desc": "IT consulting", "uqc": "NA", "qty": 0, "rt": 12, "txval": 4000, "iamt": 0, "camt": 240, "samt": 240, "csamt": 0}],
+   "hsn_b2c": [{"num": 1, "hsn_sc": "8471", "desc": "Computers", "uqc": "NOS", "qty": 1, "rt": 18, "txval": 254237.29, "iamt": 45762.71, "camt": 0, "samt": 0, "csamt": 0}]},
+  "doc_issue": {"doc_det": [
+   {"doc_num": 1, "docs": [{"num": 1, "from": "A/101", "to": "A/104", "totnum": 4, "cancel": 0, "net_issue": 4}, {"num": 2, "from": "E/1", "to": "E/2", "totnum": 2, "cancel": 0, "net_issue": 2}]},
+   {"doc_num": 5, "docs": [{"num": 1, "from": "CN/1", "to": "CN/2", "totnum": 2, "cancel": 0, "net_issue": 2}]}]}
+ },
+ "r3bjson": {
+  "gstin": "07AABCF1234K1Z5", "ret_period": "112025",
+  "sup_details": {
+   "osup_det": {"txval": 50000.5, "iamt": 4000.25, "camt": 1500.1, "samt": 1500.1, "csamt": 0},
+   "osup_zero": {"txval": 20000, "iamt": 0, "camt": 0, "samt": 0, "csamt": 0},
+   "osup_nil_exmp": {"txval": 4300.5},
+   "isup_rev": {"txval": 10000, "iamt": 0, "camt": 900, "samt": 900, "csamt": 0},
+   "osup_nongst": {"txval": 300}},
+  "itc_elg": {
+   "itc_avl": [{"ty": "IMPG", "iamt": 1800, "camt": 0, "samt": 0, "csamt": 0}, {"ty": "IMPS", "iamt": 180, "camt": 0, "samt": 0, "csamt": 0},
+    {"ty": "ISRC", "iamt": 0, "camt": 900, "samt": 900, "csamt": 0}, {"ty": "ISD", "iamt": 0, "camt": 0, "samt": 0, "csamt": 0},
+    {"ty": "OTH", "iamt": 2500.75, "camt": 1200.5, "samt": 1200.5, "csamt": 0}],
+   "itc_rev": [{"ty": "RUL", "iamt": 100, "camt": 50, "samt": 50, "csamt": 0}, {"ty": "OTH", "iamt": 0, "camt": 0, "samt": 0, "csamt": 0}],
+   "itc_net": {"txval": 0, "iamt": 4380.75, "camt": 2050.5, "samt": 2050.5, "csamt": 0},
+   "itc_inelg": [{"ty": "RUL", "iamt": 0, "camt": 0, "samt": 0, "csamt": 0}, {"ty": "OTH", "iamt": 0, "camt": 12.34, "samt": 12.34, "csamt": 0}]},
+  "inward_sup": {"isup_details": [{"ty": "GST", "inter": 1000, "intra": 2000.5}, {"ty": "NONGST", "inter": 0, "intra": 750}]},
+  "inter_sup": {"unreg_details": [{"pos": "09", "txval": 1000, "iamt": 50}, {"pos": "29", "txval": 254237.29, "iamt": 45762.71}], "comp_details": [], "uin_details": []}
+ },
+ "pay": {"use": {"igst": {"igst": 4000.25, "cgst": 190.25, "sgst": 190.25}, "cgst": {"cgst": 1309.85, "igst": 0}, "sgst": {"sgst": 1309.85, "igst": 0}, "cess": {"cess": 0}},
+         "cash": {"igst": 0, "cgst": 900, "sgst": 900, "cess": 0}},
+ "hand": {
+  "r1": {
+   "b2b": {"n": 3, "val": 1969050, "txval": 1700042, "iamt": 216008, "camt": 26500, "samt": 26500, "csamt": 0},
+   "b2ba": {"n": 1, "val": 118000, "txval": 100000, "iamt": 0, "camt": 9000, "samt": 9000},
+   "b2cl": {"n": 1, "val": 30000000, "txval": 25423729, "iamt": 4576271},
+   "exp": {"n": 2, "val": 7000000, "txval": 6237288, "iamt": 762712},
+   "b2cs": {"n": 2, "txval": 947458, "iamt": 5000, "camt": 76271, "samt": 76271},
+   "nil": {"n": 2, "nil": 150000, "expt": 250050, "ngsup": 30000},
+   "cdnr": {"n": 2, "val": -59000, "txval": -50000, "iamt": -9000},
+   "cdnur": {"n": 1, "val": -1180000, "txval": -1000000, "iamt": -180000},
+   "at": {"n": 1, "txval": 2000000, "camt": 180000, "samt": 180000},
+   "txpd": {"n": 1, "txval": 500000, "camt": 45000, "samt": 45000},
+   "hsn": {"n": 3, "txval": 27023771, "iamt": 4792279, "camt": 24000, "samt": 24000, "csamt": 0},
+   "doc_issue": {"n": 3, "totnum": 8, "cancel": 0, "net": 8}
+  },
+  "r3b": {"3.1a.txval": 50000.5, "3.1a.iamt": 4000.25, "3.1a.samt": 1500.1, "3.1b.txval": 20000, "3.1c.txval": 4300.5, "3.1d.camt": 900, "3.1e.txval": 300,
+   "4A1.iamt": 1800, "4A2.iamt": 180, "4A3.samt": 900, "4A4.iamt": 0, "4A5.iamt": 2500.75, "4A5.camt": 1200.5, "4B1.iamt": 100, "4B2.camt": 0, "4D1.iamt": 0, "4D2.camt": 12.34,
+   "5.gst.inter": 1000, "5.gst.intra": 2000.5, "5.nongst.inter": 0, "5.nongst.intra": 750}
+ }
+}

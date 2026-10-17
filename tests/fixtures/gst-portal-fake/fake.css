@@ -1,0 +1,21 @@
+/* a plain look-alike of the GST portal (services/return pages), for the browser helper's tests only */
+body { font: 14px Arial, sans-serif; margin: 0; background: #f3f5f9; color: #222; }
+header { background: #1f3a68; color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; }
+main { padding: 16px; max-width: 1100px; margin: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 12px 0; }
+.tile { background: #fff; border: 1px solid #c8d1e0; border-radius: 4px; padding: 12px; cursor: pointer; min-height: 40px; }
+.tile:hover { border-color: #1f3a68; }
+.ret-tile { background: #fff; border: 1px solid #c8d1e0; padding: 10px; margin: 8px 0; }
+button { background: #1f3a68; color: #fff; border: 0; padding: 7px 12px; border-radius: 3px; cursor: pointer; margin: 2px; }
+button.danger { background: #b23; }
+table { border-collapse: collapse; background: #fff; margin: 8px 0; }
+td, th { border: 1px solid #ccd; padding: 4px 6px; text-align: left; }
+td.n, th.n { text-align: right; }
+input, select { padding: 4px; margin: 2px 4px 2px 0; }
+input[readonly] { background: #eee; }
+.form { background: #fff; border: 1px solid #c8d1e0; padding: 10px; }
+.modal { display: none; position: fixed; inset: 40px; background: #fff; border: 2px solid #1f3a68; padding: 16px; overflow: auto; z-index: 5; }
+.modal.open { display: block; }
+.alert-success { background: #dfd; border: 1px solid #6a6; padding: 10px; margin: 8px 0; }
+.err { color: #b00; }
+label { display: inline-block; margin: 4px 10px 4px 0; }
