@@ -353,3 +353,9 @@ run_gb_pages.py                       300  TDSDESK_SITE=../app/dist-test
 run_lazy_fail.py                      120  TDSDESK_SITE=../app/dist-test
 # 16-Oct-2026 (round 65): the TDS page when the books are in but hold no TDS (GB TEXCOAT): said plainly, empty TDS ledgers, should have deducted
 run_tds_empty.py                      300  TDSDESK_SITE=../app/dist-test
+# 17-Oct-2026 (next-gst-browser): the GST browser helper: the Chrome extension driven against the portal look-alike
+# (tests/fixtures/gst-portal-fake), its rules, FinCom's card and GST portal login (migration 93 on pg_stand)
+run_gst_helper_rules.js               120
+run_gst_browser_helper.py             600
+run_migration93.py                    120
+run_gst_helper_app_ui.py              600  TDSDESK_SITE=../app/dist-test

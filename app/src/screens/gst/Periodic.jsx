@@ -3,6 +3,7 @@
 // year. Were viewQrmp, viewCmp08 and viewGstr4 (src/js/37). The figures are GSTQ (37); what is typed goes through
 // gqSetField, gqSetPaid, gqIffJson (37) and gstfSet (35).
 import CommitBox from "../../parts/CommitBox.jsx";
+import BrowserHelper from "./BrowserHelper.jsx";
 
 const m = (v) => "₹" + INR.format(r2(v || 0));
 const d = (s) => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
@@ -26,6 +27,7 @@ function Iff({ ym, reg, rec }) {
       <Actions><button className="btn small" onClick={() => gqIffJson()}>Download IFF JSON</button><span className="note">Filed on</span><FiledOn k="iff" v={rec.iff} label="IFF filed on" /></Actions>
       {rec.iff && (GSTQ.iffFiled(ym, reg) ? <p className="note">Filed: these are already on the portal and flow into the quarter’s GSTR-1 by themselves, so the GSTR-1 file here leaves them out.</p>
         : <p className="bad">IFF cannot be filed after {due}: these invoices go in the quarter’s GSTR-1 instead.</p>)}
+      <BrowserHelper form="IFF" ym={ym} reg={reg} />
     </> : <p>No invoices to registered customers this month; nothing to file.</p>}
   </Step>;
 }

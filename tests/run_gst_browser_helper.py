@@ -80,22 +80,25 @@ with sync_playwright() as p:
     ok(stand.wait(fc, lambda: stand.portal_tab(ctx), 10000) is not None, "“Open the portal” opens the portal in the person's own browser (a tab of its own)")
     fig = panel.inner_text("#figures")
     ok("4A, 4B, 6B, 6C - B2B" in fig and "₹17,000.42" in fig and "13 - Documents issued" in fig, "the panel shows FinCom's figures for the client and period, table by table")
-    run_all("summary")
-    st = {s: status(s) for s in ["login", "period", "upload", "process", "open", "summary", "you"]}
-    ok(all(v == "done" for k, v in st.items() if k != "you") and st["you"] == "you", "upload way: log in, period, upload, processed, open, summary all done; the last step is the person's (%s)" % st)
+    run_all("file")
+    st = {s: status(s) for s in ["login", "period", "upload", "process", "open", "summary", "file", "you"]}
+    ok(all(v == "done" for k, v in st.items() if k != "you") and st["you"] == "you", "upload way: log in, period, upload, processed, open, summary, File page all done; the last step is the person's (%s)" % st)
     r1st = fake_state("r1:112025") or {}
     chk = panel.evaluate(CHECK, [j1["r1json"], r1st])
     ok(not chk["bad"] and chk["n"] > 100, "every field of every table on the portal holds FinCom's figure to the paisa (%d fields)%s" % (chk["n"], "" if not chk["bad"] else ": " + "; ".join(chk["bad"][:5])))
     ok(panel.get_attribute('[data-compare="r1"]', "class") == "agree" and "agree to the paisa" in panel.inner_text("#compare"), "the portal's summary read back agrees with FinCom table by table: " + panel.inner_text('[data-compare="r1"]'))
     filed = fake_state("filed") or []
-    ok(not filed and not stand.portal_tab(ctx).query_selector("#filemodal"), "stopped before File: nothing filed, the File box never opened")
+    pt = stand.portal_tab(ctx)
+    ok(not filed and pt.is_visible("#filemodal #fdsc") and pt.inner_text("#otpbox") == "" and not pt.is_checked("#decl"),
+       "the helper opened the portal's File page and stopped: FILE WITH DSC is there for the person; nothing ticked, signed or filed")
+    ok("FILE WITH DSC" in panel.inner_text('[data-step="you"]'), "the person's step says it plainly: sign with FILE WITH DSC (companies and LLPs) on the page that is open")
     runs = msgs("run")
     ok(runs and runs[-1]["final"] and runs[-1]["agree"].get("r1", {}).get("agree") is True and runs[-1]["form"] == "R1" and runs[-1]["gstin"] == GSTIN, "each step's result went back to FinCom (steps, agreement, no differences)")
     stand.portal_tab(ctx).screenshot(path=OUT + "/gst-helper-r1-summary.png", full_page=True)
     panel.screenshot(path=OUT + "/gst-helper-panel-r1.png", full_page=True)
     # the person files: ticks, EVC, types the OTP; the helper reads the ARN and sends it to FinCom
     pt = stand.portal_tab(ctx)
-    pt.click("#file1"); pt.check("#decl"); pt.click("#fevc"); pt.fill("#otp", "123456"); pt.click("#verify")
+    pt.check("#decl"); pt.click("#fevc"); pt.fill("#otp", "123456"); pt.click("#verify")
     stand.wait(fc, lambda: msgs("arn"), 10000)
     a = msgs("arn")
     ok(a and a[-1]["arn"] == "AA0711250000001" and a[-1]["gstin"] == GSTIN and a[-1]["ym"] == "202511", "after the person files, the ARN the portal shows goes back to FinCom (%s)" % (a[-1]["arn"] if a else "none"))
@@ -105,7 +108,7 @@ with sync_playwright() as p:
     # ---------- 2. GSTR-1 typed table by table ----------
     j2 = job("R1", "122025", tag="type", mode="type")
     send(j2)
-    run_all("summary", 240000)
+    run_all("file", 240000)
     steps = panel.eval_on_selector_all("[data-step]", "els => els.map(e => [e.dataset.step, e.dataset.status])")
     tsteps = [s for s in steps if s[0].startswith("t_")]
     ok(len(tsteps) == 12 and all(s[1] == "done" for s in tsteps), "typing way: a step per table FinCom has (%d), each done" % len(tsteps))
@@ -114,10 +117,12 @@ with sync_playwright() as p:
     ok(panel.get_attribute('[data-compare="r1"]', "class") == "agree", "summary read back agrees after typing")
     # the person changes a figure on the portal; the helper's summary shows the difference, highlighted
     pt = stand.portal_tab(ctx)
-    pt.evaluate("() => { const s = JSON.parse(localStorage.getItem('fake:r1:122025')); s.b2cs[0].itms[0].txval = 8475.58; localStorage.setItem('fake:r1:122025', JSON.stringify(s)); }")
+    pt.evaluate("() => { const s = JSON.parse(localStorage.getItem('fake:r1:122025')); s.b2cs[0].itms[0].txval = 8475.58; s.at[0].itms[0].txval = 20000.40; localStorage.setItem('fake:r1:122025', JSON.stringify(s)); }")
     panel.click('[data-run="summary"]'); stand.wait(panel, lambda: status("summary") == "done" and panel.query_selector('#compare tr.diff'), 30000)
     diff = panel.eval_on_selector_all("#compare tr.diff", "els => els.map(e => e.dataset.key + ' ' + e.innerText.replace(/\\s+/g, ' '))")
+    rnd = panel.eval_on_selector_all("#compare tr.round", "els => els.map(e => e.dataset.key)")
     ok(any(d.startswith("b2cs.txval") and "1.00" in d for d in diff) and len(diff) == 1, "a rupee changed on the portal in B2C (Others) is the one difference, highlighted (%s)" % diff)
+    ok(rnd == ["at.txval"] and "less than ₹1.00 (rounding" in panel.inner_text('[data-compare="r1"]'), "40 paise in table 11A is rounding: grey, not highlighted (%s)" % rnd)
     panel.screenshot(path=OUT + "/gst-helper-panel-r1-difference.png", full_page=True)
 
     # ---------- 3. GSTR-3B ----------

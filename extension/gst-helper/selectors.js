@@ -73,6 +73,12 @@
           generate: btn("GENERATE SUMMARY"),
           summaryTable: { css: "table#summary" },
           back: btn("BACK"),
+          // the owner's decision of 17-Oct-2026: after filling and comparing, the helper opens the portal's File page (it
+          // only shows the declaration, the signatory and the FILE WITH DSC / EVC buttons) and stops there; it never presses
+          // FILE WITH DSC or FILE WITH EVC. opensFilePage: the one button the rules let it press although it says "File".
+          openFile: { css: "button", text: "FILE STATEMENT", click: true, opensFilePage: true },
+          fileDsc: { css: "button", text: "FILE WITH DSC" },
+          fileEvc: { css: "button", text: "FILE WITH EVC" },
         },
         tables: {
           b2b: tile("4A, 4B, 6B, 6C - B2B, SEZ, DE Invoices", "B2B, SEZ, DE Invoices", recordForm(PARTY)),
@@ -96,7 +102,7 @@
           doc_issue: tile("13 - Documents Issued", "Documents Issued", recordForm({ doc_num: F("select#doc_num"), from: F("#from"), to: F("#to"), totnum: F("#totnum"), cancel: F("#cancel") }, { rates: null }), { cols: { n: 2, totnum: 3, cancel: 4, net: 5 } }),
         },
         // the File / submit buttons, listed only so the helper can SAY where the person clicks; never pressed
-        personClicks: [{ css: "button", text: "FILE STATEMENT" }, { css: "button", text: "FILE GSTR-1" }],
+        personClicks: [{ css: "button", text: "FILE WITH DSC" }, { css: "button", text: "FILE WITH EVC" }],
         arn: { css: ".alert-success, .modal .success, #arn-msg" },
       },
       upload: {

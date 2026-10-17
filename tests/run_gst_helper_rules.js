@@ -30,8 +30,14 @@ ok(f3.length === (5 + 3 + 1 + 5 + 1) + (2 + 2 + 4 + 4 + 4) + 8 + 8 + 4, "3B: eve
 ok(R.rows32(fx.r3bjson).length === fx.r3bjson.inter_sup.unreg_details.length, "3.2: a row per place of supply");
 
 // compare: equal to the paisa agrees; a paisa off differs; a box not shown is a difference, never taken as zero
-const c1 = R.compare([{ key: "a", label: "A", value: 100.1 }, { key: "b", label: "B", value: 5 }, { key: "c", label: "C", value: 0 }], { a: "₹ 100.10", b: "5.01" });
-ok(c1.rows[0].ok && !c1.rows[1].ok && c1.rows[1].diff === "0.01" && !c1.rows[2].ok && c1.rows[2].portal === "not shown" && !c1.agree, "compare: to the paisa; one paisa is a difference; a box the portal did not show is a difference");
+const c1 = R.compare([{ key: "a", label: "A", value: 100.1 }, { key: "b", label: "B", value: 5 }, { key: "c", label: "C", value: 0 }, { key: "d", label: "D", value: 10 }, { key: "e", label: "E", value: 10 }, { key: "n", label: "N", value: 3, count: true }],
+  { a: "₹ 100.10", b: "5.99", d: "11.00", e: "8.995", n: "4" });
+const st = Object.fromEntries(c1.rows.map((r) => [r.key, r.status]));
+ok(st.a === "same" && st.b === "rounding" && c1.rows[1].diff === "0.99", "compare: to the paisa; 99 paise is rounding (grey, no reason needed)");
+ok(st.d === "differs" && st.e === "differs" && st.n === "differs" && st.c === "differs" && c1.rows[2].portal === "not shown",
+  "compare: Rs 1.00 or more differs (both ways); a count that differs and a box the portal did not show are differences, never rounding");
+ok(!c1.agree && c1.differences.length === 4 && c1.rounding.length === 1, "compare: 4 differences, 1 rounding");
+ok(R.compare([{ key: "x", label: "X", value: 10 }], { x: "10.40" }).agree, "compare: only rounding left counts as agreeing");
 const port = {}; Object.values(t).forEach((x) => { port[x.key] = Object.fromEntries(Object.entries(x).filter(([k]) => !["key", "label"].includes(k)).map(([k, v]) => [k, ["n", "totnum", "cancel", "net"].includes(k) ? v : (v / 100).toFixed(2)])); });
 ok(R.compare1(t, port).agree, "GSTR-1 compare: FinCom's own figures read back agree, table by table");
 port.b2b.txval = (t.b2b.txval / 100 + 1).toFixed(2); port.cdnura = { n: 1, txval: "10.00" };
@@ -52,7 +58,10 @@ Object.entries(SEL.pages).forEach(([pk, pg]) => { if (!pg.url) missing.push(pk +
 ok(!missing.length, "every field of every page has a selector" + (missing.length ? ": missing " + missing.join(", ") : ""));
 ok(f3.every((x) => SEL.pages.gstr3b.fields["box:" + x.key]), "every 3B box FinCom fills has its field in the selectors file");
 ok(R.R1.every(([k]) => SEL.pages.gstr1.tables[k]), "every GSTR-1 table has its tile and summary row in the selectors file");
-ok(!Object.values(SEL.pages).some((p) => Object.values(p.fields || {}).some((s) => s.click && R.forbidden(s.text || ""))), "no button the helper clicks is a filing, payment or signing button");
+ok(!Object.values(SEL.pages).some((p) => Object.values(p.fields || {}).some((s) => s.click && !s.opensFilePage && R.forbidden(s.text || ""))), "no button the helper clicks is a filing, payment or signing button");
+const opens = [].concat(...Object.values(SEL.pages).map((p) => Object.values(p.fields || {}).filter((s) => s.opensFilePage)));
+ok(opens.length === 1 && opens[0].text === "FILE STATEMENT" && SEL.pages.gstr1.fields.fileDsc && !SEL.pages.gstr1.fields.fileDsc.click && !SEL.pages.gstr1.fields.fileEvc.click,
+  "the one 'File' button it presses only opens the File page; FILE WITH DSC and FILE WITH EVC are named only to be found, never pressed");
 
 console.log("\n" + (fails ? fails + " FAILED" : "all passed"));
 process.exit(fails ? 1 : 0);

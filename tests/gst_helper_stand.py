@@ -9,6 +9,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FAKE = os.path.join(HERE, "fixtures", "gst-portal-fake")
 EXT = os.path.abspath(os.path.join(HERE, "..", "extension", "gst-helper"))
 EXT_ID = "okajonmmjoidmaapknhpphpojodaocmg"     # fixed by the manifest's "key"
+# Supabase Vault stood in as Supabase has it (vault.secrets, vault.decrypted_secrets, create_secret, update_secret;
+# nothing of it granted to signed-in users), for run_migration93.py and run_gst_helper_app_ui.py
+VAULT = """create schema if not exists vault;
+create table if not exists vault.secrets (id uuid primary key default gen_random_uuid(), name text unique, description text default '', secret text not null, created_at timestamptz default now());
+create or replace view vault.decrypted_secrets as select id, name, description, secret as decrypted_secret from vault.secrets;
+create or replace function vault.create_secret(new_secret text, new_name text default null, new_description text default '') returns uuid language sql as $$
+  insert into vault.secrets (name, secret, description) values (new_name, new_secret, new_description) returning id $$;
+create or replace function vault.update_secret(secret_id uuid, new_secret text default null, new_name text default null, new_description text default null) returns void language sql as $$
+  update vault.secrets set secret = coalesce(new_secret, secret), name = coalesce(new_name, name), description = coalesce(new_description, description) where id = secret_id $$;
+revoke all on schema vault from public; revoke all on all tables in schema vault from public; revoke all on all functions in schema vault from public;"""
 ROUTES = {k: v for k, v in json.load(open(os.path.join(FAKE, "ROUTES.json"))).items() if not k.startswith("_")}
 
 
@@ -50,6 +60,14 @@ def start(p, fincom_dir=None, two_b=None, extra_routes=()):
     for pat, fn in extra_routes: ctx.route(pat, fn)
     if fincom_dir: ctx.route(re.compile(r"^https://staging\.fincom\.live/review/"), _site(fincom_dir, "https://staging.fincom.live/review/"))
     ctx.route("https://staging.fincom.live/stub.html", lambda r: r.fulfill(status=200, path=os.path.join(FAKE, "fincom-stub.html"), content_type="text/html"))
+    # a tab the extension opens (chrome.tabs.create) starts loading before Playwright's routes reach it, so its first load
+    # goes to the network, which the stand has none of; that one load is made again once the routes are in place
+    def fresh(pg):
+        try:
+            pg.wait_for_load_state("domcontentloaded", timeout=10000)
+            if pg.url.startswith("chrome-error://"): pg.reload()
+        except Exception: pass
+    ctx.on("page", fresh)
     sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
     ext_id = sw.url.split("/")[2]
     ctx.portal_seen = seen

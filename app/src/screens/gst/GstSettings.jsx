@@ -5,6 +5,7 @@
 //
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
+import GstPortalLogin from "./GstPortalLogin.jsx";
 import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Loading from "../../parts/Loading.jsx";
@@ -70,7 +71,8 @@ function OneGstin({ b, g, regs }) {
       </div>
       <H4>GST portal username</H4>
       <CommitBox aria-label="GST portal username" data-fk={"gset-puser-" + reg} value={st.portalUser || ""} placeholder="as used to sign in on gst.gov.in" style={{ width: 260 }} autoComplete="off" onCommit={(v) => gsetSet("puser", v, reg)} />
-      {" "}<span className="note">for the GST API (OTP sign-in). The password is never asked for or kept.</span>
+      {" "}<span className="note">for the GST API (OTP sign-in); the API never needs the password.</span>
+      <GstPortalLogin gstin={g} portalUser={st.portalUser || ""} />
       <H4>Credit in 3B table 4</H4>
       <select aria-label="Credit in 3B table 4" style={{ width: "auto" }} key={k("basis", basis)} defaultValue={basis} onChange={shared("basis")}><option value="2b">As far as 2B shows it (section 16(2)(aa)) — the law</option><option value="books">As booked in Tally — for comparison only</option></select>
       <H4>Electronic credit ledger at the start{first ? " (" + GSTR.label(first) + ")" : ""}</H4>

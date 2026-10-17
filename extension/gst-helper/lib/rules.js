@@ -141,28 +141,32 @@
     return r;
   }
 
-  // FinCom against the portal. expected: [{key,label,value(rupees)}]; got: {key: text or number read from the portal}
-  // A box FinCom has but the portal did not show is a difference too (never taken as zero).
+  // FinCom against the portal. expected: [{key,label,value(rupees),count?}]; got: {key: text or number read from the portal}
+  // The owner's rule (17-Oct-2026): a money difference under Rs 1.00 is rounding (shown grey, needs no reason); Rs 1.00 or
+  // more is a difference (highlighted). A count that differs, or a box the portal did not show, is always a difference
+  // (never taken as zero).
+  const ROUNDING = 100;   // paise
   function compare(expected, got) {
     const rows = expected.map((e) => {
       const has = Object.prototype.hasOwnProperty.call(got, e.key), p = has ? paise(got[e.key]) : NaN, f = paise(e.value);
-      const ok = has && !Number.isNaN(p) && p === f;
-      return { key: e.key, label: e.label, fincom: rupees(f), portal: has ? (Number.isNaN(p) ? String(got[e.key]) : rupees(p)) : "not shown", diff: has && !Number.isNaN(p) ? rupees(p - f) : "", ok };
+      const read = has && !Number.isNaN(p), d = read ? p - f : NaN;
+      const ok = read && d === 0, rounding = read && !e.count && d !== 0 && Math.abs(d) < ROUNDING;
+      return { key: e.key, label: e.label, fincom: rupees(f), portal: has ? (Number.isNaN(p) ? String(got[e.key]) : rupees(p)) : "not shown", diff: read ? rupees(d) : "", ok, rounding, status: ok ? "same" : rounding ? "rounding" : "differs" };
     });
-    return { rows, differences: rows.filter((r) => !r.ok), agree: rows.every((r) => r.ok) };
+    return { rows, differences: rows.filter((r) => r.status === "differs"), rounding: rows.filter((r) => r.rounding), agree: rows.every((r) => r.status !== "differs") };
   }
   // GSTR-1: FinCom's tables against the portal's summary read back, table by table
   function compare1(fin, portal) {
     const exp = [], got = {};
     Object.values(fin).forEach((t) => {
       const cols = t.key === "nil" ? ["n", "nil", "expt", "ngsup"] : t.key === "doc_issue" ? ["n", "totnum", "cancel", "net"] : ["n", "val", "txval", "iamt", "camt", "samt", "csamt"].filter((c) => c !== "val" || !["b2cs", "b2csa", "at", "ata", "txpd", "txpda", "hsn"].includes(t.key));
-      cols.forEach((c) => { const key = t.key + "." + c; exp.push({ key, label: t.label + " · " + (C1[c] || c), value: c === "n" || t.key === "doc_issue" ? (t[c] || 0) : (t[c] || 0) / 100, count: c === "n" || t.key === "doc_issue" });
+      cols.forEach((c) => { const key = t.key + "." + c, count = c === "n" || t.key === "doc_issue"; exp.push({ key, label: t.label + " · " + (C1[c] || c), value: count ? (t[c] || 0) : (t[c] || 0) / 100, count });
         const p = portal[t.key]; if (p && p[c] !== undefined) got[key] = p[c]; });
     });
     // a table the portal shows that FinCom has nothing for
     Object.keys(portal).forEach((k) => { if (!fin[k]) { const p = portal[k]; if (p && (+p.n || 0) > 0) { exp.push({ key: k + ".n", label: k + " · records (FinCom has none)", value: 0, count: true }); got[k + ".n"] = p.n; } } });
     // counts are compared as whole numbers, not paise
-    const res = compare(exp.map((e) => e.count ? Object.assign({}, e, { value: e.value }) : e), got);
+    const res = compare(exp, got);
     res.rows.forEach((r, i) => { if (exp[i].count) { r.fincom = String(exp[i].value); if (r.portal !== "not shown") r.portal = String(Math.round(paise(got[exp[i].key]) / 100)); r.diff = r.portal === "not shown" ? "" : String(Math.round(paise(got[exp[i].key]) / 100) - exp[i].value); } });
     return res;
   }
@@ -176,7 +180,7 @@
   const NEVER = /(^file$|^file\b|\bfile (gstr|return|with|statement|nil)|\bsubmit\b|e-?sign|\bevc\b|\bdsc\b|make payment|post credit|offset liabilit|pay now|proceed to file|create challan|generate challan|\bsign\b)/i;
   function forbidden(text) { return NEVER.test(String(text || "").replace(/\s+/g, " ").trim()); }
 
-  const R = { paise, rupees, money, R1, tables1, records1, fields3b, rows32, net4c, setoffRows, compare, compare1, arnIn, forbidden, COL, C1 };
+  const R = { paise, rupees, money, ROUNDING, R1, tables1, records1, fields3b, rows32, net4c, setoffRows, compare, compare1, arnIn, forbidden, COL, C1 };
   root.GSTH_RULES = R;
   if (typeof module !== "undefined" && module.exports) module.exports = R;
 })(typeof self !== "undefined" ? self : globalThis);

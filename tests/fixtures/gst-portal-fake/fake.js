@@ -185,7 +185,7 @@
     const home = () => {
       const st = r1();
       $("#view").innerHTML = '<div class="tiles">' + shown.map((d) => '<div class="tile" data-t="' + d[0] + '">' + esc(d[1]) + "<br><small>" + (d[5] === "nil" ? (st.nil ? "4 rows" : "0") : (st[d[0]] || []).length) + " record(s)</small></div>").join("") + "</div>" +
-        '<button id="gen">GENERATE SUMMARY</button> <button id="file1">' + (iff ? "FILE IFF" : "FILE STATEMENT") + '</button><div id="sumbox"></div>';
+        '<button id="gen">GENERATE SUMMARY</button> <button id="file1">' + "FILE STATEMENT" + '</button><div id="sumbox"></div>';
       $$("#view .tile").forEach((t) => { t.onclick = () => table(T1.find((d) => d[0] === t.dataset.t)); });
       $("#gen").onclick = () => {
         const rows = summary().filter((r) => shown.some((d) => d[2] === r[0]));

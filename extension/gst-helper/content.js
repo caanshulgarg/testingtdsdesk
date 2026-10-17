@@ -38,9 +38,11 @@
       "The helper stopped here and typed nothing more; it never guesses a field. The portal may have changed: the selectors file (version " + SEL.version + ") needs this field corrected.");
     return el;
   }
-  function press(step, name, el) {
+  function press(step, name, el, sel) {
     const words = (el.textContent || el.value || "").trim();
-    if (R.forbidden(words)) throw new Stop(step, name, "Step “" + step + "”: the helper refused to press “" + words + "”. Filing, payment and signing are always yours.");
+    // the File page's own button (it opens the page; signing is a different button the helper never presses)
+    const opens = sel && sel.opensFilePage && norm(words) === norm(sel.text);
+    if (!opens && R.forbidden(words)) throw new Stop(step, name, "Step “" + step + "”: the helper refused to press “" + words + "”. Filing, payment and signing are always yours.");
     el.click();
   }
   // typed as a person would: the value set, then the page's own input, change and blur events
@@ -176,6 +178,15 @@
         portal[k] = o;
       });
       return { ok: true, portal };
+    },
+
+    // GSTR-1 / IFF: the portal's File page opened, and the helper stops: FILE WITH DSC (or EVC) is the person's
+    r1OpenFile: async () => {
+      const step = "Go to the File page", f = P.gstr1.fields;
+      press(step, "openFile", need(step, "openFile", f.openFile, null, null, "FILE STATEMENT"), f.openFile);
+      const dsc = await waitFor(() => find(f.fileDsc), 8000);
+      if (!dsc) need(step, "fileDsc", f.fileDsc, null, null, "FILE WITH DSC");
+      return { ok: true, message: "The portal's File page is open, with FILE WITH DSC" + (find(f.fileEvc) ? " and FILE WITH EVC" : "") + ". The helper stops here." };
     },
 
     // GSTR-3B: one tile's boxes typed, read back, confirmed

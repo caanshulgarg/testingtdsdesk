@@ -63,7 +63,8 @@ function stepsFor(j) {
       add("open", "Open " + FORM_LABEL[j.form] + " online", () => stepPeriod(j.form === "IFF" ? "iff" : "r1"));
     }
     add("summary", "Generate the summary, read it back and compare table by table", stepR1Summary);
-    add("you", "You: check the summary, then FILE (EVC or DSC). The helper reads the ARN.", null, true);
+    add("file", "Go to the portal's File page (File with DSC) and stop there", stepOpenFile);
+    add("you", "You: sign on the File page — FILE WITH DSC (companies and LLPs), or EVC. The helper reads the ARN.", null, true);
   } else if (j.form === "3B") {
     add("period", "Choose " + j.fp + " on the returns dashboard and open GSTR-3B", () => stepPeriod("r3b"));
     add("t31", "Type 3.1 (a) to (e)", () => step3b("t31", (b) => b.sec === "3.1"));
@@ -73,7 +74,7 @@ function stepsFor(j) {
     add("read", "Read 4(C), 3.1.1 and 5.1 as the portal works them out, and compare", step3bRead);
     add("save", "Save GSTR-3B on the portal (a draft)", () => on("gstr3b", { cmd: "r3bSave" }).then((r) => ({ message: r.message })));
     add("pay", "Proceed to payment: read the portal's tax payable and set-off, and compare", step3bPay);
-    add("you", "You: Make payment / Post credit to ledger, then FILE (EVC or DSC). The helper reads the ARN.", null, true);
+    add("you", "You: Make payment / Post credit to ledger, then FILE GSTR-3B WITH DSC (companies and LLPs) or EVC. The helper reads the ARN.", null, true);
   } else if (j.form === "2B") {
     add("period", "Choose " + j.fp + " and open GSTR-2B", () => stepPeriod("r2b"));
     add("download", "Download the 2B JSON and bring it into FinCom", step2b);
@@ -132,14 +133,22 @@ async function stepR1Summary() {
   const r = await on("gstr1", { cmd: "r1Summary", tables: Object.keys(R.tables1(job.r1json)).concat(job.form === "IFF" ? [] : []) });
   const c = R.compare1(fin, r.portal);
   run.compare.r1 = c; await setS("run", run); drawCompare();
-  return { message: c.agree ? "Every table agrees with FinCom to the paisa (" + c.rows.length + " figures)." : c.differences.length + " figure(s) differ from FinCom: see the comparison below. Check them before filing.", differences: c.differences.length };
+  return { message: c.agree ? "Every table agrees with FinCom: " + verdict(c) : c.differences.length + " figure(s) differ from FinCom by ₹1.00 or more: see the comparison below. Check them before filing.", differences: c.differences.length };
+}
+// after the comparison: the File page opened, never signed. Run by "Run all steps" it does not go on while a figure differs
+// by Rs 1.00 or more; pressed by itself ("Run") it goes on, the person having looked.
+async function stepOpenFile(auto) {
+  const c = run.compare.r1;
+  if (auto === true && c && !c.agree) throw new Stop(c.differences.length + " figure(s) differ from FinCom by ₹1.00 or more (see below). Check them; to go to the File page anyway, press Run on this step.");
+  const r = await on("gstr1", { cmd: "r1OpenFile" });
+  return { message: r.message };
 }
 async function step3b(tileKey, pick) {
   const boxes = R.fields3b(job.r3bjson).filter(pick);
   const r = await on("gstr3b", { cmd: "r3bFill", tile: tileKey, boxes });
   const c = R.compare(boxes, r.back);
   run.compare["typed_" + tileKey] = c; await setS("run", run);
-  if (!c.agree) throw new Stop("The portal shows different figures from those typed in " + tileKey + ": " + c.differences.map((d) => d.label + " " + d.portal).join("; "));
+  if (c.rows.some((x) => !x.ok)) throw new Stop("The portal shows different figures from those typed in " + tileKey + ": " + c.differences.map((d) => d.label + " " + d.portal).join("; "));
   return { message: boxes.length + " box(es) typed and read back to the paisa." };
 }
 async function step32() {
@@ -148,7 +157,7 @@ async function step32() {
   const r = await on("gstr3b", { cmd: "r3b32", rows });
   const exp = []; rows.forEach((x) => { exp.push({ key: "3.2." + x.kind + "." + x.pos + ".txval", label: "3.2 " + x.pos + " taxable", value: x.txval }); exp.push({ key: "3.2." + x.kind + "." + x.pos + ".iamt", label: "3.2 " + x.pos + " IGST", value: x.iamt }); });
   const c = R.compare(exp, r.back);
-  if (!c.agree) throw new Stop("3.2 read back differs: " + c.differences.map((d) => d.label).join(", "));
+  if (c.rows.some((x) => !x.ok)) throw new Stop("3.2 read back differs: " + c.differences.map((d) => d.label).join(", "));
   return { message: rows.length + " row(s) typed and read back." };
 }
 async function step3bRead() {
@@ -168,7 +177,7 @@ async function step3bPay() {
   const r = await on("gstr3b", { cmd: "r3bPayment", keys: rows.map((x) => x.key) });
   const c = R.compare(rows, r.got);
   run.compare.pay = c; await setS("run", run); drawCompare();
-  const cash = c.rows.filter((x) => /^pay\.(cash|liab)/.test(x.key)), cashOk = cash.every((x) => x.ok);
+  const cash = c.rows.filter((x) => /^pay\.(cash|liab)/.test(x.key)), cashOk = cash.every((x) => x.status !== "differs");
   return { message: (c.agree ? "Tax payable, credit used and cash agree with FinCom to the paisa." : (cashOk ? "Tax payable and cash agree; the portal uses credit differently from FinCom's set-off: see below." : "The portal's tax payable or cash differs from FinCom: see below. Check before paying.")), differences: c.differences.length };
 }
 async function step2b() {
@@ -198,17 +207,17 @@ async function stepStatus() {
 function setMsg(id, msg) { const el = document.querySelector('[data-step="' + id + '"] .msg'); if (el) el.textContent = msg; }
 async function report(final) {
   const steps = (job.steps || []).map((s) => Object.assign({ id: s.id, label: s.label }, run.steps[s.id] || { status: s.you ? "you" : "waiting" }));
-  const diffs = Object.entries(run.compare || {}).reduce((a, [k, c]) => a.concat((c.differences || []).map((d) => ({ part: k, key: d.key, label: d.label, fincom: d.fincom, portal: d.portal, diff: d.diff }))), []);
-  const agree = Object.fromEntries(Object.entries(run.compare || {}).map(([k, c]) => [k, { agree: c.agree, n: c.rows.length, differ: c.differences.length }]));
+  const diffs = Object.entries(run.compare || {}).reduce((a, [k, c]) => a.concat((c.rows || []).filter((d) => !d.ok).map((d) => ({ part: k, key: d.key, label: d.label, fincom: d.fincom, portal: d.portal, diff: d.diff, rounding: !!d.rounding }))), []);
+  const agree = Object.fromEntries(Object.entries(run.compare || {}).map(([k, c]) => [k, { agree: c.agree, n: c.rows.length, differ: c.differences.length, rounding: (c.rounding || []).length }]));
   await chrome.runtime.sendMessage({ type: "toFincom", msg: { type: "run", jobId: job.id, client: job.client, gstin: job.gstin, ym: job.ym, form: job.form, mode: job.r1mode || "", steps, agree, differences: diffs,
     portal51: run.portal51 || null, arn: run.arn || "", final: !!final, selectors: SEL.version, version: chrome.runtime.getManifest().version, at: new Date().toISOString() } });
 }
-async function runStep(s) {
+async function runStep(s, auto) {
   if (s.you || busy) return false;
   busy = true; run.steps[s.id] = { status: "running", message: "" }; await setS("run", run); draw();
   let ok = false;
   try {
-    const r = await s.fn();
+    const r = await s.fn(auto);
     run.steps[s.id] = { status: "done", message: (r && r.message) || "Done.", differences: r && r.differences };
     ok = true;
   } catch (e) {
@@ -223,7 +232,7 @@ async function runAll() {
   for (const s of job.steps) {
     if (s.you) break;
     if ((run.steps[s.id] || {}).status === "done") continue;
-    if (!(await runStep(s))) return;
+    if (!(await runStep(s, true))) return;
   }
 }
 
@@ -244,14 +253,21 @@ function drawFigures() {
       r32.map((x) => "<tr><td>3.2 " + esc(x.label) + " · place " + x.pos + "</td><td class=n>" + money(x.txval) + " / IGST " + money(x.iamt) + "</td></tr>").join("") + "</tbody></table></details>";
   } else el.innerHTML = "<h3>" + esc(FORM_LABEL[job.form]) + "</h3><p class=small>No figures to type: the helper reads from the portal and sends to FinCom.</p>";
 }
+// the owner's rule: under Rs 1.00 is rounding (grey); Rs 1.00 or more is a difference
+function verdict(c) {
+  const rd = (c.rounding || []).length, n = c.rows.length;
+  if (c.agree && !rd) return "All " + n + " figures agree to the paisa.";
+  if (c.agree) return "All " + n + " figures agree; " + rd + " differ by less than ₹1.00 (rounding, shown grey).";
+  return c.differences.length + " of " + n + " figures differ by ₹1.00 or more" + (rd ? "; " + rd + " by less than ₹1.00 (rounding)" : "") + ".";
+}
 function drawCompare() {
   const el = $("#compare"), parts = Object.entries((run && run.compare) || {}).filter(([k]) => !/^typed_/.test(k));
   if (!parts.length) { el.hidden = true; return; }
   el.hidden = false;
   const TITLE = { r1: "GSTR-1 summary on the portal against FinCom", r3b4c: "4(C) net ITC on the portal against FinCom", pay: "Payment of tax on the portal against FinCom's set-off" };
-  el.innerHTML = parts.map(([k, c]) => "<h3>" + esc(TITLE[k] || k) + "</h3><p class=" + (c.agree ? "agree" : "differ") + " data-compare=" + k + ">" + (c.agree ? "All " + c.rows.length + " figures agree to the paisa." : c.differences.length + " of " + c.rows.length + " differ") + "</p>" +
+  el.innerHTML = parts.map(([k, c]) => "<h3>" + esc(TITLE[k] || k) + "</h3><p class=" + (c.agree ? "agree" : "differ") + " data-compare=" + k + ">" + verdict(c) + "</p>" +
     "<details" + (c.agree ? "" : " open") + "><summary class=small>Figure by figure</summary><table><thead><tr><th>Figure</th><th class=n>FinCom</th><th class=n>Portal</th><th class=n>Difference</th></tr></thead><tbody>" +
-    c.rows.map((r) => "<tr" + (r.ok ? "" : " class=diff") + " data-key=\"" + esc(r.key) + "\"><td>" + esc(r.label) + "</td><td class=n>" + esc(r.fincom) + "</td><td class=n>" + esc(r.portal) + "</td><td class=n>" + esc(r.ok ? "" : r.diff) + "</td></tr>").join("") + "</tbody></table></details>").join("");
+    c.rows.map((r) => "<tr" + (r.ok ? "" : r.rounding ? " class=round" : " class=diff") + " data-key=\"" + esc(r.key) + "\"><td>" + esc(r.label) + "</td><td class=n>" + esc(r.fincom) + "</td><td class=n>" + esc(r.portal) + "</td><td class=n>" + esc(r.ok ? "" : r.diff) + "</td></tr>").join("") + "</tbody></table></details>").join("");
 }
 function draw() {
   $("#versions").textContent = "v" + chrome.runtime.getManifest().version + " · portal map " + SEL.version + (SEL.verified ? "" : " (not yet checked on the live portal)");
@@ -270,8 +286,8 @@ function draw() {
   drawFigures(); drawCompare();
 }
 function youText() {
-  if (job.form === "3B") return "On the portal: check the payment table, press MAKE PAYMENT/POST CREDIT TO LEDGER, then FILE GSTR-3B WITH EVC or DSC and type the OTP. The helper never presses these. When the portal shows the ARN, the helper reads it and FinCom marks the return filed.";
-  return "On the portal: tick the declaration, press " + (job.form === "IFF" ? "FILE IFF" : "FILE STATEMENT") + ", choose EVC or DSC and type the OTP. The helper never presses these. When the portal shows the ARN, the helper reads it and FinCom marks the return filed.";
+  if (job.form === "3B") return "On the portal: check the payment table, press MAKE PAYMENT/POST CREDIT TO LEDGER, then FILE GSTR-3B WITH DSC (companies and LLPs must sign with DSC) or WITH EVC and the OTP. The helper never presses these. When the portal shows the ARN, the helper reads it and FinCom marks the return filed.";
+  return "On the File page the helper opened: tick the declaration, choose the authorised signatory and press FILE WITH DSC (companies and LLPs must sign with DSC; others may use FILE WITH EVC and the OTP). The helper never presses these. When the portal shows the ARN, the helper reads it and FinCom marks the return filed.";
 }
 async function drawConn() {
   const r = await chrome.runtime.sendMessage({ type: "fincomUp" }).catch(() => ({ up: false }));

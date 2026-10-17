@@ -28,14 +28,7 @@ OWNER, STAFF, STAFF2, VIEW, OTHER = ("55555555-5555-5555-5555-555555555555", "44
                                      "33333333-3333-3333-3333-333333333333", "66666666-6666-6666-6666-666666666666")
 G = "07AABCF1234K1Z5"
 PW, PW2 = "Fx#S3cret-pass-0101", "N3w-Pass!word-2026"
-VAULT = """create schema if not exists vault;
-create table if not exists vault.secrets (id uuid primary key default gen_random_uuid(), name text unique, description text default '', secret text not null, created_at timestamptz default now());
-create or replace view vault.decrypted_secrets as select id, name, description, secret as decrypted_secret from vault.secrets;
-create or replace function vault.create_secret(new_secret text, new_name text default null, new_description text default '') returns uuid language sql as $$
-  insert into vault.secrets (name, secret, description) values (new_name, new_secret, new_description) returning id $$;
-create or replace function vault.update_secret(secret_id uuid, new_secret text default null, new_name text default null, new_description text default null) returns void language sql as $$
-  update vault.secrets set secret = coalesce(new_secret, secret), name = coalesce(new_name, name), description = coalesce(new_description, description) where id = secret_id $$;
-revoke all on schema vault from public; revoke all on all tables in schema vault from public; revoke all on all functions in schema vault from public;"""
+from gst_helper_stand import VAULT   # Vault as Supabase has it, stood in
 
 text = open(M93).read() if os.path.exists(M93) else ""
 ok(bool(text), "the migration file is there (%s)" % os.path.basename(M93))

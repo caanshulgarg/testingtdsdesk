@@ -41,6 +41,7 @@ import "../parts/returns.css";
 import Filters, { Field, Search } from "../parts/Filters.jsx";
 import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
 import { Answer } from "../parts/Answer.jsx";
+import BrowserHelper from "./gst/BrowserHelper.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => (s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "");
@@ -297,6 +298,8 @@ export default function Gst() {
         {part === "r3b" && !noReturn && <button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button>}
       </div>
       <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p></section>}
+    {/* the browser helper (next-gst-browser): fills the return on the portal and stops before File */}
+    {sub === "file" && !noReturn && S.gstYm && <BrowserHelper form={part === "r1" ? "R1" : "3B"} ym={S.gstYm} reg={S.gstReg || ""} />}
     {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
     </>}
