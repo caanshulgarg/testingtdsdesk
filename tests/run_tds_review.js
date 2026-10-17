@@ -22,7 +22,7 @@ process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES"];
+  "PayTax", "TDS24Q", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25"];
 const have = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
 const {ctx, x} = load(HTML, have);
 ctx.S.companies = {t: {id: "t", name: "Co", tan: "DELC01234E", pan: "AAACC1234C"}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t";
@@ -48,7 +48,7 @@ let b = books([V("v1", "20260520", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("v2
 b.challans = [{id: "c1", bsr: "0240020", serial: "00001", date: "20260607", tax: 2000, interest: 0, section: "194C"}, {id: "c2", bsr: "0240020", serial: "00002", date: "20260707", tax: 2000, interest: 0, section: "194C"}];
 b.alloc = {"v1|TDS 194C": "c1", "v2|TDS 194C": "c2"};
 let f = x.TDS26Q.build("2026-27", "Q1", firm, "26Q");
-ok(!f.error && lines(f.text, "DD").length === 2 && lines(f.text, "CD").some(l => /\^07072026\^00002\^/.test(l)), "H1. June's deduction paid on the 7-July challan is in the Q1 file, with that challan (" + (f.error || lines(f.text, "DD").length + " DD") + ")");
+ok(!f.error && lines(f.text, "DD").length === 2 && lines(f.text, "CD").some(l => l.split("^")[16] === "00002" && l.split("^")[18] === "07072026"), "H1. June's deduction paid on the 7-July challan is in the Q1 file, with that challan (" + (f.error || lines(f.text, "DD").length + " DD") + ")");
 b = books([V("v3", "20260320", "Alpha Ltd", 100000, 2000, "TDS 194C")]);
 b.challans = [{id: "c3", bsr: "0240020", serial: "00003", date: "20260430", tax: 2000, interest: 0}]; b.alloc = {"v3|TDS 194C": "c3"};
 f = x.TDS26Q.build("2025-26", "Q4", firm, "26Q");
@@ -98,9 +98,10 @@ ok(typeof x.TDS26Q.codeFor === "function" && code("k1") === "94C", "H4. 194C sta
 ok(has("TDS_SEC_CODES"), "H4. the codes are one table (TDS_SEC_CODES)");
 // H4 (the coordinator's research, 14-Oct-2026: several secondary sources agree; the official text not reachable): from
 // FY 2026-27 the new forms carry 4-digit payment codes. Form 140: 194J(a) technical 1026, 194J(b) professional 1027, 194T
-// 1067; rent (old 194-I) is UNCONFIRMED (the sources disagree): no code, listed in To fix. Form 143: liquor 1068, tendu
-// 1069, timber under a forest lease 1070, other timber 1071, other forest produce 1072, scrap 1073; others unconfirmed.
-// The inferred codes 1007, 1010, 1025 and 1036 are never used. Up to 2025-26 the old section codes stay.
+// 1067; rent (old 194-I): 1008 plant or machinery, 1009 other (next-tds-forms-2025: Annexure 2 of Protean's file format
+// 1.1 of 22-07-2026 settles what the sources disagreed on). Form 143: liquor 1068, tendu 1069, timber under a forest lease
+// 1070, other timber 1071, other forest produce 1072, scrap 1073, parking lot 1090 (the same Annexure). 1007, 1010, 1025
+// and 1036 are not in Form 140's Annexure 2 and are never used. Up to 2025-26 the old section codes stay.
 ok(code("j2") === "4JB" && code("j1") === "4JA" && code("i1") === "4IA" && code("i2") === "4IB", "H4. a 2025-26 26Q keeps the old section codes (" + [code("j1"), code("j2"), code("i1"), code("i2")] + ")");
 b = books([V("p1", "20260510", "Beta", 100000, 10000, "TDS 194J", "Professional Fees"), V("p2", "20260511", "Beta", 100000, 2000, "TDS 194J", "Technical Services"),
   V("p3", "20260512", "Gamma", 100000, 10000, "TDS 194I", "Office Rent"), V("p4", "20260513", "Alpha Ltd", 100000, 2000, "TDS 194C")]);
@@ -108,28 +109,34 @@ b.challans = [{id: "pc1", bsr: "0240020", serial: "00011", date: "20260607", tax
 b.alloc = {"p1|TDS 194J": "pc1", "p2|TDS 194J": "pc1", "p3|TDS 194I": "pc1", "p4|TDS 194C": "pc1"};
 f = x.TDS26Q.build("2026-27", "Q1", firm, "26Q");
 const ddOf = (party, amt) => lines(f.text, "DD").find(l => l.includes("^" + party + "^") && l.includes("^" + amt + "^")) || "";
-ok(!f.error && /\^1027\^/.test(ddOf("Beta", "10000.00")) && /\^1026\^/.test(ddOf("Beta", "2000.00")), "H4. a 2026-27 Form 140 writes 194J(b) professional as 1027, 194J(a) technical as 1026 (" + (f.error || [ddOf("Beta", "10000.00").split("^")[20], ddOf("Beta", "2000.00").split("^")[20]]) + ")");
-ok(!/\^10(07|10|25|36)\^/.test(f.text || "") && !/\^(1008|1009|1016|1017|1019)\^/.test(ddOf("Gamma", "10000.00")), "H4. no inferred code (1007, 1010, 1025, 1036) and no rent code picked silently");
+ok(!f.error && ddOf("Beta", "10000.00").split("^")[14] === "1027" && ddOf("Beta", "2000.00").split("^")[14] === "1026", "H4. a 2026-27 Form 140 writes 194J(b) professional as 1027, 194J(a) technical as 1026 (" + (f.error || [ddOf("Beta", "10000.00").split("^")[14], ddOf("Beta", "2000.00").split("^")[14]]) + ")");
+ok(!/\^10(07|10|25|36)\^/.test(f.text || "") && ddOf("Gamma", "10000.00").split("^")[14] === "1009", "H4. no code outside Annexure 2 (1007, 1010, 1025, 1036); office rent is 1009 (" + ddOf("Gamma", "10000.00").split("^")[14] + ")");
 const pc = typeof x.TDS26Q.payCodeRows === "function" ? x.TDS26Q.payCodeRows("2026-27", "Q1", "26Q") : null;
-ok(pc && pc.some(z => z.row.id.startsWith("p3|") && /payment code to confirm/.test(z.why)) && !pc.some(z => /^p[12]\|/.test(z.row.id)), "H4. the 2026-27 rent deduction is in To fix: payment code to confirm (" + (pc ? J(pc.map(z => [z.row.id.split("|")[0], z.why])) : "no payCodeRows") + ")");
+ok(pc && pc.length === 0, "H4. nothing of these is in To fix: each has its code (" + (pc ? J(pc.map(z => [z.row.id.split("|")[0], z.why])) : "no payCodeRows") + ")");
 ok(pc && x.TDS26Q.payCodeRows("2025-26", "Q1", "26Q").length === 0, "H4. none for a 2025-26 return (the old codes)");
 b = books([{id: "s9", date: "20260510", type: "Sales", party: "Beta", ent: [{l: "Beta", a: -102000}, {l: "Sales", a: 100000}, {l: "TCS Scrap", a: 2000}]},
   {id: "s8", date: "20260511", type: "Sales", party: "Beta", ent: [{l: "Beta", a: -102000}, {l: "Sales", a: 100000}, {l: "TCS Parking", a: 2000}]}]);
 b.challans = [{id: "t9", bsr: "0240020", serial: "00019", date: "20260607", tax: 4000, section: "206C"}]; b.alloc = {"s9|TCS Scrap": "t9", "s8|TCS Parking": "t9"};
 f = x.TDS26Q.build("2026-27", "Q1", firm, "27EQ");
-ok(!f.error && lines(f.text, "DD").some(l => /\^1073\^/.test(l)), "H4. a 2026-27 Form 143 writes scrap as 1073 (" + (f.error || lines(f.text, "DD").map(l => l.split("^")[20])) + ")");
+ok(!f.error && lines(f.text, "DD").some(l => l.split("^")[14] === "1073"), "H4. a 2026-27 Form 143 writes scrap as 1073 (" + (f.error || lines(f.text, "DD").map(l => l.split("^")[14])) + ")");
 const pt = typeof x.TDS26Q.payCodeRows === "function" ? x.TDS26Q.payCodeRows("2026-27", "Q1", "27EQ") : [];
-ok(pt.length === 1 && pt[0].row.id.startsWith("s8|"), "H4. a 2026-27 parking-lot collection (no confirmed code) is in To fix (" + J(pt.map(z => z.why)) + ")");
+ok(pt.length === 0 && lines(f.text, "DD").some(l => l.split("^")[14] === "1090"), "H4. a 2026-27 parking-lot collection is 1090, nothing in To fix (" + J(pt.map(z => z.why)) + ")");
 
 // ---------------- H5 and M1
 b = books([V("v1", "20260520", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("v2", "20260620", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("v3", "20260720", "Alpha Ltd", 100000, 2000, "TDS 194C")]);
 b.challans = [{id: "c1", bsr: "0240020", serial: "00001", date: "20260607", tax: 2000, section: "194C"}, {id: "c2", bsr: "0240020", serial: "00002", date: "20260707", tax: 4000, interest: 500, fee: 200, section: "194C"}];
 b.alloc = {"v1|TDS 194C": "c1", "v2|TDS 194C": "c2", "v3|TDS 194C": "c2"};
 const cd = (q) => lines(x.TDS26Q.build("2026-27", q, firm, "26Q").text, "CD").find(l => /\^00002\^/.test(l)).split("^");
-const adds = (r) => { const a = r.map(v => /^\d+\.\d{2}$/.test(v) ? Number(v) : null); return {parts: Math.round((a[6] + a[7] + a[8] + a[9] + a[10]) * 100), total: Math.round(a[11] * 100), interest: a[9], fee: a[10]}; };
+// next-tds-forms-2025: the record of Form 140 (Protean's file format 1.1): field 8 tax, 9 interest, 10 fee, 11 others, 12 the
+// total; 24 and 25 the interest and others allocated, "as provided in field no. 9 / 11"
+const adds = (r) => { const a = r.map(v => /^\d+\.\d{2}$/.test(v) ? Number(v) : 0); return {parts: Math.round((a[7] + a[8] + a[9] + a[10]) * 100), total: Math.round(a[11] * 100), interest: a[8], fee: a[9], alloc: a[23]}; };
 const q1 = adds(cd("Q1")), q2 = adds(cd("Q2"));
 ok(q1.parts === q1.total && q2.parts === q2.total, "H5. each challan record adds up: tax + surcharge + cess + interest + fee = its total (Q1 " + J(q1) + ", Q2 " + J(q2) + ")");
-ok(q1.interest + q2.interest <= 500 && q1.fee + q2.fee <= 200, "M1. the challan's interest (500) and fee (200) are not claimed twice by Q1 and Q2 (" + [q1.interest, q2.interest, q1.fee, q2.fee] + ")");
+// M1 for the forms of the Act of 2025: the workbook has each statement carry the challan as deposited (Gazette Note 6,
+// "the exact amount deposited through challan") and the interest allocation "as provided in field no. 9": a challan that
+// pays two quarters' deductions shows its whole interest in both. Whether that is how Protean wants a shared challan is a
+// question for the owner (docs/tds-forms-2025/GAPS.md); the register below still splits it for the screen.
+ok(q1.interest === 500 && q2.interest === 500 && q1.fee === 200 && q1.alloc === 500 && q2.alloc === 500, "M1. Form 140: each statement carries the challan as deposited, interest 500 and fee 200, allocation = field 9 (" + [q1.interest, q2.interest, q1.fee, q1.alloc, q2.alloc] + ")");
 const c2 = x.TDS.challans().find(c => c.id === "c2"), bal = x.TDSReg.balance(c2);
 ok(bal.interest === 0 && bal.fee === 0 && bal.tax === 0, "M1. its balance by head: what one return claims is used (" + J(bal) + ")");
 
@@ -140,7 +147,7 @@ b.challans = [{id: "c1", bsr: "0240020", serial: "00001", date: "20260630", tax:
 const row = x.TDS.allRows()[0];
 ok(row.paid === 100000 && x.TDS.ymd(row.credit) === "20260410", "M2. a TDS entry made after the bill: the bill's ₹1,00,000 and its date are the amount and date of credit (" + J([row.paid, row.credit]) + ")");
 const dd = lines(x.TDS26Q.build("2026-27", "Q1", firm, "26Q").text, "DD")[0] || "";
-ok(/\^100000\.00\^2000\.00\^/.test(dd) && /\^10042026\^20062026\^/.test(dd), "M2. the file: amount 1,00,000, credited 10-04-2026, deducted 20-06-2026 (" + dd + ")");
+ok(dd.split("^")[19] === "100000.00" && dd.split("^")[23] === "2000.00" && dd.split("^")[18] === "10042026" && dd.split("^")[26] === "20062026", "M2. the file: amount 1,00,000, credited 10-04-2026, deducted 20-06-2026 (" + dd + ")");
 const it = x.TDS.interest("2026-27", "Q1", "26Q").filter(i => i.kind === "deduct");
 ok(it.length === 1 && it[0].months === 3 && it[0].amount === 60, "M2. interest for deducting late still found: 3 months, ₹60 (" + J(it.map(i => [i.months, i.amount])) + ")");
 

@@ -323,6 +323,8 @@ const PayTax = {
 // the FVU before filing (NEW_FORMS_VALIDATED, src/js/16).
 const TDS24Q_FILE = {
   build(fy, q, firm){
+    // tax year 2026-27 on: Form 138 as Protean's file format has it (src/js/83); earlier years below, as before
+    if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, "24Q");
     const rows = Payroll.annexI(fy, q).filter(r => r.tds > 0.005 && r.challan);
     if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
     const ch = {}; (Payroll.books().challans || []).forEach(c => { ch[c.id] = c; });
@@ -383,5 +385,8 @@ function payFvuDownload(fy, q){
   const r = TDS24Q_FILE.build(fy, q, TDS26Q.firmDetails());
   if (r.error){ toast(r.error); return; }
   saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-  toast(r.rows + " salary payment" + (r.rows === 1 ? "" : "s") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.salaryRecords ? ", " + r.salaryRecords + " salary record" + (r.salaryRecords === 1 ? "" : "s") : "") + ". Check before filing: run it through the FVU.");
+  toast(r.rows + " salary payment" + (r.rows === 1 ? "" : "s") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.salaryRecords ? ", " + r.salaryRecords + " salary record" + (r.salaryRecords === 1 ? "" : "s") : "") +
+    (r.missingCodes && r.missingCodes.length ? ". No section code yet: " + r.missingCodes.join(", ") : "") +
+    (r.problems && r.problems.length ? ". " + r.problems.length + " thing" + (r.problems.length === 1 ? "" : "s") + " to fix first: " + r.problems.slice(0, 3).join(" ") + (r.problems.length > 3 ? " \u2026" : "") : "") +
+    ". Check before filing: run it through the FVU.");
 }

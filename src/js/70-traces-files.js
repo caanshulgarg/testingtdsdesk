@@ -223,7 +223,19 @@ const TRF = {
     String(text || "").replace(/\r/g, "").split("\n").forEach(raw => {
       const f = raw.split("^").map(x => x.trim()); if (f.length < 3) return;
       const rt = f[1];
-      if (rt === "BH"){
+      // next-tds-forms-2025: Forms 138, 140, 143, 144 (tax year 2026-27 on) have Protean's file format 1.1: the batch
+      // header has the assessment year (field 16) before the tax year (field 17), and the challan record its BSR code,
+      // serial and date in fields 15, 17 and 19, the deductees' deposited total in field 21; read by field number
+      if (rt === "BH" && /^(138|140|143|144)$/.test(f[4] || "")){
+        out.layout = "2025"; out.tan = /^[A-Z]{4}\d{5}[A-Z]$/.test(f[12] || "") ? f[12] : "";
+        out.form = ({138: "24Q", 140: "26Q", 144: "27Q", 143: "27EQ"})[f[4]];
+        if (/^20\d{4}$/.test(f[16] || "")) out.fy = f[16].slice(0, 4) + "-" + f[16].slice(4);
+        if (/^Q[1-4]$/.test(f[17] || "")) out.q = f[17];
+      } else if (rt === "CD" && out.layout === "2025"){
+        out.challans++;
+        const d = f[18] || "";
+        if (/^\d{7}$/.test(f[14] || "") && /^\d{8}$/.test(d)) out.cd.push({n: f[3] || "", bsr: f[14], date: d.slice(4, 8) + d.slice(2, 4) + d.slice(0, 2), serial: String(f[16] || "").padStart(5, "0"), consumed: num(f[20])});
+      } else if (rt === "BH"){
         out.tan = (f.find(x => /^[A-Z]{4}\d{5}[A-Z]$/.test(x)) || "");
         const fm = f.find(x => /^(24Q|26Q|27Q|27EQ|13[0-9]|14[0-9])$/.test(x)); if (fm) out.form = ({138: "24Q", 140: "26Q", 144: "27Q", 143: "27EQ"})[fm] || fm;
         const y = f.find(x => /^20\d{4}$/.test(x)); if (y) out.fy = y.slice(0, 4) + "-" + y.slice(4);
@@ -242,7 +254,9 @@ const TRF = {
         const name = f.slice(pi + 1).find(x => /[A-Za-z]{2}/.test(x) && !/^(?:[A-Z]{5}\d{4}[A-Z]|PAN\w+)$/.test(x) && !/^[A-Z]?\d/.test(x)) || "";
         const amounts = f.filter(x => /^-?\d+\.\d{2}$/.test(x)).map(x => num(x)).filter(x => x > 0);
         const date = f.find(x => /^\d{8}$/.test(x)) || "";
-        out.rows.push({challan: f[3] || "", n: f[4] || "", pan, name, amounts, date: date ? date.slice(4, 8) + date.slice(2, 4) + date.slice(0, 2) : ""});
+        // Protean's file format 1.1: field 4 the deductee's number, field 5 its challan's
+        const nw = out.layout === "2025";
+        out.rows.push({challan: (nw ? f[4] : f[3]) || "", n: (nw ? f[3] : f[4]) || "", pan, name, amounts, date: date ? date.slice(4, 8) + date.slice(2, 4) + date.slice(0, 2) : ""});
       }
     });
     return out;

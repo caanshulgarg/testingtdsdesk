@@ -15,19 +15,50 @@ const TDS_FORMS = {
 // are to be matched field by field to Protean's file-format documents and run through their FVU; until that is done
 // (NEW_FORMS_VALIDATED), a new-form file is a draft: named so, and not sent to the FVU from FinCom.
 const NEW_FORMS_VALIDATED = false;
-// The payment codes of the new forms (FY 2026-27 on), by form: Form 140 (26Q) by old section (and, for a section split by
-// what was paid for, by TDSRate.payType: r.pay); Form 143 (27EQ) by the old collection code. From the coordinator's
-// research of 14-Oct-2026 (docs/tds-codes.md, with the sources): several secondary sources agree; the official text
-// (Income-tax Rules 2026, Protean's file format) could not be reached. A section with { unconfirmed } gets NO code: the
-// sources disagree, so FinCom never picks one; its deductions are in To fix as "payment code to confirm" (payCodeRows).
-// Anything not listed is unconfirmed the same way. The codes some sources only infer (1007, 1010, 1025, 1036) are never used.
+// The payment codes of the new forms (FY 2026-27 on), by form: Form 140 (26Q) and Form 144 (27Q) by old section (and,
+// for a section split by what was paid for, by TDSRate.payType: r.pay; for 194C by the PAN's fourth letter, as the rate
+// is chosen, TDSRate.expect); Form 143 (27EQ) by the old collection code. next-tds-forms-2025 (17-Oct-2026): the codes are
+// Annexure 2 of Protean's file format version 1.1 of 22-07-2026 (and Note 15 / Note 9 / Note 13 of the Gazette Forms 140,
+// 143, 144), read against the old section of the same payment (docs/tds-forms-2025/GAPS.md lists each, for the owner).
+// A section with { unconfirmed } gets NO code: the old section is split in the new list by something FinCom does not know
+// (who pays, cash or kind, the amount over a year); its deductions are in To fix as "payment code to confirm"
+// (payCodeRows). A section not listed is unconfirmed the same way.
 const PAY_CODES = {
   "26Q": {
-    "194J": {by: {technical: "1026", professional: "1027"}, note: "s.393(1): technical services (old 194J(a)) at 2%; professional services (old 194J(b)) at 10%"},
-    "194T": {code: "1067", note: "partner's remuneration (old 194T)"},
-    "194I": {unconfirmed: "rent: the sources disagree (1008/1009, or 1016/1017/1019)"}
+    "192A": {code: "1004", note: "accumulated balance of provident fund due to an employee (392(7))"},
+    "193": {code: "1019", note: "interest on securities (393(1) Sl. 5(i))"},
+    "194": {code: "1029", note: "dividends (393(1) Sl. 7)"},
+    "194A": {unconfirmed: "interest other than on securities: 1020 / 1021 when a bank, co-operative bank or post office pays (senior citizen or not), 1022 when anyone else does"},
+    "194B": {unconfirmed: "winnings: 1058, or 1059 when given in kind (or the cash is not enough) and the tax was paid before release"},
+    "194BA": {unconfirmed: "online games: 1060, or 1061 when given in kind (or the cash is not enough)"},
+    "194BB": {code: "1062", note: "winnings from horse races (393(3) Sl. 3)"},
+    "194C": {byPan: {P: "1023", H: "1023"}, other: "1024", note: "work contract: 1023 if the contractor is an individual or HUF (PAN's 4th letter P or H), else 1024 (393(1) Sl. 6(i))"},
+    "194D": {code: "1005", note: "insurance commission (393(1) Sl. 1(i))"},
+    "194DA": {code: "1030", note: "life insurance policy payout (393(1) Sl. 8(i))"},
+    "194EE": {code: "1066", note: "NSS deposits, old section 80CCA(2)(a) (393(3) Sl. 6)"},
+    "194G": {code: "1063", note: "commission on lottery tickets (393(3) Sl. 4)"},
+    "194H": {code: "1006", note: "commission or brokerage, others (393(1) Sl. 1(ii))"},
+    "194I": {by: {rent_machinery: "1008", rent_building: "1009"}, note: "rent: plant or machinery 1008, other (land, building, furniture) 1009 (393(1) Sl. 2(ii))"},
+    "194IC": {code: "1011", note: "joint development agreement, section 67(14) (393(1) Sl. 3(ii))"},
+    "194J": {by: {technical: "1026", professional: "1027", director: "1028"}, note: "technical services 1026, professional services 1027, a director's fees 1028 (393(1) Sl. 6(iii))"},
+    "194K": {code: "1013", note: "units of a mutual fund (393(1) Sl. 4(i))"},
+    "194LA": {code: "1012", note: "compensation on acquisition of immovable property (393(1) Sl. 3(iii))"},
+    "194LBA": {unconfirmed: "business trust: interest 1014, dividend 1015, rent 1016"},
+    "194LBB": {code: "1017", note: "investment fund units (393(1) Sl. 4(iii))"},
+    "194LBC": {code: "1018", note: "securitisation trust (393(1) Sl. 4(iv))"},
+    "194N": {unconfirmed: "cash withdrawal: 1064 to a co-operative society, 1065 to others; the amount above the limit is needed too"},
+    "194O": {code: "1035", note: "e-commerce operator (393(1) Sl. 8(v))"},
+    "194Q": {code: "1031", note: "purchase of goods (393(1) Sl. 8(ii))"},
+    "194R": {unconfirmed: "business perquisite: 1033, or 1034 when in kind (or the cash is not enough) and the tax was paid before release"},
+    "194S": {unconfirmed: "virtual digital asset: 1037, or 1038 when in kind or partly in kind"},
+    "194T": {code: "1067", note: "partner's salary, remuneration, commission, bonus or interest (393(3) Sl. 7)"}
   },
-  "27EQ": {"6CA": "1068", "6CI": "1069", "6CB": "1070", "6CC": "1071", "6CD": "1072", "6CE": "1073"}
+  "27Q": {
+    "195": {code: "1057", note: "any other sum chargeable to a non-resident (393(2) Sl. 17)"},
+    "194E": {code: "1039", note: "non-resident sportsman, entertainer or sports association, section 211 income (393(2) Sl. 1)"}
+  },
+  "27EQ": {"6CA": "1068", "6CI": "1069", "6CB": "1070", "6CC": "1071", "6CD": "1072", "6CE": "1073", "6CJ": "1074", "6CL": "1075",
+    "6CF": "1090", "6CG": "1091", "6CH": "1092"}
 };
 // The section codes of the 26Q / 27Q file's deductee records, in one place (the TDS review of 14-Oct-2026, H4). A section
 // not listed keeps the code the file has always carried (194C -> 94C; 195 stays 195). A section split by what was paid for
@@ -43,6 +74,8 @@ const TDS26Q = {
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){
     form = TDS_FORMS[form] ? form : "26Q";
+    // tax year 2026-27 on: Forms 140, 144, 143 as Protean's file format has them (src/js/83); earlier years below, as before
+    if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, form);
     const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
     const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
     const used = {};
@@ -109,12 +142,17 @@ const TDS26Q = {
   payCode(r, form){ return this.payCodeOf(r, form).code; },
   // {code, why}: the code, or "" with why it has none ("payment code to confirm: …")
   payCodeOf(r, form){
-    const t = PAY_CODES[form === "27EQ" ? "27EQ" : form === "26Q" ? "26Q" : ""] || {};
+    const t = PAY_CODES[form] || {};
     if (form === "27EQ"){ const c = t[r.code || ""]; return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + (r.code ? "collection code " + r.code + " has no confirmed code in Form 143" : "no collection code")}; }
     const sec = TDS.sec(r.section), e = t[sec];
     if (!e) return {code: "", why: "payment code to confirm: " + sec + " has no confirmed code in Form " + TDS.formNo(form, "2026-27")};
     if (e.unconfirmed) return {code: "", why: "payment code to confirm: " + e.unconfirmed};
     if (e.code) return {code: e.code, why: ""};
+    if (e.byPan){
+      const p = String(r.pan || "").toUpperCase(), k = Certs.validPan(p) ? p[3] : "";
+      if (!k) return {code: "", why: "payment code to confirm: " + sec + " to " + (r.party || "?") + ", no valid PAN to tell an individual or HUF (" + Object.values(e.byPan)[0] + ") from others (" + e.other + ")"};
+      return {code: e.byPan[k] || e.other, why: ""};
+    }
     const c = e.by && e.by[r.pay];
     return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + sec + ", what was paid for is not known (" + Object.keys(e.by || {}).join(" or ") + ")"};
   },
@@ -135,7 +173,7 @@ const TDS26Q = {
   // A: a certificate covers the payment (its number goes beside); C: the higher rate, with no PAN or an inoperative one
   remark(r, form){
     const cert = form === "27EQ" ? TCS27EQ.certFor(r) : Certs.forRow(r);
-    if (cert) return {remark: "A", certNo: String(cert.certNo || "").toUpperCase().slice(0, 10)};
+    if (cert) return {remark: "A", certNo: String(cert.certNo || "").toUpperCase().slice(0, 10), certFull: String(cert.certNo || "").toUpperCase().replace(/\s/g, "")};
     if (!Certs.validPan(r.pan) || Certs.inoperative(r.pan)) return {remark: "C", certNo: ""};
     return {remark: "", certNo: ""};
   },
@@ -167,7 +205,7 @@ const TDS26Q = {
   },
   firmDetails(){
     const co = CO(), f = (co.tds26q || {});
-    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name, deductorType: "F"}, f);
+    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name}, f);
   }
 };
 

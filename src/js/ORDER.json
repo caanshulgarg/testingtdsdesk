@@ -80,5 +80,6 @@
  "79-challan-register.js",
  "80-assets.js",
  "81-tax-ledgers.js",
- "82-registers.js"
+ "82-registers.js",
+ "83-tds-forms-2025.js"
 ]

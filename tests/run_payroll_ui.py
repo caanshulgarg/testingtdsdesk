@@ -108,11 +108,17 @@ try:
         pg.screenshot(path=os.path.join(OUT, "annex2-desktop.png"), full_page=True)
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
         ok("Check before filing" in pg.inner_text('[data-file="24Q-tally"]'), "the file is marked check before filing")
+        # next-tds-forms-2025: Form 138 (tax year 2026-27) is built to Protean's file format 1.1, which is for Q1 to Q3: the Q4
+        # file (Annexure II's salary records) is refused until Protean's Q4 layout is in hand; Q1's file downloads, a draft
+        q4 = pg.evaluate("() => TDS24Q_FILE.build('2026-27', 'Q4', TDS26Q.firmDetails())")
+        ok(q4.get("error") and "Q1 to Q3" in q4["error"], "Q4 2026-27: Form 138's file is not made yet (%s)" % q4.get("error"))
+        pg.evaluate("() => { S.tdsQ = 'Q1'; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
         with pg.expect_download() as dl:
             pg.click('[data-pay-fvu]')
         fn = dl.value.suggested_filename
         body = open(dl.value.path(), encoding="ascii").read()
-        ok(fn.endswith("_DRAFT.txt") and body.count("^SD^") == len(EXP["annex2"]) and body.count("^CD^") == 3, "the Q4 text file downloads, a draft with a salary record per employee (%s)" % fn)
+        ok(fn.endswith("_Form138_Q1_202627_DRAFT.txt") and body.startswith("1^FH^SL1^") and body.count("^SD^") == 0 and body.count("^CD^") == 3 and all(len(l.split("^")) == {"FH": 18, "BH": 72, "CD": 30, "DD": 45}[l.split("^")[1]] for l in body.strip().splitlines()),
+           "the Q1 text file downloads: a Form 138 draft, every record with the workbook's number of fields (%s %d CD %s)" % (fn, body.count("^CD^"), sorted(set((l.split("^")[1], len(l.split("^"))) for l in body.strip().splitlines()))))
         print("== 5. light and dark, desktop and phone")
         for scheme in ("light", "dark"):
             for w, h, tag in ((1400, 1000, "desktop"), (390, 844, "phone")):
