@@ -12,7 +12,8 @@
 // "summary", "employees" and "annex2" open their new place (tabNow).
 import { useState } from "react";
 import { Upload as TracesUpload, TracesDefaults, Conso } from "./Files.jsx";
-import { AddChallan, UseBalance, SrcBadge, Notes, Split, TracesCheck, Said } from "./Register.jsx";
+import { UseBalance, SrcBadge, TracesCheck, Said } from "./Register.jsx";
+import { ChallanMatch } from "./Match.jsx";
 import { Lock as LockIcon } from "lucide-react";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -67,49 +68,14 @@ export function LockLine({ fy, q, form, short }) {
   </p>;
 }
 
-/* ---------------------------------------------------------------- Challans: what this return uses, from the register */
+/* ---------------------------------------------------------------- Challans: which challan pays which deduction */
+// next-challan-match (the owner, 17-Oct-2026): the one screen of tds/Match.jsx: the challans as cards, the deductions on
+// each, the suggestions to confirm, what is not matched yet with its next step, the checks before the file. It replaced
+// "This return's challans" with its "Auto-allocate N" and "Add from register" (and the "Suggested tagging" card)
 export function ReturnChallans({ fy, q, form, children }) {
-  const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), mine = TDSReg.register().filter((x) => x.uses.some((u) => u.form === form && u.fy === fy && u.q === q));
-  const locked = TDSReg.locked(fy, q, form), open = TDSReg.openRows(fy, q, form, cx), [adding, setAdding] = useState(false), [from, setFrom] = useState(false), [use, setUse] = useState("");
-  const sugg = from ? TDSReg.suggestions(fy, q, form, cx) : [], suggOf = {};
-  sugg.forEach((s) => { suggOf[s.challan.id] = s; });
-  const others = from ? TDSReg.register().filter((x) => x.bal.tax > 0.005).sort((a, b) => (suggOf[b.c.id] ? 1 : 0) - (suggOf[a.c.id] ? 1 : 0)) : [];
-  const auto = () => { const r = TDSReg.autoAllocate(fy, q, form); if (!r.ok) { toast(r.why); return; }
-    toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " allocated" + (r.left ? "; " + r.left + " still without a challan" : "") + ".", r.n ? { actions: [{ label: "Undo", run: () => { TDSCH.untag(r.ids); render(); } }] } : undefined); render(); };
-  const off = (x) => { const r = TDSReg.removeUse(x.c.id, form, fy, q); if (!r.ok) { toast(r.why); return; }
-    toast("Taken off challan " + TDSCH.label(x.c) + ".", { actions: [{ label: "Undo", run: () => { TDSReg.undoRemove(r); render(); } }] }); render(); };
-  return <div data-ret-challans={k}>
+  return <div data-ret-challans={TDSReg.key(form, fy, q)}>
     <Said />
-    <section className="dash-card" style={{ marginBottom: 12 }}>
-      <div className="rp-title"><h3>This return’s challans</h3>
-        <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          {!locked && open.length > 0 && <button className="btn small primary" data-auto-alloc="" onClick={auto}>Auto-allocate {open.length}</button>}
-          {!locked && <button className="btn small" data-add-from-register="" aria-expanded={from} onClick={() => setFrom(!from)}>Add from register</button>}
-          <button className="btn small" data-ret-add-challan="" onClick={() => setAdding(!adding)}>Add challan</button>
-          <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register →</button></span></div>
-      {mine.length ? <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement="" data-ret-alloc="">
-        <thead><tr><th>Challan</th><th className="n">Used here</th><th className="n">Balance left</th><th className="ac"></th></tr></thead>
-        <tbody>{mine.map((x) => { const u = x.uses.find((y) => y.form === form && y.fy === fy && y.q === q);
-          return <tr key={x.c.id} data-alloc-row={x.c.id}>
-            <td>{x.c.bsr} / {x.c.serial} · {day(x.c.date)} <SrcBadge c={x.c} /> <Notes list={u.notes} /></td>
-            <td className="n">{money(u.tax)}<div className="nr">{u.n} deduction{u.n === 1 ? "" : "s"}{u.portion.interest || u.portion.fee ? " · interest " + money(u.portion.interest) + ", fee " + money(u.portion.fee) : ""}</div></td>
-            <td className="n"><Split c={x.c} kind="left" cx={cx} /></td>
-            <td className="ac">{u.locked ? <span className="tag" data-lock=""><LockIcon width={11} height={11} aria-hidden="true" /> filed</span>
-              : <button className="btn small" data-use-off={k} onClick={() => off(x)}>Take off</button>}</td>
-          </tr>; })}</tbody></table></div>
-        : <p className="note">No challan is allocated to this return yet{open.length ? ": " + open.length + " deduction" + (open.length === 1 ? "" : "s") + " without a challan" : ""}.</p>}
-      {from && <div data-register-pick="" style={{ marginTop: 10 }}>
-        <p className="note">Challans with a balance. Those of another form or an earlier period are allowed, and noted; the suggested ones first, filled in. Nothing is used until you click Use.</p>
-        <ul className="tch-list">{others.map((x) => <li key={x.c.id} className="tch-prop" data-reg-pick={x.c.id} data-suggested={suggOf[x.c.id] ? "1" : undefined}><div className="tch-line">
-          <span><b>{TDSCH.label(x.c)}</b> <SrcBadge c={x.c} /> · {money(x.bal.tax)} left{suggOf[x.c.id] ? " · fits " + suggOf[x.c.id].ids.length + " deduction" + (suggOf[x.c.id].ids.length === 1 ? "" : "s") : ""}</span>
-          <Notes list={TDSReg.notes(x.c, form, fy, q)} />
-          <span className="tch-act"><button className="btn small" data-reg-pick-use={x.c.id} onClick={() => setUse(use === x.c.id ? "" : x.c.id)}>Use…</button></span></div>
-          {use === x.c.id && <UseBalance c={x.c} fixed={{ form, fy, q }} amount={suggOf[x.c.id] ? suggOf[x.c.id].amount : undefined} onDone={() => setUse("")} />}</li>)}</ul>
-        {!others.length && <p className="note">No challan has a balance left. Add one, or upload the portal's Payment History in the challan register.</p>}
-      </div>}
-    </section>
-    {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
-    {children}
+    <ChallanMatch fy={fy} q={q} form={form}>{children}</ChallanMatch>
   </div>;
 }
 

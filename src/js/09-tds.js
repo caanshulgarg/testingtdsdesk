@@ -153,13 +153,21 @@ const TDS = {
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   // bridge 2.4.4: and Tally's payroll, one row per employee and payroll entry (Payroll.tdsRows, src/js/73), in place of the
   // books' own 192 row of that entry (the entry's total, which says neither whom nor how much)
-  salaryRows(){
-    const pay = typeof Payroll === "object" ? Payroll.tdsRows() : [];
-    if (!pay.length) return this.allRows().filter(r => /^192/.test(String(r.section || "")));
+  // next-challan-match: Form 138 / 24Q of a year from Tally's payroll where it has that year; else the salary sheet's rows of
+  // the year (TDS24Q.dedRows: by employee, with stable ids); else the 192 the books carry (matched to challans too; the file
+  // asks for the sheet or the payroll, as the books do not say whose TDS it is)
+  salaryRows(){ return typeof perRender === "function" ? perRender(this, "salaryRows", () => this.salaryRowsNow()) : this.salaryRowsNow(); },
+  salaryRowsNow(){
+    const pay = typeof Payroll === "object" ? Payroll.tdsRows() : [], sheet = typeof TDS24Q === "object" && TDS24Q.dedRows ? TDS24Q.dedRows() : [];
+    const books = this.allRows().filter(r => /^192/.test(String(r.section || "")));
+    if (!pay.length && !sheet.length) return books;
+    const payFy = new Set(pay.map(r => r.fy)), sheetFy = new Set(sheet.map(r => r.fy).filter(fy => !payFy.has(fy)));
     const covered = new Set(pay.map(r => r.id.slice(4, r.id.indexOf("|"))));
-    return this.allRows().filter(r => /^192/.test(String(r.section || "")) && !covered.has(String(r.id).split("|")[0])).concat(pay)
+    return books.filter(r => !sheetFy.has(r.fy) && !covered.has(String(r.id).split("|")[0])).concat(pay, sheet.filter(r => sheetFy.has(r.fy)))
       .sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
+  // the source of a year's Form 138 rows: "payroll", "sheet" or "books"
+  salarySource(fy){ const r = this.salaryRows().find(x => x.fy === fy && (x.src === "payroll" || x.src === "sheet")); return r ? r.src : "books"; },
   // every voucher that carries a TDS ledger becomes one deduction row
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
@@ -192,7 +200,8 @@ const TDS = {
     });
     // t70: what was corrected in FinCom (the corrected Excel brought back) over the books' deduction (app/src/lib/tdsEdit.js)
     if (typeof TDSEdit === "object" && b.tdsEdits) out.forEach(r => TDSEdit.apply(r));
-    return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    // next-challan-match: a deduction split across challans by a person is its parts, each on its challan (TDSMatch.expand)
+    return (typeof TDSMatch === "object" ? TDSMatch.expand(out) : out).sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
   paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },

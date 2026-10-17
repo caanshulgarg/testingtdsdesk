@@ -138,7 +138,7 @@ const Payroll = {
       if (kind === "earn") r.paid = r2(r.paid - a.amt);
       if (this.isTds(a.head)) r.tds = r2(r.tds + a.amt);
     });
-    return Object.values(by).filter(r => r.paid > 0.005 || r.tds > 0.005).map(r => {
+    const out = Object.values(by).filter(r => r.paid > 0.005 || r.tds > 0.005).map(r => {
       const e = this.empByName(r.employee), pay = d.pays.filter(p => normName(p.employee) === normName(r.employee) && p.paidOn >= r.credit && TDS.monthsBetween(r.credit, p.paidOn) <= 2)
         .sort((x, y) => x.paidOn.localeCompare(y.paidOn))[0];
       const date = r.credit, id = "pay:" + r.guid + "|" + r.employee;
@@ -146,36 +146,14 @@ const Payroll = {
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
         src: "payroll", challan: (b.alloc || {})[id] || ""};
     }).sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
+    // next-challan-match: a month's TDS split across challans by a person is its parts (TDSMatch.expand)
+    return typeof TDSMatch === "object" ? TDSMatch.expand(out) : out;
   },
-  // the challan each month's TDS goes to: Tally's salary TDS challans (Stat Payment of Income Tax, section 192; TDSTally,
-  // src/js/72) by the period the payment says it is for, else the first such challan on or after the payment, within its
-  // amount. Only rows without a challan, never one a person tagged; marked "tally" in b.allocFrom. How many tagged
-  autoTag(b){
-    b = b || this.books();
-    const rows = this.tdsRows().filter(r => r.tds > 0.005 && !r.challan);
-    if (!rows.length) return 0;
-    const chs = (b.challans || []).filter(c => /^192/.test(String(c.section || ""))).sort((a, c) => String(a.date).localeCompare(String(c.date)));
-    if (!chs.length) return 0;
-    const use = TDS.challanUse(), vouch = {}; (b.vouchers || []).forEach(v => { vouch[v.id] = v; vouch[v.guid] = v; });
-    const period = (c) => { const v = vouch[c.fromVoucher], x = v && v.tdsx || {}; return {from: TDS.ymd(x.from), to: TDS.ymd(x.to)}; };
-    // tds-layout (the TDS review of 14-Oct-2026, M8): a 24Q marked filed is never changed; the tags go through the one
-    // tagging (TDSCH.tag: the lock, the limit, the trail), marked "tally"
-    const plan = {};
-    rows.forEach(r => {
-      if (typeof TDSReg === "object" && TDSReg.locked(r.fy, r.q, "24Q")) return;
-      const fits = (c) => Math.round(((use[c.id] || 0) + r.tds) * 100) <= Math.round(num(c.tax) * 100);
-      const ym = this.ym(r.date);
-      let c = chs.find(c => { const p = period(c); return p.from && p.from.slice(0, 6) <= ym && (p.to || p.from).slice(0, 6) >= ym && fits(c); });
-      if (!c) c = chs.find(c => TDS.ymd(c.date) >= TDS.ymd(r.date) && TDS.monthsBetween(r.date, c.date) <= 2 && fits(c));
-      if (!c) return;
-      (plan[c.id] = plan[c.id] || []).push(r.id); use[c.id] = r2((use[c.id] || 0) + r.tds);
-    });
-    let n = 0;
-    b.allocFrom = b.allocFrom || {};
-    Object.entries(plan).forEach(([chId, ids]) => { const t = TDSCH.tag(ids, chId, {via: "tally", nosave: true}); if (t.ok){ ids.forEach(id => { b.allocFrom[id] = "tally"; }); n += t.n; } });
-    if (n && typeof TDSReg === "object") TDSReg.done();
-    return n;
-  },
+  // next-challan-match (the owner, 17-Oct-2026: matches are shown and confirmed, never applied by themselves): the months a
+  // Tally payroll TDS payment says it pays are now rule a ("From Tally") of the one matcher (TDSMatch.links, src/js/86),
+  // shown on Form 138's Challans tab for a person to confirm. Nothing is tagged here any more; kept so its callers (the
+  // cloud read, src/js/49) stay as they are. How many tagged: none
+  autoTag(){ return 0; },
   // ---------- 24Q Annexure I: per employee per month, the amount paid or credited, the TDS, the dates and the challan
   annexI(fy, q){
     const ch = {}; (this.books().challans || []).forEach(c => { ch[c.id] = c; });
@@ -326,12 +304,27 @@ const PayTax = {
 // official sites are not reachable from where FinCom was built): the file is named _DRAFT and FinCom says to check it with
 // the FVU before filing (NEW_FORMS_VALIDATED, src/js/16).
 const TDS24Q_FILE = {
+  // next-challan-match: Form 138 / 24Q's rows: Tally's payroll for the year, else the salary sheet (both by employee, the
+  // same rows the Challans tab matches, TDS.salaryRows); the books' 192 alone do not say whose TDS it is: the sheet is
+  // asked for. A salary payment with tax on no challan stops the file with the list (never left out silently). {rows} or
+  // {error}
+  rowsOf(fy, q){
+    const src = TDS.salarySource(fy), all = TDS.salaryRows().filter(r => r.fy === fy && r.q === q);
+    if (src === "books") return {error: all.length ? "The books' salary TDS under 192 does not say which employee it is for: bring in the salary sheet (or Tally's payroll) to make the " + TDS.formName("24Q", fy) + " file." : "No salary TDS of " + q + " " + fy + "."};
+    const mine = all.filter(r => r.src === src), un = TDS26Q.untaggedError(mine);
+    if (un) return un;
+    const rows = mine.filter(r => r.tds > 0.005 && r.challan).map(r => Object.assign({}, r, {employee: r.employee || r.party}));
+    if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
+    return {rows, src};
+  },
   build(fy, q, firm){
     // tax year 2026-27 on: Form 138 as Protean's file format has it (src/js/83); earlier years below, as before
     if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, "24Q");
-    const rows = Payroll.annexI(fy, q).filter(r => r.tds > 0.005 && r.challan);
-    if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
-    const ch = {}; (Payroll.books().challans || []).forEach(c => { ch[c.id] = c; });
+    const got = this.rowsOf(fy, q);
+    if (got.error) return got;
+    if (q === "Q4" && got.src === "sheet") return {error: "Annexure II (the year's salary details) is built from Tally's payroll only: the salary sheet gives Annexure I. File the fourth quarter's 24Q with Protean's RPU, or bring the payroll in from Tally."};
+    const rows = got.rows;
+    const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; });
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     const live = Object.keys(used).map(id => ch[id]).filter(Boolean).sort((a, c) => String(a.date).localeCompare(String(c.date)));

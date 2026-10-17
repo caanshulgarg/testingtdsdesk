@@ -1106,8 +1106,6 @@ function tdsAlloc(rowId, chId){
 // many deductions at once (Entries: the ticked ones): to a challan, or off their challans
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
 function tdsUntagMany(ids){ const r = TDSCH.untag(ids); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
-function tdsConfirm(pid, opt){ const r = TDSCH.confirm(pid, Object.assign({form: S.tdsForm || "26Q"}, opt)); toast(r.ok ? r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged." : r.why); render(); return r; }
-function tdsConfirmAll(){ const r = TDSCH.confirmAllExact(S.tdsFy, S.tdsQ, S.tdsForm || "26Q"); toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + "."); render(); return r; }
 // a challan taken out (tds-layout): a soft delete with its reason, the one dialog; TDSReg.canDelete says when it cannot be
 // (read from Tally, or anything allocated to it); Undo brings it back
 async function challanDelete(id){
@@ -1134,8 +1132,8 @@ function challanFromBooks(vid, bsr, ser){
       if (num(p.fee)) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
       if (num(p.others)) c.others = num(p.others);
       return c; }));
-  const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.placed) : [];
-  saveBooks(); toast("Challan added from the books." + (pl.length ? " Allocated to " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + " (draft)." : "")); render(); return true;
+  const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.suggested) : [];
+  saveBooks(); toast("Challan added from the books." + (pl.length ? " What it pays is suggested on " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + ": confirm it on Challans." : "")); render(); return true;
 }
 function certAdd(c){
   const party = String(c.party || "").trim();

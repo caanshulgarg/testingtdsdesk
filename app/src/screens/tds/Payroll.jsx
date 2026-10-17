@@ -13,6 +13,7 @@
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";
+import { ChallanCell, MatchDialogs } from "./Match.jsx";
 import { tabNow, checksToFix, ReturnChallans, ToFix, PreFileSlot, AfterFiling, unknownItem, UnknownChallans } from "./ReturnParts.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -197,13 +198,14 @@ function Form16({ fy }) {
 }
 
 /* ---------------------------------------------------------------- the 24Q return from Tally's payroll */
-export function Return24Tally({ fy, q, ReturnCard, Tabs, Suggest }) {
+export function Return24Tally({ fy, q, ReturnCard, Tabs }) {
   const a1 = Payroll.annexI(fy, q), checks = Payroll.checks(fy, q), filed = TDSFiled.get(fy, q, "24Q");
   // tds-layout (14-Oct-2026): the owner's tabs: Deductions (Annexure I), Employees & declarations (the old Salary tab, with
   // Annexure II in Q4), Challans (from the register), To fix, Return file, After filing (ReturnParts.jsx)
   S.tdsTab = tabNow(S.tdsTab, "24Q");
   const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0));
   return <>
+    <MatchDialogs form="24Q" fy={fy} q={q} />
     <ReturnCard fy={fy} q={q} form="24Q" filed={filed} errN={checks.length} driftN={0} draft={TDS.isNew(fy)}
       primary={filed || S.tdsTab === "file" ? null : ["The text file", () => tdsTabGo("file")]}
       figs={[
@@ -221,10 +223,11 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs, Suggest }) {
           { k: "paid", role: "amount", label: "Amount", cls: "n", v: (r) => r.paid, fmt: money, sum: true, cell: (r) => money(r.paid) },
           { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, sum: true, cell: (r) => money(r.tds) },
           { k: "ded", role: "date", label: "Deducted on", v: (r) => TDS.ymd(r.deducted), cell: (r) => day(r.deducted) || "—" },
-          { k: "ch", label: "Challan", v: (r) => r.challanNo, cell: (r) => (r.challan ? <span data-challan-of={r.id}>{r.challanBsr} / {r.challanNo} · {day(r.challanDate)}</span> : r.tds > 0 ? <span className="tag warn">not tagged</span> : "—") },
+          // next-challan-match: the challan, "BSR · date · section", opening the Move dialog (it was read only)
+          { k: "ch", label: "Challan", v: (r) => r.challanNo, cell: (r) => (r.tds > 0 ? <span data-challan-of={r.id}><ChallanCell r={r} /></span> : "—") },
         ]} />
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
-      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q">{Suggest && <Suggest fy={fy} q={q} form="24Q" />}</ReturnChallans>
+      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" />
       : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><ListTable name="q24Annex2" id="q24A2Table" rows={Payroll.annexII(fy)} rowKey={(x) => x.guid} unit={["employee", "employees"]}
           cols={[
             { k: "name", role: "party", label: "Employee", v: (x) => x.name, cell: (x) => <button className="linkbtn" onClick={() => { S.paySub = "form16"; S.payF16 = x.guid; tdsTabGo("people"); }}>{x.name}</button> },
@@ -243,9 +246,10 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs, Suggest }) {
       : S.tdsTab === "checks" ? <div data-pay-checks=""><ToFix items={checksToFix(checks).items.concat([unknownItem(fy, q)])}
           parts={[["chtype", <UnknownChallans fy={fy} q={q} form="24Q" />]].concat(checksToFix(checks).parts)} /></div>
       : <><section className="dash-card" data-file="24Q-tally"><h3>{TDS.formName("24Q", fy)}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
-          <p className="note"><b>Check before filing.</b> The text file is built to the current 24Q layout (Annexure I{q === "Q4" ? " and II" : ""}); the new form's own layout could not be checked where FinCom was built, so the file is named _DRAFT. Run it through Protean's FVU first.</p>
+          {/* next-challan-match: the note was stale (it said the new form's layout could not be checked) */}
+          <p className="note"><b>Check before filing.</b> {TDS.isNew(fy) ? <>The text file is built to Protean's file format 1.1 for Form 138 (Annexure I, Q1 to Q3) and checked with its FVU 1.2; it stays a draft (named _DRAFT) until a statement with the challan file (CSI) from the portal passes FVU 1.2.{q === "Q4" ? " Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has." : ""}</> : <>The text file is built to Protean's 24Q file format as its FVU 8.7 checks it (Annexure I{q === "Q4" ? " and II" : ""}). Run it through the FVU before filing.</>}</p>
           <PreFileSlot />
-          <div className="revfilter"><button className="btn small primary" data-pay-fvu="" onClick={() => payFvuDownload(fy, q)}>Download the text file</button>
+          <div className="revfilter"><button className="btn small primary" data-pay-fvu="" disabled={TDS.isNew(fy) && q === "Q4"} onClick={() => payFvuDownload(fy, q)}>Download the {TDS.formName("24Q", fy)} text file</button>
             <button className="btn small" onClick={() => printTable("q24A1Table", "24Q Annexure I, " + q + " " + fy)}>Print Annexure I</button></div></section>
         <MarkFiled fy={fy} q={q} form="24Q" /></>}
   </>;

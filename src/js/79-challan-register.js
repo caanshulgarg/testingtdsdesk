@@ -90,17 +90,12 @@ const TDSReg = {
   natureCode(c){ if (c && c.natureCode) return c.natureCode; const s = TDSCH.secNorm(c && c.section); return !s ? "" : s === "192" ? "92B" : s.replace(/^1(9\d)/, "$1").replace(/^206C/, "6C"); },
   feeOf(c){ return r2(num(c.fee) + num(c.others)); },
   // ---------------- the balance: the one ----------------
-  // a challan's interest and fee by return. A person's portions where set (chPortions); none set, the whole interest and fee
-  // go to one return only, its home: the return of its own type and quarter where that uses it, else the first that uses it
-  // (the TDS review of 14-Oct-2026, M1: each return once claimed the whole, so two returns claimed it twice)
-  portions(c, cx){
-    const set = ((this.books().chPortions || {})[c && c.id]) || null;
-    if (set || !c) return set;
-    const m = (cx || this.ctx()).uses[c.id] || {}, keys = Object.keys(m).sort((a, b) => (m[a].fy + m[a].q + m[a].form).localeCompare(m[b].fy + m[b].q + m[b].form));
-    if (!keys.length || !(num(c.interest) || this.feeOf(c))) return null;
-    const own = this.ownReturn(c), home = keys.includes(own) ? own : keys[0];
-    return {[home]: {interest: num(c.interest), fee: this.feeOf(c)}};
-  },
+  // a challan's interest and fee by return: what a person allocated (chPortions), and nothing else. next-challan-match (the
+  // owner, 17-Oct-2026; FVU 1.2's "interest allocated" / "others allocated"): interest and fee are ALLOCATED to a return
+  // explicitly, the Challans tab offering the amount (TDSMatch.defaultPortion); none allocated, the return's file carries
+  // 0.00. (Before, none set gave the whole to the challan's home return by itself.) The fee portion is the fee and others
+  // together, the fee first (the register's split, tds/Register.jsx)
+  portions(c){ return ((this.books().chPortions || {})[c && c.id]) || null; },
   explicit(c){ return !!((this.books().chPortions || {})[c && c.id]); },
   portionsUsed(c, cx){ const p = this.portions(c, cx) || {}; return {interest: r2(Object.values(p).reduce((a, x) => a + num(x.interest), 0)), fee: r2(Object.values(p).reduce((a, x) => a + num(x.fee), 0))}; },
   // what a return uses of every challan: its own share (the return's Challans figure; the TDS review, M6)
@@ -191,8 +186,8 @@ const TDSReg = {
     return x;
   },
   done(){ const b = S.books; if (b && b.allocLog && b.allocLog.length > 5000) b.allocLog = b.allocLog.slice(-5000); this.flushSoon(); },
-  logTag(rows, c, via, cx){
-    rows.forEach(r => { const form = this.formOfRow(r.id, cx) || "26Q"; this.log({act: via || "tag", ch: c, form, fy: r.fy, q: r.q, row: r.id, tax: r.tds, note: this.notes(c, form, r.fy, r.q).join("; ")}); });
+  logTag(rows, c, via, cx, why){
+    rows.forEach(r => { const form = this.formOfRow(r.id, cx) || "26Q"; this.log({act: via || "tag", ch: c, form, fy: r.fy, q: r.q, row: r.id, tax: r.tds, note: [why || ""].concat(this.notes(c, form, r.fy, r.q)).filter(Boolean).join("; ")}); });
   },
   logUntag(list, cx){
     list.forEach(({r, ch}) => { const form = this.formOfRow(r.id, cx) || "26Q"; this.log({act: "untag", ch, form, fy: r.fy, q: r.q, row: r.id, tax: r.tds}); });
@@ -239,44 +234,8 @@ const TDSReg = {
     return Object.values(this.byRow(cx)).filter(x => x.form === form && x.r.fy === fy && x.r.q === q && !x.r.challan && x.r.tds > 0).map(x => x.r)
       .sort((a, b) => String(TDS.ymd(a.date)).localeCompare(String(TDS.ymd(b.date))) || TDSCH.p(a.tds) - TDSCH.p(b.tds));
   },
-  // the owner's order: Tally's tags stay; this return's open deductions to challans of the same form and year, oldest first
-  // (a challan deposited in or after the deduction's month, of the deduction's own section where the challan names one:
-  // a 94C challan is not filled with 194J deductions by itself; that is a person's choice, with its note)
-  autoAllocate(fy, q, form){
-    form = form || "26Q";
-    if (this.locked(fy, q, form)) return {ok: false, n: 0, why: this.lockWords(fy, q, form)};
-    const cx = this.ctx(), plan = {}, room = {};
-    const chs = TDS.challans().filter(c => TDSCH.isTdsHead(c) && this.sameStep(c, fy, q, form));
-    chs.forEach(c => { room[c.id] = TDSCH.p(this.balance(c, cx).tax); });
-    this.openRows(fy, q, form, cx).forEach(r => {
-      const ym = TDS.ymd(r.date).slice(0, 6), c = chs.find(c => TDS.ymd(c.date).slice(0, 6) >= ym && room[c.id] >= TDSCH.p(r.tds) && (form === "24Q" || !TDSCH.secNorm(c.section) || TDSCH.secOk(c.section, r.section)));
-      if (!c) return;
-      room[c.id] -= TDSCH.p(r.tds); (plan[c.id] = plan[c.id] || []).push(r.id);
-    });
-    let n = 0; const ids = [];
-    Object.entries(plan).forEach(([chId, list]) => { const x = TDSCH.tag(list, chId, {via: "auto", cx, nosave: true}); if (x.ok){ n += x.n; ids.push(...list); } });
-    if (n){ this.done(); saveBooks(); }
-    return {ok: true, n, ids, left: this.openRows(fy, q, form, cx).length};
-  },
-  // unused balances of other forms and earlier periods for this return's open deductions: one click each (useBalance with
-  // the amount shown), never applied by themselves. Each: {challan, ids, amount, left, notes}
-  suggestions(fy, q, form, cx){
-    form = form || "26Q"; cx = cx || this.ctx();
-    if (this.locked(fy, q, form)) return [];
-    const rows = this.openRows(fy, q, form, cx);
-    if (!rows.length) return [];
-    const chs = TDS.challans().filter(c => TDSCH.isTdsHead(c) && (TDS.fyOf(c.date) <= fy || this.sameYear(c, fy, q)) && this.balance(c, cx).tax > 0.005 && !this.sameStep(c, fy, q, form));
-    const free = new Set(rows.map(r => r.id)), out = [];
-    chs.forEach(c => {
-      if (out.length >= 10) return;
-      const left = this.balance(c, cx).tax; let room = TDSCH.p(left); const ids = [];
-      rows.forEach(r => { if (free.has(r.id) && TDSCH.p(r.tds) <= room){ room -= TDSCH.p(r.tds); ids.push(r.id); } });
-      if (!ids.length) return;
-      ids.forEach(id => free.delete(id));
-      out.push({challan: c, ids, amount: r2(ids.reduce((a, id) => a + cx.byRow[id].r.tds, 0)), left, notes: this.notes(c, form, fy, q)});
-    });
-    return out;
-  },
+  // next-challan-match: the "Auto-allocate N" button (autoAllocate) and the one-click suggestions of other forms' and
+  // earlier periods' balances (suggestions) are gone: the one matcher (TDSMatch, src/js/86) suggests, a person confirms.
   // ---------------- one rule, one function: a challan's balance used by a return ----------------
   // The register's "Use…" and a return's "Add from register" (and its one-click suggestions) are this one call: the
   // return's open deductions, oldest first, each whole, up to the amount given (never past the challan's tax left);
@@ -376,33 +335,34 @@ const TDSReg = {
     try { const l = typeof TDSTally === "object" && S.books ? TDSTally.links(S.books) : []; return {rows: new Set(l.map(x => x.row)), vids: new Set(l.map(x => x.vid))}; }
     catch (e){ return {rows: new Set(), vids: new Set()}; }
   },
-  // tl: tallyLinked(), once for several; synced: called by the sync, after Tally's tags
+  // tl: tallyLinked(), once for several; synced: called by the sync, after Tally's tags. next-challan-match (the owner,
+  // 17-Oct-2026: shown first, confirmed with one click, never applied by itself): a new challan is no longer allocated here;
+  // its draft return (its own type and quarter, else the quarter before) is named, where the one matcher (TDSMatch) shows
+  // what it can pay as suggestions. A challan whose type cannot be told is still asked in To fix ("unknown").
   autoPlace(c, tl, synced){
     if (!c || c.autoPlace !== "pending") return {placed: false};
     tl = tl || this.tallyLinked();
-    if (c.fromVoucher && tl.vids.has(c.fromVoucher) && !synced) return {placed: false, waiting: true};   // still "pending": the sync places it
+    if (c.fromVoucher && tl.vids.has(c.fromVoucher) && !synced) return {placed: false, waiting: true};   // still "pending": the sync looks at it
     const cx = this.ctx();
     if (this.usedTax(c, cx) > 0.005){ c.autoPlace = "used"; return {placed: false}; }
     const form = this.homeForm(c);
     if (!form){ c.autoPlace = "unknown"; return {placed: false, unknown: true}; }
     const d = TDS.ymd(c.date), fy0 = TDS.fyOf(d), q0 = TDS.qOf(d);
     const prev = q0 === "Q1" ? {fy: (num(fy0.slice(0, 4)) - 1) + "-" + fy0.slice(2, 4), q: "Q4"} : {fy: fy0, q: "Q" + (num(q0.slice(1)) - 1)};
-    const only = (r) => TDS.ymd(r.date) <= d && !tl.rows.has(r.id) && (form === "24Q" || TDSCH.secOk(c.section, r.section));
+    c.autoPlace = "suggested";
     for (const t of [{fy: fy0, q: q0}, prev]){
-      if (this.locked(t.fy, t.q, form) || !this.openRows(t.fy, t.q, form, cx).some(only)) continue;
-      const r = this.useBalance(c.id, form, t.fy, t.q, this.balance(c, cx).tax, 0, 0, "auto", only);
-      if (r.ok && r.n){ c.autoPlace = "placed"; c.placedIn = this.key(form, t.fy, t.q); return {placed: true, form, fy: t.fy, q: t.q, n: r.n, tax: r.tax, ids: r.ids, chId: c.id}; }
+      if (this.locked(t.fy, t.q, form)) continue;
+      const n = typeof TDSMatch === "object" ? TDSMatch.suggestNow(form, t.fy, t.q).filter(s => s.chId === c.id || (s.parts || []).some(p => p.chId === c.id)).length : 0;
+      if (n) return {placed: false, suggested: true, form, fy: t.fy, q: t.q, n, chId: c.id};
     }
-    c.autoPlace = "none";
     return {placed: false};
   },
   // every pending challan, once the challans are made (addHand, TDSCH.add, TDSTally.sync, challanFromBooks)
   placeNew(synced){ const p = TDS.challans().filter(c => c.autoPlace === "pending"), tl = p.length ? this.tallyLinked() : null; return p.map(c => Object.assign({c}, this.autoPlace(c, tl, synced))); },
-  // the words and the way to the return a new challan went to: "Added to 26Q Q2 →"
+  // the words and the way to the return whose Challans tab suggests what a new challan pays: "Matches suggested on 26Q Q2 →"
   placedToast(p, lead){
-    if (!p || !p.placed) return toast(lead);
-    toast(lead + " Added to " + p.form + " " + p.q + " " + p.fy + " (draft).", {actions: [{label: p.form + " " + p.q + " →", run: () => tdsGoTab(p.fy, p.q, p.form, "challans")},
-      {label: "Undo", run: () => { TDSCH.untag(p.ids || []); render(); }}]});
+    if (!p || !p.suggested) return toast(lead);
+    toast(lead + " What it can pay is suggested on " + p.form + " " + p.q + " " + p.fy + ": confirm it there.", {actions: [{label: p.form + " " + p.q + " →", run: () => tdsGoTab(p.fy, p.q, p.form, "challans")}]});
   },
   // the challans whose type could not be told, deposited in this quarter or the next (To fix asks which return)
   unknownType(fy, q){

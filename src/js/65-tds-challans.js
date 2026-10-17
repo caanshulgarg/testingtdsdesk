@@ -77,61 +77,8 @@ const TDSCH = {
   // how many deductions a Tally payment voucher pays bill-wise (shown beside it before it is a challan)
   billCount(vid){ const v = ((S.books || {}).vouchers || []).find(x => x.id === vid); return this.billLinks(v, this.billIndex()).length; },
   /* ---------- proposals ---------- */
-  // each: {id, kind: "tally" | "auto", challan, rows, section, months, need, avail, gap (avail - need; below 0: short), exact}
-  // form: only that return's deductions (each return page proposes its own)
-  proposals(fy, q, form){
-    const all = this.formRows(form), use = TDS.challanUse(), byId = {};
-    all.forEach(r => { byId[r.id] = r; });
-    const open = all.filter(r => !r.challan && (!fy || r.fy === fy) && (!q || r.q === q));
-    const free = new Set(open.map(r => r.id)), taken = {}, out = [];
-    const avail = (c) => this.left(c, use) - (taken[c.id] || 0);
-    const sum = (rows) => rows.reduce((a, r) => a + this.p(r.tds), 0) / 100;
-    const put = (kind, c, rows, section, months) => {
-      const need = r2(sum(rows)), have = r2(avail(c)), gap = r2(have - need);
-      rows.forEach(r => free.delete(r.id));
-      taken[c.id] = r2((taken[c.id] || 0) + Math.min(need, Math.max(0, have)));
-      out.push({id: kind + ":" + c.id + ":" + section + ":" + months.join(","), kind, challan: c, rows, section, months, need, avail: have, gap, exact: Math.abs(gap) < 0.005,
-        interest: num(c.interest), fee: num(c.fee)});
-    };
-    const chs = TDS.challans().filter(c => this.left(c, use) > 0.005);
-    // 1. Tally bill-wise
-    const idx = this.billIndex();
-    chs.forEach(c => {
-      const rows = this.billLinks(this.payVoucher(c), idx).filter(id => free.has(id)).map(id => byId[id]);
-      if (!rows.length) return;
-      put("tally", c, rows, Array.from(new Set(rows.map(r => TDS.sec(r.section)))).join(", "), Array.from(new Set(rows.map(r => this.ym(r.date)))).sort());
-    });
-    // 2. section and month: exact first
-    const groups = () => {
-      const g = {};
-      open.filter(r => free.has(r.id)).forEach(r => { const k = TDS.sec(r.section) + "|" + this.ym(r.date); (g[k] = g[k] || {section: TDS.sec(r.section), ym: this.ym(r.date), rows: []}).rows.push(r); });
-      return Object.values(g).sort((a, b) => a.ym.localeCompare(b.ym) || a.section.localeCompare(b.section));
-    };
-    const cands = (section, ym) => chs.filter(c => this.isTdsHead(c) && avail(c) > 0.005 && TDS.ymd(c.date).slice(0, 6) >= ym && (this.secOk(c.section, section) || !this.secNorm(c.section)))
-      .sort((a, b) => (this.secNorm(b.section) ? 1 : 0) - (this.secNorm(a.section) ? 1 : 0) || String(a.date).localeCompare(String(b.date)));
-    groups().forEach(g => {
-      const c = cands(g.section, g.ym).find(x => this.p(avail(x)) === this.p(sum(g.rows)));
-      if (c) put("auto", c, g.rows, g.section, [g.ym]);
-    });
-    // 3. one challan for a section's months together (a quarter paid at once), exact
-    const bySec = {};
-    groups().forEach(g => { (bySec[g.section] = bySec[g.section] || []).push(g); });
-    Object.values(bySec).forEach(gs => {
-      if (gs.length < 2) return;
-      const rows = [].concat(...gs.map(g => g.rows)), first = gs[0].ym;
-      const c = cands(gs[0].section, first).find(x => this.p(avail(x)) === this.p(sum(rows)));
-      if (c) put("auto", c, rows, gs[0].section, gs.map(g => g.ym));
-    });
-    // 4. the nearest challan of the same section (named on the challan), for a person to review: paid closest to the
-    //    month's due date (the 7th of the next month)
-    groups().forEach(g => {
-      const due = TDS.dueDate(g.ym + "01");
-      const near = cands(g.section, g.ym).filter(c => this.secOk(c.section, g.section))
-        .sort((a, b) => Math.abs(this.days(a.date, due)) - Math.abs(this.days(b.date, due)) || String(a.date).localeCompare(String(b.date)))[0];
-      if (near) put("auto", near, g.rows, g.section, [g.ym]);
-    });
-    return out;
-  },
+  // next-challan-match (17-Oct-2026): the proposals that were here (section and month, Tally bill-wise) are the one
+  // matcher's rules a to d now (TDSMatch.suggest, src/js/86, and server/_shared/tdsmatch.js)
   /* ---------- tagging ---------- */
   // tag deductions to a challan; refused (nothing changes) when the challan would be used beyond its amount
   // tds-layout (14-Oct-2026, the owner's register rules, TDSReg src/js/79): refused on a return marked filed (locked until a
@@ -158,7 +105,7 @@ const TDSCH = {
       b.alloc[r.id] = chId; r.challan = chId; TDSReg.track(cx, r, byId[r.id].form, chId, 1);
       if (b.allocFrom && b.allocFrom[r.id] === "tally") delete b.allocFrom[r.id];
     });
-    TDSReg.logTag(rows, c, opt.via || "tag", cx);
+    TDSReg.logTag(rows, c, opt.via || "tag", cx, opt.note);
     TDSReg.kept(cx);
     if (!opt.nosave){ TDSReg.done(); saveBooks(); }
     return {ok: true, n: rows.length};
@@ -181,31 +128,6 @@ const TDSCH = {
     TDSReg.kept(cx);
     if (on.length && !opt.nosave){ TDSReg.done(); saveBooks(); }
     return {ok: true, n: on.length};
-  },
-  // confirm a proposal: all its deductions, or (fit) those that fit the challan, oldest first
-  confirm(pid, opt){
-    const form = (opt && opt.form) || "", p = this.proposals(S.tdsFy, S.tdsQ, form).find(x => x.id === pid) || this.proposals("", "", form).find(x => x.id === pid);
-    if (!p) return {ok: false, why: "That suggestion is no longer there."};
-    let rows = p.rows;
-    if (opt && opt.ids) rows = rows.filter(r => opt.ids.includes(r.id));
-    if (opt && opt.fit){
-      let room = this.p(this.left(p.challan)); const keep = [];
-      rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || this.p(a.tds) - this.p(b.tds)).forEach(r => { if (this.p(r.tds) <= room){ keep.push(r); room -= this.p(r.tds); } });
-      rows = keep;
-    }
-    return this.tag(rows.map(r => r.id), p.challan.id);
-  },
-  confirmAllExact(fy, q, form){
-    let n = 0, k = 0;
-    // one at a time: each confirmation changes what is left
-    for (let i = 0; i < 200; i++){
-      const p = this.proposals(fy, q, form).find(x => x.exact);
-      if (!p) break;
-      const r = this.tag(p.rows.map(x => x.id), p.challan.id);
-      if (!r.ok || !r.n) break;
-      n += r.n; k++;
-    }
-    return {n, challans: k};
   },
   /* ---------- reading challans ---------- */
   money2(v){ const t = String(v == null ? "" : v).replace(/rs\.?|inr|₹|,|\s/gi, ""); const n = parseFloat(t); return isFinite(n) ? r2(n) : 0; },
@@ -335,13 +257,13 @@ const TDSCH = {
         if (ch) updated++;
         return;
       }
-      const c = Object.assign({id: uid("ch"), from: "upload", autoPlace: "pending"}, x);   // tds-layout: placed by itself (TDSReg.placeNew)
+      const c = Object.assign({id: uid("ch"), from: "upload", autoPlace: "pending"}, x);   // next-challan-match: what it pays is suggested (TDSReg.placeNew)
       const near = (d) => pays.find(p => !linked.has(p.vid) && this.p(p.tax) === this.p(c.tax) && Math.abs(this.days(p.date, c.date)) <= d);
       const p = c.tax > 0 ? near(0) || near(3) : null;
       if (p){ c.fromVoucher = p.vid; linked.add(p.vid); linkedN++; }
       b.challans.push(c); have[key(c)] = c; added++;
     });
-    const placed = added && typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.placed).length : 0;
+    const placed = added && typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.suggested).length : 0;
     if (added || updated) saveBooks();
     return {added, updated, linked: linkedN, placed};
   },
@@ -357,9 +279,9 @@ const TDSCH = {
       try { const got = await this.readFile(f); if (got.length) read = read.concat(got); else bad.push(f.name); } catch (e){ bad.push(f.name); }
     }
     const r = this.add(read);
-    const props = this.proposals(S.tdsFy, S.tdsQ, S.tdsView === "return" ? S.tdsForm || "26Q" : ""), exact = props.filter(p => p.exact).length;
+    const props = typeof TDSMatch === "object" && S.tdsFy && S.tdsQ ? TDSMatch.suggestNow(S.tdsView === "return" ? S.tdsForm || "26Q" : "26Q", S.tdsFy, S.tdsQ) : [], exact = props.filter(p => /exact/.test(p.words)).length;
     toast((r.added ? r.added + " challan" + (r.added === 1 ? "" : "s") + " added" : "No new challan") + (r.updated ? ", " + r.updated + " filled in" : "") +
-      (r.linked ? ", " + r.linked + " matched to Tally payments" : "") + (r.placed ? ", " + r.placed + " allocated to " + (r.placed === 1 ? "its draft return" : "their draft returns") : "") + "." + (props.length ? " " + props.length + " suggestion" + (props.length === 1 ? "" : "s") + " to confirm" + (exact ? " (" + exact + " exact)" : "") + "." : "") +
+      (r.linked ? ", " + r.linked + " matched to Tally payments" : "") + (r.placed ? ", " + r.placed + " with matches suggested on " + (r.placed === 1 ? "its return" : "their returns") : "") + "." + (props.length ? " " + props.length + " suggestion" + (props.length === 1 ? "" : "s") + " to confirm on Challans" + (exact ? " (" + exact + " exact)" : "") + "." : "") +
       (bad.length ? " Nothing read from " + bad.slice(0, 3).join(", ") + (bad.length > 3 ? " and " + (bad.length - 3) + " more" : "") + "." : ""));
     render();
     return Object.assign({read: read.length, bad}, r);

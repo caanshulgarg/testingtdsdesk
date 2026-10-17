@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 def read(p): return open(os.path.join(ROOT, p), encoding="utf-8").read()
 NAMES_JS = "server/_shared/names.js"
 # plain JavaScript shared with the server functions, put at the head of the app without its export line, in this order
-SHARED_JS = [NAMES_JS, "server/_shared/match2b.js"]
+SHARED_JS = [NAMES_JS, "server/_shared/match2b.js", "server/_shared/tdsmatch.js"]
 
 def assemble():
     shell = read("src/shell.html")

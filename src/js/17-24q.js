@@ -69,6 +69,25 @@ const TDS24Q = {
     return Market.date(s);
   },
   rows(){ return ((S.books || {}).salary || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
+  // next-challan-match: the sheet's rows as deductions, matched to challans like any other (Form 138's rows for a year with
+  // no Tally payroll). Each has a stable id, kept on the row: "sal:" and a hash of the employee, PAN, date and amounts, and
+  // its place among rows that are the same in all of these (so the same sheet brought in again keeps its matching)
+  dedRows(){
+    const b = S.books || {}, list = b.salary || [];
+    if (!list.length) return [];
+    const seen = {}, alloc = b.alloc || {};
+    const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); };
+    const out = [];
+    list.forEach(r => {
+      const base = [normName(r.name), String(r.pan || "").toUpperCase(), TDS.ymd(r.date), r2(num(r.gross)), r2(num(r.tds))].join("|"), k = seen[base] = (seen[base] || 0) + 1;
+      if (!r.id) r.id = "sal:" + hash(base) + "-" + k;
+      const date = TDS.ymd(r.date);
+      if (!date) return;
+      out.push({id: r.id, date, q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.name, employee: r.name, pan: r.pan || "", section: "192", ledger: "", paid: r2(num(r.gross)), tds: r2(num(r.tds)),
+        rate: num(r.gross) ? r2(num(r.tds) / num(r.gross) * 100) : null, voucher: "", src: "sheet", challan: alloc[r.id] || ""});
+    });
+    return (typeof TDSMatch === "object" ? TDSMatch.expand(out) : out).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
   // Annexure I: employee-wise deductions for the quarter
   annexI(fy, q){
     const rows = this.rows().filter(r => r.date && TDS.fyOf(r.date) === fy && TDS.qOf(r.date) === q);

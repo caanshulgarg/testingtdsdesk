@@ -256,7 +256,13 @@ const TDSF25 = {
       // FVU 1.2 (T_FV_3157): a transfer voucher is dated the last day of its month
       if (book){ const d = TDS.ymd(c.date), y = +d.slice(0, 4), m = +d.slice(4, 6); if (+d.slice(6, 8) !== new Date(Date.UTC(y, m, 0)).getUTCDate()) P("Transfer voucher " + c.bsr + "/" + c.serial + ": its date must be the last day of the month (FVU 1.2).");}
       if (book && /^[AS]$/.test(cat) && !/^\d{7}$/.test(String(firm.ain || ""))) P("A book adjustment by a Central or State Government deductor needs the AIN of the PAO / DTO / CDDO (BH field 68, 7 digits).");
-      return {c, mine, B, C, D, E, F, dep, no: ci + 1, book};
+      // next-challan-match (the owner, 17-Oct-2026; GAPS.md Q2): fields 24 and 25 are the interest and the others ALLOCATED
+      // to this statement (the register's portion, TDSReg.portionFor), 0.00 when none; the challan as deposited stays in
+      // fields 8 to 12. The fee portion is fee and others together, the fee first: the others' part of it goes to 25
+      const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: 0, fee: 0};
+      const aI = r2(Math.min(num(part.interest), C)), aE = r2(Math.max(0, Math.min(E, num(part.fee) - D)));
+      [[aI, "interest allocated"], [aE, "others allocated"]].forEach(([v, w]) => { if (Math.round(v * 100) % 100) P("Challan " + c.bsr + "/" + c.serial + ": its " + w + " " + this.money(v) + " has paise; the challan record takes whole rupees."); });
+      return {c, mine, B, C, D, E, F, dep, no: ci + 1, book, aI, aE};
     });
     const batchTotal = r2(ch.reduce((a, x) => a + x.F, 0));
     // BH: one batch for the form and quarter
@@ -279,7 +285,7 @@ const TDSF25 = {
       put(this.FIELDS.CD, {2: "CD", 3: "1", 4: String(x.no), 5: String(mine.length), 6: "N", 8: this.money(x.B), 9: this.money(x.C), 10: this.money(x.D),
         11: this.money(x.E), 12: this.money(x.F), 13: x.book ? "B" : "C", 15: String(c.bsr || ""), 17: String(c.serial || ""), 19: this.dmy(c.date),
         21: this.money(x.dep), 22: this.money(mine.reduce((a, r) => a + num(r.tds), 0)), 23: x.book ? String(c.minorHead || "") : String(c.minorHead || "200"),
-        24: this.money(x.C), 25: this.money(x.E)});
+        24: this.money(x.aI), 25: this.money(x.aE)});
       mine.forEach(r => {
         dno++;
         const d = this.ddOf(r, form, fy, q, firm, cat, c, problems, missing, P);
@@ -348,15 +354,22 @@ const TDSF25 = {
 
   // the rows of the return that are on a challan, and the challans: as the old builders choose them (the quarter's own
   // challans and any other that pays this return's deductions)
+  // next-challan-match: a deduction with tax on no challan stops the file with the list (TDS26Q.untaggedError), never left
+  // out silently; Form 138's rows are TDS24Q_FILE.rowsOf's (Tally's payroll, else the salary sheet)
   rowsOf(fy, q, form){
     let rows;
-    if (form === "24Q") rows = (typeof Payroll === "object" ? Payroll.annexI(fy, q) : []).filter(r => r.tds > 0.005 && r.challan)
-      .map(r => Object.assign({}, r, {party: r.employee}));
-    else rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
+    if (form === "24Q"){
+      const s = TDS24Q_FILE.rowsOf(fy, q);
+      if (s.error) return s;
+      rows = s.rows.filter(r => r.tds > 0.005).map(r => Object.assign({}, r, {party: r.employee || r.party}));
+    } else {
+      const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = TDS26Q.untaggedError(all, form === "27EQ");
+      if (un) return un;
+      rows = all.filter(r => r.challan);
+    }
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
-    const all = form === "24Q" && typeof Payroll === "object" ? (Payroll.books().challans || []).filter(c => !c.deleted) : TDS.challans();
-    const live = all.filter(c => (used[c.id] || []).length).sort((a, b) => String(TDS.ymd(a.date)).localeCompare(String(TDS.ymd(b.date))));
+    const live = TDS.challans().filter(c => (used[c.id] || []).length).sort((a, b) => String(TDS.ymd(a.date)).localeCompare(String(TDS.ymd(b.date))));
     if (!live.length) return {error: form === "24Q" ? "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."
       : "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in Form " + TDS.formNo(form, fy) + " against it yet."};
     const useAll = TDS.challanUse(), over = live.filter(c => Math.round((useAll[c.id] || 0) * 100) > Math.round(num(c.tax) * 100));

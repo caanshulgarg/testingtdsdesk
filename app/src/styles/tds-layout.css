@@ -65,3 +65,77 @@
 .ch-detail .reg-use { margin-top: 8px; }
 /* no column filters here: an amount's heading ends where its figures end */
 #app #tdsRegTable thead th.n > .lt-sort { justify-content: flex-end; padding-right: 10px; }
+
+/* next-challan-match (17-Oct-2026): which challan pays which deduction, one screen any fresher can follow (tds/Match.jsx).
+   Each challan a card on the left, its deductions and its suggestions (yellow) on the right; "Not matched yet" in red;
+   on a phone the card sits above its deductions. */
+.cm-steps { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0 0 10px; padding: 0; font-size: 13px; }
+.cm-steps li { color: var(--text-muted); }
+.cm-steps li b { margin-right: 4px; }
+.cm-steps li[data-st="done"] { color: var(--ok); }
+.cm-steps li[data-st="now"] { color: var(--foreground); font-weight: 600; }
+.cm-top { margin-bottom: 12px; }
+.cm-metric { font-size: 15px; margin-bottom: 4px; }
+.cm-metric .bad { color: var(--bad); }
+.cm-ai { margin: 2px 0 8px; }
+.cm-acts, .cm-filters { gap: 8px; flex-wrap: wrap; align-items: center; }
+.cm-filters { margin-top: 8px; }
+.cm-filters select { flex: 0 1 auto; width: auto; max-width: 100%; }
+.cm-list { display: grid; gap: 10px; margin-bottom: 12px; }
+.cm-ch { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-card, 10px); background: var(--surface-raised, var(--surface)); }
+.cm-ch.cm-none { border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); }
+.cm-card-h { font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.cm-card-h.bad { color: var(--bad); }
+.cm-card-sub { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; font-size: 13px; }
+.cm-heads { display: grid; grid-template-columns: repeat(4, auto); gap: 0 10px; margin: 0 0 6px; font-size: 12px; }
+.cm-heads dt { color: var(--text-muted); grid-row: 1; }
+.cm-heads dd { margin: 0; grid-row: 2; font-variant-numeric: tabular-nums; }
+.cm-bar { height: 8px; border-radius: 4px; background: var(--surface-muted); overflow: hidden; }
+.cm-bar span { display: block; height: 100%; background: var(--ok); }
+.cm-bar.over span { background: var(--bad); }
+.cm-bar-l { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin: 3px 0 6px; font-variant-numeric: tabular-nums; }
+.cm-portion { font-size: 12.5px; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.cm-side { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.cm-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cm-row { display: grid; grid-template-columns: auto 100px minmax(0, 1fr) 70px 104px; gap: 4px 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rule, var(--border)); font-size: 13px; }
+.cm-row:last-child { border-bottom: 0; }
+.cm-row-a { text-align: right; font-variant-numeric: tabular-nums; }
+.cm-row-p { min-width: 0; overflow-wrap: anywhere; }
+.cm-by { display: block; color: var(--text-muted); font-size: 11.5px; }
+.cm-row .cm-why { grid-column: 2 / -1; font-size: 12.5px; color: var(--bad); }
+.cm-row > .linkbtn { grid-column: 2 / -1; justify-self: start; font-size: 12px; }
+.cm-sugg { border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--border)); background: var(--warn-soft); border-radius: var(--radius-control, 6px); padding: 8px 10px; }
+.cm-sugg.low { border-style: dashed; }
+.cm-sugg-h { font-size: 13px; }
+.cm-sugg-why { font-size: 13px; margin: 3px 0; }
+.cm-sugg-warn { font-size: 12.5px; color: var(--bad); margin: 3px 0; }
+.cm-sugg .cm-rows { margin: 4px 0; }
+.cm-sugg .cm-row { grid-template-columns: 100px minmax(0, 1fr) 70px 104px; }
+.cm-row-d, .cm-row-a { white-space: nowrap; }
+.cm-sugg-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.cm-parts { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+.cm-bar-sel { position: sticky; bottom: 8px; z-index: 4; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; margin: 0 0 12px;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-control, 6px); box-shadow: var(--shadow-floating); }
+.cm-checks ul { margin: 4px 0 10px; padding-left: 18px; }
+.cm-block li { color: var(--bad); }
+.cm-warn li { color: var(--warn); }
+.cm-tips { margin: 0 0 12px; font-size: 13px; }
+.cm-tips summary { cursor: pointer; color: var(--text-secondary); }
+.cm-pick { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow: auto; }
+.cm-pick li { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--rule, var(--border)); font-size: 13px; }
+.cm-pick small.bad { color: var(--bad); }
+.cm-cell { white-space: nowrap; font-size: 12.5px; }
+.cm-cell.bad { color: var(--bad); }
+.cm-split input { min-width: 0; max-width: 100%; }
+@media (max-width: 760px) {
+  .cm-ch { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .cm-row { grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-areas: "ck d a" "ck p p" "ck x x"; }
+  .cm-row > .cm-ck { grid-area: ck; }
+  .cm-row .cm-row-d { grid-area: d; }
+  .cm-row .cm-row-a { grid-area: a; }
+  .cm-row .cm-row-p { grid-area: p; }
+  .cm-row .cm-row-s { display: none; }
+  .cm-row .cm-why, .cm-row > .linkbtn { grid-area: x; grid-column: auto; }
+  .cm-sugg .cm-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "d a" "p p"; }
+  .cm-cell { white-space: normal; }
+}

@@ -14,12 +14,12 @@
 /* to work out tax or to make a return.                               */
 /* ================================================================== */
 const AIH = {
-  FEATURES: [["tds", "TDS: suggest the section for expense ledgers"], ["r2b", "GST: suggest pairs for 2B invoices left unmatched"],
+  FEATURES: [["tds", "TDS: suggest the section for expense ledgers"], ["r2b", "GST: suggest pairs for 2B invoices left unmatched"], ["tdsMatch", "TDS: suggest which challan pays the deductions the rules leave"],
     ["audit", "Audit: flag credit blocked under section 17(5), and expenses where TDS looks missed"], ["notices", "Notices: read a GST or TDS notice and draft a reply"]],
-  cfg(){ return Object.assign({on: false, tds: true, r2b: true, audit: true, notices: true}, (S.firm || {}).ai || {}); },
+  cfg(){ return Object.assign({on: false, tds: true, r2b: true, tdsMatch: true, audit: true, notices: true}, (S.firm || {}).ai || {}); },
   // switched on for the firm, this part, and this client
   enabled(f){ const c = this.cfg(), co = CO(); return !!c.on && c[f] !== false && !(co && co.aiOff); },
-  sub(){ const c = this.cfg(); return c.on ? "on: " + this.FEATURES.filter(([k]) => c[k] !== false).length + " of 4 parts" : "off"; },
+  sub(){ const c = this.cfg(); return c.on ? "on: " + this.FEATURES.filter(([k]) => c[k] !== false).length + " of " + this.FEATURES.length + " parts" : "off"; },
   st(){ const b = S.books; b.ai = b.ai || {}; ["led", "tdsPay", "pairs"].forEach(k => { b.ai[k] = b.ai[k] || {}; }); b.ai.notices = b.ai.notices || []; b.ai.log = b.ai.log || []; return b.ai; },
   who(){ return (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "this computer"; },
   log(what, detail){ const a = this.st(); a.log.unshift({at: new Date().toISOString(), by: this.who(), what, detail: String(detail || "").slice(0, 300)}); a.log.length = Math.min(a.log.length, 500); },

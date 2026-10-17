@@ -24,6 +24,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 | gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
 | gst-taxpro | server/gst-taxpro | index.ts, filing.ts, automatch.ts, ../_shared/cors.ts | `*` |
 | gst-2b-match | server/gst-2b-match | index.ts, handler.ts, match.ts, ../_shared/cors.ts, ../_shared/match2b.js, ../assistant/models.ts, ../assistant/router.ts (models.ts imports it); verify_jwt off (it checks the user's token, the service key or the cron key itself) | the list |
+| tds-challan-match | server/tds-challan-match | index.ts, handler.ts, match.ts, ../_shared/cors.ts, ../_shared/tdsmatch.js, ../assistant/models.ts, ../assistant/router.ts (models.ts imports it); verify_jwt off (it checks the user's token itself); no table of its own (the assistant's switch, cap, cost and log) | the list |
 | support-mail | server/support-mail | index.ts, ../_shared/cors.ts | `*` |
 
 The `*` functions take only the header list from here: each call carries a sign-in token or a device key (no cookies),
@@ -77,3 +78,13 @@ how its answer is checked and decided (`m2bAiInput`, `m2bAiParse`, `m2bAiApply`)
 JSON (`m2bFrom2bJson`, which `GST2B.fromJson` calls). Plain JavaScript with no imports. The gst-2b-match function imports it;
 `build.py` puts it, without its export line, at the head of the app after names.js (`SHARED_JS`).
 `node tests/run_2b_automatch.js` checks the app and the module give the same answers.
+
+## tdsmatch.js: one matcher for TDS challans
+
+`tdsmatch.js` says which challan pays which TDS deduction (next-challan-match, 17-Oct-2026): the rules a to f
+(`tmRules`: From Tally; same section, same month, exact; same section, whole quarter, exact; same section, same month,
+filled; several sections in one challan; an earlier challan's balance; a split offered), the reason and next step for
+anything left (`tmReasons`), and what goes to Claude for the left-overs and how each pairing is checked (`tmAiInput`,
+`tmAiParse`, `tmAiCheck`). Plain JavaScript with no imports. The tds-challan-match function imports it; `build.py` puts it,
+without its export line, at the head of the app after match2b.js (`SHARED_JS`), where `TDSMatch` (src/js/86) calls it.
+`node tests/run_tds_match.js` checks the rules one by one; `python3 tests/run_tds_challan_match_server.py` the function.

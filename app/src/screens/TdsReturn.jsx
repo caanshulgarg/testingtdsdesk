@@ -26,6 +26,7 @@ import { Info } from "../parts/Answer.jsx";
 // tds-layout (14-Oct-2026): a return's six tabs in the owner's layout, its challans from the one register, To fix, After filing
 import { returnTabs, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
 import { Limits, TieOut } from "./tds/Smart.jsx";
+import { ChallanCell, MatchDialogs } from "./tds/Match.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -163,83 +164,24 @@ function TallyPays({ fy, q }) {
   </>;
 }
 
-/* ---------------------------------------------------------------- challan tagging (tds-challans, 10-Oct-2026) */
-// The owner's choice: the challans read from the portal's Payment History or receipt PDFs (Upload challans), and the
-// tagging proposed from Tally's bill-wise details or by section and month, each confirmed by a person (TDSCH, src/js/65).
-// Nothing here works out a figure: the proposals, the amounts left and the refusals are TDSCH's.
-const gapTag = (p) => p.exact ? <span className="tag ok">Exact</span>
-  : p.gap < 0 ? <span className="tag bad">{money(-p.gap)} short</span> : <span className="tag warn">{money(p.gap)} more on the challan</span>;
-
-function Proposal({ p, fy, open, setOpen, main }) {
-  const [off, setOff] = useState({});
-  const ticked = p.rows.filter((r) => !off[r.id]), sum = r2(ticked.reduce((a, r) => a + r.tds, 0)), over = sum - p.avail > 0.005;
-  const months = p.months.map((m) => monthName(m)).join(", "), n = p.rows.length, lab = TDSCH.label(p.challan);
-  const fitN = (() => { let room = Math.round(p.avail * 100), k = 0; p.rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.tds - b.tds).forEach((r) => { const v = Math.round(r.tds * 100); if (v <= room) { room -= v; k++; } }); return k; })();
-  return <li className="tch-prop" data-proposal={p.id} data-kind={p.kind}>
-    <div className="tch-line">
-      <span className={"tag " + (p.kind === "tally" ? "info" : "")}>{p.kind === "tally" ? "From Tally bill-wise" : "Same section and month"}</span>
-      <span><b>{p.section.split(", ").map((x) => secText(x, fy)).join(", ")}</b> · {months} · {n} deduction{n === 1 ? "" : "s"} · <b>{money(p.need)}</b></span>
-      <span className="note">→ challan {lab} · {money(p.avail)} {p.avail === num(p.challan.tax) ? "" : "left "}{(p.interest || p.fee) ? "· interest " + money(p.interest) + (p.fee ? ", fee " + money(p.fee) : "") + " apart" : ""}</span>
-      {gapTag(p)}
-      <span className="tch-act">
-        {p.exact ? <button className={"btn small" + (main ? " primary" : "")} onClick={() => tdsConfirm(p.id)}>Confirm {n} deduction{n === 1 ? "" : "s"} to challan {lab}</button>
-          : <button className="btn small" aria-expanded={open} onClick={() => setOpen(open ? "" : p.id)}>{open ? "Close" : "Review"}</button>}
-      </span>
-    </div>
-    {open && !p.exact && <div className="tch-review">
-      <div className="bk-tablewrap"><table className="bk-table" data-statement="">
-        <thead><tr><th className="ck"></th><th className="dt">Date</th><th>Deductee</th><th>Voucher</th><th className="n">TDS</th></tr></thead>
-        <tbody>{p.rows.map((r) => <tr key={r.id}><td className="ck"><input type="checkbox" aria-label={"Include " + r.party} checked={!off[r.id]} onChange={(ev) => setOff({ ...off, [r.id]: !ev.target.checked })} /></td>
-          <td>{day(r.date)}</td><td>{r.party}</td><td>{r.voucher}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
-      </table></div>
-      <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }}>
-        <span>{ticked.length} ticked · <b>{money(sum)}</b> against {money(p.avail)} on the challan</span>
-        <span className={over ? "bad" : "note"}>{over ? "Over by " + money(sum - p.avail) : money(p.avail - sum) + " left on the challan after"}</span>
-        <button className="btn small primary" disabled={!ticked.length || over} onClick={() => tdsConfirm(p.id, { ids: ticked.map((r) => r.id) })}>Confirm {ticked.length} deduction{ticked.length === 1 ? "" : "s"} to challan {lab}</button>
-        {p.gap < 0 && fitN > 0 && <button className="btn small" onClick={() => tdsConfirm(p.id, { fit: true })}>Confirm the {fitN} that fit</button>}
-      </div>
-    </div>}
-  </li>;
-}
-
-function Suggest({ fy, q, form }) {
-  const props = TDSCH.proposals(fy, q, form), exact = props.filter((p) => p.exact).length, [open, setOpen] = useState("");
-  return <section className="dash-card tch-card" style={{ marginBottom: 12 }} data-challan-suggest="">
-    <div className="rp-title"><h3>Suggested tagging</h3>
-      <Info label="How tagging is suggested">From Tally’s bill-wise details where the TDS payment has them, else by section and month. Nothing is tagged until you confirm.</Info></div>
-    {props.length ? <>
-      {exact > 1 && <div className="row" style={{ marginBottom: 8 }}><button className="btn small primary" onClick={() => tdsConfirmAll()}>Confirm all exact ({exact})</button></div>}
-      <ul className="tch-list">{props.map((p) => <Proposal key={p.id} p={p} fy={fy} open={open === p.id} setOpen={setOpen} main={exact === 1 && p.exact} />)}</ul></>
-      : <p className="note">No suggestion now: the deductions are against challans, or no challan fits them. Add or upload challans in the challan register{form === "24Q" ? "" : ", or tick deductions under Deductions and tag them"}.</p>}
-  </section>;
-}
-
-// the ticked deductions (Entries): their total against the challan chosen, tagged or untagged together
-function TagBar({ rows, chOpts }) {
-  const sel = rows.filter((r) => (S.tdsSel || {})[r.id]), [ch, setCh] = useState("");
+// the ticked deductions (Entries): their total, moved to a challan (the Move dialog of tds/Match.jsx: each challan's
+// section, month and balance, refused over it) or taken off their challans
+function TagBar({ rows }) {
+  const sel = rows.filter((r) => (S.tdsSel || {})[r.id]);
   if (!sel.length) return null;
-  const total = r2(sel.reduce((a, r) => a + r.tds, 0)), c = chOpts.find((x) => x.id === ch);
-  const add = r2(sel.filter((r) => r.challan !== ch).reduce((a, r) => a + r.tds, 0)), left = c ? TDSCH.left(c) : 0, after = r2(left - add), over = !!c && after < -0.005;
-  const tagged = sel.filter((r) => r.challan).map((r) => r.id);
+  const total = r2(sel.reduce((a, r) => a + r.tds, 0)), tagged = sel.filter((r) => r.challan).map((r) => r.id);
   return <div className="revfilter tch-bar" style={{ flexWrap: "wrap", rowGap: 6 }} data-tag-bar="">
     <span><b>{sel.length} selected</b> · TDS <b>{money(total)}</b></span>
-    <select aria-label="Tag to challan…" value={ch} onChange={(ev) => setCh(ev.target.value)} style={{ width: "auto", maxWidth: "100%" }}>
-      <option value="">Tag to challan…</option>
-      {chOpts.map((x) => <option key={x.id} value={x.id}>{TDSCH.label(x) + (x.section ? " · " + x.section : "") + (x.minorHead === "400" ? " · minor head 400" : "") + " · " + money(TDSCH.left(x)) + " left"}</option>)}</select>
-    {c && <span className={over ? "bad" : "note"}>{over ? "Over by " + money(-after) + ": a challan cannot carry more than its amount" : money(after) + " left on the challan after"}</span>}
-    <button className="btn small primary" disabled={!c || over} onClick={() => tdsTagMany(sel.map((r) => r.id), ch)}>Tag to challan</button>
-    {tagged.length > 0 && <button className="btn small" onClick={() => tdsUntagMany(tagged)}>Untag{tagged.length < sel.length ? " " + tagged.length : ""}</button>}
+    <button className="btn small primary" data-tag-move="" onClick={() => tdsMoveOpen(sel.map((r) => r.id))}>Move to challan…</button>
+    {tagged.length > 0 && <button className="btn small" onClick={() => tdsTakeOff(tagged)}>Take off challan{tagged.length < sel.length ? " (" + tagged.length + ")" : ""}</button>}
     <button className="linkbtn" onClick={() => { S.tdsSel = {}; render(); }}>Clear selection</button>
   </div>;
 }
 const selSet = (ids, on) => { const s = { ...(S.tdsSel || {}) }; ids.forEach((id) => { if (on) s[id] = true; else delete s[id]; }); S.tdsSel = s; render(); };
 
-// the challan a deduction is paid by (or not yet)
-function ChallanPick({ r, chOpts }) {
-  return <select value={r.challan || ""} aria-label={"Challan for " + r.party} onChange={(ev) => tdsAlloc(r.id, ev.target.value)}>
-    <option value="">— not yet —</option>{chOpts.map((x) => <option key={x.id} value={x.id}>{x.bsr + "/" + x.serial + " · " + day(x.date)}</option>)}
-  </select>;
-}
+// the challan a deduction is paid by (or not yet): "BSR · date · section", opening the Move dialog (next-challan-match: the
+// old dropdown re-tagged silently)
+const ChallanPick = ({ r }) => <ChallanCell r={r} />;
 // t70: the reason under the rate, in words (it was only on a hover, cut with "…")
 // (in short, two lines at most: "should be 20% (no PAN, 206AA)"; the full reason on a hover and in To fix › Rate questions)
 const shortWhy = (w) => String(w || "").replace(/no valid PAN, section /, "no PAN, ").replace(/, section 206AA/, ", 206AA").replace(/\s*\(higher rate\)/, "").replace(/\s*\(PAN's 4th letter \w\)/, "")
@@ -506,8 +448,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
     <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
       side={S.tdsTab === "deductions" ? <div className="tg-tabside">
         <DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} />{tools}</div> : null} />
+    <MatchDialogs form={form} fy={fy} q={q} />
     {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
-        <Suggest fy={fy} q={q} form={form} />
         <TallyPays fy={fy} q={q} /></ReturnChallans>
       : S.tdsTab === "deductions" ? <>{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
         : <><Deductions fy={fy} q={q} {...common_} unitW={unit} edN={edN} /><BySection fy={fy} q={q} form={form} /></>}</>
@@ -602,6 +544,8 @@ export function yearChecks(fy) {
 
 function Employees({ fy, q, a1 }) {
   const f = (S.tdsFl || {}).employees || {}, qq = String(f.q || "").toLowerCase();
+  // next-challan-match: each month's row of the sheet with its challan (the rows TDS.salaryRows matches; a split row its parts)
+  const ded = {}; TDS24Q.dedRows().forEach((r) => { const k = r.splitOf || r.id; (ded[k] = ded[k] || []).push(r); });
   const shown = tdsSorted("employees", a1.filter((e) => (!qq || (e.name + " " + e.pan).toLowerCase().includes(qq)) &&
     (f.pan !== "no" || !Certs.validPan(e.pan)) && (f.pan !== "yes" || Certs.validPan(e.pan)) && (f.tds !== "yes" || e.tds > 0) && (f.tds !== "no" || !e.tds)), (e, k) => e[k]);
   return <>
@@ -611,8 +555,9 @@ function Employees({ fy, q, a1 }) {
     <ListTable name="q24Employees" id="q24Table" rows={shown} rowKey={(e) => e.pan || e.name} unit={["employee", "employees"]} of={a1.length} sortVia={via("employees")}
       empty="No employee matches these filters. Use Clear filters above to see all."
       after={(e) => S.q24Open === (e.pan || e.name) && <table className="bk-table" style={{ margin: 0 }} data-statement="">
-          <thead><tr><th className="dt">Month</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Chapter VI-A</th><th className="n">TDS</th></tr></thead>
-          <tbody>{e.rows.map((r, i) => <tr key={i}><td>{fmtDate(r.date)}</td><td className="n">{money(r.gross)}</td><td className="n">{money(r.exempt)}</td><td className="n">{money(r.chapter6)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
+          <thead><tr><th className="dt">Month</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Chapter VI-A</th><th className="n">TDS</th><th>Challan</th></tr></thead>
+          <tbody>{e.rows.map((r, i) => <tr key={i}><td>{fmtDate(r.date)}</td><td className="n">{money(r.gross)}</td><td className="n">{money(r.exempt)}</td><td className="n">{money(r.chapter6)}</td><td className="n">{money(r.tds)}</td>
+            <td>{(ded[r.id] || []).filter((x) => x.tds > 0.005).map((x) => <ChallanCell key={x.id} r={x} />)}</td></tr>)}</tbody>
         </table>}
       cols={[
         { k: "name", role: "party", label: "Employee", v: (e) => e.name, cell: (e) => <Toggle which="q24Open" k={e.pan || e.name}>{e.name}</Toggle> },
@@ -627,7 +572,7 @@ function Employees({ fy, q, a1 }) {
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
   // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
-  if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} ReturnCard={ReturnCard} Tabs={Tabs} Suggest={Suggest} />;
+  if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} ReturnCard={ReturnCard} Tabs={Tabs} />;
   // tds-layout: Deductions (Annexure I, the employees), Employees & declarations (the old Salary tab, Annexure II), …
   S.tdsTab = tabNow(S.tdsTab, "24Q");
   const fname = TDS.formName("24Q", fy);
@@ -651,8 +596,8 @@ export function Return24({ b }) {
             { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => r.pan || "—" },
           ]} />
         <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
-      {/* tds-challans: the 192 the books carry, tagged to their challans here too (no salary sheet needed for that) */}
-      {inB.length > 0 && <div style={{ maxWidth: 1100 }}><Suggest fy={fy} q={q} form="24Q" /></div>}
+      {/* next-challan-match: the 192 the books carry, matched to their challans here too (the file needs the sheet) */}
+      {inB.length > 0 && <><MatchDialogs form="24Q" fy={fy} q={q} /><ReturnChallans fy={fy} q={q} form="24Q" /></>}
       <section className="dash-card" style={{ maxWidth: 760 }} data-needs-sheet=""><h3>24Q needs the salary sheet</h3>
         <p className="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare — Excel or CSV — and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>
     </>;
@@ -674,14 +619,17 @@ export function Return24({ b }) {
         { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
       ]} />
     <Tabs counts={{ deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length + late || null }} />
+    <MatchDialogs form="24Q" fy={fy} q={q} />
     {S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
-        <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}</section>
+        <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}
+        {/* next-challan-match: the text file from the salary sheet, as from Tally's payroll (TDS24Q_FILE.build) */}
+        {TDS.isNew(fy) && q === "Q4" ? <p className="note" data-q4-wait="">Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has.</p>
+          : <div className="revfilter"><button className="btn small primary" data-sheet-fvu="" onClick={() => payFvuDownload(fy, q)}>Download the {fname} text file</button></div>}</section>
         <PreFileSlot />
         <MarkFiled fy={fy} q={q} form="24Q" /></>
       : S.tdsTab === "deductions" ? <Employees fy={fy} q={q} a1={a1} />
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
-      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q">
-        {TDS.salaryRows().some((r) => r.fy === fy && r.q === q) && <Suggest fy={fy} q={q} form="24Q" />}</ReturnChallans>
+      : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" />
       : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
           <thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Standard</th><th className="n">Chapter VI-A</th><th className="n">Taxable</th><th className="n">TDS</th></tr></thead>
           <tbody>{TDS24Q.annexII(fy).map((e) => <tr key={e.pan || e.name}><td>{e.name}</td><td>{e.pan || "—"}</td><td>{e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "—"}</td>

@@ -308,7 +308,7 @@ const TDSTally = {
       else ids.forEach(id => res.disagree.push({row: id, party: rows[id].party, date: rows[id].date, fincom: "", tally: chId, why: r.why}));
     });
     // ---- tds-layout: a challan new from Tally, with nothing tagged by Tally, goes to its own draft return (TDSReg.placeNew)
-    if (typeof TDSReg === "object") res.placed = TDSReg.placeNew(true).filter(x => x.placed).length;
+    if (typeof TDSReg === "object") res.placed = TDSReg.placeNew(true).filter(x => x.suggested).length;   // next-challan-match: suggested, not allocated
     // ---- the certificates
     b.certs = b.certs || [];
     const CF = [["party", String], ["pan", String], ["section", TDS.sec], ["certNo", String], ["rate", num], ["limit", num], ["from", TDS.ymd], ["to", TDS.ymd], ["nature", String], ["under", String]];

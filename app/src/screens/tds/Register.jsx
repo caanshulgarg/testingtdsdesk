@@ -109,7 +109,7 @@ export function AddChallan({ form, edit, onDone }) {
     setBusy(false);
     if (r.ok) {
       if (edit) toast("Challan " + TDSCH.label(r.c) + " changed.");
-      else { TDSReg.placedToast(r.placed, "Challan " + TDSCH.label(r.c) + " added (entered by hand)."); if (r.placed && r.placed.placed) say("Challan " + TDSCH.label(r.c) + " added and used in " + r.placed.form + " " + r.placed.q + " " + r.placed.fy + " (draft): " + money(r.placed.tax) + ", " + r.placed.n + " deduction" + (r.placed.n === 1 ? "" : "s") + "."); }
+      else { TDSReg.placedToast(r.placed, "Challan " + TDSCH.label(r.c) + " added (entered by hand)."); if (r.placed && r.placed.suggested) say("Challan " + TDSCH.label(r.c) + " added. What it can pay is suggested on " + r.placed.form + " " + r.placed.q + " " + r.placed.fy + " › Challans: confirm it there."); }
       render(); onDone && onDone(r.c); return;
     }
     setErr(r.errors || { dup: r.why }); setDupT(r.dupTally || null);
@@ -184,8 +184,8 @@ function SetType({ c, onDone }) {
     const r = TDSReg.setNature(c.id, v);
     if (!r.ok) { setMsg(r.why); return; }
     const p = r.placed;
-    toast("Challan " + TDSCH.label(c) + ": type " + TDSReg.natureCode(c) + (p && p.placed ? "; used in " + p.form + " " + p.q + " " + p.fy + " (draft), " + money(p.tax) : "") + ".");
-    if (p && p.placed) say("Challan " + TDSCH.label(c) + " is " + TDSReg.natureCode(c) + " now and was used in " + p.form + " " + p.q + " " + p.fy + " (draft): " + money(p.tax) + ".");
+    toast("Challan " + TDSCH.label(c) + ": type " + TDSReg.natureCode(c) + (p && p.suggested ? "; what it pays is suggested on " + p.form + " " + p.q + " " + p.fy : "") + ".");
+    if (p && p.suggested) say("Challan " + TDSCH.label(c) + " is " + TDSReg.natureCode(c) + " now. What it can pay is suggested on " + p.form + " " + p.q + " " + p.fy + " › Challans.");
     S.regSetType = ""; render(); onDone && onDone();
   };
   return <div className="revfilter reg-use" data-set-type-box={c.id}>
@@ -273,7 +273,7 @@ export default function Register() {
   if (S.regAdding) S.regAdding = false;
   // "Needs a return": tax still to be used by a return (a new challan whose type could not be told among them)
   const f = S.regFl || {}, shown = all.filter((x) => !f.needs || x.bal.tax > 0.005), del = TDSReg.deletedList(), co = CO() || {}, openId = detailOpen("challan");
-  const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added to " + (r.placed === 1 ? "its draft return" : "their draft returns") + " by themselves; open one to see where."); render(); };
+  const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added; what " + (r.placed === 1 ? "it pays is" : "they pay is") + " suggested on " + (r.placed === 1 ? "its return's" : "their returns'") + " Challans tab, to confirm."); render(); };
   return <div data-register="">
     <p className="note"><button className="linkbtn" onClick={() => tdsGo(S.tdsFy)}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p>
     <div className="rp-title"><h2 className="tg-h2">Challan register{co.tan ? " · TAN " + co.tan : ""}</h2>

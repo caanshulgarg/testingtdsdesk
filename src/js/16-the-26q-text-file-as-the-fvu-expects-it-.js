@@ -76,13 +76,27 @@ const TDS_SEC_CODES = {
   "194LBA": {by: {}, note: "BA1 or BA2 by the clause of 194LBA: not known to FinCom"}
 };
 const TDS26Q = {
+  // next-challan-match (the owner, 17-Oct-2026): no deduction is left out of a file silently. A deduction with tax on no
+  // challan stops the file, with the list ({error, untagged}); one with no tax on no challan (a nil deduction: a nil challan
+  // FinCom does not make) is counted in the file's answer (nilOut). rows: the return's deductions of the quarter
+  untaggedError(rows, collections){
+    const un = (rows || []).filter(r => !r.challan && num(r.tds) > 0.005);
+    if (!un.length) return null;
+    const w = collections ? ["collection", "collections"] : ["deduction", "deductions"];
+    return {error: un.length + " " + (un.length === 1 ? w[0] + " is" : w[1] + " are") + " on no challan (" + money(r2(un.reduce((a, r) => a + num(r.tds), 0))) + "): match " + (un.length === 1 ? "it" : "them") +
+      " on the return's Challans tab first; the file is not made while any is left out. " + un.slice(0, 5).map(r => (r.party || r.employee || "?") + " " + fmtDate(tallyDate(TDS.ymd(r.date))) + " " + money(r.tds)).join("; ") + (un.length > 5 ? " \u2026" : ""),
+      untagged: un.map(r => r.id)};
+  },
+  nilOut(rows){ return (rows || []).filter(r => !r.challan && !(num(r.tds) > 0.005)).length; },
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){
     form = TDS_FORMS[form] ? form : "26Q";
     // tax year 2026-27 on: Forms 140, 144, 143 as Protean's file format has them (src/js/83); earlier years below, as before
     if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, form);
     const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
-    const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
+    const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = this.untaggedError(all, form === "27EQ");
+    if (un) return un;
+    const rows = all.filter(r => r.challan), nilOut = this.nilOut(all);
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     // tds-layout (14-Oct-2026, the owner's register rules): a challan of another quarter or an earlier year that pays this
@@ -102,7 +116,7 @@ const TDS26Q = {
     const qNum = {Q1: "Q1", Q2: "Q2", Q3: "Q3", Q4: "Q4"}[q];
     const ay = (num(fy.slice(0, 4)) + 1) + "-" + String(num(fy.slice(0, 4)) + 2).slice(2);
     // up to FY 2025-26: the old forms, laid out as Protean's file format (oldBuild, below)
-    if (!isNew) return this.oldBuild(form, fy, q, firm, rows, live, used);
+    if (!isNew) return Object.assign(this.oldBuild(form, fy, q, firm, rows, live, used), {nilOut});
     const lines = [];
     let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
