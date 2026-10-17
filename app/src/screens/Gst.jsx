@@ -41,6 +41,7 @@ import FileApi from "./gst/FileApi.jsx";
 import "../parts/returns.css";
 import Filters, { Field, Search } from "../parts/Filters.jsx";
 import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
+import { r1PortalExcel } from "./gst/R1Portal.jsx";
 import { Answer } from "../parts/Answer.jsx";
 import BrowserHelper from "./gst/BrowserHelper.jsx";
 
@@ -198,17 +199,20 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
 
 // round 4: GSTR-1's Details: find and Export at the right of the return's tabs (the part is the Customer header's ▾)
 function R1Tools() {
-  const f = S.r1F || {}, title = CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), byCust = S.r1View === "customer";
+  // round 72: Portal tables (the portal's own tables, the default) · By bill · By customer
+  const f = S.r1F || {}, title = CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), v1 = S.r1View === "customer" ? "customer" : S.r1View === "bill" ? "bill" : "portal";
   const g = GSTR.one(S.gstYm || "", S.gstReg || ""), rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   const view = (v) => { S.r1View = v; render(); };
+  const printId = v1 === "customer" ? "r1Table" : v1 === "bill" ? "r1Bills" : "";
   return <>
-    {/* By bill / By customer, as TDS's By deduction / By deductee */}
-    <nav className="sbar subnav" aria-label="GSTR-1 view" data-r1-view={byCust ? "customer" : "bill"}>
-      <button aria-selected={!byCust} data-r1-switch="bill" onClick={() => view("")}>By bill</button>
-      <button aria-selected={byCust} data-r1-switch="customer" onClick={() => view("customer")}>By customer</button></nav>
+    <nav className="sbar subnav" aria-label="GSTR-1 view" data-r1-view={v1}>
+      <button aria-selected={v1 === "portal"} data-r1-switch="portal" onClick={() => view("")}>Portal tables</button>
+      <button aria-selected={v1 === "bill"} data-r1-switch="bill" onClick={() => view("bill")}>By bill</button>
+      <button aria-selected={v1 === "customer"} data-r1-switch="customer" onClick={() => view("customer")}>By customer</button></nav>
     <Filters className="revfilter tg-tools" label={"Filter " + title}
     search={<Search value={f.q} placeholder="Find invoice, customer" label="Find an invoice, customer or GSTIN" data-fk="r1Fq" onChange={(v) => setFilter("r1F", "q", v, true)} />}
-    tools={<More label="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable(byCust ? "r1Table" : "r1Bills", title)],
+    tools={<More label="Export" data-fb-out="" items={[printId ? ["Print or save as PDF", () => printTable(printId, title)] : ["Print or save as PDF", () => window.print()],
+      ["Excel: the portal's tables, with totals", () => r1PortalExcel(S.gstYm || "", S.gstReg || "", title).then(() => toast("Downloaded."))],
       ["Excel: these bills, with totals", () => { const L = r1Lists(rows); return r1BillsExcel(L.shown, L.b2cs, title).then(() => toast("Downloaded.")); }],
       ["Excel: GSTR-1 and 3B working", () => doAct("gstExcel")]]} />} /></>;
 }

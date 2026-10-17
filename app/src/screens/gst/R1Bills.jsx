@@ -10,6 +10,8 @@
 //     Excel with SUM formulas in its totals row.
 import { useState } from "react";
 import SrcTag from "../../parts/SrcTag.jsx";
+import { R1_BY, r1Title } from "./portal.js";
+import { r1PortalData } from "./R1Portal.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -51,29 +53,41 @@ export function r1Tables(j) {
 }
 const taxOf = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 
-// the portal's GSTR-1 summary names and grouping (B2B, reverse charge and SEZ / deemed exports are ONE table there)
-const R1_PORTAL = { B2B: "4A, 4B, 6B, 6C – B2B, SEZ, DE invoices", "5": "5A – B2C (Large) invoices", "6A": "6A – Exports invoices", "7": "7 – B2C (Others)",
-  "8": "8A, 8B, 8C, 8D – Nil rated supplies", "9BR": "9B – Credit / Debit notes (Registered)", "9BU": "9B – Credit / Debit notes (Unregistered)",
-  "11A": "11A(1), 11A(2) – Tax liability (Advances received)", "11B": "11B(1), 11B(2) – Adjustment of advances", "12": "12 – HSN-wise summary", "13": "13 – Documents issued" };
+// the portal's GSTR-1 summary names and grouping (B2B, reverse charge and SEZ / deemed exports are ONE table there);
+// round 72: the portal's own words, and a row opens that table in the portal's layout (Details → Portal tables)
+const R1_PORTAL = { B2B: "4A, 4B, 6B, 6C – B2B, SEZ, DE Invoices", "5": "5A, 5B – B2C (Large) Invoices", "6A": "6A – Exports Invoices", "7": "7 – B2C (Others)",
+  "8": "8A, 8B, 8C, 8D – Nil Rated Supplies", "9BR": "9B – Credit / Debit Notes (Registered)", "9BU": "9B – Credit / Debit Notes (Unregistered)",
+  "11A": "11A(1), 11A(2) – Tax Liability (Advances Received)", "11B": "11B(1), 11B(2) – Adjustment of Advances", "12": "12 – HSN-wise summary of outward supplies", "13": "13 – Documents Issued" };
+// the portal table a summary row opens
+const R1_OPEN = { B2B: "b2b", "5": "b2cl", "6A": "exp", "7": "b2cs", "8": "nil", "9BR": "cdnr", "9BU": "cdnur", "11A": "at", "11B": "txpd", "13": "docs" };
 function portalRows(list) {
   const out = [], b2b = list.filter((o) => o.k === "4A" || o.k === "4B" || o.k === "6B");
   if (b2b.length) { const g = blank("B2B"); g.parts = b2b.map((o) => o.k); b2b.forEach((o) => { g.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { g[f] = r2(g[f] + o[f]); }); }); out.push(g); }
   list.filter((o) => !["4A", "4B", "6B"].includes(o.k)).forEach((o) => out.push(o));
   return out;
 }
+const AMEND_IDS = ["b2ba", "b2cla", "expa", "cdnra", "cdnura", "b2csa", "ata", "txpda"];
 export function R1Summary({ amendN }) {
-  const j = GSTR.toJson(S.gstYm || "", S.gstReg || "", { plain: true }), list = portalRows(r1Tables(j));
+  const ym = S.gstYm || "", reg = S.gstReg || "";
+  const j = GSTR.toJson(ym, reg, { plain: true }), list = portalRows(r1Tables(j));
+  const T = r1PortalData(ym, reg), amd = AMEND_IDS.filter((k) => T[k].rows.length), late = ["b2b", "b2cl", "exp", "cdnr", "cdnur"].reduce((a, k) => a + T[k].late, 0);
   const tot = blank("all"); list.filter((o) => o.k !== "12" && o.k !== "13").forEach((o) => { tot.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { tot[f] = r2(tot[f] + o[f]); }); });
-  const open = (k) => { if (k === "11A" || k === "11B") { gstPartGo("adv"); return; } S.r1F = k === "12" || k === "13" ? {} : k === "B2B" ? { parts: ["4A", "4B", "6B"] } : { part: k }; S.r1View = ""; gstSubGo("details"); };
+  const openT = (id) => { S.r1T = id; S.r1View = ""; S.r1F = {}; gstSubGo("details"); };
+  const open = (k) => { if (k === "12") { openT(T.hsnb2b.rows.length ? "hsnb2b" : T.hsnb2c.rows.length ? "hsnb2c" : "hsn"); return; } openT(R1_OPEN[k] || ""); };
+  const Name = ({ label, go }) => <button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); go(); }}>{label}</button>;
   return <div className="bk-tablewrap" data-r1-summary=""><table className="bk-table tg-fit" data-statement="">
-    <thead><tr><th>Table</th><th className="n">Records</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th><th className="n">Total tax</th></tr></thead>
-    <tbody>{list.length ? list.map((o) => <tr key={o.k} data-r1-table={o.k} className="tg-click" onClick={() => open(o.k)} title="Open the documents of this table">
-      <td><button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); open(o.k); }}>{R1_PORTAL[o.k] || R1_PARTS[o.k]}</button>{o.k === "7" && <div className="tg-sub">summary by state and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
+    <thead><tr><th>Table</th><th className="n">No. of records</th><th className="n">Taxable Value</th><th className="n">Integrated Tax</th><th className="n">Central Tax</th><th className="n">State/UT Tax</th><th className="n">Cess</th><th className="n">Total tax</th></tr></thead>
+    <tbody>{list.length ? list.map((o) => <tr key={o.k} data-r1-table={o.k} className="tg-click" onClick={() => open(o.k)} title="Open this table as the portal shows it">
+      <td><Name label={R1_PORTAL[o.k] || R1_PARTS[o.k]} go={() => open(o.k)} />{o.k === "7" && <div className="tg-sub">summary by place of supply and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
       <td className="n">{o.n}</td>{o.k === "13" ? <td colSpan={6}></td> : <><td className="n">{money(o.taxable)}</td><td className="n">{money(o.igst)}</td><td className="n">{money(o.cgst)}</td><td className="n">{money(o.sgst)}</td>
       <td className="n">{money(o.cess)}</td><td className="n">{money(taxOf(o))}</td></>}</tr>)
       : <tr><td colSpan={8} className="note">No documents for this month.</td></tr>}
       <tr className="tg-tot" data-r1-grand=""><td><b>Total</b><span className="note"> · tables 4 to 11 (12 and 13 apart, as the portal)</span></td><td className="n">{tot.n}</td><td className="n">{money(tot.taxable)}</td><td className="n">{money(tot.igst)}</td>
-        <td className="n">{money(tot.cgst)}</td><td className="n">{money(tot.sgst)}</td><td className="n">{money(tot.cess)}</td><td className="n"><b>{money(taxOf(tot))}</b></td></tr></tbody>
+        <td className="n">{money(tot.cgst)}</td><td className="n">{money(tot.sgst)}</td><td className="n">{money(tot.cess)}</td><td className="n"><b>{money(taxOf(tot))}</b></td></tr>
+      {late > 0 && <tr data-r1-late=""><td colSpan={8} className="note">Also in this month's file: {late} document{late === 1 ? "" : "s"} missed in an earlier month's return, reported now in {["b2b", "b2cl", "exp", "cdnr", "cdnur"].filter((k) => T[k].late).map((k) => R1_BY[k].no).join(", ")} (not in the total above).</td></tr>}
+      {amd.length > 0 && <><tr className="tg-group" data-r1-amend-head=""><td colSpan={8}><b>Amendments in this month's file</b><span className="note"> · revised values; the original beside them in each table</span></td></tr>
+        {amd.map((k) => { const x = T[k]; return <tr key={k} data-r1-amend={k} className="tg-click" onClick={() => openT(k)}><td><Name label={r1Title(R1_BY[k])} go={() => openT(k)} /></td><td className="n">{x.n}</td>
+          <td className="n">{money(x.tot.taxable)}</td><td className="n">{money(x.tot.igst)}</td><td className="n">{money(x.tot.cgst)}</td><td className="n">{money(x.tot.sgst)}</td><td className="n">{money(x.tot.cess)}</td><td className="n">{money(taxOf(x.tot))}</td></tr>; })}</>}</tbody>
   </table>{amendN > 0 && <p className="note" style={{ margin: "8px 12px" }}>{amendN} earlier month{amendN === 1 ? "" : "s"}’ entr{amendN === 1 ? "y" : "ies"} to amend go into this month’s JSON (9A and the other amendment tables): <button className="linkbtn" onClick={() => gstPartGo("amend")}>see them</button>.</p>}</div>;
 }
 

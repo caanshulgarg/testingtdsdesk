@@ -415,3 +415,67 @@ details.more .more-words p{margin:0 0 6px}
 .gfile .gq-step:first-of-type { border-top: 0; }
 .gfile td.gfile-round { color: var(--muted, #6b7280); background: var(--paper, transparent); font-style: italic; }
 .gfile .gfile-roundtag { color: var(--muted, #6b7280); font-size: 12px; white-space: nowrap; }
+
+/* round 72: GST in the portal's own layout — GSTR-1's tables (R1Portal), GSTR-3B's tables (R3bPortal), GSTR-2B (TwoBPortal),
+   and the 2B reconciliation one row an invoice (Reco2b) */
+#app [data-gst-page] .r2-tabrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 8px 0 6px; }
+#app [data-gst-page] .r2-tabrow > nav.sbar { margin: 0 !important; min-width: 0; }
+#app [data-gst-page] .r2-tabrow .tg-tabside { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; }
+#app [data-gst-page] .r2-tabrow nav.sbar.subnav { gap: 0; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin: 0; }
+#app [data-gst-page] .r2-tabrow nav.sbar.subnav > button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 6px; font-size: 12.5px; }
+#app [data-gst-page] .r2-tabrow nav.sbar.subnav > button[aria-selected="true"] { background: var(--accent-subtle); }
+#app [data-gst-page] .r1p { margin: 0 0 16px; }
+#app [data-gst-page] .r1p-h { font-size: 14px; font-weight: 600; margin: 4px 2px 6px; }
+#app [data-gst-page] .r1p-h .r1p-no { color: var(--accent); }
+#app [data-gst-page] .r1p-h .note { font-weight: 400; }
+#app [data-gst-page] .r1p-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 10px; }
+#app [data-gst-page] .r1p-pick label { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+#app [data-gst-page] .r1p-pick select { width: auto; min-width: 0; max-width: 100%; flex: 0 1 auto; }
+#app table.bk-table.tg-fit tr.r1p-cont td { border-top-color: transparent; }
+#app [data-gst-page] .r3b-t { margin: 0 0 14px; }
+#app table.bk-table th.r3b-title { text-align: left; font-weight: 600; white-space: normal; background: color-mix(in oklab, var(--accent) 6%, var(--surface)); }
+#app [data-gst-page] .r3b-note { margin: 4px 2px 0; }
+#app table.bk-table tr.r3b-on td { background: color-mix(in oklab, var(--accent) 7%, var(--surface)); }
+#app table.bk-table .linkbtn.r3b-fig { padding: 0; min-width: 0; font-variant-numeric: tabular-nums; }
+#app [data-gst-page] .r3b-bills { margin: 6px 0 4px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+#app [data-gst-page] .r3b-bills-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; }
+#app [data-gst-page] .r3b-bills-h .linkbtn { margin-left: auto; }
+#app table.bk-table tr.r3b-adj td { font-style: italic; color: var(--muted); }
+#app [data-gst-page] .rc-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
+#app [data-gst-page] .rc-totals > div { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); min-width: 0; }
+#app [data-gst-page] .rc-totals span, #app [data-gst-page] .rc-totals small { display: block; font-size: 12px; color: var(--muted); }
+#app [data-gst-page] .rc-totals b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+#app [data-gst-page] .rc-totals b.rc-per { font-size: 14px; }
+#app [data-gst-page] .rc-totals > div.warn b { color: var(--bad); }
+#app [data-gst-page] .rc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#app [data-gst-page] .rc-chip { min-height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 12.5px; cursor: pointer; color: var(--foreground); }
+#app [data-gst-page] .rc-chip.on { background: var(--accent-subtle); border-color: color-mix(in oklab, var(--accent) 40%, var(--border)); color: var(--accent); font-weight: 600; }
+#app [data-gst-page] .rc-find { width: 200px; max-width: 100%; height: 30px; }
+#app table.bk-table.rc-table th.rc-bk, #app table.bk-table.rc-table th.rc-2b { text-align: left; }
+#app table.bk-table.rc-table tr.rc-band th { text-align: center; font-size: 12px; text-transform: none; }
+#app table.bk-table.rc-table tr.rc-band th.rc-bk, #app table.bk-table.rc-table thead th.rc-bk { background: color-mix(in oklab, var(--info) 7%, var(--surface)); }
+#app table.bk-table.rc-table tr.rc-band th.rc-2b, #app table.bk-table.rc-table thead th.rc-2b { background: color-mix(in oklab, var(--ok) 7%, var(--surface)); }
+#app table.bk-table.rc-table td.rc-diff { background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+#app table.bk-table.rc-table td.rc-dim { color: var(--muted); }
+#app table.bk-table.rc-table td.rc-none { color: var(--muted); }
+#app table.bk-table.rc-table .rc-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+@media (max-width: 720px) {
+  #app [data-gst-page] .rc-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #app [data-gst-page] .r2-tabrow .tg-tabside { margin-left: 0; }
+  #app [data-gst-page] .rc-find { width: 100%; }
+}
+#app table.bk-table.rc-table td.rc-doc { min-width: 12ch; max-width: 18ch; }
+#app table.bk-table.rc-table td.rc-doc > .code { white-space: nowrap; }
+#app table.bk-table.rc-table .rc-acts { flex-direction: column; align-items: flex-start; }
+#app table.bk-table.rc-table .rc-acts select { max-width: 112px; }
+#app table.bk-table.rc-table td.rc-st { width: 1%; }
+#app table.bk-table.rc-table td.rc-st .tag { white-space: nowrap; }
+#app table.bk-table.rc-table span.rc-diff { background: var(--bad-soft); color: var(--bad); font-weight: 600; padding: 0 2px; border-radius: 3px; }
+#app table.bk-table.rc-table td.pty .tg-pty { max-width: 16ch; }
+#app table.bk-table.rc-table td.ac { min-width: 0; }
+#app table.bk-table.rc-table thead th { white-space: normal; }
+#app table.bk-table.rc-table td.rc-doc > .code { white-space: normal; word-break: break-word; }
+#app [data-r3b-portal] table.bk-table thead th, #app [data-2b-summary] table.bk-table thead th { white-space: normal; vertical-align: bottom; }
+#app [data-r3b-portal] tr.r3b-groups th.r3b-grp { text-align: center; border-bottom: 1px solid var(--border); }
+#app table.bk-table td.r1p-nw { white-space: nowrap; }
+#app [data-r1-portal] table.bk-table thead th { white-space: normal; vertical-align: bottom; }
