@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinCom GST helper</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<header>
+  <b>FinCom GST helper</b>
+  <span id="versions" class="small"></span>
+</header>
+<main>
+  <section id="conn" class="card"></section>
+  <section id="job" class="card"><p class="small">No return chosen yet. In FinCom, open the client's GSTR-1, IFF or GSTR-3B, go to its Files tab and press “Open the portal for this return”.</p></section>
+  <section id="figures" class="card" hidden></section>
+  <section id="steps" class="card" hidden></section>
+  <section id="compare" class="card" hidden></section>
+  <section class="card small" id="never">
+    <b>What the helper never does</b>
+    <ul>
+      <li>Type the captcha or an OTP, or read them.</li>
+      <li>Press File, Submit, EVC, DSC, Make payment or Post credit to ledger. Filing is always your own click.</li>
+      <li>Keep your portal password: it is typed into the login box once and dropped.</li>
+      <li>Guess a field: if one is not where it expects, it stops and says which.</li>
+    </ul>
+  </section>
+</main>
+<script src="lib/rules.js"></script>
+<script src="selectors.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

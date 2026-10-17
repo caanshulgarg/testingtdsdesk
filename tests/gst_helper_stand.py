@@ -1,0 +1,71 @@
+"""The GST browser helper's test stand: Chromium with the extension in extension/gst-helper loaded (unpacked, as the owner
+loads it), every https://*.gst.gov.in address answered by the look-alike pages in tests/fixtures/gst-portal-fake (nothing
+reaches the real portal), and https://staging.fincom.live answered by a local folder (the stand-in page, or app/dist-test).
+Used by run_gst_browser_helper.py and run_gst_helper_app_ui.py.
+    ctx, ext_id = start(p, fincom_dir=None, two_b=lambda period: {...})"""
+import json, os, re, time, mimetypes
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+HERE = os.path.dirname(os.path.abspath(__file__))
+FAKE = os.path.join(HERE, "fixtures", "gst-portal-fake")
+EXT = os.path.abspath(os.path.join(HERE, "..", "extension", "gst-helper"))
+EXT_ID = "okajonmmjoidmaapknhpphpojodaocmg"     # fixed by the manifest's "key"
+ROUTES = {k: v for k, v in json.load(open(os.path.join(FAKE, "ROUTES.json"))).items() if not k.startswith("_")}
+
+
+def _portal(two_b, seen):
+    def handle(route):
+        url = route.request.url
+        seen.append(url)
+        path = url.split("?")[0]
+        if "/__fake/" in path:
+            f = os.path.join(FAKE, path.split("/__fake/")[1])
+            return route.fulfill(status=200, path=f, content_type=mimetypes.guess_type(f)[0] or "text/plain")
+        if path.startswith("https://gstr2b.gst.gov.in/gstr2b/auth/download"):
+            period = re.search(r"period=(\d{6})", url).group(1)
+            return route.fulfill(status=200, content_type="application/json", body=json.dumps(two_b(period)))
+        for k, f in ROUTES.items():
+            if path == k or path.rstrip("/") == k.rstrip("/"):
+                return route.fulfill(status=200, path=os.path.join(FAKE, f), content_type="text/html")
+        return route.fulfill(status=404, content_type="text/html", body="<h1>Not in the look-alike</h1>")
+    return handle
+
+
+def _site(root, prefix):
+    def handle(route):
+        path = route.request.url.split("?")[0].split("#")[0]
+        rel = path[len(prefix):] if path.startswith(prefix) else ""
+        f = os.path.join(root, rel) if rel else os.path.join(root, "index.html")
+        if os.path.isdir(f): f = os.path.join(f, "index.html")
+        if not os.path.exists(f): f = os.path.join(root, "index.html")     # the app's own routes
+        return route.fulfill(status=200, path=f, content_type=mimetypes.guess_type(f)[0] or "text/html")
+    return handle
+
+
+def start(p, fincom_dir=None, two_b=None, extra_routes=()):
+    """fincom_dir: a folder served as https://staging.fincom.live/review/ (default: the stand-in page only)."""
+    seen = []
+    ctx = p.chromium.launch_persistent_context("", channel="chromium", headless=True, viewport={"width": 1300, "height": 900},
+                                               args=["--headless=new", "--disable-extensions-except=" + EXT, "--load-extension=" + EXT])
+    ctx.route(re.compile(r"^https://[a-z0-9.-]*gst\.gov\.in/"), _portal(two_b or (lambda period: {}), seen))
+    for pat, fn in extra_routes: ctx.route(pat, fn)
+    if fincom_dir: ctx.route(re.compile(r"^https://staging\.fincom\.live/review/"), _site(fincom_dir, "https://staging.fincom.live/review/"))
+    ctx.route("https://staging.fincom.live/stub.html", lambda r: r.fulfill(status=200, path=os.path.join(FAKE, "fincom-stub.html"), content_type="text/html"))
+    sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
+    ext_id = sw.url.split("/")[2]
+    ctx.portal_seen = seen
+    return ctx, ext_id
+
+
+def portal_tab(ctx):
+    for pg in reversed(ctx.pages):
+        if "gst.gov.in" in pg.url: return pg
+    return None
+
+
+def wait(pg, fn, ms=60000, step=250):
+    """fn() until it is true (or ms pass), letting the browser's events run in between"""
+    end = time.time() + ms / 1000.0
+    while True:
+        v = fn()
+        if v or time.time() > end: return v
+        pg.wait_for_timeout(step)

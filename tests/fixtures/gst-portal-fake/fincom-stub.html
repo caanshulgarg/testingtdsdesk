@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>FinCom stand-in</title></head>
+<body>
+<p>A stand-in for FinCom's tab (tests only): it talks to the GST helper as FinCom's page does, through the extension's
+externally_connectable port named "fincom", and keeps every message the helper sends back in window.__msgs.</p>
+<script>
+  window.__msgs = [];
+  window.fc = {
+    port: null,
+    connect(id) { this.port = chrome.runtime.connect(id, { name: "fincom" }); this.port.onMessage.addListener((m) => window.__msgs.push(m)); this.port.postMessage({ type: "hello" }); return true; },
+    send(m) { this.port.postMessage(m); return true; },
+  };
+</script>
+</body></html>
