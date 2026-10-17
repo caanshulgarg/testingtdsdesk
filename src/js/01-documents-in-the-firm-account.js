@@ -1936,7 +1936,25 @@ function findDate(lines){
 }
 // ---- GST labels, tolerant of OCR ("CGSTAmL", "IGST18"), but not GSTIN ----
 // OCR often reads G as 6 and I as 1 or l ("16ST", "C6ST")
-const RE_CGST = /\bc\s?[g6]st(?!\s?in\b)/i, RE_SGST = /\b(s|ut)\s?[g6]st(?!\s?in\b)/i, RE_IGST = /(\bi\s?[g6]st|(?<![\w.,])[1l|][g6]st)(?!\s?in\b)/i;
+// Safari before 16.4 cannot read a regular expression with a look-behind, and then the whole program fails to load (Mac
+// Safari stuck on "Opening FinCom", 17-Oct-2026). The few that had one check "not right after <chars>" here instead: the
+// match whose group 2 took part is refused when the character before it is one of notAfter, and the search goes on from the
+// next character, which gives exactly the matches of /…(?<![chars])…/ (test, exec, match and replace all go through exec)
+class NotAfterRegExp extends RegExp {
+  constructor(src, flags, notAfter){ super(src, flags); this.notAfter = notAfter; }
+  exec(s){
+    s = String(s); const g = this.global || this.sticky, re = new RegExp(this.source, this.flags.replace(/[gy]/g, "") + "g");
+    re.lastIndex = g ? this.lastIndex : 0;
+    let m;
+    while ((m = RegExp.prototype.exec.call(re, s))){
+      if (!this.notAfter || m[2] === undefined || m.index === 0 || !this.notAfter.test(s[m.index - 1])){ if (g) this.lastIndex = m.index + m[0].length; return m; }
+      re.lastIndex = m.index + 1;
+    }
+    if (g) this.lastIndex = 0;
+    return null;
+  }
+}
+const RE_CGST = /\bc\s?[g6]st(?!\s?in\b)/i, RE_SGST = /\b(s|ut)\s?[g6]st(?!\s?in\b)/i, RE_IGST = new NotAfterRegExp("(\\bi\\s?[g6]st|([1l|])[g6]st)(?!\\s?in\\b)", "i", /[\w.,]/);
 const NUMBER_WORD_RE = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakhs?|lacs?|crores?)\b/ig;
 function numberWordCount(l){ return (String(l).match(NUMBER_WORD_RE) || []).length; }
 // PANs printed on the bill (labelled), for suppliers without GSTIN

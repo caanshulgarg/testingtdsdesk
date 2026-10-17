@@ -113,7 +113,7 @@ const SheetFmt = {
       let s = String(v == null ? "" : v).trim();
       if (!s) return "";
       s = s.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]\b/gi, m => tok("GSTIN", m.toUpperCase())).replace(/\b[A-Z]{5}\d{4}[A-Z]\b/gi, m => tok("PAN", m.toUpperCase()))
-        .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, m => tok("EMAIL", m)).replace(/(?<![\d.,])\+?\d{10,13}(?![\d.,])/g, m => tok("PHONE", m));
+        .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, m => tok("EMAIL", m)).replace(/(^|[^\d.,])(\+?\d{10,13})(?![\d.,])/g, (m, p, v) => p + tok("PHONE", v));
       // words that are not a date, a code or a figure: a name (a party, an item): masked, its shape kept
       if (/[a-z]{3}/i.test(s) && !/^(GSTIN|PAN|EMAIL|PHONE)_\d+$/.test(s) && !this.date(s) && !/^[A-Z]{1,4}[-\/]?\d/.test(s)) return tok("TEXT", s);
       return s;

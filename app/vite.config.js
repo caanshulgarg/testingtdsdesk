@@ -28,6 +28,10 @@ const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + has
   "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
   "worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'";
 
+// 17-Oct-2026 (Mac Safari stuck on "Opening FinCom"): the code is written down to what Safari 14 and Chrome 87 read
+// (esbuild rewrites newer syntax); newer helpers come from public/guard.js. public/oldcheck.js tells older browsers
+const TARGET = ["es2020", "safari14", "chrome87", "firefox78", "edge88"];
+
 function legacy(mode) {
   const test = mode === "test", file = new URL("./legacy/" + (test ? "test" : "live") + ".js", import.meta.url);
   const read = () => {
@@ -45,7 +49,7 @@ function legacy(mode) {
       // own top-level names (S, render, GSTAPI, …), which the React screens and the tests use, stay as they are
       // (esbuild keeps a classic script's top-level names), and so does every string (publish-preview.sh's database check)
       const src = read();
-      const out = await esbuildTransform(src, { minify: true, sourcemap: "external", sourcefile: "legacy.src.js", charset: "utf8", legalComments: "inline" });
+      const out = await esbuildTransform(src, { minify: true, sourcemap: "external", sourcefile: "legacy.src.js", charset: "utf8", legalComments: "inline", target: TARGET });
       this.emitFile({ type: "asset", fileName: "legacy.js", source: out.code + "//# sourceMappingURL=legacy.js.map\n" });
       this.emitFile({ type: "asset", fileName: "legacy.js.map", source: out.map });
       // go-bridge: FinCom Bridge 2.0 (Go) is handed out by the testing site only (assets-test/bridge-go); a live build
@@ -70,6 +74,8 @@ function legacy(mode) {
       const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].filter((m) => !/type="module"/.test(m[0]))
         .map((m) => " 'sha256-" + crypto.createHash("sha256").update(m[1], "utf8").digest("base64") + "'").join("");
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode, hashes) + '">\n</head>');
+      // the "FinCom did not open" note (public/oldcheck.js) reports the browser on the testing site only
+      if (sentryOn(mode)) html = html.replace('<script src="./oldcheck.js"></script>', '<script src="./oldcheck.js" data-report="' + SENTRY_INGEST + '/api/4512221234724864/store/?sentry_version=7&amp;sentry_key=7f2432ad2a6406244d931f4856c30933"></script>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
       // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
       const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>]/g, "");
@@ -142,5 +148,5 @@ export default defineConfig(({ mode }) => ({
     __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
   plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
-  build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
+  build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true, target: TARGET },
 }));

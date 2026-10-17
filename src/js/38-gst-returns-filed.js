@@ -40,8 +40,10 @@ const GSTV = {
   // GSTR-1 / IFF: the Total Liability line (value, IGST, CGST, SGST, cess). GSTR-3B: 3.1(a), 3.1(d), 4A(5), 4(C), and the
   // interest and late fee of 5.1. Amounts may be printed 1,23,456.78 or (1,234.00) for a negative.
   nums(s, n){
-    const out = [], re = /\(?-?\d[\d,]*\.\d{1,2}\)?|\(?-?\d{1,3}(?:,\d{2,3})+\)?|(?<![\w.])-?\d+(?![\w.])/g; let m;
-    while ((m = re.exec(s)) && out.length < n){ const t = m[0]; out.push((/^\(.*\)$/.test(t) ? -1 : 1) * num(t.replace(/[(),]/g, ""))); }
+    // a plain whole number only when not right after a letter, digit or dot (checked by hand: Safari before 16.4 cannot read a
+    // look-behind); refused, the search goes on from the next character, as the look-behind did
+    const out = [], re = /\(?-?\d[\d,]*\.\d{1,2}\)?|\(?-?\d{1,3}(?:,\d{2,3})+\)?|(-?\d+)(?![\w.])/g; let m;
+    while ((m = re.exec(s)) && out.length < n){ if (m[1] !== undefined && m.index > 0 && /[\w.]/.test(s[m.index - 1])){ re.lastIndex = m.index + 1; continue; } const t = m[0]; out.push((/^\(.*\)$/.test(t) ? -1 : 1) * num(t.replace(/[(),]/g, ""))); }
     return out;
   },
   after(t, re, n){ const m = re.exec(t); return m ? this.nums(t.slice(m.index + m[0].length, m.index + m[0].length + 260), n) : null; },
