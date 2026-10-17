@@ -319,6 +319,7 @@ function DeductorDetails() {
       </div>}
       <h4 style={{ margin: "14px 0 6px" }}>The deductor's address</h4>
       <div style={grid}>
+        <DedT p={probs} k="branch" label="Branch / division (old 24Q, 26Q, 27Q, 27EQ)" max={75} />
         <DedT p={probs} k="flat" label="Flat / door / block" req max={25} /><DedT p={probs} k="postOffice" label="Post office" max={25} /><DedT p={probs} k="premises" label="Building" />
         <DedT p={probs} k="road" label="Road / street / sector" /><DedT p={probs} k="area" label="Area / locality" max={25} /><DedT p={probs} k="town" label="District" max={25} />
         <DedSel p={probs} k="state" label="State" req opts={states} first="Choose the State" /><DedT p={probs} k="pin" label="PIN code" req max={6} /><DedT p={probs} k="country" label="Country" max={25} placeholder="INDIA" />

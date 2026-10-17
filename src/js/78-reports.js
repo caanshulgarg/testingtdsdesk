@@ -1557,7 +1557,7 @@ const FSX = (() => {
     // 20
     { const it = [], seen = {};
       allText().forEach(({n, x}) => { const k = x.trim().toLowerCase().replace(/\s+/g, " "); if (k.length < 40) return; if (seen[k]) it.push("Note " + n.no + " repeats a paragraph already in Note " + seen[k].no + ": \"" + x.slice(0, 60) + "...\""); else seen[k] = n;
-        const ss = x.split(/(?<=\.)\s+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 40); const d = ss.find((s, i) => ss.indexOf(s) !== i); if (d) it.push("Note " + n.no + " repeats a sentence: \"" + d.slice(0, 60) + "...\""); });
+        const ss = x.replace(/\.\s+/g, ".\u0000").split("\u0000").map(s => s.trim().toLowerCase()).filter(s => s.length > 40); const d = ss.find((s, i) => ss.indexOf(s) !== i); if (d) it.push("Note " + n.no + " repeats a sentence: \"" + d.slice(0, 60) + "...\""); });
       add(20, it); }
     // 21
     { const it = [];

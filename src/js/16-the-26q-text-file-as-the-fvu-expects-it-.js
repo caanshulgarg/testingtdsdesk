@@ -67,10 +67,13 @@ const PAY_CODES = {
 // (TDSRate.payType: r.pay) has a code for each kind; a row whose kind is not known gets none, and the file says so.
 // THE CODES MARKED unverified ARE NOT CHECKED AGAINST PROTEAN'S FILE FORMAT (the reviewer's memory of it): the owner to
 // confirm them against Protean's current list before filing; docs/tds-codes.md says how.
+// FVU 8.7 (17-Oct-2026): its list of the codes 26Q and 27Q may carry has 4JA, 4JB, 4IA, 4IB, 4DA, 4BB; 194LA is 94L there
+// (4LA is not in it), 194LBB LBB, 194LBC LBC. Whether 4JA is technical and 4JB professional is not in the list: as before.
 const TDS_SEC_CODES = {
   "194J": {by: {technical: "4JA", professional: "4JB"}, unverified: true, note: "194J(a) fees for technical services; 194J(b) professional fees"},
   "194I": {by: {rent_machinery: "4IA", rent_building: "4IB"}, note: "194-I(a) plant and machinery; 194-I(b) land, building or furniture (Protean's 2018 annexure)"},
-  "194DA": {code: "4DA", unverified: true}, "194BB": {code: "4BB", unverified: true}, "194LA": {code: "4LA", unverified: true}
+  "194DA": {code: "4DA"}, "194BB": {code: "4BB"}, "194LA": {code: "94L"}, "194LBB": {code: "LBB"}, "194LBC": {code: "LBC"},
+  "194LBA": {by: {}, note: "BA1 or BA2 by the clause of 194LBA: not known to FinCom"}
 };
 const TDS26Q = {
   // the file is caret-delimited ASCII; each line is one record
@@ -98,6 +101,8 @@ const TDS26Q = {
     const txt = v => String(v == null ? "" : v).replace(/[\^\r\n]/g, " ").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().slice(0, 75);
     const qNum = {Q1: "Q1", Q2: "Q2", Q3: "Q3", Q4: "Q4"}[q];
     const ay = (num(fy.slice(0, 4)) + 1) + "-" + String(num(fy.slice(0, 4)) + 2).slice(2);
+    // up to FY 2025-26: the old forms, laid out as Protean's file format (oldBuild, below)
+    if (!isNew) return this.oldBuild(form, fy, q, firm, rows, live, used);
     const lines = [];
     let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
@@ -168,8 +173,15 @@ const TDS26Q = {
     const firm = this.firmDetails();
     return TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q).map(r => ({row: r, why: this.payCodeOf(r, form, firm).why})).filter(x => x.why);
   },
-  // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
-  code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
+  // the section code as the 26Q / 27Q file carries it (FVU 8.7's list): 194C is 94C, 194EE 4EE, 194LC 4LC; 193, 194 and 195
+  // stay as they are; 196D is 96D
+  code(section){
+    const s = TDS.sec(section);
+    if (/^19[345]$/.test(s)) return s;
+    if (/^196[A-D]$/.test(s)) return s.slice(1);
+    if (/^194[A-Z]{2}$/.test(s)) return "4" + s.slice(3);
+    return "9" + s.replace(/^19/, "");
+  },
   // a deduction's code, from the one table (TDS_SEC_CODES); "" when its section is split and what was paid for is not known
   codeFor(r){
     const s = TDS.sec(r.section), t = TDS_SEC_CODES[s];
@@ -210,10 +222,157 @@ const TDS26Q = {
     });
     return out;
   },
+  // ---------- the forms of the Income-tax Act, 1961 (26Q, 27Q, 27EQ, 24Q; FY 2025-26 and before), laid out as Protean's file
+  // format: each record field by field, as Protean's FVU 8.7 (June 2024) reads it. Every record has a fixed number of
+  // fields (OLD_FIELDS, the line number first); a field is given by its number in the format (oldRec). Checked with the FVU
+  // itself on made-up books (tests/run_fvu87.py, where the FVU is installed) and field by field (tests/run_fvu_layout.js).
+  OLD_FIELDS: {FH: 18, BH: 72, CD: 41, DD: 54, SD: 88},
+  // the file type of each form: NS1 (26Q, 27Q), TC1 (27EQ), SL1 (24Q)
+  OLD_FILE_TYPE: {"26Q": "NS1", "27Q": "NS1", "27EQ": "TC1", "24Q": "SL1"},
+  oldRec(type, vals){
+    const a = new Array(this.OLD_FIELDS[type] - 1).fill("");
+    a[0] = type;
+    Object.keys(vals).forEach(k => { const v = vals[k]; a[num(k) - 2] = v == null ? "" : String(v); });
+    return a;
+  },
+  // the deductor's details the batch header asks (FVU 8.7 with only these given: no error), and those missing
+  OLD_FIRM_NEEDS: [["tan", "TAN"], ["pan", "PAN"], ["name", "name"], ["deductorType", "deductor category"], ["branch", "branch or division"], ["flat", "address"], ["state", "state (two-digit code)"], ["pin", "PIN code"],
+    ["person", "responsible person's name"], ["personDesignation", "responsible person's designation"], ["personPan", "responsible person's PAN"],
+    ["personFlat", "responsible person's address"], ["personState", "responsible person's state (two-digit code)"], ["personPin", "responsible person's PIN code"],
+    ["personMobile", "responsible person's mobile number"]],
+  oldFirmMissing(firm){
+    const f = Object.assign({}, firm, {personMobile: firm.personMobile || firm.personPhone, deductorType: this.oldCategory(firm)});
+    const out = this.OLD_FIRM_NEEDS.filter(([k]) => !String(f[k] || "").trim() || (/state$/i.test(k) && !/^\d{2}$/.test(String(f[k]))) || (/pin$/i.test(k) && !/^\d{6}$/.test(String(f[k]))))
+      .map(([, w]) => w);
+    if (!String(f.email || "").trim() && !String(f.personEmail || "").trim()) out.push("e-mail of the deductor or the responsible person");
+    return out;
+  },
+  // the deductor category of the batch header: firmDetails' category, else the one given
+  oldCategory(firm){ return firm.category != null ? firm.category : firm.deductorType || ""; },
+  // what the file cannot be complete without: the deductor's details, and the token of an earlier statement marked filed
+  oldAsks(form, fy, q, firm){
+    const out = this.oldFirmMissing(firm), e = this.oldEarlier(form, fy, q);
+    if (e.filed && !/^\d{15}$/.test(e.token)) out.push("the token number of " + form + " " + e.q + " " + e.fy + " (marked filed without it)");
+    return out;
+  },
+  // the regular statement of this form filed for an earlier quarter, as marked filed in FinCom (TDSFiled): the latest of the
+  // eight quarters before this one, with its token (receipt) number; {filed: false} when none is marked
+  oldEarlier(form, fy, q){
+    if (typeof TDSFiled !== "object") return {filed: false, token: ""};
+    let y = num(fy.slice(0, 4)), qi = ["Q1", "Q2", "Q3", "Q4"].indexOf(q);
+    for (let i = 0; i < 8; i++){
+      qi--; if (qi < 0){ qi = 3; y--; }
+      const f = TDSFiled.get(y + "-" + String(y + 1).slice(2), "Q" + (qi + 1), form);
+      if (f && f.on) return {filed: true, token: String(f.token || "").replace(/\s/g, ""), fy: y + "-" + String(y + 1).slice(2), q: "Q" + (qi + 1)};
+    }
+    return {filed: false, token: ""};
+  },
+  // the deductee (collectee) code: 26Q 1 company, 2 other; 27Q and 27EQ (FY 2023-24 on) two digits by the PAN's fourth letter
+  // (FVU 8.7): 01 company, 02 individual, 03 HUF, 04 AOP, 07 firm, 08 BOI, 09 artificial juridical person, 10 others (G, T,
+  // E, L); 05 and 06 (and any deductee with no PAN) only as the party's own code (r.dcode): else {why}
+  OLD_PAN_CODES: {C: "01", P: "02", H: "03", A: "04", F: "07", B: "08", J: "09", G: "10", T: "10", E: "10", L: "10"},
+  oldDeducteeCode(r, form, pan){
+    const has = pan !== "PANNOTAVBL";
+    if (form === "26Q") return {code: r.dcode ? (String(r.dcode).replace(/^0/, "") === "1" ? "1" : "2") : has && pan[3] === "C" ? "1" : "2", why: ""};
+    if (r.dcode && /^(0[1-9]|10)$/.test(String(r.dcode))) return {code: String(r.dcode), why: ""};
+    if (has && this.OLD_PAN_CODES[pan[3]]) return {code: this.OLD_PAN_CODES[pan[3]], why: ""};
+    return {code: "10", why: "no PAN, so the deductee's status code (01 to 10) is not known: 10 (others) written"};
+  },
+  // a deductee with no PAN: the deductee reference number, ten digits, the same for the party in every return (from its name)
+  oldRefNo(party){
+    let h = 2166136261;
+    const k = normName(party);
+    for (let i = 0; i < k.length; i++){ h ^= k.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return String(1000000000 + h % 9000000000).slice(0, 10);
+  },
+  // the whole file: chs [{c, part: {interest, fee}, dds: [DD fields by number]}], sds [SD fields by number], subs (24Q) for each
+  // SD its section 16 and Chapter VI-A records {s16: [[id, amount]], c6: [[id, gross, deductible]]}; a C6A record's fields:
+  // section, deductible, gross, qualifying (given for 80G, 80TTA and others only: FVU 8.7, T_FV_6100)
+  oldText(form, fy, q, firm, chs, sds, subs){
+    const today = new Date(), fileDate = String(today.getDate()).padStart(2, "0") + String(today.getMonth() + 1).padStart(2, "0") + today.getFullYear();
+    const money = v => r2(num(v)).toFixed(2), dmy = s => s ? String(s).slice(6, 8) + String(s).slice(4, 6) + String(s).slice(0, 4) : "";
+    const txt = (v, n) => String(v == null ? "" : v).replace(/[\^\r\n]/g, " ").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().slice(0, n || 75);
+    const ay = (num(fy.slice(0, 4)) + 1) + String(num(fy.slice(0, 4)) + 2).slice(2);
+    const lines = []; let ln = 0;
+    const put = (type, vals) => { ln++; lines.push([ln].concat(this.oldRec(type, vals)).join("^")); };
+    const cds = chs.map(({c, part, dds}) => {
+      const sum = n => r2(dds.reduce((a, d) => a + num(d[n]), 0));
+      const tax = sum(14), interest = r2(num(part.interest)), fee = r2(num(part.fee));
+      return {c, dds, tax, interest, fee, total: r2(tax + interest + fee), deposited: sum(19), deducted: sum(17)};
+    });
+    const earlier = this.oldEarlier(form, fy, q), mobile = firm.personMobile || firm.personPhone || "";
+    const salaryTotal = r2((sds || []).reduce((a, s) => a + num(s[19]), 0));
+    put("FH", {3: this.OLD_FILE_TYPE[form], 4: "R", 5: fileDate, 6: "1", 7: "D", 8: firm.tan, 9: "1", 10: "FinCom"});
+    put("BH", {3: "1", 4: cds.length, 5: form, 9: earlier.filed ? earlier.token : "", 13: firm.tan, 15: firm.pan, 16: ay, 17: fy.replace("-", ""), 18: q,
+      19: txt(firm.name), 20: txt(firm.branch), 21: txt(firm.flat, 25), 22: txt(firm.premises, 25), 23: txt(firm.road, 25), 24: txt(firm.area, 25), 25: txt(firm.town, 25),
+      26: firm.state, 27: firm.pin, 28: txt(firm.email), 29: firm.std || "", 30: firm.std ? firm.phone || "" : "", 31: "N", 32: this.oldCategory(firm),
+      33: txt(firm.person), 34: txt(firm.personDesignation, 20), 35: txt(firm.personFlat, 25), 36: txt(firm.personPremises, 25), 37: txt(firm.personRoad, 25),
+      38: txt(firm.personArea, 25), 39: txt(firm.personTown, 25), 40: firm.personState, 41: firm.personPin, 42: txt(firm.personEmail), 43: mobile, 44: "", 45: "", 46: "N",
+      47: money(cds.reduce((a, x) => a + x.total, 0)), 49: form === "24Q" ? String((sds || []).length) : "", 50: form === "24Q" && q === "Q4" ? money(salaryTotal) : "",
+      51: "N", 52: earlier.filed ? "Y" : "N", 59: firm.personPan || "", 69: firm.gstin || "",
+      70: form === "24Q" && q === "Q4" ? "0" : "", 71: form === "24Q" && q === "Q4" ? "0.00" : ""});
+    cds.forEach((x, ci) => {
+      put("CD", {3: "1", 4: ci + 1, 5: x.dds.length, 6: "N", 12: x.c.serial, 16: x.c.bsr, 18: dmy(x.c.date),
+        22: money(x.tax), 23: "0.00", 24: "0.00", 25: money(x.interest), 26: "0.00", 27: money(x.total), 29: money(x.deposited), 30: money(x.tax), 31: "0.00", 32: "0.00",
+        33: money(x.deducted), 34: money(x.interest), 35: "0.00", 37: "N", 39: money(x.fee), 40: String(x.c.minorHead || "200")});
+      x.dds.forEach((d, di) => put("DD", Object.assign({3: "1", 4: ci + 1, 5: di + 1, 6: "O"}, d)));
+    });
+    (sds || []).forEach((s, i) => {
+      put("SD", Object.assign({3: "1", 4: i + 1, 5: "A"}, s));
+      const x = (subs || [])[i] || {};
+      (x.s16 || []).forEach(([id, v], k) => { ln++; lines.push([ln, "S16", "1", i + 1, k + 1, id, money(v), ""].join("^")); });
+      (x.c6 || []).forEach(([id, g, v], k) => { ln++; lines.push([ln, "C6A", "1", i + 1, k + 1, id, money(v), money(g), /^(80G|80TTA|OTHERS)$/.test(id) ? money(v) : "", ""].join("^")); });
+    });
+    return lines.join("\r\n") + "\r\n";
+  },
+  // 26Q, 27Q, 27EQ up to FY 2025-26: the deductee (collectee) records of each challan, and the file
+  oldBuild(form, fy, q, firm, rows, live, used){
+    const money = v => r2(num(v)).toFixed(2), dmy = s => s ? String(s).slice(6, 8) + String(s).slice(4, 6) + String(s).slice(0, 4) : "";
+    const txt = (v, n) => String(v == null ? "" : v).replace(/[\^\r\n]/g, " ").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().slice(0, n || 75);
+    const missing = new Set();
+    const chs = live.map(c => {
+      const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)};
+      const dds = (used[c.id] || []).map(r => {
+        const m = this.remark(r, form), code = form === "27EQ" ? r.code || "" : this.codeFor(r);
+        if (form !== "27EQ" && !code) missing.add(TDS.sec(r.section) + " (" + r.party + "): what was paid for is not known, so the section code (" + Object.keys(TDS_SEC_CODES[TDS.sec(r.section)].by).join(" or ") + ") cannot be chosen");
+        if (form === "27EQ" && !code) missing.add(r.ledger + ": no collection code");
+        const pan = r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL";
+        const dc = this.oldDeducteeCode(r, form, pan);
+        if (dc.why) missing.add(r.party + ": " + dc.why);
+        const d = {8: dc.code, 10: pan, 12: pan === "PANNOTAVBL" ? this.oldRefNo(r.party) : "", 13: txt(r.party),
+          14: money(r.tds), 15: "0.00", 16: "0.00", 17: money(r.tds), 19: money(r.tds), 22: money(r.paid), 23: dmy(r.credit || r.date), 24: dmy(r.date),
+          26: r.rate == null ? "" : r2(r.rate).toFixed(4), 30: m.remark, 33: form === "27EQ" ? code.slice(-1) : code, 34: m.certNo};
+        // 27EQ: the total value of the purchase (what the buyer was charged, without the TCS)
+        if (form === "27EQ") d[21] = money(r.paid);
+        if (form === "27Q"){
+          const t = this.nrTail(r);
+          [35, 36, 37, 38, 39, 40, 41, 42].forEach((n, i) => { d[n] = t[i]; });
+          if (!/^\d{1,3}$/.test(t[3]) || num(t[3]) <= 0 || num(t[3]) >= 287 || num(t[3]) === 99) missing.add(r.party + ": the country of residence as Protean's country code (a number)");
+        }
+        // 27Q, 27EQ (FY 2023-24 on): whether the deductee opted out of the new tax regime (section 115BAC(1A)): N unless the
+        // party is marked so (S.books.nrInfo[party].optOut115BAC)
+        if (form === "27Q" || form === "27EQ") d[49] = this.nrInfo(r.party).optOut115BAC ? "Y" : "N";
+        return d;
+      });
+      return {c, part, dds};
+    });
+    const firmMissing = this.oldAsks(form, fy, q, firm);
+    return {text: this.oldText(form, fy, q, firm, chs, []), rows: rows.length, challans: live.length,
+      name: (firm.tan || "TAN") + "_" + form + "_" + q + "_" + fy.replace("-", "") + ".txt", form, formNo: form, isNew: false, draft: false,
+      missingCodes: Array.from(missing), firmMissing, remarks: rows.filter(r => this.remark(r, form).remark).length};
+  },
+  // the deductor's details: what the client's settings keep (co.tds26q), else the TAN, PAN and name. category: the deductor
+  // category the files up to FY 2025-26 carry (oldText): the one set, else from the PAN's fourth letter (K company, F firm,
+  // Q individual or HUF, P AOP, T trust, B BOI, J artificial juridical person; "" for any other: a government body, an LLP,
+  // a local authority: asked). The new forms' draft keeps deductorType, F unless set, as before
   firmDetails(){
-    const co = CO(), f = (co.tds26q || {});
-    // Client setup → TDS (the deductor's details, co.tds26q); the GSTIN the client's own unless given there
-    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name, gstin: co.gstin || ""}, f, f.gstin ? {} : {gstin: co.gstin || ""});
+    const co = CO(), f = (co.tds26q || {}), pan = String(co.pan || "").toUpperCase();
+    const byPan = /^[A-Z]{5}\d{4}[A-Z]$/.test(pan) ? ({C: "K", F: "F", P: "Q", H: "Q", A: "P", T: "T", B: "B", J: "J"}[pan[3]] || "") : "";
+    // Client setup → TDS (the deductor's details, co.tds26q). category: as chosen, else from the PAN (the old files' batch
+    // header, next-fvu87); deductorType only as chosen (the new forms read it from the PAN themselves, TDSF25.categoryFor;
+    // the old draft path keeps F when none is chosen). gstinOwn: the client's own GSTIN, which the new forms write unless one is
+    // given here (the old files write only one given here, as before)
+    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name, category: f.deductorType || byPan, gstinOwn: co.gstin || ""}, f);
   }
 };
 

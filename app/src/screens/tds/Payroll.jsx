@@ -92,7 +92,9 @@ function Details({ e, fy }) {
     </div>
     <div>
       {old && <><Field e={e} k="rent" label="Rent paid in the year" kind="money" /><Field e={e} k="landlordPan" label="Landlord's PAN" width={120} />
-        <Field e={e} k="hlInterest" label="Housing-loan interest" kind="money" /><Field e={e} k="lenderPan" label="Lender's PAN" width={120} /></>}
+        <Field e={e} k="landlordName" label="Landlord's name" width={160} />
+        <Field e={e} k="hlInterest" label="Housing-loan interest" kind="money" /><Field e={e} k="lenderPan" label="Lender's PAN" width={120} />
+        <Field e={e} k="lenderName" label="Lender's name" width={160} /></>}
       <Field e={e} k="prevSalary" label="Previous employer's salary" kind="money" hint="Salary from an earlier employer this year (after its exemptions)" />
       <Field e={e} k="prevTds" label="Previous employer's TDS" kind="money" />
     </div>

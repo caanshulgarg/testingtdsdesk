@@ -349,7 +349,7 @@ if (typeof D === "function"){
 }
 ctx.S.companies.t = {id: "t", name: "Co", tan: "BLRF02329F", pan: "AAAFF1234F", gstin: "07AAAFF1234F1Z5", tds26q: {person: "Ravi Kumar", state: "09", isBank: false}};
 const fd = x.TDS26Q.firmDetails();
-ok(fd.tan === "BLRF02329F" && fd.person === "Ravi Kumar" && fd.state === "09" && fd.gstin === "07AAAFF1234F1Z5", "A6. the files read the details from Client setup (GSTIN from the client's own when not given) (" + J(fd) + ")");
+ok(fd.tan === "BLRF02329F" && fd.person === "Ravi Kumar" && fd.state === "09" && fd.gstinOwn === "07AAAFF1234F1Z5" && !fd.gstin, "A6. the files read the details from Client setup (the new forms write the client's own GSTIN when none is given) (" + J(fd) + ")");
 ctx.S.companies.t = {id: "t", name: "Co"};
 
 // ---------------- O: up to 2025-26, the old files as before
@@ -357,7 +357,8 @@ b = books([V("o1", "20250510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contract 
 b.challans = [{id: "oc", bsr: "0240020", serial: "00031", date: "20250607", tax: 2000}]; b.alloc = {"o1|TDS 194C": "oc"};
 f = build("2025-26", "Q1", FIRM, "26Q");
 const obh = of(f.text, "BH")[0] || [], odd = of(f.text, "DD")[0] || [];
-ok(!f.error && /_26Q_Q1_202526\.txt$/.test(f.name) && obh[4] === "26Q" && obh.length === 39 && odd.includes("94C") && !f.draft, "O. a 2025-26 26Q is the old file: BH of 39 fields with form 26Q, section 94C, not a draft (" + (f.error || f.name + " " + obh.length) + ")");
+// (the old path is next-fvu87's FVU 8.7 layout, tests/run_fvu_layout.js: form 26Q, old section codes, not a draft)
+ok(!f.error && /_26Q_Q1_202526\.txt$/.test(f.name) && obh[4] === "26Q" && odd.includes("94C") && !odd.includes("1024") && !f.draft, "O. a 2025-26 26Q is the old file: form 26Q, section 94C, not a draft (" + (f.error || f.name + " " + obh.length) + ")");
 f = build("2025-26", "Q1", FIRM, "27EQ");
 ok(f.error || /^1\^FH\^NS1\^/.test(f.text), "O. a 2025-26 27EQ keeps its old header");
 

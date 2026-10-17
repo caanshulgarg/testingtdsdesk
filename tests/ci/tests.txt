@@ -15,6 +15,8 @@ run_assistant_settings_ui.py          180  TDSDESK_SITE=../app/dist-test
 run_bottom_banner_ui.py               180  TDSDESK_SITE=../app/dist-test
 run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
+run_no_lookbehind_same.js             120
+run_safari_compat.py                  300
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_audit_wp.js                       120
@@ -305,6 +307,10 @@ run_tds_register.py                   300  TDSDESK_SITE=../app/dist-test
 run_migration80.py                    120
 # the independent TDS review of 14-Oct-2026: each finding a case (H1-H5, M1-M8, L1)
 run_tds_review.js                     120
+# fvu87 (17-Oct-2026): FinCom's 26Q, 27Q, 27EQ and 24Q files of FY 2025-26 as Protean's FVU 8.7 reads them, field by field;
+# run_fvu87.py runs the FVU itself where it is installed ($FINCOM_FVU87), else says skipped
+run_fvu_layout.js                     120
+run_fvu87.py                          600
 # next-tds-forms-2025 (17-Oct-2026): Forms 138, 140, 143, 144 against Protean's file format 1.1 (22-07-2026), field by field; the owner's RPU samples
 run_tds_forms_2025.js                 120
 # the same files through Protean's FVU 1.2 (17-Aug-2026) when TDSDESK_FVU12 names its folder (never committed); skipped otherwise

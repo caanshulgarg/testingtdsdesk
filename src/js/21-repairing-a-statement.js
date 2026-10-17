@@ -300,7 +300,8 @@ function decodeNarr(n, clientName){
   const chq = (u.match(/(?:CHQ|CHEQUE|CLG)\s*(?:NO\.?|PAID|DEP|DEPOSIT)?\s*[:\-]?\s*(\d{6})\b/) || [])[1] || "";
   const utr = (u.match(/\b([A-Z]{4}[RNH0-9][0-9A-Z]{9,17}|\d{12})\b/) || [])[1] || "";
   const clientKey = normName(clientName).replace(/ /g, "");
-  const parts = t.split(/[\/*:|]+|\s*-\s+|\s+-\s*|-(?=[A-Za-z])|(?<=[A-Za-z])-|\s{2,}/).map(s => s.trim()).filter(Boolean);
+  // a dash right after a letter splits too (written as "|" first, unless a space follows, which the "- " rule takes: Safari before 16.4 cannot read a look-behind; the parts are trimmed)
+  const parts = t.replace(/([A-Za-z])-(?!\s)/g, "$1|").split(/[\/*:|]+|\s*-\s+|\s+-\s*|-(?=[A-Za-z])|\s{2,}/).map(s => s.trim()).filter(Boolean);
   const bankWords = /^(?:(?:[a-z]+\s+)?bank(?:\s+(?:ltd|limited|of\s+\w+))?|hdfc|icici|sbi|axis|kotak|yes|idfc(?:\s+first)?|indusind|paytm(?:\s+payments)?|state\s+bank\s+of\s+india|punjab\s+national|canara|federal|rbl)(?:\s+bank)?$/i;
   let name = "", best = 0, bestIsRemark = false;
   for (let p of parts){

@@ -229,7 +229,7 @@ const TDSF25 = {
     const email = this.ascii(firm.email), pemail = this.ascii(firm.personEmail);
     const digits = (v) => String(v == null ? "" : v).replace(/\D/g, "");
     const phone = digits(firm.phone), pphone = digits(firm.personPhone || firm.phone);
-    const ppan = String(firm.personPan || "").toUpperCase(), gstin = this.ascii(firm.gstin).toUpperCase();
+    const ppan = String(firm.personPan || "").toUpperCase(), gstin = this.ascii(firm.gstin || firm.gstinOwn).toUpperCase();
     const ascii = this.ascii.bind(this);
     // address lines (Annexure: Flat/Door/Block, Post Office, Road/Street/Block/Sector, Area/locality, District)
     const addr = (o) => { const a = this.addrLines(o); return {1: fit(a[1], 25), 2: fit(a[2], 25), 3: fit(a[3], 25), 4: fit(a[4], 25), 5: fit(a[5], 25)}; };
@@ -341,7 +341,7 @@ const TDSF25 = {
     if (govt && /^[ADG]$/.test(cat) && !/^\d{2}$/.test(a(firm.ministry))) P("ministry", "A Central Government deductor gives its Ministry code (Annexure 3, two digits).");
     if (govt && a(firm.ministry) === "99" && !a(firm.ministryOther)) P("ministryOther", "Ministry \u201cOthers\u201d (99): give the Ministry's name.");
     if (firm.ain && !/^\d{7}$/.test(a(firm.ain))) P("ain", "The AIN of the PAO / DTO / CDDO is 7 digits.");
-    const gstin = a(firm.gstin).toUpperCase();
+    const gstin = a(firm.gstin || firm.gstinOwn).toUpperCase();
     if (gstin && !/^\d{2}[A-Z0-9]{13}$/.test(gstin)) P("gstin", "The GSTIN \u201c" + gstin + "\u201d is not 15 characters.");
     return out;
   },

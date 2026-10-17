@@ -70,7 +70,7 @@ def run(pg, E):
     foot.locator("[data-cfm=save]").click(); pg.wait_for_timeout(600)
     ok(foot.inner_text().startswith("Saved"), "Save: saved (%s)" % foot.inner_text()[:60])
     fd = E("TDS26Q.firmDetails()")
-    ok(fd["personPan"] == "ABCPK1234K" and fd["state"] == "09" and fd["gstin"] == "07AAAFF1234F1Z5" and not fd.get("isBank"), "the files read them (%s)" % {k: fd.get(k) for k in ("personPan", "state", "gstin", "isBank")})
+    ok(fd["personPan"] == "ABCPK1234K" and fd["state"] == "09" and (fd.get("gstin") or fd.get("gstinOwn")) == "07AAAFF1234F1Z5" and not fd.get("isBank"), "the files read them (%s)" % {k: fd.get(k) for k in ("personPan", "state", "gstin", "isBank")})
 
 with sync_playwright() as p:
     br = p.chromium.launch()
