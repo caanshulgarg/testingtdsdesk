@@ -52,9 +52,20 @@ Deno.test("GSTR-1: the portal's RETSUM read the same way; the same figures compa
   // a table only on one side is a difference too
   const c3 = compare(r1Figures({ ...R1, exp: [{ exp_typ: "WOPAY", inv: [{ inum: "E1", itms: [{ txval: 500 }] }] }] }), p, "R1");
   yes(c3.differs.includes("EXP.n") && c3.differs.includes("EXP.txval"), "a table the portal does not have");
-  // a paisa is a difference (financial accuracy: no tolerance)
-  const p4 = r1PortalFigures({ sec_sum: sum.sec_sum.map((s) => s.sec_nm === "B2CS" ? { ...s, ttl_cgst: 27.04 } : s) });
-  eq(compare(r1Figures(R1), p4, "R1").differs, ["B2CS.camt"], "₹0.01 differs");
+  // the owner's answer of 17-Oct-2026: under ₹1.00 is rounding (shown, no reason needed); ₹1.00 or more is a difference
+  const at = (cgst: number) => compare(r1Figures(R1), r1PortalFigures({ sec_sum: sum.sec_sum.map((s) => s.sec_nm === "B2CS" ? { ...s, ttl_cgst: cgst } : s) }), "R1");
+  const c4 = at(27.04);
+  eq([c4.differs, c4.rounding], [[], ["B2CS.camt"]], "₹0.01: rounding, not a difference");
+  const c5 = at(26.06);
+  eq([c5.differs, c5.rounding], [[], ["B2CS.camt"]], "₹0.99: rounding, not a difference");
+  eq(c5.rows.find((r) => r.key === "B2CS")!.rounding, ["B2CS.camt"], "the row says which figure is rounding");
+  const c6 = at(26.05);
+  eq([c6.differs, c6.rounding], [["B2CS.camt"], []], "₹1.00: a difference");
+  const c7 = at(28.05);
+  eq(c7.differs, ["B2CS.camt"], "₹1.00 the other way: a difference");
+  // a count is never rounding
+  const c8 = compare(r1Figures(R1), r1PortalFigures({ sec_sum: sum.sec_sum.map((s) => s.sec_nm === "B2B" ? { ...s, ttl_rec: 3 } : s) }), "R1");
+  eq([c8.differs, c8.rounding], [["B2B.n"], []], "one document more on the portal: a difference");
 });
 
 const R3B = {

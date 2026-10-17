@@ -176,6 +176,13 @@ try:
     n0 = sum(1 for c in TP["calls"] if c["a"] == "RETNEWPTF")
     r = call(dict(iff, action="proceed"))
     ok(not r.get("ok") and r.get("changed") and row("IFF", "072026")["status"] == "summary" and not row("IFF", "072026")["confirmed_by"] and sum(1 for c in TP["calls"] if c["a"] == "RETNEWPTF") == n0, "IFF: the portal's summary changed after confirming: nothing sent, compare again")
+    # the owner's ₹1 rounding (17-Oct-2026): ₹0.99 off needs no reason; ₹1.00 off does
+    for per, cg, rounding in (("052026", 26.06, True), ("042026", 26.05, False)):
+        x = {"gstin": G, "form": "R1", "period": per}
+        call(dict(x, action="save", payload=dict(R1, fp=per))); TP["tamper"][("R1", per)] = {"B2CS": {"ttl_cgst": cg}}
+        r = call(dict(x, action="summary")); c = call(dict(x, action="confirm"))
+        if rounding: ok(r.get("differs") == [] and r.get("rounding") == ["B2CS.camt"] and c.get("ok"), "₹0.99 off (27.05 against 26.06): rounding, confirmed without a reason")
+        else: ok(r.get("differs") == ["B2CS.camt"] and r.get("rounding") == [] and not c.get("ok") and "B2CS.camt" in c.get("error", ""), "₹1.00 off (27.05 against 26.05): a difference, to accept with a reason")
     # 3B: the set-off; cash short; then enough cash
     b3 = {"gstin": G, "form": "3B", "period": "082026"}
     r = call(dict(b3, action="save", payload=R3B)); r = call(dict(b3, action="summary"))

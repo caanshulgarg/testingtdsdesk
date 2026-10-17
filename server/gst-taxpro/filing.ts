@@ -77,21 +77,27 @@ const LABEL: Record<string, string> = { B2B: "B2B invoices (4A)", B2BA: "B2B ame
   AT: "Advances received (11A)", ATA: "Advances amended", TXPD: "Advances adjusted (11B)", TXPDA: "Adjusted amended", NIL: "Nil, exempt, non-GST (8)", HSN: "HSN summary (12)", DOC_ISSUE: "Documents issued (13)" };
 // counts that are compared: documents (B2C small, HSN and the rest are rows the portal may group differently)
 const COUNTED = new Set(["B2B", "B2BA", "B2CL", "B2CLA", "CDNR", "CDNRA", "CDNUR", "CDNURA", "EXP", "EXPA", "DOC_ISSUE"]);
-export type Row = { key: string; label: string; fincom: Fig; portal: Fig; diff: Fig; differs: string[] };
-// every difference of a paisa or more is listed (no tolerance: the owner decides, docs/gst-filing-api.md question 12)
+export type Row = { key: string; label: string; fincom: Fig; portal: Fig; diff: Fig; differs: string[]; rounding: string[] };
+// the owner's answer of 17-Oct-2026: a figure that differs by less than ₹1.00 is rounding (shown, needs no reason); ₹1.00 or
+// more is a difference that must be corrected or accepted with a reason. A count of documents never rounds
+export const ROUNDING = 1;
 export function compare(fincom: Figs, portal: Figs, form: string) {
   const keys = Array.from(new Set(Object.keys(fincom).concat(Object.keys(portal))));
-  const rows: Row[] = [], differs: string[] = [];
+  const rows: Row[] = [], differs: string[] = [], rounding: string[] = [];
   for (const k of keys) {
-    const a = fincom[k] || z(), b = portal[k] || z(), d = z(), dk: string[] = [];
+    const a = fincom[k] || z(), b = portal[k] || z(), d = z(), dk: string[] = [], rk: string[] = [];
     if (form !== "3B" && COUNTED.has(k)) { d.n = a.n - b.n; if (d.n !== 0) dk.push(k + ".n"); }
-    for (const h of H) { d[h] = r2(a[h] - b[h]); if (Math.abs(d[h]) >= 0.01) dk.push(k + "." + h); }
+    for (const h of H) {
+      d[h] = r2(a[h] - b[h]);
+      const x = Math.round(Math.abs(d[h]) * 100);          // in paise, so 0.99 and 1.00 are exact
+      if (x >= ROUNDING * 100) dk.push(k + "." + h); else if (x >= 1) rk.push(k + "." + h);
+    }
     const empty = !a.n && !b.n && H.every((h) => !a[h] && !b[h]);
     if (empty) continue;
-    rows.push({ key: k, label: LABEL[k] || k, fincom: a, portal: b, diff: d, differs: dk });
-    differs.push(...dk);
+    rows.push({ key: k, label: LABEL[k] || k, fincom: a, portal: b, diff: d, differs: dk, rounding: rk });
+    differs.push(...dk); rounding.push(...rk);
   }
-  return { rows, differs };
+  return { rows, differs, rounding };
 }
 // the portal's summary the same as when the person confirmed it (figures, not the text: the portal adds checksums)
 export function sameFigures(a: Figs, b: Figs) {

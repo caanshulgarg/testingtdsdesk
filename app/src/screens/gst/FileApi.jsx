@@ -24,18 +24,21 @@ export function FiledOrDate({ form, ym, reg, children }) {
 
 // FinCom's figures beside the portal's, table by table; a figure that differs is marked
 function Compare({ cmp, form }) {
-  const differs = new Set(cmp.differs || []);
-  const cell = (r, h, side) => <td key={side + h} className={"n" + (differs.has(r.key + "." + h) ? " gfile-diff" : "")}>{money(r[side][h])}</td>;
+  const differs = new Set(cmp.differs || []), rounding = new Set(cmp.rounding || []);
+  const cls = (k) => differs.has(k) ? " gfile-diff" : rounding.has(k) ? " gfile-round" : "";
+  const cell = (r, h, side) => <td key={side + h} className={"n" + cls(r.key + "." + h)} title={rounding.has(r.key + "." + h) ? "rounding (under ₹1)" : undefined}>{money(r[side][h])}</td>;
   return <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact" data-gfile-compare="" data-statement="">
-    <thead><tr><th rowSpan={2}>{form === "3B" ? "Table" : "Table of GSTR-1"}</th>{form !== "3B" && <th className="n" colSpan={2}>Documents</th>}
-      <th className="n" colSpan={H.length}>FinCom</th><th className="n" colSpan={H.length}>On the portal</th><th></th></tr>
-      <tr>{form !== "3B" && <><th className="n">FinCom</th><th className="n">Portal</th></>}{H.map(([, l]) => <th key={"f" + l} className="n">{l}</th>)}{H.map(([, l]) => <th key={"p" + l} className="n">{l}</th>)}<th></th></tr></thead>
+    <thead><tr><th rowSpan={2}>{form === "3B" ? "Table" : "Table of GSTR-1"}</th><th rowSpan={2}></th>{form !== "3B" && <th className="n" colSpan={2}>Documents</th>}
+      <th className="n" colSpan={H.length}>FinCom</th><th className="n" colSpan={H.length}>On the portal</th></tr>
+      <tr>{form !== "3B" && <><th className="n">FinCom</th><th className="n">Portal</th></>}{H.map(([, l]) => <th key={"f" + l} className="n">{l}</th>)}{H.map(([, l]) => <th key={"p" + l} className="n">{l}</th>)}</tr></thead>
     <tbody>{cmp.rows.map((r) => <tr key={r.key} data-gfile-row={r.key} data-differs={r.differs.length ? "1" : "0"} className={r.differs.length ? "gfile-bad" : undefined}>
       <td>{r.label}</td>
+      <td>{r.differs.length ? <span className="tag bad">differs</span> : (r.rounding || []).length ? <span className="gfile-roundtag" data-gfile-rounding={r.key}>rounding (under ₹1)</span> : <span className="tag ok">same</span>}</td>
       {form !== "3B" && <><td className={"n" + (differs.has(r.key + ".n") ? " gfile-diff" : "")}>{r.fincom.n}</td><td className={"n" + (differs.has(r.key + ".n") ? " gfile-diff" : "")}>{r.portal.n}</td></>}
       {H.map(([h]) => cell(r, h, "fincom"))}{H.map(([h]) => cell(r, h, "portal"))}
-      <td>{r.differs.length ? <span className="tag bad">differs</span> : <span className="tag ok">same</span>}</td></tr>)}</tbody>
-  </table></div>;
+</tr>)}</tbody>
+  </table>
+    {(cmp.rounding || []).length > 0 && <p className="note gfile-roundnote" data-gfile-rounding-note="">{"Rounding (under ₹1), no reason needed: " + cmp.rounding.map((k) => words(k, cmp.rows)).join("; ") + "."}</p>}</div>;
 }
 
 // 3B: the set-off worked out from the portal's liability and its ledgers (sections 49, 49A; rule 88A)
@@ -70,13 +73,17 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
   const pick = <label className="note" data-gfile-route="">{"File through: "}
     <select aria-label="File through" value={route} disabled={!may} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setRoute(ev.target.value)}>
       <option value="helper">Browser helper</option><option value="api">GST API (OTP every 30 days)</option></select></label>;
+  const sign = GSTFILE.sign(), dsc = sign === "dsc";
+  const signPick = route === "api" && <label className="note" data-gfile-sign="">{"Signs with: "}
+    <select aria-label="Signs with" value={sign} disabled={!may} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setSign(ev.target.value)}>
+      <option value="evc">EVC (OTP to the signatory)</option><option value="dsc">DSC (companies and LLPs)</option></select></label>;
   const head = <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-    <b>{"File " + name + " for " + GSTR.label(ym)}</b>{pick}</div>;
+    <b>{"File " + name + " for " + GSTR.label(ym)}</b><span className="row" style={{ gap: 12, flexWrap: "wrap" }}>{signPick}{pick}</span></div>;
   const msg = s.msg ? <p className={s.bad ? "bad" : "note"} data-gfile-msg="" style={{ margin: "6px 0 0" }}>{s.msg}</p> : null;
   if (done || st === "filed") {
     const arn = (done && done.arn) || fl.arn, on = done ? dmy(done.on) : dmy(fl.filed_at);
     return <section className="dash-card gq gfile" data-gst-file={form} data-route={route} data-filed={arn} style={{ marginTop: 12 }}>{head}
-      <p style={{ margin: "6px 0 0" }}><span className="tag ok">Filed</span>{" " + name + " for " + GSTR.label(ym) + " through the GST API · ARN "}<b data-gfile-arn="">{arn}</b>{on ? " · " + on : ""}</p>{msg}</section>;
+      <p style={{ margin: "6px 0 0" }}><span className="tag ok">Filed</span>{" " + name + " for " + GSTR.label(ym) + (dsc ? " · ARN " : " through the GST API · ARN ")}<b data-gfile-arn="">{arn}</b>{on ? " · " + on : ""}</p>{msg}</section>;
   }
   if (route !== "api") return <section className="dash-card gq gfile" data-gst-file={form} data-route="helper" style={{ marginTop: 12 }}>{head}
     <p className="note" style={{ margin: "6px 0 0" }}>{"Through FinCom’s browser helper: open the GST portal in your own browser and sign in yourself; the helper works only in that tab and never presses Submit or File, or types a captcha or OTP — you do. Or download the JSON and upload it on the portal as before."}</p></section>;
@@ -107,12 +114,22 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
       <p className="note" style={{ margin: 0 }}>{form === "3B" ? "Pays the tax from the credit and cash ledgers as shown above. After this the 3B cannot be changed." : "The portal makes the return ready to file. The portal’s summary is read again first; if it changed, nothing is sent."}</p>
       {btn("proceed", "Proceed to file", () => GSTFILE.proceed(form, ym, reg), st === "confirmed", st !== "confirmed")}
     </Step>
+    {dsc ? <>
+    <Step n={4} title="File with DSC on the portal" on={st === "proceeded"}>
+      <p className="note" style={{ margin: 0 }} data-gfile-dsc="">{"This client signs with DSC. The return is saved and ready to file on the portal: sign in there as " + gstin + " yourself, open the Returns Dashboard for " + GSTR.label(ym) + ", choose " + (form === "3B" ? "GSTR-3B" : "GSTR-1/IFF") + " and press File with DSC (the portal’s signer, emSigner, and your DSC token)."}</p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+        <button className={"btn small" + (st === "proceeded" ? " primary" : "")} data-gfile="portal" disabled={st !== "proceeded"} onClick={() => GSTFILE.openPortal()}>File with DSC on the portal</button>
+        {btn("track-dsc", "I have filed it: read the ARN", () => GSTFILE.track(form, ym, reg), false, st !== "proceeded")}
+      </div>
+      <p className="note">{"FinCom reads the ARN back from the portal by itself, and the month is marked filed."}</p>
+    </Step>
+    </> : <>
     <Step n={4} title="The authorised signatory’s OTP" done={!!(fl && fl.otp_sent_at)} on={st === "proceeded"}>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <label className="note">{"Signatory’s PAN "}<input aria-label="Signatory PAN" value={pan} maxLength={10} onChange={(ev) => setPan(ev.target.value.toUpperCase())} style={{ width: 130 }} /></label>
         {btn("evc_otp", fl && fl.otp_sent_at ? "Send the OTP again" : "Send OTP", () => GSTFILE.otp(form, ym, reg, pan), st === "proceeded" && !(fl && fl.otp_sent_at), st !== "proceeded" || !/^[A-Z]{5}\d{4}[A-Z]$/.test(pan))}
       </div>
-      <p className="note">{"The portal sends the OTP to the signatory’s registered mobile and e-mail. Companies and LLPs file with DSC on the portal instead."}</p>
+      <p className="note">{"The portal sends the OTP to the signatory’s registered mobile and e-mail. Companies and LLPs sign with DSC: choose “Signs with: DSC” above."}</p>
     </Step>
     <Step n={5} title="File" on={st === "proceeded" && !!(fl && fl.otp_sent_at)}>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -121,6 +138,7 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
       </div>
       <p className="note">{"Filing is final. The ARN comes back here and the month is marked filed."}</p>
     </Step>
+    </>}
     {msg}
     <p className="note" style={{ margin: "8px 0 0" }}><button className="linkbtn" data-gfile="track" disabled={busy || !may} onClick={() => GSTFILE.track(form, ym, reg)}>Check the status on the portal</button></p>
   </section>;

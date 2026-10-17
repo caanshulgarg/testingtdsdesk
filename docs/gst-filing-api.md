@@ -81,7 +81,66 @@ A GSP forum flow of 3B (older API): save → summary (gives the liability ids) �
 `track`; and `filing` (where a return stands). Owner and staff may do these (as posting); a viewer may not. Every call
 is logged in `gst_filing_log` (who, when, GSTIN, period, form, action, result, ARN; never the OTP). The summary is read
 again before proceeding and before filing; if it changed since it was confirmed, nothing is sent and the person compares
-again. Writes go to the sandbox: on the production host they are refused unless `TAXPRO_FILE_LIVE=yes` is set.
+again. Differences under ₹1.00 are rounding (no reason needed). A DSC client stops after proceed to file and is
+filed on the portal; the ARN is read back with `track`. Writes go to the sandbox: on the production host they are refused unless `TAXPRO_FILE_LIVE=yes` is set.
+
+## DSC (companies and LLPs): what others do, and FinCom's way
+
+The owner's answers of 17-Oct-2026: do not hide File for DSC clients; research how others file with DSC through an API;
+until FinCom can sign, a DSC client's return goes Save → Compare → Proceed to file through the API, and is then filed
+**with DSC on the portal** by the person; FinCom reads the ARN back (RETTRACK) and marks the month filed. EVC stays as built
+for proprietors, firms and others. (Also answered: owner and staff file; ₹1 rounding tolerance; the person who confirms
+may also file.)
+
+Who must use DSC: companies and LLPs must sign GSTR-1 and 3B with a Class 2/3 PAN-based DSC registered on the portal;
+others may use EVC [documented: GST portal guides, eMudhra, Quicko].
+
+### How DSC signing works through the GSTN API
+- The return's summary (RETSUM) is signed: a hash of the summary is signed with the DSC as a **CMS / PKCS#7 signature**,
+  and RETFILE is sent with `st=DSC`, `sid=<PAN>` and the signature. GSTN's error list has RT_FIL_09 "Signed summary is not
+  the latest one", RTN_FIL_30 "Signed summary data does not match with encoded hash summary" and RET13506 "Invalid DSC
+  Signature" [documented: GST API error code list (MasterGST); GSTN GSP framework v3.0: "fetch GSTR1 summary … digital sign
+  using DSC or e-Sign or EVC"].
+- The signing must happen on the computer with the DSC token (a USB token with a PIN); it cannot happen on a server.
+
+### What other software does
+| Software | DSC filing | Source |
+|---|---|---|
+| **TaxPro (our GSP)** | Its own free browser extension **Signer.Digital** (Chrome / Firefox) signs from the token, the PFX or the Windows certificate store: `SignerDigital.signGstHash(hash, certThumbprint)` returns the CMS (PKCS#7) signature, which the software sends to the filing API. | taxpro.co.in "Digital Signing GST and ITR eReturns using Signer.Digital Browser Extension"; help.signer.digital; Chrome Web Store listing |
+| **TallyPrime** | Files GSTR-1 and 3B itself: E for EVC (PAN + OTP) or D for DSC (choose the signatory, type the token's PIN), on the computer running Tally. | help.tallysolutions.com, "File GSTR-1" |
+| **ClearTax** | GSTR-1 and 3B with DSC through its **desktop app** (on the PC with the token): "File with EVC" or "File with DSC". | docs.cleartax.in, "GSTR-3B on Desktop App" |
+| **Zoho Books** | Files with EVC (PAN + OTP) only; for DSC the user files on the GST portal and then uses **Mark as Filed** in Zoho Books. | zoho.com/in/books/help/gst/gstr1-filing.html |
+| **GST portal** | DSC through its own signer, **emSigner**, installed on the PC; the DSC registered on the portal first. | Quicko "GST emSigner", "Register or update DSC" |
+| Masters India, IRIS | Their API pages advertise "EVC or DSC" filing; no public description of how the signature is made was found. | mastersindia.co blog (DSC errors); vendor pages |
+
+### Recommendation for FinCom
+1. **Now (built):** DSC clients file on the portal. FinCom does Save → Compare → Proceed to file through the API, then a
+   "File with DSC on the portal" button opens the portal's Returns Dashboard; the person signs in, files with DSC there,
+   and FinCom reads the ARN back (RETTRACK; by itself when the card is opened, or "I have filed it: read the ARN"). This is
+   what Zoho Books does, and needs nothing installed.
+2. **Next, recommended:** sign in FinCom with **TaxPro's Signer.Digital extension**, on whichever computer holds the
+   token. It is our GSP's own, free, and made for exactly this call (sign the GST summary hash, return PKCS#7); FinCom
+   would fetch the summary, ask the extension to sign it (the person picks the certificate and types the PIN), and send
+   RETFILE with `st=DSC`. This avoids building a signer, and works away from the Tally computer (FinCom Bridge runs on the
+   Tally computer, which is often not the one with the partner's token; a Bridge signer would also need its own Windows
+   certificate-store code and testing).
+   Needs from TaxPro first: the exact hash to sign (the base64 summary or its SHA-256), and the decrypted RETFILE body for
+   DSC (`sign`, `st`, `sid`), on the sandbox with a test DSC.
+3. Not recommended: the portal's emSigner (it only talks to the portal's own pages), or keeping the DSC on a server
+   (the law and the token both need the signatory's own PIN on their own computer).
+
+Sources (DSC):
+- https://taxpro.co.in/digital-signing-gst-and-itr-ereturns-using-signer-digital-browser-extension
+- https://help.signer.digital/digital_signing_gst_and_itr_ereturns_using_signer_digital_chrome_extension.htm
+- https://gsthelp.charteredinfo.com/ucl/digital_signing_gst_and_itr_ereturns_using_signer_digital_chrome_extension.htm
+- https://chromewebstore.google.com/detail/signerdigital-digital-sig/glghokcicpikglmflbbelbgeafpijkkf
+- https://help.tallysolutions.com/tally-prime/file-gst-returns/india-gst-filing-gstr1-tally/
+- https://docs.cleartax.in/product-help-and-support/for-tax-experts/clearpro-suite/clearpro-desktop-app/file-returns-on-desktop/gstr-3b-on-desktop-app
+- https://www.zoho.com/in/books/help/gst/gstr1-filing.html
+- https://learn.quicko.com/gst-emsigner , https://learn.quicko.com/register-update-dsc-gst-portal
+- https://mastergst.com/static/pdfs/gst-api-error-codes.pdf
+- https://gstn.org.in/assets/mainDashboard/Pdf/GSP_Implementation_Framework_V_3.0.pdf
+- https://emudhradigital.com/kc/how-to-file-gst-with-adigital-signature
 
 ## Questions (for TaxPro, and for the owner)
 
@@ -104,15 +163,12 @@ For TaxPro:
 9. Sandbox taxpayers that can file (one QRMP, one monthly), and the sandbox EVC OTP (575757 as for login?).
 10. Daily limits per ASP, IP allow-listing for Supabase's function IPs, and the error codes for "already filed".
 
-For the owner:
-11. The plan of 02-Oct said **owner only** may file; this brief says **owner and staff, as posting**. Built as owner and
-    staff (viewers refused). Keep it, or owner only?
-12. Differences: any difference of ₹0.01 or more in a figure (and any count difference) is listed and must be accepted
-    one by one with a reason. Is a tolerance (say ₹1 rounding) wanted?
-13. Companies and LLPs must file with DSC, not EVC; FinCom does EVC only. Shall FinCom hide "File" for them (from the
-    client's constitution) and say "file with DSC on the portal"?
-14. Should the person who confirms the comparison and the person who presses File be allowed to be the same person?
-    (Built: yes.)
+For the owner (answered 17-Oct-2026):
+11. Owner and staff may file: kept.
+12. Rounding: a figure off by less than ₹1.00 is shown in grey as "rounding (under ₹1)" and needs no reason; ₹1.00 or
+    more must be corrected or accepted with a reason. A count of documents never rounds.
+13. DSC: File is not hidden; see "DSC" above (filed on the portal for now, ARN read back).
+14. The person who confirms may also file: kept.
 
 ## Sources
 

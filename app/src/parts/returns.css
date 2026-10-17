@@ -413,3 +413,5 @@ details.more .more-words p{margin:0 0 6px}
 .gfile .gfile-bad td:first-child { font-weight: 600; }
 .gfile td.gfile-diff { background: var(--bad-soft); color: var(--bad); font-weight: 600; }
 .gfile .gq-step:first-of-type { border-top: 0; }
+.gfile td.gfile-round { color: var(--muted, #6b7280); background: var(--paper, transparent); font-style: italic; }
+.gfile .gfile-roundtag { color: var(--muted, #6b7280); font-size: 12px; white-space: nowrap; }

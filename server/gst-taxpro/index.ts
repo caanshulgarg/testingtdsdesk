@@ -490,8 +490,8 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw), c = compare(row.fincom_sum || {}, portal, form);
       const plan = form === "3B" ? await offsetPlan(r, s.raw, s.h, s.username) : null;
       await putFiling(w, r, { status: "summary", portal_sum: portal, diffs: c.differs, offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, error: null });
-      await logFiling(w, r, "summary", true, c.differs.length ? c.differs.length + " differences: " + c.differs.join(", ") : "matches FinCom");
-      return { ok: true, rows: c.rows, differs: c.differs, plan };
+      await logFiling(w, r, "summary", true, (c.differs.length ? c.differs.length + " differences: " + c.differs.join(", ") : "matches FinCom") + (c.rounding.length ? "; rounding under ₹1: " + c.rounding.join(", ") : ""));
+      return { ok: true, rows: c.rows, differs: c.differs, rounding: c.rounding, plan };
     }
     if (action === "confirm") {
       if (row.status !== "summary") return { ok: false, error: "Read the portal's summary first." };

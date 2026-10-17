@@ -17,10 +17,26 @@ function gstFileRoute(books){
   const b = books || S.books || {};
   return b.gstFileRoute === "api" ? "api" : "helper";
 }
+// how the client's authorised signatory signs (the owner's answer of 17-Oct-2026): "evc" (an OTP; proprietors, firms and
+// others) or "dsc" (companies and LLPs must). Chosen per client; by default DSC for a company (its PAN), else EVC. A DSC
+// client's return is saved, compared and made ready to file through the API, then filed with DSC on the portal; FinCom
+// reads the ARN back (RETTRACK). gstSignWith() for the client open, gstSignWith(books, co) for another
+function gstSignWith(books, co){
+  const b = books || S.books || {};
+  if (b.gstSign === "dsc" || b.gstSign === "evc") return b.gstSign;
+  const e = typeof FS === "object" && FS.entityOf ? FS.entityOf(co || (typeof CO === "function" ? CO() : null)).code : "";
+  return e === "C" ? "dsc" : "evc";
+}
+// the GST portal's returns dashboard, where a return is filed with DSC (the person signs in there themselves)
+const GST_PORTAL_RETURNS = "https://return.gst.gov.in/returns/auth/dashboard";
 const GSTFILE = {
   FORMS: {R1: "GSTR-1", IFF: "IFF", "3B": "GSTR-3B"},
   st: {},
   route(){ return gstFileRoute(); },
+  sign(){ return gstSignWith(); },
+  setSign(v){ const b = S.books; if (!b) return; b.gstSign = v === "dsc" ? "dsc" : "evc"; saveBooks(); render(); },
+  // DSC: the portal's returns dashboard in a new tab; the person signs in, picks the period and files with DSC there
+  openPortal(){ try { window.open(GST_PORTAL_RETURNS, "_blank", "noopener"); } catch (e){} },
   setRoute(v){ const b = S.books; if (!b) return; if (v === "api") b.gstFileRoute = "api"; else delete b.gstFileRoute; saveBooks(); render(); },
   gstin(reg){ return typeof GSTAPI === "object" ? GSTAPI.gstinOf(reg) : ""; },
   // the API steps: chosen for this client, and its GSTIN connected (the existing per-client OTP session)
@@ -60,6 +76,10 @@ const GSTFILE = {
       const j = await GSTAPI.call(this.body(form, ym, reg, {action: "filing"}));
       s.filing = j.filing; s.log = j.log || []; s.host = j.host || "";
       if (s.filing && s.filing.status === "filed" && s.filing.arn) this.markFiled(form, ym, reg, s.filing.arn, s.filing.filed_at);
+      // filed with DSC on the portal: the ARN read back by itself (at most every 10 minutes while it waits)
+      else if (s.filing && s.filing.status === "proceeded" && this.sign() === "dsc" && this.mayFile() && (!s.trackedAt || Date.now() - s.trackedAt > 10 * 60000)){
+        s.trackedAt = Date.now(); this.track(form, ym, reg, true).catch(() => {});
+      }
     } catch (e){ s.loadErr = (e && e.message) || String(e); }
     render(); return s;
   },
@@ -78,7 +98,7 @@ const GSTFILE = {
   async summary(form, ym, reg){
     const j = await this.call(form, ym, reg, "summary"), s = this.state(form, ym, reg);
     if (!j) return;
-    s.cmp = {rows: j.rows || [], differs: j.differs || [], plan: j.plan || null}; s.bad = false;
+    s.cmp = {rows: j.rows || [], differs: j.differs || [], rounding: j.rounding || [], plan: j.plan || null}; s.bad = false;
     s.msg = j.differs && j.differs.length ? j.differs.length + " difference" + (j.differs.length === 1 ? "" : "s") + " between the portal and FinCom: check each one." : "The portal’s summary matches FinCom.";
     await this.load(form, ym, reg, true);
   },
@@ -111,10 +131,12 @@ const GSTFILE = {
     await this.load(form, ym, reg, true);
     return true;
   },
-  async track(form, ym, reg){
-    const j = await this.call(form, ym, reg, "track"), s = this.state(form, ym, reg);
+  async track(form, ym, reg, quiet){
+    const s = this.state(form, ym, reg); s.trackedAt = Date.now();
+    const j = await this.call(form, ym, reg, "track");
     if (!j) return;
-    s.bad = false; s.msg = j.filed ? "Filed on the portal, ARN " + j.arn + "." : "Not filed on the portal yet.";
+    if (j.filed) this.markFiled(form, ym, reg, j.arn, j.dof ? j.dof.split("-").reverse().join("-") + "T00:00:00+05:30" : "");
+    if (!quiet || j.filed){ s.bad = false; s.msg = j.filed ? "Filed on the portal, ARN " + j.arn + "." : "Not filed on the portal yet."; }
     await this.load(form, ym, reg, true);
   },
   istDate(at){ const t = Date.parse(at || ""); return new Date((isNaN(t) ? Date.now() : t) + 5.5 * 3600000).toISOString().slice(0, 10); },
