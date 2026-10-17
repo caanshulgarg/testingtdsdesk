@@ -8,36 +8,65 @@
 //  - only FinCom's own code, styles and fonts are kept: nothing from Supabase (the firm's data), the bridge, Sentry or
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
-const VERSION = "mvc4zpqe-40471e";
-const FILES = ["./","./legacy.js?v=e4b1c1921c74","./guard.js","./oldcheck.js","./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-h4OcD_n9.css","./assets/Books-CHTEXAAj.css","./assets/returns-JFNRPr-J.css","./assets/Integrations-C1RPLvE9.css","./assets/index-CtKsDw0r.js","./assets/registers-CzgUIo79.js","./assets/sentry-BL3jvfF2.js","./assets/Assistant-DcCvICMi.js","./assets/Books-DxrkqVRa.js","./assets/chevron-down-D7iVkOy2.js","./assets/Gst-B0hp3AL9.js","./assets/Settings-CQcfCbAP.js","./assets/Ai-Dl1portU.js","./assets/Tally-DQPMCKv9.js","./assets/NeedAction-DVK2zk94.js","./assets/Bank-BAjiACHD.js","./assets/BankSettings-DnBtot70.js","./assets/Sales-BxDn75Nc.js","./assets/LedgerSelect-BmY0TRYk.js","./assets/Confirm-xUDWp3nJ.js","./assets/Post--5d8RHaU.js","./assets/BankChecks-D7hBrmDm.js","./assets/Help-FbgSR_Wq.js","./assets/Txn-CSpqAKU-.js","./assets/Parties-BTcdLBwO.js","./assets/VendorRecon-CJUCQr0V.js","./assets/Compliance-CKNDCTlC.js","./assets/Integrations-BrymIpSI.js","./assets/GstApiCard-BD5bvOSv.js","./assets/GstApiAll-D1GrjmzO.js","./assets/FiledCompare-Cde8FteN.js","./assets/FileApi-6DfRZKsV.js","./assets/SheetPanel-DwWI2C6c.js","./assets/DetailDrawer-DoBcla6I.js","./assets/LedgerBox-Dyzh6hKS.js","./assets/AssistantUploads-ClB7i-Nh.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DhXo2pjA.js"];
+const VERSION = "mvca4iej-52ec40";
+// round 73 B: FILES, kept at install, are what the first page needs; REST, the other files of this build, are kept once
+// the first page is up and the computer is idle (the page sends "fincom:keep-rest", main.jsx)
+const FILES = ["./","./legacy.js?v=4490bf03d30b","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-h4OcD_n9.css","./assets/index-BUcOusk8.js"];
+const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/Books-CHTEXAAj.css","./assets/returns-JFNRPr-J.css","./assets/Integrations-C1RPLvE9.css","./assets/registers-CzgUIo79.js","./assets/sentry-BH4KxzuE.js","./assets/Assistant-CdmmyGqA.js","./assets/Books-CF0F5uua.js","./assets/chevron-down-BokU1-aV.js","./assets/Gst-0x6ZR8Vc.js","./assets/Settings-4fDpWCDa.js","./assets/Ai--4d6ZYVT.js","./assets/Tally-C7FLOrJK.js","./assets/NeedAction-B5dRodMN.js","./assets/Bank-B-7BLBvV.js","./assets/BankSettings-VPEZ067K.js","./assets/Sales-BT9n2Cz6.js","./assets/LedgerSelect-DX6aQA_1.js","./assets/Confirm-kjrxNo3O.js","./assets/Post-kauTVjFQ.js","./assets/BankChecks-DSObWnTQ.js","./assets/Help-9B-ETOnl.js","./assets/Txn-kK0RrlK7.js","./assets/Parties-CEsxBiKE.js","./assets/VendorRecon-dtix8NMu.js","./assets/Compliance-Ber8rnpb.js","./assets/Integrations-Dr8Xw2m9.js","./assets/GstApiCard-DvmBjIBS.js","./assets/GstApiAll-sI0Vgupv.js","./assets/FiledCompare-D34Fs4cq.js","./assets/FileApi-BydApKjp.js","./assets/SheetPanel-B2n_7x8S.js","./assets/DetailDrawer-DWDg8KCT.js","./assets/LedgerBox-DotRTeie.js","./assets/AssistantUploads-BtC4tTae.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DhXo2pjA.js"];
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = "fincom-shell:" + SCOPE + ":" + VERSION, RUNTIME = "fincom-files:" + SCOPE;
 const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
 
+// a file whose name or address carries its build's hash may come from the browser's cache (the page has just fetched it:
+// not again over the line); the page and the two little scripts without a hash past it
+const HASHED = (f) => /^\.\/assets\//.test(f) || /^\.\/legacy\.js\?v=/.test(f);
+const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map(ask))).then(() => self.skipWaiting()));
 });
+// the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
+let keeping = null;
+function keepRest() {
+  return keeping || (keeping = caches.open(SHELL).then(async (c) => {
+    for (const f of REST) {
+      try { if (!(await caches.match(f, { ignoreVary: true }))) await c.add(ask(f)); } catch (e) { /* kept when it is first used */ }
+    }
+  }).finally(() => { keeping = null; }));
+}
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith("fincom-shell:" + SCOPE + ":") && k !== SHELL) || k === RUNTIME).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener("message", (e) => {
   if (e.data === "fincom:signed-out") e.waitUntil(caches.delete(RUNTIME));
+  if (e.data === "fincom:keep-rest") e.waitUntil(keepRest());
 });
 
-// the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s)
+// the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
+// A page asked for by its build (?v=…: index.html's check found a newer build than the page it was given) waits for the
+// network as long as it takes (17-Oct-2026: on a slow line the 4 s wait handed back the old page again)
 async function page(req) {
   const cache = await caches.open(SHELL);
   const net = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) cache.put("./", r.clone()); return r; });
+  const byBuild = new URL(req.url).searchParams.has("v");
   try {
-    const r = await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
+    const r = byBuild ? await net : await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
     if (r) return r;
-    return (await cache.match("./")) || (await net);
+    const c = await cache.match("./");
+    return c ? kept(c) : await net;
   } catch (e) {
     const c = await cache.match("./");
-    if (c) return c;
+    if (c) return kept(c);
     throw e;
   }
+}
+// the kept copy is marked (data-boot-kept on <html>): its program waits for index.html's build check before it starts,
+// so an older build is swapped before it is drawn (src/main.jsx)
+async function kept(c) {
+  try {
+    const t = await c.clone().text();
+    return new Response(t.replace("<html ", '<html data-boot-kept="" '), { status: c.status, statusText: c.statusText, headers: c.headers });
+  } catch (e) { return c; }
 }
 
 self.addEventListener("fetch", (e) => {
