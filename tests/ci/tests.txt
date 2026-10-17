@@ -309,6 +309,8 @@ run_tds_review.js                     120
 run_tds_forms_2025.js                 120
 # the same files through Protean's FVU 1.2 (17-Aug-2026) when TDSDESK_FVU12 names its folder (never committed); skipped otherwise
 run_fvu12_forms.py                    600
+# the owner's answers of 17-Oct-2026: Client setup → TDS, the deductor's details for the statements (desktop and phone)
+run_tds_deductor_ui.py                240  TDSDESK_SITE=../app/dist-test
 # ledger-confirm (14-Oct-2026): TDS and GST ledgers confirmed (and unconfirmed) on the TDS and GST pages, the Tally ledgers
 # listed and picked, the AI guess (a fake AI; the server's batch with Claude and Supabase faked), Settings' pointer
 run_ledger_confirm.py                 300  TDSDESK_SITE=../app/dist-test

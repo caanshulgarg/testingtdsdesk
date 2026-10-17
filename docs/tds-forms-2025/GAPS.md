@@ -96,7 +96,28 @@ non-Government (K, M, P, T, J, B, Q, F)→1002; statutory, autonomous and local 
   in-kind columns of the Gazette annexures, nil challans, corrections: not made.
 - A challan file (.csi) cannot be made by FinCom; FVU 1.2 needs the deductor's own for a "C" statement.
 
-## 6. Questions for the owner
+## 6. The owner's answers (17-Oct-2026), as built
+
+- **Draft marking stays on** until a challan-paid statement with a real .csi passes FVU 1.2 (he will provide .csi files).
+- **Form 138 Q4** refused: "Protean has not yet released the Q4 layout for Form 138".
+- **The challan record carries the challan's full deposited amount**: kept.
+- **194A interest**: 1022 for a client that is not a bank, co-operative bank or post office. FinCom did not know this, so
+  Client setup → TDS has "This client is a bank, co-operative bank or post office" (default No, `co.tds26q.isBank`). When
+  Yes, the codes that depend on it: 194A → 1020 (deductee a senior citizen) or 1021 (others), which FinCom asks for each
+  deductee in To fix (it does not hold the deductee's age); 194N cash withdrawals → 1064 (to a co-operative society) / 1065
+  (others), which stay to confirm with the amount above the limit.
+- **An inoperative PAN** (right form, not linked): remark C, the PAN as it is, at the higher rate FinCom works out; in all
+  four forms (Form 138 too). FVU 1.2 takes it (tests: I138, I140 valid).
+- **Deductor details screen**: Client setup → TDS → "Deductor details for the TDS statements": category (default from the
+  PAN's 4th letter, shown and changeable), TAN, GSTIN (the client's own unless given), the bank question, the deductor's
+  address (flat*, post office, building, road, area, district, state*, PIN*, country, e-mail*, phone country code, phone*),
+  the person responsible (name*, designation*, PAN*, the same address lines, state*, PIN*, country, e-mail, mobile country
+  code, mobile*), and for Government categories only the State (S, E, H, N), the Ministry (A, D, G required; E, H, L, N
+  optional) and the AIN (A, S). Each field checked by `TDSF25.deductorProblems`, the same function the files use, and the
+  problem shown beside it. Kept as `co.tds26q`; the old 24Q / 26Q / 27Q / 27EQ files read the same keys (their category
+  still "F" unless one is chosen, as before).
+
+## 7. Questions for the owner (as asked on 17-Oct-2026; 1, 2, 3, 6, 7, 8, 15 are answered above)
 
 1. **Switch the draft off?** FinCom's files pass FVU 1.2 (book adjustment fully; by challan up to the .csi). Shall
    `NEW_FORMS_VALIDATED` become true (file not named _DRAFT, sent to the FVU from FinCom), after you run one real

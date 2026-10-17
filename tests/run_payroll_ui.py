@@ -111,7 +111,7 @@ try:
         # next-tds-forms-2025: Form 138 (tax year 2026-27) is built to Protean's file format 1.1, which is for Q1 to Q3: the Q4
         # file (Annexure II's salary records) is refused until Protean's Q4 layout is in hand; Q1's file downloads, a draft
         q4 = pg.evaluate("() => TDS24Q_FILE.build('2026-27', 'Q4', TDS26Q.firmDetails())")
-        ok(q4.get("error") and "Q1 to Q3" in q4["error"], "Q4 2026-27: Form 138's file is not made yet (%s)" % q4.get("error"))
+        ok(q4.get("error") == "Protean has not yet released the Q4 layout for Form 138", "Q4 2026-27: Form 138's file is not made yet (%s)" % q4.get("error"))
         pg.evaluate("() => { S.tdsQ = 'Q1'; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
         with pg.expect_download() as dl:
             pg.click('[data-pay-fvu]')

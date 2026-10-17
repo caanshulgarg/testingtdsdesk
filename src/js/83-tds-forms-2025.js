@@ -27,6 +27,29 @@ const TDSF25 = {
   STATE_ALIAS: {"PUDUCHERRY": "PONDICHERRY", "LAKSHADWEEP": "LAKSHWADEEP", "ORISSA": "ODISHA", "NCT OF DELHI": "DELHI", "NEW DELHI": "DELHI",
     "ANDAMAN & NICOBAR ISLANDS": "ANDAMAN AND NICOBAR ISLANDS", "DADRA AND NAGAR HAVELI AND DAMAN AND DIU": "DADRA & NAGAR HAVELI AND DAMAN & DIU",
     "JAMMU AND KASHMIR": "JAMMU & KASHMIR", "UTTARANCHAL": "UTTARAKHAND"},
+  // Annexure 3: Ministry codes (BH field 57), for a Central Government deductor
+  MINISTRIES: {
+    "01": "Agriculture", "02": "Atomic Energy", "03": "Fertilizers", "04": "Chemicals and Petrochemicals",
+    "05": "Civil Aviation and Tourism", "06": "Coal", "07": "Consumer Affairs, Food and Public Distribution",
+    "08": "Commerce and Textiles", "09": "Environment and Forests and Ministry of Earth Science",
+    "10": "External Affairs and Overseas Indian Affairs", "11": "Finance", "12": "Central Board of Direct Taxes",
+    "13": "Central Board of Excise and Customs", "14": "Contoller of Aid Accounts and Audit",
+    "15": "Central Pension Accounting Office", "16": "Food Processing Industries", "17": "Health and Family Welfare",
+    "18": "Home Affairs and Development of North Eastern Region", "19": "Human Resource Development", "20": "Industry",
+    "21": "Information and Broadcasting", "22": "Telecommunication and Information Technology", "23": "Labour",
+    "24": "Law and Justice and Company Affairs", "25": "Personnel, Public Grievances and Pensions",
+    "26": "Petroleum and Natural Gas", "27": "Plannning, Statistics and Programme Implementation", "28": "Power",
+    "29": "New and Renewable Energy", "30": "Rural Development and Panchayati Raj", "31": "Science And Technology",
+    "32": "Space", "33": "Steel", "34": "Mines", "35": "Social Justice and Empowerment", "36": "Tribal Affairs",
+    "37": "D/o Commerce (Supply Division)", "38": "Shipping and Road Transport and Highways",
+    "39": "Urban Development, Urban Employment and Poverty Alleviation", "40": "Water Resources",
+    "41": "President's Secretariat", "42": "Lok Sabha Secretariat", "43": "Rajya Sabha secretariat",
+    "44": "Election Commission", "45": "Ministry of Defence (Controller General of Defence Accounts)",
+    "46": "Ministry of Railways", "47": "Department of Posts", "48": "Department of Telecommunications",
+    "49": "Andaman and Nicobar Islands Administration", "50": "Chandigarh Administration",
+    "51": "Dadra and Nagar Haveli", "52": "Goa, Daman and Diu", "53": "Lakshadweep", "54": "Pondicherry Administration",
+    "55": "Pay and Accounts Officers (Audit)", "56": "Ministry of Non-conventional energy sources",
+    "57": "Government Of NCT of Delhi", "99": "Others"},
   // Annexure 4: deductor / collector category
   CATEGORY: {A: "Central Government", S: "State Government", D: "Statutory body (Central Govt.)", E: "Statutory body (State Govt.)",
     G: "Autonomous body (Central Govt.)", H: "Autonomous body (State Govt.)", L: "Local Authority (Central Govt.)", N: "Local Authority (State Govt.)",
@@ -184,15 +207,11 @@ const TDSF25 = {
     if (!TDS.isNew(fy)) return {error: "Forms 138, 140, 143 and 144 are for tax year " + TDS.NEW_FROM + " on."};
     if (!this.FILE_TYPE[form]) return {error: "Unknown form " + form + "."};
     if (form === "24Q" && q === "Q4")
-      return {error: "Form 138 for Q4 needs the salary details of Annexure II and III. Protean's file format the owner has is for Q1 to Q3 only, so FinCom does not make the Q4 file yet."};
+      return {error: "Protean has not yet released the Q4 layout for Form 138"};
     firm = firm || {};
     const fno = TDS.formNo(form, fy), problems = [], notes = [], missing = new Set(), P = (w) => { if (!problems.includes(w)) problems.push(w); };
-    const fit = (v, n, what, must) => {
-      const s = this.ascii(v);
-      if (!s && must) P(what + " is missing (it is mandatory).");
-      if (s.length > n){ P(what + " is longer than the file allows (" + n + " characters): “" + s + "”."); return s.slice(0, n); }
-      return s;
-    };
+    // a value cut to its size; what is missing or too long is named once, by deductorProblems
+    const fit = (v, n) => this.ascii(v).slice(0, n);
     // the deductions (collections) of the quarter that are against a challan, with the challans they use
     const data = this.rowsOf(fy, q, form);
     if (data.error) return data;
@@ -200,44 +219,21 @@ const TDSF25 = {
     const yrs = this.years(fy), prev = this.previous(fy, q, form, firm);
     if (prev.flag === "Y" && !/^\d{15}$/.test(prev.token)) P("Form " + fno + " of " + (prev.pq || "the quarter before") + " " + (prev.pfy || "") + " is marked filed but its 15-digit token number is not given: BH field 9 needs it.");
     if (prev.how === "not marked") notes.push("Form " + fno + " of " + prev.pq + " " + prev.pfy + " is not marked filed in FinCom, so the file says no earlier regular statement (BH field 52 “N”). If it was filed, mark it filed with its token first.");
-    // the deductor (collector)
-    const pan = String(firm.pan || "").toUpperCase(), cat = String(firm.deductorType || "").toUpperCase() || (this.CATEGORY_BY_PAN[this.panLetter(pan)] || "");
-    if (!cat) P("The deductor's category (Government, company, firm …, Annexure 4) is not known: give it in the deductor's details.");
-    else if (!this.CATEGORY[cat]) P("The deductor's category “" + cat + "” is not one of Annexure 4.");
-    if (!firm.deductorType && cat) notes.push("The deductor's category “" + cat + "” (" + this.CATEGORY[cat] + ") is read from its PAN's fourth letter.");
-    const govt = this.GOVT.test(cat);
-    if (!Certs.validPan(pan) && !(govt && pan === "PANNOTREQD")) P("The deductor's PAN is missing or not a valid PAN" + (govt ? " (a Government deductor writes PANNOTREQD)" : "") + ".");
-    const tan = String(firm.tan || "").toUpperCase();
-    if (!/^[A-Z]{4}\d{5}[A-Z]$/.test(tan)) P("The deductor's TAN is missing or not a valid TAN.");
+    // the deductor (collector): Client setup → TDS (co.tds26q), checked by the same function the screen uses
+    this.deductorProblems(firm).forEach(p => P(p.why));
+    const pan = String(firm.pan || "").toUpperCase(), cat = this.categoryFor(firm);
+    if (!firm.deductorType && cat) notes.push("The deductor's category \u201c" + cat + "\u201d (" + this.CATEGORY[cat] + ") is read from its PAN's fourth letter.");
+    const govt = this.GOVT.test(cat), tan = String(firm.tan || "").toUpperCase();
     const st = this.stateCode(firm.state), pst = this.stateCode(firm.personState || firm.state);
-    if (!st) P("The deductor's state is missing or not one of Annexure 1" + (firm.state ? " (“" + this.ascii(firm.state) + "”)" : "") + ".");
-    if (!pst) P("The responsible person's state is missing or not one of Annexure 1.");
     const pin = this.ascii(firm.pin), ppin = this.ascii(firm.personPin || firm.pin);
-    if (!/^\d{6}$/.test(pin)) P("The deductor's PIN code is missing or not 6 digits.");
-    if (!/^\d{6}$/.test(ppin)) P("The responsible person's PIN code is missing or not 6 digits.");
     const email = this.ascii(firm.email), pemail = this.ascii(firm.personEmail);
-    const okMail = (m) => /^[^@\s^]+@[^@\s^]+\.[^@\s^]+$/.test(m) && /[^@.]$/.test(m);
-    if (!email && !pemail) P("An e-mail of the deductor or of the responsible person is needed (BH fields 28, 42).");
-    if (email && !okMail(email)) P("The deductor's e-mail “" + email + "” is not a valid e-mail.");
-    if (pemail && !okMail(pemail)) P("The responsible person's e-mail “" + pemail + "” is not a valid e-mail.");
     const digits = (v) => String(v == null ? "" : v).replace(/\D/g, "");
     const phone = digits(firm.phone), pphone = digits(firm.personPhone || firm.phone);
-    if (!phone || phone.length > 10) P("The deductor's contact number is missing or longer than 10 digits (without the country code).");
-    if (!pphone || pphone.length > 10) P("The responsible person's contact number is missing or longer than 10 digits (without the country code).");
-    const ppan = String(firm.personPan || "").toUpperCase();
-    if (!Certs.validPan(ppan)) P("The PAN of the person responsible (BH field 59) is missing or not a valid PAN.");
-    if (govt && /^[SEHN]$/.test(cat) && !this.stateCode(firm.stateName || firm.state)) P("A State Government deductor gives its State (BH field 54).");
-    if (govt && /^[ADG]$/.test(cat) && !this.ascii(firm.ministry)) P("A Central Government deductor gives its Ministry code (BH field 57, Annexure 3).");
-    const gstin = this.ascii(firm.gstin).toUpperCase();
-    if (gstin && !/^\d{2}[A-Z0-9]{13}$/.test(gstin)) P("The GSTIN “" + gstin + "” is not 15 characters.");
+    const ppan = String(firm.personPan || "").toUpperCase(), gstin = this.ascii(firm.gstin).toUpperCase();
     const ascii = this.ascii.bind(this);
     // address lines (Annexure: Flat/Door/Block, Post Office, Road/Street/Block/Sector, Area/locality, District)
-    const addr = (o, who) => ({
-      1: fit(o.flat, 25, who + " address line 1 (flat, door, block)", true), 2: fit(o.postOffice, 25, who + " address line 2 (post office)"),
-      3: fit([o.premises, o.road].map(ascii).filter(Boolean).join(", "), 25, who + " address line 3 (building, road, street)"),
-      4: fit(o.area, 25, who + " address line 4 (area, locality)"), 5: fit(o.town, 25, who + " address line 5 (district)")});
-    const da = addr(firm, "The deductor's"), pa = addr({flat: firm.personFlat, postOffice: firm.personPostOffice, premises: firm.personPremises,
-      road: firm.personRoad, area: firm.personArea, town: firm.personTown}, "The responsible person's");
+    const addr = (o) => { const a = this.addrLines(o); return {1: fit(a[1], 25), 2: fit(a[2], 25), 3: fit(a[3], 25), 4: fit(a[4], 25), 5: fit(a[5], 25)}; };
+    const da = addr(firm), pa = addr(this.personAddr(firm));
     const lines = [];
     let ln = 0;
     const put = (n, at) => { ln++; at[1] = ln; lines.push(this.rec(n, at)); };
@@ -265,15 +261,15 @@ const TDSF25 = {
     const batchTotal = r2(ch.reduce((a, x) => a + x.F, 0));
     // BH: one batch for the form and quarter
     put(this.FIELDS.BH, {2: "BH", 3: "1", 4: String(live.length), 5: fno, 9: prev.flag === "Y" ? prev.token : "", 13: tan, 15: govt && !Certs.validPan(pan) ? "PANNOTREQD" : pan,
-      16: yrs.ay, 17: yrs.ty, 18: q, 19: fit(firm.name, 75, "The deductor's name", true), 20: fit(firm.country || "INDIA", 25, "The deductor's country"),
+      16: yrs.ay, 17: yrs.ty, 18: q, 19: fit(firm.name, 75), 20: fit(firm.country || "INDIA", 25),
       21: da[1], 22: da[2], 23: da[3], 24: da[4], 25: da[5], 26: st, 27: pin, 28: email.slice(0, 75), 29: digits(firm.phoneCc || "91"), 30: phone,
-      32: cat, 33: fit(firm.person, 75, "The name of the person responsible", true), 34: fit(firm.personDesignation, 20, "The responsible person's designation", true),
+      32: cat, 33: fit(firm.person, 75), 34: fit(firm.personDesignation, 20),
       35: pa[1], 36: pa[2], 37: pa[3], 38: pa[4], 39: pa[5], 40: pst, 41: ppin, 42: pemail.slice(0, 75),
-      43: fit(firm.personCountry || firm.country || "INDIA", 25, "The responsible person's country"), 44: digits(firm.personPhoneCc || firm.phoneCc || "91"), 45: pphone,
+      43: fit(firm.personCountry || firm.country || "INDIA", 25), 44: digits(firm.personPhoneCc || firm.phoneCc || "91"), 45: pphone,
       // field 49 (Count of Salary Details Records): the workbook says 'Not applicable', but Protean's FVU 1.2 (17-Aug-2026)
       // refuses a Form 138 file without it (T-FV-2127) and the RPU sample writes 0: 0 for Q1 to Q3 (no salary records)
       47: this.money(batchTotal), 49: form === "24Q" ? "0" : "", 52: prev.flag, 54: govt && /^[SEHN]$/.test(cat) ? this.stateCode(firm.stateName || firm.state) : "",
-      57: govt ? ascii(firm.ministry).slice(0, 3) : "", 58: govt && ascii(firm.ministry) === "99" ? fit(firm.ministryOther, 150, "The ministry's name") : "",
+      57: govt ? ascii(firm.ministry).slice(0, 3) : "", 58: govt && ascii(firm.ministry) === "99" ? fit(firm.ministryOther, 150) : "",
       59: ppan, 68: govt && ch.some(x => x.book) ? ascii(firm.ain).slice(0, 7) : "", 69: gstin});
     // CD and its DD: deductee records numbered from 1 under each challan. The workbooks do not say it plainly (Form 144:
     // "in a batch"); Protean's FVU 1.2 refuses numbering through the batch (T-FV-4007 "not in sequence") on a second challan
@@ -298,6 +294,58 @@ const TDSF25 = {
       words: "Built to " + this.FORMAT + "; check it with Protean's FVU before filing."};
   },
 
+  // the deductor's category (Annexure 4): as chosen in Client setup → TDS, else from its PAN's fourth letter
+  categoryOf(pan){ return this.CATEGORY_BY_PAN[this.panLetter(pan)] || ""; },
+  categoryFor(firm){ return String((firm || {}).deductorType || "").toUpperCase() || this.categoryOf((firm || {}).pan); },
+  // address lines 1 to 5 (Flat/Door/Block; Post Office; Road/Street/Block/Sector; Area/locality; District)
+  addrLines(o){ const a = this.ascii.bind(this); return {1: a(o.flat), 2: a(o.postOffice), 3: [o.premises, o.road].map(a).filter(Boolean).join(", "), 4: a(o.area), 5: a(o.town)}; },
+  personAddr(f){ return {flat: f.personFlat, postOffice: f.personPostOffice, premises: f.personPremises, road: f.personRoad, area: f.personArea, town: f.personTown}; },
+  // the deductor's details as the batch header needs them (the workbook, BH fields 13-59, 68, 69): [{k, why}], k the key in
+  // co.tds26q (or tan, pan, name of the client); one function for the screen (Client setup → TDS) and the files
+  deductorProblems(firm){
+    firm = firm || {};
+    const out = [], P = (k, why) => out.push({k, why}), a = (v) => this.ascii(v);
+    const pan = String(firm.pan || "").toUpperCase(), cat = this.categoryFor(firm), govt = this.GOVT.test(cat);
+    if (!/^[A-Z]{4}\d{5}[A-Z]$/.test(String(firm.tan || "").toUpperCase())) P("tan", "The deductor's TAN is missing or not a valid TAN (4 letters, 5 digits, a letter).");
+    if (!cat) P("deductorType", "The deductor's category (Annexure 4) is not known: choose it.");
+    else if (!this.CATEGORY[cat]) P("deductorType", "The deductor's category \u201c" + cat + "\u201d is not one of Annexure 4.");
+    if (!Certs.validPan(pan) && !(govt && pan === "PANNOTREQD")) P("pan", "The deductor's PAN is missing or not a valid PAN" + (govt ? " (a Government deductor writes PANNOTREQD)" : "") + ".");
+    if (!a(firm.name)) P("name", "The deductor's name is missing.");
+    else if (a(firm.name).length > 75) P("name", "The deductor's name is longer than 75 characters.");
+    const lines = (o, who, pre) => { const L = this.addrLines(o); if (!L[1]) P(pre + "flat", who + " address line 1 (flat, door, block) is missing.");
+      [[1, "flat"], [2, "postOffice"], [3, "road"], [4, "area"], [5, "town"]].forEach(([n, k]) => { if (L[n].length > 25) P(pre + k, who + " address line " + n + " is longer than 25 characters (\u201c" + L[n] + "\u201d)" + (n === 3 ? ": building and road together." : ".")); }); };
+    lines(firm, "The deductor's", "");
+    lines(this.personAddr(firm), "The responsible person's", "person");
+    const pk = (k) => "person" + k[0].toUpperCase() + k.slice(1);
+    if (!this.stateCode(firm.state)) P("state", "The deductor's state is missing or not one of Annexure 1" + (firm.state ? " (\u201c" + a(firm.state) + "\u201d)" : "") + ".");
+    if (!this.stateCode(firm.personState || firm.state)) P("personState", "The responsible person's state is missing or not one of Annexure 1.");
+    if (!/^\d{6}$/.test(a(firm.pin))) P("pin", "The deductor's PIN code is missing or not 6 digits.");
+    if (!/^\d{6}$/.test(a(firm.personPin || firm.pin))) P("personPin", "The responsible person's PIN code is missing or not 6 digits.");
+    const okMail = (m) => /^[^@\s^]+@[^@\s^]+\.[^@\s^]+$/.test(m) && /[^@.]$/.test(m) && m.length <= 75;
+    const email = a(firm.email), pemail = a(firm.personEmail);
+    if (!email && !pemail) P("email", "An e-mail of the deductor or of the responsible person is needed.");
+    if (email && !okMail(email)) P("email", "The deductor's e-mail \u201c" + email + "\u201d is not a valid e-mail.");
+    if (pemail && !okMail(pemail)) P("personEmail", "The responsible person's e-mail \u201c" + pemail + "\u201d is not a valid e-mail.");
+    const digits = (v) => String(v == null ? "" : v).replace(/\D/g, "");
+    [["phoneCc", "The deductor's"], ["personPhoneCc", "The responsible person's"]].forEach(([k, who]) => { const v = firm[k]; if (v != null && v !== "" && !/^\d{1,5}$/.test(digits(v))) P(k, who + " country code is up to 5 digits."); });
+    const phone = digits(firm.phone), pphone = digits(firm.personPhone || firm.phone);
+    if (!phone || phone.length > 10) P("phone", "The deductor's contact number is missing or longer than 10 digits (without the country code).");
+    if (!pphone || pphone.length > 10) P("personPhone", "The responsible person's mobile number is missing or longer than 10 digits (without the country code).");
+    if (!a(firm.person)) P("person", "The name of the person responsible is missing.");
+    else if (a(firm.person).length > 75) P("person", "The name of the person responsible is longer than 75 characters.");
+    if (!a(firm.personDesignation)) P("personDesignation", "The responsible person's designation is missing.");
+    else if (a(firm.personDesignation).length > 20) P("personDesignation", "The responsible person's designation is longer than 20 characters.");
+    if (!Certs.validPan(String(firm.personPan || "").toUpperCase())) P("personPan", "The PAN of the person responsible (BH field 59) is missing or not a valid PAN.");
+    [["country", "The deductor's"], ["personCountry", "The responsible person's"]].forEach(([k, who]) => { if (a(firm[k]).length > 25) P(k, who + " country is longer than 25 characters."); });
+    if (govt && /^[SEHN]$/.test(cat) && !this.stateCode(firm.stateName || firm.state)) P("stateName", "A State Government deductor gives its State (Annexure 5).");
+    if (govt && /^[ADG]$/.test(cat) && !/^\d{2}$/.test(a(firm.ministry))) P("ministry", "A Central Government deductor gives its Ministry code (Annexure 3, two digits).");
+    if (govt && a(firm.ministry) === "99" && !a(firm.ministryOther)) P("ministryOther", "Ministry \u201cOthers\u201d (99): give the Ministry's name.");
+    if (firm.ain && !/^\d{7}$/.test(a(firm.ain))) P("ain", "The AIN of the PAO / DTO / CDDO is 7 digits.");
+    const gstin = a(firm.gstin).toUpperCase();
+    if (gstin && !/^\d{2}[A-Z0-9]{13}$/.test(gstin)) P("gstin", "The GSTIN \u201c" + gstin + "\u201d is not 15 characters.");
+    return out;
+  },
+
   // the rows of the return that are on a challan, and the challans: as the old builders choose them (the quarter's own
   // challans and any other that pays this return's deductions)
   rowsOf(fy, q, form){
@@ -319,20 +367,20 @@ const TDSF25 = {
   // the section code of a deduction for the new form: Form 138 by the deductor's category (Annexure 2: 1001 State
   // Government employees, 1002 other than Government employees, 1003 Union Government employees); the others from the one
   // table (PAY_CODES, src/js/16)
-  sectionCode(r, form, cat){
+  sectionCode(r, form, cat, firm){
     if (form === "24Q"){
       if (cat === "A") return {code: "1003", why: ""};
       if (cat === "S") return {code: "1001", why: ""};
       if (/^[KMPTJBQF]$/.test(cat)) return {code: "1002", why: ""};
       return {code: "", why: "salary section code to confirm: a deductor of category " + (cat || "?") + " (" + (this.CATEGORY[cat] || "not known") + ") — 1001, 1002 or 1003"};
     }
-    return TDS26Q.payCodeOf(r, form);
+    return TDS26Q.payCodeOf(r, form, firm);
   },
 
   // the fields of one deductee (collectee) record after the first six, by field number
   ddOf(r, form, fy, q, firm, cat, c, problems, missing, P){
     const who = (r.party || r.employee || "?") + " (" + fmtDate(tallyDate(TDS.ymd(r.date))) + ")";
-    const sc = this.sectionCode(r, form, cat), code = sc.code;
+    const sc = this.sectionCode(r, form, cat, firm), code = sc.code;
     if (!code) missing.add(sc.why || "payment code to confirm: " + who);
     else if (!this.CODES[form].includes(code)) P(who + ": section code " + code + " is not in Annexure 2 of Form " + TDS.formNo(form, fy) + ".");
     const pan = String(r.pan || "").toUpperCase(), valid = Certs.validPan(pan);
@@ -343,12 +391,12 @@ const TDSF25 = {
     if (form === "24Q"){
       const cr = Certs.forRow(Object.assign({}, r, {party: r.party || r.employee, section: "192"}));
       if (cr && TDS.sec(cr.section) === "192"){ remark = "A"; cert = String(cr.certNo || "").toUpperCase().replace(/\s/g, ""); }
-      else if (!valid) remark = "C";
+      // an inoperative PAN (the owner, 17-Oct-2026): the higher rate under 397(2), PAN treated as not furnished: remark C
+      else if (!valid || Certs.inoperative(pan)) remark = "C";
     }
     else { const m = TDS26Q.remark(r, form); remark = m.remark; cert = m.certFull || m.certNo || ""; }
     if (remark === "A" && !/^[A-Z0-9]{10}$|^[A-Z0-9]{15}$/.test(cert)) P(who + ": remark A needs the certificate number, 10 or 15 letters and digits (“" + cert + "”).");
     if (remark === "C" && form === "24Q" && Math.round(tds * 100) < Math.round(paid * 20)) P(who + ": remark C (no PAN) needs tax of at least 20% of the amount paid (Annexure 6).");
-    if (remark === "C" && valid) P(who + ": remark C (higher rate, no PAN) with a PAN that is in the right form (an inoperative PAN?): Form " + TDS.formNo(form, fy) + "'s FVU may not take it; to confirm with the owner.");
     const flags = (this.FLAG_CODES[form] || {})[remark];
     if (remark && code && flags && !flags.includes(code)) P(who + ": remark " + remark + " is not allowed with section code " + code + " (Annexure 6).");
     const nodef = (this.NO_DEFAULT_PAN[form] || []).includes(code);

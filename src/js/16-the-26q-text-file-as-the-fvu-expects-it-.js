@@ -28,7 +28,9 @@ const PAY_CODES = {
     "192A": {code: "1004", note: "accumulated balance of provident fund due to an employee (392(7))"},
     "193": {code: "1019", note: "interest on securities (393(1) Sl. 5(i))"},
     "194": {code: "1029", note: "dividends (393(1) Sl. 7)"},
-    "194A": {unconfirmed: "interest other than on securities: 1020 / 1021 when a bank, co-operative bank or post office pays (senior citizen or not), 1022 when anyone else does"},
+    // the owner, 17-Oct-2026: 1022 for a client that is not a bank, co-operative bank or post office (Client setup → TDS,
+    // isBank, default no); for one that is, 1020 (senior citizen) or 1021 (others), which FinCom does not know: to confirm
+    "194A": {bank: {no: "1022"}, bankWhy: "interest paid by a bank, co-operative bank or post office: 1020 if the deductee is a senior citizen, 1021 if not", note: "interest other than on securities (393(1) Sl. 5(ii), 5(iii))"},
     "194B": {unconfirmed: "winnings: 1058, or 1059 when given in kind (or the cash is not enough) and the tax was paid before release"},
     "194BA": {unconfirmed: "online games: 1060, or 1061 when given in kind (or the cash is not enough)"},
     "194BB": {code: "1062", note: "winnings from horse races (393(3) Sl. 3)"},
@@ -141,13 +143,17 @@ const TDS26Q = {
   // the payment code of the Act of 2025 for a deduction or collection (new forms); "" until the table has it
   payCode(r, form){ return this.payCodeOf(r, form).code; },
   // {code, why}: the code, or "" with why it has none ("payment code to confirm: …")
-  payCodeOf(r, form){
+  payCodeOf(r, form, firm){
     const t = PAY_CODES[form] || {};
     if (form === "27EQ"){ const c = t[r.code || ""]; return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + (r.code ? "collection code " + r.code + " has no confirmed code in Form 143" : "no collection code")}; }
     const sec = TDS.sec(r.section), e = t[sec];
     if (!e) return {code: "", why: "payment code to confirm: " + sec + " has no confirmed code in Form " + TDS.formNo(form, "2026-27")};
     if (e.unconfirmed) return {code: "", why: "payment code to confirm: " + e.unconfirmed};
     if (e.code) return {code: e.code, why: ""};
+    if (e.bank){
+      let f = firm; if (!f) try { f = this.firmDetails(); } catch (x){ f = {}; }
+      return f && f.isBank ? {code: "", why: "payment code to confirm: " + sec + ", " + e.bankWhy} : {code: e.bank.no, why: ""};
+    }
     if (e.byPan){
       const p = String(r.pan || "").toUpperCase(), k = Certs.validPan(p) ? p[3] : "";
       if (!k) return {code: "", why: "payment code to confirm: " + sec + " to " + (r.party || "?") + ", no valid PAN to tell an individual or HUF (" + Object.values(e.byPan)[0] + ") from others (" + e.other + ")"};
@@ -159,7 +165,8 @@ const TDS26Q = {
   // the deductions of a new-form return (FY 2026-27 on) with no confirmed payment code: [{row, why}] (To fix)
   payCodeRows(fy, q, form){
     if (!TDS.isNew(fy) || !TDS_FORMS[form]) return [];
-    return TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q).map(r => ({row: r, why: this.payCodeOf(r, form).why})).filter(x => x.why);
+    const firm = this.firmDetails();
+    return TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q).map(r => ({row: r, why: this.payCodeOf(r, form, firm).why})).filter(x => x.why);
   },
   // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
   code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
@@ -205,7 +212,8 @@ const TDS26Q = {
   },
   firmDetails(){
     const co = CO(), f = (co.tds26q || {});
-    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name}, f);
+    // Client setup → TDS (the deductor's details, co.tds26q); the GSTIN the client's own unless given there
+    return Object.assign({tan: co.tan || "", pan: co.pan || "", name: co.tallyName || co.name, gstin: co.gstin || ""}, f, f.gstin ? {} : {gstin: co.gstin || ""});
   }
 };
 

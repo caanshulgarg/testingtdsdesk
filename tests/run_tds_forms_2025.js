@@ -108,13 +108,13 @@ function against(form, text, label){
 // the same statement as a State Government's, its challans by book adjustment (CD field 13 "B"), kept as V<form>.txt: a
 // book adjustment needs no challan file (.csi), so Protean's FVU 1.2 checks every deductee record of it; without the .csi
 // (which only TIN / the e-filing portal give) FVU 1.2 stops at the challans of a "C" file (T-FV-1041)
-function fvuCopy(form){
+function fvuCopy(form, name){
   const keep = JSON.stringify(ctx.S.books.challans);
   // a transfer voucher is dated the last day of its month and numbered by its Form 24G receipt (FVU 1.2, T_FV_3157, T-FV-3149)
   const monthEnd = (d) => { const y = +d.slice(0, 4), m = +d.slice(4, 6); return d.slice(0, 6) + String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0"); };
   ctx.S.books.challans.forEach((c, i) => { c.mode = "B"; c.minorHead = ""; c.date = monthEnd(c.date); c.bsr = ["2000090", "3000012", "4000013"][i % 3]; });
   const r = build("2026-27", "Q1", Object.assign({}, FIRM, {deductorType: "S", stateName: "Delhi", ain: "1091650"}), form);
-  fs.writeFileSync(path.join(KEEP, "V" + FORMNO[form] + ".txt"), r.text || "");
+  fs.writeFileSync(path.join(KEEP, (name || "V") + FORMNO[form] + ".txt"), r.text || "");
   ctx.S.books.challans = JSON.parse(keep);
 }
 const field = (line, n) => (line || [])[n - 1];
@@ -227,7 +227,14 @@ fieldsAre(of(f.text, "DD")[0], {4: "1", 8: "ABCPR1234R", 9: "Asha Rao", 15: "100
   "V. 138 DD: an employee of a firm is 1002 (not “92B”); the date of deposit is the challan's");
 fieldsAre(of(f.text, "DD")[1], {4: "2", 8: "PANNOTAVBL", 15: "1002", 24: "4000.00", 32: "C"}, "V. 138 DD: no PAN, 20%: PANNOTAVBL and remark C");
 f = build("2026-27", "Q4", FIRM, "24Q");
-ok(f.error && /Q1 to Q3/.test(f.error || ""), "V. 138 Q4: not made, the file format the owner has is for Q1 to Q3 (" + f.error + ")");
+// the owner's answer of 17-Oct-2026 (2): Q4 refused, in his words
+ok(f.error === "Protean has not yet released the Q4 layout for Form 138", "A2. 138 Q4: not made: \u201cProtean has not yet released the Q4 layout for Form 138\u201d (" + f.error + ")");
+// (5) an inoperative PAN (right form, not linked): remark C, the higher rate, the PAN as it is, nothing to confirm
+b.panInoperative = {"ABCPR1234R": "2026-10-01"};
+f = build("2026-27", "Q1", FIRM, "24Q");
+fieldsAre(of(f.text, "DD")[0], {8: "ABCPR1234R", 32: "C"}, "A5. 138: an inoperative PAN: remark C, the PAN kept");
+fvuCopy("24Q", "I");
+b.panInoperative = {};
 
 // ---------------- G: the owner's samples (Protean RPU 1.0, 06-05-2026)
 const SAMPLE = process.env.TDSDESK_FORMS_SAMPLES || path.join(__dirname, "fixtures", "tds-forms-2025", "owner-samples-17oct.txt");
@@ -310,6 +317,40 @@ golden(2, "27Q", "Form 144 (NS1)", () => {
   if (x.PAY_CODES){ x.PAY_CODES["27Q"] = x.PAY_CODES["27Q"] || {}; x.PAY_CODES["27Q"]["194LC"] = {code: "1042"}; }
 });
 if (x.PAY_CODES && x.PAY_CODES["27Q"]) delete x.PAY_CODES["27Q"]["194LC"];
+
+// ---------------- A: the owner's answers of 17-Oct-2026
+// (4) 194A interest: 1022 for a client that is not a bank, co-operative bank or post office (the default); for one that
+// is (Client setup, TDS: isBank), 1020 / 1021 by whether the deductee is a senior citizen, which FinCom does not hold: to confirm
+b = books([V("a1", "20260510", "Beta", 100000, 10000, "TDS 194A", "Interest Paid")]);
+b.map["TDS 194A"] = {kind: "tds_payable", section: "194A"};
+b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 10000}]; b.alloc = {"a1|TDS 194A": "c1"};
+f = build("2026-27", "Q1", FIRM, "26Q");
+ok(field(of(f.text, "DD")[0], 15) === "1022" && (f.missingCodes || []).length === 0, "A4. 194A paid by a client that is not a bank: 1022 (" + field(of(f.text, "DD")[0], 15) + J(f.missingCodes) + ")");
+f = build("2026-27", "Q1", Object.assign({}, FIRM, {isBank: true}), "26Q");
+ok(field(of(f.text, "DD")[0], 15) === "" && (f.missingCodes || []).some(m => /194A/.test(m) && /1020/.test(m) && /1021/.test(m)), "A4. paid by a bank, co-operative bank or post office: 1020 or 1021, to confirm (" + J(f.missingCodes) + ")");
+ok(typeof x.TDS26Q.payCodeRows === "function", "A4. To fix lists them");
+// (5) inoperative PAN in Form 140: remark C, no question left in the file's problems
+b = books([V("p1", "20260510", "Beta", 100000, 20000, "TDS 194J", "Professional Fees")], {panInoperative: {"ABCPB1234B": "2026-10-01"}});
+b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 20000}]; b.alloc = {"p1|TDS 194J": "c1"};
+f = build("2026-27", "Q1", FIRM, "26Q");
+ok(field(of(f.text, "DD")[0], 8) === "ABCPB1234B" && field(of(f.text, "DD")[0], 32) === "C" && !(f.problems || []).some(p => /inoperative/i.test(p)), "A5. 140: an inoperative PAN: remark C, the PAN kept, nothing to confirm (" + J(f.problems) + ")");
+fvuCopy("26Q", "I");
+// (6) the deductor's details from Client setup → TDS (co.tds26q), checked as the workbook says, field by field
+const D = x.TDSF25 && x.TDSF25.deductorProblems ? (o) => x.TDSF25.deductorProblems(o) : null;
+ok(typeof D === "function", "A6. the deductor's details are checked by one function the screen and the files share (TDSF25.deductorProblems)");
+if (typeof D === "function"){
+  const keys = (o) => D(o).map(p => p.k);
+  ok(D(FIRM).length === 0, "A6. complete details: nothing to fix (" + J(D(FIRM)) + ")");
+  const bad = keys(Object.assign({}, FIRM, {pin: "1100", email: "accounts", personPan: "", person: "", state: "", personPhone: "98765432101", deductorType: "Z"}));
+  ok(["pin", "email", "personPan", "person", "state", "personPhone", "deductorType"].every(k => bad.includes(k)), "A6. each wrong or missing field named by its key (" + J(bad) + ")");
+  const gov = keys(Object.assign({}, FIRM, {deductorType: "A"}));
+  ok(gov.includes("ministry") && !keys(FIRM).includes("ministry"), "A6. the Ministry only for a Central Government category (" + J(gov) + ")");
+  ok(x.TDSF25.categoryOf("AAAFF1234F") === "F" && x.TDSF25.categoryOf("AAACA1234A") === "K" && x.TDSF25.categoryOf("ABCPK1234K") === "Q" && x.TDSF25.categoryOf("") === "", "A6. the category from the PAN's 4th letter, as the default shown");
+}
+ctx.S.companies.t = {id: "t", name: "Co", tan: "BLRF02329F", pan: "AAAFF1234F", gstin: "07AAAFF1234F1Z5", tds26q: {person: "Ravi Kumar", state: "09", isBank: false}};
+const fd = x.TDS26Q.firmDetails();
+ok(fd.tan === "BLRF02329F" && fd.person === "Ravi Kumar" && fd.state === "09" && fd.gstin === "07AAAFF1234F1Z5", "A6. the files read the details from Client setup (GSTIN from the client's own when not given) (" + J(fd) + ")");
+ctx.S.companies.t = {id: "t", name: "Co"};
 
 // ---------------- O: up to 2025-26, the old files as before
 b = books([V("o1", "20250510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contract Charges")]);
