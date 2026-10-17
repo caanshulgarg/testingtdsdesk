@@ -37,8 +37,10 @@ function Act({ r, free }) {
   const tagSel = (id, tags) => <select aria-label="Action" data-reco-act="" value={r.tag || ""} onChange={(ev) => r2Tag(id, ev.target.value)} style={{ maxWidth: 112 }}>{tags.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
   if (r.status === "probable") {
     const ids = r.books ? r.books.ids : [];
-    return <span className="rc-acts"><button className="btn small primary" data-reco-accept="" onClick={() => (r.merged ? r2Link(r.twoB.key, ids[0]) : r2Confirm(r.key))}>Accept</button>
-      <button className="btn small" data-reco-reject="" onClick={() => r2Unlink(r.twoB.key, ids)}>Reject</button></span>;
+    // a pair the automatic matching suggested: the person's answer is kept with that run too (M2B.decide, src/js/85)
+    const told = (d) => { if (r.auto && r.auto.id && window.GSTAutoMatch && window.GSTAutoMatch.decide) window.GSTAutoMatch.decide(r2Reg(S.books), r.auto.id, d); };
+    return <span className="rc-acts"><button className="btn small primary" data-reco-accept="" onClick={() => { told("accept"); if (r.merged) r2Link(r.twoB.key, ids[0]); else r2Confirm(r.key); }}>Accept</button>
+      <button className="btn small" data-reco-reject="" onClick={() => { told("reject"); r2Unlink(r.twoB.key, ids); }}>Reject</button></span>;
   }
   if (r.status === "books") return <span className="rc-acts">{tagSel(r.books.ids[0], TAGS_BOOKS)}{r.gstin && <button className="linkbtn" data-reco-copy="" title="Copy a note to the supplier listing the invoices not in 2B" onClick={() => r2Copy(r.gstin)}>Note to supplier</button>}</span>;
   if (r.status === "2b") {

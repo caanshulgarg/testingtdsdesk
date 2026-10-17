@@ -114,6 +114,11 @@ try:
     # Fetch now: 2B, GSTR-1 (the version that answers), 3B; a month not filed is "none"
     r = call({"action": "fetch", "gstin": G, "form": "2B", "period": per(1)})
     ok(r.get("ok") and ret("2B", per(1))["status"] == "ok" and ret("2B", per(1))["data"]["docdata"]["b2b"][0]["ctin"] == "09AAACB1234C1Z5", "2B fetched and kept on the server")
+    # round 72b: a 2B fetched queues the 2B matching by itself (gst2b_enqueue, migration-95; server/gst-taxpro/automatch.ts)
+    for i in range(20):
+        if F.ARGS.get("gst2b_enqueue"): break
+        time.sleep(0.1)
+    ok([a.get("p_period") for a in F.ARGS.get("gst2b_enqueue", [])] == [per(1)] and F.ARGS["gst2b_enqueue"][0].get("p_why") == "fetched", "a 2B fetched queues the 2B matching for its period (gst2b_enqueue)")
     r = call({"action": "fetch", "gstin": G, "form": "R1", "period": per(1)})
     d = (ret("R1", per(1)) or {}).get("data") or {}
     ok(r.get("ok") and d.get("b2b", [{}])[0].get("ctin") == "07AAACB1234C1Z5" and d.get("summary", {}).get("sec_sum") and "partial" not in d, "filed GSTR-1: summary and B2B, as the portal's JSON; empty tables are not failures")

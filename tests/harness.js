@@ -12,6 +12,9 @@ function load(htmlPath, names){
   // the ledger-name helpers every report uses to find a ledger's group (00-core.js): always loaded, so a test's list of
   // names need not know them
   names = CORE.filter(n => !names.includes(n) && decl.some(d => d.name === n)).concat(names);
+  // the 2B matching rules shared with the server (server/_shared/match2b.js, at the head of the app): always loaded too,
+  // since GST2B.fromJson reads a 2B through them
+  names = decl.filter(d => /^(m2b|M2B_)/.test(d.name) && !names.includes(d.name)).map(d => d.name).concat(names);
   const parts = names.map(n => {
     const k = decl.findIndex(d => d.name === n);
     if (k < 0) throw new Error("not found: " + n);

@@ -11,6 +11,7 @@ import { Only2bNote } from "./InputRegister.jsx";
 import ListTable from "../../parts/ListTable.jsx";
 import Reco2b from "./Reco2b.jsx";
 import TwoBPortal from "./TwoBPortal.jsx";
+import TwoBAuto from "./TwoBAuto.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -222,6 +223,7 @@ export default function TwoB({ b }) {
   }
   return <>
     {apiCard && <GstApiCard />}
+    <TwoBAuto reg={reg} />
     <section className="dash-card">
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn small primary" onClick={() => doAct("twoBPick")}>Bring in 2B JSON</button>

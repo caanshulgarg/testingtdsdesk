@@ -440,3 +440,13 @@ runs after 74 (staging ... -> 72 -> 73 -> 74 -> 75; a fresh database the same). 
 `migration-75b-zoho-cron-staging.sql` (staging only: the pg_cron job `zoho-books-sync`, every 5 minutes, posting only when an
 organisation is due; live needs its own URL). Deploy order: 75, then the zoho-books function, then 75b. Tested on pg_stand:
 `tests/run_migration75.py`, `tests/run_zoho_server.py`.
+
+2B matched by itself (17-Oct-2026, round 72b, branch next-2b-automatch; NOT run on staging): `server/gst-2b-match/migration-95-gst-2b-match.sql`
+runs after 94 (staging ... -> 93 -> 94 -> 95; a fresh database the same; it also needs 77's asst_cap_take / asst_cost_add /
+asst_log_add / assistant_settings and gst-taxpro's schema.sql gst_cron_ok, called by the function). Add-only, one transaction,
+`lock_timeout` 10 s, nothing dropped or changed, safe twice: three new tables (gst_2b_inputs, gst_2b_runs, gst_2b_decisions; members
+read their firm's rows, only the service role writes) and two new functions (gst2b_enqueue, gst2b_take; service role only). Then
+`migration-95b-gst-2b-match-cron-staging.sql` (staging only: the pg_cron job `gst-2b-match-queue`, every 15 minutes, only when a run
+waits). Deploy order: 95, then the gst-2b-match function (verify_jwt off), then gst-taxpro (it queues a run after each 2B it fetches;
+without 95 the queueing fails quietly and the fetch is unchanged), then 95b. Tested on pg_stand: `tests/run_migration95.py`; the
+function and the trigger: `tests/run_2b_automatch_server.py`.

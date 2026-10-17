@@ -22,7 +22,8 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 | fincom-assistant | server/assistant | a one-line index.ts importing server/assistant/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./agent.ts, ./tools.ts, ./tools/*, ./checks.ts, ./files.ts, ./mask.ts, ./models.ts, ./router.ts, ./citations.ts, ./notices.ts, ../_shared/cors.ts, ../_shared/sentry.ts, ../_shared/sentry-scrub.js); verify_jwt off (it checks the user's token itself) | the list |
 | tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js, ../_shared/sentry.ts, ../_shared/sentry-scrub.js | `*` |
 | gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
-| gst-taxpro | server/gst-taxpro | index.ts, ../_shared/cors.ts | `*` |
+| gst-taxpro | server/gst-taxpro | index.ts, filing.ts, automatch.ts, ../_shared/cors.ts | `*` |
+| gst-2b-match | server/gst-2b-match | index.ts, handler.ts, match.ts, ../_shared/cors.ts, ../_shared/match2b.js, ../assistant/models.ts, ../assistant/router.ts (models.ts imports it); verify_jwt off (it checks the user's token, the service key or the cron key itself) | the list |
 | support-mail | server/support-mail | index.ts, ../_shared/cors.ts | `*` |
 
 The `*` functions take only the header list from here: each call carries a sign-in token or a device key (no cookies),
@@ -67,3 +68,12 @@ the app, where `ledClean` / `ledKey` / `ledNm` / `ledEnt` (src/js/00-core.js) an
 only when `SUPABASE_URL` is the staging project and the secret `FINCOM_SENTRY` is not `off`). Plain JavaScript with no
 imports. What may be sent, and how to turn it off: docs/sentry.md. Tests: `node tests/run_sentry_scrub.mjs`,
 `node tests/run_sentry_cloud.mjs`.
+
+## match2b.js: one set of rules for matching 2B against the books
+
+`match2b.js` is the 2B matching of round 72b: the invoice number written the same way (`m2bNormNo`), the rules
+(`m2bRules`: same GSTIN, number, dates within 3 days, amounts within Rs 1.00), what goes to Claude for the left-overs and
+how its answer is checked and decided (`m2bAiInput`, `m2bAiParse`, `m2bAiApply`), the line shown, and the reading of a 2B
+JSON (`m2bFrom2bJson`, which `GST2B.fromJson` calls). Plain JavaScript with no imports. The gst-2b-match function imports it;
+`build.py` puts it, without its export line, at the head of the app after names.js (`SHARED_JS`).
+`node tests/run_2b_automatch.js` checks the app and the module give the same answers.

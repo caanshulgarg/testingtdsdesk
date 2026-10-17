@@ -16,33 +16,9 @@ const GST2B = {
   ymOfPeriod(p){ p = String(p || ""); return p.length === 6 ? p.slice(2) + p.slice(0, 2) : ""; },
   RSN: {P: "place of supply rule: supplier and recipient in the same state, different place of supply", C: "filed after the time limit in section 16(4)"},
   IMS: {N: "no action", A: "accepted", R: "rejected", P: "pending"},
-  // the portal's JSON: one row per document, every section 2B carries
-  fromJson(j){
-    const d = (j && j.data) || j || {}, dd = d.docdata || {}, period = d.rtnprd || "", ym = this.ymOfPeriod(period);
-    const rows = [];
-    const add = (sec, sup, x, extra) => {
-      const no = x.inum || x.ntnum || x.nt_num || x.docnum || x.boenum || "";
-      rows.push(Object.assign({sec, period, ym, gstin: String(sup.ctin || "").toUpperCase(), party: sup.trdnm || "", filedOn: sup.supfildt || "", supPrd: sup.supprd || "",
-        no: String(no), noN: this.normNo(no), date: this.dmy(x.dt || x.docdt || x.boedt || x.nt_dt), val: num(x.val), taxable: num(x.txval),
-        igst: num(x.igst), cgst: num(x.cgst), sgst: num(x.sgst), cess: num(x.cess), pos: x.pos || "", rcm: x.rev === "Y", itcavl: x.itcavl || x.itcelg || "Y",
-        rsn: x.rsn || "", typ: x.typ || "", ims: x.imsStatus || "", irn: x.irn || "", dir: 1}, extra || {}));
-    };
-    (dd.b2b || []).forEach(s => (s.inv || []).forEach(x => add("b2b", s, x)));
-    (dd.b2ba || []).forEach(s => (s.inv || []).forEach(x => add("b2ba", s, x, {oNo: x.oinum || "", oDate: this.dmy(x.oidt)})));
-    (dd.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnr", s, x, {dir: x.typ === "D" ? 1 : -1})));
-    (dd.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {dir: x.typ === "D" ? 1 : -1, oNo: x.ontnum || x.ont_num || "", oDate: this.dmy(x.ontdt || x.ont_dt)})));
-    (dd.isd || []).forEach(s => (s.doclist || []).forEach(x => add("isd", s, x, {dir: x.doctyp === "C" ? -1 : 1})));
-    (dd.impg || []).forEach(x => add("impg", {ctin: "", trdnm: "Import of goods (" + (x.portcode || "") + ")"}, x));
-    // documents rejected in IMS: 2B keeps them apart (docRejdata); they give no credit, and a rejected credit note does not reduce it
-    const rj = d.docRejdata || {};
-    (rj.b2b || []).forEach(s => (s.inv || []).forEach(x => add("b2b", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || ""})));
-    (rj.b2ba || []).forEach(s => (s.inv || []).forEach(x => add("b2ba", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", oNo: x.oinum || "", oDate: this.dmy(x.oidt)})));
-    (rj.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnr", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
-    (rj.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
-    (dd.impgsez || []).forEach(s => (s.boe || []).forEach(x => add("impgsez", s, x)));
-    rows.forEach((r, i) => { r.key = period + "|" + r.sec + "|" + r.gstin + "|" + r.noN + "|" + r.date + "|" + i; });
-    return {rows, period, ym, gstin: String(d.gstin || "").toUpperCase(), generated: d.gendt || "", summary: d.itcsumm || null};
-  },
+  // the portal's JSON: one row per document, every section 2B carries. The reading is server/_shared/match2b.js
+  // (m2bFrom2bJson), so the gst-2b-match function reads a 2B fetched on the server row for row as the app does
+  fromJson(j){ return m2bFrom2bJson(j); },
   // every document in Tally that carries input tax: purchases, and expenses booked in journals or payments
   bookDocs(){
     const b = S.books;

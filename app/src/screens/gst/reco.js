@@ -70,7 +70,7 @@ export function applyAuto(rows, auto) {
     if (!a || !AUTO[a.status]) return;
     const i = out.findIndex((r) => r.twoB && r.twoB.key === a.key2b);
     if (i < 0) return;
-    const r = out[i], info = { status: a.status, reason: String(a.reason || ""), confidence: a.confidence == null ? null : N(a.confidence) };
+    const r = out[i], info = { status: a.status, reason: String(a.reason || ""), confidence: a.confidence == null ? null : N(a.confidence), id: a.id || "" };
     if (r.status !== "2b") { out[i] = Object.assign({}, r, { auto: info, status: a.status === "probable" && r.status === "matched" ? r.status : a.status === "probable" ? "probable" : r.status }); return; }
     const ids = new Set(a.books || []), bk = out.filter((x) => x.status === "books" && x.books && x.books.ids.some((id) => ids.has(id)));
     if (!bk.length) { out[i] = Object.assign({}, r, { auto: info }); return; }

@@ -67,6 +67,7 @@ const GSTAPI = {
     if (!t.gstin || !t.ym) throw new Error("The 2B for " + GSTR.label(ym) + " came back without its GSTIN or period.");
     const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: new Date().toISOString()});
     delete b.twoB; GST2B._memo = null; GSTR._carry = null;
+    if (typeof M2B === "object") M2B.next = "fetched";          // matched by itself (src/js/85; the server ran it too)
     return t;
   }
 };
@@ -90,6 +91,7 @@ Object.assign(GSTAPI, {
       if (!t.gstin || !t.ym) return;
       b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: at});
       delete b.twoB; GST2B._memo = null; GSTR._carry = null;
+      if (typeof M2B === "object") M2B.next = "fetched";
     } else if (r.form === "R1"){
       GSTAmend.keep(Object.assign({}, r.data, {gstin: r.gstin, fp: r.period}), "portal", {via: "api", fetchedAt: at});
     } else if (r.form === "TRACK"){
