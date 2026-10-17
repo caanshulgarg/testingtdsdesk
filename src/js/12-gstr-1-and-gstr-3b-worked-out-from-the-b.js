@@ -202,14 +202,9 @@ const GSTR = {
     rows.filter(r => r.no && !r.eco).forEach(r => inSeries(r.no, natOf(r), false));
     ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.inP(v.date, ym)) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
       .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
+    // the operator sales (table 14: eco14 below, the R1 portal screen); the old card's per-operator summary is gone (17-Oct-2026)
     const eco = rows.filter(r => r.eco);
-    const ecoBy = {};
-    eco.forEach(r => {
-      const k = r.eco, e = ecoBy[k] = ecoBy[k] || {eco: k, n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, tcs: 0};
-      e.n++; e.taxable = r2(e.taxable + r.taxable); e.igst = r2(e.igst + r.igst); e.cgst = r2(e.cgst + r.cgst);
-      e.sgst = r2(e.sgst + r.sgst); e.cess = r2(e.cess + r.cess); e.tcs = r2(e.tcs + num(r.tcs));
-    });
-    return {rows, eco, ecoBy: Object.values(ecoBy), b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
+    return {rows, eco, b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
       exp: part("EXP"), nil: part("NIL"), rcm: rows.filter(r => r.rcm),
       b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
       series: Object.values(series), total: this.sum(rows)};

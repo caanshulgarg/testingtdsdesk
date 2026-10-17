@@ -18,6 +18,7 @@ the same books a year on, as tdsgst_snapshot.py loads them) with a 2B made for t
      and the automatic matcher's hook (statuses "matched-rules", "matched-ai", "probable") without moving an amount;
   6. GSTR-1 table 14 (17-Oct-2026): sales through an e-commerce operator, by the operator's GSTIN, 14(a) where it collects
      TCS, 14(b) empty with a note; the JSON's supeco is the screen's, its total the operator sales', and no other table moves;
+     the old "Supplies through an e-commerce operator (14)" card is gone (the owner, 17-Oct-2026: table 14 is the one place);
   5. the page pattern: one tab row, filters in the headings, footer totals, 100-row paging; at 390 px no sideways page
      scroll; screenshots of each screen, desktop and phone, in tests/out/gst-portal/.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
@@ -374,6 +375,14 @@ try:
         ok(scr and js and scr["n"] == js["n"] == 2 and all(abs(scr[k] - js[k]) < 0.005 for k in ("taxable", "igst", "cgst", "sgst", "cess")), "14(a) on the screen is the JSON's (%s / %s)" % (scr, js))
         foot = E("() => Number(document.querySelector('[data-r1p-foot=eco14a] [data-r1p-sum=taxable]').innerText.replace(/[₹,]/g, ''))")
         ok(foot == 13000, "14(a)'s footer: 13,000 (%s)" % foot)
+        # the owner, 17-Oct-2026: table 14 above is the one place; the old "Supplies through an e-commerce operator (14)" card is gone
+        old = {}
+        for v in ("", "customer", "bill"):
+            gst(pg, "202603", "r1", "details", "S.r1View = '%s';" % v); W(200)
+            old[v or "portal"] = pg.locator("text=Supplies through an e-commerce operator").count()
+        gst(pg, "202603", "r1", "details", "S.r1View = '';")
+        ok(not any(old.values()) and E("() => { const g = GSTR.one('202603', '07'); return !('ecoBy' in g) && g.eco.length === 4; }"),
+           "the old e-commerce operator card is gone from every view (portal, by customer, by bill) and its summary (ecoBy) with it; the operator sales stay (%s)" % old)
         gst(pg, "202603", "r1", "summary")
         s14 = E("() => { const tr = document.querySelector('[data-r1-summary] tr[data-r1-table=\"14\"]'); return tr ? [...tr.children].map(c => c.innerText.trim()) : []; }")
         grand = E("() => Number(document.querySelector('[data-r1-grand] td:nth-child(3)').innerText.replace(/[₹,]/g, ''))")

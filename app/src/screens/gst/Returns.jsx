@@ -72,7 +72,7 @@ export function Gstr1({ b, sub }) {
   const amend = S.gstReg && GSTAmend.filed(S.gstReg).length ? GSTAmend.pending(S.gstYm || "", S.gstReg).rows.filter((r) => r.act !== "skip") : [];
   const adv = GSTAdv.ready() ? GSTAdv.month(S.gstYm || "", S.gstReg || "") : null;
   const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
-  const ECO = { amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify" }, NAT = { 1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes" };
+  const NAT = { 1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes" };
   return <>
     {/* t70 (the owner: "check the schema of GSTN, make it user friendly to see"): the portal's summary, a row per GSTR-1
         table, each opening its documents; the books' own total under it (every document of the month, as the boxes had) */}
@@ -90,13 +90,7 @@ export function Gstr1({ b, sub }) {
       <tbody>{g.hsn.map((x, i) => <tr key={i}><td>{x.hsn ? x.hsn : <span className="tag warn">no HSN</span>}</td><td>{x.supply || ""}</td><td className="n">{x.rate}%</td><td className="n">{x.n}</td>
         <td className="n">{money(x.taxable)}</td><td className="n">{money(x.igst)}</td><td className="n">{money(x.cgst)}</td><td className="n">{money(x.sgst)}</td></tr>)}</tbody>
     </table></div></section>}
-    {g.ecoBy && g.ecoBy.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Supplies through an e-commerce operator (14)</h3>
-      <div className="bk-tablewrap"><table className="bk-table" data-statement="">
-        <thead><tr><th>Operator</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">TCS collected</th></tr></thead>
-        <tbody>{g.ecoBy.map((e) => <tr key={e.eco}><td>{ECO[e.eco] || e.eco}</td><td className="n">{e.n}</td><td className="n">{money(e.taxable)}</td><td className="n">{money(e.igst)}</td>
-          <td className="n">{money(e.cgst)}</td><td className="n">{money(e.sgst)}</td><td className="n">{money(e.tcs)}</td></tr>)}</tbody>
-      </table></div>
-      <p className="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>}
+    {/* the owner, 17-Oct-2026: supplies through an e-commerce operator are in GSTR-1 table 14 (R1Portal, portal.js) only */}
     {(S.r1View === "customer" || S.r1View === "bill") && <section className="dash-card" style={{ marginTop: 12 }}><h3>13 Documents issued</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th className="n">Total</th><th className="n">Cancelled</th><th className="n">Net issued</th></tr></thead>
       <tbody>{g.series.slice().sort((a, c) => a.nat - c.nat).map((x, i) => <tr key={i}><td>{NAT[x.nat]}</td><td>{x.pre || "—"}</td><td>{x.from}</td><td>{x.to}</td>
