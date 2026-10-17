@@ -2,7 +2,7 @@
 // 14-Oct-2026: one Upload in the Assistant, anything can be uploaded). Haiku 5.5 reads the file (a PDF or a picture as
 // the user gave it, or the text FinCom took out of a sheet or a Word file, masked) and names its kind and gives one line;
 // it does nothing else. The cost goes against the firm's cap like any AI call.
-import { costUsd, HAIKU, Usage } from "./models.ts";
+import { capWords, costUsd, HAIKU, Usage } from "./models.ts";
 import { Masker } from "./mask.ts";
 
 export const KINDS = ["notice", "bill", "register", "bank", "as26", "certificate", "other"] as const;
@@ -17,10 +17,10 @@ export const KIND_TOOL = { name: "record_kind", description: "Record what the fi
 
 type Client = { beta: { messages: { stream: (p: Record<string, unknown>) => { [Symbol.asyncIterator](): AsyncIterator<any>, finalMessage(): Promise<any> } } } };
 export async function classifyUpload(o: { client: Client, attachments: Record<string, unknown>[], name: string, excerpt: string,
-  capTake: () => Promise<{ ok: boolean, cap_inr?: number }>, costAdd?: (feature: string, usd: number, u: Usage) => Promise<unknown> }):
+  capTake: () => Promise<{ ok: boolean, cap_inr?: number, cap?: number, why?: string }>, costAdd?: (feature: string, usd: number, u: Usage) => Promise<unknown> }):
   Promise<{ ok: true, kind: Kind, summary: string, usage: Usage } | { ok: false, error: string, kind?: string }> {
   const cap = await o.capTake();
-  if (!cap.ok) return { ok: false, kind: "cap", error: "Your firm has used today's ₹" + Math.round(cap.cap_inr || 0) + " for AI answers; the file is kept, and FinCom could not tell what it is by its own rules." };
+  if (!cap.ok) return { ok: false, kind: "cap", error: capWords(cap.why, cap.cap_inr || 0, cap.cap || 0) + " The file is kept, and FinCom could not tell what it is by its own rules." };
   const mk = new Masker("");
   const text = "[The file: " + mk.text(o.name).slice(0, 200) + "]\n" + (o.excerpt ? "[What FinCom took out of it, masked]\n" + mk.text(o.excerpt).slice(0, 12000) : "");
   const stream = o.client.beta.messages.stream({ model: HAIKU, max_tokens: 600, output_config: { effort: "low" }, thinking: { type: "adaptive" },

@@ -6,7 +6,7 @@ before the sign-in had finished (no firm yet, so no answer) it stayed on "Loadin
 the switch stayed greyed out. Now an unanswered or failed read is asked again, and only a member who is not the owner
 sees the switch greyed (with the reason). Also the owner's decision of 14-Oct-2026: the assistant is ON for every firm
 unless the owner switches it off; no consent tick; the notice "Questions may be processed by an AI provider; identifiers
-are masked" on first use; the daily cap stays.
+are masked" on first use; the cost cap stays (a month's since 17-Oct-2026: Rs 3,000 a calendar month, migration 96).
 The firm account is stood in (Cloud.rpc answers as the database does); no network. Run on app/dist-test, under the lock:
 flock /tmp/fincom-app.lock python3 tests/run_assistant_settings_ui.py"""
 import os, sys, threading, functools, http.server
@@ -39,7 +39,7 @@ SIGN_IN = """([role, late, fail, stored]) => {
       return {enabled: window.__stored === null ? true : window.__stored, owner: role === "owner", set_at: null, default_on: window.__stored === null, consent: true};
     }
     if (fn === "asst_set_settings") { if (role !== "owner") throw new Error("only the firm's owner switches the assistant"); window.__stored = !!a.p_enabled; return {enabled: !!a.p_enabled, owner: true, default_on: false, consent: true}; }
-    if (fn === "asst_usage") return {owner: role === "owner", today: 0, cap: 500, cap_inr: 150, rate: 85, spent_inr: 0, warn: false, over: false, days: [], months: [], features: [], questions: [], fell_through: []};
+    if (fn === "asst_usage") return {owner: role === "owner", today: 0, cap: 500, cap_inr: 3000, rate: 85, spent_inr: 0, warn: false, over: false, period: "month", month: "2026-10", today_inr: 0, days: [], months: [], features: [], questions: [], fell_through: []};
     if (fn === "asst_mismatches") return {counts: {new: 0, cause_found: 0, fix_waiting: 0, fixed: 0, all: 0}, rows: []};
     return {};
   };
@@ -84,7 +84,13 @@ with sync_playwright() as p:
         ok(box.count() and box.is_checked() and box.is_enabled(), name + ": on by default (the owner's decision of 14-Oct-2026), and the owner can change it")
         ok(pg.locator("[data-asst-switch] input[type=checkbox]").count() == 1 and "consent" not in pg.inner_text("[data-asst-switch]").lower().split("decided")[0], name + ": no consent tick to block it")
         ok("14-Oct-2026" in pg.inner_text("[data-asst-settings]"), name + ": the page says the owner decided it on 14-Oct-2026")
-        ok("₹150.00" in pg.inner_text("[data-asst-settings]"), name + ": the daily cap of ₹150 is on")
+        sp = pg.inner_text("[data-asst-spend]") if pg.locator("[data-asst-spend]").count() else ""
+        ok("This month" in sp and "₹3,000.00" in sp and "Today" not in sp, name + ": the monthly cap of ₹3,000 is on (%s)" % sp[:80])
+        lab = pg.inner_text("[data-asst-settings] .asst-cap") if pg.locator("[data-asst-settings] .asst-cap").count() else ""
+        mx = pg.get_attribute("[data-asst-settings] .asst-cap input", "max") if lab else ""
+        ok("Monthly limit" in lab and "Daily" not in lab and mx == "10000000", name + ": the owner sets the monthly limit in Settings, up to 1 crore (%s; max %s)" % (lab.strip()[:40], mx))
+        pg.fill("[data-asst-settings] .asst-cap input >> nth=0", "4500"); pg.click("[data-asst-settings] .asst-cap button"); pg.wait_for_timeout(500)
+        ok(pg.evaluate("window.__rpc.some(x => x[0] === 'asst_set_cap' && Number(x[1].p_inr) === 4500)"), name + ": Set sends the monthly limit")
         pg.screenshot(path=os.path.join(OUT, name + "-owner.png"), full_page=True)
         box.click(); pg.wait_for_timeout(700)
         ok(not box.is_checked() and pg.evaluate("window.__rpc.some(x => x[0] === 'asst_set_settings' && x[1].p_enabled === false)"), name + ": the owner switches it off with one click")

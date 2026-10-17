@@ -1,4 +1,4 @@
-// FinCom Assistant in Settings › AI help: the firm's switch, today's use against the daily cap, the questions asked and
+// FinCom Assistant in Settings › AI help: the firm's switch, this month's use against the monthly cap, the questions asked and
 // the mismatches. Its own file, imported only by the Settings screen (a file fetched when Settings opens), so the app's
 // first file stays within its budget (tests/run_stability.py). The panel and the launcher are in Assistant.jsx.
 import { useState } from "react";
@@ -7,7 +7,8 @@ import Button from "./Button.jsx";
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const dmy = (v) => ASST.dmy(v);
 
-// Settings › Assistant (the firm's owner): today's use and the daily limit, the last 30 days, the questions asked, and the
+// Settings › Assistant (the firm's owner): this month's use and the monthly limit (₹3,000 a calendar month by India's date
+// unless the owner sets another; migration 96, the owner's decision of 17-Oct-2026), the last 30 days, the questions asked, and the
 // mismatches (AI figures the books gave differently, answers marked wrong) with their status
 export function AssistantSettings() {
   const a = ASST.st();
@@ -19,9 +20,9 @@ export function AssistantSettings() {
     <h3>FinCom Assistant</h3>
     <AssistantSwitch />
     {!u ? <p className="note">Loading…</p> : u.error ? <p className="note">{u.error}</p> : <>
-      <p data-asst-spend="">Today: <b>₹{money(u.spent_inr)}</b> of <b>₹{money(u.cap_inr)}</b> for AI answers{u.warn ? <b className="asst-warn-txt"> · {u.over ? "the limit is reached: new AI answers wait for midnight" : "80% used"}</b> : null}.
+      <p data-asst-spend="">This month: <b>₹{money(u.spent_inr)}</b> of <b>₹{money(u.cap_inr)}</b> for AI answers{u.warn ? <b className="asst-warn-txt"> · {u.over ? "the limit is reached: new AI answers wait for the 1st of next month" : "80% used"}</b> : null}.
         <span className="note"> At ₹{u.rate} to the dollar. Answers from FinCom's own tools, answers given earlier on the same books and the checks before filing cost nothing and keep working at the limit.</span></p>
-      {u.owner && <p className="asst-cap"><label>Daily limit ₹ <input type="number" min="0" max="1000000" value={cap} placeholder={String(u.cap_inr)} onChange={(e) => setCap(e.target.value)} /></label>
+      {u.owner && <p className="asst-cap"><label>Monthly limit ₹ <input type="number" min="0" max="10000000" value={cap} placeholder={String(u.cap_inr)} onChange={(e) => setCap(e.target.value)} /></label>
         <label> ₹ to a dollar <input type="number" min="1" max="1000" step="0.01" value={rate} placeholder={String(u.rate)} onChange={(e) => setRate(e.target.value)} /></label>
         <Button className="btn small" onClick={() => (cap !== "" || rate !== "") && ASST.setCap(cap, rate)}>Set</Button></p>}
       {u.owner && (u.features || []).length > 0 && <table className="asst-table" data-asst-features=""><thead><tr><th>What uses the money (30 days)</th><th className="n">Questions</th><th className="n">AI calls</th><th className="n">₹</th></tr></thead>

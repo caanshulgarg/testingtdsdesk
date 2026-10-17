@@ -9,8 +9,8 @@ Tool modules for the audit and the reports: `docs/assistant-tools.md`.
 FinCom Assistant is ON for every firm unless the firm's owner switches it off (Settings › AI help › FinCom Assistant);
 staff see the switch but cannot change it. There is no clients'-consent tick any more: the owner decided on 14-Oct-2026
 to use it by default, and each person sees the notice "Questions may be processed by an AI provider; identifiers are
-masked" the first time they open the assistant (the short note stays under the question box). The daily cost cap
-(Rs 150 a firm a day) stays on. Migration 82 makes a firm with no setting count as on; a firm whose owner switched it
+masked" the first time they open the assistant (the short note stays under the question box). The cost cap
+(then Rs 150 a firm a day; a month's since 17-Oct-2026, below) stays on. Migration 82 makes a firm with no setting count as on; a firm whose owner switched it
 off stays off. The same day's fix: the Settings page could stay on "Loading…" (or greyed) when the firm's setting was
 first read before the sign-in had finished, and on a phone the Ask FinCom button covered the bottom bar's More (so
 Settings could not be reached); the setting is now read again until known, and the button sits above the bar.
@@ -106,8 +106,10 @@ point." Case names the model writes without a verified citation are removed. Eac
 
 ## Cost guard
 
-A rupee cap per firm per day (Rs 150 by default, at Rs 85 to the dollar; the owner sets both). Each AI call's cost is
-worked out from the API's usage (`models.ts` prices) and added to the day and the feature. At 80% a warning; at 100% no
+A rupee cap per firm per calendar month, by India's date (Rs 3,000 by default, at Rs 85 to the dollar; the owner sets both
+in Settings › AI help). The owner's decision of 17-Oct-2026, migration 96 (it was Rs 150 a day, migration 77); shared by Ask
+FinCom and the 2B matching. Each AI call's cost is worked out from the API's usage (`models.ts` prices) and added to the
+day and the feature; the cap compares the month's days. At 80% a warning; at 100% no
 new AI call; green answers, cached answers and checks before filing keep working. A second limit of 500 calls a day
 stops a runaway loop. The log: question, tools, route, models, tokens, cost, time; never an answer or a figure.
 

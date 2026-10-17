@@ -449,7 +449,7 @@ try:
         mm = pg.inner_text("[data-asst-mismatches]") if pg.locator("[data-asst-mismatches]").count() else ""
         ok("reverse charge on March's rent" in mm and "3,600.00" in mm and "4,000.00" in mm and "reported wrong" in mm, "Mismatches: the corrected figure and the report, with their status")
         sp = pg.inner_text("[data-asst-spend]") if pg.locator("[data-asst-spend]").count() else ""
-        ok("₹" in sp and "150.00" in sp, "Settings: today's AI spend against the ₹150 cap (%s)" % sp[:80])
+        ok("This month" in sp and "₹3,000.00" in sp, "Settings: this month's AI spend against the ₹3,000 monthly cap (%s)" % sp[:80])
         ok(pg.locator("[data-asst-features] tr").count() >= 2, "which features use the money")
         shot(pg, "09-mismatches", "[data-asst-settings]")
         # ---------- Ctrl+K: the switcher's last line

@@ -42,7 +42,7 @@ function fakeSupabase() {
       const fn = u.pathname.split("/").pop()!;
       if (fn === "mfa_ok") return out(200, true);
       if (fn === "gst_cron_ok") return out(200, body.k === "cron-key");
-      if (fn === "asst_cap_take") return out(200, { ok: true });
+      if (fn === "asst_cap_take") return out(200, { ok: true, cap_inr: 3000, spent_inr: 0, period: "month" });
       if (fn === "asst_cost_add") return out(200, { inr: Math.round(body.p_cost_usd * 85 * 10000) / 10000 });
       if (fn === "asst_log_add") { (T.assistant_log = T.assistant_log || []).push(body); return out(200, null); }
       if (fn === "gst2b_take") { const rs = T.gst_2b_runs.filter((r) => r.status === "queued").slice(0, body.p_n); rs.forEach((r) => { r.status = "running"; }); return out(200, rs); }

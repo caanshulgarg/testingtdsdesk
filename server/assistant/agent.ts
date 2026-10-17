@@ -17,7 +17,7 @@ import { actionAsked, checkCitations, Claim, compare, fieldOf, markFigures, numb
 import { DocSpec, Section, TableData } from "./files.ts";
 import { dropSentences, FileTableSpec, fileFigures, SheetFile, tableFromFile } from "./filetable.ts";
 import { Masker } from "./mask.ts";
-import { costUsd, detailAsked, HAIKU, plan, Plan, SONNET, Task, taskOf, Usage } from "./models.ts";
+import { capWords, costUsd, detailAsked, HAIKU, plan, Plan, rupees, SONNET, Task, taskOf, Usage } from "./models.ts";
 import { compound, describe, route } from "./router.ts";
 import { relabelText, summaryLabels } from "../_shared/assistant-labels.js";
 import { applyCitations, Checked, Citation, LABEL as CITE_LABEL, NO_CASE, verify } from "./citations.ts";
@@ -287,12 +287,12 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     const spent = ctx.costAdd ? await ctx.costAdd(p.feature, c, u).catch(() => null) : null;
     if (spent && spent.warn && !warned) {
       warned = true;
-      emit({ t: "warn", kind: "cap80", spent: spent.spent_inr, cap: spent.cap_inr, message: "Your firm has used ₹" + Math.round(spent.spent_inr) + " of today's ₹" + Math.round(spent.cap_inr) + " for AI answers (80% or more). Answers from FinCom's own tools and the checks before filing keep working at the limit." });
+      emit({ t: "warn", kind: "cap80", spent: spent.spent_inr, cap: spent.cap_inr, message: "Your firm has used " + rupees(spent.spent_inr) + " of this month's " + rupees(spent.cap_inr) + " for AI answers (80% or more). Answers from FinCom's own tools and the checks before filing keep working at the limit." });
     }
     return msg;
   };
-  const capError = (cap: Cap) => emit({ t: "error", kind: "cap", message: cap.why === "calls" ? "Your firm has used today's " + cap.cap + " AI calls. It starts again at midnight (India time)."
-    : "Your firm has used today's ₹" + Math.round(cap.cap_inr || 0) + " for AI answers. New AI answers start again at midnight (India time); the firm's owner can raise the limit in Settings › AI help. Answers from FinCom's own tools and the checks before filing keep working.",
+  const capError = (cap: Cap) => emit({ t: "error", kind: "cap", message: cap.why === "calls" ? capWords("calls", cap.cap_inr || 0, cap.cap)
+    : capWords("inr", cap.cap_inr || 0, cap.cap) + " Answers from FinCom's own tools and the checks before filing keep working.",
     used: cap.used, cap: cap.cap, spent: cap.spent_inr, cap_inr: cap.cap_inr });
 
   // a firm-wide tool's question (the certificates), or the conversation it is in: neither the keyword router nor Haiku

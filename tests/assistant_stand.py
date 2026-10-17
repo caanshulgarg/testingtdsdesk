@@ -24,6 +24,8 @@ MIG86 = os.path.join(ROOT, "server", "assistant", "migration-86-asst-span-books.
 MIG87 = os.path.join(ROOT, "server", "assistant", "migration-87-rls-initplan.sql")
 # then 88: a ledger or party name matched as people type it (asst_ledger_pick)
 MIG88 = os.path.join(ROOT, "server", "assistant", "migration-88-ledger-names.sql")
+# then 96: the firm's AI cost limit is a month's (Rs 3,000 a calendar month, India's date; the owner's decision of 17-Oct-2026)
+MIG96 = os.path.join(ROOT, "server", "assistant", "migration-96-assistant-monthly-cap.sql")
 FIRM, OTHER = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ME, STAFF, VIEWER, STRANGER = ("aaaaaaaa-0000-4000-8000-00000000000%d" % i for i in (1, 2, 3, 4))
 CLIENT, OTHER_CLIENT = "larkspur", "zz-other-client"
@@ -124,14 +126,14 @@ def start(port):
     return db
 
 def migrate(db, path=MIG77):
-    """77, then 82 (the assistant on by default), 84 (uploads) and 85-88 (asst_span, the read policies, ledger names) as
-    staging has them; another path: that file only"""
+    """77, then 82 (the assistant on by default), 84 (uploads), 85-88 (asst_span, the read policies, ledger names) and 96
+    (the monthly cost limit) as staging has them; another path: that file only"""
     if path != MIG77: return db.sql(open(path).read())
     out = db.sql(open(MIG77).read())
     out += db.sql(open(MIG82).read())
     out += db.sql(open(MIG84).read())
     out += db.sql(open(MIG85).read())
-    for m in (MIG86, MIG87, MIG88):
+    for m in (MIG86, MIG87, MIG88, MIG96):
         if os.path.exists(m) and not os.environ.get("ASST_SKIP_" + os.path.basename(m)[10:12]): out += db.sql(open(m).read())
     return out
 

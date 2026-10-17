@@ -308,17 +308,17 @@ const ASST = {
     } catch (e){ toast("Could not open it: " + (e && e.message)); }
   },
   newChat(){ const a = this.st(), k = this.key(); a.by[k] = []; delete a.chatIds[k]; if (a.upsBy) delete a.upsBy[k]; a.saveOn = false; this.draw(); },
-  // ---------- Settings › Assistant (the owner): today's use, the cap, the days, the questions, the mismatches
+  // ---------- Settings › Assistant (the owner): this month's use, the monthly cap, the days, the questions, the mismatches
   async loadUsage(){
     const a = this.st();
     try { a.usage = await Cloud.rpc("asst_usage", {p_days: 30}); } catch (e){ a.usage = {error: e.message}; }
     try { a.mismatches = await Cloud.rpc("asst_mismatches", {p_limit: 200}); } catch (e){ a.mismatches = null; }
     this.draw();
   },
-  // the firm's daily cap in rupees, and the rupees to a dollar (null keeps it)
+  // the firm's monthly cap in rupees (a calendar month, India's date; migration 96), and the rupees to a dollar (null keeps it)
   async setCap(inr, rate){
-    const p = {p_inr: inr === "" || inr == null ? null : Math.max(0, Math.min(1000000, r2(num(inr)))), p_rate: rate === "" || rate == null ? null : Math.max(1, Math.min(1000, r2(num(rate))))};
-    try { const r = await Cloud.rpc("asst_set_cap", p); toast("Daily limit ₹" + INR.format(r.cap_inr) + " at ₹" + r.rate + " to the dollar."); this.loadUsage(); }
+    const p = {p_inr: inr === "" || inr == null ? null : Math.max(0, Math.min(10000000, r2(num(inr)))), p_rate: rate === "" || rate == null ? null : Math.max(1, Math.min(1000, r2(num(rate))))};
+    try { const r = await Cloud.rpc("asst_set_cap", p); toast("Monthly limit ₹" + INR.format(r.cap_inr) + " at ₹" + r.rate + " to the dollar."); this.loadUsage(); }
     catch (e){ toast("Could not set it: " + (e && e.message)); }
   },
   // a notice's documents: ticked as they are attached; its status, filed with the acknowledgement number (FinCom files nothing)

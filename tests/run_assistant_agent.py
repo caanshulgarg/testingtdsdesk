@@ -41,7 +41,7 @@ try:
     ok(r.returncode == 0, "deno test server/assistant/assistant_test.ts and router_test.ts")
     if r.returncode: print(out[-6000:])
     # the cap: a firm at its cap gets the message and Claude is not called
-    db.sql("insert into assistant_usage (firm_id, day, cost_inr) values ('%s', (now() at time zone 'Asia/Kolkata')::date, 150) on conflict (firm_id, day) do update set cost_inr = 150;" % A.FIRM)
+    db.sql("insert into assistant_usage (firm_id, day, cost_inr) values ('%s', (now() at time zone 'Asia/Kolkata')::date, 3000) on conflict (firm_id, day) do update set cost_inr = 3000;" % A.FIRM)
     capt = r"""
 import { handler } from "./server/assistant/index.ts";
 let called = 0;
@@ -55,10 +55,10 @@ console.log(JSON.stringify({ called, err: ev.find((e) => e.t === "error"), done:
     r2 = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", p], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
     j = json.loads((r2.stdout.strip().splitlines() or ["{}"])[-1]) if r2.returncode == 0 else {}
     if r2.returncode: print(r2.stdout[-2000:] + r2.stderr[-3000:])
-    ok(j.get("called") == 0 and (j.get("err") or {}).get("kind") == "cap" and "cap" not in str((j.get("err") or {}).get("message", "x")).lower().split("limit")[0][:0] and "₹150" in (j.get("err") or {}).get("message", ""),
-       "the cap: Claude not called; the message says the firm used today's ₹150 (%s)" % (j.get("err") or {}).get("message"))
+    ok(j.get("called") == 0 and (j.get("err") or {}).get("kind") == "cap" and "cap" not in str((j.get("err") or {}).get("message", "x")).lower().split("limit")[0][:0] and "this month's ₹3,000" in (j.get("err") or {}).get("message", ""),
+       "the cap: Claude not called; the message says the firm used this month's ₹3,000 (%s)" % (j.get("err") or {}).get("message"))
     used = db.one("select cost_inr from assistant_usage where firm_id = '%s' and day = (now() at time zone 'Asia/Kolkata')::date" % A.FIRM)
-    ok(float(used) == 150, "the spend stays at the cap (%s)" % used)
+    ok(float(used) == 3000, "the spend stays at the cap (%s)" % used)
     n = db.one("select count(*) from assistant_log where firm_id = '%s' and question = 'What is the TDS rate on commission?' and calls = 0" % A.FIRM)
     ok(str(n) == "1", "the capped question is logged with no calls")
 finally:

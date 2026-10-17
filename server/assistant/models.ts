@@ -77,3 +77,14 @@ export function costUsd(model: string, u: Usage): number {
     + (u.server_tool_use?.web_search_requests || 0) * WEB_SEARCH_USD;
   return Math.round(usd * 1e6) / 1e6;
 }
+
+// the firm's AI cost limit (migration 96, the owner's decision of 17-Oct-2026): the rupees are a calendar month's (India's
+// date), the count of calls (daily_calls) a day's. `why` is asst_cap_take's: "calls" for the day's count, else the rupees.
+export const rupees = (v: number): string => {
+  const s = String(Math.round(Math.abs(Number(v) || 0))), last = s.slice(-3), rest = s.slice(0, -3);
+  return "₹" + (Number(v) < 0 ? "-" : "") + (rest ? rest.replace(/\B(?=(\d{2})+$)/g, ",") + "," : "") + last;
+};
+export function capWords(why: string | undefined, capInr: number, calls: number): string {
+  return why === "calls" ? "Your firm has used today's " + (Number(calls) || 0) + " AI calls. It starts again at midnight (India time)."
+    : "Your firm has used this month's " + rupees(capInr) + " for AI answers. New AI answers start again on the 1st of next month (India time); the firm's owner can raise the limit in Settings › AI help.";
+}

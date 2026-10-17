@@ -50,7 +50,8 @@ export async function matchRun(twob: any[], books: any[], decisions: Record<stri
   ai.sent = inp.g.length + inp.b.length; ai.notSent = inp.notSent;
   let cap: { ok: boolean, why?: string };
   try { cap = await deps.capTake(); } catch { cap = { ok: false, why: "error" }; }
-  if (!cap.ok) { ai.state = "cap"; ai.say = "The firm's AI budget is used up for today: " + STANDS; return done([]); }
+  // the rupees are the month's (migration 96); the count of calls the day's
+  if (!cap.ok) { ai.state = "cap"; ai.say = (cap.why === "calls" ? "The firm's AI calls for today are used up: " : "The firm's AI budget for this month is used up: ") + STANDS; return done([]); }
   let msg: any = null;
   try {
     const stream = deps.client.beta.messages.stream({

@@ -445,17 +445,18 @@ Deno.test("the rupee cap: at 80% a warning; at 100% no AI call, but answers from
     const r = await fetch(STAND + "/rest/v1/assistant_usage?firm_id=eq." + FIRM + "&day=eq." + day, { method: "PATCH", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ cost_inr: inr }) });
     await r.body?.cancel();
   };
-  await setSpent(125);
+  await setSpent(2500);   // of 3,000 a month (migration 96): over 80%
   const c = new MockClaude([[text("A rate question, answered.")]]);
   c.usage = () => ({ input_tokens: 1000, output_tokens: 100 });
   const r = await ask(c, { question: "What is the due date of GSTR-9 for 2025-26? " + crypto.randomUUID().slice(0, 6), client_id: null });
   const w = ofType(r.events, "warn");
   eq([w.length, w[0]?.kind], [1, "cap80"], "the 80% warning");
-  await setSpent(150);
+  await setSpent(3000);
   const c2 = new MockClaude([[text("should not be called")]]);
   const r2 = await ask(c2, { question: "What is the due date of GSTR-1 for October? " + crypto.randomUUID().slice(0, 6), client_id: null });
   eq([c2.calls.length, ofType(r2.events, "error")[0]?.kind], [0, "cap"], "at the cap: no AI call, the cap message");
-  assert(/₹150/.test(ofType(r2.events, "error")[0].message), "in rupees: " + ofType(r2.events, "error")[0].message);
+  assert(/this month's ₹3,000/.test(ofType(r2.events, "error")[0].message) && !/today|midnight/.test(ofType(r2.events, "error")[0].message), "in rupees, for the month: " + ofType(r2.events, "error")[0].message);
+  assert(/of this month's ₹3,000/.test(w[0].message), "the warning names the month: " + w[0].message);
   const r3 = await ask(c2, { question: "Cash and bank balances on 31 March 2026", client_id: CLIENT });
   eq([ofType(r3.events, "result")[0]?.summary.total, r3.done.labels], [231750, ["books"]], "a keyword answer still works at the cap");
   const r4 = await ask(c2, { question: "check my Q4 26Q", client_id: CLIENT });

@@ -84,7 +84,9 @@ Deno.test("the cap reached, AI off, no key, a failed call: no AI, the rules stan
   const c1 = new FakeClaude(pairAll);
   const capped = await matchRun(TWOB, BOOKS, {}, deps(c1, { capTake: async () => ({ ok: false, why: "inr" }) }).d);
   eq([capped.ai.state, c1.calls.length], ["cap", 0], "over the cap: no call");
-  assert(/budget/.test(capped.ai.say) && /rules' result stands/.test(capped.ai.say), capped.ai.say);
+  assert(/budget/.test(capped.ai.say) && /this month/.test(capped.ai.say) && !/today/.test(capped.ai.say) && /rules' result stands/.test(capped.ai.say), capped.ai.say);
+  const calls = await matchRun(TWOB, BOOKS, {}, deps(new FakeClaude(pairAll), { capTake: async () => ({ ok: false, why: "calls" }) }).d);
+  assert(calls.ai.state === "cap" && /calls for today/.test(calls.ai.say) && /rules' result stands/.test(calls.ai.say), "the day's count of calls: " + calls.ai.say);
   const c2 = new FakeClaude(pairAll);
   const off = await matchRun(TWOB, BOOKS, {}, deps(c2, { aiAllowed: false }).d);
   eq([off.ai.state, c2.calls.length], ["off", 0], "AI off: no call");

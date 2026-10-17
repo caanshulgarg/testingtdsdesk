@@ -6,8 +6,8 @@ Checks, each against figures worked out by hand (tests/fixtures/books/EXPECTED.m
   - every book tool, as the firm's member, to the paisa;
   - row-level security: another firm's member gets nothing of this client, and the anon role may not run a tool; a tool
     cannot write (STABLE: an insert inside it fails);
-  - the cap: asst_cap_take takes calls only under the cap, atomically; the log keeps the question, the tools, the tokens and
-    the time only; the owner sees the days and questions, staff only today's count;
+  - the cap (a calendar month's, migration 96): asst_cap_take takes calls only under the cap, atomically; the log keeps the question, the tools, the tokens and
+    the time only; the owner sees the days and questions, staff only the month's spend and today's count;
   - mismatches: add-only (the service role cannot change or remove a row), read by the owner only."""
 # The database is a throwaway PostgreSQL from tests/pg_stand.py (through assistant_stand.py): CI runs this as root.
 import os, sys, json, re, hashlib, datetime, collections
@@ -264,20 +264,20 @@ analyze;""")
     db.sql(open(A.MIG87).read())
     ok(db.one("select string_agg(qual, ' | ') from pg_policies where tablename in ('tally_lines', 'tally_vouchers', 'tally_ledgers', 'client_book_items') and cmd = 'SELECT'") == pol, "migration 87 runs twice (policies unchanged the second time)")
 
-    # ---- the cap (in rupees: Rs 150 a day at Rs 85 a dollar unless the owner sets others) and the log
+    # ---- the cap (in rupees: Rs 3,000 a calendar month since migration 96, at Rs 85 a dollar unless the owner sets others) and the log
     take = lambda n=1: json.loads(db.one("select asst_cap_take('%s', %d)" % (A.FIRM, n)))
     cost = lambda usd, feat="book": json.loads(db.one("select asst_cost_add('%s', '%s', %s, 1000, 100, 500, 0)" % (A.FIRM, feat, usd)))
     t = take()
-    ok(t["ok"] and t["cap_inr"] == 150 and t["rate"] == 85 and t["spent_inr"] == 0, "default cap Rs 150 a day at Rs 85 to the dollar (%s)" % t)
-    c1 = cost(1.0)
-    ok(c1["inr"] == 85 and c1["spent_inr"] == 85 and not c1["warn"], "a call of $1.00 costs Rs 85 at the firm's rate")
-    c2 = cost(0.5, "notice")
-    ok(c2["spent_inr"] == 127.5 and c2["warn"] and not c2["over"], "at Rs 127.50 of 150 (85%%) the warning is on")
+    ok(t["ok"] and t["cap_inr"] == 3000 and t["rate"] == 85 and t["spent_inr"] == 0 and t.get("period") == "month", "default cap Rs 3,000 a month at Rs 85 to the dollar (%s)" % t)
+    c1 = cost(20.0)
+    ok(c1["inr"] == 1700 and c1["spent_inr"] == 1700 and not c1["warn"], "a call of $20.00 costs Rs 1,700 at the firm's rate")
+    c2 = cost(10.0, "notice")
+    ok(c2["spent_inr"] == 2550 and c2["warn"] and not c2["over"], "at Rs 2,550 of 3,000 (85%%) the warning is on")
     t = take()
     ok(t["ok"] and t["warn"], "still under the cap: the call is taken, with the warning")
-    cost(0.3)
+    cost(6.0)
     t = take()
-    ok(not t["ok"] and t["why"] == "inr" and t["spent_inr"] == 153, "at Rs 153 (over 150) no new AI call (%s)" % t)
+    ok(not t["ok"] and t["why"] == "inr" and t["spent_inr"] == 3060, "at Rs 3,060 (over 3,000) no new AI call this month (%s)" % t)
     try: A.ask(db, "select asst_cap_take('%s', 1)" % A.FIRM); ok(False, "a member cannot take calls")
     except RuntimeError as e: ok("permission denied" in str(e), "only the function (service role) takes calls")
     try: A.ask(db, "select asst_cost_add('%s', 'x', 0, 0, 0, 0, 0)" % A.FIRM); ok(False, "a member cannot add cost")
@@ -288,18 +288,18 @@ analyze;""")
     ok(len(lg) == 2 and set(lg[0].keys()) == {"id", "firm_id", "user_id", "client_id", "at", "question", "tools", "input_tokens", "output_tokens", "calls", "ms", "feature", "route", "models", "cache_read", "cache_write", "cost_inr", "fell_through"}
        and lg[0]["tools"] == "{top_parties}", "the log: question, tools, route, models, tokens, cost and time; no answer")
     u = J("select asst_usage(30)")
-    ok(u["owner"] is True and u["spent_inr"] == 153 and u["over"] and u["days"][0]["inr"] == 153 and u["months"][0]["inr"] == 153, "the owner sees today's spend in rupees, by day and by month")
+    ok(u["owner"] is True and u["spent_inr"] == 3060 and u["over"] and u["days"][0]["inr"] == 3060 and u["months"][0]["inr"] == 3060, "the owner sees the month's spend in rupees, by day and by month")
     fe = {x["feature"]: x for x in u["features"]}
-    ok(fe["book"]["inr"] == 110.5 and fe["notice"]["inr"] == 42.5 and fe["book"]["questions"] == 2, "and which features use the money (%s)" % u["features"])
+    ok(fe["book"]["inr"] == 2210 and fe["notice"]["inr"] == 850 and fe["book"]["questions"] == 2, "and which features use the money (%s)" % u["features"])
     ok(u["fell_through"] == [{"q": "What was the advance to Rukmini about?", "n": 1}], "the questions no fixed question fitted, for new intents")
     u = J("select asst_usage(30)", A.STAFF)
-    ok(u["owner"] is False and u["spent_inr"] == 153 and u["days"] is None and u["questions"] is None and u["features"] is None, "staff see today's spend and the cap only")
+    ok(u["owner"] is False and u["spent_inr"] == 3060 and u["days"] is None and u["questions"] is None and u["features"] is None, "staff see the month's spend and the cap only")
     try: A.ask(db, "select count(*) from assistant_log", A.ME); ok(False, "the log is not read directly")
     except RuntimeError as e: ok("permission denied" in str(e), "the log table is not read directly by members")
-    try: A.ask(db, "select asst_set_cap(300, null)", A.STAFF); ok(False, "staff cannot set the cap")
+    try: A.ask(db, "select asst_set_cap(5000, null)", A.STAFF); ok(False, "staff cannot set the cap")
     except RuntimeError as e: ok("only the firm's owner" in str(e), "only the owner sets the cap")
-    r = J("select asst_set_cap(300, 84.5)")
-    ok(r["cap_inr"] == 300 and r["rate"] == 84.5 and take()["ok"], "the owner raises the cap to Rs 300 (rate 84.50): calls again")
+    r = J("select asst_set_cap(5000, 84.5)")
+    ok(r["cap_inr"] == 5000 and r["rate"] == 84.5 and take()["ok"], "the owner raises the cap to Rs 5,000 a month (rate 84.50): calls again")
     ok(cost(1.0)["inr"] == 84.5, "the new rate applies to the next call")
     # the answer cache's data version: changes when the books change
     v1 = A.ask(db, "select asst_data_version('larkspur')")
