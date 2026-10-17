@@ -45,4 +45,7 @@ function fixtureCache(){
   return FIXTURE_CACHE;
 }
 const CACHE = process.env.TDSDESK_CACHE || (FIXTURE ? fixtureCache() : path.join(__dirname, "data", "books-cache.json"));
-module.exports = {load, openBlob, HTML, DATA, CACHE, OUT, FIXTURE, FIXTURE_DIR, FIXTURE_CACHE};
+// next-challan-match: every top-level name of the shared TDS challan matcher (server/_shared/tdsmatch.js), for a test that
+// loads TDSMatch (src/js/86) or a builder that reads its splits
+const TM_NAMES = (() => { try { const t = fs.readFileSync(path.join(__dirname, "..", "server", "_shared", "tdsmatch.js"), "utf8"), out = [], re = /\n(?:function|const) ([A-Za-z_$][\w$]*)/g; let m; while ((m = re.exec(t))) out.push(m[1]); return out; } catch (e){ return []; } })();
+module.exports = {load, openBlob, HTML, DATA, CACHE, OUT, FIXTURE, FIXTURE_DIR, FIXTURE_CACHE, TM_NAMES};

@@ -42,6 +42,15 @@ tmp = tempfile.mkdtemp(prefix="tdsreg-")
 ADD = """([id, bsr, date, serial, tax, section, extra]) => { const c = Object.assign({id, bsr, date, serial, tax, interest: 0, section, minorHead: "200"}, extra || {});
   S.books.challans = (S.books.challans || []).concat([c]); return c.id; }"""
 ROWS = "(([sec, ym]) => TDS.allRows().concat(TDS.salaryRows()).filter(r => TDS.sec(r.section) === sec && TDS.ymd(r.date).slice(0, 6) === ym).map(r => r.id))"
+# next-challan-match: a file is made only when every deduction is on a challan; the rest of the quarter's deductions go on a
+# stand-in challan for the build and come off again (what is checked is the challan under test)
+BUILD = """() => { const fl = S.books.tdsFiled; S.books.tdsFiled = {};
+  const ids = TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0).map(r => r.id);
+  S.books.challans = (S.books.challans || []).concat([{id: 'chFill', bsr: '0240020', serial: '00999', date: '20260707', tax: 9999999, interest: 0, section: '', minorHead: '200'}]);
+  if (ids.length) TDSCH.tag(ids, 'chFill');
+  const f = TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q');
+  if (ids.length) TDSCH.untag(ids);
+  S.books.challans = S.books.challans.filter(c => c.id !== 'chFill'); S.books.tdsFiled = fl; return f.text || f.error || ''; }"""
 RESET = "() => { S.books.alloc = {}; S.books.allocFrom = {}; S.books.challans = []; S.books.chPortions = {}; S.books.tdsCorr = {}; S.books.tdsFiled = {}; S.books.allocLog = []; S.books.tracesConso = []; S.books.tracesChStatus = []; render(); }"
 
 try:
@@ -69,7 +78,7 @@ try:
         notes = J("() => TDSReg.notes(TDS.challans().find(c => c.id === 'chS'), '26Q', '2026-27', 'Q1')")
         ok("challan nature 92B used in 26Q" in notes, "A2. the note says so: %s" % notes)
         J("() => { S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(400)
-        ok(pg.locator('[data-ret-alloc] [data-note="challan nature 92B used in 26Q"]').count() == 1, "A2. the note shows on the return's Challans tab")
+        ok(pg.locator('[data-cm-info="nature"]').count() == 1 and "challan nature 92B used in 26Q" in pg.locator('[data-cm-info="nature"]').inner_text(), "A2. the note shows on the return's Challans tab (its checks)")
         ok(J("() => TDSReg.trail('chS').some(t => t.act === 'tag' && /92B used in 26Q/.test(t.note))"), "A2. the trail keeps the note")
         # earlier year's balance
         J(ADD, ["chOld", "0240020", "20260305", "00103", 5000, "194J"])
@@ -78,21 +87,22 @@ try:
         notes = J("() => TDSReg.notes(TDS.challans().find(c => c.id === 'chOld'), '26Q', '2026-27', 'Q1')")
         ok("challan of FY 2025-26 used in FY 2026-27" in notes, "A3. the note: %s" % notes)
         ok(J("() => TDSReg.trail('chOld').some(t => /FY 2025-26 used in FY 2026-27/.test(t.note))"), "A3. kept in the audit trail")
-        txt = J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text || ''")
+        txt = J(BUILD)
         # next-tds-forms-2025: Form 140's challan record (Protean's file format 1.1): BSR field 15, serial 17, date 19
         cds = [l.split("^") for l in txt.split("\r\n") if "^CD^" in l]
         ok(any(c[14] == "0240020" and c[16] == "00103" and c[18] == "05032026" for c in cds), "A3. the earlier year's challan is in the Q1 file with its deductions (a CD record)")
         # interest and fee apart
         J("() => { const c = TDS.challans().find(c => c.id === 'chA'); c.interest = 150; c.fee = 400; }")
-        ok("^150.00^400.00^" in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text"), "A4. no portion set: the file carries the challan's whole interest and fee, as before")
+        cd0 = [l.split("^") for l in J(BUILD).split("\r\n") if "^CD^" in l and "^00101^" in l]
+        ok(cd0 and cd0[0][8] == "150.00" and cd0[0][9] == "400.00" and cd0[0][23] == "0.00", "A4. no portion set: the challan as deposited (interest 150, fee 400), nothing allocated (field 24 0.00): next-challan-match, interest is allocated explicitly")
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 200, 0)"); ok(not r["ok"] and re.search(r"₹150(\.00)? left on this challan for interest", r["why"]), "A4. interest over its own limit refused: %s" % r.get("why"))
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 500)"); ok(not r["ok"] and "for the fee" in r["why"], "A4. fee over its own limit refused")
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 400)"); ok(r["ok"], "A4. within each limit: given")
         # next-tds-forms-2025: Form 140 carries the challan as deposited (fields 9, 10) and the interest allocation "as
         # provided in field no. 9" (field 24), as Protean's file format 1.1 says; the portion stays in FinCom's register (a
         # question for the owner, docs/tds-forms-2025/GAPS.md)
-        cdA = [l.split("^") for l in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text").split("\r\n") if "^CD^" in l]
-        ok(any(c[8] == "150.00" and c[9] == "400.00" and c[23] == "150.00" for c in cdA), "A4. Form 140's challan record carries the challan as deposited (interest 150, fee 400) and allocation = field 9, the portion set or not")
+        cdA = [l.split("^") for l in J(BUILD).split("\r\n") if "^CD^" in l]
+        ok(any(c[8] == "150.00" and c[9] == "400.00" and c[23] == "100.00" for c in cdA), "A4. Form 140's challan record: the challan as deposited (interest 150, fee 400) and the interest allocated here, 100 (field 24)")
         r = J("() => TDSReg.setPortion('chA', '27Q', '2026-27', 'Q1', 60, 0)"); ok(not r["ok"] and re.search(r"₹50(\.00)? left on this challan for interest", r["why"]), "A4. another return gets only what is left (%s)" % r.get("why"))
         ok(J("() => TDSReg.balance(TDS.challans().find(c => c.id === 'chA'))") == {"tax": 0, "interest": 50, "fee": 0, "total": 50}, "A4. the balance by head: tax 0, interest 50, fee 0")
         # filed: locked
@@ -101,7 +111,7 @@ try:
         jun = rows("194C", "202606")
         J(ADD, ["chJ", "0240020", "20260707", "00104", 1000, "194C"])
         r = J("(j) => TDSCH.tag(j, 'chJ')", jun); ok(not r["ok"] and "Open a correction" in r["why"], "A5. tag on a filed return refused")
-        ok(not J("() => TDSReg.autoAllocate('2026-27', 'Q1', '26Q').ok"), "A5. auto-allocation refused on a filed return")
+        ok(J("() => TDSMatch.suggestNow('26Q', '2026-27', 'Q1').length") == 0 and J("() => TDSMatch.confirmAll('26Q', '2026-27', 'Q1').n") == 0, "A5. nothing suggested, nothing confirmed, on a filed return")
         ok(not J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 0, 0).ok"), "A5. the interest and fee portion locked too")
         J("() => { S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(300)
         ok(pg.locator('[data-ret-lock="locked"]').count() == 1, "A5. the return's Challans tab says it is locked")
@@ -121,17 +131,18 @@ try:
         J(ADD, ["chSal", "0240020", "20260505", "00204", 50000, "192"])
         first = may194c[0]
         J("(id) => { S.books.alloc[id] = 'chT'; S.books.allocFrom = {[id]: 'tally'}; }", first)
-        r = J("() => TDSReg.autoAllocate('2026-27', 'Q1', '26Q')")
-        ok(r["ok"] and J("(id) => S.books.alloc[id]", first) == "chT", "A6. Tally's own tag kept (not moved)")
-        ok(J("(ids) => ids.every(id => S.books.alloc[id] === 'chOld1')", may194c[1:]), "A6. then the same form and year, the oldest challan with room (deposited in or after the deductions' month) first")
-        ok(J("() => !Object.values(S.books.alloc).includes('chSal')"), "A6. another form's challan never used by itself")
-        s = J("() => TDSReg.suggestions('2026-27', 'Q1', '26Q').map(x => ({ch: x.challan.id, notes: x.notes}))")
-        ok(any(x["ch"] == "chSal" and "challan nature 92B used in 26Q" in x["notes"] for x in s), "A6. the salary challan's balance only suggested, with its note (%s)" % s)
+        # next-challan-match: the one matcher suggests (the Auto-allocate button is gone); Tally's own tag stays
+        sg = J("() => TDSMatch.suggestNow('26Q', '2026-27', 'Q1').map(s => ({ch: s.chId, ids: s.ids, rule: s.rule}))")
+        ok(J("(id) => S.books.alloc[id]", first) == "chT" and not any(first in x["ids"] for x in sg), "A6. Tally's own tag kept (not moved, not suggested again)")
+        got = {i: x["ch"] for x in sg for i in x["ids"]}
+        ok(all(got.get(i) in ("chT", "chNew1") for i in may194c[1:]), "A6. the rest of May's 194C suggested for challans deposited after them (Tally's chT with room, then chNew1 of 05-Jun), not chOld1 paid before them (%s)" % [got.get(i) for i in may194c[1:]])
+        ok(all(got.get(i) == "chOld1" for i in apr194c), "A6. April's 194C to chOld1 of 05-May (%s)" % [got.get(i) for i in apr194c])
+        ok(not any(x["ch"] == "chSal" for x in sg) and J("() => !Object.values(S.books.alloc).includes('chSal')"), "A6. another form's challan never suggested, never used by itself")
         # TRACES: consolidated file and challan status file
         J(RESET)
         J(ADD, ["chA", "0240020", "20260507", "00101", 8640, "194C"]); J("(a) => TDSCH.tag(a, 'chA')", apr194c)
         # TRACES' consolidated file, made from FinCom's own Form 140 with the challan's consumed amount (CD field 21) at 8,000
-        conso = "\r\n".join("^".join(f[:20] + ["8000.00"] + f[21:]) if len(f) > 21 and f[1] == "CD" else "^".join(f) for f in (l.split("^") for l in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text").split("\r\n")))
+        conso = "\r\n".join("^".join(f[:20] + ["8000.00"] + f[21:]) if len(f) > 21 and f[1] == "CD" else "^".join(f) for f in (l.split("^") for l in J(BUILD).split("\r\n")) if not (len(f) > 16 and f[1] == "CD" and f[16] == "00999"))
         cpath = os.path.join(tmp, "DELZ12345A_26Q_Q1_202627_conso.txt"); open(cpath, "w").write(conso)
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; S.tdsTab = 'after'; render(); }"); pg.wait_for_timeout(300)
         pg.set_input_files('[data-after-filing] input[type=file]', cpath); pg.wait_for_timeout(1200)
@@ -203,7 +214,7 @@ try:
         ok(r and "cannot be less" in r, "B4. its tax cannot go below what is used: %s" % r)
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; }")
         ok("filed return uses this challan" in J("([id]) => TDSReg.canEdit(TDS.challans().find(c => c.id === id))", [hid]), "B4. not editable once a filed return uses it")
-        txt = J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text")
+        txt = J(BUILD)
         cd = [l for l in txt.split("\r\n") if "^CD^" in l]
         ok(any(l.split("^")[14] == "0240020" and l.split("^")[18] == "07052026" and l.split("^")[16] == "00301" and l.split("^")[7] == "8640.00" for l in cd), "B5. the hand challan's CD line in the FVU file: BSR, date, serial, tax (%s)" % cd)
         J("() => { S.books.tdsFiled = {}; }")
@@ -236,10 +247,11 @@ try:
         # a new challan placed by itself
         J(RESET)
         r = J("async (x) => { const r = await TDSReg.addHand(x); return r.placed; }", dict(good, serial="00601", tax="8640", date="2026-05-07", section="94C"))
-        ok(r and r.get("placed") and r["form"] == "26Q" and r["q"] == "Q1", "C5. a new 94C challan of 07-May placed in 26Q Q1 by itself (%s)" % r)
-        ok(J("() => TDSReg.balance(TDS.challans().find(c => c.serial === '00601')).tax") == 0, "C5. its balance drops to 0")
+        ok(r and r.get("suggested") and not r.get("placed") and r["form"] == "26Q" and r["q"] == "Q1", "C5. a new 94C challan of 07-May: what it pays suggested on 26Q Q1, nothing tagged by itself (%s)" % r)
+        ok(J("() => TDSReg.balance(TDS.challans().find(c => c.serial === '00601')).tax") == 8640, "C5. its balance stays until a person confirms")
         r = J("async (x) => { const r = await TDSReg.addHand(x); return r.placed; }", dict(good, serial="00602", tax="26520", date="2026-05-07", section="92B"))
-        ok(r and r.get("placed") and r["form"] == "24Q", "C5. a 92B challan placed in 24Q (%s)" % r)
+        ok(r and r.get("suggested") and r["form"] == "24Q", "C5. a 92B challan: suggested on 24Q (%s)" % r)
+        J("() => TDSMatch.confirmAll('24Q', '2026-27', 'Q1')")
         r = J("async () => { const n = TDSCH.add([{bsr: '0240020', serial: '00603', date: '20260507', tax: 500, interest: 0, section: '', minorHead: '200'}]); return n; }")
         ok(J("() => TDS.challans().find(c => c.serial === '00603').autoPlace") == "unknown" and J("() => TDSReg.usedTax(TDS.challans().find(c => c.serial === '00603'))") == 0, "C6. a challan of unknown type is not placed")
         J("() => { S.tdsView = 'return'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'checks'; S.tdsFix = ''; render(); }"); pg.wait_for_timeout(400)

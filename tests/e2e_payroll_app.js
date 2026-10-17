@@ -9,7 +9,9 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tall
   "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "BookSrc", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
   "TDSFiled", "TDSTally", "AIH", "Payroll", "PayTax", "TDS24Q_FILE", "BOOKS_KEYS",
   // tds-layout (14-Oct-2026): the one tagging (TDSCH.tag) asks the challan register (TDSReg) for the balance, the lock, the trail
-  "TDSReg", "TDS_SEC_CODES", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
+  "TDSReg", "TDS_SEC_CODES", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday",
+  // next-challan-match: the one matcher (its suggestions confirmed, as a person does on Form 138's Challans tab)
+  "money", "TDS24Q", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
 (async () => {
   const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), outPath = process.argv[3];
   const setup = JSON.parse(fs.readFileSync(inp.setup, "utf8"));
@@ -33,7 +35,9 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tall
     const e = x.Payroll.employees().find(z => z.name === name);
     for (const [k, v] of Object.entries(d)) x.Payroll.setDetail(e, k, v);
   }
-  out.tagged = x.Payroll.autoTag(b);
+  // next-challan-match: Tally's payroll no longer tags by itself (autoTag is 0); its challans are suggested, From Tally
+  // (the months each payment pays), and confirmed
+  out.tagged = x.Payroll.autoTag(b) + ["Q1", "Q2", "Q3", "Q4"].reduce((a, q) => a + x.TDSMatch.confirmAll("24Q", setup.fy, q).n, 0);
   out.employees = x.Payroll.employees().map(e => ({name: e.name, pan: e.pan, group: e.parent, joined: e.joined, left: e.left, designation: e.designation}));
   out.groups = x.Payroll.groups().map(e => e.name);
   out.months = x.Payroll.months(setup.fy);

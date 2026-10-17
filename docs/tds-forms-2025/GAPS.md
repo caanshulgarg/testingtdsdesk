@@ -15,7 +15,7 @@ wrong:
 |---|---|---|---|
 | FH | 17 fields | 18 | one field short; Form 143 had file type NS1 (must be **TC1**) |
 | BH | 39 fields | 72 | TAN at 5 (must be 13), PAN at 6 (15), **tax year before assessment year** (16 must be AY 202728, 17 TY 202627), quarter last (18), name and address shifted; state written as text (must be the Annexure 1 code, e.g. Delhi 09); no country (20), no country codes (29, 44), no responsible person's country (43, mandatory), no **PAN of the responsible person (59, mandatory)**, no batch total (47), field 52 at the wrong place, no AIN / State / Ministry for Government; deductor category defaulted to "F" for every client |
-| CD | 26 fields | 30 | the tax (8) was this return's deductions, not the **challan as deposited** (Gazette Note 6: "the exact amount deposited through challan"); BSR (15), serial (17), date (19), mode (13), minor head (23) all at other places; no interest / others allocation (24, 25) |
+| CD | 26 fields | 30 | the tax (8) was this return's deductions, not the **challan as deposited** (Gazette Note 6: "the exact amount deposited through challan"); BSR (15), serial (17), date (19), mode (13), minor head (23) all at other places; no interest / others allocation (24, 25; now the allocated portion, question 2) |
 | DD | 27 (26Q) / 35 (27Q, 27EQ) fields | 45 | old 26Q order: PAN at 7 (must be 8), section code at 21 (15), dates, amounts, rate, remark and certificate all at other places; a "deductee code" 01/02 that the new forms do not have; "whether deposited" (18, mandatory) missing; certificate cut to 10 characters (the workbook allows 10 or 15) |
 | DD 138 | section "92B" | 1001 / 1002 / 1003 / 1032 | old code; no date of deposit (29) |
 | DD 144 | 27Q's tail (rate A/B, nature, 15CA, country, e-mail, phone, address, TIN) in 27Q's order | fields 12, 14, 16, 17, 21, 30, 31, 37, 38, 39, 41 | no status (12), no opting-out (14), no grossing up (21); country written as typed (must be **Annexure 10's own numbering**, e.g. USA 267, India 113) |
@@ -117,16 +117,27 @@ non-Government (K, M, P, T, J, B, Q, F)→1002; statutory, autonomous and local 
   problem shown beside it. Kept as `co.tds26q`; the old 24Q / 26Q / 27Q / 27EQ files read the same keys (their category
   still "F" unless one is chosen, as before).
 
-## 7. Questions for the owner (as asked on 17-Oct-2026; 1, 2, 3, 6, 7, 8, 15 are answered above)
+## 7. Questions for the owner (as asked on 17-Oct-2026; 1, 2, 3, 6, 7, 8, 15 are answered above; 2 and 3 as built in next-challan-match)
+
+Also from next-challan-match (17-Oct-2026): a deduction with tax on no challan stops the file with the list (it was
+left out silently); a deduction split across two challans by a person is two deductee records, one under each challan,
+the same dates, the amount paid in proportion; Form 138 is made from Tally's payroll, else the salary sheet (Q1 to Q3).
 
 1. **Switch the draft off?** FinCom's files pass FVU 1.2 (book adjustment fully; by challan up to the .csi). Shall
    `NEW_FORMS_VALIDATED` become true (file not named _DRAFT, sent to the FVU from FinCom), after you run one real
    statement with your .csi through FVU 1.2?
-2. **A challan shared by two quarters (or two forms)**: the workbook says CD field 24 / 25 (interest / others allocation)
-   = fields 9 / 11 (xlsx rows 142-143), so each statement shows the challan's whole interest; FinCom's register splits it.
-   FinCom now follows the workbook. Right? (The RPU samples leave 24 / 25 empty; FVU 1.2 takes them filled.)
-3. **CD field 8 is the challan's whole tax** (Gazette Note 6), no longer this return's share (as the TDS review H5 had
-   it). Confirm.
+2. **A challan shared by two quarters (or two forms)**: answered (the owner, 17-Oct-2026, next-challan-match): interest
+   and others are ALLOCATED explicitly per return. CD fields 24 / 25 carry what is allocated to this statement in the
+   challan register (`TDSReg.portionFor`; field 25 the others' part of the fee-and-others portion), **0.00 when none**;
+   fields 9 to 12 stay the challan as deposited, so the challan's interest is never claimed twice by two statements
+   (it was: each statement wrote the whole as field 24). The Challans tab offers the amount (the interest of this return's
+   late deductions on that challan, or all of it when the return is the challan's only user) as a suggestion; Confirm all
+   takes it; a person's own figure is never offered over. FVU 1.2 takes it (tests: S140, a challan shared by Q1 and Q2
+   with 40 / 20 of its 60 interest, valid). The old 24Q / 26Q / 27Q / 27EQ files (FVU 8.7) write the same portions (CD 25
+   and 34 interest, 39 fee), and no longer give the whole to the challan's "home" return by themselves.
+3. **CD field 8 is the challan's whole tax** (Gazette Note 6), no longer this return's share: answered, kept (section 6:
+   "the challan record carries the challan's full deposited amount"). What this return uses of it is fields 21 / 22 (the
+   sum of its deductee records); what it is allocated of the interest and others, fields 24 / 25 (question 2).
 4. **Form 138, date of deposit (DD field 29)**: FinCom writes the challan's date; the sample's (09-05-2025) is not its
    challan's (30-04-2025), and RPU 1.2 has it as a column the user types. Same date always? (xlsx row 181; it is typed
    DECIMAL 7 there.)

@@ -83,8 +83,9 @@ const TDS26Q = {
     const un = (rows || []).filter(r => !r.challan && num(r.tds) > 0.005);
     if (!un.length) return null;
     const w = collections ? ["collection", "collections"] : ["deduction", "deductions"];
-    return {error: un.length + " " + (un.length === 1 ? w[0] + " is" : w[1] + " are") + " on no challan (" + money(r2(un.reduce((a, r) => a + num(r.tds), 0))) + "): match " + (un.length === 1 ? "it" : "them") +
-      " on the return's Challans tab first; the file is not made while any is left out. " + un.slice(0, 5).map(r => (r.party || r.employee || "?") + " " + fmtDate(tallyDate(TDS.ymd(r.date))) + " " + money(r.tds)).join("; ") + (un.length > 5 ? " \u2026" : ""),
+    const rs = (v) => "\u20b9" + (typeof INR === "object" ? INR.format(r2(num(v))) : r2(num(v)).toFixed(2)), dt = (d) => { const t = TDS.ymd(d); return t.slice(6, 8) + "-" + t.slice(4, 6) + "-" + t.slice(0, 4); };
+    return {error: un.length + " " + (un.length === 1 ? w[0] + " is" : w[1] + " are") + " on no challan (" + rs(un.reduce((a, r) => a + num(r.tds), 0)) + "): match " + (un.length === 1 ? "it" : "them") +
+      " on the return's Challans tab first; the file is not made while any is left out. " + un.slice(0, 5).map(r => (r.party || r.employee || "?") + " " + dt(r.date) + " " + rs(r.tds)).join("; ") + (un.length > 5 ? " \u2026" : ""),
       untagged: un.map(r => r.id)};
   },
   nilOut(rows){ return (rows || []).filter(r => !r.challan && !(num(r.tds) > 0.005)).length; },

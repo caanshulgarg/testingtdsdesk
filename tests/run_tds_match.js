@@ -18,8 +18,7 @@ const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
   "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "Market", "monthName",
-  "TM_RULES", "tmNum", "tmP", "tmInr", "tmYmd", "tmMonth", "tmDmy", "tmFyOf", "tmNextYm", "tmSecOk", "tmYearOk", "tmTdsHead", "tmKey", "tmByDate", "tmChOrder", "tmDue", "tmRules", "TM_CONF", "TM_SCHEMA", "TM_SYSTEM",
-  "TM_AI_ROWS", "TM_AI_CHS", "TM_MON", "tmMask", "tmClip", "tmAiInput", "tmAiPrompt", "tmAiParse", "tmAiCheck", "tmReasons", "tmLateInterest", "tmMonths", "TDSMatch"];
+  "TDSMatch"].concat(require("./harness").TM_NAMES);
 const fails = [];
 function ok(c, w){ console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails.push(w); }
 const J = JSON.stringify;
@@ -189,6 +188,8 @@ x.TDSMatch.confirmAll("24Q", "2026-27", "Q1");
 f = x.TDS24Q_FILE.build("2026-27", "Q1", FIRM);
 const c138 = rec(f.text, "CD"), d138 = rec(f.text, "DD");
 ok(!f.error && c138.length === 2 && d138.length === 3 && J(d138.map(d => [d[7], d[24]])) === J([["ABCPM1234R", "4000.00"], ["ABCPR5678S", "5000.00"], ["ABCPM1234R", "5000.00"]]), "S. Form 138 from the sheet: 2 CD and 3 DD records (" + (f.error || c138.length + " CD, " + d138.length + " DD") + ")");
+const sheet = x.TDS24Q.challanSheet("2026-27", "Q1");
+ok(sheet[1][0] === "BSR code" && sheet.filter(z => z[0] === "0240020").length === 2 && sheet.slice(-3).every(z => /0240020 \/ /.test(z[5])), "S. the working's Challans sheet: the two challans, and each salary payment with its challan");
 ok(x.TDS24Q_FILE.build("2026-27", "Q4", FIRM).error && /Protean/.test(x.TDS24Q_FILE.build("2026-27", "Q4", FIRM).error), "S. Q4 still waits on Protean's layout");
 // the books' 192 alone: matched, but no file (they do not say which employee)
 b = books([V("w1", "20260430", "Salary Payable", 50000, 5000, "TDS 192")], [CH("chW", "20260507", 5000, "192")]);

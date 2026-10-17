@@ -22,7 +22,7 @@ process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25"];
+  "PayTax", "TDS24Q", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "money", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
 const have = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
 const {ctx, x} = load(HTML, have);
 ctx.S.companies = {t: {id: "t", name: "Co", tan: "DELC01234E", pan: "AAACC1234C"}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t";
@@ -134,13 +134,16 @@ const cd = (q) => lines(x.TDS26Q.build("2026-27", q, firm, "26Q").text, "CD").fi
 const adds = (r) => { const a = r.map(v => /^\d+\.\d{2}$/.test(v) ? Number(v) : 0); return {parts: Math.round((a[7] + a[8] + a[9] + a[10]) * 100), total: Math.round(a[11] * 100), interest: a[8], fee: a[9], alloc: a[23]}; };
 const q1 = adds(cd("Q1")), q2 = adds(cd("Q2"));
 ok(q1.parts === q1.total && q2.parts === q2.total, "H5. each challan record adds up: tax + surcharge + cess + interest + fee = its total (Q1 " + J(q1) + ", Q2 " + J(q2) + ")");
-// M1 for the forms of the Act of 2025: the workbook has each statement carry the challan as deposited (Gazette Note 6,
-// "the exact amount deposited through challan") and the interest allocation "as provided in field no. 9": a challan that
-// pays two quarters' deductions shows its whole interest in both. Whether that is how Protean wants a shared challan is a
-// question for the owner (docs/tds-forms-2025/GAPS.md); the register below still splits it for the screen.
-ok(q1.interest === 500 && q2.interest === 500 && q1.fee === 200 && q1.alloc === 500 && q2.alloc === 500, "M1. Form 140: each statement carries the challan as deposited, interest 500 and fee 200, allocation = field 9 (" + [q1.interest, q2.interest, q1.fee, q1.alloc, q2.alloc] + ")");
+// M1, next-challan-match (the owner, 17-Oct-2026; GAPS.md Q2): each statement carries the challan as deposited (fields 9,
+// 10: interest 500, fee 200) and, as the interest allocation (field 24), only what is ALLOCATED to it: none allocated,
+// 0.00 in both; 300 to Q1 and 200 to Q2, each its own, never the whole twice
+ok(q1.interest === 500 && q2.interest === 500 && q1.fee === 200 && q1.alloc === 0 && q2.alloc === 0, "M1. Form 140: the challan as deposited, interest 500 and fee 200; nothing allocated: field 24 0.00 in both (" + [q1.interest, q2.interest, q1.fee, q1.alloc, q2.alloc] + ")");
+x.TDSReg.setPortion("c2", "26Q", "2026-27", "Q1", 300, 0); x.TDSReg.setPortion("c2", "26Q", "2026-27", "Q2", 200, 200);
+const p1 = adds(cd("Q1")), p2 = adds(cd("Q2"));
+ok(p1.alloc === 300 && p2.alloc === 200, "M1. allocated 300 to Q1 and 200 to Q2: each statement its own (" + [p1.alloc, p2.alloc] + ")");
 const c2 = x.TDS.challans().find(c => c.id === "c2"), bal = x.TDSReg.balance(c2);
-ok(bal.interest === 0 && bal.fee === 0 && bal.tax === 0, "M1. its balance by head: what one return claims is used (" + J(bal) + ")");
+ok(bal.interest === 0 && bal.fee === 0 && bal.tax === 0, "M1. its balance by head: what the returns were given is used (" + J(bal) + ")");
+ok(!x.TDSReg.setPortion("c2", "26Q", "2026-27", "Q2", 300, 200).ok, "M1. more than the challan's interest cannot be given");
 
 // ---------------- M2
 b = books([{id: "bill", date: "20260410", type: "Purchase", no: "B1", party: "Alpha Ltd", ent: [{l: "Alpha Ltd", a: 100000}, {l: "Contract Charges", a: -100000}]},
@@ -180,10 +183,13 @@ ok(typeof x.TDSReg.usedBy === "function" && x.TDSReg.usedBy("2026-27", "Q1", "26
 b = books([], {challans: [{id: "s1", bsr: "0240020", serial: "00011", date: "20260507", tax: 5000, section: "192"}], tdsFiled: {"2026-27|Q1|24Q": {on: "2026-07-20"}}});
 const prow = {id: "pay:g1|e1", date: "20260430", fy: "2026-27", q: "Q1", employee: "E1", party: "E1", section: "192", tds: 1000, paid: 50000, challan: ""};
 x.Payroll.tdsRows = () => [prow];
-const n = x.Payroll.autoTag(b);
-ok(n === 0 && !b.alloc[prow.id], "M8. Tally's payroll tag is not put on a 24Q marked filed (" + n + ")");
+// next-challan-match (the owner, 17-Oct-2026: shown first, confirmed with one click): Tally's payroll no longer tags by
+// itself; its challan is a suggestion on Form 138's Challans tab, never on a 24Q marked filed
+ok(x.Payroll.autoTag(b) === 0 && !b.alloc[prow.id], "M8. Tally's payroll does not tag by itself");
+ok(!x.TDSMatch || x.TDSMatch.suggestNow("24Q", "2026-27", "Q1").length === 0, "M8. nothing suggested on a 24Q marked filed");
 b.tdsFiled = {};
-ok(x.Payroll.autoTag(b) === 1 && b.alloc[prow.id] === "s1" && (b.allocLog || []).some(l => l.act === "tally"), "M8. not filed: tagged, through the one tagging (in the trail)");
+const sg8 = x.TDSMatch ? x.TDSMatch.suggestNow("24Q", "2026-27", "Q1") : [];
+ok(sg8.length === 1 && sg8[0].chId === "s1" && x.TDSMatch.confirm(sg8[0].key, "24Q", "2026-27", "Q1").ok && b.alloc[prow.id] === "s1" && (b.allocLog || []).some(l => l.act === "suggestion"), "M8. not filed: suggested, and confirmed through the one tagging (in the trail)");
 
 // ---------------- L1
 b = books([V("v1", "20260415", "Alpha Ltd", 100000, 2000, "TDS 194C")]);

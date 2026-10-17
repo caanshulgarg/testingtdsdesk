@@ -35,7 +35,9 @@ LOAD = """(a) => {
   TDSTally.sync(b);
   Payroll.take(b, {book: a.tables.book, employees: T.tally_employees, heads: T.tally_ledgers, allocs: T.tally_cost_allocs, pays: T.tally_salary_pays, vouchers: T.tally_vouchers});
   for (const [name, d] of Object.entries(a.details)) { const e = Payroll.employees().find(z => z.name === name); for (const [k, v] of Object.entries(d)) Payroll.setDetail(e, k, v); }
-  Payroll.autoTag(b);
+  // next-challan-match: Tally's payroll no longer tags by itself; its challans are suggested (From Tally: the months each
+  // payment pays) and confirmed, as a person does on Form 138's Challans tab
+  ["Q1", "Q2", "Q3", "Q4"].forEach(q => TDSMatch.confirmAll("24Q", "2026-27", q));
   S.booksTab = "tds"; S.tdsFy = "2026-27"; S.tdsView = "salary"; S.paySub = "employees"; render();
 }"""
 def txt(pg): return pg.inner_text("#app")
@@ -101,7 +103,9 @@ try:
         pg.evaluate("() => { S.tdsView = 'return'; S.tdsForm = '24Q'; S.tdsQ = 'Q1'; S.tdsTab = 'employees'; render(); }"); pg.wait_for_timeout(400)
         a1 = pg.inner_text('[data-list="q24Annex1"]')
         ok(pg.locator('[data-list="q24Annex1"] tbody tr').count() == len(EXP["annex1"]["Q1"]), "Q1 Annexure I: one row per employee per month (%d)" % len(EXP["annex1"]["Q1"]))
-        ok("0510308 / 01001" in a1 and "0510308 / 01003" in a1, "each month's challan beside its TDS")
+        cells = pg.locator('[data-list="q24Annex1"] [data-ch-cell]').all_inner_texts()
+        ok(cells and all(c.startswith("0510308 · ") and c.endswith("· 192") for c in cells), "each month's challan beside its TDS: BSR · date · section, opening the Move dialog (%s)" % cells[:3])
+        ok(pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).map(r => r.challanNo).sort().join(',')").count("01001") >= 1 and pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).every(r => r.challan)"), "every month's TDS on its challan (01001 … 01003), from Tally's payment's months")
         pg.evaluate("() => { S.tdsQ = 'Q4'; S.tdsTab = 'annex2'; render(); }"); pg.wait_for_timeout(400)
         a2 = pg.inner_text('[data-list="q24Annex2"]')
         ok(inr(EXP["annex2"]["PE Gita Sharma"]["taxPayable"]) in a2 and inr(EXP["annex2"]["PE Chitra Iyer"]["hraExempt"]) in a2, "Q4 Annexure II: the year's tax and exemptions")

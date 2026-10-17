@@ -1,4 +1,6 @@
-"""python3 run_tds_challans.py - smart TDS challan tagging (the owner's choice of 10-Oct-2026, all four together):
+"""python3 run_tds_challans.py - smart TDS challan tagging (the owner's choice of 10-Oct-2026, all four together; since
+next-challan-match, 17-Oct-2026, the suggestions are the one matcher's, TDSMatch, src/js/86, shown on the Challans tab,
+confirmed by a person, never applied by themselves; a new challan is no longer placed by itself):
   1. auto-match by section + month: a month's deductions of one section against a challan of that section (minor head
      200 only; a 400 challan is never matched) whose tax + surcharge + cess equals them; exact: one click "Confirm N
      deductions to challan BSR/date/serial"; a difference: the gap in rupees and a review. Nothing is tagged until a person
@@ -117,9 +119,10 @@ try:
         pg.evaluate("""() => { S.books.challans.push({id: "chShort", bsr: "0510308", serial: "00301", date: "20260606", tax: 7500, interest: 0, section: "194C", minorHead: "200"},
                                                    {id: "chPart", bsr: "0510308", serial: "00302", date: "20260607", tax: 1500, interest: 0, section: "194J", minorHead: "200"}); render(); }""")
         pg.wait_for_timeout(300)
-        # the owner's rule of 14-Oct-2026: a new challan goes to the draft return of its own type and quarter by itself
-        placed = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")
-        ok(placed == {"00123": 8, "00456": 8, "00124": 5}, "the new challans placed themselves: 94C and 194J in 26Q Q1, 92B in 24Q Q1, each exactly its April deductions; the minor head 400 one not (%s)" % placed)
+        # next-challan-match (the owner, 17-Oct-2026: shown first, confirmed with one click, never applied by itself): a new
+        # challan is not placed by itself any more; what it pays is suggested
+        ok(pg.evaluate("Object.keys(S.books.alloc).length") == 0, "the new challans did not tag anything by themselves")
+        ok(pg.evaluate("TDSMatch.suggestNow('26Q', '2026-27', 'Q1').length") > 0 and pg.evaluate("TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length") > 0, "what they pay is suggested on 26Q's and 24Q's Challans tabs")
         ok(pg.evaluate("(S.books.challans.find(c => c.serial === '00125') || {}).autoPlace") == "unknown", "the minor head 400 challan: no return of its own, asked in To fix")
         pg.evaluate("() => { S.tdsView = 'return'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(400)
         row = pg.locator('#app tr', has_text="P-2")
@@ -128,65 +131,45 @@ try:
         c4 = pg.evaluate("(S.books.challans.find(c => c.fromVoucher === 'pay194jMay') || {})")
         ok(c4.get("bsr") == "0510308" and c4.get("serial") == "00222" and c4.get("date") == "20260606" and c4.get("tax") == 10000 and c4.get("section") == "194J",
            "the payment made a challan from its CIN: BSR, serial, the voucher's date and amount, section 194J (%s)" % c4)
-        ok(pg.evaluate("Object.values(S.books.alloc).filter(v => v === (S.books.challans.find(c => c.fromVoucher === 'pay194jMay') || {}).id).length") == 4,
-           "the payment's challan placed itself too: the four deductions it pays (the same as Tally's bill-wise)")
-        # the proposals (the challans' own suggestions) from here, on the same challans as if already there: nothing tagged
-        pg.evaluate("() => { S.books.alloc = {}; S.books.allocFrom = {}; S.books.challans.forEach(c => { c.autoPlace = 'placed'; }); render(); }"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("Object.keys(S.books.alloc).length") == 0, "the payment's challan tagged nothing by itself either")
+        pg.evaluate("() => { S.books.alloc = {}; S.books.allocFrom = {}; S.books.challans.forEach(c => { c.autoPlace = 'suggested'; }); render(); }"); pg.wait_for_timeout(300)
 
-        # ---- 1 and 2: the proposals
-        P = pg.evaluate("TDSCH.proposals('2026-27', 'Q1').map(p => ({id: p.id, kind: p.kind, serial: p.challan.serial, sec: p.section, n: p.rows.length, need: p.need, avail: p.avail, gap: p.gap, exact: p.exact, rows: p.rows.map(r => r.id)}))")
-        bys = {x["serial"]: x for x in P}
+        # ---- 1 and 2: the suggestions of the one matcher
+        SG = """(form) => TDSMatch.suggestNow(form, '2026-27', 'Q1').map(s => ({key: s.key, rule: s.rule, words: s.words, serial: S.books.challans.find(c => c.id === s.chId).serial, n: s.ids.length, total: s.total, rows: s.ids}))"""
+        P = pg.evaluate(SG, "26Q"); bys = {x["serial"]: x for x in P}
         t = bys.get("00222", {})
         want_bw = pg.evaluate(ids("194J", "202605") + ".slice(0, 4)")
-        ok(t.get("kind") == "tally" and sorted(t.get("rows", [])) == sorted(want_bw) and t.get("exact"), "Tally bill-wise: the payment's four Agst Ref deductions proposed for its challan, exact (%s)" % {k: t.get(k) for k in ("kind", "n", "gap")})
-        for ser, sec, n in [("00123", "194C", 8), ("00456", "194J", 8), ("00124", "192", 5)]:
+        ok(t.get("rule") == "a" and t.get("words") == "From Tally" and sorted(t.get("rows", [])) == sorted(want_bw), "From Tally: the payment's four Agst Ref deductions suggested for its challan (%s)" % {k: t.get(k) for k in ("rule", "n")})
+        for ser, sec, n in [("00123", "194C", 8), ("00456", "194J", 8)]:
             x = bys.get(ser, {})
-            ok(x.get("kind") == "auto" and x.get("sec") == sec and x.get("n") == n and x.get("exact"), "auto-match: %d deductions of %s in April, exact, to challan %s (%s)" % (n, sec, ser, {k: x.get(k) for k in ("kind", "sec", "n", "gap")}))
+            ok(x.get("rule") == "b" and x.get("n") == n, "same section, same month, exact: %d deductions of %s in April to challan %s (%s)" % (n, sec, ser, {k: x.get(k) for k in ("rule", "n")}))
+        P24 = pg.evaluate(SG, "24Q"); x = {y["serial"]: y for y in P24}.get("00124", {})
+        ok(x.get("rule") == "b" and x.get("n") == 5, "Form 138 (24Q): the five 192 deductions of April to the 92B challan 00124, exact (%s)" % x)
         sh = bys.get("00301", {})
-        ok(sh.get("kind") == "auto" and sh.get("n") == 8 and not sh.get("exact") and abs(sh.get("gap", 0) + 500) < 0.001, "the short challan: May's 8 deductions of 194C, gap -₹500.00 (%s)" % {k: sh.get(k) for k in ("n", "gap")})
+        ok(sh.get("rule") == "d" and sh.get("n") == 7 and sh.get("total") == 700000, "the short challan (₹7,500): May's 194C filled, oldest first, whole rows: 7 of 8, ₹7,000 (%s)" % {k: sh.get(k) for k in ("rule", "n", "total")})
         pt = bys.get("00302", {})
-        ok(pt.get("n") == 2 and abs(pt.get("gap", 0) - 300) < 0.001, "the 1,500 challan: the two May 194J deductions not paid bill-wise, ₹300.00 left on it (%s)" % {k: pt.get(k) for k in ("n", "gap")})
-        ok("00125" not in bys, "the minor head 400 challan is never proposed")
-        ok(len(set(r for x in P for r in x["rows"])) == sum(x["n"] for x in P), "no deduction is in two proposals")
+        ok(pt.get("n") == 2 and pt.get("total") == 120000, "the ₹1,500 challan: the two May 194J deductions not paid bill-wise, ₹1,200 (%s)" % {k: pt.get(k) for k in ("n", "total")})
+        ok("00125" not in bys and "00124" not in bys, "the minor head 400 challan is never suggested; the 92B challan not for 26Q's deductions")
+        ok(len(set(r for x in P for r in x["rows"])) == sum(x["n"] for x in P), "no deduction is in two suggestions")
 
-        # ---- the screen: proposals, one click for an exact one
+        # ---- the screen: suggestions, one click each, Confirm all
         pg.evaluate(GO); tab(pg, "Challans")
-        card = pg.locator("#app [data-challan-suggest]")
-        txt = card.inner_text() if card.count() else ""
-        ok(card.count() == 1 and "From Tally bill-wise" in txt and "Same section and month" in txt, "Challans: the suggestions, “From Tally bill-wise” and “Same section and month”")
-        ok("00124" not in txt and "Apr 2026 · 5 deductions" not in txt, "Form 140 (26Q) proposes its own deductions only: the 192 challan is not offered here")
-        ok("₹500.00" in txt and "short" in txt.lower(), "the short challan's gap in rupees (₹500.00 short)")
+        txt = pg.locator("#app [data-challan-match]").inner_text() if pg.locator("#app [data-challan-match]").count() else ""
+        ok("From Tally" in txt and "Same section, same month, exact amount" in txt, "Challans: the suggestions with their rules, “From Tally” and “Same section, same month, exact amount”")
+        chT = pg.evaluate("S.books.challans.find(c => c.serial === '00222').id")
+        pg.click('#app [data-cm-ch="%s"] [data-cm-confirm]' % chT); pg.wait_for_timeout(500)
+        ok(sorted(pg.evaluate("Object.keys(S.books.alloc).filter(k => S.books.alloc[k] === S.books.challans.find(c => c.serial === '00222').id)")) == sorted(want_bw), "confirmed: exactly those four tagged to it")
+        pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
+        tagged = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")
+        ok(tagged == {"00222": 4, "00123": 8, "00456": 8, "00301": 7, "00302": 2}, "Confirm all: every suggestion of Form 140 confirmed, nothing else (%s)" % tagged)
+        used = pg.evaluate("TDS.challanUse().chShort || 0")
+        ok(used == 7000 and used <= 7500, "the short challan: the 7 that fit (₹7,000.00 of ₹7,500.00); one left, with its next step (%s)" % used)
+        pg.evaluate("() => { S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
+        pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(400)
+        ok(pg.evaluate("Object.values(S.books.alloc).filter(v => S.books.challans.find(c => c.id === v).serial === '00124').length") == 5, "Form 138: the 192 deductions confirmed to 00124")
+        pg.evaluate("() => { S.tdsForm = '26Q'; render(); }"); pg.wait_for_timeout(300)
         if SHOTS:
             os.makedirs(SHOTS, exist_ok=True)
-        btn = pg.locator('#app button:has-text("Confirm 4 deductions to challan 0510308/06-Jun-2026/00222")')
-        ok(btn.count() == 1, "one click for the bill-wise one: “Confirm 4 deductions to challan 0510308/06-Jun-2026/00222”")
-        if btn.count(): btn.click(); pg.wait_for_timeout(500)
-        ok(sorted(pg.evaluate("Object.keys(S.books.alloc).filter(k => S.books.alloc[k] === S.books.challans.find(c => c.serial === '00222').id)")) == sorted(want_bw), "confirmed: exactly those four tagged to it")
-        allx = pg.locator('#app button:has-text("Confirm all exact")')
-        ok(allx.count() == 1, "“Confirm all exact” for the rest")
-        if allx.count(): allx.click(); pg.wait_for_timeout(600)
-        tagged = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")
-        ok(tagged == {"00222": 4, "00123": 8, "00456": 8}, "every exact proposal of Form 140 confirmed, nothing else (%s)" % tagged)
-        # 192: on Form 138 (24Q), the salary TDS the books carry, against the 92B challan
-        pg.evaluate("() => { S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
-        b192 = pg.locator('#app [data-challan-suggest] button:has-text("Confirm 5 deductions to challan 0510308/06-May-2026/00124")')
-        ok(b192.count() == 1, "Form 138 (24Q) Challans: the five 192 deductions of April proposed for the 92B challan")
-        if b192.count(): b192.click(); pg.wait_for_timeout(400)
-        ok(pg.evaluate("Object.values(S.books.alloc).filter(v => S.books.challans.find(c => c.id === v).serial === '00124').length") == 5, "confirmed: the 192 deductions tagged to 00124")
-        pg.evaluate("() => { S.tdsForm = '26Q'; render(); }"); pg.wait_for_timeout(300)
-        # the short one: confirming all is refused; the ones that fit are tagged
-        pid = pg.evaluate("(TDSCH.proposals('2026-27', 'Q1').find(p => p.challan.serial === '00301') || {}).id")
-        res = pg.evaluate("(id) => TDSCH.confirm(id)", pid)
-        ok(res and not res.get("ok") and pg.evaluate("Object.values(S.books.alloc).filter(v => v === 'chShort').length") == 0, "the short challan: confirming all 8 is refused (over-allocation) (%s)" % (res or {}).get("why"))
-        pg.evaluate(GO); tab(pg, "Challans")
-        rv = pg.locator('#app [data-proposal*="chShort"] button:has-text("Review")')
-        if rv.count(): rv.click(); pg.wait_for_timeout(300)
-        fit = pg.locator('#app [data-proposal*="chShort"] button:has-text("that fit")')
-        ok(fit.count() == 1, "review of the short challan: “Confirm the … that fit”")
-        if fit.count(): fit.click(); pg.wait_for_timeout(500)
-        used = pg.evaluate("TDS.challanUse().chShort || 0"); nshort = pg.evaluate("Object.values(S.books.alloc).filter(v => v === 'chShort').length")
-        ok(nshort == 7 and used == 7000 and used <= 7500, "the 7 that fit tagged (₹7,000.00 of ₹7,500.00); one left untagged (%d, %s)" % (nshort, used))
-        if SHOTS:
             for w, h, tag in [(1400, 1000, "desktop"), (390, 900, "phone")]:
                 for sch in ["light", "dark"]:
                     q = br.new_page(viewport={"width": w, "height": h}, color_scheme=sch)
@@ -195,43 +178,49 @@ try:
                     q.evaluate(BOOKS_JS); q.wait_for_timeout(700); q.evaluate(GO); q.wait_for_timeout(400)
                     q.evaluate("(cs) => { S.books.challans = cs; render(); }", pg.evaluate("S.books.challans")); q.wait_for_timeout(300)
                     q.evaluate("() => { S.tdsTab = 'challans'; render(); document.querySelectorAll('.toast').forEach(t => t.remove()); window.scrollTo(0, 0); }"); q.wait_for_timeout(500)
-                    if tag == "phone": q.evaluate("() => { const e = document.querySelector('[data-challan-upload-bar]'); if (e) e.scrollIntoView({block: 'start'}); window.scrollBy(0, -8); }"); q.wait_for_timeout(300)
                     q.screenshot(path=os.path.join(SHOTS, "challans-suggestions-%s-%s.png" % (tag, sch)), full_page=(tag == "desktop"))
                     q.close()
 
-        # ---- 3. manual multi-select on Entries
+        # ---- 3. manual multi-select on Entries: ticked, then Move to challan… (the one dialog) or Take off challan
+        two = pg.evaluate(ids("194J", "202605") + ".slice(4)")
+        pg.evaluate("(ids) => TDSCH.untag(ids)", two)
         tab(pg, "Deductions")
         pg.select_option('#app select[aria-label="Section"]', "194J"); pg.select_option('#app select[aria-label="Month"]', "202605"); pg.select_option('#app select[aria-label="Challan"]', "no"); pg.wait_for_timeout(400)
         pg.click('#tdsDnTable thead input[type="checkbox"][aria-label="Select all shown"]'); pg.wait_for_timeout(300)
         bar = pg.locator("#app [data-tag-bar]")
         ok(bar.count() == 1 and "2 selected" in bar.inner_text() and "₹1,200.00" in bar.inner_text(), "select all shown (194J, May, not against a challan): 2 selected, ₹1,200.00 (%s)" % (bar.inner_text()[:160] if bar.count() else ""))
-        pg.select_option('#app [data-tag-bar] select[aria-label="Tag to challan…"]', "chPart"); pg.wait_for_timeout(300)
-        ok("₹300.00" in bar.inner_text() and "left" in bar.inner_text(), "running total against the challan: ₹300.00 left after")
+        pg.click('#app [data-tag-bar] [data-tag-move]'); pg.wait_for_timeout(400)
+        pick = pg.locator('[data-cm-pick="chPart"]')
+        ok(pick.count() == 1 and "₹300.00 left after" in pick.inner_text(), "the Move dialog: against challan 00302, ₹300.00 left after (%s)" % (pick.inner_text()[:160] if pick.count() else ""))
         if SHOTS:
-            pg.evaluate("() => { document.querySelectorAll('.toast').forEach(t => t.remove()); const e = document.querySelector('[data-tag-bar]'); if (e) e.scrollIntoView({block: 'center'}); }"); pg.wait_for_timeout(200)
-            pg.screenshot(path=os.path.join(SHOTS, "entries-tag-bar-desktop-light.png"))
-        pg.click('#app [data-tag-bar] button:has-text("Tag to challan")'); pg.wait_for_timeout(500)
-        two = pg.evaluate(ids("194J", "202605") + ".slice(4)")
-        ok(all(pg.evaluate("(i) => S.books.alloc[i]", i) == "chPart" for i in two), "tagged: both to challan 00302")
-        # untag one
+            pg.screenshot(path=os.path.join(SHOTS, "entries-move-dialog-desktop-light.png"))
+        pg.click('[data-cm-pick-go="chPart"]'); pg.wait_for_timeout(500)
+        ok(all(pg.evaluate("(i) => S.books.alloc[i]", i) == "chPart" for i in two), "moved: both to challan 00302")
+        # take one off
         pg.select_option('#app select[aria-label="Challan"]', ""); pg.wait_for_timeout(300)
         pg.check('#tdsDnTable tbody tr:has-text("ZZ Consultant %s") input[type="checkbox"]' % two[0][1:].split("|")[0]); pg.wait_for_timeout(200)
-        pg.click('#app [data-tag-bar] button:has-text("Untag")'); pg.wait_for_timeout(400)
-        ok(pg.evaluate("(i) => S.books.alloc[i] || ''", two[0]) == "" and pg.evaluate("(i) => S.books.alloc[i]", two[1]) == "chPart", "Untag: the one ticked is off its challan, the other stays")
-        # over-allocation refused: in the bar, and by the logic and by the single picker
+        pg.click('#app [data-tag-bar] button:has-text("Take off challan")'); pg.wait_for_timeout(400)
+        ok(pg.evaluate("(i) => S.books.alloc[i] || ''", two[0]) == "" and pg.evaluate("(i) => S.books.alloc[i]", two[1]) == "chPart", "Take off challan: the one ticked is off its challan, the other stays")
+        # over-allocation refused: in the dialog, by the logic and by the single picker
+        pg.evaluate("() => { S.tdsSel = {}; render(); }")
         pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
         pg.select_option('#app select[aria-label="Section"]', "194C"); pg.select_option('#app select[aria-label="Month"]', "202606"); pg.wait_for_timeout(300)
         pg.click('#tdsDnTable thead input[type="checkbox"][aria-label="Select all shown"]'); pg.wait_for_timeout(200)
-        pg.select_option('#app [data-tag-bar] select[aria-label="Tag to challan…"]', "chPart"); pg.wait_for_timeout(300)
-        b2 = pg.locator('#app [data-tag-bar] button:has-text("Tag to challan")')
-        ok("over by" in bar.inner_text().lower() and b2.is_disabled(), "₹1,000.00 against ₹800.00 left: “over by ₹200.00”, Tag to challan cannot be clicked (%s)" % bar.inner_text()[:160])
+        pg.click('#app [data-tag-bar] [data-tag-move]'); pg.wait_for_timeout(400)
+        ok(pg.locator('[data-cm-pick-go="chPart"]').is_disabled() and "more than it has" in pg.locator('[data-cm-pick="chPart"]').inner_text(), "₹1,000.00 against ₹800.00 left: the challan cannot be chosen, “needs ₹200.00 more than it has”")
+        pg.evaluate("() => { S.tdsMove = null; S.tdsSel = {}; render(); }"); pg.wait_for_timeout(200)
         before = pg.evaluate("JSON.stringify(S.books.alloc)")
         res = pg.evaluate("(ids) => TDSCH.tag(ids, 'chPart')", pg.evaluate(ids("194C", "202606")))
         ok(not res.get("ok") and pg.evaluate("JSON.stringify(S.books.alloc)") == before, "TDSCH.tag refuses to over-allocate a challan; nothing changes (%s)" % res.get("why"))
         one = pg.evaluate("(TDS.rows().find(r => r.fy === '2026-27' && !r.challan && TDS.sec(r.section) === '194C' && TDS.ymd(r.date).slice(0, 6) === '202605') || {}).id")
-        pg.evaluate("(i) => tdsAlloc(i, 'chPart')", one)   # 1,000.00 against 800.00 left
-        ok(pg.evaluate("(i) => S.books.alloc[i] || ''", one) == "", "the single challan picker refuses it too")
+        pg.evaluate("(i) => tdsMoveTo([i], 'chPart')", one)   # 1,000.00 against 800.00 left
+        ok(pg.evaluate("(i) => S.books.alloc[i] || ''", one) == "", "a single move refuses it too")
         ok(all(pg.evaluate("TDS.challans().every(c => (TDS.challanUse()[c.id] || 0) <= num(c.tax) + 0.001)") for _ in [0]), "no challan is used beyond its amount, to the paisa")
+        # the file refuses while anything is on no challan (next-challan-match: never left out silently), then a challan for the rest
+        fr = pg.evaluate("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
+        ok("on no challan" in (fr.get("error") or "") and len(fr.get("untagged") or []) == 4, "the file refuses: 4 deductions on no challan, listed (%s)" % (fr.get("error") or "")[:120])
+        pg.evaluate("""(ids) => { S.books.challans.push({id: "chRest", bsr: "0510308", serial: "00303", date: "20260707", tax: 2000, interest: 0, section: "194C", minorHead: "200"});
+          TDSCH.tag(ids.r, 'chRest'); TDSCH.tag(ids.j, 'chPart'); render(); }""", {"r": pg.evaluate("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && TDS.sec(r.section) === '194C').map(r => r.id)"), "j": [two[0]]})
 
         # ---- the FVU file: the confirmed tagging only
         f = pg.evaluate("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
@@ -243,10 +232,10 @@ try:
         # next-tds-forms-2025: Form 140's challan record (Protean's file format 1.1): BSR field 15, serial 17, date 19; the
         # challan as deposited in 8 to 12 (Gazette Note 6), the deductions' tax as tagged in field 21
         got = {l[16]: {"n": int(l[4]), "tax": float(l[20]), "bsr": l[14], "date": l[18], "total": float(l[11])} for l in cd}
-        ok(len(cd) == 5 and set(got) == {"00123", "00456", "00222", "00301", "00302"}, "the file: one CD record per challan with confirmed 26Q deductions, none for 192 or the 400 challan (%s)" % sorted(got))
+        ok(len(cd) == 6 and set(got) == {"00123", "00456", "00222", "00301", "00302", "00303"}, "the file: one CD record per challan with confirmed 26Q deductions, none for 192 or the 400 challan (%s)" % sorted(got))
         ok(got == {k: {"n": v["n"], "tax": v["tax"], "bsr": v["bsr"], "date": v["date"], "total": v["total"]} for k, v in want.items()},
            "each CD: BSR, date, serial, number of deductions, tax as tagged; its total the challan as deposited (%s)" % got.get("00456"))
-        ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 7 + 1, "DD records: the 28 confirmed deductions (%d)" % len(dd))
+        ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 7 + 2 + 3, "DD records: the 32 deductions, every one on its challan (%d)" % len(dd))
         ok(all(l[22] == "200" for l in cd), "minor head 200 on every CD record")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
         br.close()

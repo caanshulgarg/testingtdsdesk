@@ -311,7 +311,7 @@ const TDS24Q_FILE = {
   rowsOf(fy, q){
     const src = TDS.salarySource(fy), all = TDS.salaryRows().filter(r => r.fy === fy && r.q === q);
     if (src === "books") return {error: all.length ? "The books' salary TDS under 192 does not say which employee it is for: bring in the salary sheet (or Tally's payroll) to make the " + TDS.formName("24Q", fy) + " file." : "No salary TDS of " + q + " " + fy + "."};
-    const mine = all.filter(r => r.src === src), un = TDS26Q.untaggedError(mine);
+    const mine = src === "payroll" ? Payroll.tdsRows().filter(r => r.fy === fy && r.q === q) : TDS24Q.dedRows().filter(r => r.fy === fy && r.q === q), un = TDS26Q.untaggedError(mine);
     if (un) return un;
     const rows = mine.filter(r => r.tds > 0.005 && r.challan).map(r => Object.assign({}, r, {employee: r.employee || r.party}));
     if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};

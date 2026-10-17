@@ -167,7 +167,11 @@ const TDS = {
       .sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the source of a year's Form 138 rows: "payroll", "sheet" or "books"
-  salarySource(fy){ const r = this.salaryRows().find(x => x.fy === fy && (x.src === "payroll" || x.src === "sheet")); return r ? r.src : "books"; },
+  salarySource(fy){
+    if (typeof Payroll === "object" && Payroll.tdsRows().some(x => x.fy === fy)) return "payroll";
+    if (typeof TDS24Q === "object" && TDS24Q.dedRows && TDS24Q.dedRows().some(x => x.fy === fy)) return "sheet";
+    return "books";
+  },
   // every voucher that carries a TDS ledger becomes one deduction row
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
@@ -307,10 +311,10 @@ const TDS = {
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },
-  // put deductions against challans of the same quarter and section, as a person would. tds-layout (14-Oct-2026): no button
-  // calls this any more; the app's one allocator is TDSReg.autoAllocate (src/js/79, the owner's order). It stays as the
-  // tests' way to set up their books (tdsgst_snapshot.py, e2e_tdsgst_app.js, run_tds_accuracy.py, pages_tds.py), whose
-  // files and figures were made with it and must not move
+  // put deductions against challans of the same quarter and section. TEST SET-UP ONLY: nothing in the app calls it (the
+  // one matcher is TDSMatch, src/js/86, which only suggests; a person confirms). It stays as the tests' way to set up their
+  // books (tdsgst_snapshot.py, e2e_tdsgst_app.js, run_tds_accuracy.py, pages_tds.py), whose files and figures were made
+  // with it and must not move
   autoAllocate(){
     // tds-layout (14-Oct-2026): a return marked filed is locked (TDSReg, src/js/79): its deductions are left as they are
     const b = S.books, rows = this.rows().concat(this.nrRows(), this.tcsRows()).filter(r => !r.challan && !(typeof TDSReg === "object" && TDSReg.rowLocked(r.id))), use = this.challanUse();
@@ -343,12 +347,16 @@ const TDS = {
     await ensureXlsx();
     form = typeof TDS_FORMS === "object" && TDS_FORMS[form] ? form : "26Q";
     const rows = TDS_FORMS[form].rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
-    const ch = this.challans().filter(c => (!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q));
-    const use = this.challanUse();
+    // next-challan-match: the quarter's challans and any other this return uses (an earlier one's balance), with what
+    // this return uses of each and the interest and fee allocated to it
+    const usedHere = new Set(rows.map(r => r.challan).filter(Boolean));
+    const ch = this.challans().filter(c => usedHere.has(c.id) || ((!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q)));
+    const use = this.challanUse(), part = (c) => typeof TDSReg === "object" && fy && q ? TDSReg.portionFor(c, form, fy, q) : {interest: 0, fee: 0};
     const d = s => s ? String(s).slice(6, 8) + "/" + String(s).slice(4, 6) + "/" + String(s).slice(0, 4) : "";
     const wb = XLSX.utils.book_new();
-    const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left"]]
-      .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0))]));
+    const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left", "Used by this return", "Interest allocated here", "Fee allocated here"]]
+      .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0)),
+        r2(rows.filter(r => r.challan === c.id).reduce((a, r) => a + r.tds, 0)), part(c).interest, part(c).fee]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
     const head = ["Sl. No.", "Deductee code", "PAN", "Name of the deductee", "Section", "Date of payment or credit", "Amount paid or credited",
       "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];

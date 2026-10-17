@@ -2,14 +2,16 @@
 // `node fvu_books.js <out dir>`): Larkspur Fixture Events Private Limited (tests/fixtures/books, made up), FY 2025-26, each
 // quarter: 194C to an LLP and to a transporter with no PAN (20%, remark C), 194J professional fees, 194A interest, 195 to a
 // non-resident (27Q), TCS on scrap (27EQ), two employees' salary through Tally's payroll (24Q; Annexure II in Q4). Every
-// deduction is on a challan of the 7th of the next month. Test data only.
+// deduction is on a challan of the 7th of the next month. Test data only. next-challan-match (17-Oct-2026): Q3's 194J is
+// split across two challans (two deductee records under two challan records), and Q4's challan of the 7th pays both
+// 26Q's and 27Q's deductions with its interest of 150 allocated 100 to 26Q and 50 to 27Q.
 "use strict";
 const path = require("path"), fs = require("fs");
 process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES"];
+  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "money", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
 const FY = "2025-26", QS = ["Q1", "Q2", "Q3", "Q4"];
 const FIRM = {tan: "DELL04827E", pan: "AAGCL4827M", name: "Larkspur Fixture Events Private Limited", deductorType: "K", branch: "Head Office", flat: "Unit 4", premises: "Larkspur House", road: "Ring Road",
   area: "Lajpat Nagar", town: "New Delhi", state: "09", pin: "110024", email: "accounts@larkspur.example", phone: "9811000000",
@@ -31,12 +33,13 @@ function books(){
     vs.push(V("x" + n, d, "Ashvattha Transport Co", 40000, 8000, "TDS ON CONTRACT 194C", "Freight"));
     vs.push(V("n" + n, d, "Overseas Design GmbH", 100000, 20800, "TDS ON NON RESIDENT 195", "Design Fees"));
     vs.push({id: "s" + n, date: d, type: "Sales", no: "LFE/S/" + n, party: "Scrap Buyer Co", ent: [{l: "Scrap Buyer Co", a: -101000}, {l: "Scrap Sales", a: 100000}, {l: "TCS ON SCRAP", a: 1000}]});
-    challans.push({id: "ch" + n, bsr: "0510308", serial: "0000" + n, date: due, tax: 17000, interest: 0, section: "194C"});
-    challans.push({id: "nr" + n, bsr: "0510308", serial: "0010" + n, date: due, tax: 20800, interest: 0, section: "195"});
+    challans.push({id: "ch" + n, bsr: "0510308", serial: "0000" + n, date: due, tax: n === 3 ? 14000 : n === 4 ? 37800 : 17000, interest: n === 4 ? 150 : 0, section: "194C"});
+    if (n === 3) challans.push({id: "ch3b", bsr: "0510308", serial: "00005", date: due, tax: 3000, interest: 0, section: "194J"});
+    if (n !== 4) challans.push({id: "nr" + n, bsr: "0510308", serial: "0010" + n, date: due, tax: 20800, interest: 0, section: "195"});
     challans.push({id: "tc" + n, bsr: "0510308", serial: "0020" + n, date: due, tax: 1000, interest: 0, section: "206C"});
     challans.push({id: "sl" + n, bsr: "0510308", serial: "0030" + n, date: due, tax: 15000, interest: 0, section: "192"});
-    ["c", "j", "a", "x"].forEach(k => { const v = vs.find(z => z.id === k + n); alloc[v.id + "|" + v.ent[1].l] = "ch" + n; });
-    alloc["n" + n + "|TDS ON NON RESIDENT 195"] = "nr" + n; alloc["s" + n + "|TCS ON SCRAP"] = "tc" + n;
+    ["c", "j", "a", "x"].forEach(k => { if (n === 3 && k === "j") return; const v = vs.find(z => z.id === k + n); alloc[v.id + "|" + v.ent[1].l] = "ch" + n; });
+    alloc["n" + n + "|TDS ON NON RESIDENT 195"] = n === 4 ? "ch4" : "nr" + n; alloc["s" + n + "|TCS ON SCRAP"] = "tc" + n;
   });
   const b = {cid: "t", vouchers: vs, challans, alloc, certs: [], meta: {from: "20250401", to: "20260331"},
     map: {"TDS ON CONTRACT 194C": {kind: "tds_payable", section: "194C"}, "TDS ON PROFESSIONAL 194J": {kind: "tds_payable", section: "194J"}, "TDS ON INTEREST 194A": {kind: "tds_payable", section: "194A"},
@@ -62,6 +65,9 @@ function books(){
   const ravi = x.Payroll.employees().find(e => e.name === "Ravi Menon");
   [["regime", "old"], ["d80C", 150000], ["rent", 300000], ["landlordPan", "ABCPL5678L"], ["landlordName", "Lata Iyer"], ["hraMetro", "no"]].forEach(([k, v]) => x.Payroll.setDetail(ravi, k, v));
   x.Payroll.tdsRows().forEach(r => { b.alloc[r.id] = "sl" + (QS.indexOf(r.q) + 1); });
+  const sp = x.TDSMatch.split("j3|TDS ON PROFESSIONAL 194J", [{chId: "ch3", tds: 2000}, {chId: "ch3b", tds: 3000}]);
+  if (!sp.ok) throw new Error("the split: " + sp.why);
+  x.TDSReg.setPortion("ch4", "26Q", FY, "Q4", 100, 0); x.TDSReg.setPortion("ch4", "27Q", FY, "Q4", 50, 0);
   return {ctx, x, b};
 }
 // every file: {"26Q1.txt": result, ...}; the names fit the FVU's 12 characters

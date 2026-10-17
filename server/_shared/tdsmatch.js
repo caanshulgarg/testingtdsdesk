@@ -172,7 +172,9 @@ function tmRules(rows, chs, opt){
   dPass(false);
   // f. an earlier challan of the same tax year with balance left (paid before these deductions)
   allCh.filter(c => tmTdsHead(c) && left[c.id] > 0 && tmFyOf(c.date) === fy).forEach(c => {
-    const rest = freeRows().filter(r => !c.sec || tmSecOk(c.sec, r.sec));
+    // only deductions of a later month than the challan's (a challan of the same month paid before the deduction is not
+    // a balance left over)
+    const rest = freeRows().filter(r => (!c.sec || tmSecOk(c.sec, r.sec)) && tmYmd(r.date).slice(0, 6) > tmYmd(c.date).slice(0, 6));
     const got = fill(c, rest, true);
     if (!got.length) return;
     const secs = Array.from(new Set(got.map(r => r.sec))).sort();

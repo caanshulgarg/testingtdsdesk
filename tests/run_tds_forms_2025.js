@@ -19,7 +19,7 @@ const {load, HTML, OUT} = require("./harness");
 const KEEP = path.join(OUT, "forms2025"); fs.mkdirSync(KEEP, {recursive: true});
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25"];
+  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "money", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
 const have = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
 const {ctx, x} = load(HTML, have);
 ctx.S.companies = {t: {id: "t", name: "Co"}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t";
@@ -93,7 +93,9 @@ function against(form, text, label){
     if (cents(c[11]) !== cents(c[7]) + cents(c[8]) + cents(c[9]) + cents(c[10])) bad.push("CD " + c[3] + " field 12 = 8 + 9 + 10 + 11");
     if (cents(c[20]) !== mine.reduce((a, d) => a + cents(d[24]), 0)) bad.push("CD " + c[3] + " field 21: the sum of DD field 25");
     if (cents(c[21]) !== mine.reduce((a, d) => a + cents(d[23]), 0)) bad.push("CD " + c[3] + " field 22: the sum of DD field 24");
-    if (c[23] !== c[8] || c[24] !== c[10]) bad.push("CD " + c[3] + " fields 24, 25: as fields 9, 11 (" + [c[23], c[24], c[8], c[10]] + ")");
+    // next-challan-match (the owner, 17-Oct-2026; GAPS.md Q2): fields 24 and 25 are what is ALLOCATED to this statement
+    // (0.00 when none), never more than the challan's interest and others as deposited (fields 9, 11)
+    if (!/^\d+\.00$/.test(c[23]) || !/^\d+\.00$/.test(c[24]) || cents(c[23]) > cents(c[8]) || cents(c[24]) > cents(c[10])) bad.push("CD " + c[3] + " fields 24, 25: allocated, within fields 9, 11 (" + [c[23], c[24], c[8], c[10]] + ")");
     if (cents(c[11]) < cents(c[20]) + cents(c[23]) + cents(c[24]) + (c[12] === "C" ? cents(c[9]) : 0)) bad.push("CD " + c[3] + " field 12: not less than the deductees' tax + the allocations (+ the fee)");
   });
   dds.forEach((d, i) => {
@@ -128,6 +130,8 @@ let b = books([V("v1", "20260510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contr
   V("v3", "20260515", "Gamma", 50000, 1000, "TDS 194I", "Machinery Hire Charges"), V("v4", "20260601", "Delta", 50000, 500, "TDS 194C", "Contract Charges")]);
 b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 13000, interest: 0}, {id: "c2", bsr: "0240020", serial: "00012", date: "20260705", tax: 500, interest: 15}];
 b.alloc = {"v1|TDS 194C": "c1", "v2|TDS 194J": "c1", "v3|TDS 194I": "c1", "v4|TDS 194C": "c2"};
+// next-challan-match: the challan's interest allocated to this return (TDSReg.setPortion; none allocated, field 24 is 0.00)
+b.chPortions = {c2: {"26Q|2026-27|Q1": {interest: 15, fee: 0}}};
 let f = build("2026-27", "Q1", FIRM, "26Q");
 ok(!f.error && f.formNo === "140" && /_Form140_Q1_202627/.test(f.name || ""), "V. Form 140 for Q1 2026-27 is made (" + (f.error || f.name) + ")");
 let L = against("26Q", f.text, "Form 140");
@@ -140,7 +144,7 @@ fieldsAre(of(f.text, "BH")[0], {4: "2", 5: "140", 13: "BLRF02329F", 15: "AAAFF12
 const cd = of(f.text, "CD");
 fieldsAre(cd[0], {4: "1", 5: "3", 8: "13000.00", 9: "0.00", 10: "0.00", 11: "0.00", 12: "13000.00", 13: "C", 15: "0240020", 17: "00011", 19: "07062026", 21: "13000.00", 22: "13000.00", 23: "200", 24: "0.00", 25: "0.00"},
   "V. 140 CD 1: the challan as deposited, three deductees, its date 07-06-2026");
-fieldsAre(cd[1], {4: "2", 5: "1", 8: "500.00", 9: "15.00", 12: "515.00", 17: "00012", 19: "05072026", 21: "500.00", 24: "15.00"}, "V. 140 CD 2: a July challan that pays a June deduction, with its interest");
+fieldsAre(cd[1], {4: "2", 5: "1", 8: "500.00", 9: "15.00", 12: "515.00", 17: "00012", 19: "05072026", 21: "500.00", 24: "15.00"}, "V. 140 CD 2: a July challan that pays a June deduction, with its interest allocated here (field 24)");
 const dd = of(f.text, "DD");
 fieldsAre(dd[0], {4: "1", 5: "1", 8: "AAACA1234A", 9: "Alpha Ltd", 15: "1024", 18: "Y", 19: "10052026", 20: "100000.00", 24: "2000.00", 25: "2000.00", 27: "10052026", 28: "2.0000"}, "V. 140 DD: 194C to a company is 1024 at 2%");
 fieldsAre(dd[1], {4: "2", 15: "1027", 28: "10.0000"}, "V. 140 DD: professional fees (194J) is 1027 at 10%");
@@ -351,6 +355,30 @@ ctx.S.companies.t = {id: "t", name: "Co", tan: "BLRF02329F", pan: "AAAFF1234F", 
 const fd = x.TDS26Q.firmDetails();
 ok(fd.tan === "BLRF02329F" && fd.person === "Ravi Kumar" && fd.state === "09" && fd.gstinOwn === "07AAAFF1234F1Z5" && !fd.gstin, "A6. the files read the details from Client setup (the new forms write the client's own GSTIN when none is given) (" + J(fd) + ")");
 ctx.S.companies.t = {id: "t", name: "Co"};
+
+// ---------------- M: next-challan-match: a challan shared by two quarters (each its own interest allocated) and a deduction
+// split across two challans: two deductee records under two challan records (S140.txt, through FVU 1.2 as a book
+// adjustment, which needs no .csi; run_fvu12_forms.py)
+if (x.TDSMatch){
+  b = books([V("s1", "20260510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contract Charges"), V("s2", "20260720", "Beta", 100000, 2000, "TDS 194C", "Contract Charges"),
+    V("s3", "20260612", "Gamma", 150000, 15000, "TDS 194J", "Professional Fees")]);
+  b.challans = [{id: "sh", bsr: "0240020", serial: "00041", date: "20260807", tax: 5000, interest: 60, section: "194C"}, {id: "j1", bsr: "0240020", serial: "00042", date: "20260707", tax: 9000, interest: 0, section: "194J"},
+    {id: "j2", bsr: "0240020", serial: "00043", date: "20260707", tax: 6000, interest: 0, section: "194J"}];
+  b.alloc = {"s1|TDS 194C": "sh", "s2|TDS 194C": "sh"};
+  ctx.S.tdsFy = "2026-27";
+  const sp = x.TDSMatch.split("s3|TDS 194J", [{chId: "j1", tds: 9000}, {chId: "j2", tds: 6000}]);
+  x.TDSReg.setPortion("sh", "26Q", "2026-27", "Q1", 40, 0); x.TDSReg.setPortion("sh", "26Q", "2026-27", "Q2", 20, 0);
+  f = build("2026-27", "Q1", FIRM, "26Q");
+  against("26Q", f.text, "Form 140 (shared challan, split row)");
+  const mc = of(f.text, "CD"), md = of(f.text, "DD"), cdBy = (ser) => mc.find(c => c[16] === ser) || [];
+  ok(sp.ok && !f.error && mc.length === 3 && md.length === 3, "M. Q1: 3 challans, 3 deductee records (the split row is two) (" + (f.error || sp.why || mc.length + "/" + md.length) + ")");
+  ok(J(["00042", "00043"].map(ser => md.filter(d => d[4] === cdBy(ser)[3]).map(d => [d[7], d[19], d[23], d[26]]))) === J([[["ABCPG1234G", "90000.00", "9000.00", "12062026"]], [["ABCPG1234G", "60000.00", "6000.00", "12062026"]]]),
+    "M. the split: one deductee record under each challan, the amount paid in proportion, the same date of deduction");
+  ok(cdBy("00041")[8] === "60.00" && cdBy("00041")[23] === "40.00", "M. the shared challan in Q1: interest 60 as deposited (field 9), 40 allocated to Q1 (field 24)");
+  fvuCopy("26Q", "S");
+  const q2 = build("2026-27", "Q2", FIRM, "26Q"), c2 = of(q2.text, "CD").find(c => c[16] === "00041") || [];
+  ok(!q2.error && c2[8] === "60.00" && c2[23] === "20.00", "M. the shared challan in Q2: 20 allocated to Q2 (field 24); together never more than the 60 paid");
+}
 
 // ---------------- O: up to 2025-26, the old files as before
 b = books([V("o1", "20250510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contract Charges")]);

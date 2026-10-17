@@ -62,9 +62,12 @@ const firm = { tan: "DELF01234E", pan: "AAACF1234A", name: "FinCom Spike Co", de
 const k1row = G.K1 + "|FC TDS 194C Keys";
 ok(x.TDSCH.rowsAll().some((rw) => rw.id === k1row), "the deduction K1 is a TDS row (" + k1row + ")");
 b.alloc[k1row] = px.id;
+// next-challan-match (17-Oct-2026): interest and fee are written as allocated to the return (none allocated: 0.00)
+const r0 = x.TDSReg.setPortion(px.id, "26Q", "2026-27", "Q3", 150, 200);
+ok(r0.ok, "the challan's interest and fee allocated to 26Q Q3 (" + (r0.why || "ok") + ")");
 const f = x.TDS26Q.build("2026-27", "Q3", firm, "26Q");
 const cd = String(f.text || "").split("\r\n").map((l) => l.split("^")).find((a) => a[1] === "CD") || [];
-ok(cd[9] === "150.00" && cd[10] === "200.00" && cd[13] === "0510308" && cd[15] === "54321", "1. the FVU's challan record: interest 150.00, fee 200.00, BSR, number (" + cd.slice(5, 16).join("^") + ")");
+ok(cd[9] === "150.00" && cd[10] === "200.00" && cd[13] === "0510308" && cd[15] === "54321", "1. the FVU's challan record: interest 150.00, fee 200.00 as allocated, BSR, number (" + cd.slice(5, 16).join("^") + ")");
 delete b.alloc[k1row];
 // ---- 2. SP1 pays K1 (Tally's link): with a challan FinCom has for SP1 (uploaded, matched by date and amount)
 x.TDSCH.add([{ bsr: "0240020", serial: "00979", date: "20261201", tax: 2000, interest: 0, section: "194C", minorHead: "200" }]);

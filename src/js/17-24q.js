@@ -125,6 +125,16 @@ const TDS24Q = {
       how: "Deducted " + INR.format(ded) + ", challans " + INR.format(paid) + ". Some challans may belong to 26Q.", who: []});
     return out;
   },
+  challanSheet(fy, q){
+    const cx = TDSReg.ctx(), k = TDSReg.key("24Q", fy, q), rows = TDS.salaryRows().filter(r => r.fy === fy && r.q === q), chs = TDS.challans();
+    const d = (s) => s ? fmtDate(tallyDate(TDS.ymd(s))) : "";
+    const used = chs.filter(c => (cx.uses[c.id] || {})[k]);
+    const head = [["Challans used by " + TDS.formName("24Q", fy) + " " + q + " " + fy], ["BSR code", "Challan serial", "Date of deposit", "Section", "Tax", "Interest", "Fee and others", "Tax used here", "Deductions here", "Interest allocated here", "Fee allocated here", "Tax left"]]
+      .concat(used.map(c => { const u = cx.uses[c.id][k], p = TDSReg.portionFor(c, "24Q", fy, q, cx); return [c.bsr, c.serial, d(c.date), TDSCH.secNorm(c.section), num(c.tax), num(c.interest), TDSReg.feeOf(c), u.tax, u.n, p.interest, p.fee, TDSReg.balance(c, cx).tax]; }));
+    const byId = {}; chs.forEach(c => { byId[c.id] = c; });
+    return head.concat([[], ["Salary payments and their challans"], ["Employee", "PAN", "Date", "Paid", "TDS", "Challan", "Matched by"]],
+      rows.map(r => { const c = byId[r.challan]; return [r.employee || r.party, r.pan || "PANNOTAVBL", d(r.date), r.paid, r.tds, c ? c.bsr + " / " + c.serial + " / " + d(c.date) : r.tds > 0 ? "on no challan" : "", typeof TDSMatch === "object" ? TDSMatch.matchedBy(r.id).words.replace(/^Matched by: /, "") : ""]; }));
+  },
   async toExcel(fy, q){
     await ensureXlsx();
     const a1 = this.annexI(fy, q), a2 = this.annexII(fy);
@@ -137,6 +147,9 @@ const TDS24Q = {
         "Chapter VI-A", "Taxable income", "TDS", "Surcharge", "Cess"]].concat(
         a2.map((e, i) => [i + 1, e.name, e.pan || "PANNOTAVBL", e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "", e.gross, e.exempt,
           e.standard, e.profTax, e.chapter6, e.taxable, e.tds, e.surcharge, e.cess]))), "Annexure II " + fy);
+    // next-challan-match: the Challans sheet: each challan this return uses (what it pays here, the interest and fee
+    // allocated here, what is left), then each salary payment with its challan (or "on no challan")
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(this.challanSheet(fy, q)), "Challans");
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-24Q-" + q + "-" + fy.replace("-", "") + ".xlsx",
       new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
