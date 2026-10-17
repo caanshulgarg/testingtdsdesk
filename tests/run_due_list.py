@@ -46,7 +46,13 @@ try:
           b.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-08-05', token: '123456789012345'}};
           b.gstFiled = {'07': {'202608': {r3b: '2026-09-25'}}};
           b.portalFiled = {'07|r1|202608': {arn: 'AA070826000001', dof: '2026-09-10'}};
-          b.alloc = Object.assign({}, b.alloc); TDS.rows().filter(r => String(r.date).slice(0, 6) === '202609').forEach(r => { delete b.alloc[r.id]; });
+          b.alloc = Object.assign({}, b.alloc);
+          // next-challan-match: the salary sheet's TDS is matched to challans like any other (TDS.salaryRows): its deposits,
+          // a challan for each quarter's salary TDS, as the fixture's other challans are made (CHALLANS)
+          const sal = TDS.salaryRows().filter(r => r.tds > 0 && !r.challan), byQ = {};
+          sal.forEach(r => { (byQ[r.fy + r.q] = byQ[r.fy + r.q] || []).push(r); });
+          Object.values(byQ).forEach((list, i) => { const id = 'chSal' + i; b.challans.push({id, bsr: '0240020', serial: String(20000 + i), date: list[0].date, tax: 900000, interest: 0, section: '192'}); list.forEach(r => { b.alloc[r.id] = id; }); });
+          TDS.rows().filter(r => String(r.date).slice(0, 6) === '202609').forEach(r => { delete b.alloc[r.id]; });
           return saveBooks();
         }""")
         ids = pg.evaluate("""async () => {
