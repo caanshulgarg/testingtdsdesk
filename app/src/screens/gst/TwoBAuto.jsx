@@ -35,17 +35,17 @@ export default function TwoBAuto({ reg }) {
       </div>
       {runLine && <p className="note" data-m2b-run="" style={{ margin: "4px 0 0" }}>{runLine}</p>}
       {look.length > 0 && <div style={{ overflowX: "auto", marginTop: 8 }}><table className="bk-table" style={{ margin: 0 }} data-m2b-look="">
-        <thead><tr><th>To look at</th><th>Supplier</th><th>In 2B</th><th>In books</th><th>What differs</th><th className="ac"></th></tr></thead>
+        <thead><tr><th>To look at</th><th>Supplier</th><th>In 2B</th><th>In books</th><th>What differs</th><th></th></tr></thead>
         <tbody>{look.map((r) => { const s = g2.get(r.g[0]) || bk.get(r.b[0]) || {}; return (
           <tr key={r.id} data-m2b-row={r.id}>
             <td>{r.st === "probable" ? <span className="tag warn">Probable match</span> : <span className="tag">Differs</span>}</td>
             <td>{s.party || "—"}<div className="nr">{s.gstin || ""}</div></td>
             <td><Docs keys={r.g} map={g2} side="g" /></td>
             <td><Docs keys={r.b} map={bk} side="b" /></td>
-            <td style={{ minWidth: 220 }}>{r.why.join("; ")}</td>
-            <td className="ac" style={{ whiteSpace: "nowrap" }}>{r.st === "probable" && !run.local && <>
-              <button className="btn small primary" data-m2b-accept={r.id} disabled={v.busy} onClick={() => m2bDecide(reg, [r.id], "accept")}>Accept</button>{" "}
-              <button className="btn small" data-m2b-reject={r.id} disabled={v.busy} onClick={() => m2bDecide(reg, [r.id], "reject")}>Reject</button></>}</td>
+            <td style={{ minWidth: 200 }}>{r.why.join("; ")}</td>
+            <td style={{ width: "1%" }}>{r.st === "probable" && !run.local && <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <button className="btn small primary" data-m2b-accept={r.id} disabled={v.busy} onClick={() => m2bDecide(reg, [r.id], "accept")}>Accept</button>
+              <button className="btn small" data-m2b-reject={r.id} disabled={v.busy} onClick={() => m2bDecide(reg, [r.id], "reject")}>Reject</button></div>}</td>
           </tr>); })}</tbody>
       </table></div>}
     </section>

@@ -96,7 +96,14 @@ with sync_playwright() as p:
     rows = pg.locator("[data-m2b-row]")
     ok(rows.count() == 1 and "Probable match" in rows.first.inner_text() and "AI: invoice number written differently" in rows.first.inner_text(), "the probable match first, with the AI's reason and the figures of both sides")
     ok(pg.locator("[data-m2b-accept-all]").count() == 1 and "Accept all suggestions (1)" in pg.inner_text("[data-m2b-accept-all]"), "Accept all suggestions (1)")
+    rj = pg.locator("[data-m2b-reject]")
+    inside = pg.evaluate("() => { const b = document.querySelector('[data-m2b]').getBoundingClientRect(); return Array.from(document.querySelectorAll('[data-m2b-accept],[data-m2b-reject]')).every(x => { const r = x.getBoundingClientRect(); return r.width > 0 && r.right <= b.right + 0.5 && r.left >= b.left; }); }")
+    ok(rj.count() == 1 and rj.first.is_visible() and inside, "each probable match has Accept and Reject, both shown inside the box at 1366")
     pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "1-desktop-box.png")); pg.screenshot(path=os.path.join(SHOTS, "2-desktop-page.png"))
+    pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(600)
+    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "3-phone-box.png"))
+    ok(pg.evaluate("document.documentElement.scrollWidth") <= 392, "phone 390 with a row to look at: no sideways page scroll (the table scrolls in its box)")
+    pg.set_viewport_size({"width": 1366, "height": 1000}); pg.wait_for_timeout(600)
     # Accept
     pid = pg.get_attribute("[data-m2b-accept]", "data-m2b-accept")
     pg.click("[data-m2b-accept]"); pg.wait_for_timeout(1500)
@@ -125,7 +132,7 @@ with sync_playwright() as p:
     # phone
     pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(600)
     sw = pg.evaluate("document.documentElement.scrollWidth")
-    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "3-phone-box.png"))
+    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "4-phone-after.png"))
     ok(sw <= 392, "phone 390: no sideways page scroll (page width %d)" % sw)
     ok(not errors, "no page errors" + (": " + "; ".join(errors[:3]) if errors else ""))
     br.close()
