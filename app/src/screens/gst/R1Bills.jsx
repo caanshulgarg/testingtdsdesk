@@ -17,11 +17,11 @@ const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 export const R1_PARTS = { "4A": "4A B2B", "4B": "4B B2B reverse charge", "5": "5 B2C large", "6A": "6A Exports", "6B": "6B/6C SEZ / deemed exports", "7": "7 B2C others",
   "8": "8 Nil/exempt", "9BR": "9B Credit/debit notes (registered)", "9BU": "9B Credit/debit notes (unregistered)", "11A": "11A Advances received", "11B": "11B Advances adjusted",
-  "12": "12 HSN summary", "13": "13 Documents issued" };
+  "12": "12 HSN summary", "13": "13 Documents issued", "14": "14 Supplies through e-commerce operators" };
 // (in the portal's order: an object's keys like "5" and "12" would sort as numbers)
 // the same, short, for a cell (the full name in its title and in the Part filter)
 const R1_SHORT = { "4A": "4A B2B", "4B": "4B B2B RCM", "5": "5 B2CL", "6A": "6A Export", "6B": "6B SEZ", "7": "7 B2CS", "8": "8 Nil/exempt", "9BR": "9B CDN reg.", "9BU": "9B CDN unreg." };
-export const R1_ORDER = ["4A", "4B", "5", "6A", "6B", "7", "8", "9BR", "9BU", "11A", "11B", "12", "13"];
+export const R1_ORDER = ["4A", "4B", "5", "6A", "6B", "7", "8", "9BR", "9BU", "11A", "11B", "12", "13", "14"];
 // the GSTR-1 table a document goes in (as GSTR.toJson puts it); "7" for a B2C small invoice and a note that adjusts it
 export function partOf(r) {
   if (r.kind === "B2B") return r.cls === "sez" ? "6B" : r.rcm ? "4B" : "4A";
@@ -49,6 +49,8 @@ export function r1Tables(j) {
   const hsn = j.hsn ? (j.hsn.data || []).concat(j.hsn.hsn_b2b || [], j.hsn.hsn_b2c || []) : [];
   hsn.forEach((x) => { const o = T("12"); o.n++; add(o, x); });
   ((j.doc_issue || {}).doc_det || []).forEach((d) => (d.docs || []).forEach((x) => { const o = T("13"); o.n += num(x.net_issue); }));
+  // table 14: a record an operator, 14(a) and 14(b) together (as the portal's tile)
+  ["clttx", "paytx"].forEach((k) => ((j.supeco || {})[k] || []).forEach((x) => { const o = T("14"); o.n++; add(o, { txval: x.suppval, iamt: x.igst, camt: x.cgst, samt: x.sgst, csamt: x.cess }); }));
   return R1_ORDER.filter((k) => t[k]).map((k) => t[k]);
 }
 const taxOf = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
@@ -57,9 +59,10 @@ const taxOf = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 // round 72: the portal's own words, and a row opens that table in the portal's layout (Details → Portal tables)
 const R1_PORTAL = { B2B: "4A, 4B, 6B, 6C – B2B, SEZ, DE Invoices", "5": "5A, 5B – B2C (Large) Invoices", "6A": "6A – Exports Invoices", "7": "7 – B2C (Others)",
   "8": "8A, 8B, 8C, 8D – Nil Rated Supplies", "9BR": "9B – Credit / Debit Notes (Registered)", "9BU": "9B – Credit / Debit Notes (Unregistered)",
-  "11A": "11A(1), 11A(2) – Tax Liability (Advances Received)", "11B": "11B(1), 11B(2) – Adjustment of Advances", "12": "12 – HSN-wise summary of outward supplies", "13": "13 – Documents Issued" };
+  "11A": "11A(1), 11A(2) – Tax Liability (Advances Received)", "11B": "11B(1), 11B(2) – Adjustment of Advances", "12": "12 – HSN-wise summary of outward supplies", "13": "13 – Documents Issued",
+  "14": "14 – Supplies made through E-Commerce Operators" };
 // the portal table a summary row opens
-const R1_OPEN = { B2B: "b2b", "5": "b2cl", "6A": "exp", "7": "b2cs", "8": "nil", "9BR": "cdnr", "9BU": "cdnur", "11A": "at", "11B": "txpd", "13": "docs" };
+const R1_OPEN = { B2B: "b2b", "5": "b2cl", "6A": "exp", "7": "b2cs", "8": "nil", "9BR": "cdnr", "9BU": "cdnur", "11A": "at", "11B": "txpd", "13": "docs", "14": "eco14a" };
 function portalRows(list) {
   const out = [], b2b = list.filter((o) => o.k === "4A" || o.k === "4B" || o.k === "6B");
   if (b2b.length) { const g = blank("B2B"); g.parts = b2b.map((o) => o.k); b2b.forEach((o) => { g.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { g[f] = r2(g[f] + o[f]); }); }); out.push(g); }
@@ -71,18 +74,18 @@ export function R1Summary({ amendN }) {
   const ym = S.gstYm || "", reg = S.gstReg || "";
   const j = GSTR.toJson(ym, reg, { plain: true }), list = portalRows(r1Tables(j));
   const T = r1PortalData(ym, reg), amd = AMEND_IDS.filter((k) => T[k].rows.length), late = ["b2b", "b2cl", "exp", "cdnr", "cdnur"].reduce((a, k) => a + T[k].late, 0);
-  const tot = blank("all"); list.filter((o) => o.k !== "12" && o.k !== "13").forEach((o) => { tot.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { tot[f] = r2(tot[f] + o[f]); }); });
+  const tot = blank("all"); list.filter((o) => o.k !== "12" && o.k !== "13" && o.k !== "14").forEach((o) => { tot.n += o.n; ["taxable", "igst", "cgst", "sgst", "cess"].forEach((f) => { tot[f] = r2(tot[f] + o[f]); }); });
   const openT = (id) => { S.r1T = id; S.r1View = ""; S.r1F = {}; gstSubGo("details"); };
   const open = (k) => { if (k === "12") { openT(T.hsnb2b.rows.length ? "hsnb2b" : T.hsnb2c.rows.length ? "hsnb2c" : "hsn"); return; } openT(R1_OPEN[k] || ""); };
   const Name = ({ label, go }) => <button type="button" className="linkbtn tg-pty" style={{ textAlign: "left", paddingLeft: 0, marginLeft: 0 }} onClick={(ev) => { ev.stopPropagation(); go(); }}>{label}</button>;
   return <div className="bk-tablewrap" data-r1-summary=""><table className="bk-table tg-fit" data-statement="">
     <thead><tr><th>Table</th><th className="n">No. of records</th><th className="n">Taxable Value</th><th className="n">Integrated Tax</th><th className="n">Central Tax</th><th className="n">State/UT Tax</th><th className="n">Cess</th><th className="n">Total tax</th></tr></thead>
     <tbody>{list.length ? list.map((o) => <tr key={o.k} data-r1-table={o.k} className="tg-click" onClick={() => open(o.k)} title="Open this table as the portal shows it">
-      <td><Name label={R1_PORTAL[o.k] || R1_PARTS[o.k]} go={() => open(o.k)} />{o.k === "7" && <div className="tg-sub">summary by place of supply and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}</td>
+      <td><Name label={R1_PORTAL[o.k] || R1_PARTS[o.k]} go={() => open(o.k)} />{o.k === "7" && <div className="tg-sub">summary by place of supply and rate</div>}{o.k === "13" && <div className="tg-sub">documents, net of cancelled</div>}{o.k === "14" && <div className="tg-sub">by operator; these supplies are also in tables 4 to 10</div>}</td>
       <td className="n">{o.n}</td>{o.k === "13" ? <td colSpan={6}></td> : <><td className="n">{money(o.taxable)}</td><td className="n">{money(o.igst)}</td><td className="n">{money(o.cgst)}</td><td className="n">{money(o.sgst)}</td>
       <td className="n">{money(o.cess)}</td><td className="n">{money(taxOf(o))}</td></>}</tr>)
       : <tr><td colSpan={8} className="note">No documents for this month.</td></tr>}
-      <tr className="tg-tot" data-r1-grand=""><td><b>Total</b><span className="note"> · tables 4 to 11 (12 and 13 apart, as the portal)</span></td><td className="n">{tot.n}</td><td className="n">{money(tot.taxable)}</td><td className="n">{money(tot.igst)}</td>
+      <tr className="tg-tot" data-r1-grand=""><td><b>Total</b><span className="note"> · tables 4 to 11 ({list.some((o) => o.k === "14") ? "12, 13 and 14" : "12 and 13"} apart, as the portal)</span></td><td className="n">{tot.n}</td><td className="n">{money(tot.taxable)}</td><td className="n">{money(tot.igst)}</td>
         <td className="n">{money(tot.cgst)}</td><td className="n">{money(tot.sgst)}</td><td className="n">{money(tot.cess)}</td><td className="n"><b>{money(taxOf(tot))}</b></td></tr>
       {late > 0 && <tr data-r1-late=""><td colSpan={8} className="note">Also in this month's file: {late} document{late === 1 ? "" : "s"} missed in an earlier month's return, reported now in {["b2b", "b2cl", "exp", "cdnr", "cdnur"].filter((k) => T[k].late).map((k) => R1_BY[k].no).join(", ")} (not in the total above).</td></tr>}
       {amd.length > 0 && <><tr className="tg-group" data-r1-amend-head=""><td colSpan={8}><b>Amendments in this month's file</b><span className="note"> · revised values; the original beside them in each table</span></td></tr>

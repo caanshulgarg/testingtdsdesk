@@ -16,6 +16,8 @@ the same books a year on, as tdsgst_snapshot.py loads them) with a 2B made for t
      only) as GST2B's matching says, the chips' counts, ITC as per books / as per 2B / difference equal to the figures the
      2B page showed before (the workbench's tiles), the differing field highlighted, the actions, the Excel's formulas,
      and the automatic matcher's hook (statuses "matched-rules", "matched-ai", "probable") without moving an amount;
+  6. GSTR-1 table 14 (17-Oct-2026): sales through an e-commerce operator, by the operator's GSTIN, 14(a) where it collects
+     TCS, 14(b) empty with a note; the JSON's supeco is the screen's, its total the operator sales', and no other table moves;
   5. the page pattern: one tab row, filters in the headings, footer totals, 100-row paging; at 390 px no sideways page
      scroll; screenshots of each screen, desktop and phone, in tests/out/gst-portal/.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
@@ -78,6 +80,7 @@ R1_FROM_JSON = """([ym, reg]) => { const j = GSTR.toJson(ym, reg), t = {}, z = (
   (j.b2csa || []).forEach(p => p.itms.forEach(x => add('b2csa', x, 1, true)));
   if (j.nil) j.nil.inv.forEach(x => { const o = t.nil = t.nil || z(); o.n++; o.taxable = r2(o.taxable + num(x.nil_amt) + num(x.expt_amt) + num(x.ngsup_amt)); });
   if (j.doc_issue) j.doc_issue.doc_det.forEach(d => d.docs.forEach(x => { const o = t.docs = t.docs || z(); o.n += num(x.net_issue); }));
+  [['clttx', 'eco14a'], ['paytx', 'eco14b']].forEach(([s, k]) => ((j.supeco || {})[s] || []).forEach(x => add(k, {txval: x.suppval, iamt: x.igst, camt: x.cgst, samt: x.sgst, csamt: x.cess}, 1, true)));
   return t; }"""
 R1_PORTAL = """([ym, reg]) => { const T = window.__r1p(ym, reg), o = {}; Object.entries(T).forEach(([k, v]) => { if (v.rows.length) o[k] = Object.assign({n: v.n}, v.tot); }); return o; }"""
 # GSTR-3B: the portal's tables against threeB and the JSON
@@ -136,7 +139,8 @@ try:
         gst(pg, "202603", "r1", "summary")
         names = E("[...document.querySelectorAll('[data-r1-summary] tr[data-r1-table] td:first-child button')].map(b => b.textContent)")
         PORTAL_NAMES = {"4A, 4B, 6B, 6C – B2B, SEZ, DE Invoices", "5A, 5B – B2C (Large) Invoices", "6A – Exports Invoices", "7 – B2C (Others)", "8A, 8B, 8C, 8D – Nil Rated Supplies", "9B – Credit / Debit Notes (Registered)",
-            "9B – Credit / Debit Notes (Unregistered)", "11A(1), 11A(2) – Tax Liability (Advances Received)", "11B(1), 11B(2) – Adjustment of Advances", "12 – HSN-wise summary of outward supplies", "13 – Documents Issued"}
+            "9B – Credit / Debit Notes (Unregistered)", "11A(1), 11A(2) – Tax Liability (Advances Received)", "11B(1), 11B(2) – Adjustment of Advances", "12 – HSN-wise summary of outward supplies", "13 – Documents Issued",
+            "14 – Supplies made through E-Commerce Operators"}
         allnames = set()
         for ym in months:
             gst(pg, ym, "r1", "summary"); allnames |= set(E("[...document.querySelectorAll('[data-r1-summary] tr[data-r1-table] td:first-child button')].map(b => b.textContent)"))
@@ -326,6 +330,64 @@ try:
         pg.click('[data-r2-view="work"]'); W(400)
         ok(pg.locator('nav[aria-label="2B reconciliation"]').count() == 1, "the workbench of before (tiles, tabs, linking by hand) under Workbench")
         E("() => { S.r2View = ''; S.r2Tab = ''; render(); }")
+
+        print("6. GSTR-1 table 14: supplies through e-commerce operators")
+        before = E(R1_FROM_JSON, ["202603", "07"])
+        AMZ = E("() => { const b = '07AAICA9999K1C'; for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; return ''; }")
+        FK = E("() => { const b = '07AABCF8888L1C'; for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; return ''; }")
+        # four sales from marketplace reports in March 2026: Amazon (an invoice and a credit note, TCS collected), Flipkart (to a
+        # registered buyer), Shopify (the seller's own store: no TCS); Amazon's GSTIN typed for Delhi, Flipkart's not yet
+        E("""() => { const mk = (id, x) => ({id, source: 'market', status: 'posted', x: Object.assign({customerName: '', customerGstin: '', placeOfSupply: 'Delhi', cess: 0, igst: 0, cgst: 0, sgst: 0, noteKind: ''}, x)});
+          S.sales = {cid: S.coId, list: [mk('m1', {number: 'AMZ-301', date: '2026-03-10', taxable: 10000, cgst: 900, sgst: 900, total: 11800, rate: 18, ecommerce: 'amazon', tcs: 100}),
+            mk('m2', {number: 'AMZ-301 (CN)', date: '2026-03-20', taxable: 2000, cgst: 180, sgst: 180, total: 2360, rate: 18, ecommerce: 'amazon', tcs: 20, noteKind: 'credit'}),
+            mk('m3', {number: 'FK-77', date: '2026-03-12', customerName: 'Orchid Lane Hospitality LLP', customerGstin: '09AACCO6624H1ZC', placeOfSupply: 'Uttar Pradesh', taxable: 5000, igst: 900, total: 5900, rate: 18, ecommerce: 'flipkart', tcs: 0}),
+            mk('m4', {number: 'SH-9', date: '2026-03-15', taxable: 3000, cgst: 270, sgst: 270, total: 3540, rate: 18, ecommerce: 'shopify', tcs: 0})], cfg: {}, sel: new Set(), sticky: new Set(), hist: {}};
+          GSTSet.store('07').ecoGstin = {}; render(); }""")
+        base = E(R1_FROM_JSON, ["202603", "07"])
+        ok(not base.get("eco14a") and "supeco" not in E("GSTR.toJson('202603', '07')"), "no operator GSTIN known: nothing in the JSON's supeco")
+        E("([g]) => ecoGstinSet('07', 'amazon', g)", [AMZ]); W(300)
+        j14 = E("GSTR.toJson('202603', '07').supeco")
+        after = E(R1_FROM_JSON, ["202603", "07"])
+        ok(j14 == {"clttx": [{"etin": AMZ, "suppval": 8000, "igst": 0, "cgst": 720, "sgst": 720, "cess": 0, "flag": "N"}]},
+           "14(a) in the JSON: Amazon's GSTIN, net value 10,000 less the credit note 2,000, its tax (%s)" % j14)
+        ok(all(after[k] == base[k] for k in base) and set(after) - set(base) == {"eco14a"}, "typing the operator's GSTIN moves no other table of the file (%s)" % sorted(set(after) ^ set(base)))
+        ok(set(base) >= set(before) and all(base[k]["n"] >= before[k]["n"] for k in before), "the marketplace sales are in the file's tables as before (B2B, B2C, notes)")
+        gst(pg, "202603", "r1", "details", "S.r1View = ''; S.r1T = 'eco14a';")
+        h14 = E("[...document.querySelectorAll('#r1p-eco14a thead th')].map(t => (t.querySelector('.colh > span') || t).textContent)")
+        ok(h14 == ["#", "GSTIN of E-Commerce Operator", "Trade/Legal name", "Net value of supplies", "Integrated tax", "Central tax", "State/UT tax", "Cess"] and "14(a)" in pg.inner_text("[data-r1p=eco14a] h3"),
+           "14(a): the portal's columns and number (%s)" % h14)
+        r14 = E("() => [...document.querySelectorAll('#r1p-eco14a tbody tr[data-r1p-row]')].map(tr => [...tr.children].map(c => c.innerText.trim()))")
+        ok(len(r14) == 1 and r14[0][1:4] == [AMZ, "Amazon", "₹8,000.00"], "14(a) on the screen: one row by the operator's GSTIN (%s)" % r14)
+        miss = pg.inner_text("[data-r1p=eco14a] [data-eco-missing]") if pg.locator("[data-r1p=eco14a] [data-eco-missing]").count() else ""
+        ok("Flipkart" in miss and "₹5,000.00" in miss and "Shopify" in miss and "no TCS" in miss, "the operators with no GSTIN known are named with their net value, not in the file (%s)" % miss.replace("\n", " "))
+        ok(pg.locator("[data-r1p=eco14b]").count() == 1 and "9(5)" in pg.inner_text("[data-r1p=eco14b]") and "FinCom" in pg.inner_text("[data-r1p=eco14b]") and pg.locator("#r1p-eco14b tbody tr[data-r1p-row]").count() == 0,
+           "14(b) (u/s 9(5)): shown empty, with a plain note")
+        shot(pg, "r1-table14-desktop")
+        # Flipkart's GSTIN typed on the screen: in the file
+        pg.fill('[data-eco-gstin="flipkart"] input', "07ABC"); pg.click('[data-eco-gstin="flipkart"] button'); W(400)
+        ok(len(E("GSTR.toJson('202603', '07').supeco.clttx")) == 1, "a GSTIN that is not valid is refused")
+        pg.fill('[data-eco-gstin="flipkart"] input', FK); pg.click('[data-eco-gstin="flipkart"] button'); W(500)
+        j14 = E("GSTR.toJson('202603', '07').supeco")
+        sales = E("""() => r2(S.sales.list.filter(v => v.x.ecommerce !== 'shopify').reduce((a, v) => a + (v.x.noteKind === 'credit' ? -1 : 1) * v.x.taxable, 0))""")
+        ok(len(j14["clttx"]) == 2 and abs(sum(x["suppval"] for x in j14["clttx"]) - sales) < 0.005 and sales == 13000, "Flipkart's GSTIN typed: 14(a) holds both operators; its total is the operators' sales, 13,000 (%s)" % j14)
+        scr = E(R1_PORTAL, ["202603", "07"]).get("eco14a"); js = E(R1_FROM_JSON, ["202603", "07"]).get("eco14a")
+        ok(scr and js and scr["n"] == js["n"] == 2 and all(abs(scr[k] - js[k]) < 0.005 for k in ("taxable", "igst", "cgst", "sgst", "cess")), "14(a) on the screen is the JSON's (%s / %s)" % (scr, js))
+        foot = E("() => Number(document.querySelector('[data-r1p-foot=eco14a] [data-r1p-sum=taxable]').innerText.replace(/[₹,]/g, ''))")
+        ok(foot == 13000, "14(a)'s footer: 13,000 (%s)" % foot)
+        gst(pg, "202603", "r1", "summary")
+        s14 = E("() => { const tr = document.querySelector('[data-r1-summary] tr[data-r1-table=\"14\"]'); return tr ? [...tr.children].map(c => c.innerText.trim()) : []; }")
+        grand = E("() => Number(document.querySelector('[data-r1-grand] td:nth-child(3)').innerText.replace(/[₹,]/g, ''))")
+        others = E("() => [...document.querySelectorAll('[data-r1-summary] tr[data-r1-table]')].filter(t => !['12', '13', '14'].includes(t.dataset.r1Table)).reduce((a, t) => a + Number(t.children[2].innerText.replace(/[₹,]/g, '')), 0)")
+        ok(s14[:1] and s14[0].startswith("14 – Supplies made through E-Commerce Operators") and s14[1:3] == ["2", "₹13,000.00"] and abs(grand - others) < 0.01, "the summary names table 14 as the portal and keeps it out of the total (its supplies are in 4 to 10) (%s; %s / %s)" % (s14[:3], grand, others))
+        bad = E(R3B_CHECK, ["202603", "07"])
+        ok(not bad, "GSTR-3B still ties with the marketplace sales and table 14 (%s)" % bad[:3])
+        E("() => { GSTSet.store('07').ecoGstin = {amazon: GSTSet.store('07').ecoGstin.amazon}; render(); }")
+        pg.set_viewport_size({"width": 390, "height": 844}); gst(pg, "202603", "r1", "details", "S.r1View = ''; S.r1T = 'eco14a';"); W(300)
+        w = E("document.documentElement.scrollWidth")
+        ok(w <= 391 and pg.locator("[data-eco-missing]").count() == 1, "phone, table 14 with an operator's GSTIN to type: %dpx wide, no sideways page scroll" % w)
+        shot(pg, "r1-table14-phone")
+        pg.set_viewport_size({"width": 1440, "height": 900})
+        E("() => { S.sales = null; delete GSTSet.store('07').ecoGstin; render(); }")
         br.close()
 
         print("5. A phone")

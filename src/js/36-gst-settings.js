@@ -123,6 +123,16 @@ function gsetSet(key, val, reg, sub){
   if (key === "d2") b.rev = Object.assign({}, b.rev, {d2: !!val});
   GSTR._carry = null; saveBooks(); render();
 }
+// GSTR-1 table 14 (17-Oct-2026): the GSTIN of an e-commerce operator for a registration (its TCS registration in that
+// state), typed beside 14(a) when a marketplace's report does not carry it; "" removes it
+function ecoGstinSet(reg, eco, g){
+  g = String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+  if (g && !gstinValid(g)){ toast(g + " is not a valid GSTIN: check it on the operator's TCS certificate or GSTR-2A/2B (TCS credit)."); return false; }
+  if (g && reg && g.slice(0, 2) !== reg){ toast(g + " is registered in " + GSTRegs.state(g) + ": 14(a) takes the operator's GSTIN in " + GSTRegs.state(reg) + "."); return false; }
+  const st = GSTSet.store(reg); st.ecoGstin = Object.assign({}, st.ecoGstin, {[eco]: g});
+  if (!g) delete st.ecoGstin[eco];
+  GSTR._carry = null; saveBooks(); render(); return true;
+}
 // "type it" beside a GSTIN: its settings shown, the cursor in the username box
 function gsetUserFocus(reg){ S.gsetReg = reg; render(); const i = document.querySelector('input[data-fk="gset-puser-' + reg + '"]'); if (i){ i.scrollIntoView({block: "center", behavior: "smooth"}); i.focus(); } }
 // a GSTIN added (it must carry the client's PAN) or removed

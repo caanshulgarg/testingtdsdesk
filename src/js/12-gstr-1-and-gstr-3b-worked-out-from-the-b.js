@@ -89,11 +89,41 @@ const GSTR = {
       if (ym && !GSTR.inP(d, ym)) return null;
       const tax = r2(num(x.cgst) + num(x.sgst) + num(x.igst));
       return {id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
-        pos: x.placeOfSupply || "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market",
+        pos: x.placeOfSupply || "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market", etin: this.ecoGstinOf(x.ecoGstin) || this.ecoGstinOf(x.ecommerce),
         tcs: num(x.tcs), kind: x.noteKind === "credit" ? "CDNR" : (x.customerGstin ? "B2B" : "B2C"), note: x.noteKind || "",
         taxable: num(x.taxable), cgst: num(x.cgst), sgst: num(x.sgst), igst: num(x.igst), cess: num(x.cess),
         rate: num(x.rate) || (num(x.taxable) ? Math.round(tax / num(x.taxable) * 10000) / 100 : 0), total: num(x.total)};
     }).filter(Boolean);
+  },
+  // an e-commerce operator's GSTIN as written on a sale ("" when it is not one: Amazon's report names the operator only)
+  ecoGstinOf(g){ const x = String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, ""); return /^\d{2}[A-Z0-9]{13}$/.test(x) ? x : ""; },
+  // GSTR-1 table 14 (17-Oct-2026): supplies made through an e-commerce operator, by the operator's GSTIN (they are also in
+  // tables 4 to 10; nothing goes to 3B from here).
+  //   14(a), the operator collects tax (TCS) u/s 52: the month's sales through an operator, net of credit notes, once its
+  //   GSTIN is known (an operator collects TCS: Amazon and Flipkart, or TCS on any of its documents; tcs says so). The GSTIN is the sale's own, else
+  //   the one typed for that operator and registration (GST settings: GSTSet.store(reg).ecoGstin). An operator whose GSTIN
+  //   is not known cannot go in the file: it is listed apart (missing), with its figures.
+  //   14(b), the operator pays the tax u/s 9(5): FinCom has no record of such supplies, so it is always empty.
+  // {a: [{etin, eco, n, suppval, igst, cgst, sgst, cess}], missing: [{eco, tcs, n, suppval, ...}], b: []}
+  ECO_TCS: ["amazon", "flipkart"],
+  ECO_NAME: {amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify", generic: "Marketplace", market: "Marketplace"},
+  eco14(ym, reg, g){
+    g = g || this.one(ym, reg);
+    const typed = typeof GSTSet === "object" ? (GSTSet.peek(reg).ecoGstin || {}) : {}, by = {};
+    g.eco.forEach(r => { (by[r.eco] = by[r.eco] || []).push(r); });
+    const z = (o) => Object.assign({n: 0, suppval: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}, o);
+    const add = (o, r) => { const sg = r.kind === "CDNR" ? -1 : 1; o.n++; o.suppval = r2(o.suppval + sg * num(r.taxable)); ["igst", "cgst", "sgst", "cess"].forEach(h => { o[h] = r2(o[h] + sg * num(r[h])); }); };
+    const a = {}, missing = {};
+    Object.keys(by).sort().forEach(eco => {
+      const rs = by[eco], known = this.ecoGstinOf(typed[eco]);
+      const tcs = this.ECO_TCS.includes(eco) || rs.some(r => num(r.tcs) > 0);
+      rs.forEach(r => {
+        const etin = r.etin || known;
+        if (etin) add(a[etin] = a[etin] || z({etin, eco}), r);
+        else add(missing[eco] = missing[eco] || z({eco, tcs}), r);
+      });
+    });
+    return {a: Object.values(a).sort((x, c) => x.etin.localeCompare(c.etin)), missing: Object.values(missing), b: []};
   },
   // the purchase side, for the credit in 3B: every bill, and every journal or payment that takes input tax
   // (an expense booked in a journal, bank charges, reverse charge on rent); not the month's set-off,
@@ -502,6 +532,9 @@ const GSTR = {
       const nats = Array.from(new Set(g.series.map(x => x.nat))).sort((a, c) => a - c);
       out.doc_issue = {doc_det: nats.map(n => ({doc_num: n, docs: g.series.filter(x => x.nat === n).map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: x.cancelled, net_issue: x.n - x.cancelled}))}))};
     }
+    // table 14(a) (from the January 2024 return period, when the portal opened tables 14 and 15): by the operator's GSTIN
+    const e14 = fe >= "202401" ? this.eco14(ym, reg, g).a : [];
+    if (e14.length) out.supeco = {clttx: e14.map(x => ({etin: x.etin, suppval: r2(x.suppval), igst: r2(x.igst), cgst: r2(x.cgst), sgst: r2(x.sgst), cess: r2(x.cess), flag: "N"}))};
     if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, this.pStart(ym), reg);
     return out;
   },

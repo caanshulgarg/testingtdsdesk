@@ -5,6 +5,7 @@
 //   - a document missed in an earlier month's return and reported now (GST → Amendments) is marked in its table;
 //   - 9A, 9C and 10: the copy filed (original) beside what goes in the file now (revised);
 //   - the filters in the column headings, the first 100 rows of a table, its totals always of every row filtered;
+//   - table 14 (14(a), 14(b)) from the JSON's supeco; sales through an operator whose GSTIN is not known named under 14(a);
 //   - "All tables" one under another, or one table chosen (S.r1T); the search box of the Details tab finds in them too.
 import { useState } from "react";
 import { r1Portal, r1Present, R1_TABLES, R1_BY, r1Title, colsOf } from "./portal.js";
@@ -19,6 +20,8 @@ const FILTERS = { b2b: ["ctin", "pos", "rate", "typ"], b2cl: ["pos", "rate"], ex
 export function r1PortalData(ym, reg) {
   const full = GSTR.toJson(ym, reg), plain = GSTR.toJson(ym, reg, { plain: true }), g = GSTR.one(ym, reg), names = {};
   g.rows.forEach((r) => { if (r.gstin && !names[r.gstin]) names[r.gstin] = r.party; });
+  // table 14: an operator's GSTIN → its name (Amazon, Flipkart)
+  GSTR.eco14(ym, reg, g).a.forEach((x) => { if (!names[x.etin]) names[x.etin] = GSTR.ECO_NAME[x.eco] || x.eco; });
   let amend = [];
   try { amend = reg && GSTAmend.filed(reg).length ? GSTAmend.pending(ym, reg).rows : []; } catch (e) { amend = []; }
   return r1Portal(full, plain, names, amend);
@@ -28,7 +31,21 @@ const cell = (k, v) => (MONEY_COLS.has(k) ? money(v) : k === "rate" ? (v === "" 
 const fv = (k, r) => (k === "ctin" ? r.ctin || "" : String(r[k] == null ? "" : r[k]));
 const fl = (k, r) => (k === "ctin" ? (r.name ? r.name + " · " : "") + (r.ctin || "") : k === "rate" ? r.rate + "%" : String(r[k] == null ? "" : r[k]));
 
-export function PortalTable({ t, data, q }) {
+// 14(a): sales through an operator whose GSTIN is not known are not in the file; named here with their figures, and the
+// GSTIN can be typed (ecoGstinSet, src/js/36)
+function EcoMissing({ list, reg }) {
+  if (!list.length) return null;
+  const save = (ev, eco) => { const i = ev.currentTarget.closest("[data-eco-gstin]").querySelector("input"); ecoGstinSet(reg, eco, i ? i.value : ""); };
+  return <div className="note" data-eco-missing="" style={{ margin: "6px 2px 0" }}>
+    <p style={{ margin: "0 0 4px" }}>Not in the file: the operator’s GSTIN{reg ? " in " + GSTRegs.state(reg) : ""} is not known for these sales. Type it (from its TCS certificate, or GSTR-2A/2B’s TCS credit) to put them in 14(a).</p>
+    {list.map((x) => <div key={x.eco} data-eco-gstin={x.eco} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 8px", margin: "2px 0" }}>
+      <span><b>{GSTR.ECO_NAME[x.eco] || x.eco}</b>: {x.n} document{x.n === 1 ? "" : "s"}, net value {money(x.suppval)}, tax {money(r2(x.igst + x.cgst + x.sgst + x.cess))}{x.tcs ? "" : " (no TCS on its documents: perhaps not an operator collecting tax u/s 52)"}</span>
+      {reg && <><input type="text" aria-label={"GSTIN of " + (GSTR.ECO_NAME[x.eco] || x.eco)} placeholder="15-character GSTIN" maxLength={15} style={{ width: "17ch", maxWidth: "100%" }} />
+        <button type="button" className="linkbtn" onClick={(ev) => save(ev, x.eco)}>Save</button></>}</div>)}
+  </div>;
+}
+
+export function PortalTable({ t, data, q, extra }) {
   const [more, setMore] = useState(100);
   const all = S.r1PF || {}, f = all[t.id] || {}, cols = colsOf(t), qq = String(q || "").toLowerCase();
   const rows = data.rows.filter((r) => Object.keys(f).every((k) => !f[k] || fv(k, r) === f[k]) && (!qq || Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(qq))));
@@ -53,25 +70,27 @@ export function PortalTable({ t, data, q }) {
           {k === cols[0][0] && r.late && !r.cont && <div className="tg-sub"><span className="tag info" title="Not in the return filed for its month: it goes in this month's file with its own number and date">missed earlier, reported now</span></div>}</td>)}</tr>)}
         {rows.length > list.length && <tr className="lt-more"><td colSpan={cols.length + 1} style={{ textAlign: "center" }}><span className="note">{list.length} of {rows.length} rows shown · </span>
           <button type="button" className="linkbtn" onClick={() => setMore(more + 100)}>Show 100 more</button> · <button type="button" className="linkbtn" onClick={() => setMore(rows.length)}>Show all {rows.length}</button></td></tr>}
-        {!rows.length && <tr><td colSpan={cols.length + 1}><p className="note" style={{ textAlign: "center" }}>{data.rows.length ? "No row matches these filters." : "Nothing in this table this month."}{any && <> <button type="button" className="linkbtn" onClick={clear}>Clear filters</button></>}</p></td></tr>}
+        {!rows.length && <tr><td colSpan={cols.length + 1}><p className="note" style={{ textAlign: "center" }}>{data.rows.length ? "No row matches these filters." : t.note || "Nothing in this table this month."}{any && <> <button type="button" className="linkbtn" onClick={clear}>Clear filters</button></>}</p></td></tr>}
       </tbody>
       {data.rows.length > 0 && <tfoot><tr className="tg-tot" data-r1p-foot={t.id}>
         <td colSpan={Math.max(1, firstMoney + 1)}><b>Total</b>{rows.length !== data.rows.length && <span className="note"> · filtered</span>}{any && <> · <button type="button" className="linkbtn" onClick={clear}>Clear filters</button></>}</td>
         {cols.slice(Math.max(0, firstMoney)).map(([k, , n]) => <td key={k} className={n ? "n" : undefined}>{n && (MONEY_COLS.has(k) && k !== "val" || k === "qty" || k === "totnum" || k === "cancel" || k === "net") ? <b data-r1p-sum={k}>{cell(k, sum(k))}</b> : ""}</td>)}</tr></tfoot>}
     </table></div>
+    {extra}
   </section>;
 }
 
 // the Details tab's "Portal tables": a table chosen, or every table with something in it
 export default function R1Portal({ ym, reg }) {
-  const T = r1PortalData(ym, reg), present = r1Present(T), pick = S.r1T && R1_BY[S.r1T] ? S.r1T : "";
-  const shown = pick ? [R1_BY[pick]] : present, q = (S.r1F || {}).q || "";
+  const miss = GSTR.eco14(ym, reg).missing, T = r1PortalData(ym, reg), present = r1Present(T, miss.length > 0), pick = S.r1T && R1_BY[S.r1T] ? S.r1T : "";
+  // table 14 is one table on the portal: 14(a) and 14(b) together
+  const shown = pick ? (R1_BY[pick].eco ? R1_TABLES.filter((t) => t.eco) : [R1_BY[pick]]) : present, q = (S.r1F || {}).q || "";
   return <div data-r1-portal="">
     <div className="r1p-pick"><label className="note">Table <select aria-label="GSTR-1 table" data-r1p-pick="" value={pick} onChange={(ev) => { S.r1T = ev.target.value; render(); }}>
       <option value="">All tables with entries ({present.length})</option>
       {R1_TABLES.map((t) => <option key={t.id} value={t.id}>{r1Title(t) + " (" + (T[t.id].rows.length ? T[t.id].n : 0) + ")"}</option>)}</select></label>
       {pick && <button type="button" className="linkbtn" onClick={() => { S.r1T = ""; render(); }}>Show all tables</button>}</div>
-    {shown.length ? shown.map((t) => <PortalTable key={t.id} t={t} data={T[t.id]} q={q} />) : <p className="note" data-list-empty="">No documents for this month.</p>}
+    {shown.length ? shown.map((t) => <PortalTable key={t.id} t={t} data={T[t.id]} q={q} extra={t.id === "eco14a" ? <EcoMissing list={miss} reg={reg} /> : null} />) : <p className="note" data-list-empty="">No documents for this month.</p>}
   </div>;
 }
 

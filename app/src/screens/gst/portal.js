@@ -76,6 +76,12 @@ export const R1_TABLES = [
     cols: [C("hsn", "HSN"), C("desc", "Description"), C("uqc", "UQC"), C("qty", "Total Quantity", 1), C("rate", "Rate", 1)].concat(AMT) },
   { id: "docs", no: "13", name: "Documents Issued", short: "DOCS", unit: "series",
     cols: [C("nature", "Nature of Document"), C("from", "Sr. No. From"), C("to", "Sr. No. To"), C("totnum", "Total Number", 1), C("cancel", "Cancelled", 1), C("net", "Net Issued", 1)] },
+  // table 14 (17-Oct-2026): the JSON's supeco, by the operator's GSTIN; its supplies are also in tables 4 to 10
+  { id: "eco14a", no: "14(a)", name: "Supplies made through E-Commerce Operators – ECO liable to collect tax u/s 52", short: "ECO 14a", unit: "operator", eco: true,
+    cols: [C("etin", "GSTIN of E-Commerce Operator"), C("name", "Trade/Legal name"), C("taxable", "Net value of supplies", 1), C("igst", "Integrated tax", 1), C("cgst", "Central tax", 1), C("sgst", "State/UT tax", 1), C("cess", "Cess", 1)] },
+  { id: "eco14b", no: "14(b)", name: "Supplies made through E-Commerce Operators – ECO liable to pay tax u/s 9(5)", short: "ECO 14b", unit: "operator", eco: true,
+    note: "FinCom has no record of supplies on which the e-commerce operator pays the tax u/s 9(5) (such as restaurant, passenger transport or accommodation services sold through an operator): the GSTR-1 JSON leaves 14(b) empty. Enter any on the portal.",
+    cols: [C("etin", "GSTIN of E-Commerce Operator"), C("name", "Trade/Legal name"), C("taxable", "Net value of supplies", 1), C("igst", "Integrated tax", 1), C("cgst", "Central tax", 1), C("sgst", "State/UT tax", 1), C("cess", "Cess", 1)] },
 ];
 export const R1_BY = Object.fromEntries(R1_TABLES.map((t) => [t.id, t]));
 export const r1Title = (t) => t.no + " – " + t.name;
@@ -123,6 +129,8 @@ export function r1Portal(full, plain, names, amend) {
     (full.hsn.data || []).forEach((x) => put("hsn", hsnRow(x), true));
   }
   ((full.doc_issue || {}).doc_det || []).forEach((d) => (d.docs || []).forEach((x) => { const o = T.docs; o.rows.push({ nature: DOC_NATURE[d.doc_num] || String(d.doc_num), from: x.from, to: x.to, totnum: N(x.totnum), cancel: N(x.cancel), net: N(x.net_issue) }); o.n += N(x.net_issue); }));
+  // table 14: one row an operator (names: its GSTIN → the operator's name)
+  [["clttx", "eco14a"], ["paytx", "eco14b"]].forEach(([k, id]) => ((full.supeco || {})[k] || []).forEach((x) => put(id, { etin: x.etin || "", name: nm[x.etin] || "", taxable: N(x.suppval), igst: N(x.igst), cgst: N(x.cgst), sgst: N(x.sgst), cess: N(x.cess) }, true)));
   // the amendment tables: the revised figures are the file's; the original ones the copy filed
   const was = {}; (amend || []).forEach((r) => { if (r.act === "skip" || !r.was) return; const w = r.was; was[r.kind + "|" + (w.ctin || "") + "|" + String(w.num || "")] = r; });
   const am = (id, kind, g, x, sg, extra) => {
@@ -147,11 +155,12 @@ export function r1Portal(full, plain, names, amend) {
   return T;
 }
 // the tables with something in them, in the portal's order
-export const r1Present = (T) => R1_TABLES.filter((t) => T[t.id] && (T[t.id].rows.length > 0));
+// (14(b), always empty, beside 14(a); ecoMore: sales through an operator whose GSTIN is not known, which open 14(a) too)
+export const r1Present = (T, ecoMore) => R1_TABLES.filter((t) => T[t.id] && (T[t.id].rows.length > 0 || (t.eco && (ecoMore || T.eco14a.rows.length > 0))));
 
 // the portal's summary: one row per table, the B2B tables together (as the portal's "4A, 4B, 6B, 6C" tile)
 export function r1SummaryRows(T) {
-  return r1Present(T).map((t) => ({ k: t.id, t, n: T[t.id].n, late: T[t.id].late, ...T[t.id].tot }));
+  return r1Present(T).filter((t) => T[t.id].rows.length > 0).map((t) => ({ k: t.id, t, n: T[t.id].n, late: T[t.id].late, ...T[t.id].tot }));
 }
 
 /* ---------------------------------------------------------------- GSTR-3B */
