@@ -1041,6 +1041,53 @@ async function companyGate(fc, b, co, fname, quiet){
   const r = await askConfirm({title: "Is this the right company?", ok: "Yes, take it", body: '<p class="note">' + esc(fname) + " was exported from the Tally company <b>" + esc(fc.name) + "</b>. The client open here is <b>" + esc((co && co.name) || "") + "</b>" + (co && co.tallyName ? " (in Tally: " + esc(co.tallyName) + ")" : "") + ". Take it into this client\u2019s books?</p>"});
   return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
 }
+// a Day Book brought in on this computer, sent to FinCom's cloud (handOver: through Storage, cut into pieces of at most
+// 45 MB when larger). 17-Oct-2026: a send that fails says so on Books > From Tally, with the reason and Send again
+// (part.cloud "not sent: <reason>", part.again), and its job is marked failed (TCloudUp.failJob), never left queued
+async function tallyCloudSend(b, part, f, wait, who, step){
+  const from = part.from, to = part.to;
+  // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
+  // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
+  const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
+  window.addEventListener("beforeunload", stay);
+  part.cloud = "going to the cloud…"; delete part.again;
+  try {
+    // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
+    // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
+    const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name || part.file);
+    part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days" + (r.pieces > 1 ? ", in " + r.pieces + " pieces" : "") + "), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+    if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? (f.name || part.file) + " is in FinCom’s cloud" + (r.pieces > 1 ? " (in " + r.pieces + " pieces)" : "") + "; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? (f.name || part.file) + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : (f.name || part.file) + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+    return true;
+  }
+  catch (e){
+    part.cloud = TCloudUp.notSent(e); part.again = !(e && e.final);
+    toast("Saved on this computer, but not sent to FinCom’s cloud: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + ".");
+    return false;
+  }
+  finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
+}
+// Send again (Books > From Tally): the file this page still holds (or this browser's own copy of it); else it is chosen again
+async function tallySendAgain(i){
+  const b = S.books, p = b && ((b.meta || {}).parts || [])[i];
+  if (!p) return;
+  const cid = b.cid || S.coId, k = p.wait || ("tcup:" + cid + ":" + p.from + "-" + p.to);
+  if (!TCloudUp.on()){ toast("Sign in to the firm account first: then Send again."); return; }
+  if (TCloudUp.live.has(k)){ toast((p.file || "This day book") + " is being sent now."); return; }
+  let x = null; try { x = await IDBStore.get(k); } catch (e){}
+  const f = TCloudUp.files[k] || (x && x.blob);
+  if (!f){
+    p.cloud = "not sent: this page no longer holds " + (p.file || "the file") + " (it was reloaded); choose it again";
+    p.again = false; render();
+    toast("Choose " + (p.file || "the Day Book") + " again: this page no longer holds it.");
+    tallyPickFor(tallyDate(p.from), tallyDate(p.to));
+    return;
+  }
+  const who = (x && x.who) || {client: cid, company: BridgeSeed.company()};
+  if (!(x && x.blob)) await TCloudUp.hold(cid, f, {from: p.from, to: p.to}, who); else { TCloudUp.live.add(k); TCloudUp.files[k] = f; }
+  p.wait = k; b.busy = "Sending " + (p.file || "the day book") + " to FinCom’s cloud…"; render();
+  await tallyCloudSend(b, p, f, k, who, m => { b.busy = m; softRender(); });
+  b.busy = ""; await saveBooks(null, b); render();
+}
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
 // opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown).
 // opts.toast === false (2.4.0, the one Upload Tally data on From Tally): the questions are asked as always, but the
@@ -1089,22 +1136,9 @@ async function bringDayBookFile(f, from0, to0, opts){
         // server-books: the file waits in this browser until FinCom's cloud has every day of it; a send cut short (or
         // made before signing in) goes again on its own the next time the client is opened, so it is never left here only
         const wait = await TCloudUp.hold(who.client, f, {from, to}, who);
-        if (TCloudUp.on()){
-          // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
-          // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
-          const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
-          window.addEventListener("beforeunload", stay);
-          part.cloud = "going to the cloud…";
-          try {
-            // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
-            // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
-            const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name);
-            part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? f.name + " is in FinCom’s cloud; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
-          }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
-          finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
-        } else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
+        part.wait = wait;
+        if (TCloudUp.on()) await tallyCloudSend(b, part, f, wait, who, step);
+        else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();

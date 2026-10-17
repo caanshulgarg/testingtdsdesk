@@ -25,7 +25,10 @@ ST = {}
 LOCK = threading.Lock()
 def reset(mode=""):
     with LOCK:
-        ST.clear(); ST.update({"mode": mode, "ingest": [], "creates": [], "patches": [], "heads": [], "uploads": {}, "delay": 0.0, "cut_done": False, "n": 0, "staged": {}})
+        ST.clear(); ST.update({"mode": mode, "ingest": [], "creates": [], "patches": [], "heads": [], "uploads": {}, "delay": 0.0, "cut_done": False, "n": 0, "staged": {}, "jobs": 0, "refused": []})
+# 17-Oct-2026: like the project's global limit (50 MB), Storage refuses a larger file at once with 413
+LIMIT = 50 * 1000 * 1000
+FILES = {}            # files the page fetches (made here, so the test knows every byte)
 reset()
 class Fake(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"         # one request a connection: a cut connection is never reused
@@ -44,6 +47,11 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if data and self.command != "HEAD": self.wfile.write(data)
     def do_OPTIONS(self): self.out(204)
     def do_GET(self):
+        if self.path.startswith("/__file/"):
+            return self.out(200, FILES[self.path[len("/__file/"):]], {"Content-Type": "application/octet-stream"})
+        if self.path.startswith("/__upload/"):
+            with LOCK: u = ST["uploads"].get(self.path[len("/__upload/"):])
+            return self.out(200, bytes(u["data"]) if u else b"", {"Content-Type": "application/octet-stream"})
         if self.path == "/__state":
             with LOCK:
                 s = {k: v for k, v in ST.items() if k != "uploads"}
@@ -61,7 +69,9 @@ class Fake(http.server.BaseHTTPRequestHandler):
             if k == "upload_new":
                 if mode == "unknown400": return self.out(400, {"ok": False, "error": "unknown kind"})
                 if mode == "unknown404": return self.out(404, {"ok": False, "error": "Not Found"})
-                return self.out(200, {"ok": True, "job": "job-1", "path": "f-1/%s/job-1.xml" % body.get("client")})
+                with LOCK: ST["jobs"] += 1; jn = "job-%d" % ST["jobs"]
+                return self.out(200, {"ok": True, "job": jn, "path": "f-1/%s/%s.xml" % (body.get("client"), jn)})
+            if k == "upload_fail": return self.out(200, {"ok": True, "job": body.get("job"), "failed": True})
             if k == "upload_done": return self.out(200, {"ok": True, "queued": True})
             if k == "job_new": return self.out(200, {"ok": True, "job": "old-job-1"})
             if k == "stage_days":
@@ -78,6 +88,9 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 kv = part.strip().split(" ")
                 if kv and kv[0]: meta[kv[0]] = base64.b64decode(kv[1]).decode() if len(kv) > 1 else ""
             hd = {h: self.headers.get(h) for h in ("Tus-Resumable", "Upload-Length", "authorization", "x-upsert", "apikey")}
+            if int(self.headers.get("Upload-Length") or 0) > LIMIT:
+                with LOCK: ST["refused"].append({"length": int(self.headers.get("Upload-Length")), "meta": meta})
+                return self.out(413, {"statusCode": "413", "error": "Payload too large", "message": "The object exceeded the maximum allowed size"})
             with LOCK:
                 ST["n"] += 1; uid = "u%d" % ST["n"]
                 ST["uploads"][uid] = {"length": int(self.headers.get("Upload-Length") or -1), "data": bytearray(), "meta": meta, "headers": hd}
@@ -125,6 +138,38 @@ def state():
     s = json.loads(urllib.request.urlopen("http://localhost:9342/__state").read())
     s["ingest"] = [x for x in s["ingest"] if x["body"].get("kind") != "wake"]      # the page's own wake-ups (opening a client) are not the upload's
     return s
+
+
+# ---------------------------------------------------------------- 17-Oct-2026: Day Books larger than Storage takes
+import datetime
+def book(days, per_day, narr, enc="utf-16le", tag="v", big=None):
+    """a Tally Day Book export: the envelope (company in SVCURRENTCOMPANY), per_day entries a day (big: {day: extra
+    characters in each of that day's narrations}), the closing tags; UTF-16LE with the BOM, or UTF-8"""
+    head = ('<ENVELOPE>\r\n<HEADER>\r\n<TALLYREQUEST>Export Data</TALLYREQUEST>\r\n</HEADER>\r\n<BODY>\r\n<IMPORTDATA>\r\n<REQUESTDESC>\r\n<REPORTNAME>Vouchers</REPORTNAME>\r\n'
+            '<STATICVARIABLES>\r\n<SVCURRENTCOMPANY>ZZ UP</SVCURRENTCOMPANY>\r\n</STATICVARIABLES>\r\n</REQUESTDESC>\r\n<REQUESTDATA>\r\n')
+    foot = "</REQUESTDATA>\r\n</IMPORTDATA>\r\n</BODY>\r\n</ENVELOPE>\r\n"
+    out, n = [head], 0
+    for d in days:
+        for k in range(per_day):
+            extra = "y" * (big or {}).get(d, 0)
+            out.append('<TALLYMESSAGE xmlns:UDF="TallyUDF">\r\n<VOUCHER REMOTEID="%s-%06d" VCHTYPE="Sales" ACTION="Create">\r\n<DATE>%s</DATE>\r\n<GUID>%s-%06d</GUID>\r\n<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>\r\n'
+                       '<NARRATION>%s %d ₹ 1,180 बिक्री 😀%s</NARRATION>\r\n<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>1180.00</AMOUNT></ALLLEDGERENTRIES.LIST>\r\n</VOUCHER>\r\n</TALLYMESSAGE>\r\n'
+                       % (tag, n, d, tag, n, narr, n, extra)); n += 1
+    out.append(foot)
+    t = "".join(out)
+    return (b"\xff\xfe" + t.encode("utf-16-le")) if enc == "utf-16le" else t.encode("utf-8")
+def dlist(a, b):
+    d, e, out = datetime.date(int(a[:4]), int(a[4:6]), int(a[6:])), datetime.date(int(b[:4]), int(b[4:6]), int(b[6:])), []
+    while d <= e: out.append(d.strftime("%Y%m%d")); d += datetime.timedelta(days=1)
+    return out
+VRE = re.compile(r"<VOUCHER\b[\s\S]*?</VOUCHER>")
+def vouchers(raw):
+    t = raw.decode("utf-16") if raw[:2] == b"\xff\xfe" else raw.decode("utf-8")
+    return [(re.search(r"<DATE>(\d{8})</DATE>", v).group(1), v) for v in VRE.findall(t)]
+YEAR = dlist("20260401", "20270331")
+FILES["big16"] = book(YEAR, 120, "Sale to Ramesh & Sons " + "x" * 1080, tag="b")
+FILES["f413"] = book(YEAR[:120], 300, "Sale " + "z" * 1300, enc="utf-8", tag="c")
+FILES["hugeday"] = book(dlist("20260401", "20260420"), 30, "Sale", tag="h", big={"20260415": 30000})
 
 SETUP = """async () => {
   let c = Object.values(S.companies).find(x => x.name === "ZZ Upload Client");
@@ -215,7 +260,8 @@ with sync_playwright() as p:
     ok(E("window.__err") is not None, "Storage failing after the first chunk: the upload stops with words (%s)" % E("window.__err"))
     ok(E("(async () => (await IDBStore.prefix('tus:')).length)()") == 1, "the upload's URL is kept in this browser's store")
     s = state()
-    ok([x["body"]["kind"] for x in s["ingest"]] == ["upload_new"], "no upload_done yet (%s)" % [x["body"]["kind"] for x in s["ingest"]])
+    ok([x["body"]["kind"] for x in s["ingest"]] == ["upload_new", "upload_fail"] and s["ingest"][1]["body"].get("job") == "job-1" and "stopped at" in str(s["ingest"][1]["body"].get("reason")),
+       "no upload_done yet; the job marked failed with the reason, not left queued (upload_fail: %s)" % [x["body"] for x in s["ingest"]][1:])
     with LOCK: ST["mode"] = ""; ST["heads"] = []
     pg.reload(); pg.wait_for_timeout(2500)
     if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
@@ -223,7 +269,7 @@ with sync_playwright() as p:
     sent = E("async (cid) => { window.__steps = []; return await TCloudUp.retry(cid, m => window.__steps.push(m)); }", cid)
     s = state()
     ok(sent is True, "after the reload, the waiting Day Book goes on its own (retry: %s)" % sent)
-    ok(len(s["creates"]) == 1 and [x["body"]["kind"] for x in s["ingest"]] == ["upload_new", "upload_done"],
+    ok(len(s["creates"]) == 1 and [x["body"]["kind"] for x in s["ingest"]] == ["upload_new", "upload_fail", "upload_done"],
        "no second upload_new, no second resumable upload; upload_done once (%s, %d made)" % ([x["body"]["kind"] for x in s["ingest"]], len(s["creates"])))
     ok(len(s["heads"]) >= 1, "the reload asked the server's offset first (HEAD)")
     ok204 = [x for x in s["patches"] if x["what"] == "204"]
@@ -274,6 +320,101 @@ with sync_playwright() as p:
        "UTF-8: the vouchers of 4 days staged, 5 vouchers (%s)" % {d: len(x) for d, x in got["f8"].items()})
     ok(got["f16"] == got["f8"], "UTF-16LE with its BOM: the same days and the same vouchers staged as in UTF-8 (UTF-16LE %s, UTF-8 %s)"
        % ({d: len(x) for d, x in got["f16"].items()}, {d: len(x) for d, x in got["f8"].items()}))
+    # ---- 5. 17-Oct-2026: a 120 MB UTF-16LE Day Book (a year, every day): cut in this page into 3 Day Books of whole days,
+    # each at most 45 MB, each its own upload_new / Storage / upload_done, one after another; "piece 2 of 3" said
+    big = FILES["big16"]
+    ok(115 * 1048576 < len(big) < 125 * 1048576, "5. a Day Book of %.1f MB, UTF-16LE with the BOM, %d days" % (len(big) / 1048576, len(YEAR)))
+    reset("")
+    E("""async () => { const r = await fetch("http://localhost:9342/__file/big16"); window.__big = new File([await r.blob()], "DayBook-2026-27.xml", {type: "text/xml"}); window.__steps = []; window.__bars = [];
+      window.__barT = setInterval(() => { const p = TCloudUp.prog[window.__who.client]; if (p) window.__bars.push(p.name); }, 50); return window.__big.size; }""")
+    t0 = time.time()
+    E(START.replace("window.__file", "window.__big"))
+    for _ in range(1500):
+        if E("window.__res || window.__err"): break
+        pg.wait_for_timeout(200)
+    E("clearInterval(window.__barT)")
+    s = state()
+    res = E("window.__res") or {}
+    ok(E("window.__err") is None and res.get("pieces") == 3 and res.get("days") == 365 and res.get("storage") is True and len(res.get("jobs") or []) == 3,
+       "5. sent in 3 pieces (%s / %s, %.0f s)" % (E("window.__err"), {k: res.get(k) for k in ("pieces", "days", "jobs")}, time.time() - t0))
+    kinds = [x["body"]["kind"] for x in s["ingest"]]
+    ok(kinds == ["upload_new", "upload_done"] * 3, "5. one after another: upload_new, Storage, upload_done, three times (%s)" % kinds)
+    news = [x["body"] for x in s["ingest"] if x["body"]["kind"] == "upload_new"]
+    ok(all(x["size"] <= 45 * 1024 * 1024 for x in news) and not s["refused"], "5. each piece at most 45 MB; nothing refused by Storage (%s)" % [x["size"] for x in news])
+    ok(news and news[0]["from"] == "20260401" and news[-1]["to"] == "20270331" and all(dlist(news[i]["to"], "20270331")[1] == news[i + 1]["from"] for i in range(len(news) - 1)),
+       "5. each piece its own period; they follow one another and make the year (%s)" % [(x["from"], x["to"]) for x in news])
+    ok([x["name"] for x in news] == ["DayBook.xml (piece %d of 3)" % i for i in (1, 2, 3)], "5. each job named by its piece (%s)" % [x["name"] for x in news])
+    steps = E("window.__steps") or []
+    ok(any("piece 2 of 3" in m for m in steps) and any("piece 3 of 3" in m and "%" in m for m in steps), "5. the progress says the piece: %s" % next((m for m in steps if "piece 2 of 3" in m), steps[-1:]))
+    ok(any("(piece 2 of 3)" in n for n in (E("window.__bars") or [])), "5. the progress bar names the piece (%s)" % sorted(set(E("window.__bars") or []))[:3])
+    s0 = big.index("<VOUCHER".encode("utf-16-le")); e9 = big.rindex("</VOUCHER>".encode("utf-16-le")) + 20
+    import urllib.request
+    stored = [urllib.request.urlopen("http://localhost:9342/__upload/" + c["id"]).read() for c in s["creates"]]
+    ok(len(stored) == 3 and all(len(x) == n["size"] for x, n in zip(stored, news)), "5. three files in Storage, whole (%s)" % [len(x) for x in stored])
+    ok(all(x[:s0] == big[:s0] and x[-(len(big) - e9):] == big[e9:] for x in stored), "5. each: the original envelope (BOM, header, SVCURRENTCOMPANY) and the original closing tags, UTF-16LE")
+    allv, perday = [], {}
+    for i, (x, n) in enumerate(zip(stored, news)):
+        vs = vouchers(x); allv += vs
+        ok(all(n["from"] <= d <= n["to"] for d, _ in vs), "5. piece %d holds only the days of its period %s-%s" % (i + 1, n["from"], n["to"]))
+        for d, _ in vs: perday.setdefault(d, set()).add(i)
+    ok(all(len(v) == 1 for v in perday.values()), "5. whole days: no day in two pieces")
+    ok(sorted(allv) == sorted(vouchers(big)), "5. the pieces together hold every entry of the file, each once (%d)" % len(allv))
+    ok(E("(async () => (await IDBStore.prefix('tcpieces:')).length + (await IDBStore.prefix('tus:')).length)()") == 0, "5. nothing about the pieces left in this browser's store")
+    E("() => { window.__big = null; }")
+    # ---- 6. a file Storage refuses (413, larger than 50 MB: here a page that does not cut it): the line on Books > From
+    # Tally, the job marked failed; Send again (the file still in the page) goes, in pieces
+    reset("")
+    E("""async (cid) => { await openCompany(cid); S.books = {loading: false, cid, vouchers: [], map: {}, meta: {}, alloc: {}, challans: [], misCfg: {freq: "off"}, auditCfg: {freq: "off"}}; goClient("books:import");
+      const r = await fetch("http://localhost:9342/__file/f413"); window.__f413 = new File([await r.blob()], "DayBook-Apr-Jul.xml", {type: "text/xml"});
+      DayCut.PIECE = 200 * 1048576; window.__brought = await bringDayBookFile(window.__f413, "", "", {toast: false}); return window.__f413.size; }""", cid)
+    line = None
+    for _ in range(300):
+        line = txt("#app [data-cloud-notsent]")
+        if line: break
+        pg.wait_for_timeout(200)
+    s = state()
+    print("     line: " + line)
+    ok(len(FILES["f413"]) > LIMIT and s["refused"] and s["refused"][0]["length"] == len(FILES["f413"]), "6. Storage answered 413 for the %.1f MB file" % (len(FILES["f413"]) / 1048576))
+    ok(line.startswith("DayBook-Apr-Jul.xml: Saved on this computer, but not sent to FinCom’s cloud: FinCom’s cloud refused the file as too large (")
+       and "it takes at most 50 MB a file). Other logins will not see it until it is sent." in line and line.endswith("Send again"),
+       "6. the line on Books › From Tally says it plainly, with Send again")
+    ok(pg.locator("#app [data-cloud-notsent].bad").count() == 1, "6. shown as a problem (bad)")
+    fails_ = [x["body"] for x in s["ingest"] if x["body"]["kind"] == "upload_fail"]
+    ok([x["body"]["kind"] for x in s["ingest"]] == ["upload_new", "upload_fail"] and fails_[0].get("job") == "job-1" and "too large" in fails_[0].get("reason", ""),
+       "6. the job is marked failed with the reason (upload_fail), never left queued (%s)" % fails_)
+    ok(E("(async () => (await IDBStore.prefix('tus:')).length)()") == 0, "6. the refused upload is not kept to go on with (a new upload next time)")
+    E("() => { DayCut.PIECE = 45 * 1048576; }")
+    pg.click("#app [data-send-again]")
+    for _ in range(600):
+        if not pg.locator("#app [data-cloud-notsent]").count() and "upload_done" in [x["body"]["kind"] for x in state()["ingest"]] and not E("S.books.busy"): break
+        pg.wait_for_timeout(200)
+    s = state()
+    kinds = [x["body"]["kind"] for x in s["ingest"]]
+    ok(kinds == ["upload_new", "upload_fail", "upload_new", "upload_done", "upload_new", "upload_done"], "6. Send again: the file the page holds, in 2 pieces (%s)" % kinds)
+    ok(not pg.locator("#app [data-cloud-notsent]").count(), "6. the line is gone once it is sent")
+    news = [x["body"] for x in s["ingest"] if x["body"]["kind"] == "upload_new"][1:]
+    ok(all(x["size"] <= 45 * 1024 * 1024 for x in news) and news[0]["from"] == "20260401" and news[-1]["to"] == "20260729", "6. pieces of at most 45 MB over the file's period (%s)" % [(x["from"], x["to"], x["size"]) for x in news])
+    # Send again after a reload: the page no longer holds the file (nor this browser): it asks to choose it again
+    E("""async () => { const p = S.books.meta.parts[0]; p.cloud = "not sent: Storage answered 503"; p.again = true; p.wait = "tcup:none"; TCloudUp.files = {}; render(); }""")
+    pg.wait_for_timeout(300)
+    E("() => { window.__picked = false; const i = document.getElementById('tallyIn'); if (i) i.click = () => { window.__picked = true; }; }")
+    pg.click("#app [data-send-again]"); pg.wait_for_timeout(800)
+    ok(E("window.__picked") is True and "choose it again" in txt("#app [data-cloud-notsent]") and not pg.locator("#app [data-send-again]").count(),
+       "6. after a reload: asks to choose the file again (%s)" % txt("#app [data-cloud-notsent]"))
+    # ---- 7. one day larger than a piece: said plainly, nothing sent, no Send again
+    reset("")
+    E("""async (cid) => { S.books = {loading: false, cid, vouchers: [], map: {}, meta: {}, alloc: {}, challans: [], misCfg: {freq: "off"}, auditCfg: {freq: "off"}}; goClient("books:import");
+      const r = await fetch("http://localhost:9342/__file/hugeday"); const f = new File([await r.blob()], "DayBook-April.xml", {type: "text/xml"});
+      DayCut.PIECE = 1048576; await bringDayBookFile(f, "", "", {toast: false}); }""", cid)
+    for _ in range(150):
+        line = txt("#app [data-cloud-notsent]")
+        if line: break
+        pg.wait_for_timeout(200)
+    E("() => { DayCut.PIECE = 45 * 1048576; }")
+    print("     line: " + line)
+    ok(re.search(r"^DayBook-April\.xml: Saved on this computer, but not sent to FinCom’s cloud: the entries of 15-Apr-2026 alone come to 1\.\d MB, more than FinCom’s cloud takes in one piece \(1\.0 MB\), and a day is never cut in two: tell FinCom’s support\. Other logins will not see it until it is sent\.$", line),
+       "7. a day larger than a piece: said plainly")
+    ok(not pg.locator("#app [data-send-again]").count() and not state()["ingest"] and not state()["creates"], "7. nothing sent, no Send again (it cannot help)")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown(); fake.shutdown()
