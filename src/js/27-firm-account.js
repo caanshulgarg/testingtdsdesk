@@ -1853,8 +1853,8 @@ function doAct(act, t){
     // the Tally page's install and connect steps, back to this page once connected; Check again: ask now, answer at once
     // (15-Oct-2026: the one place to connect, the Tally page's Connect Tally guide, at its first step not done)
     case "tallyConnect": Smart.setReturn(); S.tallyConnectBack = !!S.returnTo; openConnectTally(0, ""); break;
-    // a client's "Link to Tally" (Getting ready, the top bar's sign): the guide's step 4 with that client
-    case "connectTally": Smart.setReturn(); openConnectTally(4, S.coId || ""); break;
+    // a client's "Link to Tally" (Getting ready, the top bar's sign): the guide's step 5 with that client
+    case "connectTally": Smart.setReturn(); openConnectTally(5, S.coId || ""); break;
     case "tallyCheck": tallyCheckNow(); break;
     case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
@@ -2019,10 +2019,10 @@ function saveNewCompany(v){
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
   // round 39: the new client opens on its Tally card (Client setup → Tally). 15-Oct-2026 (one place to connect): a Tally
-  // company chosen here is linked in the Tally page's Connect Tally guide, step 4, with the client and that company
+  // company chosen here is linked in the Tally page's Connect Tally guide, step 5, with the client and that company
   // already chosen; a person presses Link there (nothing links by itself here)
   openCompany(co.id); S.tab = "cotally"; render();
-  if (tco) openConnectTally(4, co.id, tco);
+  if (tco) openConnectTally(5, co.id, tco);
   return true;
 }
 let pickMode = "company";

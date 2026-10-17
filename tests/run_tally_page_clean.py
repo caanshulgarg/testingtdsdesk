@@ -17,6 +17,10 @@ very simple connection guide").
      Today's not-linked line, Getting ready, Settings → Books in the cloud, the per-computer "Seen, not linked", Add
      client) lands on the guide at the right step, and none of them links or connects on its own.
   Staff see no owner button; a phone 390 wide never scrolls sideways.
+  7. 17-Oct-2026 (the owner: "we need to upload TDL for every Tally while integrating"): seven steps; step 3 Load FinCom
+     add-on in Tally (the clicks, the path with Copy, a Check line), ticked per computer from the beat's recorder (the
+     client worked on's company, else any company open there), an older bridge said plainly; the Status card's one line
+     "Add-on not loaded on <PC> · How". The link step is now step 5 (ledgers 6, Day Book 7).
   6. Round 63 (16-Oct-2026): six steps (+ Import ledgers, Bring in this year's entries) with a strip on top; step 5's
      ledgers-only wake (one call), the moving bar and the time, "1,240 ledgers imported ✓", nothing in 10 minutes: Try
      again and the masters file (a Master.xml marks step 5 done with its count; upload_ledgers declared complete, the
@@ -176,11 +180,11 @@ def main():
         # 0. the guide
         gd = "#app [data-connect-guide]"
         ok(n(gd) == 1 and txt(gd).startswith("Connect Tally"), "one Connect Tally guide")
-        ok(steps()[:4] == [["install", True], ["tally", False], ["company", False], ["link", False]], "the steps tick from the beat: installed only (%s)" % steps())
-        ok([x[0] for x in steps()] == ["install", "tally", "company", "link", "ledgers", "daybook"] and n(gd + " [data-guide-strip] [data-strip-step]") == 6,
-           "round 63: six steps, the strip of six on top (%s)" % [x[0] for x in steps()])
-        ok(txt(gd + " [data-guide-count]") == "1 of 6 done" and n(gd + ' [data-strip-step="install"].done') == 1 and n(gd + ' [data-strip-step="tally"].now') == 1,
-           "round 63: '1 of 6 done', Install ticked, Open Tally the current one (%s)" % txt(gd + " [data-guide-count]"))
+        ok(steps()[:5] == [["install", True], ["tally", False], ["addon", False], ["company", False], ["link", False]], "the steps tick from the beat: installed only (%s)" % steps())
+        ok([x[0] for x in steps()] == ["install", "tally", "addon", "company", "link", "ledgers", "daybook"] and n(gd + " [data-guide-strip] [data-strip-step]") == 7,
+           "17-Oct-2026: seven steps (+ Load FinCom add-on after Open Tally), the strip of seven on top (%s)" % [x[0] for x in steps()])
+        ok(txt(gd + " [data-guide-count]") == "1 of 7 done" and n(gd + ' [data-strip-step="install"].done') == 1 and n(gd + ' [data-strip-step="tally"].now') == 1,
+           "round 63: '1 of 7 done', Install ticked, Open Tally the current one (%s)" % txt(gd + " [data-guide-count]"))
         gt = txt(gd)
         ok("Open TallyPrime on NWS144, signed in as anshul." in gt and "F1 (Help) \u2192 Settings \u2192 Connectivity" in gt and "Both" in gt
            and "choose any free port from 9000 to 9999 (9002 is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself." in gt,
@@ -238,7 +242,7 @@ def main():
         shot("after-desktop-1440")
         # Link in the table: the guide's step 4 with that client
         E("() => window.scrollTo(0, 0)"); pg.click(tb + " [data-client-link=\"%s\"]" % G); pg.wait_for_timeout(900)
-        ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, G] and n('#app [data-connect-step="link"][data-open]') == 1
+        ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 5, G] and n('#app [data-connect-step="link"][data-open]') == 1
            and E("() => document.querySelector('#app [data-guide-client]').value") == G, "Link: the guide's step 4, that client chosen (%s)" % E("[S.view, S.homeTab, S.tallyGuide]"))
         # nothing open in Tally (his scene): nothing to link to, so Link cannot be pressed (linking is checked below with a company open)
         ok(E("() => { const b = document.querySelector('#app [data-guide-link]'); return !!b && b.disabled; }"), "his scene: no company open in Tally, Link cannot be pressed")
@@ -264,16 +268,16 @@ def main():
         def guide_scene(d, cos=None):
             scene([d], cos if cos is not None else companies(d=d["id"])); return d["id"]
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
-        ok(steps()[:4] == [["install", True], ["tally", False], ["company", False], ["link", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]")
+        ok(steps()[:5] == [["install", True], ["tally", False], ["addon", False], ["company", False], ["link", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]")
            and "Offline" in txt("#app [data-pc-line=\"%s\"]" % d), "offline: installed, the rest not; step 2 says it is offline (%s)" % steps())
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))
-        ok(steps()[:4] == [["install", True], ["tally", True], ["company", False], ["link", False]] and "Reading is paused" not in page() and "Leave TallyPrime open on a company" in txt("#app [data-connect-guide]"),
+        ok(steps()[:5] == [["install", True], ["tally", True], ["addon", False], ["company", False], ["link", False]] and "Reading is paused" not in page() and "Leave TallyPrime open on a company" in txt("#app [data-connect-guide]"),
            "Tally answering, no company: two ticked (%s)" % steps())
         d = guide_scene(dev(4, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"paused": True}))
-        ok(steps()[2] == ["company", False] and "Reading is paused on NWS144." in txt("#app [data-connect-guide]"), "a company open, reading paused: step 3 not done, how to resume (%s)" % steps())
+        ok(steps()[3] == ["company", False] and "Reading is paused on NWS144." in txt("#app [data-connect-guide]"), "a company open, reading paused: step 4 not done, how to resume (%s)" % steps())
         d = guide_scene(dev(5, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"readStopped": {"by": "fincom", "reason": "Tally hangs", "at": "ago:4"}}))
         sp = '#app [data-connect-step="company"]'
-        ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: step 3 with the owner's Resume (%s)" % txt(sp))
+        ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: step 4 with the owner's Resume (%s)" % txt(sp))
         pg.click(sp + " [data-read-resume]"); pg.wait_for_timeout(600)
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume"], "Resume calls tally_read_resume")
         d = guide_scene(dev(6, "NWS144", "anshul", tally="open", opened=("VMS EVENTS", "GARG SHEKHAR", "GB TEXCOAT")), companies(seen=("VMS EVENTS",), d="d0000000-0000-4000-8000-000000000006"))
@@ -288,7 +292,7 @@ def main():
         ok(n("#app [data-guide-open-count]") == 1 and txt("#app [data-guide-open-count]") == "3 companies open in Tally on NWS144." and "VMS EVENTS" not in txt('#app [data-connect-step="company"]'),
            "step 3: the number of companies open, never their names (%s)" % txt("#app [data-guide-open-count]"))
         pg.select_option("#app [data-guide-client]", G); pg.wait_for_timeout(300)
-        ok(steps()[:4] == [["install", True], ["tally", True], ["company", True], ["link", False]], "a company open, a client not linked: three ticked (%s)" % steps())
+        ok(steps()[:5] == [["install", True], ["tally", True], ["addon", True], ["company", True], ["link", False]], "a company open (the add-on recording), a client not linked: four ticked (%s)" % steps())
         # same GSTIN on top of step 4's list
         E("""(c) => { S.companies[c].gstin = '09AANFG3202D1ZR'; window.__companies.push({company: 'GARG SHEKHAR', client_id: null, device_id: 'd0000000-0000-4000-8000-000000000006', gstin: '09AANFG3202D1ZR', last_seen: new Date().toISOString(), linked_at: new Date(Date.now() - 3600e3).toISOString()});
             TCloud.pane.devices = null; TCloud.pane.at = 0; TLight.st.cos = window.__companies; render(); }""", G); pg.wait_for_timeout(1800)
@@ -303,8 +307,8 @@ def main():
         # all well: the guide is one green line, All good
         d6 = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
         scene([d6], companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]))
-        ok(n('#app [data-connect-guide="done"]') == 0 and steps() and steps()[4:] == [["ledgers", False], ["daybook", False]],
-           "round 63: all four linked, no ledgers or Day Book in FinCom: not done yet, steps 5 and 6 to go (%s)" % steps()[4:])
+        ok(n('#app [data-connect-guide="done"]') == 0 and steps() and steps()[5:] == [["ledgers", False], ["daybook", False]],
+           "round 63: all four linked, no ledgers or Day Book in FinCom: not done yet, steps 5 and 6 to go (%s)" % steps()[5:])
         d = d6["id"]; scene([d6], companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]), books=HELD_ALL)
         gl = txt('#app [data-connect-guide="done"]')
         ok(n("#app [data-connect-step]") == 0 and re.search(r"Connected \u00b7 1 company open in Tally \u00b7 last entry \d\d:\d\d IST", gl), "all six done: one green line, the number of companies open (%s)" % gl)
@@ -317,8 +321,8 @@ def main():
         all3 = companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"])
         ids = scene([d6], all3, books=five); T = ids["GB TEXCOAT"]
         s5 = '#app [data-connect-step="ledgers"]'
-        ok(steps()[4:] == [["ledgers", False], ["daybook", False]] and n('#app [data-strip-step="ledgers"].now') == 1 and n(s5 + ".now") == 1 and n('#app [data-connect-step="daybook"].later') == 1,
-           "step 5 is the current one (marked), step 6 later (muted) (%s)" % steps()[4:])
+        ok(steps()[5:] == [["ledgers", False], ["daybook", False]] and n('#app [data-strip-step="ledgers"].now') == 1 and n(s5 + ".now") == 1 and n('#app [data-connect-step="daybook"].later') == 1,
+           "step 5 is the current one (marked), step 6 later (muted) (%s)" % steps()[5:])
         ok(n('#app [data-connect-step="install"].done') == 1 and n('#app [data-connect-step="install"] [data-bridge-download]') == 0, "a done step folds to its green line")
         pg.click('#app [data-guide-unfold="install"]'); pg.wait_for_timeout(300)
         ok(n('#app [data-guide-more="install"] [data-bridge-download]') == 1, "a done step opens on click (install: the download again)")
@@ -336,8 +340,8 @@ def main():
         E("""(t) => { window.__books[t][0].ledgersAt = new Date().toISOString();
             window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 1240}, (_, i) => ({name: 'Ledger ' + (i + 1), parent: 'Sundry Creditors'})); }""", T)
         pg.wait_for_timeout(11500)
-        ok(txt(s5 + " [data-guide-ledgers-done]").startswith("1,240 ledgers of GB TEXCOAT imported \u2713") and " took 0:" in txt(s5) and steps()[4] == ["ledgers", True],
-           "the list arrives (the cloud's count of the client's ledgers): '1,240 ledgers of GB TEXCOAT imported \u2713' with the time; step 5 done (%s / %s)" % (txt(s5)[-80:], steps()[4]))
+        ok(txt(s5 + " [data-guide-ledgers-done]").startswith("1,240 ledgers of GB TEXCOAT imported \u2713") and " took 0:" in txt(s5) and steps()[5] == ["ledgers", True],
+           "the list arrives (the cloud's count of the client's ledgers): '1,240 ledgers of GB TEXCOAT imported \u2713' with the time; step 5 done (%s / %s)" % (txt(s5)[-80:], steps()[5]))
         shot("guide-step5-done")
         # nothing in 10 minutes: Tally must be open, Try again, the masters file offered
         ids = scene([d6], all3, books=five); T = ids["GB TEXCOAT"]
@@ -346,7 +350,7 @@ def main():
         ok(txt(s5 + ' [data-guide-ledgers-stop="late"]').startswith("Not received in 10 minutes. TallyPrime must be open on NWS144 with GB TEXCOAT open") and n(s5 + " [data-guide-ledgers-bar]") == 0
            and n(s5 + " [data-guide-ledgers-again]") == 1 and n(s5 + " [data-guide-masters]") == 1 and E("(s) => document.querySelector(s + ' [data-guide-masters-how]').open", s5),
            "round 64: at 10 minutes the bar stops: 'Not received in 10 minutes. TallyPrime must be open on NWS144 with GB TEXCOAT open', Try again, the masters file with how (%s)" % txt(s5)[:160])
-        ok(n('#app [data-strip-step="ledgers"].done') == 0 and steps()[4] == ["ledgers", False], "round 64: stopped: the strip and the card agree, step 5 not done")
+        ok(n('#app [data-strip-step="ledgers"].done') == 0 and steps()[5] == ["ledgers", False], "round 64: stopped: the strip and the card agree, step 5 not done")
         shot("guide-r64-step5-stop-10min")
         E("() => { window.__wakes = []; }"); pg.click(s5 + " [data-guide-ledgers-again]"); pg.wait_for_timeout(800)
         ok(len([w for w in E("window.__wakes") if w.get("what") == "ledgers"]) == 1, "Try again: the wake once more")
@@ -356,8 +360,8 @@ def main():
         ok(fc.value is not None, "Or upload the masters file: opens the file picker")
         E("() => { window.__wakes = []; }")
         fc.value.set_files(files=[{"name": "Master.xml", "mimeType": "text/xml", "buffer": MASTERS.encode("utf-8")}]); pg.wait_for_timeout(2500)
-        ok(txt(s5 + " [data-guide-masters-result]").startswith("3 ledgers imported from Master.xml \u2713") and steps()[4] == ["ledgers", True],
-           "a Master.xml: '3 ledgers imported from Master.xml \u2713', step 5 done (%s / %s)" % (txt(s5), steps()[4]))
+        ok(txt(s5 + " [data-guide-masters-result]").startswith("3 ledgers imported from Master.xml \u2713") and steps()[5] == ["ledgers", True],
+           "a Master.xml: '3 ledgers imported from Master.xml \u2713', step 5 done (%s / %s)" % (txt(s5), steps()[5]))
         up = [w for w in E("window.__wakes") if w.get("kind") == "upload_ledgers"]
         ok(len(up) == 1 and up[0]["complete"] is True and up[0]["count"] == 3 and up[0]["from"] == "20260401" and up[0]["openAsOn"] == "20260331"
            and [l[0] for l in up[0]["ledgers"]] == ["Cash", "Rent", "VMS EVENTS"] and all(l[2] == "0" for l in up[0]["ledgers"]),
@@ -366,7 +370,7 @@ def main():
         ids = scene([d6], all3, books=dict(five, **{"GB TEXCOAT": book("GB TEXCOAT", ledgers=True, days=False)})); T = ids["GB TEXCOAT"]
         s6 = '#app [data-connect-step="daybook"]'
         how = E("(s) => [...document.querySelectorAll(s + ' [data-guide-daybook-how] li')].map(e => e.innerText.replace(/\\s+/g, ' ').trim())", s6)
-        ok(steps()[4:] == [["ledgers", True], ["daybook", False]] and len(how) == 3 and "Display More Reports \u2192 Day Book" in how[0] and "F2" in how[1] and "Alt+E" in how[2] and "XML" in how[2]
+        ok(steps()[5:] == [["ledgers", True], ["daybook", False]] and len(how) == 3 and "Display More Reports \u2192 Day Book" in how[0] and "F2" in how[1] and "Alt+E" in how[2] and "XML" in how[2]
            and n(s6 + " svg.tg-art") == 1, "step 6: three lines (Gateway \u2192 Display More Reports \u2192 Day Book; F2; Alt+E \u2192 XML), a drawing (%s)" % how)
         shot("guide-step6-desktop-light")
         pg.click(s6 + " [data-guide-daybook-open]"); pg.wait_for_timeout(1800)
@@ -374,7 +378,7 @@ def main():
         # the year's days held: step 6 done; with the ledgers, all six: the green line
         ids = scene([d6], all3, books=HELD_ALL)
         ok(n('#app [data-connect-guide="done"]') == 1, "every linked client's ledgers and this year's Day Book held: all six done")
-        E("() => openConnectTally(6, '')"); pg.wait_for_timeout(900)
+        E("() => openConnectTally(7, '')"); pg.wait_for_timeout(900)
         ok(n('#app [data-connect-step="daybook"][data-done]') == 0 or n('#app [data-connect-step="daybook"] [data-guide-daybook-open]') == 1, "opened on step 6 by a pointer: its Upload again")
         # ---- round 64 (the owner's test of 16-Oct-2026): steps 4 to 6 judge the client worked on; the others are named
         r64 = {"GB TEXCOAT": book("GB TEXCOAT", ledgers=False, days=True), "ABC TRADERS": book("ABC TRADERS", ledgers=False, days=False)}
@@ -383,7 +387,7 @@ def main():
         # GB TEXCOAT's 224 ledgers are in the cloud (tally_ledgers), its ledger time never set (the bridge's whole list did not set it)
         E("() => { window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 224}, (_, i) => ({name: 'L' + i, parent: 'Sundry Debtors'})); }")
         E("(t) => { S.tallyGuide = {cid: t, at: Date.now()}; TCloud.st = {}; render(); }", T); pg.wait_for_timeout(2500)
-        ok(steps()[3:] == [["link", True], ["ledgers", True], ["daybook", True]] and all(n('#app [data-strip-step="%s"].done' % k) == 1 for k in ("link", "ledgers", "daybook")),
+        ok(steps()[4:] == [["link", True], ["ledgers", True], ["daybook", True]] and all(n('#app [data-strip-step="%s"].done' % k) == 1 for k in ("link", "ledgers", "daybook")),
            "round 64: GB TEXCOAT worked on: steps 4 to 6 green (strip and cards), though garg shekhar & company is not linked and ABC TRADERS has no ledgers (%s)" % steps())
         ok(not E("window.__wakes").__len__() or not [w for w in E("window.__wakes") if w.get("what") == "ledgers"], "round 64: no click: nothing asked of Tally")
         ok(txt('#app [data-connect-step="ledgers"] [data-guide-ledgers-held]').startswith("224 ledgers of GB TEXCOAT are in FinCom."),
@@ -399,13 +403,13 @@ def main():
         # ---- round 66 (the owner, 16-Oct-2026: "all 6 steps are not visible anywhere"): all done, the six steps stay on
         # the page as six green ticks, the count says "All 6 done for <client>", the client can be changed there, and each
         # other client named opens the steps for that client
-        ok(n('#app [data-connect-guide="done"] [data-guide-strip] li') == 6 and n('#app [data-connect-guide="done"] [data-guide-strip] li.done') == 6
+        ok(n('#app [data-connect-guide="done"] [data-guide-strip] li') == 7 and n('#app [data-connect-guide="done"] [data-guide-strip] li.done') == 7
            and n("#app [data-connect-step]") == 0 and n('#app [data-connect-guide="done"] [data-connected-line]') == 1,
            "round 66: all done: the strip of six ticks stays, the cards folded, the green line under it (%s)" % gl)
-        ok(txt('#app [data-connect-guide="done"] [data-guide-count]').startswith("All 6 done for GB TEXCOAT"), "round 66: 'All 6 done for GB TEXCOAT' (%s)" % txt('#app [data-guide-count]'))
+        ok(txt('#app [data-connect-guide="done"] [data-guide-count]').startswith("All 7 done for GB TEXCOAT"), "round 66: 'All 7 done for GB TEXCOAT' (%s)" % txt('#app [data-guide-count]'))
         ok(n('#app [data-connect-guide="done"] [data-guide-client-pick]') == 1, "round 66: the client the steps are about can be changed in the guide")
-        ok("[object Object]" not in txt("#app [data-connect-guide]") and txt('#app [data-connect-guide="done"] [data-guide-count]') == "All 6 done for GB TEXCOAT"
-           and not re.search(r"(^|\n)0(\n|$)", txt("#app [data-connect-guide]")), "round 66: the count reads 'All 6 done for GB TEXCOAT' (a tick drawn, no stray text) (%s)" % txt("#app [data-guide-count]"))
+        ok("[object Object]" not in txt("#app [data-connect-guide]") and txt('#app [data-connect-guide="done"] [data-guide-count]') == "All 7 done for GB TEXCOAT"
+           and not re.search(r"(^|\n)0(\n|$)", txt("#app [data-connect-guide]")), "round 66: the count reads 'All 7 done for GB TEXCOAT' (a tick drawn, no stray text) (%s)" % txt("#app [data-guide-count]"))
         shot("guide-r66-all-done-strip")
         fold(True); shot("guide-r66-help-open"); fold(False)
         pg.click('#app [data-connect-guide="done"] [data-guide-strip-go="ledgers"]'); pg.wait_for_timeout(700)
@@ -428,7 +432,7 @@ def main():
             else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update now still reads the ledger list)'}}); }")
             pg.click(s5 + " [data-guide-ledgers-import]"); pg.wait_for_timeout(1200)
             st = txt(s5 + ' [data-guide-ledgers-stop="%s"]' % why)
-            ok(st.startswith(words) and n(s5 + " [data-guide-ledgers-bar]") == 0 and n(s5 + " [data-guide-ledgers-import]") == 1 and steps()[4] == ["ledgers", False],
+            ok(st.startswith(words) and n(s5 + " [data-guide-ledgers-bar]") == 0 and n(s5 + " [data-guide-ledgers-import]") == 1 and steps()[5] == ["ledgers", False],
                "round 64: the reply '%s': the bar stops at once with the reason, Try again (%s)" % (why, st))
             if why == "woken 0": shot("guide-r64-step5-stop-nobody")
         E("() => { if (window.__askT) Ledgers.askTally = window.__askT; }")
@@ -471,7 +475,7 @@ def main():
         # ---- round 63 (the owner): a company linked to another client is offered, "will move", and asked first
         ids = scene([d6], companies(linked=("GB TEXCOAT",), seen=(), d=d6["id"]), books=HELD_ALL)
         G2 = ids["garg shekhar & company"]
-        E("(c) => openConnectTally(4, c)", G2); pg.wait_for_timeout(1200)
+        E("(c) => openConnectTally(5, c)", G2); pg.wait_for_timeout(1200)
         opts = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.innerText)")
         ok(opts == ["GB TEXCOAT (linked to GB TEXCOAT \u2014 will move) \u00b7 NWS144 \u00b7 anshul"] and "is linked to another client" in txt("#app [data-guide-all-taken]")
            and txt("#app [data-guide-link]") == "Move it here", "the open company is another client's: offered, marked, the right words (%s / %s)" % (opts, txt("#app [data-guide-all-taken]")))
@@ -489,7 +493,7 @@ def main():
             sign = E("() => (document.querySelector('[data-tally-link-sign]') || {getAttribute: () => ''}).getAttribute('data-tally-link-sign')")
             E("() => navHome('clients')"); pg.wait_for_timeout(1000)
             chip = E("(c) => { const r = [...document.querySelectorAll('#app table[data-list=\"clients\"] tr')].find(t => t.innerText.includes('GB TEXCOAT')); const ch = r && r.querySelector('[data-tally-chip]'); return ch ? ch.getAttribute('data-tally-chip') : ''; }", T)
-            E("(c) => openConnectTally(4, c)", T); pg.wait_for_timeout(1200)
+            E("(c) => openConnectTally(5, c)", T); pg.wait_for_timeout(1200)
             st = txt("#app [data-guide-client-state]")
             t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-step=\"tally\"]').forEach(e => e.remove()); return a.innerText; }""")
             ok(sign == "reading" and chip == "reading" and st.startswith("GB TEXCOAT is linked to GB TEXCOAT") and "open in Tally now" in st and n("#app [data-guide-link]:not([disabled])") == 0
@@ -526,9 +530,74 @@ def main():
         ok(rows and rows[0][1] == "stopped" and "Stopped: a request to Tally (TDSDeskCompanies) took 21.2 s" in rows[0][2], "Stopped by the bridge itself (2.3.0): its reason (%s)" % rows)
         # nothing installed: step 1 with the one download
         scene([], [])
-        ok(steps()[:4] == [["install", False], ["tally", False], ["company", False], ["link", False]] and n('#app [data-connect-step="install"] [data-bridge-download]') == 1
+        ok(steps()[:5] == [["install", False], ["tally", False], ["addon", False], ["company", False], ["link", False]] and n('#app [data-connect-step="install"] [data-bridge-download]') == 1
            and "2.4.4" in txt('#app [data-connect-step="install"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: step 1 with the download (%s)" % steps())
 
+        # ---- 17-Oct-2026 (the owner: "we need to upload TDL for every Tally while integrating — include this in the process of
+        # integrating Tally"): step 3, Load FinCom add-on in Tally: once in each computer's TallyPrime; the path to type with
+        # a Copy button; ticked from the beat (info.bridges[id].recorder: seen) for the client worked on, else any company open
+        # on that computer; per computer; an older bridge said plainly; the Status card says "Add-on not loaded on <PC> · How"
+        PATH = "C:\\ProgramData\\FinCom\\addon\\FinComRecorder.tdl"
+        s3 = '#app [data-connect-step="addon"]'
+        def norec(d, cos=None):
+            for b in d["info"]["bridges"].values():
+                b["recorder"] = {co: {"seen": co not in (cos if cos is not None else b["open"]), "lastAt": "ago:7" if co not in (cos if cos is not None else b["open"]) else ""} for co in b["recorder"]}
+            return d
+        dn = norec(dev(3, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4"))
+        scene([dn], companies(d=dn["id"]))
+        ok(steps()[:4] == [["install", True], ["tally", True], ["addon", False], ["company", True]] and n('#app [data-strip-step="addon"].now') == 1 and n(s3 + ".now") == 1,
+           "add-on: not recording on NWS144: step 3 not done, the current one (%s)" % steps()[:4])
+        labs = E("() => [...document.querySelectorAll('#app [data-guide-strip] [data-strip-step]')].map(e => e.innerText.trim())")
+        ok(len(labs) == 7 and labs[2].endswith("Add-on") and txt("#app [data-guide-count]") == "3 of 7 done", "add-on: the strip of seven, 'Add-on' third; '3 of 7 done' (%s / %s)" % (labs, txt("#app [data-guide-count]")))
+        t3 = txt(s3)
+        ok(txt(s3 + " .tg-title") == "Load FinCom add-on in Tally" and "Once on each computer\u2019s TallyPrime, so FinCom sees every entry the moment it\u2019s saved" in t3,
+           "add-on: the title and the one plain line (%s)" % t3[:200])
+        how3 = E("(s) => [...document.querySelectorAll(s + ' [data-guide-addon-how] > li')].map(e => e.innerText.replace(/\\s+/g, ' ').trim())", s3)
+        ok(len(how3) >= 4 and "F1 (Help)" in how3[0] and "TDLs & Add-Ons" in how3[0] and "F4 (Manage Local TDLs)" in how3[0] and "Alt+G" in how3[0]
+           and "Load selected TDL files on startup" in how3[1] and "Yes" in how3[1] and "List of TDL files to preload on startup" in how3[2]
+           and "FinComRecorderAnyCompany.tdl" in " ".join(how3) and "Ctrl+A" in " ".join(how3) and "Loaded" in " ".join(how3), "add-on: the numbered clicks (%s)" % how3)
+        ok(txt(s3 + " [data-guide-addon-path]") == PATH and n(s3 + " [data-guide-addon-copy]") == 1, "add-on: the path in a box, with Copy (%s)" % txt(s3 + " [data-guide-addon-path]"))
+        ok(n(s3 + " [data-guide-addon-check]") == 1 and "save one entry" in txt(s3 + " [data-guide-addon-check]").lower(), "add-on: a small Check line (%s)" % txt(s3 + " [data-guide-addon-check]"))
+        ok(E("(d) => (document.querySelector('#app [data-guide-addon-pc=\"' + d + '\"]') || {getAttribute: () => ''}).getAttribute('data-addon-state')", dn["id"]) == "off"
+           and "NWS144 (anshul)" in txt(s3 + " [data-guide-addon-pc]") and "not loaded" in txt(s3 + " [data-guide-addon-pc]"), "add-on: NWS144's own line says not loaded yet (%s)" % txt(s3 + " [data-guide-addon-pc]"))
+        E("() => { window.__copied = null; try { Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText: async (t) => { window.__copied = t; }}}); } catch (e) {} }")
+        pg.click(s3 + " [data-guide-addon-copy]"); pg.wait_for_timeout(400)
+        ok(E("window.__copied") == PATH and "Copied" in txt(s3 + " [data-guide-addon-copy]"), "add-on: Copy puts the path on the clipboard (%s / %s)" % (E("window.__copied"), txt(s3 + " [data-guide-addon-copy]")))
+        st3 = '#app [data-pc-line="%s"] [data-addon-off]' % dn["id"]
+        ok(n(st3) == 1 and txt(st3).replace("\n", " ").startswith("Add-on not loaded on NWS144 (anshul) \u00b7 How") and n("#app [data-addon-off]") == 1,
+           "Status: one line 'Add-on not loaded on NWS144 (anshul) \u00b7 How' (%s)" % txt(st3))
+        ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "add-on: desktop, no sideways scroll")
+        shot("addon-step3-undone-desktop")
+        E("() => window.scrollTo(0, 0)"); E("() => { S.tallyGuide = {}; render(); }"); pg.wait_for_timeout(300)
+        pg.click(st3 + " [data-addon-how]"); pg.wait_for_timeout(700)
+        ok((E("S.tallyGuide || {}") or {}).get("step") == 3 and n(s3 + "[data-open]") == 1, "Status's How opens step 3 (%s)" % E("S.tallyGuide"))
+        # recording: step 3 done, folded to its green line; no Status line
+        dy = dev(3, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
+        scene([dy], companies(d=dy["id"]))
+        ok(steps()[2] == ["addon", True] and n('#app [data-strip-step="addon"].done') == 1 and "Recording on NWS144 (anshul)" in txt(s3) and n("#app [data-addon-off]") == 0,
+           "add-on: recording: step 3 done, its green line, nothing on Status (%s / %s)" % (steps()[2], txt(s3)))
+        shot("addon-step3-done-desktop")
+        pg.click('#app [data-guide-unfold="addon"]'); pg.wait_for_timeout(300)
+        ok(n('#app [data-guide-more="addon"] [data-guide-addon-path]') == 1, "add-on: a done step opens on click (the steps again, for another computer)")
+        # per computer: a second computer without it shows its own step undone
+        d2 = norec(dev(4, "LAPTOP", "ravi", tally="open", opened=("ABC TRADERS",), version="2.4.4"))
+        scene([dy, d2], companies(d=dy["id"]))
+        ok(steps()[2] == ["addon", False] and E("() => [...document.querySelectorAll('#app [data-guide-addon-pc]')].map(e => e.getAttribute('data-addon-state'))") == ["on", "off"]
+           and "LAPTOP (ravi)" in txt(s3) and n("#app [data-addon-off]") == 1 and n('#app [data-pc-line="%s"] [data-addon-off]' % d2["id"]) == 1,
+           "add-on: NWS144 recording, LAPTOP not: step 3 not done, each computer's own line; Status names LAPTOP only (%s)" % txt(s3)[-200:])
+        # the client worked on: its own company must record (GB TEXCOAT open but not recording, VMS EVENTS recording)
+        dc = norec(dev(5, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT", "VMS EVENTS"), version="2.4.4"), cos=("GB TEXCOAT",))
+        ids = scene([dc], companies(d=dc["id"]))
+        E("(t) => { S.tallyGuide = {cid: t}; render(); }", ids["GB TEXCOAT"]); pg.wait_for_timeout(600)
+        ok(steps()[2] == ["addon", False], "add-on: GB TEXCOAT worked on, its company not recording (another one is): not done (%s)" % steps()[2])
+        E("(g) => { S.tallyGuide = {cid: g}; render(); }", ids["garg shekhar & company"]); pg.wait_for_timeout(600)
+        ok(steps()[2] == ["addon", True], "add-on: before linking (garg shekhar & company), any company recording on that computer: done (%s)" % steps()[2])
+        # an older bridge (no recorder in its beat): said plainly
+        do = dev(6, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.1.5")
+        for b in do["info"]["bridges"].values(): b.pop("recorder", None)
+        scene([do], companies(d=do["id"]))
+        ok(steps()[2] == ["addon", False] and "older than 2.2.0" in txt(s3) and n(s3 + " [data-bridge-download]") == 1,
+           "add-on: FinCom Bridge 2.1.5 does not say: 'older than 2.2.0', the download (%s)" % txt(s3)[-220:])
         # ---- 5. every former entry point lands on the guide, at the right step; none links or connects on its own
         ids = scene([dev(8, "NWS144", "anshul", tally="open", opened=("VMS EVENTS",))], companies(seen=("VMS EVENTS",), d="d0000000-0000-4000-8000-000000000008"), only=False)
         G = ids["garg shekhar & company"]
@@ -542,43 +611,43 @@ def main():
         LINKERS = '[data-tally-link-to], [data-tally-link-picker], select[data-card-link], select[aria-label^="Client for"], [data-act="bridgeConnect"], [data-connect-section]'
         # the client's Tally card (Client setup -> Tally)
         at_client()
-        ok(n("#app [data-tally-link]") == 1 and n("#app " + LINKERS.replace(", ", ", #app ")) == 0 and n('#app [data-tally-link] [data-open-connect="4"]') == 1,
+        ok(n("#app [data-tally-link]") == 1 and n("#app " + LINKERS.replace(", ", ", #app ")) == 0 and n('#app [data-tally-link] [data-open-connect="5"]') == 1,
            "the client's Tally card: a pointer, nothing to link with (%s)" % txt("#app [data-tally-link]")[:120])
-        pg.click('#app [data-tally-link] [data-open-connect]'); pg.wait_for_timeout(900); landed("the client's Tally card", 4, G)
+        pg.click('#app [data-tally-link] [data-open-connect]'); pg.wait_for_timeout(900); landed("the client's Tally card", 5, G)
         # the client's chip on its title line, and the top bar's sign
         at_client("dash")
         chip = '#app [data-tally-chip], #cobar [data-tally-chip]'
         if n(chip):
-            pg.click(chip.split(", ")[0] if n(chip.split(", ")[0]) else chip.split(", ")[1]); pg.wait_for_timeout(900); landed("the client's Tally chip", 4, G)
+            pg.click(chip.split(", ")[0] if n(chip.split(", ")[0]) else chip.split(", ")[1]); pg.wait_for_timeout(900); landed("the client's Tally chip", 5, G)
         else:
             ok(False, "the client's Tally chip is on its page")
         at_client("dash")
-        pg.click('[data-tally-sign]'); pg.wait_for_timeout(900); landed("the top bar's Tally sign", 4, G)
+        pg.click('[data-tally-sign]'); pg.wait_for_timeout(900); landed("the top bar's Tally sign", 5, G)
         # Getting ready's Link to Tally step
         at_client("dash")
         gr = '#app [data-onb-step="link"] button'
         if n(gr):
-            pg.click(gr); pg.wait_for_timeout(900); landed("Getting ready's Link to Tally", 4, G)
+            pg.click(gr); pg.wait_for_timeout(900); landed("Getting ready's Link to Tally", 5, G)
         else:
             ok(n('#app [data-onb-step="link"]') == 0, "Getting ready: its link step is not shown here")
         # the Overview's Tally line
         at_client("dash")
         if n('#app [data-tally-link-line] [data-open-connect]'):
-            pg.click('#app [data-tally-link-line] [data-open-connect]'); pg.wait_for_timeout(900); landed("the Overview's Tally line", 4, G)
+            pg.click('#app [data-tally-link-line] [data-open-connect]'); pg.wait_for_timeout(900); landed("the Overview's Tally line", 5, G)
         # the Clients list chip
         E("() => { S.tallyGuide = {}; navHome('clients'); }"); pg.wait_for_timeout(1200)
         cc = '#app [data-tally-chip-at="clients"][data-tally-chip="unlinked"]'
         ok(n(cc) >= 1, "the Clients list: a chip for the client not linked")
-        if n(cc): pg.click(cc + " >> nth=0"); pg.wait_for_timeout(900); landed("the Clients list chip", 4)
+        if n(cc): pg.click(cc + " >> nth=0"); pg.wait_for_timeout(900); landed("the Clients list chip", 5)
         # Today's not-linked line
         E("() => { S.tallyGuide = {}; navHome('today'); }"); pg.wait_for_timeout(1200)
         tl = '#app [data-not-linked-open]'
         ok(n(tl) >= 1, "Today: the not-linked line")
-        if n(tl): pg.click(tl + " >> nth=0"); pg.wait_for_timeout(900); landed("Today's not-linked line", 4)
+        if n(tl): pg.click(tl + " >> nth=0"); pg.wait_for_timeout(900); landed("Today's not-linked line", 5)
         # Settings -> Books in the cloud
         E("() => { S.tallyGuide = {}; doAct('goTcloud'); }"); pg.wait_for_timeout(1500)
-        ok(n('#app select[aria-label^="Client for"]') == 0 and n('#app [data-open-connect="4"]') >= 1, "Books in the cloud: no Link here, a pointer to Connect Tally")
-        if n('#app [data-open-connect="4"]'): pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(900); landed("Books in the cloud", 4)
+        ok(n('#app select[aria-label^="Client for"]') == 0 and n('#app [data-open-connect="5"]') >= 1, "Books in the cloud: no Link here, a pointer to Connect Tally")
+        if n('#app [data-open-connect="5"]'): pg.click('#app [data-open-connect="5"] >> nth=0'); pg.wait_for_timeout(900); landed("Books in the cloud", 5)
         # the top bar's panel: Open Connect Tally (was Connect this computer: the browser's own bridge)
         E("() => { S.tallyGuide = {}; doAct('tallyConnect'); }"); pg.wait_for_timeout(900); landed("the top bar's panel", 0)
         ok(n("#app [data-connect-section]") == 0, "this browser's own bridge connect stays in the closed Advanced fold")
@@ -586,7 +655,7 @@ def main():
         fold(True)
         sn = '#app [data-advanced] [data-card-seen]'
         ok(n(sn) == 1 and n(sn + " select") == 0 and n(sn + " [data-open-connect]") == 1, "a computer's 'Seen, not linked': a pointer, no Link… box")
-        if n(sn + " [data-open-connect]"): pg.click(sn + " [data-open-connect]"); pg.wait_for_timeout(900); landed("a computer's Seen, not linked", 4)
+        if n(sn + " [data-open-connect]"): pg.click(sn + " [data-open-connect]"); pg.wait_for_timeout(900); landed("a computer's Seen, not linked", 5)
         fold(False)
         # Add client with its Tally company chosen: the guide's step 4 with both chosen, nothing linked yet
         E("""() => { S.tallyGuide = {}; const f = {name: 'NEW CLIENT', gstin: '', tallyCompany: 'VMS EVENTS', postOnly: false};
@@ -594,7 +663,7 @@ def main():
         pg.wait_for_timeout(1500)
         if E("Object.values(S.companies).some(c => c.name === 'NEW CLIENT')"):
             nc = E("Object.values(S.companies).find(c => c.name === 'NEW CLIENT').id")
-            landed("Add client with a Tally company", 4, nc)
+            landed("Add client with a Tally company", 5, nc)
             ok(E("() => document.querySelector('#app [data-guide-company]').value") == "VMS EVENTS", "Add client: its Tally company chosen in step 4")
         ok(not [c for c in E("window.__calls") if c[0] in ("tally_company_link",)], "none of the entry points linked anything on its own (%s)" % E("window.__calls"))
         # ---- 3. staff: no owner button, fold open or not
@@ -613,6 +682,16 @@ def main():
         ok(n("#app [data-pc-line]") == 1, "phone: the page drawn")
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone 390: no sideways scroll (%s)" % E("() => [document.documentElement.scrollWidth, window.innerWidth]"))
         shot("after-phone-390")
+        # the add-on step on a phone: undone and done, no sideways scroll
+        scene([norec(dev(3, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4"))], companies(d="d0000000-0000-4000-8000-000000000003"))
+        pg.evaluate("() => { const e = document.querySelector('#app [data-connect-step=\"addon\"]'); if (e) e.scrollIntoView({block: 'start'}); }")
+        ok(n('#app [data-connect-step="addon"] [data-guide-addon-path]') == 1 and E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"),
+           "phone 390: the add-on step, its path box, no sideways scroll (%s)" % E("() => [document.documentElement.scrollWidth, window.innerWidth]"))
+        ok(E("() => { const b = document.querySelector('#app [data-guide-addon-path]').getBoundingClientRect(); return b.right <= window.innerWidth + 1; }"), "phone 390: the path box fits")
+        shot("addon-step3-undone-phone", full=False)
+        scene([dev(3, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")], companies(d="d0000000-0000-4000-8000-000000000003"))
+        ok(n('#app [data-connect-step="addon"][data-done]') == 1 and E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone 390: the add-on step done, no sideways scroll")
+        shot("addon-step3-done-phone", full=False)
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()
     srv.shutdown()

@@ -172,9 +172,9 @@ def main():
         # step to do, with its download; nothing ticked
         scene([], [], fold=False)
         g = "#app [data-connect-guide]"
-        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 6, "guide: six steps while nothing is connected (round 63: + Import ledgers, the Day Book)")
+        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 7, "guide: seven steps while nothing is connected (round 63: + Import ledgers, the Day Book; 17-Oct-2026: + the add-on)")
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
-        ok([s[0] for s in steps] == ["install", "tally", "company", "link", "ledgers", "daybook"], "guide: Install -> Open Tally -> Keep a company open -> Link -> Import ledgers -> Day Book (%s)" % [s[0] for s in steps])
+        ok([s[0] for s in steps] == ["install", "tally", "addon", "company", "link", "ledgers", "daybook"], "guide: Install -> Open Tally -> Load add-on -> Keep a company open -> Link -> Import ledgers -> Day Book (%s)" % [s[0] for s in steps])
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
         ok(pg.locator(g + ' [data-connect-step="install"] [data-bridge-download]').count() == 1 and "2.3.4" in txt(g + ' [data-connect-step="install"] [data-bridge-download]'), "guide: step 1 has the download (%s)" % txt(g + ' [data-connect-step="install"]')[:120])
         ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
@@ -191,7 +191,7 @@ def main():
         # ---- 2. a bridge heard from, Tally open, no company linked: three ticked, Link to do
         scene([OK_DEV], UNLINKED, fold=False)
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(steps[:4] == [["install", True], ["tally", True], ["company", True], ["link", False]], "guide: Install, Tally and the company ticked, Link not (%s)" % steps)
+        ok(steps[:5] == [["install", True], ["tally", True], ["addon", True], ["company", True], ["link", False]], "guide: Install, Tally, the add-on and the company ticked, Link not (%s)" % steps)
         ok(pg.locator('#app [data-connect-guide] [data-connect-step="link"] [data-guide-link], #app [data-connect-guide] [data-connect-step="link"] [data-guide-add]').count() == 1, "guide: Link has its one button (Link, or Add a client when there is none)")
         shot("guide-link")
         # a company linked: Link ticks once no client is left unlinked (5c: each client to a company of its own)
@@ -307,7 +307,7 @@ def main():
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
         ok(pg.locator('#app [data-connect-guide="done"]').count() == 1 and pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to one green line with 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
-        ok(pg.locator("#app [data-connect-step]").count() == 6 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
+        ok(pg.locator("#app [data-connect-step]").count() == 7 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
         # the Day Book upload; no "waiting" box
         scene(DEVS, LINKED)

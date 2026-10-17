@@ -5,11 +5,11 @@
 // (TALLY_LINK_WORDS: "Linked · reading", "Waiting for Tally", "Not linked → Link", "Needs you").
 // 15-Oct-2026 (the owner: "multiple places to connect.. need a very simple connection guide"): ONE place connects and
 // links Tally, the Tally page's Connect Tally guide (openConnectTally, src/js/52). A chip of a client not linked, or
-// linked but waiting for Tally, points there (step 4 with that client); a client linked and reading, or needing a Day
+// linked but waiting for Tally, points there (step 5 with that client); a client linked and reading, or needing a Day
 // Book, opens its own Tally card (Client setup → Tally: what it needs, and the posting company), which links nothing
 export function goTallyCard(cid) {
   const k = cid && typeof tallyLinkOf === "function" && S.companies && S.companies[cid] ? tallyLinkOf(S.companies[cid]) : null;
-  if (k && (k.state === "unlinked" || k.state === "waiting")) { openConnectTally(k.state === "unlinked" ? 4 : 0, cid); return Promise.resolve(); }
+  if (k && (k.state === "unlinked" || k.state === "waiting")) { openConnectTally(k.state === "unlinked" ? 5 : 0, cid); return Promise.resolve(); }
   return goTallySetup(cid);
 }
 // the client's own Tally card (Client setup → Tally)

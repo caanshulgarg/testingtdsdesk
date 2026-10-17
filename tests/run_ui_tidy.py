@@ -232,9 +232,9 @@ try:
             E2(TL.SETUP, [devs, [], companies, "owner", []]); W2(300)
         def on_card(where):
             g = E2("S.tallyGuide || {}")
-            ok(E2("S.view") == "home" and E2("S.homeTab") == "tally" and g.get("step") == 4 and g.get("cid") == lcid and tl.locator("#app [data-connect-guide] [data-guide-client]").count() == 1
+            ok(E2("S.view") == "home" and E2("S.homeTab") == "tally" and g.get("step") == 5 and g.get("cid") == lcid and tl.locator("#app [data-connect-guide] [data-guide-client]").count() == 1
                and E2("() => document.querySelector('#app [data-guide-client]').value") == lcid,
-               "%s → Connect Tally, step 4, Link Co chosen (%s %s %s)" % (where, E2("S.view"), E2("S.homeTab"), g))
+               "%s → Connect Tally, step 5, Link Co chosen (%s %s %s)" % (where, E2("S.view"), E2("S.homeTab"), g))
         scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(1200)
         tl.click('#cobar [data-tally-chip]'); W2(900); on_card("the title line's chip")
@@ -260,15 +260,15 @@ try:
         def card_again():
             E2("() => { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); }"); W2(1500)
         scene([], []); card_again()
-        ok(steps() == [0, 0, 0, 0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
+        ok(steps() == [0, 0, 0, 0, 0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())
         scene([], [TL.dev(1, "NWS144", "anshul", opened=(), tally="closed")]); card_again()
-        ok(steps() == [1, 0, 0, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
+        ok(steps() == [1, 0, 0, 0, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
         scene(TL.SEEN, TL.DEVS); card_again()
-        ok(steps()[:3] == [1, 1, 1] and steps()[3] == 0, "Tally open on a company: steps 1 to 3 ticked, not 4 (%s)" % steps())
-        E2("(c) => openConnectTally(4, c)", lcid); W2(900)
+        ok(steps()[:4] == [1, 1, 1, 1] and steps()[4] == 0, "Tally open on a company, the add-on recording: steps 1 to 4 ticked, not 5 (%s)" % steps())
+        E2("(c) => openConnectTally(5, c)", lcid); W2(900)
         tl.select_option("#app [data-guide-company]", "GARG SHEKHAR"); W2(300); tl.click("#app [data-guide-link]"); W2(1500)
         E2(TL.SETUP, [[TL.dev(1, "NWS144", "anshul", tally="closed", opened=())], [], TL.LINKED(), "owner", []]); W2(300)
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)

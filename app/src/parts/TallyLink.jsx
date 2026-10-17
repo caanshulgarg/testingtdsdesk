@@ -4,14 +4,14 @@
 // the Tally page's Connect Tally guide (screens/Tally.jsx, openConnectTally in src/js/52). This card is a pointer to it:
 //   One status line, one of four (tallyLinkOf, src/js/49; "Not linked → Link", "Waiting for Tally", "Linked · reading",
 //   "Needs you"), and while not linked or waiting for Tally, "Open Connect Tally" (the guide at the right step; for a
-//   client not linked, step 4 with this client). Nothing is linked or connected here.
+//   client not linked, step 5 with this client). Nothing is linked or connected here.
 //     Linked and reading  "Linked to X on <PC> · last entry 10:42", with Update now.
 //     Needs you           one line and one button: reading stopped, that day's Day Book, the starting point, held
 //                         entries; Tally not answering or paused point to the guide.
 //   Then one tick, "Post this client's entries into X": the client's confirmed posting company (choiceConfirm postTo,
 //   asked first). Nothing is posted without it; a company FinCom found by itself stays off until ticked.
-//   More: Change company (the guide's step 4), Unlink, Name differs in Tally, Tally page.
-// companiesSeen (below) is the list the guide's step 4 offers, the company with this client's GSTIN on top.
+//   More: Change company (the guide's step 5), Unlink, Name differs in Tally, Tally page.
+// companiesSeen (below) is the list the guide's step 5 offers, the company with this client's GSTIN on top.
 import { useState } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
 import Button from "./Button.jsx";
@@ -44,7 +44,7 @@ export function companiesSeen(co) {
   return out.sort((a, b) => (b.same - a.same) || (sameName(b.company, co.tallyName) - sameName(a.company, co.tallyName)) || (b.open - a.open) || a.company.localeCompare(b.company));
 }
 
-// the Tally page's Connect Tally guide, from this client: step 4 (link) while not linked, else the first step not done
+// the Tally page's Connect Tally guide, from this client: step 5 (link) while not linked, else the first step not done
 export function OpenConnect({ co, step, primary = true }) {
   return <Button className={"btn small" + (primary ? " primary" : "")} data-open-connect={String(step || 0)} onClick={() => openConnectTally(step || 0, co ? co.id : "")}>Open Connect Tally</Button>;
 }
@@ -54,7 +54,7 @@ function StatusLine({ co, k, where, b, plain = false }) {
   const l = k.line, x = k.company, pc = k.computer || "the office computer", owner = isOwner();
   const openTally = () => openTallyFor(co.id);
   let text = "", act = null;
-  if (k.state === "unlinked") { text = "Not linked to its Tally company yet."; act = <OpenConnect co={co} step={4} primary={!plain} />; }
+  if (k.state === "unlinked") { text = "Not linked to its Tally company yet."; act = <OpenConnect co={co} step={5} primary={!plain} />; }
   else if (k.state === "waiting") { text = "Linked to " + x + ". Open " + x + " in TallyPrime on " + pc + " to read new entries.";
     act = <OpenConnect co={co} step={0} primary={!plain} />; }
   else if (k.state === "reading") { const last = lastEntry(co, k);
@@ -89,7 +89,7 @@ function needLine(co, n, k, where, b, owner, openTally, plain = false) {
     act: <Button className="btn small" data-tally-need-baseline="" onClick={openTally}>Open the Tally page</Button> };
   if (n.kind === "held") return { text: n.n === 1 ? "1 entry from Tally is held and needs a look" : n.n + " entries from Tally are held and need a look",
     act: <Button className="btn small" data-tally-need-held="" onClick={() => Rec.openActivity(co.id, "held")}>See them</Button> };
-  if (n.kind === "paused") return { text: l.text + ".", act: <OpenConnect co={co} step={3} primary={false} /> };
+  if (n.kind === "paused") return { text: l.text + ".", act: <OpenConnect co={co} step={4} primary={false} /> };
   return { text: (l.text || "Tally is not answering") + ".", act: <OpenConnect co={co} step={2} primary={false} /> };
 }
 
@@ -122,7 +122,7 @@ function More({ co, k, onName }) {
   return <details className="bk-menu" data-tally-link-more="">
     <summary className="btn small" aria-label={"More about the Tally link of " + co.name}>More</summary>
     <div className="bk-menu-list">
-      {linked && cloud && may && <button data-tally-link-change="" onClick={go(() => openConnectTally(4, co.id))}>Change company<small>In Connect Tally: link another company in Tally to this client instead.</small></button>}
+      {linked && cloud && may && <button data-tally-link-change="" onClick={go(() => openConnectTally(5, co.id))}>Change company<small>In Connect Tally: link another company in Tally to this client instead.</small></button>}
       {linked && cloud && may && <button className="danger" data-tally-link-unlink="" onClick={go(unlink)}>Unlink<small>{k.company + "’s books stop coming to this client."}</small></button>}
       <button data-tally-link-name="" onClick={go(onName)}>Name differs in Tally<small>The company’s name exactly as Tally shows it.</small></button>
       <button data-tally-link-page="" onClick={go(() => openTallyFor(co.id))}>Tally page<small>The computers, and the details for support.</small></button>

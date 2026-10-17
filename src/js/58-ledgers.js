@@ -225,7 +225,7 @@ const Ledgers = {
   },
   // the ledgers-only wake (no full Update now): the bridge here when it has the company open (POST /ledgers/refresh),
   // else the client's Tally computer through FinCom's cloud (tally-ingest wake, what "ledgers"). One call. Used by the
-  // bill's chooser (staleAsk) and Connect Tally's step 5 (round 63, Import ledgers)
+  // bill's chooser (staleAsk) and Connect Tally's step 6 (round 63, Import ledgers)
   async askTally(cid){
     const co = CO(cid), r = {cid, at: Date.now(), via: ""};
     if (!co){ r.err = "no client"; return r; }

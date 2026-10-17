@@ -423,7 +423,7 @@ function NeedAct({ r, n, m, top }) {
 //      reading on or paused, the bridge's version ("Update to 2.4.4" only when older).
 //   2. Needs you (NeedsYou): only what the guide and the lines do not say (reading stopped on all computers, a computer
 //      key refused). The Day Book needs stay on each client's own pages.
-//   3. One table (ClientsTable): Client · Tally company · Linked · Last entry received, with Link (the guide's step 4)
+//   3. One table (ClientsTable): Client · Tally company · Linked · Last entry received, with Link (the guide's step 5)
 //      or nothing.
 //   The rest is under "Advanced (for support)" (PageMore): the same parts, the same functions, the same owner-only rules.
 // ---------------------------------------------------------------------------------------------------------------------
@@ -469,7 +469,7 @@ function checkAgain() {
   return TCloud.refreshPane();
 }
 // 1. one line a computer: the facts in a few words (how to connect is the guide's, above)
-// guided: the guide's step 3 speaks of this computer (its Resume is there, not here)
+// guided: the guide's step 4 speaks of this computer (its Resume is there, not here)
 function PcLine({ r, latest, m, focus, guided = false }) {
   const s = pcState(r, latest), [lv, word] = s.word, owner = isOwner(), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const heard = r.at ? (r.online ? "Online, last heard " + tallyHm(r.at) : "Offline since " + tallyHm(r.at)) : "Never heard";
@@ -486,6 +486,8 @@ function PcLine({ r, latest, m, focus, guided = false }) {
       {s.stopped && !guided && (owner && !allStopped ? <button className="btn small primary" data-pc-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
         : !owner ? <span className="note">An owner of the firm can resume it.</span> : null)}
     </div>
+    {addonOff(r, latest) && <div className="tpc-addon" data-addon-off="">{"Add-on not loaded on " + pcWords(r) + " \u00b7 "}
+      <button type="button" className="linkbtn" data-addon-how={r.device.id} onClick={() => openConnectTally(3, "")}>How</button></div>}
   </div>;
 }
 // ---------------------------------------------------------------------------------------------------------------------
@@ -570,33 +572,60 @@ function ReadingView({ cards }) {
 }
 // ---------------------------------------------------------------------------------------------------------------------
 // Connect Tally, the ONE place to connect and link Tally (15-Oct-2026; the owner: "multiple pages of Tally connection..
-// multiple places to connect.. need a very simple connection guide"). Round 63 (16-Oct-2026): six steps, each ticked by
-// itself (from the computers' beats, the link, and what FinCom holds; nothing new is asked of the bridge or Tally):
+// multiple places to connect.. need a very simple connection guide"). Round 63 (16-Oct-2026): six steps, seven since 17-Oct-2026
+// (the add-on, step 3), each ticked by itself (from the computers' beats, the link, and what FinCom holds; nothing new is asked of the bridge or Tally):
 //   1. Install FinCom Bridge        the one Download                         done: a bridge heard this week
 //   2. Open TallyPrime              F1 → … Both, port; Check again           done: Tally answering
-//   3. Keep a company open          resume when paused                       done: a company open, reading on
-//   4. Link the client              the client worked on (the pointer's, else the open client), its state in one line,
+//   3. Load FinCom add-on in Tally  the clicks, the path with Copy, Check     done: each computer whose Tally answers records
+//                                   (one line a computer; an older bridge said)  (the client's company, else any company open)
+//   4. Keep a company open          resume when paused                       done: a company open, reading on
+//   5. Link the client              the client worked on (the pointer's, else the open client), its state in one line,
 //                                   one type-to-search list of the companies open in Tally now (one linked to another
 //                                   client is offered too, "will move", asked first); tallyLinkClient (tally_company_link)
 //                                                                            done: the client worked on is linked (round 64:
 //                                                                            the others not linked are named in a note)
-//   5. Import ledgers               the ledgers-only wake (Ledgers.askTally: the bridge's /ledgers/refresh, or the cloud's
+//   6. Import ledgers               the ledgers-only wake (Ledgers.askTally: the bridge's /ledgers/refresh, or the cloud's
 //                                   wake "ledgers"), a moving bar with the time while reading (the bridge sends no count
 //                                   up front), then "1,240 ledgers imported ✓"; nothing in 10 minutes: Tally must be
 //                                   open, Try again, or upload the masters file (Ledgers.fromMasters)
 //                                                                            done: the client worked on has ledgers in
 //                                                                            FinCom (round 64: the cloud's count of its
 //                                                                            ledgers, tally_ledgers; the others named)
-//   6. Bring in this year's entries the Day Book: three lines on exporting it, and Open Upload (Books › From Tally)
+//   7. Bring in this year's entries the Day Book: three lines on exporting it, and Open Upload (Books › From Tally)
 //                                                                            done: the client worked on has days of this
 //                                                                            financial year in FinCom's cloud
 // A strip across the top (Install → … → Day Book); one card a step: a done step folds to its green line (open on click),
-// the current one is marked, the later ones muted. All six done: one green line (owner, 15-Oct: "the company we are
+// the current one is marked, the later ones muted. All done: one green line (owner, 15-Oct: "the company we are
 // working on, and the number of companies open in Tally": counts, never a list of names). Every other place that spoke of
-// connecting or linking points here (openConnectTally(n), src/js/52; unchanged).
+// connecting or linking points here (openConnectTally(n), src/js/52; from step 3 on one later since 17-Oct-2026).
 // ---------------------------------------------------------------------------------------------------------------------
-const GUIDE_KEYS = ["install", "tally", "company", "link", "ledgers", "daybook"], GUIDE_REFRESH_MS = 20000;
-const GUIDE_STRIP = { install: "Install", tally: "Open Tally", company: "Company", link: "Link", ledgers: "Ledgers", daybook: "Day Book" };
+const GUIDE_KEYS = ["install", "tally", "addon", "company", "link", "ledgers", "daybook"], GUIDE_REFRESH_MS = 20000;
+const GUIDE_STRIP = { install: "Install", tally: "Open Tally", addon: "Add-on", company: "Company", link: "Link", ledgers: "Ledgers", daybook: "Day Book" };
+const GUIDE_N = GUIDE_KEYS.length, GUIDE_WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][GUIDE_N] || String(GUIDE_N);
+// step 3 (17-Oct-2026; the owner: "we need to upload TDL for every Tally while integrating — include this in the process of
+// integrating Tally"): FinCom's add-on, which FinCom Bridge 2.2.0 and later puts at ADDON_PATH (bridge-go/folders.go), loaded
+// once in each computer's TallyPrime (it stays in that Tally's list of local TDLs and works for every company; the steps are
+// docs/recorder-live-sheet.txt, PART 1). Ticked from the beat only (info.bridges[id].recorder: {company: {seen, lastAt}},
+// Rec.recOf): per computer whose Tally answers, the company of the client worked on when it is open there, else any company
+// open there, is recording. A computer with "Changes come from: Tally's change list" needs no add-on
+const ADDON_PATH = "C:\\ProgramData\\FinCom\\addon\\FinComRecorder.tdl", ADDON_VER = "2.2.0";
+function addonOf(r, s, company) {
+  if (r.device && r.device.recorder_source === "alterid") return { kind: "list" };
+  const rc = typeof Rec === "object" && Rec.recOf ? Rec.recOf(r.device) : null;
+  if (!rc) return { kind: verAtLeast(r.version, ADDON_VER) ? "unknown" : "old" };
+  const open = (s && s.open) || [];
+  if (!open.length) return { kind: "noco" };
+  const of = (co) => { const k = Object.keys(rc).find((x) => lc(x) === lc(co)); return k ? rc[k] : null; };
+  const mine = company ? open.filter((co) => lc(co) === lc(company)) : [], want = mine.length ? mine : open;
+  const on = want.find((co) => (of(co) || {}).seen);
+  if (on) return { kind: "on", company: on, lastAt: of(on).lastAt || "" };
+  return want.some((co) => of(co) && of(co).seen === false) ? { kind: "off", company: want[0] } : { kind: "unknown" };
+}
+// the Status card's one line: Tally open on this computer, a company open there, and the add-on not recording it
+function addonOff(r, latest) {
+  const s = pcState(r, latest);
+  return s.live && r.online && s.tallyOk && s.open.length > 0 && addonOf(r, s, "").kind === "off" && Rec.notRecording(r.device).length > 0;
+}
 const LED_POLL_MS = 10000, LED_WAIT_MS = 10 * 60000, PICK_SEARCH_AT = 8, PICK_SHOW = 60;
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -664,17 +693,21 @@ function guideState(rows, latest) {
   const imp = S.ledImp, importing = !!(imp && imp.cid === cid && !imp.end && !imp.err && !imp.late && Date.now() - imp.at <= LED_WAIT_MS);
   // no client in the firm at all: as before, a company linked and none left unlinked
   const anyLink = (p.companies || []).some((c) => c.client_id);
-  const done = { install: live.length > 0, tally: tally.length > 0, company: reading.length > 0, link: curLinked || (!cur && anyLink && !unlinked.length),
+  // step 3, per computer whose Tally answers: the client worked on's company when linked, else any company open there
+  const curCo = curLinked ? (tallyLinkOf(cur) || {}).company || "" : "";
+  const addons = tally.map(([rr, ss]) => ({ r: rr, s: ss, a: addonOf(rr, ss, curCo) }));
+  const addonDone = addons.some((x) => x.a.kind === "on" || x.a.kind === "list") && addons.every((x) => ["on", "list", "noco"].includes(x.a.kind));
+  const done = { install: live.length > 0, tally: tally.length > 0, addon: addonDone, company: reading.length > 0, link: curLinked || (!cur && anyLink && !unlinked.length),
     ledgers: curLinked && ledgersHeld(cid) && !importing, daybook: curLinked && daybookHeld(cid) };
   // the computer the steps speak of: the one furthest along
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
   const fine = st.find(([, x]) => x.fine) || reading[0] || null;
-  // the companies open in Tally right now (an online computer whose Tally answers): the only ones step 4 offers (the owner,
+  // the companies open in Tally right now (an online computer whose Tally answers): the only ones step 5 offers (the owner,
   // 15-Oct-2026: "there should be companies open in Tally at that time")
   const openNow = [];
   tally.forEach(([rr, ss]) => ss.open.forEach((name) => { if (!openNow.some((o) => lc(o.company) === lc(name))) openNow.push({ company: name, computer: pcName(rr) }); }));
   const pcs = Array.from(new Set(openNow.map((o) => o.computer)));
-  return { done, r, s, live, on, tally, unlinked, fine, openNow, pcs, linked, ledMiss, dayMiss, cid, cur, curLinked };
+  return { done, r, s, live, on, tally, unlinked, fine, openNow, pcs, linked, ledMiss, dayMiss, cid, cur, curLinked, addons };
 }
 // "3 companies open in Tally on NWS144" / "12 companies open in Tally on 2 computers": a count, never the names
 function openWords(x) {
@@ -683,7 +716,7 @@ function openWords(x) {
   return nOf(n, "company", "companies") + " open in Tally on " + (x.pcs.length === 1 ? x.pcs[0].split(" · ")[0] : x.pcs.length + " computers") + ".";
 }
 const TICK = <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-const UNFOLD = { install: "Install on another computer", link: "Change", ledgers: "Import again", daybook: "Upload again" };
+const UNFOLD = { install: "Install on another computer", addon: "How, for another computer", link: "Change", ledgers: "Import again", daybook: "Upload again" };
 function GuideStep({ k, n, title, done, open, later, line, more, children }) {
   // a done step folds to its green line; a click opens what it holds (more: e.g. to change the link, import again)
   const [unf, setUnf] = useState(false), fold = done && !open;
@@ -713,7 +746,7 @@ function SearchPick({ hook, label, value, items, onPick, placeholder }) {
     {long && k && <span className="note tg-found" data-guide-found={hits.length}>{hits.length ? nOf(hits.length, "match", "matches") : "none matches"}</span>}
   </span>;
 }
-// step 4: the client worked on now (the one a pointer named, else the client open, else the first not linked) in one
+// step 5: the client worked on now (the one a pointer named, else the client open, else the first not linked) in one
 // line; to link it or change its company, one list of the companies open in Tally now. A company linked to another client
 // is offered too, "(linked to X — will move)", and asked first: tally_company_link moves the company, and its book, to
 // this client (migration-2: it sets the company's client; the other client is then not linked)
@@ -772,7 +805,7 @@ function LinkPicker({ x, g }) {
     <label className="f"><span>Client</span>
       <SearchPick key={"c" + gen} hook="client" label="Client to link" placeholder="Type a client's name" value={cid}
         items={all.map((c) => ({ value: c.id, label: c.name + (unlinked.some((u) => u.id === c.id) ? "" : " (linked)") }))}
-          onPick={(v) => { setPick({ cid: v, company: "" }); S.tallyGuide = Object.assign({}, S.tallyGuide || {}, { cid: v, company: "", step: 4, at: Date.now() }); render(); }} /></label>
+          onPick={(v) => { setPick({ cid: v, company: "" }); S.tallyGuide = Object.assign({}, S.tallyGuide || {}, { cid: v, company: "", step: 5, at: Date.now() }); render(); }} /></label>
     <label className="f"><span>Company open in Tally</span>{list.length
       ? <SearchPick key={"o" + gen} hook="company" label="Company in Tally" placeholder="Type a company's name" value={company}
           items={list.map((c) => ({ value: c.company, label: c.company + (c.same ? " (same GSTIN)" : "") + (c.mine ? " (linked here)" : c.other ? " (linked to " + c.other.name + " — will move)" : "") + (c.computer && x.pcs.length > 1 ? " · " + c.computer : c.computer ? " · " + c.computer : "") }))}
@@ -785,7 +818,7 @@ function LinkPicker({ x, g }) {
       + " Open " + co.name + "’s own company in TallyPrime, or move one here."}</p>}
   </div>;
 }
-// step 5: the ledgers import, for the client worked on. S.ledImp = {cid, name, at, base: {at: ledgersAt, n: count}, via, ans,
+// step 6: the ledgers import, for the client worked on. S.ledImp = {cid, name, at, base: {at: ledgersAt, n: count}, via, ans,
 // got: {cid: n}, end, err, late}. Round 64 (the owner's test of 16-Oct-2026: the bar ran on for ever): the answer to the ask
 // is read (the bridge here: started false and why; the cloud: none asked, debounced, not linked) and the bar stops at once
 // with the reason; the arrival is seen in the cloud's count of the client's ledgers (or their time, tally_books.ledgers_at,
@@ -805,7 +838,7 @@ async function ledImportStart(cid, hint) {
   if (r.err) { x.err = "Could not ask Tally: " + r.err; x.why = "error"; }
   else if (!r.via) { x.err = "Neither FinCom Bridge here nor FinCom’s cloud reaches the Tally computer. Sign in to the firm account."; x.why = "none"; }
   else if (r.via === "bridge" && a.started === false) { x.err = a.debounced ? soon : "FinCom Bridge did not read " + company + "’s ledgers: " + (a.why || "it did not start") + "."; x.why = a.debounced ? "debounced" : "not started"; }
-  else if (r.via === "cloud" && a.notLinked) { x.err = name + " is not linked to a company in Tally yet: link it in step 4 first."; x.why = "not linked"; }
+  else if (r.via === "cloud" && a.notLinked) { x.err = name + " is not linked to a company in Tally yet: link it in step 5 first."; x.why = "not linked"; }
   else if (r.via === "cloud" && !Number(a.woken) && Number(a.debounced) > 0 && !Number(a.asked)) { x.err = soon; x.why = "debounced"; }
   else if (r.via === "cloud" && a.woken !== undefined && !Number(a.woken) && (a.asked === undefined ? !Number(a.debounced) : !Number(a.asked))) {
     x.err = "No computer with Tally was asked: FinCom has no computer that holds " + company + " now. Open " + company + " in TallyPrime on the Tally computer, with FinCom Bridge running; then Try again.";
@@ -847,7 +880,7 @@ function LedgersStep({ x, owner }) {
   // the clock while reading (once a second) and the read again (every 10 seconds)
   useEffect(() => { if (!reading) return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, [reading]);
   useEffect(() => { if (!reading) return; const t = setInterval(() => { ledImportPoll(); }, LED_POLL_MS); return () => clearInterval(t); }, [reading, imp && imp.at]);
-  if (!co || !x.curLinked) return <span className="note">{co ? "After step 4: link " + co.name + " first." : "After step 4: link a client first."}</span>;
+  if (!co || !x.curLinked) return <span className="note">{co ? "After step 5: link " + co.name + " first." : "After step 5: link a client first."}</span>;
   const pc = x.r ? x.r.computer : "the Tally computer", company = (typeof tallyLinkOf === "function" && (tallyLinkOf(co) || {}).company) || co.name;
   const start = () => ledImportStart(cid, { paused: !!(x.s && x.s.paused), pc });
   const upload = async (f) => {
@@ -884,7 +917,7 @@ function LedgersStep({ x, owner }) {
     <MastersHow /></>;
   return <>{body}{fileLine}{others}</>;
 }
-// step 5 done, folded: what was just imported (the read, with its time; or the masters file), else what FinCom holds
+// step 6 done, folded: what was just imported (the read, with its time; or the masters file), else what FinCom holds
 function LedgersDone({ x }) {
   const imp = S.ledImp && S.ledImp.cid === x.cid ? S.ledImp : null, f = S.ledFile && S.ledFile.ok && S.ledFile.cid === x.cid && Date.now() - S.ledFile.at < 3600e3 ? S.ledFile : null;
   const others = x.ledMiss.length ? <span className="note" data-guide-others="ledgers">{" Also without ledgers: " + namesOf(x.ledMiss) + "."}</span> : null;
@@ -897,7 +930,7 @@ function ledgersLine(x) {
   const n = ledgersOf(x.cid);
   return (n ? nOf(n, "ledger", "ledgers") + " of " + x.cur.name : "The ledgers of " + x.cur.name) + " are in FinCom.";
 }
-// step 6: the Day Book of this financial year, through Books › From Tally's Upload (its JobsNote says how far the server
+// step 7: the Day Book of this financial year, through Books › From Tally's Upload (its JobsNote says how far the server
 // has read it: "143 of 365 days read")
 function openFromTally(cid) {
   const h = "#/c/" + encodeURIComponent(cid) + "/from-tally";
@@ -913,7 +946,7 @@ const DAYBOOK_ART = <svg className="tg-art" viewBox="0 0 220 64" role="img" aria
     <text x="28" y="34">Gateway</text><text x="92" y="29">Display More</text><text x="92" y="39">Reports</text><text x="152" y="34">Day Book</text>
     <text x="201" y="41" fontWeight="700">XML</text></g></svg>;
 function DaybookStep({ x }) {
-  if (!x.cur || !x.curLinked) return <span className="note">{x.cur ? "After step 4: link " + x.cur.name + " first." : "After step 4: link a client first."}</span>;
+  if (!x.cur || !x.curLinked) return <span className="note">{x.cur ? "After step 5: link " + x.cur.name + " first." : "After step 5: link a client first."}</span>;
   const c = x.cur;
   if (typeof TCloud === "object" && TCloud.on() && TCloud.jobs && TCloud.jobs[c.id] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[c.id] = []; setTimeout(() => TCloud.jobsLoad(c.id), 0); }
   const job = ((typeof TCloud === "object" && TCloud.jobs && TCloud.jobs[c.id]) || []).find((j) => j && j.kind === "upload" && j.status !== "failed");
@@ -935,6 +968,51 @@ function daybookLine(x) {
   return "This year’s entries of " + x.cur.name + " are in FinCom" + (bk && bk.to ? " (up to " + fmtDate(tallyDate(d8Of(bk.to))) + ")." : ".")
     + (x.dayMiss.length ? " Also without them: " + namesOf(x.dayMiss) + "." : "");
 }
+// step 3: load FinCom's add-on in each computer's TallyPrime: one plain line, each computer's own state, the clicks (the
+// path in a box with Copy), and how to check
+function AddonCopy() {
+  const [done, setDone] = useState(false);
+  const copy = () => {
+    const ok = () => { setDone(true); setTimeout(() => setDone(false), 2500); };
+    const sel = () => { const e = document.querySelector("#app [data-guide-addon-path]"); if (e && window.getSelection) { const rg = document.createRange(); rg.selectNodeContents(e); const w = window.getSelection(); w.removeAllRanges(); w.addRange(rg); } };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ADDON_PATH).then(ok, () => { sel(); toast("Could not copy; the path is selected: press Ctrl+C."); }); return; } } catch (e) { /* the selection below */ }
+    sel(); toast("The path is selected: press Ctrl+C.");
+  };
+  return <button type="button" className="btn small" data-guide-addon-copy="" aria-label="Copy the add-on's path" onClick={copy}>{done ? "Copied ✓" : "Copy"}</button>;
+}
+const ADDON_SAY = { on: "recording ✓", off: "the add-on is not loaded yet", noco: "open a company in TallyPrime to check", unknown: "FinCom Bridge has not said yet; it does within a minute", list: "changes come from Tally’s change list: no add-on needed" };
+function AddonPcs({ x, m, latest }) {
+  if (!x.addons.length) return null;
+  return <ul className="tg-pcs" data-guide-addon-pcs="">
+    {x.addons.map(({ r, a }) => <li key={cardKey(r)} data-guide-addon-pc={r.device.id} data-addon-state={a.kind} className={a.kind === "on" || a.kind === "list" ? "ok" : a.kind === "off" || a.kind === "old" ? "bad" : ""}>
+      <b>{pcWords(r)}</b>{": "}
+      {a.kind === "old" ? <>{"FinCom Bridge " + (r.version || "") + " is older than " + ADDON_VER + ": it does not put the add-on on this computer or say whether Tally records. Install FinCom Bridge" + (latest ? " " + latest : "") + " there first."}{" "}<DownloadBtn m={m} primary={false} /></>
+        : a.kind === "on" ? (ADDON_SAY.on + (a.company ? " (" + a.company + (a.lastAt ? ", last line " + tallyHm(a.lastAt) : "") + ")" : ""))
+        : ADDON_SAY[a.kind]}</li>)}</ul>;
+}
+function AddonHow() {
+  return <>
+    <ol className="tg-lines" data-guide-addon-how="">
+      <li>In TallyPrime press <b>F1 (Help) → TDLs &amp; Add-Ons → F4 (Manage Local TDLs)</b>. (Not there? Press <b>Alt+G</b>, type <b>TDL</b>.)</li>
+      <li>Set <b>Load selected TDL files on startup</b> to <b>Yes</b>.</li>
+      <li>On the first empty line of <b>List of TDL files to preload on startup</b> type:
+        <span className="tg-path"><code data-guide-addon-path="">{ADDON_PATH}</code><AddonCopy /></span>
+        <span className="note">The list must not also hold FinComRecorderAnyCompany.tdl or FinComRecorderTrial.tdl.</span></li>
+      <li>Press <b>Ctrl+A</b> to accept. The file shows <b>Loaded</b>.</li></ol>
+    <p className="note tg-check" data-guide-addon-check="">Check: save one entry in any company. Within a minute this step ticks by itself.</p></>;
+}
+function AddonStep({ x, m, latest }) {
+  const pc = x.r ? x.r.computer : "the Tally computer";
+  if (!x.done.tally) return <span className="note">{x.done.install ? "After step 2: open TallyPrime on " + pc + "." : "After step 1."}</span>;
+  return <>
+    <p className="tg-text">Once on each computer’s TallyPrime, so FinCom sees every entry the moment it’s saved.</p>
+    <AddonPcs x={x} m={m} latest={latest} />
+    <AddonHow /></>;
+}
+function addonLine(x) {
+  const on = x.addons.filter((y) => y.a.kind === "on" || y.a.kind === "list");
+  return on.length === 1 ? "Recording on " + pcWords(on[0].r) + "." : "Recording on " + on.length + " computers.";
+}
 function ConnectGuide({ rows, m, latest, connectStep }) {
   const p = TCloud.pane, g = S.tallyGuide || {};
   // a pointer elsewhere opened a step: that step is brought into view
@@ -944,7 +1022,7 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
   // five minutes old); guideBooksLoad reads only those, a few at a time
   useEffect(() => { guideBooksLoad(); });
   // while a step is not done, the computers and companies are read again by themselves every 20 seconds, so a step ticks
-  // (and a company opened in Tally shows in step 4) without a click
+  // (and a company opened in Tally shows in step 5) without a click
   useEffect(() => { const t = setInterval(() => {
     if (!document.querySelector("#app [data-connect-step]:not([data-done])") || !TCloud.on() || TCloud.pane.busy) return;
     const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
@@ -956,15 +1034,15 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
   const x = guideState(rows, latest), d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
   const now = GUIDE_KEYS.find((k) => !d[k]), want = GUIDE_KEYS[(g.step || 0) - 1] || now, nowAt = GUIDE_KEYS.indexOf(now);
   const go = (i) => { S.tallyGuide = Object.assign({}, g, { step: i + 1, at: Date.now() }); render(); };
-  // round 66 (the owner, 16-Oct-2026: "all 6 steps are not visible anywhere"): the six steps stay on the page, always; all
-  // done, they show as six green ticks with one line under them (never folded away to a single line)
-  const strip = <ol className="tg-strip" data-guide-strip="" aria-label="The six steps">
+  // round 66 (the owner, 16-Oct-2026: "all 6 steps are not visible anywhere"): the steps (seven since 17-Oct-2026) stay on
+  // the page, always; all done, they show as green ticks with one line under them (never folded away to a single line)
+  const strip = <ol className="tg-strip" data-guide-strip="" aria-label={"The " + GUIDE_WORD + " steps"}>
     {GUIDE_KEYS.map((k, i) => <li key={k} data-strip-step={k} className={d[k] ? "done" : k === now ? "now" : "later"} aria-current={k === now ? "step" : undefined}>
       <button type="button" data-guide-strip-go={k} onClick={() => go(i)} aria-label={"Step " + (i + 1) + ": " + GUIDE_STRIP[k] + (d[k] ? ", done" : "")}>
         <span className="tg-dot" aria-hidden="true">{d[k] ? TICK : i + 1}</span><span className="tg-lab">{GUIDE_STRIP[k]}</span></button></li>)}</ol>;
   const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
   const head = <div className="tg-top"><h3>Connect Tally</h3>
-    <span className="tg-count" data-guide-count={doneN}>{all ? <>{"All 6 done" + (x.cur ? " for " + x.cur.name : "") + " "}{TICK}</> : doneN + " of " + GUIDE_KEYS.length + " done"}</span>
+    <span className="tg-count" data-guide-count={doneN}>{all ? <>{"All " + GUIDE_N + " done" + (x.cur ? " for " + x.cur.name : "") + " "}{TICK}</> : doneN + " of " + GUIDE_N + " done"}</span>
     <GuideClientPick x={x} g={g} />
     {all && !!g.at && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = { cid: g.cid }; render(); }}>Hide the steps</button>}</div>;
   if (all && !g.at) {
@@ -996,24 +1074,28 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
           : r && !r.online ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
           : <span className="note">{"Open TallyPrime on " + pc + ", signed in as " + user + ". In TallyPrime press F1 (Help) → Settings → Connectivity, set “TallyPrime acts as” to Both and choose any free port from 9000 to 9999 (" + (r ? tallyPortOf(r) : 9002) + " is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself."}</span>}
       </GuideStep>
-      <GuideStep k="company" n={3} title="Keep a company open" done={d.company} open={want === "company"} later={later("company")}>
+      <GuideStep k="addon" n={3} title="Load FinCom add-on in Tally" done={d.addon && !forced("addon")} open={want === "addon"} later={later("addon")}
+        line={d.addon && !forced("addon") ? <span className="note" data-guide-addon-held="">{addonLine(x)}</span> : null} more={<AddonHow />}>
+        {!(d.addon && !forced("addon")) && <AddonStep x={x} m={m} latest={latest} />}
+      </GuideStep>
+      <GuideStep k="company" n={4} title="Keep a company open" done={d.company} open={want === "company"} later={later("company")}>
         {d.company ? <span className="note" data-guide-open-count={x.openNow.length}>{openWords(x)}</span>
           : s && s.stopped ? <span data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
               {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</span>
           : s && s.paused ? <span data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}{x.openNow.length ? <span className="note" data-guide-open-count={x.openNow.length}>{" " + openWords(x)}</span> : null}</span>
           : <span className="note">{"Leave TallyPrime open on a company" + (r ? " on " + pc : "") + "."}</span>}
       </GuideStep>
-      <GuideStep k="link" n={4} title="Link the client" done={d.link && !forced("link")} open={want === "link"} later={later("link")}
+      <GuideStep k="link" n={5} title="Link the client" done={d.link && !forced("link")} open={want === "link"} later={later("link")}
         line={d.link && !forced("link") ? !x.cur ? <span className="note">Every client is linked.</span> : <span className="note" data-guide-link-held={x.cid}>{x.cur.name + " is linked to " + ((typeof tallyLinkOf === "function" && tallyLinkOf(x.cur).company) || x.cur.name) + "."}
           {x.unlinked.length > 0 && <span data-guide-others="link">{" Not linked yet: " + namesOf(x.unlinked) + "."}</span>}</span> : null} more={<LinkPicker x={x} g={g} />}>
         {!(d.link && !forced("link")) && <LinkPicker x={x} g={g} />}
       </GuideStep>
-      <GuideStep k="ledgers" n={5} title="Import ledgers" done={d.ledgers && !forced("ledgers")} open={want === "ledgers"} later={later("ledgers")}
+      <GuideStep k="ledgers" n={6} title="Import ledgers" done={d.ledgers && !forced("ledgers")} open={want === "ledgers"} later={later("ledgers")}
         line={d.ledgers && !forced("ledgers") ? <LedgersDone x={x} /> : null}
         more={<LedgersStep x={x} owner={owner} />}>
         {!(d.ledgers && !forced("ledgers")) ? <LedgersStep x={x} owner={owner} /> : null}
       </GuideStep>
-      <GuideStep k="daybook" n={6} title="Bring in this year’s entries" done={d.daybook && !forced("daybook")} open={want === "daybook"} later={later("daybook")}
+      <GuideStep k="daybook" n={7} title="Bring in this year’s entries" done={d.daybook && !forced("daybook")} open={want === "daybook"} later={later("daybook")}
         line={d.daybook && !forced("daybook") ? <span className="note" data-guide-daybook-held="">{daybookLine(x)}</span> : null} more={<DaybookStep x={x} />}>
         {!(d.daybook && !forced("daybook")) && <DaybookStep x={x} />}
       </GuideStep>
@@ -1032,7 +1114,7 @@ function GuideClientPick({ x, g }) {
 }
 // the other clients' gaps, one line, each name a button that opens the steps for that client
 function GuideOthers({ x }) {
-  const parts = [["Not linked yet", x.unlinked, 4], ["Without ledgers", x.ledMiss, 5], ["Without this year’s entries", x.dayMiss, 6]].filter(([, l]) => l.length);
+  const parts = [["Not linked yet", x.unlinked, 5], ["Without ledgers", x.ledMiss, 6], ["Without this year’s entries", x.dayMiss, 7]].filter(([, l]) => l.length);
   if (!parts.length) return null;
   return <p className="note" data-guide-others="all" style={{ margin: "6px 0 0" }}>{"Other clients: "}
     {parts.map(([w, l, step], i) => <span key={w}>{i > 0 && " · "}{w + ": "}{l.map((c, j) => <span key={c.id}>{j > 0 && ", "}
@@ -1064,7 +1146,7 @@ function NeedsYou({ sources = null }) {
     <ul className="tneeds-list">{items}</ul>
   </section>;
 }
-// 3. which client reads which Tally company: one row a client; the one action, Link, opens the guide's step 4 with that
+// 3. which client reads which Tally company: one row a client; the one action, Link, opens the guide's step 5 with that
 // client, or nothing
 function ClientsTable() {
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted);
@@ -1082,7 +1164,7 @@ function ClientsTable() {
         { k: "company", role: "party", label: "Tally company", v: (x) => x.k.company || "", cell: (x) => x.k.company || <span className="note">{"—"}</span> },
         { k: "linked", role: "status", label: "Linked", v: (x) => (x.linked ? "Linked" : "Not linked"), cell: (x) => <span className={"tag " + (x.linked ? "ok" : "warn")} data-client-link-state="">{x.linked ? "Linked" : "Not linked"}</span> },
         { k: "last", label: "Last entry received", v: (x) => x.last || "", cell: (x) => x.last ? shortWhen(x.last) : <span className="note">{"—"}</span> },
-        { k: "ac", role: "act", sort: false, cell: (x) => x.linked ? null : <button type="button" className="btn small" data-client-link={x.co.id} onClick={() => openConnectTally(4, x.co.id)}>Link</button> },
+        { k: "ac", role: "act", sort: false, cell: (x) => x.linked ? null : <button type="button" className="btn small" data-client-link={x.co.id} onClick={() => openConnectTally(5, x.co.id)}>Link</button> },
       ]} />}
     <FoldMore k="clients" more={more} />
   </section>;
@@ -1093,12 +1175,12 @@ function ClientOf({ company, dev }) {
   if (!co || co.deleted) return null;
   return <>{" ("}<button className="linkbtn" data-client-open={co.id} onClick={() => openCompany(co.id)}>{co.name + " \u203a"}</button>{")"}</>;
 }
-// round 39: the companies a computer reported that no client has yet; 15-Oct-2026: linked only in Connect Tally (step 4)
+// round 39: the companies a computer reported that no client has yet; 15-Oct-2026: linked only in Connect Tally (step 5)
 function SeenNotLinked({ r }) {
   const rows = (TCloud.pane.companies || []).filter((c) => c.company && !c.client_id && c.device_id === r.device.id);
   if (!rows.length) return null;
   return <div data-card-seen="">{"Seen, not linked: "}<b>{rows.map((c) => c.company).join(", ")}</b>{" "}
-    <button className="linkbtn" data-open-connect="4" onClick={() => openConnectTally(4, "")}>Open Connect Tally</button></div>;
+    <button className="linkbtn" data-open-connect="5" onClick={() => openConnectTally(5, "")}>Open Connect Tally</button></div>;
 }
 // the card's state in words
 function cardState(r, n) {
@@ -1430,7 +1512,7 @@ export function CloudBooks() {
           { k: "ver", label: "Bridge", v: (d) => d.version || "", cell: (d) => d.version || "—" },
           { k: "ac", role: "act", cls: "n", cell: (d) => <button className="btn small" onClick={() => TCloud.revoke(d.id, d.name)}>Remove</button> },
         ]} /></div>
-    <div className="pane"><h3 style={{ marginTop: 0 }}>Tally companies and clients</h3><p className="note" style={{ margin: "0 0 8px" }}>Which client each Tally company is. A client is linked in one place: the Tally page’s Connect Tally, step 4. <button className="linkbtn" data-open-connect="4" onClick={() => openConnectTally(4, "")}>Open Connect Tally</button></p>
+    <div className="pane"><h3 style={{ marginTop: 0 }}>Tally companies and clients</h3><p className="note" style={{ margin: "0 0 8px" }}>Which client each Tally company is. A client is linked in one place: the Tally page’s Connect Tally, step 5. <button className="linkbtn" data-open-connect="5" onClick={() => openConnectTally(5, "")}>Open Connect Tally</button></p>
       {cl.length ? <ListTable name="cloudCompanies" className="data" rows={cl} rowKey={(c) => c.company} unit={["company", "companies"]}
         cols={[
           { k: "at", role: "date", label: "Last seen", v: (c) => c.last_seen || "", cell: (c) => when(c.last_seen) },
@@ -1452,7 +1534,7 @@ export function CloudBooks() {
                     : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
                     : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
                 </div></> : "Linked to a client that is not on this computer."}</div>
-              : <div className="nr">{m ? <>Same GSTIN as <b>{m.name}</b>. </> : null}<button className="btn small" data-open-connect="4" onClick={() => openConnectTally(4, m ? m.id : "", c.company)}>Open Connect Tally</button></div>}</>; } },
+              : <div className="nr">{m ? <>Same GSTIN as <b>{m.name}</b>. </> : null}<button className="btn small" data-open-connect="5" onClick={() => openConnectTally(5, m ? m.id : "", c.company)}>Open Connect Tally</button></div>}</>; } },
           { k: "gstin", label: "GSTIN", v: (c) => c.gstin || "", cell: (c) => c.gstin || "—" },
         ]} />
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>

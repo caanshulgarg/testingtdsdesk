@@ -193,11 +193,11 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
     # 15-Oct-2026: Settings links nothing itself; its Open Connect Tally leads to the guide's step 4, where the same RPC links
-    ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
+    ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="5"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
     # c_vms already has the cloud's copy of CO's books (so step 4 shows it as linked, with no Link to press); a second
     # client, not linked yet, is linked here
     pg.evaluate("() => { const c = newCompany({name: 'New Client Pvt Ltd', gstin: ''}); c.id = 'c_new'; S.companies[c.id] = c; Store.saveCompany(c); }")
-    calls["link"].clear(); pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(1200)
+    calls["link"].clear(); pg.click('#app [data-open-connect="5"] >> nth=0'); pg.wait_for_timeout(1200)
     pg.select_option("#app [data-guide-client]", "c_new"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
     pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_new"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))

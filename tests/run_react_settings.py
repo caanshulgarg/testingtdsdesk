@@ -119,8 +119,8 @@ with sync_playwright() as p:
         bridges: {'go-1': {at: nw, version: '2.4.4', computer: 'OFFICE', user: 'a', mode: 'main', tally: true, tallyState: 'open', open: ['BETA']}}}}], companies: [{company: 'BETA', client_id: null, device_id: 'd1'}]}; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"""); pg.wait_for_timeout(400)
     # 15-Oct-2026: Books in the cloud links nothing itself; it points to Connect Tally (step 4), where the same RPC links
     cid1 = pg.evaluate("S.coId")
-    ok(pg.locator('select[aria-label="Client for BETA"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
-    pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(600)
+    ok(pg.locator('select[aria-label="Client for BETA"]').count() == 0 and pg.locator('#app [data-open-connect="5"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
+    pg.click('#app [data-open-connect="5"] >> nth=0'); pg.wait_for_timeout(600)
     pg.select_option("#app [data-guide-client]", cid1); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", "BETA"); pg.wait_for_timeout(200)
     pg.click("#app [data-guide-link]"); pg.wait_for_timeout(600)
     ok(pg.evaluate("window.__tc[0]") == ["tally_company_link", {"p_company": "BETA", "p_client": cid1}], "the cloud's Tally company linked to a client, in Connect Tally (%s)" % pg.evaluate("window.__tc"))

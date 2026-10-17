@@ -77,7 +77,7 @@ function tree() {
     [null, [{ icon: "clients", label: "Clients", on: false, go: () => navHome("clients"), bar: true, title: "Every client: find one, open it" },
       { icon: "dash", label: "Overview", on: inCo && S.tab === "dash", go: () => goClient("dash"), bar: true, title: "Where this client stands" }]],
     // t70 (16-Oct-2026; the owner): no "Bring in": the Inbox is the top bar's tray (TopBar.jsx InboxBtn), From Tally
-    // (books:import, its address kept) is reached from the Tally panel's Upload and Connect Tally's step 6
+    // (books:import, its address kept) is reached from the Tally panel's Upload and Connect Tally's step 7
     ["Work", [
       { icon: "bills", label: "Purchase", count: st.drafts || 0, go: () => goClient("bills"), bar: true, on: work && mod === "bills" },
       { icon: "bank", label: "Bank", on: work && mod === "bank", go: () => goClient("bank"), bar: true,

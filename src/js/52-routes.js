@@ -195,8 +195,8 @@ function backToClient(){
 function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
 // the ONE place to connect Tally (15-Oct-2026; the owner: "multiple pages of Tally connection.. multiple places to
 // connect.. need a very simple connection guide"): the Tally page's Connect Tally guide. Every other place that spoke of
-// connecting or linking is a pointer that lands here: step 1 install, 2 open Tally, 3 keep a company open, 4 link a client
-// (0: the first step not done); for step 4 the client (cid) and, from Add client, the Tally company chosen there
+// connecting or linking is a pointer that lands here: step 1 install, 2 open Tally, 3 load FinCom's add-on in Tally, 4 keep a
+// company open, 5 link a client, 6 ledgers, 7 the Day Book (0: the first step not done); for step 5 the client (cid) and, from Add client, the Tally company chosen there
 function openConnectTally(step, cid, company){
   S.tallyGuide = {step: Number(step) || 0, cid: cid || "", company: company || "", at: Date.now()};
   S.tallyFocus = ""; S.tallyTab = "computers";

@@ -124,10 +124,10 @@ with sync_playwright() as p:
     pg.evaluate("TallySteady.reset()"); put(local(open=[{"name": "MASTERCAD SOLUTIONS"}]), link=False)
     s = watch("unlinked")
     ok(s["code"] == "unlinked" and s["text"] == "Company not linked", "Tally open, the client not linked: “Company not linked” (%s)" % (s,))
-    # 15-Oct-2026: the one place to link is the Tally page's Connect Tally (step 4, this client)
+    # 15-Oct-2026: the one place to link is the Tally page's Connect Tally (step 5 since 17-Oct-2026, this client)
     c = card(); ok(c and c["next"] and c["next"][0] == ["connectTally", "Open Connect Tally"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
     press("connectTally"); pg.wait_for_timeout(300)
-    ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid == S.coId]") == ["home", "tally", 4, True], "Open Connect Tally: the guide's step 4 for this client (%s)" % pg.evaluate("[S.view, S.homeTab, S.tallyGuide]"))
+    ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid == S.coId]") == ["home", "tally", 5, True], "Open Connect Tally: the guide's step 5 for this client (%s)" % pg.evaluate("[S.view, S.homeTab, S.tallyGuide]"))
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid); pg.wait_for_timeout(300)
     pg.evaluate("(cid) => { S.companies[cid].tallyName = 'TESTING AAD'; S.tab = 'dash'; render(); }", cid)
 
