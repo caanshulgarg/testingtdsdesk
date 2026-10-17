@@ -32,8 +32,18 @@
 //   {action:"ewb", gstin, docKey, trans}            an e-way bill for an e-invoiced invoice (by its IRN)
 //   {action:"einvoices", gstin?, docKeys?}
 // From the database's timer (x-cron-key): {action:"refresh-all"} every 20 minutes; {action:"daily"} 07:00-11:00 IST.
+// Filing through the GST API (17-Oct-2026, docs/gst-filing-api.md; migration-94): an owner or staff member, never the timer:
+//   {action:"filing", gstin, form: R1|IFF|3B, period}          where the return stands, and its log
+//   {action:"save", gstin, form, period, payload}               RETSAVE, then RETSTATUS until processed
+//   {action:"summary", gstin, form, period}                     RETSUM beside FinCom's figures; 3B: the set-off too
+//   {action:"confirm", gstin, form, period, accept?, note?}     a person: the summary matches, or these differences accepted
+//   {action:"proceed", gstin, form, period}                     GSTR-1/IFF: proceed to file; 3B: offset the liability
+//   {action:"evc_otp", gstin, form, period, pan}                the signatory's EVC OTP asked for (the portal sends it)
+//   {action:"file", gstin, form, period, pan, otp}              a person's click: RETFILE with EVC; the ARN kept
+//   {action:"track", gstin, form, period}                       the portal's status of the return (RETTRACK), ARN
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText } from "./filing.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -73,15 +83,17 @@ async function asp() {
 const sessName = (firm: string, gstin: string) => `gsp:sess:${firm}:${gstin}`;
 
 // one call to TaxPro's GST API: query in the URL, ASP credentials and taxpayer details in headers
-async function tp(path: string, query: Record<string, string>, headers: Record<string, string>, base = BASE) {
+// (filing: a PUT or POST with a JSON body; the body is never logged)
+async function tp(path: string, query: Record<string, string>, headers: Record<string, string>, base = BASE, method = "GET", body?: unknown) {
   const k = await asp();
   const r = await fetch(base + path + "?" + new URLSearchParams(query), {
-    headers: { aspid: k.id, password: k.pw, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...headers },
+    method, body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { aspid: k.id, password: k.pw, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
   });
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
-  // for the function's own logs, failures only (never return data, tokens or the credentials)
-  if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, http: r.status, head: text.slice(0, 300) }));
+  // for the function's own logs, failures only (never return data, tokens, the credentials or an OTP)
+  if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, action: query.action, http: r.status, head: safeText(text.slice(0, 300), String((body as any)?.sid || "").split("|")[1] || "") }));
   return { http: r.status, j, text };
 }
 const tpErr = (x: { http: number; j: any; text: string }) =>
@@ -103,11 +115,11 @@ const hdr = (gstin: string, username: string, ip = "127.0.0.1") => ({ "ip-usr": 
 const ret = (g: { http: number; j: any; text: string }) => ok(g) || (g.j && !g.j.error && (g.j.data || Object.keys(g.j).length > 1));
 const wrongPath = (g: { http: number; text: string }) => g.http === 404 || g.http === 405 || /invalid\s+(url|api|version)|no\s+such\s+api|resource\s+not\s+found|not\s+a\s+valid\s+api/i.test(g.text);
 const pathAt: Record<string, number> = {};
-async function tpv(kind: string, paths: string[], query: Record<string, string>, headers: Record<string, string>, base = BASE) {
+async function tpv(kind: string, paths: string[], query: Record<string, string>, headers: Record<string, string>, base = BASE, method = "GET", body?: unknown) {
   const start = pathAt[kind + base] || 0;
   let last: any = null;
   for (let i = start; i < paths.length; i++) {
-    const g = await tp(paths[i], query, headers, base);
+    const g = await tp(paths[i], query, headers, base, method, body);
     if (!wrongPath(g)) { pathAt[kind + base] = i; return { ...g, path: paths[i] }; }
     last = { ...g, path: paths[i] };
   }
@@ -365,6 +377,209 @@ async function makeIrn(firm: string, gstin: string, docKey: string, clientId: st
   return { ok: true, irn: r.Irn, ackNo: String(r.AckNo || ""), ackDt: rec.ack_dt, signedQr: rec.signed_qr, ewbNo: r.EwbNo ? String(r.EwbNo) : "", info: x.info };
 }
 
+// ---------- filing through the GST API (docs/gst-filing-api.md; migration-94) ----------
+// The owner's decisions of 17-Oct-2026: FinCom saves; a person compares the portal's summary with FinCom's and confirms
+// (or accepts the differences listed, with a reason); a person files with the signatory's EVC OTP. The OTP is sent once
+// and kept nowhere. Writes go to TaxPro's sandbox, or to production only when TAXPRO_FILE_LIVE=yes.
+const FILE_LIVE = Deno.env.get("TAXPRO_FILE_LIVE") || "";
+const FORMS: Record<string, { paths: string[]; kind: string; formType: string; rtn: string; label: string; track: string[] }> = {
+  R1: { paths: R1_PATHS, kind: "R1", formType: "R1", rtn: "GSTR1", label: "GSTR-1", track: ["GSTR1"] },
+  IFF: { paths: R1_PATHS, kind: "R1", formType: "R1", rtn: "GSTR1", label: "IFF", track: ["IFF", "GSTR1"] },
+  "3B": { paths: R3B_PATHS, kind: "R3B", formType: "R3B", rtn: "GSTR3B", label: "GSTR-3B", track: ["GSTR3B"] },
+};
+const STATUS_PATHS = (Deno.env.get("TAXPRO_STATUS_PATH") ? [Deno.env.get("TAXPRO_STATUS_PATH")!] : TRACK_PATHS);
+const LEDGER_PATHS = (Deno.env.get("TAXPRO_LEDGER_PATH") ? [Deno.env.get("TAXPRO_LEDGER_PATH")!] : ["/taxpayerapi/dec/v1.0/ledgers", "/taxpayerapi/dec/v0.3/ledgers"]);
+const EVC_PATH = Deno.env.get("TAXPRO_EVC_PATH") || AUTH;
+const STATUS_TRIES = Math.max(1, Number(Deno.env.get("TAXPRO_STATUS_TRIES") || 6)), STATUS_WAIT = Math.max(0, Number(Deno.env.get("TAXPRO_STATUS_WAIT_MS") || 2500));
+const PAN = /^[A-Z]{5}\d{4}[A-Z]$/;
+type Who = { firm: string; me: string };
+type Ret = { gstin: string; form: string; period: string };
+async function filingRow(w: Who, r: Ret) {
+  const { data } = await admin.from("gst_filings").select("*").eq("firm_id", w.firm).eq("gstin", r.gstin).eq("form", r.form).eq("period", r.period).maybeSingle();
+  return data as any;
+}
+async function putFiling(w: Who, r: Ret, set: Record<string, unknown>) {
+  const { error } = await admin.from("gst_filings").upsert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, updated_at: new Date().toISOString(), ...set });
+  if (error) throw new Error("Could not keep the filing: " + error.message + ". Is migration-94 applied on this database?");
+}
+// every call logged: who, when, GSTIN, period, form, action, result, ARN; never the OTP
+async function logFiling(w: Who, r: Ret, action: string, ok1: boolean, result: string, extra: { arn?: string; ref?: string; otp?: string } = {}) {
+  await admin.from("gst_filing_log").insert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, action, by_user: w.me, ok: ok1,
+    result: safeText(result, extra.otp || "").slice(0, 1000), arn: extra.arn || null, ref: extra.ref || null });
+}
+const figsOf = (form: string, j: any) => form === "3B" ? r3bFigures(j) : r1Figures(j);
+const portalFigsOf = (form: string, j: any) => form === "3B" ? r3bFigures(j) : r1PortalFigures(j);
+async function session(w: Who, r: Ret) {
+  const { token, s } = await liveSession(w.firm, r.gstin);
+  return { h: { ...hdr(r.gstin, s.username), "auth-token": token, ret_period: r.period, rtn_typ: FORMS[r.form].rtn, userrole: FORMS[r.form].rtn }, username: s.username };
+}
+async function portalSummary(w: Who, r: Ret) {
+  const f = FORMS[r.form], { h, username } = await session(w, r);
+  const g = await tpv(f.kind, f.paths, { gstin: r.gstin, username, ret_period: r.period, rtnprd: r.period, action: "RETSUM" }, h);
+  if (!ret(g)) throw new Error("The portal's summary could not be read: " + tpErr(g));
+  return { raw: unwrap(g), h, username, path: g.path as string };
+}
+const statusOf = (x: { j: any }) => String(x.j?.status_cd ?? x.j?.data?.status_cd ?? "");
+const reportOf = (x: { j: any }) => x.j?.error_report ?? x.j?.data?.error_report ?? null;
+const sleep = (ms: number) => new Promise((ok1) => setTimeout(ok1, ms));
+// 3B: the liability lines (tx_pmt of the 3B summary) and the ledgers, set off as the law requires
+async function offsetPlan(r: Ret, sum: any, h: Record<string, string>, username: string) {
+  const liab = sum?.tx_pmt?.tx_py || sum?.tx_pmt || [];
+  if (!Array.isArray(liab) || !liab.length) throw new Error("The portal's 3B has no liability lines (tx_pmt) yet. Save the 3B again and read the summary.");
+  const b = await tpv("LEDGER", LEDGER_PATHS, { gstin: r.gstin, username, ret_period: r.period, action: "BAL" }, h);
+  if (!ret(b)) throw new Error("The ledger balances could not be read: " + tpErr(b));
+  const L = ledgersOf(b.j);
+  return { ...setoff(liab, L.itc, L.cash), itc: L.itc, cash: L.cash };
+}
+const planKey = (p: any) => JSON.stringify({ pditc: p?.pditc, pdcash: p?.pdcash });
+
+async function filingAction(w: Who, action: string, body: any, role: string) {
+  const form = String(body.form || ""), gstin = String(body.gstin || "").toUpperCase(), period = String(body.period || "");
+  if (!FORMS[form]) return { ok: false, error: "Which return: R1, IFF or 3B." };
+  if (!PERIOD.test(period)) return { ok: false, error: "The period is MMYYYY, e.g. 082026." };
+  const r: Ret = { gstin, form, period }, f = FORMS[form];
+  if (action === "filing") {
+    const row = await filingRow(w, r);
+    const { data: log } = await admin.from("gst_filing_log").select("action, by_user, at, ok, result, arn").eq("firm_id", w.firm).eq("gstin", gstin).eq("form", form).eq("period", period).order("at", { ascending: false }).limit(50);
+    if (row) delete row.payload;
+    return { ok: true, filing: row || null, log: log || [], host: BASE === SANDBOX_URL ? "sandbox" : writeAllowed(BASE, FILE_LIVE) ? "test" : "production" };
+  }
+  // the same rights as posting: an owner or staff member; a viewer may look, not file
+  if (role !== "owner" && role !== "staff") return { ok: false, error: "Only the firm's owner or staff may file returns." };
+  if (action !== "track" && !writeAllowed(BASE, FILE_LIVE)) {
+    await logFiling(w, r, action, false, "refused: production host without TAXPRO_FILE_LIVE");
+    return { ok: false, error: "Filing through the GST API is not switched on for this server yet (it files on the sandbox only)." };
+  }
+  const row = await filingRow(w, r);
+  if (row?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (row.arn || "?") + ")." };
+  try {
+    if (action === "save") {
+      const payload = form === "3B" ? cleanR3b(body.payload, gstin, period) : cleanR1(body.payload, gstin, period);
+      const { h, username } = await session(w, r);
+      const x = await tpv(f.kind, f.paths, { gstin, username, ret_period: period, rtnprd: period, action: "RETSAVE" }, h, BASE, "PUT", payload);
+      const ref = String(x?.j?.reference_id ?? x?.j?.data?.reference_id ?? "");
+      if (!ref) {
+        const m = tpErr(x);
+        await putFiling(w, r, { status: "failed", error: m, payload, saved_by: w.me, saved_at: new Date().toISOString() });
+        await logFiling(w, r, "save", false, m);
+        return { ok: false, error: "The portal did not take the return: " + m };
+      }
+      // RETSTATUS until processed (P), processed with errors (PE) or refused (ER)
+      let st = "IP", rep: any = null;
+      for (let i = 0; i < STATUS_TRIES && st === "IP"; i++) {
+        if (i) await sleep(STATUS_WAIT);
+        const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: ref, action: "RETSTATUS" }, h);
+        st = statusOf(s1) || "IP"; rep = reportOf(s1);
+      }
+      const good = st === "P";
+      await putFiling(w, r, { status: good ? "saved" : "failed", save_ref: ref, save_state: st, save_errors: rep, payload, fincom_sum: figsOf(form, payload), portal_sum: null, diffs: null,
+        offset_plan: null, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, proceeded_by: null, proceeded_at: null, otp_sent_at: null,
+        error: good ? null : st === "IP" ? "still being processed on the portal" : "the portal found errors", saved_by: w.me, saved_at: new Date().toISOString() });
+      await logFiling(w, r, "save", good, "RETSAVE ref " + ref + ", status " + st, { ref });
+      return { ok: good || st === "IP", saveState: st, ref, errors: rep, error: good ? undefined : st === "IP" ? "Saved; the portal is still processing it. Read the summary in a minute." : "The portal found errors in the return; nothing was filed." };
+    }
+    if (!row) return { ok: false, error: "Save the return to the portal first." };
+    if (action === "summary") {
+      if (row.save_state === "IP" && row.save_ref) {   // processed since?
+        const { h, username } = await session(w, r);
+        const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: row.save_ref, action: "RETSTATUS" }, h);
+        row.save_state = statusOf(s1) || "IP";
+        await putFiling(w, r, { save_state: row.save_state, save_errors: reportOf(s1), status: row.save_state === "P" ? "saved" : row.status });
+      }
+      if (row.save_state !== "P") return { ok: false, error: row.save_state === "IP" ? "The portal is still processing the save." : "The save was not processed; save again." };
+      const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw), c = compare(row.fincom_sum || {}, portal, form);
+      const plan = form === "3B" ? await offsetPlan(r, s.raw, s.h, s.username) : null;
+      await putFiling(w, r, { status: "summary", portal_sum: portal, diffs: c.differs, offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, error: null });
+      await logFiling(w, r, "summary", true, c.differs.length ? c.differs.length + " differences: " + c.differs.join(", ") : "matches FinCom");
+      return { ok: true, rows: c.rows, differs: c.differs, plan };
+    }
+    if (action === "confirm") {
+      if (row.status !== "summary") return { ok: false, error: "Read the portal's summary first." };
+      const diffs: string[] = row.diffs || [], acc = (Array.isArray(body.accept) ? body.accept : []).map(String), note = String(body.note || "").trim().slice(0, 500);
+      const missing = diffs.filter((d) => !acc.includes(d));
+      if (missing.length) return { ok: false, error: "Accept each difference, or correct it and save again: " + missing.join(", ") + "." };
+      if (diffs.length && !note) return { ok: false, error: "Say why the differences are accepted." };
+      await putFiling(w, r, { status: "confirmed", confirmed_by: w.me, confirmed_at: new Date().toISOString(), confirmed_sum: row.portal_sum, accepted: diffs, accept_note: note || null });
+      await logFiling(w, r, "confirm", true, diffs.length ? "differences accepted (" + diffs.join(", ") + "): " + note : "the summary matches FinCom");
+      return { ok: true };
+    }
+    // proceed, evc_otp and file: only what the person confirmed; the portal's summary is read again first
+    if (action === "proceed" || action === "evc_otp" || action === "file") {
+      if (action === "proceed" ? row.status !== "confirmed" : row.status !== "proceeded") return { ok: false, error: action === "proceed" ? "A person must first confirm the portal's summary against FinCom's." : "Proceed to file first." };
+      if (action === "evc_otp") {
+        const pan = String(body.pan || "").toUpperCase().trim();
+        if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
+        const { h, username } = await session(w, r);
+        const x = await tp(EVC_PATH, { action: "EVCOTP", gstin, username, pan, form_type: f.formType }, h);
+        await putFiling(w, r, ok(x) ? { otp_sent_at: new Date().toISOString(), signatory_pan: pan } : { error: tpErr(x) });
+        await logFiling(w, r, "evc_otp", ok(x), ok(x) ? "EVC OTP sent to the signatory (PAN " + pan + ")" : tpErr(x));
+        return ok(x) ? { ok: true } : { ok: false, error: "The portal did not send the OTP: " + tpErr(x) };
+      }
+      const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw);
+      if (!sameFigures(portal, row.confirmed_sum || {})) {
+        await putFiling(w, r, { status: "summary", portal_sum: portal, diffs: compare(row.fincom_sum || {}, portal, form).differs, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
+        await logFiling(w, r, action, false, "the portal's summary changed since it was confirmed; nothing sent");
+        return { ok: false, changed: true, error: "The portal's summary changed since it was confirmed. Nothing was sent: compare it again." };
+      }
+      if (action === "proceed") {
+        let x: any, plan: any = null;
+        if (form === "3B") {
+          plan = await offsetPlan(r, s.raw, s.h, s.username);
+          if (planKey(plan) !== planKey(row.offset_plan)) {
+            await putFiling(w, r, { status: "summary", offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
+            await logFiling(w, r, "proceed", false, "the set-off changed (ledgers or liability moved); nothing sent");
+            return { ok: false, changed: true, error: "The ledgers or the liability changed since the summary was read, so the set-off changed. Nothing was sent: check it again.", plan };
+          }
+          if (Object.keys(plan.short).length) {
+            await logFiling(w, r, "proceed", false, "cash short: " + JSON.stringify(plan.short));
+            return { ok: false, error: "Not enough in the cash ledger: " + Object.entries(plan.short).map(([k, v]) => k.toUpperCase() + " ₹" + v).join(", ") + ". Pay by challan (PMT-06) first.", plan };
+          }
+          x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc });
+        } else {
+          x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period });
+        }
+        if (!ok(x) && !(x?.j && !x.j.error && (x.j.reference_id || x.j.data))) { await logFiling(w, r, "proceed", false, tpErr(x)); return { ok: false, error: "The portal refused: " + tpErr(x) }; }
+        await putFiling(w, r, { status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
+        await logFiling(w, r, "proceed", true, form === "3B" ? "liability offset (RETOFFSET)" : "proceeded to file (RETNEWPTF)");
+        return { ok: true };
+      }
+      // file: the person's click, with the OTP the signatory received; sent once, kept nowhere
+      const pan = String(body.pan || row.signatory_pan || "").toUpperCase().trim(), otp = String(body.otp || "").trim();
+      if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
+      if (!/^\d{6}$/.test(otp)) return { ok: false, error: "The EVC OTP has 6 digits." };
+      if (!row.otp_sent_at) return { ok: false, error: "Send the OTP first." };
+      const x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETFILE" }, s.h, BASE, "POST", { data: s.raw, st: "EVC", sid: pan + "|" + otp });
+      const arn = String(x?.j?.ack_num ?? x?.j?.data?.ack_num ?? x?.j?.arn ?? x?.j?.data?.arn ?? "");
+      if (!arn) {
+        const m = safeText(tpErr(x), otp);
+        await putFiling(w, r, { error: m });
+        await logFiling(w, r, "file", false, m, { otp });
+        return { ok: false, error: "Not filed: " + m };
+      }
+      const at = new Date().toISOString();
+      await putFiling(w, r, { status: "filed", arn, filed_at: at, filed_by: w.me, error: null, signatory_pan: pan });
+      await logFiling(w, r, "file", true, "filed with EVC (PAN " + pan + ")", { arn, otp });
+      return { ok: true, arn, filedAt: at };
+    }
+    if (action === "track") {
+      const { h, username } = await session(w, r), fy = (() => { const m = +period.slice(0, 2), y = +period.slice(2); const s1 = m >= 4 ? y : y - 1; return s1 + "-" + String(s1 + 1).slice(2); })();
+      const g = await getTrack(h, gstin, username, fy);
+      const hit = (g.data.EFiledlist as any[]).find((e) => String(e.ret_prd) === period && f.track.includes(String(e.rtntype || "").toUpperCase()) && e.arn);
+      if (hit && row.status !== "filed") {
+        const d = String(hit.dof || ""), iso = /^\d{2}-\d{2}-\d{4}$/.test(d) ? d.split("-").reverse().join("-") + "T00:00:00+05:30" : new Date().toISOString();
+        await putFiling(w, r, { status: "filed", arn: hit.arn, filed_at: new Date(iso).toISOString(), error: null });
+      }
+      await logFiling(w, r, "track", true, hit ? "on the portal: " + (hit.status || "filed") + ", ARN " + hit.arn : "not filed on the portal yet", { arn: hit?.arn });
+      return { ok: true, filed: !!hit, arn: hit?.arn || row.arn || "", status: hit?.status || row.status, dof: hit?.dof || "" };
+    }
+    return { ok: false, error: "Unknown action." };
+  } catch (e) {
+    const m = safeText(String((e as Error).message || e), String(body.otp || ""));
+    await logFiling(w, r, action, false, m, { otp: String(body.otp || "") }).catch(() => {});
+    return { ok: false, error: m };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const u = new globalThis.URL(req.url);
@@ -420,7 +635,7 @@ Deno.serve(async (req) => {
   const asUser = createClient(SB_URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
   const { data: who } = await asUser.auth.getUser();
   if (!who?.user) return reply(401, { ok: false, error: "Sign in again." });
-  const { data: member } = await admin.from("members").select("firm_id, active").eq("user_id", who.user.id).maybeSingle();
+  const { data: member } = await admin.from("members").select("firm_id, active, role").eq("user_id", who.user.id).maybeSingle();
   if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
   const firm = member.firm_id as string, me = who.user.id;
   const list = (v: unknown) => (Array.isArray(v) ? v : []).map((g: unknown) => String(g).toUpperCase()).filter((g: string) => GSTIN.test(g)).slice(0, 500);
@@ -451,6 +666,8 @@ Deno.serve(async (req) => {
     }
     const gstin = String(body.gstin || "").toUpperCase();
     if (!GSTIN.test(gstin)) return reply(400, { ok: false, error: "A GSTIN is needed." });
+    if (["filing", "save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].includes(action))
+      return reply(200, await filingAction({ firm, me }, action, body, String(member.role || "")));
 
     if (action === "return") {
       const { data } = await admin.from("gst_returns").select("*").eq("firm_id", firm).eq("gstin", gstin).eq("form", String(body.form || "")).eq("period", String(body.period || "")).maybeSingle();
