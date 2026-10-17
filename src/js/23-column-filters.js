@@ -2,11 +2,6 @@
 /* Column filters: a funnel on each heading opens a panel for that column */
 /* ================================================================== */
 const FUNNEL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5h18l-7 8.5V20l-4-2v-4.5z"/></svg>';
-function colHead(table, key, label, cls){
-  const on = colActive(table, key);
-  return '<th' + (cls ? ' class="' + cls + '"' : "") + '><span class="colh"><span>' + label + '</span><button class="colf' + (on ? " on" : "") + (S.colPop && S.colPop.t === table && S.colPop.k === key ? " open" : "") +
-    '" data-colf="' + key + '" data-colt="' + table + '" aria-label="Filter ' + esc(label) + '" title="Filter ' + esc(label) + '">' + FUNNEL + "</button></span></th>";
-}
 function colActive(t, k){
   if (t === "txn"){ const f = txnF();
     return k === "date" ? !!(f.from || f.to) : k === "vch" ? !!(f.vchs && f.vchs.length) : k === "no" ? !!f.no : k === "party" ? !!(f.party || (f.parties && f.parties.length)) :
@@ -229,25 +224,6 @@ function quickRange(v){
   if (v === "quarter") return [iso(new Date(Date.UTC(y, qm, 1))), iso(new Date(Date.UTC(y, qm + 3, 0)))];
   if (v === "fy") return [iso(new Date(Date.UTC(fy, 3, 1))), iso(new Date(Date.UTC(fy + 1, 2, 31)))];
   return ["", ""];
-}
-// the row of filters under the column headings (no longer shown; kept for reference)
-function bankFilterRow(){
-  const b = B(), f = b.f || {}, st = curStmt();
-  const lo = (st && st.from) || (b.rows[0] || {}).date || "", hi = (st && st.to) || (b.rows[b.rows.length - 1] || {}).date || "";
-  const modes = [["", "Any mode"], ["UPI", "UPI"], ["NEFT", "NEFT"], ["IMPS", "IMPS"], ["RTGS", "RTGS"], ["CHQ", "Cheque"], ["CASH", "Cash deposit"], ["ATM", "Cash withdrawal"], ["NACH", "NACH / ECS"], ["CARD", "Card"], ["CHARGES", "Bank charges"], ["INTEREST", "Interest"], ["TRANSFER", "Transfer"], ["OTHER", "Other"]];
-  const num2 = (key, ph) => '<input type="number" data-bf="' + key + '" data-fk="bf' + key + '" placeholder="' + ph + '" value="' + esc(f[key] || "") + '" aria-label="' + ph + '">';
-  return '<tr class="bk-frow"><th class="ck"></th>' +
-    '<th class="dt"><input type="date"' + (b.from ? ' class="on"' : '') + ' data-bfrom data-fk="bffrom" value="' + esc(b.from || "") + '" min="' + esc(lo) + '" max="' + esc(hi) + '" aria-label="From date">' +
-      '<input type="date"' + (b.to ? ' class="on"' : '') + ' data-bto data-fk="bfto" value="' + esc(b.to || "") + '" min="' + esc(lo) + '" max="' + esc(hi) + '" aria-label="To date">' +
-      '<select data-bquick aria-label="Quick date range"><option value="">Quick\u2026</option><option value="all">Whole statement</option><option value="month">This month</option><option value="last">Last month</option><option value="quarter">This quarter</option><option value="fy">This year</option></select></th>' +
-    '<th><div class="bk-fpair"><select' + (f.narrNot ? ' class="on"' : '') + ' data-bf="narrNot" aria-label="Contains or not"><option value=""' + (f.narrNot ? "" : " selected") + '>has</option><option value="1"' + (f.narrNot ? " selected" : "") + ">has not</option></select>" +
-      '<input type="text" data-bf="narr" data-fk="bfnarr" data-keeptyped autocomplete="off" placeholder="swiggy, zomato" value="' + esc(f.narr || "") + '" aria-label="Particulars"></div>' +
-      '<select' + (f.mode ? ' class="on"' : '') + ' data-bf="mode" aria-label="Mode">' + modes.map(([v, l]) => '<option value="' + v + '"' + (f.mode === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></th>" +
-    '<th class="n">' + num2("wmin", "from") + num2("wmax", "to") + "</th>" +
-    '<th class="n">' + num2("dmin", "from") + num2("dmax", "to") + "</th>" +
-    '<th class="lg"><select' + (f.led ? ' class="on"' : '') + ' data-bf="led" aria-label="Ledger"><option value="">Any ledger</option><option value="none"' + (f.led === "none" ? " selected" : "") + '>No ledger yet</option><option value="set"' + (f.led === "set" ? " selected" : "") + ">Ledger chosen</option></select>" +
-      '<input type="text" data-bf="ledText" data-fk="bfled" data-keeptyped autocomplete="off" placeholder="ledger has\u2026" value="' + esc(f.ledText || "") + '" aria-label="Ledger contains"></th>' +
-    '<th class="ac">' + (bankRangeOn() ? '<button class="linkbtn" data-act="bankRangeClear">Clear</button>' : "") + "</th></tr>";
 }
 // One line per party among the entries to review
 function bankGroups(){
@@ -1238,7 +1214,6 @@ async function tallyFileKind(f){
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};
 }
-const TALLY_KINDS = {daybook: "Day Book", masters: "ledger masters", tb: "trial balance"};
 // the files chosen or dropped: the masters first (the PANs and groups the day book's figures use), then the day books,
 // then a trial balance (asked its date on the page). S.tallyUp = {cid, at, busy, lines: [{kind, name, ok, text}]}
 async function tallyFiles(files){

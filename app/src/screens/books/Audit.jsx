@@ -22,6 +22,8 @@ const d = (x) => fmtDate(tallyDate(x));
 const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--warn)"], low: ["MINOR", "var(--muted)"] };
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
 import { FinComNav } from "../../nav.js";
+// entryCount (src/js/45-reports.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/45-reports.js";
 // stability batch 3: Run now shows the thin bar while the run takes over 300 ms
 const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => (act === "misRun" || act === "auditRun" ? FinComNav.go(() => doAct(act)) : doAct(act))}>{children}</button>;
 

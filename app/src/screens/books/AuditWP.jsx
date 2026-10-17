@@ -6,6 +6,8 @@
 import CommitBox from "../../parts/CommitBox.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import Tag from "../../parts/Tag.jsx";
+// AuditWP (src/js/77-audit.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/77-audit.js";
 
 const m = (v) => money(r2(v || 0));
 const d = (x) => (x ? fmtDate(tallyDate(x)) : "");

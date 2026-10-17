@@ -37,21 +37,6 @@ function goStep(step, type){
   } else S.tab = "sales";
   render(); window.scrollTo(0, 0);
 }
-function stepCounts(){
-  const co = CO(), st = (co && co.stats) || {}, t = docType();
-  const inbox = docqCount(S.coId);
-  if (t === "bank" && S.bank && S.bank.cid === S.coId){
-    const c = tabCounts(S.bank.rows);
-    return {collect: inbox ? inbox + " in inbox" : "upload a statement", review: c.review + " to review", post: c.ready + " ready", done: c.done + " done"};
-  }
-  if (t === "sales"){
-    const n = S.sales && S.sales.cid === S.coId ? S.sales.list.length : 0;
-    return {collect: "upload or create", review: n + " invoices", post: "from the list", done: ""};
-  }
-  // the one count for Tally (postCounts, src/js/59): ready to post; what needs attention is a badge of its own
-  const pc = typeof postCounts === "function" ? postCounts(S.coId) : {ready: st.waiting || 0, attention: 0};
-  return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: pc.ready + " for Tally", postAttention: pc.attention, done: (st.inTally || 0) + " in Tally this year"};
-}
 /* ---------- the upload pages' states (upload-pages, 14-Oct-2026) ---------- */
 // The owner (14-Oct-2026: "UI to upload bills, bank, sales is very wrong"): Purchase said "3 entries need review" in the
 // top bar, "To review 0" in the tabs and "Review 0 uploaded bills" under them; the 3 were Tally's errors, under an

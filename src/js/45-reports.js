@@ -1,3 +1,4 @@
+/* @react-lazy: begin 45-reports.js (the React app loads this file with its Books › Reports and Audit screens: build.py react_parts) */
 /* ================================================================== */
 /* Reports: every report in one place, by area, each area opening with */
 /* a few figures and a small chart for the year                        */
@@ -154,3 +155,7 @@ function entryCount(from, to){
   const text = list.length.toLocaleString("en-IN") + (list.length === 1 ? " entry" : " entries") + (out.length ? " (" + out.join(" and ") + " not counted)" : "");
   return {n: list.length, opt, cancel, all: vs.length, list, text};
 }
+if (typeof RPT !== "undefined") globalThis.RPT = RPT;
+if (typeof entryCount !== "undefined") globalThis.entryCount = entryCount;
+// (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
+/* @react-lazy: end */

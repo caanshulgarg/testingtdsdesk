@@ -1,3 +1,4 @@
+/* @react-lazy: begin 46-letters.js (the React app loads this file with its Books › Letters screen: build.py react_parts) */
 /* ================================================================== */
 /* Letters: balance confirmations for the audit, and dues reminders    */
 /* to customers. Nothing is sent from here: letters are printed or     */
@@ -187,3 +188,18 @@ function ltrCfgType(k, v){ LTR.store().cfg[k] = v; later("ltrcfg", saveBooks, 80
 // chosen: kept and shown at once
 function ltrReply(l, v){ const s = LTR.store(), asOn = LTR.st().asOn, m = s.conf[asOn] = s.conf[asOn] || {}; m[l] = Object.assign({}, m[l], {reply: v, replyAt: new Date().toISOString()}); saveBooks(); render(); }
 function ltrCfg(k, v){ LTR.store().cfg[k] = v; saveBooks(); render(); }
+if (typeof LTR !== "undefined") globalThis.LTR = LTR;
+if (typeof ltrMode !== "undefined") globalThis.ltrMode = ltrMode;
+if (typeof ltrSet !== "undefined") globalThis.ltrSet = ltrSet;
+if (typeof ltrQ !== "undefined") globalThis.ltrQ = ltrQ;
+if (typeof ltrSide !== "undefined") globalThis.ltrSide = ltrSide;
+if (typeof ltrSel !== "undefined") globalThis.ltrSel = ltrSel;
+if (typeof ltrOne !== "undefined") globalThis.ltrOne = ltrOne;
+if (typeof ltrAct !== "undefined") globalThis.ltrAct = ltrAct;
+if (typeof ltrContact !== "undefined") globalThis.ltrContact = ltrContact;
+if (typeof ltrTheir !== "undefined") globalThis.ltrTheir = ltrTheir;
+if (typeof ltrCfgType !== "undefined") globalThis.ltrCfgType = ltrCfgType;
+if (typeof ltrReply !== "undefined") globalThis.ltrReply = ltrReply;
+if (typeof ltrCfg !== "undefined") globalThis.ltrCfg = ltrCfg;
+// (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
+/* @react-lazy: end */

@@ -25,6 +25,8 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
+// TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../src/js/83-tds-forms-2025.js";
 
 // the list on the left: groups of sections; each section has a label and, below it, where it stands now
 function SetNav({ label, groups, current, pick }) {

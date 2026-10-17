@@ -447,18 +447,6 @@ function filterBar(id, opts){
     '<button class="btn small" data-printid="' + opts.table + '" data-printtitle="' + esc(opts.title || "") + '">Print or save as PDF</button>' +
     (opts.excel ? '<button class="btn small" data-act="' + opts.excel + '">Excel</button>' : "") + "</div>";
 }
-function tdsFiltered(rows){
-  const f = S.tdsF || {}, q = String(f.q || "").toLowerCase();
-  return rows.filter(r => {
-    if (q && ![r.party, r.pan, r.section, r.voucher].join(" ").toLowerCase().includes(q)) return false;
-    if (f.section && r.section !== f.section) return false;
-    if (f.challan === "no" && r.challan) return false;
-    if (f.challan === "yes" && !r.challan) return false;
-    if (f.pan === "no" && Certs.validPan(r.pan)) return false;
-    if (f.pan === "yes" && !Certs.validPan(r.pan)) return false;
-    return true;
-  });
-}
 // printing, which is also how a PDF is made
 function printView(title, html){
   const w = window.open("", "_blank");
@@ -683,9 +671,6 @@ function r2Reg(b){
   const own = Array.from(new Set(GST2B.all2b("").map(t => t.gstin.slice(0, 2))));
   return own.length === 1 ? own[0] : regs.length === 1 ? regs[0] : "";
 }
-/* ---------- The client's dashboard ---------- */
-// the client's dashboard: React (app/src/screens/Dash.jsx)
-function viewClientDash(){ return '<div data-react="Dash"></div>'; }
 /* ---------- Today: what needs doing, across every client ---------- */
 /* ---------- Inbox: every waiting document, and uploads that matched no client ---------- */
 // Today, Inbox and Clients are drawn by React (app/src/screens/Today.jsx, InboxAll.jsx, Clients.jsx)
@@ -711,22 +696,6 @@ function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
 function viewInbox(){ return '<div data-react="Unsorted"></div>'; }
 
 /* ---------- Home: firm-wide rates ---------- */
-function keyBox(opts){
-  // one key panel: Google OCR or Claude
-  const inClaude = !!window.claude;
-  let h = '<div class="keybox"><h3>' + opts.title + "</h3>" + '<p class="note" style="margin:0 0 8px">' + opts.help + "</p>";
-  if (inClaude){
-    h += '<label class="f"><span>' + opts.label + '</span><input type="text" disabled placeholder="Not available inside claude.ai"></label>' +
-      '<p class="note" style="margin:6px 0 0">claude.ai blocks this. Use <b>Download the standalone app</b> below, open that file in Chrome or Edge, and enter the key there.</p>';
-  } else {
-    h += '<label class="f"><span>' + opts.label + '</span><input data-draft type="' + (S.apiKeyShown ? "text" : "password") + '" id="' + opts.inputId + '" autocomplete="off" placeholder="' + opts.placeholder + '" value="' + esc(opts.value || "") + '"></label>' +
-      (opts.extra || "") +
-      '<div class="row" style="margin-top:8px"><button class="btn primary small" data-act="' + opts.saveAct + '">Save and test</button>' +
-      '<button class="btn small" data-act="toggleKey">' + (S.apiKeyShown ? "Hide keys" : "Show keys") + "</button>" +
-      (opts.value ? '<button class="btn small danger" data-act="' + opts.removeAct + '">Remove key</button>' : "") + "</div>";
-  }
-  return h + "</div>";
-}
 function viaPlatform(){ return Cloud.on() && !!S.account && !S.account.superadmin && !apiSettings().key; }
 // everything sent to Tally: React (app/src/screens/Done.jsx)
 function viewPostLog(){ return '<div data-react="PostLog"></div>'; }

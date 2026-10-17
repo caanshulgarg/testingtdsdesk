@@ -533,26 +533,6 @@ function startCloudSync2(){
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
-function whoChip(){
-  if (!Cloud.on()) return "";
-  return whoChipInner() + '<button class="tchip signout" data-act="signOutNow" title="Sign out of FinCom">\u23fb Sign out</button>';
-}
-function whoChipInner(){
-  const a = S.account, who = a && a.me ? (a.me.name || a.me.email) : Cloud.st.email;
-  return '<button class="tchip" data-act="openSettings" title="' + esc(Cloud.st.email) + '">' + esc(who) + (a && a.superadmin ? " \u00b7 administrator" : a && a.me ? " \u00b7 " + esc(a.me.role) : "") + "</button>";
-}
-function cloudChip(){
-  if (!Cloud.on()) return "";
-  const st = Cloud.st;
-  const sv = Live.sv;
-  if (st.state !== "signedout" && sv.state === "offline") return '<span class="tchip warn" title="Changes are kept on this computer and sent when it is back online">Offline \u00b7 changes kept here</span>';
-  if (sv.state === "saving") return '<span class="tchip off">Saving\u2026</span>';
-  if (st.busy) return '<span class="tchip off">Syncing\u2026</span>';
-  if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
-  if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
-  const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 ' + (sv.at ? "Saved " + fmtTime(sv.at) : "Shared") + (Live.st === "live" ? " \u00b7 live" : "") + "</span>";
-}
 
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
@@ -606,10 +586,6 @@ function accountBalance(){ return S.account && S.account.firm ? num(S.account.fi
 function moduleIncluded(code){
   const inc = S.account && S.account.firm && S.account.firm.plan && S.account.firm.plan.includes;
   return !!(inc && inc[code]);
-}
-function modulePrice(code){
-  const m = ((S.account || {}).modules || []).find(x => x.code === code);
-  return m ? num(m.price) : 0;
 }
 // charge for work done here; returns true when the work may go ahead
 async function charge(code, qty, ref, note){
@@ -1167,7 +1143,6 @@ function tdsGoTab(fy, q, form, tab, extra){
   S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsPickForm = S.tdsForm; S.tdsView = "return"; S.tdsTab = tab || ""; S.tdsOpen = ""; S.chOpen = ""; S.tdsFix = "";
   Object.assign(S, extra || {}); render(); window.scrollTo(0, 0);
 }
-function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsView === "return") S.tdsView = "year"; render(); }
 // the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
 // return; either left at "every" shows the year's grid of forms and quarters
 function tdsPick(fy, q, form){
@@ -2153,7 +2128,6 @@ function coCommit(path, v){
   }
   Store.saveCompany(co); refreshStats(co.id); render();
 }
-function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = name; Store.saveCompany(co); Bridge.lastOpenKey = null; render(); } }
 // per payment type: the TDS ledger (kind "tds") or the default expense ledger (kind "exp")
 function coSetRuleLedger(kind, ruleId, v){ const co = CO(); const m = kind === "tds" ? co.tdsLedgers : co.expenseLedgers; if (!((co.id + kind + ruleId) in SETUP_PREV)) SETUP_PREV[co.id + kind + ruleId] = m[ruleId] || ""; m[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
 // a TDS ledger of another section, or an income ledger as the expense default, is refused when the box is left

@@ -14,6 +14,8 @@ import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";
 import { tabNow, checksToFix, ReturnChallans, ToFix, PreFileSlot, AfterFiling, unknownItem, UnknownChallans } from "./ReturnParts.jsx";
+// TDSF25 (src/js/83-tds-forms-2025.js: Form 138's text file, TDS24Q_FILE.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/83-tds-forms-2025.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");

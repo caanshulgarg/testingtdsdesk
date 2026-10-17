@@ -315,21 +315,6 @@ function postPostedRows(cid){
   if (typeof CloudJobs !== "object") return [];
   return CloudJobs.history(cid).filter(x => !(x.state === "partly" && !x.ok));
 }
-// round 11 (owner item 6): the entries a finished posting put in Tally, as the Posted tab lists them under it, each with
-// where its FinCom id stands in tally_post_ids: held (the cloud still holds it live: an owner may release it, the entry
-// having been deleted in Tally by hand since it was verified), released (freed: Post again is back), none (the cloud
-// holds no row for it: an older posting), or null (not known). e is the local entry, or a stub naming the id, enough
-// for PostOwner.release (id, invoice no.)
-function postPostedEntries(cid, j){
-  if (typeof CloudJobs !== "object") return [];
-  const d = S.data[cid], s = typeof PostIds === "object" ? PostIds.by[cid] : null;
-  return [...CloudJobs.okIn(j)].map(id => {
-    const e = (d && d.entries && d.entries[id]) || {id, x: {}};
-    const rel = postIdReleased(id, cid);
-    const idState = rel === null ? null : rel === false ? "held" : s && s.held && s.held.has(String(id)) ? "released" : "none";
-    return {id, e, no: (e.x && e.x.invoiceNo) || id, idState};
-  });
-}
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
 function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
@@ -728,22 +713,6 @@ function postMatched(id, cid){
   const s = PostIds.by[cid || S.coId], m = s && s.matched && s.matched.get(String(id));
   return m || null;
 }
-// Tally's counts for one entry's reply: "created 1 · altered 0 · exceptions 1 · ignored 0" ("" when none came back)
-function postReplyCounts(x){
-  return ["created", "altered", "exceptions", "ignored"].filter(k => x && x[k] != null && x[k] !== "").map(k => k + " " + num(x[k])).join(" · ");
-}
-// Tally's line errors on a reply (bridge 2.1.8: lineError, an array of texts, or one text): the first three, as one line
-function postLineErrors(x){
-  const l = x && x.lineError, arr = Array.isArray(l) ? l : l ? [l] : [];
-  return arr.map(t => plainMsg(String(t || ""))).filter(Boolean).slice(0, 3).join("; ");
-}
-// B2: the posting's line: "Posted N of M" / "Posted N of M; K need review"
-function postJobCount(j){
-  const rs = [].concat((j && j.results) || []).filter(r => r && r.kind !== "master" && !/^led:|^vt:/.test(String(r.id || "")));
-  const ok = rs.filter(r => r.ok || postAlready(r)).length, rev = rs.filter(postNeedsReview).length;
-  const n = Math.max(num(j && j.n) || 0, ((typeof CloudJobs === "object" && CloudJobs.idsOf(j)) || []).length, rs.length);
-  return "Posted " + ok + " of " + n + (rev ? "; " + rev + (rev === 1 ? " needs review" : " need review") : "");
-}
 // B4: the timing the bridge wrote on the job (tally_post_jobs.timing = {reqs: [{n, seconds, …}], secondsTotal}): "K requests, T s"
 function postTimingWords(j){
   const t = j && j.timing;
@@ -1115,7 +1084,6 @@ function postPreviewOne(kind, id){
   const co = CO(), row = postRows(co).find(r => r.kind === kind && r.id === id);
   if (row) postPreview(co, [row], {view: true});
 }
-function postOneToTally(kind, id){ return postAllToTally({kind, id}); }
 // Back to review from the Post to Tally page, for any kind
 function postBackToReview(kind, id){
   if (kind === "bill"){ billBack(id); return; }

@@ -26,6 +26,8 @@ import { Info } from "../parts/Answer.jsx";
 // tds-layout (14-Oct-2026): a return's six tabs in the owner's layout, its challans from the one register, To fix, After filing
 import { returnTabs, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
 import { Limits, TieOut } from "./tds/Smart.jsx";
+// TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../src/js/83-tds-forms-2025.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));

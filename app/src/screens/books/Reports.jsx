@@ -17,6 +17,8 @@ import { BusyCard } from "../../parts/Reading.jsx";
 import Filters, { Field, Search } from "../../parts/Filters.jsx";
 import { Answer, Fold } from "../../parts/Answer.jsx";
 import Statements, { RX_VIEWS } from "./Statements.jsx";
+// RPT (src/js/45-reports.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/45-reports.js";
 
 // two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));

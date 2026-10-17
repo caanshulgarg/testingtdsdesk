@@ -57,23 +57,6 @@ function spliceMissing(rows, found, accId, keys, opening){
   }
   return {rows: out, added};
 }
-// merge: keep every line that is already right, add only what is missing, never the same line twice
-function mergeStatementRows(existing, found, accId, keys){
-  const fpOf = r => [accId, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|");
-  const have = new Set(existing.map(r => r.fp || fpOf(r)));
-  const added = [];
-  found.forEach(r => {
-    if (!r.date || (!r.debit && !r.credit)) return;
-    const fp = fpOf(r);
-    if (have.has(fp)) return;                                   // already in this statement
-    if (keys && keys[fp]) return;                               // already in another statement of this account
-    have.add(fp);
-    added.push(Object.assign({}, r, {fp}));
-  });
-  const all = existing.concat(added);
-  all.sort((a, c) => String(a.date).localeCompare(String(c.date)) || (a.balance == null || c.balance == null ? 0 : 0));
-  return {rows: all, added};
-}
 async function fixBreaks(force){
   const b = B(), st = curStmt();
   if (!b || !st) return;
@@ -374,13 +357,6 @@ function stdLedger(co, key){
   return hit ? hit.name : null;
 }
 function bankLedgers(co){ const o = {}; Object.keys(BANK_LEDGER_DEFAULTS).forEach(k => { o[k] = stdLedger(co, k) || ""; }); return o; }
-function ledgerStatus(name){
-  if (!name) return "none";
-  if (!hasLedgerList() && !B().newLed.length) return "nolist";
-  const info = ledgerInfo(name);
-  if (!info) return "new";
-  return info.pending ? "pending" : "known";
-}
 function vtypeFor(row, ledger){
   const co = CO(B().cid), k = ledgerInfo(ledger);
   const g = k ? String(k.group || "") : "";

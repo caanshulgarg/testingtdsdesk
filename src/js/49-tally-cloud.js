@@ -2308,12 +2308,3 @@ function tallyLinkOf(co){
   if (needs.length) return out("needs", needs);
   return out(l && l.state === "open" ? "reading" : "waiting");
 }
-// a new client linked to its Tally company in the cloud: the client is sent to the server first, then linked
-// (round 39: a company the cloud has not seen yet is not linked here: the client's Link to Tally card, where Add client
-// lands, lists it once a Tally computer reports it, and a person links it there)
-async function linkNewClient(co, company){
-  if (typeof TCloud !== "object" || !TCloud.on()) return false;
-  const seen = tallyCompaniesSeen().find(x => x.name === ledNm(company));
-  if (!seen || !seen.reported) return false;
-  return tallyLinkClient(seen.name, co.id);
-}

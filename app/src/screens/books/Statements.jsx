@@ -13,6 +13,7 @@ import { useState } from "react";
 // FSX (src/js/78-reports.js) is its own file, fetched the first time a report is opened (not in legacy.js, build.py
 // react_parts; not with the page): "Preparing…" meanwhile. It sets globalThis.FSX. The fixed asset register's code, FAR
 // (src/js/80-assets.js, globalThis.FAR), comes with it: the statements and the 3CD draft take the register's figures.
+// AuditWP (src/js/77-audit.js, also with the Audit screen) too: the 3CD draft takes its checks (FSX.shared).
 let fsxLoad = null, farLoad = null;
 export function loadFAR() {
   if (globalThis.FAR) return Promise.resolve(globalThis.FAR);
@@ -21,7 +22,7 @@ export function loadFAR() {
 }
 export function loadFSX() {
   if (globalThis.FSX && globalThis.FAR) return Promise.resolve(globalThis.FSX);
-  return fsxLoad || (fsxLoad = Promise.all([import("../../../../src/js/78-reports.js"), loadFAR()]).then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
+  return fsxLoad || (fsxLoad = Promise.all([import("../../../../src/js/78-reports.js"), loadFAR(), import("../../../../src/js/77-audit.js")]).then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
     (e) => { fsxLoad = null; S.rxLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
 }
 

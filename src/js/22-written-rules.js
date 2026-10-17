@@ -952,9 +952,7 @@ function exportBankCsv(){
     r.ledger, r.vtype, BANK_STATES[r.state] || r.state, r.why, r.billRef, r.tallyRef || ""]);
   saveFile("bank-" + (co.name || "client").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + "-" + st.from + "-to-" + st.to + ".csv", "\uFEFF" + [head].concat(rows).map(r => r.map(csvCell).join(",")).join("\r\n"));
 }
-/* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
-const BANK_TABS_EXTRA = [["rules", "Rules"]];
 // the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
 // upload-pages (14-Oct-2026): the same words as the state bar of every upload page (STATE_WORDS, src/js/02); a line
 // ignored is under Ignored, not under In Tally (it never went there)

@@ -1,3 +1,4 @@
+/* @react-lazy: begin 84-gst-browser.js (the React app loads this file with its GST portal login and browser-helper screens: build.py react_parts) */
 /* ================================================================== */
 /* GST browser helper: FinCom's side (the extension is extension/gst-helper; docs/gst-browser-helper.md) */
 /* ================================================================== */
@@ -177,3 +178,5 @@ const GSTB = {
     return r;
   }
 };
+if (typeof globalThis === "object") globalThis.GSTB = GSTB;
+/* @react-lazy: end */

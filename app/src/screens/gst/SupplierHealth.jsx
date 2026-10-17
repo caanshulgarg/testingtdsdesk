@@ -5,6 +5,8 @@
 // supplier's registration status is not shown: the page says so. Nothing here changes a figure.
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
+// SupHealth (src/js/71-supplier-health.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/71-supplier-health.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const TAG = { notfiling: ["bad", "Not filing"], bad: ["bad", "GSTIN not valid"], missing: ["warn", "Bills missing from 2B"], late: ["warn", "Files late"], ok: ["ok", "Files"] };

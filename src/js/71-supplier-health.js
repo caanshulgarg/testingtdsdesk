@@ -1,3 +1,4 @@
+/* @react-lazy: begin 71-supplier-health.js (the React app loads this file with its GST Supplier health screen: build.py react_parts) */
 /* ================================================================== */
 /* Supplier health for GST (TDS/GST round 2, item 4, G-S3): who is    */
 /* not filing, who files late, and GSTINs that cannot be right        */
@@ -68,3 +69,5 @@ const SupHealth = {
     return out;
   }
 };
+if (typeof globalThis === "object") globalThis.SupHealth = SupHealth;
+/* @react-lazy: end */

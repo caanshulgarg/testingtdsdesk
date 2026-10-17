@@ -1,3 +1,4 @@
+/* @react-lazy: begin 55-einvoice.js (the React app loads this file with its Sales and GST settings screens: build.py react_parts) */
 /* ================================================================== */
 /* E-invoice (IRN) and e-way bill from a sales invoice, through the   */
 /* firm's gst-taxpro function (TaxPro's e-invoice API)                */
@@ -79,3 +80,5 @@ const EINV = {
     Object.assign(v.x, {ewayNo: j.ewbNo, ewayDate: j.ewbDate, ewayValidTill: j.validTill}); saveSales(); return j;
   }
 };
+if (typeof globalThis === "object") globalThis.EINV = EINV;
+/* @react-lazy: end */
