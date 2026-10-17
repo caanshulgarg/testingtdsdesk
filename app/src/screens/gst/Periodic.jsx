@@ -3,6 +3,7 @@
 // year. Were viewQrmp, viewCmp08 and viewGstr4 (src/js/37). The figures are GSTQ (37); what is typed goes through
 // gqSetField, gqSetPaid, gqIffJson (37) and gstfSet (35).
 import CommitBox from "../../parts/CommitBox.jsx";
+import FileApi, { FiledOrDate } from "./FileApi.jsx";
 
 const m = (v) => "₹" + INR.format(r2(v || 0));
 const d = (s) => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
@@ -23,7 +24,8 @@ function Iff({ ym, reg, rec }) {
     {f.all ? <>
       <p>{pl(f.n, "invoice") + (f.notes ? " and " + pl(f.notes, "note") : "") + " to registered customers" + (f.over ? " in the IFF" : "") + ", value " + m(f.val) + ", tax " + m(f.tax) + ". Filing IFF lets your customers take the credit this month instead of at quarter end."}</p>
       {f.over && <p className="note"><b>IFF allows ₹50 lakh a month.</b>{" The month has " + f.all + " documents worth " + m(f.allVal) + "; the IFF file carries the first " + (f.n + f.notes) + " by date, and the other " + f.left + " go in the quarter’s GSTR-1."}</p>}
-      <Actions><button className="btn small" onClick={() => gqIffJson()}>Download IFF JSON</button><span className="note">Filed on</span><FiledOn k="iff" v={rec.iff} label="IFF filed on" /></Actions>
+      <Actions><button className="btn small" onClick={() => gqIffJson()}>Download IFF JSON</button><FiledOrDate form="IFF" ym={ym} reg={reg}><span className="note">Filed on</span><FiledOn k="iff" v={rec.iff} label="IFF filed on" /></FiledOrDate></Actions>
+      <FileApi form="IFF" ym={ym} reg={reg} />
       {rec.iff && (GSTQ.iffFiled(ym, reg) ? <p className="note">Filed: these are already on the portal and flow into the quarter’s GSTR-1 by themselves, so the GSTR-1 file here leaves them out.</p>
         : <p className="bad">IFF cannot be filed after {due}: these invoices go in the quarter’s GSTR-1 instead.</p>)}
     </> : <p>No invoices to registered customers this month; nothing to file.</p>}
@@ -53,8 +55,9 @@ function QuarterReturns({ qEnd, reg }) {
     <Step n={1} title={"GSTR-1 for the quarter — by " + d(GSTF.due(qEnd, "r1", reg))} done={!!filed.r1}>
       <p>{cnt("b2b") + " B2B invoices, " + cnt("cdnr") + " notes, " + (j.b2cs || []).length + " B2C small lines, " + (cnt("b2cl") + cnt("exp")) + " B2C large and export invoices."
         + (r1.skipped.length ? " Invoices already sent in IFF for " + r1.skipped.map((x) => GSTR.label(x)).join(" and ") + " are left out." : "")}</p>
-      <Actions><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON for the quarter</button><span className="note">Filed on</span>
-        <CommitBox type="date" aria-label="GSTR-1 filed on" value={filed.r1 || ""} style={{ width: "auto" }} onCommit={(x) => gstfSet("r1", x)} /></Actions>
+      <Actions><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON for the quarter</button><FiledOrDate form="R1" ym={qEnd} reg={reg}><span className="note">Filed on</span>
+        <CommitBox type="date" aria-label="GSTR-1 filed on" value={filed.r1 || ""} style={{ width: "auto" }} onCommit={(x) => gstfSet("r1", x)} /></FiledOrDate></Actions>
+      <FileApi form="R1" ym={qEnd} reg={reg} label="GSTR-1 for the quarter" />
     </Step>
     <Step n={2} title={"GSTR-3B for the quarter — by " + d(GSTF.due(qEnd, "r3b", reg))} done={!!filed.r3b}>
       <Row label="Tax for the quarter (after credit)" value={m(sumH(t.pay.cash))} />
@@ -63,6 +66,7 @@ function QuarterReturns({ qEnd, reg }) {
       {GSTQ.H.some((k) => t.pmtLeft[k] > 0) && <p className="note">{"PMT-06 paid more than needed: " + m(GSTQ.H.reduce((a, k) => a + t.pmtLeft[k], 0)) + " stays in the cash ledger."}</p>}
       <Actions><button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON for the quarter</button></Actions>
       <p className="note">The full 3B working is on the GSTR-3B tab.</p>
+      <FileApi form="3B" ym={qEnd} reg={reg} label="GSTR-3B for the quarter" />
     </Step>
   </>;
 }
@@ -148,16 +152,19 @@ export function Qrmp() {
     <FileBox q={q} c={pick} reg={reg} />
     {pick.kind === "iff" ? <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <button className="btn small primary" data-iffjson="" disabled={pick.state.s === "skipped"} onClick={() => { S.gstYm = pick.m; gqIffJson(); }}>Download IFF JSON</button>
-      <span className="note">Filed on</span><CommitBox type="date" aria-label={"IFF filed on " + pick.m} value={GSTF.peek(pick.m, reg).iff || ""} style={{ width: "auto" }} onCommit={(x) => gqIffFiled(pick.m, "iff", x)} />
-      <span className="note">ARN</span><CommitBox aria-label={"IFF ARN " + pick.m} value={GSTF.peek(pick.m, reg).iffArn || ""} style={{ width: 170 }} onCommit={(x) => gqIffFiled(pick.m, "iffArn", x.trim())} />
+      <FiledOrDate form="IFF" ym={pick.m} reg={reg}><span className="note">Filed on</span><CommitBox type="date" aria-label={"IFF filed on " + pick.m} value={GSTF.peek(pick.m, reg).iff || ""} style={{ width: "auto" }} onCommit={(x) => gqIffFiled(pick.m, "iff", x)} />
+      <span className="note">ARN</span><CommitBox aria-label={"IFF ARN " + pick.m} value={GSTF.peek(pick.m, reg).iffArn || ""} style={{ width: 170 }} onCommit={(x) => gqIffFiled(pick.m, "iffArn", x.trim())} /></FiledOrDate>
       {pick.state.s === "skipped" ? <button className="btn small" data-iffskip="undo" onClick={() => gqIffSkip(pick.m, false)}>It was filed after all</button>
         : <button className="btn small" data-iffskip="" onClick={() => gqIffSkip(pick.m, true)}>IFF not filed</button>}
     </div> : <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <button className="btn small primary" onClick={() => { S.gstYm = qEnd; doAct("gstJson"); }}>Download GSTR-1 JSON for the quarter</button>
-      <span className="note">Filed on</span><CommitBox type="date" aria-label="GSTR-1 filed on" value={GSTF.peek(qEnd, reg).r1 || ""} style={{ width: "auto" }} onCommit={(x) => { S.gstYm = qEnd; gstfSet("r1", x); }} />
+      <FiledOrDate form="R1" ym={qEnd} reg={reg}><span className="note">Filed on</span><CommitBox type="date" aria-label="GSTR-1 filed on" value={GSTF.peek(qEnd, reg).r1 || ""} style={{ width: "auto" }} onCommit={(x) => { S.gstYm = qEnd; gstfSet("r1", x); }} /></FiledOrDate>
       <button className="btn small" onClick={() => { S.gstYm = qEnd; doAct("gst3bJson"); }}>Download GSTR-3B JSON for the quarter</button>
       <span className="note"><code>{q.file3b}</code>: tables 3.1, 3.2, 4 and 5; PMT-06 paid ({m(GSTQ.H.reduce((a, k) => a + num(q.pmtPaid[k]), 0))}) is in the cash ledger and used first, still to pay {m(q.payable)}.</span>
     </div>}
+    {/* 17-Oct-2026: filing through the GST API, or the browser helper (the client's choice) */}
+    {pick.kind === "iff" ? (pick.state.s !== "skipped" && <FileApi form="IFF" ym={pick.m} reg={reg} />)
+      : <><FileApi form="R1" ym={qEnd} reg={reg} label="GSTR-1 for the quarter" /><FileApi form="3B" ym={qEnd} reg={reg} label="GSTR-3B for the quarter" /></>}
     {q.cols.map((c) => <Changes key={c.m} c={c} />)}
     {pick.kind === "iff" && <Pmt06 ym={pick.m} reg={reg} />}
   </section>;

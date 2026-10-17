@@ -4,6 +4,7 @@
 // figures are GSTF (35); what is typed goes through gstfSet, gstfSnap, gstfJournal, gst1aJson (35).
 import CommitBox from "../../parts/CommitBox.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import { FiledOrDate } from "./FileApi.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => GSTAmend.dmy(String(s || "").replace(/-/g, ""));
@@ -18,7 +19,7 @@ const Agrees = ({ est, portal }) => portal === undefined || portal === "" ? null
 
 function ReturnRow({ label, nil, due, k, rec, f, feeKey, est }) {
   return <tr>
-    <td>{label}{nil && <> <span className="nr">nil</span></>}</td><td>{dmy(due)}</td><td><DateIn k={k} v={rec[k]} /></td>
+    <td>{label}{nil && <> <span className="nr">nil</span></>}</td><td>{dmy(due)}</td><td><FiledOrDate form={k === "r1" ? "R1" : "3B"} ym={S.gstYm || ""} reg={S.gstReg || ""}><DateIn k={k} v={rec[k]} /></FiledOrDate></td>
     {est && <><td className="n">{f.unknown ? <span className="nr">type the date filed</span> : f.days || "—"}</td>
       <td className="n">{f.fee ? <>{money(f.fee)}{f.estimated && <div className="nr">if filed today</div>}</> : "—"}</td></>}
     <td className="n"><Portal k={feeKey} v={rec[feeKey]} />{est && <Agrees est={f.fee} portal={rec[feeKey]} />}</td>
