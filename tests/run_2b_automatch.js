@@ -124,6 +124,30 @@ const J = JSON.stringify;
       docRejdata: {b2b: [{ctin: H, trdnm: "Lakshmi", inv: [{inum: "R-1", dt: "01-09-2026", txval: 100, igst: 18, remarks: "not ours"}]}]}}};
     const a = X.GST2B.fromJson(j2b), b = M.m2bFrom2bJson(j2b);
     ok(J(a) === J(b) && a.rows.length === 4 && a.rows[1].dir === -1 && a.rows[3].rej === true, "D. GST2B.fromJson reads a 2B JSON row for row as the server does (" + a.rows.length + " rows)");
+    // E. the ECO and ISDA sections (17-Oct-2026): read by the app and the server alike, ECO as B2B invoices, ISDA as ISD
+    // with the original document beside it; the rows of the other sections keep their keys
+    const ECO = "07AAICE1234F1CZ", ISD = "07AAACI5555K1ZQ";
+    const j3 = JSON.parse(J(j2b)), dd = j3.data.docdata;
+    dd.ecom = [{ctin: ECO, trdnm: "Quickbite Foods ECO", supfildt: "11-10-2026", supprd: "092026", inv: [{inum: "ECO/26/0091", typ: "R", dt: "12-09-2026", val: 1050, pos: "07", txval: 1000, igst: 0, cgst: 25, sgst: 25, cess: 0, itcavl: "Y", rsn: "", irn: "abc123"}]}];
+    dd.isda = [{ctin: ISD, trdnm: "Head Office ISD", supfildt: "13-10-2026", supprd: "092026", doclist: [
+      {doctyp: "I", docnum: "ISD/7A", docdt: "28-09-2026", odoctyp: "I", odocnum: "ISD/7", odocdt: "31-08-2026", igst: 360, cgst: 0, sgst: 0, cess: 0, itcelg: "Y"},
+      {doctyp: "C", docnum: "ISDC/2A", docdt: "29-09-2026", odoctyp: "C", odocnum: "ISDC/2", odocdt: "30-08-2026", igst: 90, cgst: 0, sgst: 0, cess: 0, itcelg: "N"}]}];
+    j3.data.docRejdata.ecom = [{ctin: ECO, trdnm: "Quickbite Foods ECO", inv: [{inum: "ECO/26/0099", dt: "14-09-2026", txval: 200, cgst: 5, sgst: 5, remarks: "not ours"}]}];
+    const a3 = X.GST2B.fromJson(j3), b3 = M.m2bFrom2bJson(j3), sec = s => a3.rows.filter(r => r.sec === s);
+    ok(J(a3) === J(b3), "E. the app and the server read ECO and ISDA row for row alike (" + a3.rows.length + " rows)");
+    const e = sec("ecom");
+    ok(e.length === 2 && e[0].gstin === ECO && e[0].no === "ECO/26/0091" && e[0].date === "20260912" && e[0].taxable === 1000 && e[0].cgst === 25 && e[0].sgst === 25 && e[0].val === 1050 && e[0].dir === 1 && e[0].itcavl === "Y" && e[0].irn === "abc123" && e[0].supPrd === "092026"
+      && e[1].rej === true && e[1].itcavl === "N" && e[1].remarks === "not ours", "E. ECO: GSTIN of the operator, number, date, value, taxable, tax, ITC available, IRN; one rejected in IMS kept apart");
+    const ia = sec("isda");
+    ok(ia.length === 2 && ia[0].no === "ISD/7A" && ia[0].date === "20260928" && ia[0].dir === 1 && ia[0].igst === 360 && ia[0].oNo === "ISD/7" && ia[0].oDate === "20260831" && ia[0].oTyp === "I"
+      && ia[1].dir === -1 && ia[1].oNo === "ISDC/2" && ia[1].itcavl === "N", "E. ISDA: the amended document, the original's type, number and date beside it; a credit note (doctyp C) reduces credit; itcelg read");
+    ok(J(a.rows.map(r => r.key)) === J(a3.rows.filter(r => r.sec !== "isda" && r.sec !== "ecom").map(r => r.key)), "E. the rows of B2B, CDNR, IMPG and IMS-rejected keep their keys (the new sections come last)");
+    // matched like B2B (ECO) and ISD (ISDA): same GSTIN and number; the same rules, nothing new
+    const r2bE = a3.rows.filter(r => !r.rej && (r.sec === "ecom" || r.sec === "isda")).map(M.m2bRow2b);
+    const bkE = [bk("e1", "ECO-26-91", "20260913", 1000, 0, {gstin: ECO, cgst: 25, sgst: 25}), bk("i1", "ISD/7A", "20260928", 0, 360, {gstin: ISD}), bk("i2", "ISDC/2A", "20260929", 0, 90, {gstin: ISD, dir: -1})];
+    const rE = M.m2bRules(r2bE, bkE), stE = no => ((rE.pairs.find(p => p.g.some(k => r2bE.find(x => x.key === k && x.no === no))) || {}).st || "left");
+    ok(stE("ECO/26/0091") === "matched-rules" && stE("ISD/7A") === "matched-rules" && stE("ISDC/2A") === "matched-rules" && J(X.m2bRules(r2bE, bkE)) === J(rE),
+      "E. an ECO document and ISDA documents match their bills by the same rules, in the app as on the server");
   }
   console.log(fails ? "\nFAILED: " + fails : "\nall passed");
   process.exit(fails ? 1 : 0);

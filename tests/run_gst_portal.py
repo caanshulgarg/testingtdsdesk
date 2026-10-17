@@ -10,6 +10,8 @@ the same books a year on, as tdsgst_snapshot.py loads them) with a 2B made for t
      GSTR.threeB's and the GSTR-3B JSON's (every month and GSTIN); the bills behind every clickable figure and what is
      added to them add up to it; a figure clicked shows them;
   3. GSTR-2B: the portal's sections (Part A) and the summary as the 2B summary PDF lays it out, its totals the documents';
+     the ECO and ISDA sections read (17-Oct-2026): ECO under Part A I, ISDA under II and its credit notes under Part B,
+     the summary's totals the sum of its lines and of the sections' footers;
   4. 2B reconciliation: one row per supplier invoice, the statuses (Matched, Mismatch, Probable match, In books only, In 2B
      only) as GST2B's matching says, the chips' counts, ITC as per books / as per 2B / difference equal to the figures the
      2B page showed before (the workbench's tiles), the differing field highlighted, the actions, the Excel's formulas,
@@ -50,6 +52,12 @@ TWO_B = {
     "022026": {"b2b": [inv("07AAAAW1234A1Z5", "WREN PRINT HOUSE", "WPH/88", "09-02-2026", 10000, cgst=900, sgst=900)],
                "cdnr": [{"ctin": "07AAHFJ6012N1Z7", "trdnm": "JUNIPER LEGAL ASSOCIATES", "supfildt": "11-03-2026", "supprd": "022026", "nt": [{"ntnum": "JLA/CN/4", "dt": "25-02-2026", "typ": "C", "val": 5900, "txval": 5000, "igst": 0, "cgst": 450, "sgst": 450, "cess": 0, "pos": "07", "rev": "N", "itcavl": "Y", "rsn": ""}]}]},
     "032026": {"impg": [{"refdt": "10-03-2026", "portcode": "INDEL4", "boenum": "7712345", "boedt": "08-03-2026", "isamd": "N", "txval": 25000, "igst": 4500, "cess": 0}]},
+    # ECO (an operator's document, tax paid by it u/s 9(5)), ISD and ISDA (an amended ISD invoice and an amended ISD credit note)
+    "112025": {"ecom": [{"ctin": "07AAICQ4321B1CZ", "trdnm": "QUICKBITE ECO PVT LTD", "supfildt": "11-12-2025", "supprd": "112025", "inv": [{"inum": "QB/ECO/5521", "typ": "R", "dt": "14-11-2025", "val": 5250, "pos": "07", "txval": 5000, "igst": 0, "cgst": 125, "sgst": 125, "cess": 0, "itcavl": "Y", "rsn": "", "irn": "f00d"}]}],
+               "isd": [{"ctin": "07AAACI5555K1ZQ", "trdnm": "HEAD OFFICE ISD", "supfildt": "13-12-2025", "supprd": "112025", "doclist": [{"doctyp": "I", "docnum": "ISD/25/31", "docdt": "30-11-2025", "igst": 1200, "cgst": 0, "sgst": 0, "cess": 0, "itcelg": "Y"}]}],
+               "isda": [{"ctin": "07AAACI5555K1ZQ", "trdnm": "HEAD OFFICE ISD", "supfildt": "13-12-2025", "supprd": "112025", "doclist": [
+                   {"doctyp": "I", "docnum": "ISD/25/27A", "docdt": "29-11-2025", "odoctyp": "I", "odocnum": "ISD/25/27", "odocdt": "31-10-2025", "igst": 360, "cgst": 0, "sgst": 0, "cess": 0, "itcelg": "Y"},
+                   {"doctyp": "C", "docnum": "ISDC/25/4A", "docdt": "29-11-2025", "odoctyp": "C", "odocnum": "ISDC/25/4", "odocdt": "31-10-2025", "igst": 90, "cgst": 0, "sgst": 0, "cess": 0, "itcelg": "Y"}]}]},
 }
 # (the books' copy a year on carries the same invoice numbers, which GST2B would pair across the years: left out here)
 TWOB_JS = """(m) => { const b = S.books; b.vouchers = b.vouchers.filter(v => !/\\+1y$/.test(v.id)); b.twoBs = {}; Object.entries(m).forEach(([p, dd]) => { const t = GST2B.fromJson({data: {gstin: '%s', rtnprd: p, gendt: '14-' + p.slice(0, 2) + '-' + p.slice(2), docdata: dd}}); b.twoBs[t.gstin + '|' + t.period] = t; }); GST2B._memo = null; render(); }""" % G07
@@ -217,8 +225,22 @@ try:
         secs = E("[...document.querySelectorAll('[data-2b-portal] nav[aria-label=\"GSTR-2B section\"] button')].map(b => b.dataset['2bSec'])")
         ok(secs == ["summary", "b2b", "b2ba", "cdnr", "cdnra", "ecom", "isd", "isda", "impg", "impgsez"], "Part A's sections as the portal: B2B, B2BA, CDNR, CDNRA, ECO, ISD, ISDA, IMPG, IMPGSEZ (%s)" % secs)
         sm = E("""() => { const s = GSTPortal.twoBSummary(GSTPortal.twoBRows('07', GSTRev.fyMonths('202603'))), g = (b, part, grp) => b.find(x => x.part === part).rows.find(r => r.group === grp).lines.reduce((a, l) => r2(a + l.igst + l.cgst + l.sgst), 0);
-          return {a5: g(s.available, 'A', 'I'), imp: g(s.available, 'A', 'IV'), cn: g(s.available, 'B', 'I'), nav: g(s.notAvailable, 'A', 'I')}; }""")
-        ok(sm == {"a5": 18000 + 14400 + 21600 + 27000 + 1800, "imp": 4500, "cn": -900, "nav": 36000}, "the summary's figures from the documents: 4(A)(5), imports 4(A)(1), Part B credit notes, not available (%s)" % sm)
+          return {a5: g(s.available, 'A', 'I'), imp: g(s.available, 'A', 'IV'), cn: g(s.available, 'B', 'I'), nav: g(s.notAvailable, 'A', 'I'), isd: g(s.available, 'A', 'II')}; }""")
+        ok(sm == {"a5": 18000 + 14400 + 21600 + 27000 + 1800 + 250, "imp": 4500, "cn": -900 - 90, "nav": 36000, "isd": 1200 + 360}, "the summary's figures from the documents: 4(A)(5) with the ECO document, ISD with ISDA, imports 4(A)(1), Part B credit notes with ISDA's, not available (%s)" % sm)
+        lines = E("""() => { const s = GSTPortal.twoBSummary(GSTPortal.twoBRows('07', GSTRev.fyMonths('202603'))), L = (b, part, grp) => b.find(x => x.part === part).rows.find(r => r.group === grp).lines.filter(l => l.n).map(l => l.label + ':' + l.n + ':' + r2(l.igst + l.cgst + l.sgst));
+          return {i: L(s.available, 'A', 'I'), ii: L(s.available, 'A', 'II'), b: L(s.available, 'B', 'I')}; }""")
+        ok("ECO – Documents:1:250" in lines["i"] and lines["ii"] == ["ISD – Invoices:1:1200", "ISD – Invoices (Amendment):1:360"] and "ISD – Credit notes (Amendment):1:-90" in lines["b"],
+           "ECO – Documents under Part A I, ISD – Invoices (Amendment) under II, ISD – Credit notes (Amendment) under Part B, as the 2B summary PDF (%s)" % lines)
+        tie = E("""() => { const rows = GSTPortal.twoBRows('07', GSTRev.fyMonths('202603')), s = GSTPortal.twoBSummary(rows), H = ['igst', 'cgst', 'sgst', 'cess'], bad = [];
+          [['available', 'totAvl', (r) => r.itcavl !== 'N' && !r.rej], ['notAvailable', 'totNav', (r) => r.itcavl === 'N' && !r.rej]].forEach(([b, t, f]) => {
+            const ls = s[b].flatMap(P => P.rows.flatMap(g => g.lines)), n = ls.reduce((a, l) => a + l.n, 0);
+            if (n !== s[t].n) bad.push(b + ': lines hold ' + n + ' documents, total ' + s[t].n);
+            H.forEach(h => { const sum = r2(ls.reduce((a, l) => a + l[h], 0)); if (Math.abs(sum - s[t][h]) > 0.005) bad.push(b + ' ' + h + ': lines ' + sum + ', total ' + s[t][h]); });
+            // each section's documents (as its footer nets them) add up to the same total
+            const bySec = GSTPortal.TWOB_SECTIONS.reduce((a, x) => { H.forEach(h => { a[h] = r2(a[h] + rows.filter(r => f(r) && r.sec === x.id).reduce((c, r) => c + num(r[h]) * (r.dir || 1), 0)); }); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
+            H.forEach(h => { if (Math.abs(bySec[h] - s[t][h]) > 0.005) bad.push(b + ' ' + h + ': sections ' + bySec[h] + ', total ' + s[t][h]); }); });
+          return bad; }""")
+        ok(not tie, "the 2B summary's totals are the sum of its lines and of its sections, ITC available and not available (%s)" % tie)
         lab = E("[...document.querySelectorAll('[data-2b-sum=avl] tr[data-2b-group]')].map(r => r.children[1].innerText + ' | ' + r.children[2].innerText)")
         ok(lab[:4] == ["All other ITC – Supplies from registered persons | 4(A)(5)", "Inward Supplies from ISD | 4(A)(4)", "Inward Supplies liable for reverse charge | 3.1(d), 4(A)(3)", "Import of Goods | 4(A)(1)"], "laid out as the 2B summary PDF, with the 3B tables (%s)" % lab)
         shot(pg, "2b-summary-desktop")
@@ -229,6 +251,19 @@ try:
         pg.click('[data-2b-portal] nav[aria-label=ITC] button:has-text("ITC not available")'); W(400)
         ok(n_avl == 5 and pg.locator("[data-2b-section=b2b] tr[data-2b-row]").count() == 1, "ITC available / not available: 5 and 1 B2B invoices")
         shot(pg, "2b-section-desktop")
+        pg.click('[data-2b-portal] nav[aria-label=ITC] button:has-text("ITC available")'); W(300)
+        pg.click('[data-2b-sec="ecom"]'); W(400)
+        h = E("[...document.querySelectorAll('[data-2b-section=ecom] thead th')].map(t => t.textContent)")
+        er = E("() => { const tr = document.querySelector('[data-2b-section=ecom] tr[data-2b-row]'); return tr ? [...tr.children].map(c => c.innerText.trim()) : []; }")
+        ok(h[1:8] == ["GSTIN of ECO", "Trade/Legal name", "Document number", "Document type", "Document date", "Document value", "Place of supply"] and "IRN" in h and "ITC Availability" in h
+           and er[1:4] == ["07AAICQ4321B1CZ", "QUICKBITE ECO PVT LTD", "QB/ECO/5521"] and "FinCom does not read" not in pg.inner_text("[data-2b-section=ecom]"), "ECO: read, with the portal's columns (%s; %s)" % (h, er[1:4]))
+        pg.click('[data-2b-sec="isda"]'); W(400)
+        h = E("[...document.querySelectorAll('[data-2b-section=isda] thead th')].map(t => t.textContent)")
+        n_isda = pg.locator("[data-2b-section=isda] tr[data-2b-row]").count()
+        fi = E("() => Number((document.querySelector('[data-2b-foot=isda] [data-2b-sum=igst]') || {innerText: 'NaN'}).innerText.replace(/[₹,]/g, ''))")
+        ok(h[1:9] == ["Original ISD document type", "Original ISD document number", "Original ISD document date", "GSTIN of ISD", "Trade/Legal name", "ISD document type", "ISD document number", "ISD document date"]
+           and "ISD GSTR-6 Period" in h and "Eligibility of ITC" in h and n_isda == 2 and fi == 270, "ISDA: the original beside the amended, the portal's columns; its footer nets the credit note (360 - 90 = %s; %d rows; %s)" % (fi, n_isda, h[1:9]))
+        shot(pg, "2b-isda-desktop")
 
         print("4. 2B reconciliation")
         gst(pg, "202603", "r2b", None, "S.r2Scope = 'year'; S.r2View = ''; S.r2Tab = ''; S.rcF = {}; S.rcView = '';")
@@ -243,6 +278,7 @@ try:
         ok(chips == {"all": ref["matched"] + ref["mismatch"] + ref["probable"] + ref["b2"] + ref["bk"], "mismatch": ref["mismatch"], "probable": ref["probable"], "books": ref["bk"], "2b": ref["b2"], "matched": ref["matched"]},
            "the chips' counts are GST2B's: matched, mismatch, probable, books only, 2B only (%s / %s)" % (chips, ref))
         st = E("() => Object.fromEntries(GSTReco.recoRows(GST2B.scope('07', r2Scope().months), r2Scope().months, GST2B.state(), 1).map(r => [(r.twoB || r.books).no, r.status + (r.kind ? ':' + r.kind : '') + (r.diffs.length ? '[' + r.diffs.join(',') + ']' : '')]))")
+        ok(st.get("QB/ECO/5521") == "2b" and st.get("ISD/25/27A") == "2b" and st.get("ISDC/25/4A") == "2b", "the ECO and ISDA documents, with no bill in the books, are reconciled as In 2B only (%s)" % {k: st.get(k) for k in ("QB/ECO/5521", "ISD/25/27A", "ISDC/25/4A")})
         ok(st.get("NSL/112", "").startswith("mismatch:amount") and st.get("KC/1187", "").startswith("matched[date") and st.get("SS-AUG-077", "").startswith("matched") and "no" in st.get("SS-AUG-077", "")
            and st.get("INV-9001", "").startswith("probable") and st.get("WPH/88") == "2b" and st.get("JLA/311") == "books" and st.get("7712345") == "2b",
            "each fixture case has the right status and differing field (%s)" % st)

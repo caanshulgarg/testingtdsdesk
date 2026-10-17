@@ -18,14 +18,22 @@ const COLS = {
   nt: [["GSTIN of supplier", (r) => r.gstin], ["Trade/Legal name", (r) => r.party], ["Note number", (r) => r.no], ["Note type", (r) => (r.dir < 0 ? "Credit Note" : "Debit Note")], ["Note date", (r) => day(r.date)],
     ["Note value", (r) => r.val, 1], ["Place of supply", (r) => posName(r.pos)], ["Supply attract reverse charge", (r) => yes(r.rcm)]],
   isd: [["GSTIN of ISD", (r) => r.gstin], ["Trade/Legal name", (r) => r.party], ["ISD document type", (r) => (r.dir < 0 ? "ISD Credit Note" : "ISD Invoice")], ["ISD document number", (r) => r.no], ["ISD document date", (r) => day(r.date)]],
+  // ECO: the operator that reported the document and pays its tax u/s 9(5)
+  ecom: [["GSTIN of ECO", (r) => r.gstin], ["Trade/Legal name", (r) => r.party], ["Document number", (r) => r.no], ["Document type", (r) => ({ R: "Regular", SEZWP: "SEZ with payment", SEZWOP: "SEZ without payment", DE: "Deemed Exp", CBW: "Intra-State supplies attracting IGST" })[r.typ] || r.typ || "Invoice"],
+    ["Document date", (r) => day(r.date)], ["Document value", (r) => r.val, 1], ["Place of supply", (r) => posName(r.pos)]],
   impg: [["Port / reference", (r) => r.party], ["Bill of entry number", (r) => r.no], ["Bill of entry date", (r) => day(r.date)]],
   impgsez: [["GSTIN of supplier", (r) => r.gstin], ["Trade/Legal name", (r) => r.party], ["Bill of entry number", (r) => r.no], ["Bill of entry date", (r) => day(r.date)]],
 };
-const colsOf = (sec) => (sec === "b2ba" ? [["Original invoice number", (r) => r.oNo], ["Original invoice date", (r) => day(r.oDate)]].concat(COLS.inv)
+const isdTyp = (t, dir) => (t === "C" ? "ISD Credit Note" : t === "I" ? "ISD Invoice" : t ? t : dir < 0 ? "ISD Credit Note" : "ISD Invoice");
+const colsOf = (sec) => (sec === "isda" ? [["Original ISD document type", (r) => (r.oTyp ? isdTyp(r.oTyp) : "")], ["Original ISD document number", (r) => r.oNo], ["Original ISD document date", (r) => day(r.oDate)]].concat(COLS.isd)
+  : sec === "ecom" ? COLS.ecom : sec === "b2ba" ? [["Original invoice number", (r) => r.oNo], ["Original invoice date", (r) => day(r.oDate)]].concat(COLS.inv)
   : sec === "cdnra" ? [["Original note number", (r) => r.oNo], ["Original note date", (r) => day(r.oDate)]].concat(COLS.nt)
   : sec === "cdnr" ? COLS.nt : sec === "isd" ? COLS.isd : sec === "impg" ? COLS.impg : sec === "impgsez" ? COLS.impgsez : COLS.inv);
-const tail = (sec) => [["GSTR-1/IFF/GSTR-5 Period", (r) => (r.supPrd ? GSTR.label(String(r.supPrd).slice(2) + String(r.supPrd).slice(0, 2)) : "")], ["GSTR-1/IFF/GSTR-5 Filing Date", (r) => r.filedOn || ""],
-  ["ITC Availability", (r) => (r.itcavl === "N" ? "No" : "Yes")], ["Reason", (r) => (r.rsn ? GST2B.RSN[r.rsn] || r.rsn : "")]].concat(sec === "b2b" ? [["IRN", (r) => r.irn || ""]] : []);
+// an ISD's documents come from its GSTR-6, the others from the supplier's (or the operator's) GSTR-1, IFF or GSTR-5
+const tail = (sec) => (/^isd/.test(sec) ? [["ISD GSTR-6 Period", (r) => (r.supPrd ? GSTR.label(String(r.supPrd).slice(2) + String(r.supPrd).slice(0, 2)) : "")], ["ISD GSTR-6 Filing Date", (r) => r.filedOn || ""],
+  ["Eligibility of ITC", (r) => (r.itcavl === "N" ? "No" : "Yes")]]
+  : [["GSTR-1/IFF/GSTR-5 Period", (r) => (r.supPrd ? GSTR.label(String(r.supPrd).slice(2) + String(r.supPrd).slice(0, 2)) : "")], ["GSTR-1/IFF/GSTR-5 Filing Date", (r) => r.filedOn || ""],
+  ["ITC Availability", (r) => (r.itcavl === "N" ? "No" : "Yes")], ["Reason", (r) => (r.rsn ? GST2B.RSN[r.rsn] || r.rsn : "")]].concat(sec === "b2b" || sec === "ecom" ? [["IRN", (r) => r.irn || ""]] : []));
 
 function Summary({ s, onPick }) {
   const block = (title, parts, id) => <table className="bk-table tg-fit gf-off" data-statement="" data-2b-sum={id}>
@@ -38,8 +46,7 @@ function Summary({ s, onPick }) {
   return <div data-2b-summary="">
     <div className="bk-tablewrap">{block("ITC Available", s.available, "avl")}</div>
     <div className="bk-tablewrap" style={{ marginTop: 12 }}>{block("ITC not available", s.notAvailable, "nav")}</div>
-    <p className="note">Amounts as the summary shows them (credit notes as positive figures, in Part B). {s.rejected.n ? s.rejected.n + " document" + (s.rejected.n === 1 ? "" : "s") + " rejected in IMS give no credit: see “Rejected in IMS”. " : ""}
-      ECO and ISDA documents are not read from the 2B file by FinCom yet; check them on the portal if the supplier reports any.</p>
+    <p className="note">Amounts as the summary shows them (credit notes as positive figures, in Part B). {s.rejected.n ? s.rejected.n + " document" + (s.rejected.n === 1 ? "" : "s") + " rejected in IMS give no credit: see “Rejected in IMS”." : ""}</p>
   </div>;
 }
 

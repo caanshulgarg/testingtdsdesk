@@ -276,9 +276,9 @@ export const TWOB_SECTIONS = [
   { id: "b2ba", part: "A", name: "B2BA", title: "B2BA – Amendments to previously filed invoices by supplier" },
   { id: "cdnr", part: "A", name: "CDNR", title: "CDNR – Debit/Credit notes (Original)" },
   { id: "cdnra", part: "A", name: "CDNRA", title: "CDNRA – Amendments to previously filed Credit/Debit notes by supplier" },
-  { id: "ecom", part: "A", name: "ECO", title: "ECO – Documents reported by ECO on which ECO is liable to pay tax u/s 9(5)", unread: true },
+  { id: "ecom", part: "A", name: "ECO", title: "ECO – Documents reported by ECO on which ECO is liable to pay tax u/s 9(5)" },
   { id: "isd", part: "A", name: "ISD", title: "ISD – ISD Credits" },
-  { id: "isda", part: "A", name: "ISDA", title: "ISDA – Amendments to ISD Credits", unread: true },
+  { id: "isda", part: "A", name: "ISDA", title: "ISDA – Amendments to ISD Credits" },
   { id: "impg", part: "A", name: "IMPG", title: "IMPG – Import of goods from overseas on bill of entry" },
   { id: "impgsez", part: "A", name: "IMPGSEZ", title: "IMPGSEZ – Import of goods from SEZ units/developers on bill of entry" },
 ];
@@ -293,8 +293,9 @@ export function twoBSummary(rows) {
     { head: "Part A", part: "A", rows: [
       { group: "I", label: "All other ITC – Supplies from registered persons", t3b: ok ? "4(A)(5)" : "4(D)(2)", lines: [
         L("B2B – Invoices", (r) => ok(r) && r.sec === "b2b" && !r.rcm, "b2b"), L("B2B – Debit notes", (r) => ok(r) && r.sec === "cdnr" && deb(r) && !r.rcm, "cdnr"),
+        L("ECO – Documents", (r) => ok(r) && r.sec === "ecom", "ecom"),
         L("B2B – Invoices (Amendment)", (r) => ok(r) && r.sec === "b2ba" && !r.rcm, "b2ba"), L("B2B – Debit notes (Amendment)", (r) => ok(r) && r.sec === "cdnra" && deb(r) && !r.rcm, "cdnra")] },
-      { group: "II", label: "Inward Supplies from ISD", t3b: ok ? "4(A)(4)" : "4(D)(2)", lines: [L("ISD – Invoices", (r) => ok(r) && r.sec === "isd" && deb(r), "isd")] },
+      { group: "II", label: "Inward Supplies from ISD", t3b: ok ? "4(A)(4)" : "4(D)(2)", lines: [L("ISD – Invoices", (r) => ok(r) && r.sec === "isd" && deb(r), "isd"), L("ISD – Invoices (Amendment)", (r) => ok(r) && r.sec === "isda" && deb(r), "isda")] },
       { group: "III", label: "Inward Supplies liable for reverse charge", t3b: ok ? "3.1(d), 4(A)(3)" : "3.1(d)", lines: [
         L("B2B – Invoices", (r) => ok(r) && r.sec === "b2b" && r.rcm, "b2b"), L("B2B – Debit notes", (r) => ok(r) && r.sec === "cdnr" && deb(r) && r.rcm, "cdnr"),
         L("B2B – Invoices (Amendment)", (r) => ok(r) && r.sec === "b2ba" && r.rcm, "b2ba"), L("B2B – Debit notes (Amendment)", (r) => ok(r) && r.sec === "cdnra" && deb(r) && r.rcm, "cdnra")] },
@@ -303,7 +304,7 @@ export function twoBSummary(rows) {
       { group: "I", label: "Others", t3b: "", lines: [
         L("B2B – Credit notes", (r) => ok(r) && r.sec === "cdnr" && cr(r) && !r.rcm, "cdnr"), L("B2B – Credit notes (Amendment)", (r) => ok(r) && r.sec === "cdnra" && cr(r) && !r.rcm, "cdnra"),
         L("B2B – Credit notes (Reverse charge)", (r) => ok(r) && r.sec === "cdnr" && cr(r) && r.rcm, "cdnr"), L("B2B – Credit notes (Reverse charge) (Amendment)", (r) => ok(r) && r.sec === "cdnra" && cr(r) && r.rcm, "cdnra"),
-        L("ISD – Credit notes", (r) => ok(r) && r.sec === "isd" && cr(r), "isd")] },
+        L("ISD – Credit notes", (r) => ok(r) && r.sec === "isd" && cr(r), "isd"), L("ISD – Credit notes (Amendment)", (r) => ok(r) && r.sec === "isda" && cr(r), "isda")] },
     ] },
   ];
   const total = (f) => pick(f);

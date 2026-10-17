@@ -27,7 +27,7 @@ function StatusCell({ r }) {
 function Side({ s, r, other }) {
   if (!s) return <><td className="rc-none">—</td><td className="n rc-none"></td><td className="n rc-none"></td></>;
   const d = (k) => (r.diffs.includes(k) ? " rc-diff" : ""), dim = s.counted === false ? " rc-dim" : "";
-  const sub = other === "2b" ? (({ b2b: "Invoice", b2ba: "Invoice, amended", cdnr: s.dir < 0 ? "Credit note" : "Debit note", cdnra: "Note, amended", isd: "ISD", impg: "Import", impgsez: "Import from SEZ" })[s.sec] || s.sec) + (s.notAvl ? " · ITC not available" : "") : "vch " + s.voucher;
+  const sub = other === "2b" ? (({ b2b: "Invoice", b2ba: "Invoice, amended", cdnr: s.dir < 0 ? "Credit note" : "Debit note", cdnra: "Note, amended", isd: "ISD", isda: "ISD, amended", ecom: "ECO document", impg: "Import", impgsez: "Import from SEZ" })[s.sec] || s.sec) + (s.notAvl ? " · ITC not available" : "") : "vch " + s.voucher;
   return <>
     <td className={"rc-doc" + dim}><span className={"code" + d("no")}>{s.no || "—"}</span><div className="tg-sub"><span className={d("date")}>{day(s.date)}</span> · {sub}</div>{s.counted === false && <div className="tg-sub">other month, not counted</div>}</td>
     <td className={"n" + d("taxable") + dim}>{money(s.taxable)}</td>

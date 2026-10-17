@@ -89,6 +89,14 @@ function m2bFrom2bJson(j){
   (rj.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnr", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
   (rj.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
   (dd.impgsez || []).forEach(s => (s.boe || []).forEach(x => add("impgsez", s, x)));
+  // the sections read since (17-Oct-2026) come last, so the rows of the sections above keep their keys
+  // ISDA: an ISD document amended by the ISD in its GSTR-6, read as ISD; the original's type, number and date
+  // beside it, as B2BA and CDNRA carry theirs
+  (dd.isda || []).forEach(s => (s.doclist || []).forEach(x => add("isda", s, x, {dir: x.doctyp === "C" ? -1 : 1, oTyp: x.odoctyp || "", oNo: x.odocnum || "", oDate: dmy(x.odocdt)})));
+  // ECO: documents an e-commerce operator reported, on which it pays the tax u/s 9(5); read as B2B invoices (also
+  // when rejected in IMS)
+  (dd.ecom || []).forEach(s => (s.inv || s.doclist || []).forEach(x => add("ecom", s, x)));
+  (rj.ecom || []).forEach(s => (s.inv || s.doclist || []).forEach(x => add("ecom", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || ""})));
   rows.forEach((r, i) => { r.key = period + "|" + r.sec + "|" + r.gstin + "|" + r.noN + "|" + r.date + "|" + i; });
   return {rows, period, ym, gstin: String(d.gstin || "").toUpperCase(), generated: d.gendt || "", summary: d.itcsumm || null};
 }

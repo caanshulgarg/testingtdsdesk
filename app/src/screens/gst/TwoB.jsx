@@ -24,8 +24,9 @@ const TAGS_BOOKS = [["", "—"], ["Follow up with supplier", "follow up with sup
 const RESULT = { matched: "matched", diff: "difference", probable: "to confirm" };
 
 const noteOf = (p) => [p.itcavl === "N" ? "ITC not available" + (p.rsn ? ": " + (GST2B.RSN[p.rsn] || p.rsn) : "") : "", p.rcm ? "reverse charge" : "", (p.ims === "R" || p.ims === "P") ? "IMS: " + GST2B.IMS[p.ims] : "",
-  /a$/.test(p.sec) ? "amended by the supplier" + (p.oNo ? " (was " + p.oNo + ")" : "") : "", p.sec === "impg" ? "import, bill of entry" : "", p.sec === "isd" ? "from the ISD" : ""].filter(Boolean).join("; ");
-const secName = (p) => ({ b2b: "Invoice", b2ba: "Invoice, amended", cdnr: p.dir < 0 ? "Credit note" : "Debit note", cdnra: "Note, amended", isd: "ISD", impg: "Import", impgsez: "Import from SEZ" })[p.sec] || p.sec;
+  /a$/.test(p.sec) ? "amended by the " + (p.sec === "isda" ? "ISD" : "supplier") + (p.oNo ? " (was " + p.oNo + ")" : "") : "", p.sec === "impg" ? "import, bill of entry" : "", /^isd/.test(p.sec) ? "from the ISD" : "",
+  p.sec === "ecom" ? "reported by the e-commerce operator, which pays the tax u/s 9(5)" : ""].filter(Boolean).join("; ");
+const secName = (p) => ({ b2b: "Invoice", b2ba: "Invoice, amended", cdnr: p.dir < 0 ? "Credit note" : "Debit note", cdnra: "Note, amended", isd: "ISD", isda: "ISD, amended", ecom: "ECO document", impg: "Import", impgsez: "Import from SEZ" })[p.sec] || p.sec;
 
 // nothing brought in yet: how to get 2B from the portal
 function Empty({ b, apiCard }) {

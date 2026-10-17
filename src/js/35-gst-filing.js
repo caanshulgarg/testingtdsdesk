@@ -121,7 +121,7 @@ const GSTF = {
     const r3 = r2(tax(t.net) - (t.custRej ? tax(t.custRej.add) - tax(t.custRej.back) : 0) + tax(t.zero));
     const gapB = r2(r1 - r3), limB = Math.max(this.LIM.b.amt, r1 * this.LIM.b.pct / 100);
     let avl = 0, have2b = false;
-    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(x => x.ym === ym).forEach(x => { have2b = true; x.rows.filter(r => r.itcavl !== "N" && !r.rej && !r.rcm && r.sec !== "impg" && r.sec !== "isd").forEach(r => { avl += r.dir * (num(r.igst) + num(r.cgst) + num(r.sgst) + num(r.cess)); }); });
+    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(x => x.ym === ym).forEach(x => { have2b = true; x.rows.filter(r => r.itcavl !== "N" && !r.rej && !r.rcm && r.sec !== "impg" && r.sec !== "isd" && r.sec !== "isda").forEach(r => { avl += r.dir * (num(r.igst) + num(r.cgst) + num(r.sgst) + num(r.cess)); }); });
     avl = r2(avl);
     const claimed = tax(t.other), gapC = r2(claimed - avl), limC = Math.max(this.LIM.c.amt, avl * this.LIM.c.pct / 100);
     return {b: {r1, r3, gap: gapB, lim: r2(limB), flag: gapB > limB, from: r1From}, c: {have2b, avl, claimed, gap: gapC, lim: r2(limC), flag: have2b && gapC > limC}};
