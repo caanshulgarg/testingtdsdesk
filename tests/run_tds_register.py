@@ -79,14 +79,20 @@ try:
         ok("challan of FY 2025-26 used in FY 2026-27" in notes, "A3. the note: %s" % notes)
         ok(J("() => TDSReg.trail('chOld').some(t => /FY 2025-26 used in FY 2026-27/.test(t.note))"), "A3. kept in the audit trail")
         txt = J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text || ''")
-        ok("^0240020^05032026^00103^" in txt, "A3. the earlier year's challan is in the Q1 file with its deductions (a CD record)")
+        # next-tds-forms-2025: Form 140's challan record (Protean's file format 1.1): BSR field 15, serial 17, date 19
+        cds = [l.split("^") for l in txt.split("\r\n") if "^CD^" in l]
+        ok(any(c[14] == "0240020" and c[16] == "00103" and c[18] == "05032026" for c in cds), "A3. the earlier year's challan is in the Q1 file with its deductions (a CD record)")
         # interest and fee apart
         J("() => { const c = TDS.challans().find(c => c.id === 'chA'); c.interest = 150; c.fee = 400; }")
         ok("^150.00^400.00^" in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text"), "A4. no portion set: the file carries the challan's whole interest and fee, as before")
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 200, 0)"); ok(not r["ok"] and re.search(r"₹150(\.00)? left on this challan for interest", r["why"]), "A4. interest over its own limit refused: %s" % r.get("why"))
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 500)"); ok(not r["ok"] and "for the fee" in r["why"], "A4. fee over its own limit refused")
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 400)"); ok(r["ok"], "A4. within each limit: given")
-        ok("^100.00^400.00^" in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text"), "A4. the file's challan record carries the portion (interest 100, fee 400)")
+        # next-tds-forms-2025: Form 140 carries the challan as deposited (fields 9, 10) and the interest allocation "as
+        # provided in field no. 9" (field 24), as Protean's file format 1.1 says; the portion stays in FinCom's register (a
+        # question for the owner, docs/tds-forms-2025/GAPS.md)
+        cdA = [l.split("^") for l in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text").split("\r\n") if "^CD^" in l]
+        ok(any(c[8] == "150.00" and c[9] == "400.00" and c[23] == "150.00" for c in cdA), "A4. Form 140's challan record carries the challan as deposited (interest 150, fee 400) and allocation = field 9, the portion set or not")
         r = J("() => TDSReg.setPortion('chA', '27Q', '2026-27', 'Q1', 60, 0)"); ok(not r["ok"] and re.search(r"₹50(\.00)? left on this challan for interest", r["why"]), "A4. another return gets only what is left (%s)" % r.get("why"))
         ok(J("() => TDSReg.balance(TDS.challans().find(c => c.id === 'chA'))") == {"tax": 0, "interest": 50, "fee": 0, "total": 50}, "A4. the balance by head: tax 0, interest 50, fee 0")
         # filed: locked
@@ -124,7 +130,8 @@ try:
         # TRACES: consolidated file and challan status file
         J(RESET)
         J(ADD, ["chA", "0240020", "20260507", "00101", 8640, "194C"]); J("(a) => TDSCH.tag(a, 'chA')", apr194c)
-        conso = J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text").replace("^8640.00^0.00^0.00^0.00^0.00^0.00", "^8000.00^0.00^0.00^0.00^0.00^0.00")
+        # TRACES' consolidated file, made from FinCom's own Form 140 with the challan's consumed amount (CD field 21) at 8,000
+        conso = "\r\n".join("^".join(f[:20] + ["8000.00"] + f[21:]) if len(f) > 21 and f[1] == "CD" else "^".join(f) for f in (l.split("^") for l in J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text").split("\r\n")))
         cpath = os.path.join(tmp, "DELZ12345A_26Q_Q1_202627_conso.txt"); open(cpath, "w").write(conso)
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; S.tdsTab = 'after'; render(); }"); pg.wait_for_timeout(300)
         pg.set_input_files('[data-after-filing] input[type=file]', cpath); pg.wait_for_timeout(1200)
@@ -198,7 +205,7 @@ try:
         ok("filed return uses this challan" in J("([id]) => TDSReg.canEdit(TDS.challans().find(c => c.id === id))", [hid]), "B4. not editable once a filed return uses it")
         txt = J("() => TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').text")
         cd = [l for l in txt.split("\r\n") if "^CD^" in l]
-        ok(any("^0240020^07052026^00301^" in l and "^8640.00^" in l for l in cd), "B5. the hand challan's CD line in the FVU file: BSR, date, serial, tax (%s)" % cd)
+        ok(any(l.split("^")[14] == "0240020" and l.split("^")[18] == "07052026" and l.split("^")[16] == "00301" and l.split("^")[7] == "8640.00" for l in cd), "B5. the hand challan's CD line in the FVU file: BSR, date, serial, tax (%s)" % cd)
         J("() => { S.books.tdsFiled = {}; }")
         J("([id, a]) => TDSCH.untag(a)", [hid, apr194c])
         ok(not J("([id]) => TDSReg.deleteHand(id, '').ok", [hid]), "B4. delete needs a reason")

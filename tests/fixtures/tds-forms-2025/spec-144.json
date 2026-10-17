@@ -1,0 +1,6337 @@
+{
+ "form": "144",
+ "workbook": "Form_Number_144-27Q_-_Q1_to_Q4_22072026.xlsx",
+ "sheet": "FIleformat_R",
+ "title": "File Format for Non-Salary TDS File - Form Number 144 (27Q) - Q1 to Q4 (Version 1.1) for Tax Year 2026-27 and onwards",
+ "notes": [
+  {
+   "no": "1",
+   "text": "File should be generated in ASCII Format with \"txt\" as filename extension.",
+   "row": 5
+  },
+  {
+   "no": "2",
+   "text": "Each Record (including last record) must start on new line and must end with a newline character. Hex Values : \"0D\" & \"0A\".",
+   "row": 6
+  },
+  {
+   "no": "3",
+   "text": "The constant values as mentioned in the file format below (values of fields viz. 'Record Type', 'Upload Type' etc.) need to be mentioned  In BLOCK letters only. i.e.. value of field 'Record Type' in case of 'File Header' should be specified as 'FH' and not 'fh'.",
+   "row": 7
+  },
+  {
+   "no": "4",
+   "text": "For all amount fields decimal value with precision of 2 should be provided e.g. 1000.50, 2345.00. It may be noted that in case of certain amount fields where fractional portion is not allowed, the value should contain decimal point followed by two zeros i.e. value - 2345 will not be allowed, whereas value - 2345.00 will be allowed.",
+   "row": 8
+  },
+  {
+   "no": "5",
+   "text": "For Rate at which tax Deducted (DD), decimal with precision value 4 should be provided e.g. if the rate is 2 then the same should be mentioned as 2.0000",
+   "row": 9
+  },
+  {
+   "no": "6",
+   "text": "M indicates mandatory field and  O indicates - Optional.",
+   "row": 10
+  },
+  {
+   "no": "7",
+   "text": "All dates should be in 'ddmmyyyy' format. No date should be a future date.",
+   "row": 11
+  },
+  {
+   "no": "8",
+   "text": "This is a ^ delimited variable field width file. This means that in case of empty spaces there is no need to provide leading '0' for numerals and trailing spaces for character fields.",
+   "row": 12
+  },
+  {
+   "no": "9",
+   "text": "The total number of delimiters (i.e. \"^\") in any type of record should be one less than the total number of fields in the respective record. For example the total number of fields in \"File Header record\" is 16, hence the total no. of delimiters in 'File Header record' would be 15.",
+   "row": 13
+  },
+  {
+   "no": "10",
+   "text": "Nil challans/transfer vouchers need to mandatorily have deductee records with flag  'A','G','H','I','N','Y','Z' 'B' in the remarks for lower or non-deduction.",
+   "row": 14
+  },
+  {
+   "no": "11",
+   "text": "It is mandatory to import .csi file downloaded from TIN website (under Challan Status Inquiry tab) to verify the correctness of Challan details mentioned in the statement.",
+   "row": 15
+  },
+  {
+   "no": "12",
+   "text": "TAN & TAN name present in TDS Statement should match with TAN & TAN name present under .csi file downloaded from TIN website.",
+   "row": 16
+  },
+  {
+   "no": "13",
+   "text": "Changes/ Updates done in the file format is highlighted in green.",
+   "row": 17
+  },
+  {
+   "no": "14",
+   "text": "At least one deductee/collectee details should be mentioned in regular statement. Statements with zero/no deductee/collectee details should not be allowed to validate through FVU.",
+   "row": 18
+  }
+ ],
+ "records": {
+  "FH": {
+   "heading": "TDS Statement for Salary category (File Header Record)",
+   "row": 20,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file.",
+     "row": 22
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be \"FH\" signifying 'File Header' record",
+     "row": 23
+    },
+    {
+     "no": 3,
+     "name": "File Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "Value should be \"NS1\" for FN 144.",
+     "row": 24
+    },
+    {
+     "no": 4,
+     "name": "Upload Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be R",
+     "row": 25
+    },
+    {
+     "no": 5,
+     "name": "File Creation Date",
+     "col": "NA",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Mention the date of creation of the file in ddmmyyyy format.",
+     "row": 26
+    },
+    {
+     "no": 6,
+     "name": "File Sequence No.",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Indicates the running sequence number for the file. (Should be unique across all the files)",
+     "row": 27
+    },
+    {
+     "no": 7,
+     "name": "Uploader Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be D",
+     "row": 28
+    },
+    {
+     "no": 8,
+     "name": "TAN of Deductor",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "TAN of Deductor",
+     "row": 29
+    },
+    {
+     "no": 9,
+     "name": "Total No. of Batches",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Indicates the number of batches that the file contains.",
+     "row": 30
+    },
+    {
+     "no": 10,
+     "name": "Name of Return Preparation Utility",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Name of the software used for preparing the Quarterly e-TDS/TCS statement should be mentioned.",
+     "row": 31
+    },
+    {
+     "no": 11,
+     "name": "Record Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 32
+    },
+    {
+     "no": 12,
+     "name": "FVU Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 33
+    },
+    {
+     "no": 13,
+     "name": "File Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 34
+    },
+    {
+     "no": 14,
+     "name": "Sam Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 35
+    },
+    {
+     "no": 15,
+     "name": "SAM Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 36
+    },
+    {
+     "no": 16,
+     "name": "SCM Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 37
+    },
+    {
+     "no": 17,
+     "name": "SCM Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 38
+    },
+    {
+     "no": 18,
+     "name": "Consolidated file hash",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 39
+    }
+   ],
+   "after": [
+    {
+     "row": 40,
+     "text": "Note: | Single File Header record for the entire file"
+    }
+   ]
+  },
+  "BH": {
+   "heading": "TDS Statement for Salary category (Batch Header Record)",
+   "row": 42,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file",
+     "row": 44
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be \"BH\" (Batch Header) for the batch header record",
+     "row": 45
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value must start with 1.",
+     "row": 46
+    },
+    {
+     "no": 4,
+     "name": "Count of Challan/transfer voucher Records",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Count of total number of challans/transfer vouchers contained within the batch.",
+     "row": 47
+    },
+    {
+     "no": 5,
+     "name": "Form Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "Value must be 144",
+     "row": 48
+    },
+    {
+     "no": 6,
+     "name": "Transaction Type  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 49
+    },
+    {
+     "no": 7,
+     "name": "Batch Updation Indicator  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 50
+    },
+    {
+     "no": 8,
+     "name": "Original Token Number (Token Number of Regular statement) - (Not applicable) of the statement",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 51
+    },
+    {
+     "no": 9,
+     "name": "Token no. of previous regular statement (Form no. 144).",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "O",
+     "remarks": "If value present in field no. 52 is \"Y\", mandatory to mention 15 digit Token number of immediate previous regular statement for Form 144, else no value to be provided.",
+     "row": 52
+    },
+    {
+     "no": 10,
+     "name": "Token Number of the statement submitted -- (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 53
+    },
+    {
+     "no": 11,
+     "name": "Token Number date - (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 54
+    },
+    {
+     "no": 12,
+     "name": "Last TAN of Deductor /  Collector ( Used for Verification)  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 55
+    },
+    {
+     "no": 13,
+     "name": "TAN of Deductor",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Mention the 10 Character  TAN of the deductor.  Should be all CAPITALS.",
+     "row": 56
+    },
+    {
+     "no": 14,
+     "name": "Receipt number (eight digit) provided by TIN",
+     "col": "",
+     "type": "CHAR",
+     "size": "8",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 57
+    },
+    {
+     "no": 15,
+     "name": "PAN of Deductor",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Mandatory to mention the PAN  of the Deductor. If deductor is not required to have a PAN mention PANNOTREQD",
+     "row": 58
+    },
+    {
+     "no": 16,
+     "name": "Assessment Yr",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "Assessment year e.g. value should be 200809 for Assessment Year 2008-09. Value should be greater than or equal to 200809.",
+     "row": 59
+    },
+    {
+     "no": 17,
+     "name": "Tax Year",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "Tax Year (YYYYYY) as per Act; e.g., 202627 for Tax Year 2026-27",
+     "row": 60
+    },
+    {
+     "no": 18,
+     "name": "Period",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Valid values Q1, Q2, Q3, Q4 of the financial Year. Q1 for 1st Quarter, Q2 for 2nd Quarter, Q3 for 3rd Quarter and Q4 for 4th Quarter.",
+     "row": 61
+    },
+    {
+     "no": 19,
+     "name": "Name of  Deductor",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of the Employer / Deductor I.e. Employer / Deductor who deducts tax. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 62
+    },
+    {
+     "no": 20,
+     "name": "Deductor Address 6 (Country/Region)",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 6 of the Employer. Only special characters are not allowed under this field.",
+     "row": 63
+    },
+    {
+     "no": 21,
+     "name": "Deductor Address1 (Flat/Door/Block number)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 1 of the Employer. Only special characters are not allowed under this field.",
+     "row": 64
+    },
+    {
+     "no": 22,
+     "name": "Deductor Address2 (Post Office)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 2 of the Employer. Only special characters are not allowed under this field.",
+     "row": 65
+    },
+    {
+     "no": 23,
+     "name": "Deductor Address3 (Road/Street/Block/Sector)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 3 of the Employer. Only special characters are not allowed under this field.",
+     "row": 66
+    },
+    {
+     "no": 24,
+     "name": "Deductor Address4 (Area/locality)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 4 of the Employer. Only special characters are not allowed under this field.",
+     "row": 67
+    },
+    {
+     "no": 25,
+     "name": "Deductor Address5 (District)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 5 of the Employer. Only special characters are not allowed under this field.",
+     "row": 68
+    },
+    {
+     "no": 26,
+     "name": "Deductor's Address - State",
+     "col": "",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Numeric code for state. For list of State codes, refer to the Annexure 1 below.",
+     "row": 69
+    },
+    {
+     "no": 27,
+     "name": "Deductor's Address - Pincode",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "PIN Code of  Deductor .",
+     "row": 70
+    },
+    {
+     "no": 28,
+     "name": "Deductor's Email ID",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Valid E-mail  should be provided.\n1. Email format must be checked -atleast @ and '.' should be mentioned. \n2. Both @ and '.' should be preceded and succeeded by atleast one character.\n3. At least one '.' should come after '@'.\n4. All printable characters allowed except '^' and space.\n5. This field is mandatory if no value is provided under field no. 42 i.e. \"Responsible Person's Email ID -1\" of Batch Header.\n E-mail id of deductor/collector or person responsible for deducting/collecting tax should be provided.",
+     "row": 71
+    },
+    {
+     "no": 29,
+     "name": "Deductor Contact Country Code",
+     "col": "",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "M",
+     "remarks": "Country calling code for deductor contact number (e.g., 91 for India).",
+     "row": 72
+    },
+    {
+     "no": 30,
+     "name": "Deductor Contact Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Deductor contact number without country code; digits only. Max 15.",
+     "row": 73
+    },
+    {
+     "no": 31,
+     "name": "Filler 1",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 74
+    },
+    {
+     "no": 32,
+     "name": "Deductor   Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Deductor category code to be mentioned as per Annexure 4",
+     "row": 75
+    },
+    {
+     "no": 33,
+     "name": "Name of Person responsible for Deduction",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of Person responsible for paying salary on behalf of the deductor. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 76
+    },
+    {
+     "no": 34,
+     "name": "Designation of the Person responsible for Deduction",
+     "col": "",
+     "type": "CHAR",
+     "size": "20",
+     "mo": "M",
+     "remarks": "Mention the designation of Person responsible for paying salary on behalf of the deductor. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 77
+    },
+    {
+     "no": 35,
+     "name": "Responsible Person's  Address1 (Flat/Door/Block number)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 1 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 78
+    },
+    {
+     "no": 36,
+     "name": "Responsible Person's  Address2 (Post Office)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 2 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 79
+    },
+    {
+     "no": 37,
+     "name": "Responsible Person's  Address3 (Road/Street/Block/Sector)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 3 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 80
+    },
+    {
+     "no": 38,
+     "name": "Responsible Person's  Address4 (Area/locality)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 4 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 81
+    },
+    {
+     "no": 39,
+     "name": "Responsible Person's  Address5(District)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 5 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 82
+    },
+    {
+     "no": 40,
+     "name": "Responsible Person's State",
+     "col": "",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Numeric code for state. For list of State codes, refer to the Annexure 1 below.",
+     "row": 83
+    },
+    {
+     "no": 41,
+     "name": "Responsible Person's PIN",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "PIN Code of Responsible Person .",
+     "row": 84
+    },
+    {
+     "no": 42,
+     "name": "Responsible Person's Email ID -1",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Valid E-mail  should be provided.\n1. Email format must be checked -atleast @ and '.' should be mentioned. \n2. Both @ and '.' should be preceded and succeeded by atleast one character.\n3. At least one '.' should come after '@'.\n4. All printable characters allowed except '^' and space.\n5. This field is mandatory if no value is provided under field no. 28 i.e. \"Deductor's Email ID\" of Batch Header.\n E-mail id of deductor/collector or person responsible for deducting/collecting tax should be provided.",
+     "row": 85
+    },
+    {
+     "no": 43,
+     "name": "Responsible Persons country region",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the country of the responsible person . Only special characters are not allowed under this field.",
+     "row": 86
+    },
+    {
+     "no": 44,
+     "name": "Responsible Person Contact Country Code",
+     "col": "",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "M",
+     "remarks": "Country calling code for person responsible contact number (e.g., 91).",
+     "row": 87
+    },
+    {
+     "no": 45,
+     "name": "Responsible Person Contact Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Contact number (digits) for person responsible; max 15.",
+     "row": 88
+    },
+    {
+     "no": 46,
+     "name": "Filler 3",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 89
+    },
+    {
+     "no": 47,
+     "name": "Batch Total of - Total of Deposit Amount as per Challan",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the Total of Deposit Amount as per Challan.The value here should be same as sum of values in field 'Total of Deposit Amount as per Challan'  in the 'Challan Detail' record ( please refer to the Challan Detail' record section below ).  Paisa Field (Decimal Value) of the Amount must be 00.",
+     "row": 90
+    },
+    {
+     "no": 48,
+     "name": "Unmatched challan count",
+     "col": "",
+     "type": "CHAR",
+     "size": "9",
+     "mo": "O",
+     "remarks": "No value to be specified.",
+     "row": 91
+    },
+    {
+     "no": 49,
+     "name": "Count of Salary Details  Records (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 92
+    },
+    {
+     "no": 50,
+     "name": "Batch Total of - Gross Total Income as per Salary Detail (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 93
+    },
+    {
+     "no": 51,
+     "name": "Filler 4",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 94
+    },
+    {
+     "no": 52,
+     "name": "Whether regular statement for Form 144 filed for earlier period",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "\"Y\" if regular statement for Form 144 has been filed for earlier period, else value \"N\" should be provided.",
+     "row": 95
+    },
+    {
+     "no": 53,
+     "name": "Last Deductor Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 96
+    },
+    {
+     "no": 54,
+     "name": "State Name",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "O",
+     "remarks": "Numeric code for state should be mentioned as per Annexure 5. Mandatory if deductor type is State Govt. (code S), Statutory body - State Govt. (code E), Autonomous body - State Govt. code H) and Local Authority - State Govt. (code N). For other deductor category no value should be provided.",
+     "row": 97
+    },
+    {
+     "no": 55,
+     "name": "Filler 5",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 98
+    },
+    {
+     "no": 56,
+     "name": "Filler 6",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 99
+    },
+    {
+     "no": 57,
+     "name": "Ministry Name",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "3",
+     "mo": "O",
+     "remarks": "Numeric code for Ministry name should be provided. For list of Ministry name codes, refer to the Annexure 3 below. Mandatory for following deductor types:\nCentral Govt (A), Statutory body - Central Govt. (D) & Autonomous body - Central Govt. (G). Optional for deductor type Statutory body - State Govt. (E), Autonomous body - State Govt. (H), Local Authority - Central Govt. (L) & Local Authority -State Govt. (N). \n\nFor other deductor type no value should be provided.",
+     "row": 100
+    },
+    {
+     "no": 58,
+     "name": "Ministry Name (Others)",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "150",
+     "mo": "O",
+     "remarks": "If numeric code '99' (i.e. Other) is provided in Ministry Name field then value in Ministry Name \"Other\" field should be provided",
+     "row": 101
+    },
+    {
+     "no": 59,
+     "name": "PAN of Responsible Person",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Quote ten digit valid PAN of the person responsible (as quoted in field no. 33 above) for deducting tax.",
+     "row": 102
+    },
+    {
+     "no": 60,
+     "name": "Filler 7",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 103
+    },
+    {
+     "no": 61,
+     "name": "Filler 8",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 104
+    },
+    {
+     "no": 62,
+     "name": "Filler 9",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 105
+    },
+    {
+     "no": 63,
+     "name": "Filler 10",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 106
+    },
+    {
+     "no": 64,
+     "name": "Filler 11",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 107
+    },
+    {
+     "no": 65,
+     "name": "Filler 12",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 108
+    },
+    {
+     "no": 66,
+     "name": "Filler 13",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 109
+    },
+    {
+     "no": 67,
+     "name": "Filler 14",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 110
+    },
+    {
+     "no": 68,
+     "name": "Account Office Identification Number (AIN) of PAO/ TO/ CDDO",
+     "col": "",
+     "type": "CHAR",
+     "size": "7",
+     "mo": "O",
+     "remarks": "Mandatory to mention value for statements pertaining to FY 2013-14 onwards.\nApplicable only in case the deductor category is \"Central Govt.\" or \"State Govt.\" and mode of deposit of TDS/TCS is through 'Book Entry' i.e., value in the field no. 37 of challan/ transfer voucher details is \"Y\". Mention AIN of the below:\n1) Pay and Account Office (PAO)\n2) Treasure Office (TO)\n3) Cheque Drawing and Disbursing Officer (CDDO)",
+     "row": 111
+    },
+    {
+     "no": 69,
+     "name": "Goods and Service Tax Number (GSTN)",
+     "col": "",
+     "type": "CHAR",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mention 15 digit valid Goods and Service Tax Number (GSTIN).",
+     "row": 112
+    },
+    {
+     "no": 70,
+     "name": "Count of Section 194P Detail Records (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 113
+    },
+    {
+     "no": 71,
+     "name": "Batch Total of - Gross Total Income as per Section 194P Detail (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 114
+    },
+    {
+     "no": 72,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 115
+    }
+   ],
+   "after": [
+    {
+     "row": 116,
+     "text": "Note: | Single Batch Header record for the entire file"
+    }
+   ]
+  },
+  "CD": {
+   "heading": "TDS Statement for Salary category (Challan Detail Record)",
+   "row": 118,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running sequence number for each line in the file",
+     "row": 120
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value \"CD\" (Challan Detail) for Challan Detail record",
+     "row": 121
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value should be same as 'Batch Number' field in 'Batch Header' record.",
+     "row": 122
+    },
+    {
+     "no": 4,
+     "name": "Challan-Detail Record Number",
+     "col": "A",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial number for 'Challan Detail' records in a batch. Should start with 1",
+     "row": 123
+    },
+    {
+     "no": 5,
+     "name": "Count of Deductee / Party Records",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Count of total number of 'Deductee Detail Records' within e-TDS statement. Value Should be  >= 0",
+     "row": 124
+    },
+    {
+     "no": 6,
+     "name": "NIL Challan Indicator",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be \"N\". In cases where no tax has been deposited in bank, value should be \"Y\" (applicable in case of NIL return)",
+     "row": 125
+    },
+    {
+     "no": 7,
+     "name": "Challan Updation Indicator (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 126
+    },
+    {
+     "no": 8,
+     "name": "Total tax Deducted",
+     "col": "B",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Income Tax\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , i.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 127
+    },
+    {
+     "no": 9,
+     "name": "Total Interest",
+     "col": "C",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Interest\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 128
+    },
+    {
+     "no": 10,
+     "name": "Total fee",
+     "col": "D",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Fee\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 129
+    },
+    {
+     "no": 11,
+     "name": "Total Penalty/ Others",
+     "col": "E",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Penalty\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 130
+    },
+    {
+     "no": 12,
+     "name": "Total of Deposit Amount as per Challan/Total Amount adjusted through Book Adjustment (Total of values in B+C+D+E)",
+     "col": "F",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value. \nValue in this field should be equal to total of values in column numbers B, C, D, E.\n\nIn case of challan (i.e. value under field 13 is C), value in this field should be greater than or equal to:\nTotal tax deposited amount (field no. 25 of all deductee details mapped to corresponding challan) + Interest allocation (field no. 24 of challan details) + Other allocation (field no. 25 of challan details) + Fee amount (field no. 10 of challan details)\n\nIn case of transfer voucher (i.e. value under field 13 is B), value in this field should be greater than or equal to:\nTotal tax deposited amount (field no. 25 of all deductee details mapped to corresponding challan) + Interest allocation (field no. 24 of challan details) + Other allocation (field no. 25 of challan details)",
+     "row": 131
+    },
+    {
+     "no": 13,
+     "name": "Mode of payment of tax (by way of challan/by way of book adjustment)",
+     "col": "G",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "Allowed values C or B\nIf Transfer Voucher Number is provided this is mandatory and only allowed value is 'B'. If Bank Challan Number is provided , then mention value as \"C\". For a Nil statement no value to be provided.\nValue 'C' to be provided, if values under field no. 15 of DD details are '1059' & '1061'.",
+     "row": 132
+    },
+    {
+     "no": 14,
+     "name": "Last BSR Code/ Form 24G Receipt Number ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 133
+    },
+    {
+     "no": 15,
+     "name": "BSR Code/ Form 24G Receipt Number",
+     "col": "H",
+     "type": "INTEGER",
+     "size": "7",
+     "mo": "M",
+     "remarks": "In case TDS deposited by \n1) Challan:BSR Code of the receiving branch\n2) Book Adjustment: Quote seven digit receipt number provided by AO. Applicable for govt. deductor/ collector where TDS is deposited by book entry. \n3) No value to be quoted in case of Nil Statement (value in field \"NIL Challan Indicator\" field is \"Y\").",
+     "row": 134
+    },
+    {
+     "no": 16,
+     "name": "Last Bank Challan No/DDO Serial Number ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 135
+    },
+    {
+     "no": 17,
+     "name": "Bank Challan No/DDO Serial Number",
+     "col": "J",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "O",
+     "remarks": "Challan Number issued by Bank if value in field G is C\nDDO Serial Number if value in column G is B\n Applicable to both Govt and Non Govt, Non-Nil statements.  No value is required to be provided in case of a NIL return (i.e. the cases in which the value in field 'NIL Challan Indicator' is \"Y\").",
+     "row": 136
+    },
+    {
+     "no": 18,
+     "name": "Last Date of 'Bank Challan No / DDO Serial Number' ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 137
+    },
+    {
+     "no": 19,
+     "name": "Date of 'Bank Challan / DDO Serial Number' (DDMMYYYY)",
+     "col": "I",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Date of payment of tax to Govt. It can be any date on or after 1st April of immediate previous financial year for which the return is prepared. Value should be equal to last date of respective quarter if the value in field \"NIL Challan Indicator\" is \"Y\". \nDate of 'Bank Challan / Book Adjustment' should be within the respective quarter for which statement is being filed, in case of minor head code value selected under field no. 23 is '100'. Also this date has to be on or before date present under field 'Date on which Amount paid / Credited' field no. 19 of DD record (which is mapped to this challan with minor head code value '100')",
+     "row": 138
+    },
+    {
+     "no": 20,
+     "name": "Last Total of Deposit Amount as per Challan ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 139
+    },
+    {
+     "no": 21,
+     "name": "Total Tax Deposited Amount as per Deductee annexure  (Total Sum of column no. U) for the specified challan",
+     "col": "",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the sum of  'Deductee Deposit Amount' of the underlying Deductee Records",
+     "row": 140
+    },
+    {
+     "no": 22,
+     "name": "Total Tax Deducted Amount as per Deductee annexure (Total sum of Column no. S) for the specified challan",
+     "col": "",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Total sum of tax deducted amount of the deductee details for the respective Challan",
+     "row": 141
+    },
+    {
+     "no": 23,
+     "name": "Minor Head of Challan",
+     "col": "K",
+     "type": "INTEGER",
+     "size": "3",
+     "mo": "O",
+     "remarks": "Mention value as marked on challan - refer Annexure 7 for minor head\nFor Minor head code 100:\nIf DD details are having section code '1059', or '1061', then minimum 1 deductee should be there for challans having minor head code 100.",
+     "row": 142
+    },
+    {
+     "no": 24,
+     "name": "Interest Allocation",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention interest allocation. Only integer values are allowed. The value of 1000 should be represented as 1000.00 in this field. Mention value as provided in field no. 9 of CD details.",
+     "row": 143
+    },
+    {
+     "no": 25,
+     "name": "Others Allocation",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention fees allocation. Only integer values are allowed for this field. The value of 1000 should be represented as 1000.00 in this field. Mention value as provided in field no. 11 of CD details.",
+     "row": 144
+    },
+    {
+     "no": 26,
+     "name": "Filler 3",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 145
+    },
+    {
+     "no": 27,
+     "name": "Filler 4",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 146
+    },
+    {
+     "no": 28,
+     "name": "Filler 5",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 147
+    },
+    {
+     "no": 29,
+     "name": "Filler 6",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 148
+    },
+    {
+     "no": 30,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 149
+    }
+   ],
+   "after": [
+    {
+     "row": 150,
+     "text": "Separate records for each Challan"
+    }
+   ]
+  },
+  "DD": {
+   "heading": "TDS Statement for Salary category (Deductee Detail Record)",
+   "row": 152,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file",
+     "row": 154
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value \"DD\"(Deductee Detail) for Deductee-detail record",
+     "row": 155
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value should be same as 'Batch Number' field in 'Batch Header' record",
+     "row": 156
+    },
+    {
+     "no": 4,
+     "name": "Deductee / Party Detail Record No",
+     "col": "A",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial number for 'Deductee Detail' records in a batch.",
+     "row": 157
+    },
+    {
+     "no": 5,
+     "name": "Challan reference Number",
+     "col": "B",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial number for 'Challan Detail' records in a batch.",
+     "row": 158
+    },
+    {
+     "no": 6,
+     "name": "Mode",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be O",
+     "row": 159
+    },
+    {
+     "no": 7,
+     "name": "Last deductee PAN ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 160
+    },
+    {
+     "no": 8,
+     "name": "Deductee's PAN",
+     "col": "C",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "PAN of the deductee. If available should be Valid PAN Format. There may be deductees who have not been issued PAN however who have applied for a PAN and have given adequate declaration to the deductor indicating the same.  In such cases, deduction schedule in the statement will not reflect PAN and instead state PAN Ref. Number for the deductee.  The deductor will however have to mention ‘PANAPPLIED’ in place of PAN. If the deductee is not sure of the PAN format he will have to mention 'PANINVALID'.  However if the deductee has not given any declaration, deductor will have to mention ‘PANNOTAVBL’ in place of PAN.  \n\nFor section codes '1059' or '1061', no default PAN values should be allowed under this field. That means default PAN values in case of non-availablity of valid PAN ('PANNOTAVBL', 'PANAPPLIED', 'PANINVALID') will not be allowed for these sections.",
+     "row": 161
+    },
+    {
+     "no": 9,
+     "name": "Name of the Deductee",
+     "col": "D",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of the deductee.",
+     "row": 162
+    },
+    {
+     "no": 10,
+     "name": "Remarks 1 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 163
+    },
+    {
+     "no": 11,
+     "name": "Remarks 2 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 164
+    },
+    {
+     "no": 12,
+     "name": "Status",
+     "col": "I",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "As per Annexure 8",
+     "row": 165
+    },
+    {
+     "no": 13,
+     "name": "Remarks 4 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 166
+    },
+    {
+     "no": 14,
+     "name": "Whether deductee opting out of taxation regime u/s 202(1)",
+     "col": "M",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be Y/N (Yes or No)",
+     "row": 167
+    },
+    {
+     "no": 15,
+     "name": "Section Code",
+     "col": "J",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "As per Annexure 2",
+     "row": 168
+    },
+    {
+     "no": 16,
+     "name": "Nature of Remittance",
+     "col": "K",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "O",
+     "remarks": "Mandatory to mention values for sections present under Annexure 9. For all other sections, no value should be specified.",
+     "row": 169
+    },
+    {
+     "no": 17,
+     "name": "Country to which remittance is made",
+     "col": "L",
+     "type": "INTEGER",
+     "size": "3",
+     "mo": "M",
+     "remarks": "Mention country numeric code as per Annexure 10",
+     "row": 170
+    },
+    {
+     "no": 18,
+     "name": "Whether the total amount of tax deducted as mentioned in Column (S) has been deposited (Yes/No)",
+     "col": "T",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should either \"Y\" or \"N\"",
+     "row": 171
+    },
+    {
+     "no": 19,
+     "name": "Date of payment / Credited (dd/mm/yyyy)",
+     "col": "N",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Date on which Amount paid/ Credited /Debited to deductee. The value under the “Date of Payment / Date on which Amount Collected / Debited” field shall fall within the quarter and financial year to which the statement pertains·",
+     "row": 172
+    },
+    {
+     "no": 20,
+     "name": "Amount Paid/ Credited",
+     "col": "O",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the Amount paid to deductee. Value should always be greater than 0.00",
+     "row": 173
+    },
+    {
+     "no": 21,
+     "name": "Whether the amount paid or credited is grossed up as per section 393(10)",
+     "col": "P",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be Y/N (Yes or No)",
+     "row": 174
+    },
+    {
+     "no": 22,
+     "name": "Amount of cash withdrawal in excess of Rs. 1 crore as referred to in section 393(3) [Table: Sl. No. 5] (in case of person other than co- operative society)",
+     "col": "Q",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mandatory to mention value under this field only when value under field Section Code (field no. 15) of DD records is \"section 393(3), i.e. section code 1065\", else no value should be specified.",
+     "row": 175
+    },
+    {
+     "no": 23,
+     "name": "Amount of cash withdrawal which is in excess of Rs. 3 Crore for cases covered by section 393(3) [Table: Sl. No. 5]\n(in case of co- operative societies)",
+     "col": "R",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mandatory to mention value under this field only when value under field Section Code (field no. 15) of DD records is \"section 393(3), i.e. section code 1064\", else no value should be specified.",
+     "row": 176
+    },
+    {
+     "no": 24,
+     "name": "Total Tax Deducted",
+     "col": "S",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Decimal with precision value 2 is allowed. \nIn case value present under field 15 is 1059'  or '1061', then value under this field should be 0.00.",
+     "row": 177
+    },
+    {
+     "no": 25,
+     "name": "Total Tax Deposited",
+     "col": "U",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Decimal with precision value 2 is allowed. \nIn case value present under field 15 is 1059'  or '1061', then value under this field should be 0.00.",
+     "row": 178
+    },
+    {
+     "no": 26,
+     "name": "Last total Tax deducted (Used for Verification) (Not Applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 179
+    },
+    {
+     "no": 27,
+     "name": "Date of deduction (dd/mm/yyyy)",
+     "col": "V",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Date of tax deduction. Mandatory  if 'Total tax deducted' is greater than Zero (0.00) . No value needs to be specified if 'Total Tax Deducted' is Zero (0.00) . Date to be mentioned in DDMMYYYY format. Also, this date should not be less than the relevant quarter. E.g. If the statement is being prepared for Q2 of Tax Year 2026-27, then date of deduction should be greater than or equal to 01/07/2026.",
+     "row": 180
+    },
+    {
+     "no": 28,
+     "name": "Rate at which Tax Deducted",
+     "col": "W",
+     "type": "DECIMAL",
+     "size": "7",
+     "mo": "M",
+     "remarks": "Rate at which Tax is deducted, with  decimal precision of 4 point. E.g. if the rate is 2 then the same should be mentioned as 2.0000. If value in field 'Total tax collected' is 0.00 then rate at which tax deducted should be 0.0000\n\nIn case value present under field 15 is 1059',  or '1061', then value under this field should be 0.00.",
+     "row": 181
+    },
+    {
+     "no": 29,
+     "name": "Remarks 9 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 182
+    },
+    {
+     "no": 30,
+     "name": "Whether rate of TDS is as per IT Act (a) or\nDTAA (b)",
+     "col": "Z",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Allowed values 'A' or 'B'",
+     "row": 183
+    },
+    {
+     "no": 31,
+     "name": "Unique acknowledgement number of the corresponding Form No. 15CA [FN 144], if applicable",
+     "col": "AA",
+     "type": "CHAR",
+     "size": "26",
+     "mo": "O",
+     "remarks": "Mention value of Unique Identification Number of Form No. 121",
+     "row": 184
+    },
+    {
+     "no": 32,
+     "name": "Reason for non-deduction\n/lower deduction/higher deduction\n(refer Notes 1 to 9)",
+     "col": "AB",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "If applicable quote value (code) as per Annexure 6 else no value to be provided.",
+     "row": 185
+    },
+    {
+     "no": 33,
+     "name": "Certificate number(s) of the certificate under section 395(1) / 395(2)\nissued for non-deduction /lower deduction",
+     "col": "AC",
+     "type": "CHAR",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mandatory to mention 10 or 15 digit alphanumeric value if, \"A\" is mentioned in field no. 32 (Remark field).",
+     "row": 186
+    },
+    {
+     "no": 34,
+     "name": "Filler 1",
+     "col": "",
+     "type": "",
+     "size": "",
+     "mo": "",
+     "remarks": "",
+     "row": 187
+    },
+    {
+     "no": 35,
+     "name": "Filler 2",
+     "col": "",
+     "type": "",
+     "size": "",
+     "mo": "",
+     "remarks": "",
+     "row": 188
+    },
+    {
+     "no": 36,
+     "name": "Filler 3",
+     "col": "",
+     "type": "",
+     "size": "",
+     "mo": "",
+     "remarks": "",
+     "row": 189
+    },
+    {
+     "no": 37,
+     "name": "Address in Country of Residence",
+     "col": "F",
+     "type": "CHAR",
+     "size": "150",
+     "mo": "O",
+     "remarks": "Address in country of residence\nThis field will be mandatory only in case of below conditions are satisfied.\na. if rate of deduction is less than 20%\nb. remark value as 'C'\nc. PAN of the deductee is not available (i.e. 'PANNOTAVBL', 'PANAPPLIED' or 'PANINVALID'). \nd. Value under field no. 16 above (i.e. Nature of remittances) is 16,27, 49, 21, 52 & 31 (Please refer Annexure 9 below).\nMention the address of the deductee. Only special characters are not allowed under this field.",
+     "row": 190
+    },
+    {
+     "no": 38,
+     "name": "Email ID",
+     "col": "G",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "O",
+     "remarks": "1. Email format must be checked -atleast @ and '.' should be mentioned. \n\n2. Both @ and '.' shouldbe preceded and suceeded by atleast one character.\n\n3. At least one '.' should come after '@'.\n\n4.Special characters like *, # ,$, &,_, etc. are allowed for email id. The special characters should be preceeded/subceeded by either @ and/or dot.                     \n This field will be mandatory only in case of below conditions are satisfied.\na. if rate of deduction is less than 20%\nb. remark value as 'C'\nc. PAN of the deductee is not available (i.e. 'PANNOTAVBL', 'PANAPPLIED' or 'PANINVALID'). \nd. Value under field no. 16 above (i.e. Nature of remittances) is 16,27, 49, 21, 52 & 31 (Please refer Annexure 9 below).\ne. Value under field no. 36 above (i.e. Nature of remittances) is 05, 06, 07, 10, 11, 12, 13, 14, 16 or 17  (Please refer Annexure 9 below).\nMention the address of the deductee. Only special characters are not allowed under this field.",
+     "row": 191
+    },
+    {
+     "no": 39,
+     "name": "Contact Number (ISD Code,land line or mob)",
+     "col": "H",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Country calling code for deductor contact number (e.g., 91 for India). Deductor contact number without country code; digits only. Max 15.\nThis field will be mandatory only in case of below conditions are satisfied.\na. if rate of deduction is less than 20%\nb. remark value as 'C'\nc. PAN of the deductee is not available (i.e. 'PANNOTAVBL', 'PANAPPLIED' or 'PANINVALID'). \nd. Value under field no. 16 above (i.e. Nature of remittances) is 16,27, 49, 21, 52 & 31 (Please refer Annexure 8 below).\nValue in this field is applicable for statements pertaining to FY 2016-17 onwards.\nNo value to be provided for statements pertaining prior to FY 2016-17.\ne. Value under field no. 36 above (i.e. Nature of remittances) is 05, 06, 07, 10, 11, 12, 13, 14, 16 or 17  (Please refer Annexure 9 below).\nMention the address of the deductee. Only special characters are not allowed under this field.",
+     "row": 192
+    },
+    {
+     "no": 40,
+     "name": "Filler 7",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 193
+    },
+    {
+     "no": 41,
+     "name": "Tax Identification Number/Unique Identification Number issued by the country of Residence",
+     "col": "E",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Value to be specified as per country of residence\nThis field will be mandatory only in case of below conditions are satisfied.\na. if rate of deduction is less than 20%\nb. remark value as 'C'\nc. PAN of the deductee is not available (i.e. 'PANNOTAVBL', 'PANAPPLIED' or 'PANINVALID'). \nd. Value under field no. 16 above (i.e. Nature of remittances) is 16,27, 49, 21, 52 & 31 (Please refer Annexure 8 below).\nValue in this field is applicable for statements pertaining to FY 2016-17 onwards.\nNo value to be provided for statements pertaining prior to FY 2016-17.\ne. Value under field no. 36 above (i.e. Nature of remittances) is 05, 06, 07, 10, 11, 12, 13, 14, 16 or 17  (Please refer Annexure 9 below).\nMention the address of the deductee. Only special characters are not allowed under this field.\nTax Identification Number of the deductee in the country or specified territory of his residence and in case no such number is available, then a unique number on the basis of which the deductee is identified by the Government of that country or the specified territory of which he claims to be a resident.\nOnly zero's or special characters or only spaces are not allowed under this field.",
+     "row": 194
+    },
+    {
+     "no": 42,
+     "name": "Last Total Tax Deposited  ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 195
+    },
+    {
+     "no": 43,
+     "name": "Filler 10",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 196
+    },
+    {
+     "no": 44,
+     "name": "Filler 11",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 197
+    },
+    {
+     "no": 45,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 198
+    }
+   ],
+   "after": [
+    {
+     "row": 199,
+     "text": "Separate records for each Deductee"
+    }
+   ]
+  }
+ },
+ "annexures": [
+  {
+   "name": "Annexure - 1",
+   "row": 201,
+   "rows": [
+    {
+     "row": 202,
+     "cells": [
+      "State Name",
+      "State Code"
+     ]
+    },
+    {
+     "row": 203,
+     "cells": [
+      "ANDAMAN AND NICOBAR ISLANDS",
+      "01"
+     ]
+    },
+    {
+     "row": 204,
+     "cells": [
+      "ANDHRA PRADESH",
+      "02"
+     ]
+    },
+    {
+     "row": 205,
+     "cells": [
+      "ARUNACHAL PRADESH",
+      "03"
+     ]
+    },
+    {
+     "row": 206,
+     "cells": [
+      "ASSAM",
+      "04"
+     ]
+    },
+    {
+     "row": 207,
+     "cells": [
+      "BIHAR",
+      "05"
+     ]
+    },
+    {
+     "row": 208,
+     "cells": [
+      "CHANDIGARH",
+      "06"
+     ]
+    },
+    {
+     "row": 209,
+     "cells": [
+      "DADRA & NAGAR HAVELI AND DAMAN & DIU",
+      "07"
+     ]
+    },
+    {
+     "row": 210,
+     "cells": [
+      "DELHI",
+      "09"
+     ]
+    },
+    {
+     "row": 211,
+     "cells": [
+      "GOA",
+      "10"
+     ]
+    },
+    {
+     "row": 212,
+     "cells": [
+      "GUJARAT",
+      "11"
+     ]
+    },
+    {
+     "row": 213,
+     "cells": [
+      "HARYANA",
+      "12"
+     ]
+    },
+    {
+     "row": 214,
+     "cells": [
+      "HIMACHAL PRADESH",
+      "13"
+     ]
+    },
+    {
+     "row": 215,
+     "cells": [
+      "JAMMU & KASHMIR",
+      "14"
+     ]
+    },
+    {
+     "row": 216,
+     "cells": [
+      "KARNATAKA",
+      "15"
+     ]
+    },
+    {
+     "row": 217,
+     "cells": [
+      "KERALA",
+      "16"
+     ]
+    },
+    {
+     "row": 218,
+     "cells": [
+      "LAKSHWADEEP",
+      "17"
+     ]
+    },
+    {
+     "row": 219,
+     "cells": [
+      "MADHYA PRADESH",
+      "18"
+     ]
+    },
+    {
+     "row": 220,
+     "cells": [
+      "MAHARASHTRA",
+      "19"
+     ]
+    },
+    {
+     "row": 221,
+     "cells": [
+      "MANIPUR",
+      "20"
+     ]
+    },
+    {
+     "row": 222,
+     "cells": [
+      "MEGHALAYA",
+      "21"
+     ]
+    },
+    {
+     "row": 223,
+     "cells": [
+      "MIZORAM",
+      "22"
+     ]
+    },
+    {
+     "row": 224,
+     "cells": [
+      "NAGALAND",
+      "23"
+     ]
+    },
+    {
+     "row": 225,
+     "cells": [
+      "ODISHA",
+      "24"
+     ]
+    },
+    {
+     "row": 226,
+     "cells": [
+      "PONDICHERRY",
+      "25"
+     ]
+    },
+    {
+     "row": 227,
+     "cells": [
+      "PUNJAB",
+      "26"
+     ]
+    },
+    {
+     "row": 228,
+     "cells": [
+      "RAJASTHAN",
+      "27"
+     ]
+    },
+    {
+     "row": 229,
+     "cells": [
+      "SIKKIM",
+      "28"
+     ]
+    },
+    {
+     "row": 230,
+     "cells": [
+      "TAMIL NADU",
+      "29"
+     ]
+    },
+    {
+     "row": 231,
+     "cells": [
+      "TRIPURA",
+      "30"
+     ]
+    },
+    {
+     "row": 232,
+     "cells": [
+      "UTTAR PRADESH",
+      "31"
+     ]
+    },
+    {
+     "row": 233,
+     "cells": [
+      "WEST BENGAL",
+      "32"
+     ]
+    },
+    {
+     "row": 234,
+     "cells": [
+      "CHHATTISGARH",
+      "33"
+     ]
+    },
+    {
+     "row": 235,
+     "cells": [
+      "UTTARAKHAND",
+      "34"
+     ]
+    },
+    {
+     "row": 236,
+     "cells": [
+      "JHARKHAND",
+      "35"
+     ]
+    },
+    {
+     "row": 237,
+     "cells": [
+      "TELANGANA",
+      "36"
+     ]
+    },
+    {
+     "row": 238,
+     "cells": [
+      "LADAKH",
+      "37"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 2",
+   "row": 240,
+   "rows": [
+    {
+     "row": 241,
+     "cells": [
+      "Nature of Payment",
+      "Section",
+      "Section code to be used in the return"
+     ]
+    },
+    {
+     "row": 242,
+     "cells": [
+      "Any payment of accumulated balance due to an employee",
+      "392(7)",
+      "1004"
+     ]
+    },
+    {
+     "row": 243,
+     "cells": [
+      "Any income referred to in section 211.",
+      "393(2) [Table: Sl. No. 1]",
+      "1039"
+     ]
+    },
+    {
+     "row": 244,
+     "cells": [
+      "Any income by way of interest payable in respect of monies borrowed in foreign currency from a source outside India,— \n(a) under a loan agreement or issue of long term infrastructure bond on or after the 1st July, 2012 but before the 1st July, 2023; or \n(b) by way of issue of any long-term bond on or after the 1st October, 2014 but before the 1st July, 2023, \nwhich is approved by the Central Government in this behalf.",
+      "393(2) [Table: Sl. No.  2]",
+      "1040"
+     ]
+    },
+    {
+     "row": 245,
+     "cells": [
+      "Any income by way of interest payable in respect of monies borrowed from a source outside India by way of issue of rupee denominated bond before the 1st July, 2023.",
+      "393(2) [Table: Sl. No.  3]",
+      "1041"
+     ]
+    },
+    {
+     "row": 246,
+     "cells": [
+      "Any income by way of interest payable in respect of monies borrowed from a source outside India by way of issue of any long-term bond or rupee denominated bond, which is listed only on a recognised stock exchange located in any International Financial Services Centre. - Issued on or after the 1st April, 2020 but before the 1st July, 2023",
+      "393(2) [Table: Sl. No.  4.E(a)]",
+      "1042"
+     ]
+    },
+    {
+     "row": 247,
+     "cells": [
+      "Any income by way of interest payable in respect of monies borrowed from a source outside India by way of issue of any long-term bond or rupee denominated bond, which is listed only on a recognised stock exchange located in any International Financial Services Centre - Issued on or after the 1st July, 2023.",
+      "393(2) [Table: Sl. No.  4.E(b)]",
+      "1043"
+     ]
+    },
+    {
+     "row": 248,
+     "cells": [
+      "Income by way of Interest from Infrastructure debt fund payable to a Non-Resident",
+      "393(2) [Table: Sl. No. 5]",
+      "1044"
+     ]
+    },
+    {
+     "row": 249,
+     "cells": [
+      "Any distributed income referred to in section 223, being of the nature referred to in Schedule V [Table: Sl. No. 3.B(a)]",
+      "393(2) [Table: Sl. No.6.E(a)]",
+      "1045"
+     ]
+    },
+    {
+     "row": 250,
+     "cells": [
+      "Any distributed income referred to in section 223, being of the nature referred to in Schedule V [Table: Sl. No. 3.B(b)]",
+      "393(2) [Table: Sl. No.6.E(b)]",
+      "1046"
+     ]
+    },
+    {
+     "row": 251,
+     "cells": [
+      "Any distributed income referred to in section 223, being of the nature referred to in Schedule V [Table: Sl. No. 4].",
+      "393(2) [Table: Sl. No. 7]",
+      "1047"
+     ]
+    },
+    {
+     "row": 252,
+     "cells": [
+      "Any income, other than that proportion of income which is exempt under Schedule V [Table: Sl. No. 2], in respect of units of an investment fund specified in section 224.",
+      "393(2) [Table: Sl. No.  8]",
+      "1048"
+     ]
+    },
+    {
+     "row": 253,
+     "cells": [
+      "Any income in respect of an investment in a securitisation trust specified in section 221.",
+      "393(2) [Table: Sl. No.  9]",
+      "1049"
+     ]
+    },
+    {
+     "row": 254,
+     "cells": [
+      "Any income— \n(a) in respect of units of a Mutual Fund specified under Schedule VII [Table: Sl. No. 20] or [Table: Sl. No. 21]; or\n(b) from the specified company.",
+      "393(2) [Table: Sl. No.  10]",
+      "1050"
+     ]
+    },
+    {
+     "row": 255,
+     "cells": [
+      "Any income in respect of units referred to in section 208.",
+      "393(2) [Table: Sl. No.  11]",
+      "1051"
+     ]
+    },
+    {
+     "row": 256,
+     "cells": [
+      "Any income by way of long-term capital gains arising from the transfer of units referred to in section 208.",
+      "393(2) [Table: Sl. No.  12]",
+      "1052"
+     ]
+    },
+    {
+     "row": 257,
+     "cells": [
+      "Any income by way of interest or dividends in respect of bonds or Global Depository Receipts referred to in section 209.",
+      "393(2) [Table: Sl. No.  13]",
+      "1053"
+     ]
+    },
+    {
+     "row": 258,
+     "cells": [
+      "Any income by way of long-term capital gains arising from the transfer of bonds or Global Depository Receipts referred to in section 209.",
+      "393(2) [Table: Sl. No.  14]",
+      "1054"
+     ]
+    },
+    {
+     "row": 259,
+     "cells": [
+      "Any income in respect of securities referred to in section 210(1) [Table: Sl. No. 1].",
+      "393(2) [Table: Sl. No.  15]",
+      "1055"
+     ]
+    },
+    {
+     "row": 260,
+     "cells": [
+      "Any income in respect of securities referred to in section 210(1) [Table: Sl. No. 1].",
+      "393(2) [Table: Sl. No.  16]",
+      "1056"
+     ]
+    },
+    {
+     "row": 261,
+     "cells": [
+      "Any interest (not being interest referred to against serial numbers 2, 3, 4 and 5) or any other sum chargeable under the provisions of this Act, not being income chargeable under the head “Salaries”.",
+      "393(2) [Table: Sl. No. 17]",
+      "1057"
+     ]
+    },
+    {
+     "row": 262,
+     "cells": [
+      "Any income by way of winnings (other than winnings from Sl. No. 2 of the table at section 393(3)) from–– (a) any lottery; or (b) crossword puzzle; or (c) card game and other game of any sort; or (d) gambling or betting of any form or nature whatsoever",
+      "393(3) [Table: Sl. No. 1]",
+      "1058"
+     ]
+    },
+    {
+     "row": 263,
+     "cells": [
+      "Any income by way of winnings (other than winnings from Sl. No. 2 of the table at section 393(3)) from–– (a) any lottery; or (b) crossword puzzle; or (c) card game and other game of any sort; or (d) gambling or betting of any form or nature whatsoever where consideration, is made in kind or cash is not sufficient to meet the tax liability and tax has been paid before such winnings are released",
+      "393(3) [Table: Sl. No. 1] Note 2",
+      "1059"
+     ]
+    },
+    {
+     "row": 264,
+     "cells": [
+      "Any income by way of winnings from online game.",
+      "393(3) [Table: Sl. No. 2]",
+      "1060"
+     ]
+    },
+    {
+     "row": 265,
+     "cells": [
+      "Any income by way of winnings from online games, is made in kind or cash is not sufficient to meet the tax liability and tax has been paid before such winnings are released",
+      "393(3) [Table: Sl. No. 2] Note 2",
+      "1061"
+     ]
+    },
+    {
+     "row": 266,
+     "cells": [
+      "Any income by way of winnings from any horse race.",
+      "393(3) [Table: Sl. No. 3]",
+      "1062"
+     ]
+    },
+    {
+     "row": 267,
+     "cells": [
+      "Any income, credited or paid to a person, who is or has been stocking, distributing, purchasing or selling lottery tickets, by way of commission, remuneration or prize (by whatever name called) on such tickets",
+      "393(3) [Table: Sl. No. 4]",
+      "1063"
+     ]
+    },
+    {
+     "row": 268,
+     "cells": [
+      "Payment of certain amounts in cash by bank/ post office / co-operative society to a deductee being a co-operative society",
+      "393(3) [Table: Sl. No.  5.D(a)]",
+      "1064"
+     ]
+    },
+    {
+     "row": 269,
+     "cells": [
+      "Payment of certain amounts in cash by bank/ post office / co-operative society to a deductee being a person other than co-operative society",
+      "393(3) [Table: Sl. No.  5.D(b)]",
+      "1065"
+     ]
+    },
+    {
+     "row": 270,
+     "cells": [
+      "Any amount referred to in section 80CCA(2)(a) of the Income-tax Act, 1961 (43 of 1961).",
+      "393(3) [Table: Sl. No. 6]",
+      "1066"
+     ]
+    },
+    {
+     "row": 271,
+     "cells": [
+      "Any sum in the nature of salary, remuneration, commission, bonus or interest paid to a partner of the firm or credited to his account (including capital account).",
+      "393(3) [Table: Sl. No.  7]",
+      "1067"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 3",
+   "row": 273,
+   "rows": [
+    {
+     "row": 275,
+     "cells": [
+      "Ministry name",
+      "Ministry code"
+     ]
+    },
+    {
+     "row": 276,
+     "cells": [
+      "Agriculture",
+      "01"
+     ]
+    },
+    {
+     "row": 277,
+     "cells": [
+      "Atomic Energy",
+      "02"
+     ]
+    },
+    {
+     "row": 278,
+     "cells": [
+      "Fertilizers",
+      "03"
+     ]
+    },
+    {
+     "row": 279,
+     "cells": [
+      "Chemicals and Petrochemicals",
+      "04"
+     ]
+    },
+    {
+     "row": 280,
+     "cells": [
+      "Civil Aviation and Tourism",
+      "05"
+     ]
+    },
+    {
+     "row": 281,
+     "cells": [
+      "Coal",
+      "06"
+     ]
+    },
+    {
+     "row": 282,
+     "cells": [
+      "Consumer Affairs, Food and Public Distribution",
+      "07"
+     ]
+    },
+    {
+     "row": 283,
+     "cells": [
+      "Commerce and Textiles",
+      "08"
+     ]
+    },
+    {
+     "row": 284,
+     "cells": [
+      "Environment and Forests and Ministry of Earth Science",
+      "09"
+     ]
+    },
+    {
+     "row": 285,
+     "cells": [
+      "External Affairs and Overseas Indian Affairs",
+      "10"
+     ]
+    },
+    {
+     "row": 286,
+     "cells": [
+      "Finance",
+      "11"
+     ]
+    },
+    {
+     "row": 287,
+     "cells": [
+      "Central Board of Direct Taxes",
+      "12"
+     ]
+    },
+    {
+     "row": 288,
+     "cells": [
+      "Central Board of Excise and Customs",
+      "13"
+     ]
+    },
+    {
+     "row": 289,
+     "cells": [
+      "Contoller of Aid Accounts and Audit",
+      "14"
+     ]
+    },
+    {
+     "row": 290,
+     "cells": [
+      "Central Pension Accounting Office",
+      "15"
+     ]
+    },
+    {
+     "row": 291,
+     "cells": [
+      "Food Processing Industries",
+      "16"
+     ]
+    },
+    {
+     "row": 292,
+     "cells": [
+      "Health and Family Welfare",
+      "17"
+     ]
+    },
+    {
+     "row": 293,
+     "cells": [
+      "Home Affairs and Development of North Eastern Region",
+      "18"
+     ]
+    },
+    {
+     "row": 294,
+     "cells": [
+      "Human Resource Development",
+      "19"
+     ]
+    },
+    {
+     "row": 295,
+     "cells": [
+      "Industry",
+      "20"
+     ]
+    },
+    {
+     "row": 296,
+     "cells": [
+      "Information and Broadcasting",
+      "21"
+     ]
+    },
+    {
+     "row": 297,
+     "cells": [
+      "Telecommunication and Information Technology",
+      "22"
+     ]
+    },
+    {
+     "row": 298,
+     "cells": [
+      "Labour",
+      "23"
+     ]
+    },
+    {
+     "row": 299,
+     "cells": [
+      "Law and Justice and Company Affairs",
+      "24"
+     ]
+    },
+    {
+     "row": 300,
+     "cells": [
+      "Personnel, Public Grievances and Pensions",
+      "25"
+     ]
+    },
+    {
+     "row": 301,
+     "cells": [
+      "Petroleum and Natural Gas",
+      "26"
+     ]
+    },
+    {
+     "row": 302,
+     "cells": [
+      "Plannning, Statistics and Programme Implementation",
+      "27"
+     ]
+    },
+    {
+     "row": 303,
+     "cells": [
+      "Power",
+      "28"
+     ]
+    },
+    {
+     "row": 304,
+     "cells": [
+      "New and Renewable Energy",
+      "29"
+     ]
+    },
+    {
+     "row": 305,
+     "cells": [
+      "Rural Development and Panchayati Raj",
+      "30"
+     ]
+    },
+    {
+     "row": 306,
+     "cells": [
+      "Science And Technology",
+      "31"
+     ]
+    },
+    {
+     "row": 307,
+     "cells": [
+      "Space",
+      "32"
+     ]
+    },
+    {
+     "row": 308,
+     "cells": [
+      "Steel",
+      "33"
+     ]
+    },
+    {
+     "row": 309,
+     "cells": [
+      "Mines",
+      "34"
+     ]
+    },
+    {
+     "row": 310,
+     "cells": [
+      "Social Justice and Empowerment",
+      "35"
+     ]
+    },
+    {
+     "row": 311,
+     "cells": [
+      "Tribal Affairs",
+      "36"
+     ]
+    },
+    {
+     "row": 312,
+     "cells": [
+      "D/o Commerce (Supply Division)",
+      "37"
+     ]
+    },
+    {
+     "row": 313,
+     "cells": [
+      "Shipping and Road Transport and Highways",
+      "38"
+     ]
+    },
+    {
+     "row": 314,
+     "cells": [
+      "Urban Development, Urban Employment and Poverty Alleviation",
+      "39"
+     ]
+    },
+    {
+     "row": 315,
+     "cells": [
+      "Water Resources",
+      "40"
+     ]
+    },
+    {
+     "row": 316,
+     "cells": [
+      "President's Secretariat",
+      "41"
+     ]
+    },
+    {
+     "row": 317,
+     "cells": [
+      "Lok Sabha Secretariat",
+      "42"
+     ]
+    },
+    {
+     "row": 318,
+     "cells": [
+      "Rajya Sabha secretariat",
+      "43"
+     ]
+    },
+    {
+     "row": 319,
+     "cells": [
+      "Election Commission",
+      "44"
+     ]
+    },
+    {
+     "row": 320,
+     "cells": [
+      "Ministry of Defence (Controller General of Defence Accounts)",
+      "45"
+     ]
+    },
+    {
+     "row": 321,
+     "cells": [
+      "Ministry of Railways",
+      "46"
+     ]
+    },
+    {
+     "row": 322,
+     "cells": [
+      "Department of Posts",
+      "47"
+     ]
+    },
+    {
+     "row": 323,
+     "cells": [
+      "Department of Telecommunications",
+      "48"
+     ]
+    },
+    {
+     "row": 324,
+     "cells": [
+      "Andaman and Nicobar Islands Administration",
+      "49"
+     ]
+    },
+    {
+     "row": 325,
+     "cells": [
+      "Chandigarh Administration",
+      "50"
+     ]
+    },
+    {
+     "row": 326,
+     "cells": [
+      "Dadra and Nagar Haveli",
+      "51"
+     ]
+    },
+    {
+     "row": 327,
+     "cells": [
+      "Goa, Daman and Diu",
+      "52"
+     ]
+    },
+    {
+     "row": 328,
+     "cells": [
+      "Lakshadweep",
+      "53"
+     ]
+    },
+    {
+     "row": 329,
+     "cells": [
+      "Pondicherry Administration",
+      "54"
+     ]
+    },
+    {
+     "row": 330,
+     "cells": [
+      "Pay and Accounts Officers (Audit)",
+      "55"
+     ]
+    },
+    {
+     "row": 331,
+     "cells": [
+      "Ministry of Non-conventional energy sources",
+      "56"
+     ]
+    },
+    {
+     "row": 332,
+     "cells": [
+      "Government Of NCT of Delhi",
+      "57"
+     ]
+    },
+    {
+     "row": 333,
+     "cells": [
+      "Others",
+      "99"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 4",
+   "row": 335,
+   "rows": [
+    {
+     "row": 336,
+     "cells": [
+      "Category (deductor/collector) description",
+      "Value for Category in database / FVU"
+     ]
+    },
+    {
+     "row": 337,
+     "cells": [
+      "Central Government",
+      "A"
+     ]
+    },
+    {
+     "row": 338,
+     "cells": [
+      "State Government",
+      "S"
+     ]
+    },
+    {
+     "row": 339,
+     "cells": [
+      "Statutory body (Central Govt.)",
+      "D"
+     ]
+    },
+    {
+     "row": 340,
+     "cells": [
+      "Statutory body (State Govt.)",
+      "E"
+     ]
+    },
+    {
+     "row": 341,
+     "cells": [
+      "Autonomous body (Central Govt.)",
+      "G"
+     ]
+    },
+    {
+     "row": 342,
+     "cells": [
+      "Autonomous body (State Govt.)",
+      "H"
+     ]
+    },
+    {
+     "row": 343,
+     "cells": [
+      "Local Authority (Central Govt.)",
+      "L"
+     ]
+    },
+    {
+     "row": 344,
+     "cells": [
+      "Local Authority (State Govt.)",
+      "N"
+     ]
+    },
+    {
+     "row": 345,
+     "cells": [
+      "Company",
+      "K"
+     ]
+    },
+    {
+     "row": 346,
+     "cells": [
+      "Branch / Division of Company",
+      "M"
+     ]
+    },
+    {
+     "row": 347,
+     "cells": [
+      "Association of Person (AOP)",
+      "P"
+     ]
+    },
+    {
+     "row": 348,
+     "cells": [
+      "Association of Person (Trust)",
+      "T"
+     ]
+    },
+    {
+     "row": 349,
+     "cells": [
+      "Artificial Juridical Person",
+      "J"
+     ]
+    },
+    {
+     "row": 350,
+     "cells": [
+      "Body of Individuals",
+      "B"
+     ]
+    },
+    {
+     "row": 351,
+     "cells": [
+      "Individual/HUF",
+      "Q"
+     ]
+    },
+    {
+     "row": 352,
+     "cells": [
+      "Firm",
+      "F"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 5",
+   "row": 354,
+   "rows": [
+    {
+     "row": 355,
+     "cells": [
+      "State Name",
+      "State Code"
+     ]
+    },
+    {
+     "row": 356,
+     "cells": [
+      "ANDAMAN AND NICOBAR ISLANDS",
+      "01"
+     ]
+    },
+    {
+     "row": 357,
+     "cells": [
+      "ANDHRA PRADESH",
+      "02"
+     ]
+    },
+    {
+     "row": 358,
+     "cells": [
+      "ARUNACHAL PRADESH",
+      "03"
+     ]
+    },
+    {
+     "row": 359,
+     "cells": [
+      "ASSAM",
+      "04"
+     ]
+    },
+    {
+     "row": 360,
+     "cells": [
+      "BIHAR",
+      "05"
+     ]
+    },
+    {
+     "row": 361,
+     "cells": [
+      "CHANDIGARH",
+      "06"
+     ]
+    },
+    {
+     "row": 362,
+     "cells": [
+      "DADRA & NAGAR HAVELI AND DAMAN & DIU",
+      "07"
+     ]
+    },
+    {
+     "row": 363,
+     "cells": [
+      "DELHI",
+      "09"
+     ]
+    },
+    {
+     "row": 364,
+     "cells": [
+      "GOA",
+      "10"
+     ]
+    },
+    {
+     "row": 365,
+     "cells": [
+      "GUJARAT",
+      "11"
+     ]
+    },
+    {
+     "row": 366,
+     "cells": [
+      "HARYANA",
+      "12"
+     ]
+    },
+    {
+     "row": 367,
+     "cells": [
+      "HIMACHAL PRADESH",
+      "13"
+     ]
+    },
+    {
+     "row": 368,
+     "cells": [
+      "JAMMU & KASHMIR",
+      "14"
+     ]
+    },
+    {
+     "row": 369,
+     "cells": [
+      "KARNATAKA",
+      "15"
+     ]
+    },
+    {
+     "row": 370,
+     "cells": [
+      "KERALA",
+      "16"
+     ]
+    },
+    {
+     "row": 371,
+     "cells": [
+      "LAKSHWADEEP",
+      "17"
+     ]
+    },
+    {
+     "row": 372,
+     "cells": [
+      "MADHYA PRADESH",
+      "18"
+     ]
+    },
+    {
+     "row": 373,
+     "cells": [
+      "MAHARASHTRA",
+      "19"
+     ]
+    },
+    {
+     "row": 374,
+     "cells": [
+      "MANIPUR",
+      "20"
+     ]
+    },
+    {
+     "row": 375,
+     "cells": [
+      "MEGHALAYA",
+      "21"
+     ]
+    },
+    {
+     "row": 376,
+     "cells": [
+      "MIZORAM",
+      "22"
+     ]
+    },
+    {
+     "row": 377,
+     "cells": [
+      "NAGALAND",
+      "23"
+     ]
+    },
+    {
+     "row": 378,
+     "cells": [
+      "ODISHA",
+      "24"
+     ]
+    },
+    {
+     "row": 379,
+     "cells": [
+      "PONDICHERRY",
+      "25"
+     ]
+    },
+    {
+     "row": 380,
+     "cells": [
+      "PUNJAB",
+      "26"
+     ]
+    },
+    {
+     "row": 381,
+     "cells": [
+      "RAJASTHAN",
+      "27"
+     ]
+    },
+    {
+     "row": 382,
+     "cells": [
+      "SIKKIM",
+      "28"
+     ]
+    },
+    {
+     "row": 383,
+     "cells": [
+      "TAMIL NADU",
+      "29"
+     ]
+    },
+    {
+     "row": 384,
+     "cells": [
+      "TRIPURA",
+      "30"
+     ]
+    },
+    {
+     "row": 385,
+     "cells": [
+      "UTTAR PRADESH",
+      "31"
+     ]
+    },
+    {
+     "row": 386,
+     "cells": [
+      "WEST BENGAL",
+      "32"
+     ]
+    },
+    {
+     "row": 387,
+     "cells": [
+      "CHHATTISGARH",
+      "33"
+     ]
+    },
+    {
+     "row": 388,
+     "cells": [
+      "UTTARAKHAND",
+      "34"
+     ]
+    },
+    {
+     "row": 389,
+     "cells": [
+      "JHARKHAND",
+      "35"
+     ]
+    },
+    {
+     "row": 390,
+     "cells": [
+      "TELANGANA",
+      "36"
+     ]
+    },
+    {
+     "row": 391,
+     "cells": [
+      "LADAKH",
+      "37"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 6",
+   "row": 393,
+   "rows": [
+    {
+     "row": 394,
+     "cells": [
+      "Flag",
+      "New Section as per IT Act, 2025",
+      "Code in FN 144"
+     ]
+    },
+    {
+     "row": 395,
+     "cells": [
+      "A",
+      "392(7)",
+      "1004",
+      "Flag A - “Lower deduction” or “no deduction” is on account of a certificate under section 395(1) and 395(2)"
+     ]
+    },
+    {
+     "row": 396,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No. 1]",
+      "1039"
+     ]
+    },
+    {
+     "row": 397,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  2]",
+      "1040"
+     ]
+    },
+    {
+     "row": 398,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  3]",
+      "1041"
+     ]
+    },
+    {
+     "row": 399,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  4.E(a)]",
+      "1042"
+     ]
+    },
+    {
+     "row": 400,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  4.E(b)]",
+      "1043"
+     ]
+    },
+    {
+     "row": 401,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No. 5]",
+      "1044"
+     ]
+    },
+    {
+     "row": 402,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.6.E(a)]",
+      "1045"
+     ]
+    },
+    {
+     "row": 403,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.6.E(b)]",
+      "1046"
+     ]
+    },
+    {
+     "row": 404,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No. 7]",
+      "1047"
+     ]
+    },
+    {
+     "row": 405,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  8]",
+      "1048"
+     ]
+    },
+    {
+     "row": 406,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  9]",
+      "1049"
+     ]
+    },
+    {
+     "row": 407,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  10]",
+      "1050"
+     ]
+    },
+    {
+     "row": 408,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  11]",
+      "1051"
+     ]
+    },
+    {
+     "row": 409,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  12]",
+      "1052"
+     ]
+    },
+    {
+     "row": 410,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  13]",
+      "1053"
+     ]
+    },
+    {
+     "row": 411,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  14]",
+      "1054"
+     ]
+    },
+    {
+     "row": 412,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  15]",
+      "1055"
+     ]
+    },
+    {
+     "row": 413,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No.  16]",
+      "1056"
+     ]
+    },
+    {
+     "row": 414,
+     "cells": [
+      "A",
+      "393(2) [Table: Sl. No. 17]",
+      "1057"
+     ]
+    },
+    {
+     "row": 415,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No. 1]",
+      "1058"
+     ]
+    },
+    {
+     "row": 416,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No. 2]",
+      "1060"
+     ]
+    },
+    {
+     "row": 417,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No. 3]",
+      "1062"
+     ]
+    },
+    {
+     "row": 418,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No. 4]",
+      "1063"
+     ]
+    },
+    {
+     "row": 419,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No.  5.D(a)]",
+      "1064"
+     ]
+    },
+    {
+     "row": 420,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No.  5.D(b)]",
+      "1065"
+     ]
+    },
+    {
+     "row": 421,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No. 6]",
+      "1066"
+     ]
+    },
+    {
+     "row": 422,
+     "cells": [
+      "A",
+      "393(3) [Table: Sl. No.  7]",
+      "1067"
+     ]
+    },
+    {
+     "row": 423,
+     "cells": [
+      "C",
+      "392(7)",
+      "1004",
+      "Deduction is on higher rate under section 397(2) on account of non-furnishing of PAN"
+     ]
+    },
+    {
+     "row": 424,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No. 1]",
+      "1039"
+     ]
+    },
+    {
+     "row": 425,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  2]",
+      "1040"
+     ]
+    },
+    {
+     "row": 426,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  3]",
+      "1041"
+     ]
+    },
+    {
+     "row": 427,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  4.E(a)]",
+      "1042"
+     ]
+    },
+    {
+     "row": 428,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  4.E(b)]",
+      "1043"
+     ]
+    },
+    {
+     "row": 429,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No. 5]",
+      "1044"
+     ]
+    },
+    {
+     "row": 430,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.6.E(a)]",
+      "1045"
+     ]
+    },
+    {
+     "row": 431,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.6.E(b)]",
+      "1046"
+     ]
+    },
+    {
+     "row": 432,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No. 7]",
+      "1047"
+     ]
+    },
+    {
+     "row": 433,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  8]",
+      "1048"
+     ]
+    },
+    {
+     "row": 434,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  9]",
+      "1049"
+     ]
+    },
+    {
+     "row": 435,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  10]",
+      "1050"
+     ]
+    },
+    {
+     "row": 436,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  11]",
+      "1051"
+     ]
+    },
+    {
+     "row": 437,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  12]",
+      "1052"
+     ]
+    },
+    {
+     "row": 438,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  13]",
+      "1053"
+     ]
+    },
+    {
+     "row": 439,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  14]",
+      "1054"
+     ]
+    },
+    {
+     "row": 440,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  15]",
+      "1055"
+     ]
+    },
+    {
+     "row": 441,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No.  16]",
+      "1056"
+     ]
+    },
+    {
+     "row": 442,
+     "cells": [
+      "C",
+      "393(2) [Table: Sl. No. 17]",
+      "1057"
+     ]
+    },
+    {
+     "row": 443,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No. 1]",
+      "1058"
+     ]
+    },
+    {
+     "row": 444,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No. 2]",
+      "1060"
+     ]
+    },
+    {
+     "row": 445,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No. 3]",
+      "1062"
+     ]
+    },
+    {
+     "row": 446,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No. 4]",
+      "1063"
+     ]
+    },
+    {
+     "row": 447,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No.  5.D(a)]",
+      "1064"
+     ]
+    },
+    {
+     "row": 448,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No.  5.D(b)]",
+      "1065"
+     ]
+    },
+    {
+     "row": 449,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No. 6]",
+      "1066"
+     ]
+    },
+    {
+     "row": 450,
+     "cells": [
+      "C",
+      "393(3) [Table: Sl. No.  7]",
+      "1067"
+     ]
+    },
+    {
+     "row": 452,
+     "cells": [
+      "G",
+      "393(2) [Table: Sl. No. 17]",
+      "1057",
+      "No deduction is made on interest paid by an Offshore Banking Unit as per the provisions of section 393(8)"
+     ]
+    },
+    {
+     "row": 453,
+     "cells": [
+      "H",
+      "393(2) [Table: Sl. No.  16]",
+      "1056",
+      "No deduction is in view of section 393(4) [Table: Sl. No. 17] in respect of an income paid to a specified fund which is exempt as per Schedule VI [Table: Sl. Nos. 1 to 4]"
+     ]
+    },
+    {
+     "row": 454,
+     "cells": [
+      "I",
+      "393(2) [Table: Sl. No.  15]",
+      "1055",
+      "No deduction is in view of section 393(4) [Table: Sl. No. 16] in respect of income of the nature of capital gains on transfer of securities referred to in section 210 paid or payable to a Foreign Institutional Investor"
+     ]
+    },
+    {
+     "row": 456,
+     "cells": [
+      "N",
+      "393(3) [Table: Sl. No.  5.D(a)]",
+      "1064",
+      "No deduction is on account of payment made to a person referred to in section 393(4) [Table: Sl. No. 18] of the Act or on account of notification issued under fifth proviso to section 194N of the Income-tax Act, 1961"
+     ]
+    },
+    {
+     "row": 457,
+     "cells": [
+      "N",
+      "393(3) [Table: Sl. No.  5.D(b)]",
+      "1065"
+     ]
+    },
+    {
+     "row": 459,
+     "cells": [
+      "O",
+      "393(2) [Table: Sl. No.6.E(b)]",
+      "1046",
+      "Any distributed income referred to in section 223, being of the nature referred to in Schedule V [Table: Sl. No. 3.B(b)]"
+     ]
+    },
+    {
+     "row": 460,
+     "cells": [
+      "Y",
+      "392(7)",
+      "1004",
+      "No deduction is on account of payment below threshold limit as specified in the Income-tax Act, 2025"
+     ]
+    },
+    {
+     "row": 461,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No. 1]",
+      "1058"
+     ]
+    },
+    {
+     "row": 462,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No. 1] Note 2",
+      "1059"
+     ]
+    },
+    {
+     "row": 463,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No. 3]",
+      "1062"
+     ]
+    },
+    {
+     "row": 464,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No. 4]",
+      "1063"
+     ]
+    },
+    {
+     "row": 465,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No. 6]",
+      "1066"
+     ]
+    },
+    {
+     "row": 466,
+     "cells": [
+      "Y",
+      "393(3) [Table: Sl. No.  7]",
+      "1067"
+     ]
+    },
+    {
+     "row": 467,
+     "cells": [
+      "Z",
+      "393(2) [Table: Sl. No. 17]",
+      "1057",
+      "No deduction or lower deduction is on account of payment in view of notification issued under section 400(1) of the Act"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 7 - Minor head code",
+   "row": 469,
+   "rows": [
+    {
+     "row": 470,
+     "cells": [
+      "Particulars",
+      "Code"
+     ]
+    },
+    {
+     "row": 471,
+     "cells": [
+      "TDS payable by taxpayer",
+      "200"
+     ]
+    },
+    {
+     "row": 472,
+     "cells": [
+      "TDS regular assessment (Raised by I. T, Dept.)",
+      "400"
+     ]
+    },
+    {
+     "row": 473,
+     "cells": [
+      "Advance Tax",
+      "100"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 8 - Status",
+   "row": 475,
+   "rows": [
+    {
+     "row": 476,
+     "cells": [
+      "Description",
+      "Code"
+     ]
+    },
+    {
+     "row": 477,
+     "cells": [
+      "Company",
+      "1"
+     ]
+    },
+    {
+     "row": 478,
+     "cells": [
+      "Individual",
+      "2"
+     ]
+    },
+    {
+     "row": 479,
+     "cells": [
+      "Hindu undivided family",
+      "3"
+     ]
+    },
+    {
+     "row": 480,
+     "cells": [
+      "Association of Persons (AOP) except in case of AOP consisting of only companies as its members",
+      "4"
+     ]
+    },
+    {
+     "row": 481,
+     "cells": [
+      "Association of Persons (AOP) consisting of only companies as its members",
+      "5"
+     ]
+    },
+    {
+     "row": 482,
+     "cells": [
+      "Co-operative society",
+      "6"
+     ]
+    },
+    {
+     "row": 483,
+     "cells": [
+      "Firm",
+      "7"
+     ]
+    },
+    {
+     "row": 484,
+     "cells": [
+      "Body of individuals",
+      "8"
+     ]
+    },
+    {
+     "row": 485,
+     "cells": [
+      "Artificial juridical person referred to in clause (g) of sub-section (77) of section 2 of the Income-tax Act, 2025",
+      "9"
+     ]
+    },
+    {
+     "row": 486,
+     "cells": [
+      "Others",
+      "10"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 9",
+   "row": 488,
+   "rows": [
+    {
+     "row": 489,
+     "cells": [
+      "Nature of Remittance",
+      "Code",
+      "Section code."
+     ]
+    },
+    {
+     "row": 490,
+     "cells": [
+      "Interest income",
+      "27",
+      "1040"
+     ]
+    },
+    {
+     "row": 491,
+     "cells": [
+      "Interest income",
+      "27",
+      "1041"
+     ]
+    },
+    {
+     "row": 492,
+     "cells": [
+      "Interest income",
+      "27",
+      "1042"
+     ]
+    },
+    {
+     "row": 493,
+     "cells": [
+      "Interest income",
+      "27",
+      "1043"
+     ]
+    },
+    {
+     "row": 494,
+     "cells": [
+      "Interest income",
+      "27",
+      "1044"
+     ]
+    },
+    {
+     "row": 495,
+     "cells": [
+      "Interest income",
+      "27",
+      "1045"
+     ]
+    },
+    {
+     "row": 496,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16",
+      "1046"
+     ]
+    },
+    {
+     "row": 497,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 498,
+     "cells": [
+      "Interest income",
+      "27",
+      "1048"
+     ]
+    },
+    {
+     "row": 499,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 500,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 501,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 502,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 503,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 504,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 505,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 506,
+     "cells": [
+      "Interest income",
+      "27",
+      "1049"
+     ]
+    },
+    {
+     "row": 507,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 508,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 509,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 510,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 511,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 512,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 513,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 514,
+     "cells": [
+      "Interest income",
+      "27",
+      "1050"
+     ]
+    },
+    {
+     "row": 515,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 516,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 517,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 518,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 519,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 520,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 521,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 522,
+     "cells": [
+      "Interest income",
+      "27",
+      "1051"
+     ]
+    },
+    {
+     "row": 523,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 524,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 525,
+     "cells": [
+      "Long Term Capital Gains arising from transfer Transfer of Units reffered to in Section 208",
+      "71",
+      "1052"
+     ]
+    },
+    {
+     "row": 526,
+     "cells": [
+      "Interest income",
+      "27",
+      "1053"
+     ]
+    },
+    {
+     "row": 527,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 528,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 529,
+     "cells": [
+      "Long-term capital gains arising from the transfer of bonds or Global Depository Receipts referred to in section 209",
+      "72",
+      "1054"
+     ]
+    },
+    {
+     "row": 530,
+     "cells": [
+      "Interest income",
+      "27",
+      "1055"
+     ]
+    },
+    {
+     "row": 531,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 532,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 533,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 534,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 535,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 536,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 537,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 538,
+     "cells": [
+      "Interest income",
+      "27",
+      "1056"
+     ]
+    },
+    {
+     "row": 539,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 540,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 541,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 542,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 543,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 544,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 545,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 546,
+     "cells": [
+      "Interest income",
+      "27",
+      "1057"
+     ]
+    },
+    {
+     "row": 547,
+     "cells": [
+      "Dividend income referred to in the in the section 207(1) [Table: Sl. No.1]",
+      "73"
+     ]
+    },
+    {
+     "row": 548,
+     "cells": [
+      "Dividend income referred to in the section 207(1) [Table: Sl. No.2]",
+      "16"
+     ]
+    },
+    {
+     "row": 549,
+     "cells": [
+      "Investment income",
+      "28"
+     ]
+    },
+    {
+     "row": 550,
+     "cells": [
+      "Long term capital gains referred to in section 214 [Table: Sl. No. 2]",
+      "66"
+     ]
+    },
+    {
+     "row": 551,
+     "cells": [
+      "Long term capital gains referred to in section 197(1)",
+      "67"
+     ]
+    },
+    {
+     "row": 552,
+     "cells": [
+      "LTCG  other than those specifically listed under Schedule II, Sl. No. 14 and Sl. No. 17 [related to section 10(36) of IT ACT-1961]",
+      "68"
+     ]
+    },
+    {
+     "row": 553,
+     "cells": [
+      "Long term capital gains referred to in section 198 exceeding one lakh twenty-five thousand rupees,",
+      "69"
+     ]
+    },
+    {
+     "row": 554,
+     "cells": [
+      "Short term capital gains referred to in section 196",
+      "70"
+     ]
+    },
+    {
+     "row": 555,
+     "cells": [
+      "Fees for Technical Services/ Fees for included services where the agreement is made after the 31st March, 1976",
+      "21"
+     ]
+    },
+    {
+     "row": 556,
+     "cells": [
+      "Fees for Technical Services/ Fees for included services where the agreement is made after the 29th February, 1964 but before the 1st April, 1976",
+      "74"
+     ]
+    },
+    {
+     "row": 557,
+     "cells": [
+      "Royalty where the agreement is made after the 31st March, 1976",
+      "49"
+     ]
+    },
+    {
+     "row": 558,
+     "cells": [
+      "Royalty where the agreement is made after the 31st March, 1961 but before the 1st April, 1976",
+      "75"
+     ]
+    },
+    {
+     "row": 559,
+     "cells": [
+      "Other income",
+      "99"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 10 - Country name",
+   "row": 562,
+   "rows": [
+    {
+     "row": 563,
+     "cells": [
+      "Particulars",
+      "Country code"
+     ]
+    },
+    {
+     "row": 564,
+     "cells": [
+      "AFGHANISTAN",
+      "01"
+     ]
+    },
+    {
+     "row": 565,
+     "cells": [
+      "AKROTIRI",
+      "02"
+     ]
+    },
+    {
+     "row": 566,
+     "cells": [
+      "ALBANIA",
+      "03"
+     ]
+    },
+    {
+     "row": 567,
+     "cells": [
+      "ALGERIA",
+      "04"
+     ]
+    },
+    {
+     "row": 568,
+     "cells": [
+      "AMERICAN SAMOA",
+      "05"
+     ]
+    },
+    {
+     "row": 569,
+     "cells": [
+      "ANDORRA",
+      "06"
+     ]
+    },
+    {
+     "row": 570,
+     "cells": [
+      "ANGOLA",
+      "07"
+     ]
+    },
+    {
+     "row": 571,
+     "cells": [
+      "ANGUILLA",
+      "08"
+     ]
+    },
+    {
+     "row": 572,
+     "cells": [
+      "ANTARCTICA",
+      "09"
+     ]
+    },
+    {
+     "row": 573,
+     "cells": [
+      "ANTIGUA AND BARBUDA",
+      "10"
+     ]
+    },
+    {
+     "row": 574,
+     "cells": [
+      "ARGENTINA",
+      "11"
+     ]
+    },
+    {
+     "row": 575,
+     "cells": [
+      "ARMENIA",
+      "12"
+     ]
+    },
+    {
+     "row": 576,
+     "cells": [
+      "ARUBA",
+      "13"
+     ]
+    },
+    {
+     "row": 577,
+     "cells": [
+      "ASHMORE AND CARTIER ISLANDS",
+      "14"
+     ]
+    },
+    {
+     "row": 578,
+     "cells": [
+      "AUSTRALIA",
+      "15"
+     ]
+    },
+    {
+     "row": 579,
+     "cells": [
+      "AUSTRIA",
+      "16"
+     ]
+    },
+    {
+     "row": 580,
+     "cells": [
+      "AZERBAIJAN",
+      "17"
+     ]
+    },
+    {
+     "row": 581,
+     "cells": [
+      "BAHRAIN",
+      "18"
+     ]
+    },
+    {
+     "row": 582,
+     "cells": [
+      "BAILIWICK OF GUERNSEY",
+      "19"
+     ]
+    },
+    {
+     "row": 583,
+     "cells": [
+      "BAILIWICK OF JERSEY",
+      "20"
+     ]
+    },
+    {
+     "row": 584,
+     "cells": [
+      "BAKER ISLAND",
+      "21"
+     ]
+    },
+    {
+     "row": 585,
+     "cells": [
+      "BANGLADESH",
+      "22"
+     ]
+    },
+    {
+     "row": 586,
+     "cells": [
+      "BARBADOS",
+      "23"
+     ]
+    },
+    {
+     "row": 587,
+     "cells": [
+      "BELARUS",
+      "24"
+     ]
+    },
+    {
+     "row": 588,
+     "cells": [
+      "BELGIUM",
+      "25"
+     ]
+    },
+    {
+     "row": 589,
+     "cells": [
+      "BELIZE",
+      "26"
+     ]
+    },
+    {
+     "row": 590,
+     "cells": [
+      "BENIN PORTO",
+      "27"
+     ]
+    },
+    {
+     "row": 591,
+     "cells": [
+      "BERMUDA",
+      "28"
+     ]
+    },
+    {
+     "row": 592,
+     "cells": [
+      "BHUTAN",
+      "29"
+     ]
+    },
+    {
+     "row": 593,
+     "cells": [
+      "BOLIVIA",
+      "30"
+     ]
+    },
+    {
+     "row": 594,
+     "cells": [
+      "BOSNIAAND HERZEGOVINA",
+      "31"
+     ]
+    },
+    {
+     "row": 595,
+     "cells": [
+      "BOTSWANA",
+      "32"
+     ]
+    },
+    {
+     "row": 596,
+     "cells": [
+      "BOUVET ISLAND",
+      "33"
+     ]
+    },
+    {
+     "row": 597,
+     "cells": [
+      "BRAZIL",
+      "34"
+     ]
+    },
+    {
+     "row": 598,
+     "cells": [
+      "BRITISH INDIAN OCEAN TERRITORY",
+      "35"
+     ]
+    },
+    {
+     "row": 599,
+     "cells": [
+      "BRUNEI",
+      "36"
+     ]
+    },
+    {
+     "row": 600,
+     "cells": [
+      "BULGARIA",
+      "37"
+     ]
+    },
+    {
+     "row": 601,
+     "cells": [
+      "BURKINA FASO",
+      "38"
+     ]
+    },
+    {
+     "row": 602,
+     "cells": [
+      "BURUNDI",
+      "39"
+     ]
+    },
+    {
+     "row": 603,
+     "cells": [
+      "CAMBODIA",
+      "40"
+     ]
+    },
+    {
+     "row": 604,
+     "cells": [
+      "CAMEROON",
+      "41"
+     ]
+    },
+    {
+     "row": 605,
+     "cells": [
+      "CANADA",
+      "42"
+     ]
+    },
+    {
+     "row": 606,
+     "cells": [
+      "CAPE VERDE",
+      "43"
+     ]
+    },
+    {
+     "row": 607,
+     "cells": [
+      "CAYMAN ISLANDS",
+      "44"
+     ]
+    },
+    {
+     "row": 608,
+     "cells": [
+      "CENTRAL AFRICAN REPUBLIC",
+      "45"
+     ]
+    },
+    {
+     "row": 609,
+     "cells": [
+      "CHAD",
+      "46"
+     ]
+    },
+    {
+     "row": 610,
+     "cells": [
+      "CHILE",
+      "47"
+     ]
+    },
+    {
+     "row": 611,
+     "cells": [
+      "CHINA",
+      "48"
+     ]
+    },
+    {
+     "row": 612,
+     "cells": [
+      "CHRISTMAS ISLAND",
+      "49"
+     ]
+    },
+    {
+     "row": 613,
+     "cells": [
+      "CLIPPERTON ISLAND",
+      "50"
+     ]
+    },
+    {
+     "row": 614,
+     "cells": [
+      "COCOS (KEELING) ISLANDS",
+      "51"
+     ]
+    },
+    {
+     "row": 615,
+     "cells": [
+      "COLOMBIA",
+      "52"
+     ]
+    },
+    {
+     "row": 616,
+     "cells": [
+      "COMMONWEALTH OF PUERTO RICO",
+      "53"
+     ]
+    },
+    {
+     "row": 617,
+     "cells": [
+      "COMMONWEALTH OF THE NORTHERN MARIANA ISLANDS",
+      "54"
+     ]
+    },
+    {
+     "row": 618,
+     "cells": [
+      "COMOROS",
+      "55"
+     ]
+    },
+    {
+     "row": 619,
+     "cells": [
+      "CONGO,DEMOCRATIC REPUBLIC OF THE",
+      "56"
+     ]
+    },
+    {
+     "row": 620,
+     "cells": [
+      "CONGO,REPUBLIC OF THE",
+      "57"
+     ]
+    },
+    {
+     "row": 621,
+     "cells": [
+      "COOK ISLANDS",
+      "58"
+     ]
+    },
+    {
+     "row": 622,
+     "cells": [
+      "CORAL SEA ISLANDS",
+      "59"
+     ]
+    },
+    {
+     "row": 623,
+     "cells": [
+      "CORAL SEA ISLANDS TERRITORY",
+      "60"
+     ]
+    },
+    {
+     "row": 624,
+     "cells": [
+      "COSTA RICA",
+      "61"
+     ]
+    },
+    {
+     "row": 625,
+     "cells": [
+      "COTE D'IVOIRE",
+      "62"
+     ]
+    },
+    {
+     "row": 626,
+     "cells": [
+      "CROATIA",
+      "63"
+     ]
+    },
+    {
+     "row": 627,
+     "cells": [
+      "CUBA",
+      "64"
+     ]
+    },
+    {
+     "row": 628,
+     "cells": [
+      "CYPRUS",
+      "65"
+     ]
+    },
+    {
+     "row": 629,
+     "cells": [
+      "CZECH REPUBLIC",
+      "66"
+     ]
+    },
+    {
+     "row": 630,
+     "cells": [
+      "DENMARK",
+      "67"
+     ]
+    },
+    {
+     "row": 631,
+     "cells": [
+      "DEPARTMENTAL COLLECTIVITY OF MAYOTTE",
+      "68"
+     ]
+    },
+    {
+     "row": 632,
+     "cells": [
+      "DHEKELIA",
+      "69"
+     ]
+    },
+    {
+     "row": 633,
+     "cells": [
+      "DJIBOUTI",
+      "70"
+     ]
+    },
+    {
+     "row": 634,
+     "cells": [
+      "DOMINICA",
+      "71"
+     ]
+    },
+    {
+     "row": 635,
+     "cells": [
+      "DOMINICAN REPUBLIC",
+      "72"
+     ]
+    },
+    {
+     "row": 636,
+     "cells": [
+      "EAST TIMOR (TIMORLASTE)",
+      "73"
+     ]
+    },
+    {
+     "row": 637,
+     "cells": [
+      "ECUADOR",
+      "74"
+     ]
+    },
+    {
+     "row": 638,
+     "cells": [
+      "EGYPT",
+      "75"
+     ]
+    },
+    {
+     "row": 639,
+     "cells": [
+      "ELSALVADOR",
+      "76"
+     ]
+    },
+    {
+     "row": 640,
+     "cells": [
+      "EQUATORIAL GUINEA",
+      "77"
+     ]
+    },
+    {
+     "row": 641,
+     "cells": [
+      "ERITREA",
+      "78"
+     ]
+    },
+    {
+     "row": 642,
+     "cells": [
+      "ESTONIA",
+      "79"
+     ]
+    },
+    {
+     "row": 643,
+     "cells": [
+      "ETHIOPIA",
+      "80"
+     ]
+    },
+    {
+     "row": 644,
+     "cells": [
+      "FALKLAND ISLANDS (ISLAS MALVINAS)",
+      "81"
+     ]
+    },
+    {
+     "row": 645,
+     "cells": [
+      "FAROE ISLANDS",
+      "82"
+     ]
+    },
+    {
+     "row": 646,
+     "cells": [
+      "FIJI",
+      "83"
+     ]
+    },
+    {
+     "row": 647,
+     "cells": [
+      "FINLAND",
+      "84"
+     ]
+    },
+    {
+     "row": 648,
+     "cells": [
+      "FRANCE",
+      "85"
+     ]
+    },
+    {
+     "row": 649,
+     "cells": [
+      "FRENCH GUIANA",
+      "86"
+     ]
+    },
+    {
+     "row": 650,
+     "cells": [
+      "FRENCH POLYNESIA",
+      "87"
+     ]
+    },
+    {
+     "row": 651,
+     "cells": [
+      "FRENCH SOUTHERN ISLANDS",
+      "88"
+     ]
+    },
+    {
+     "row": 652,
+     "cells": [
+      "GABON",
+      "89"
+     ]
+    },
+    {
+     "row": 653,
+     "cells": [
+      "GEORGIA",
+      "90"
+     ]
+    },
+    {
+     "row": 654,
+     "cells": [
+      "GERMANY",
+      "91"
+     ]
+    },
+    {
+     "row": 655,
+     "cells": [
+      "GEURNSEY",
+      "92"
+     ]
+    },
+    {
+     "row": 656,
+     "cells": [
+      "GHANA",
+      "93"
+     ]
+    },
+    {
+     "row": 657,
+     "cells": [
+      "GIBRALTAR",
+      "94"
+     ]
+    },
+    {
+     "row": 658,
+     "cells": [
+      "GREECE",
+      "95"
+     ]
+    },
+    {
+     "row": 659,
+     "cells": [
+      "GREENLAND",
+      "96"
+     ]
+    },
+    {
+     "row": 660,
+     "cells": [
+      "GRENADA",
+      "97"
+     ]
+    },
+    {
+     "row": 661,
+     "cells": [
+      "GUADELOUPE",
+      "98"
+     ]
+    },
+    {
+     "row": 662,
+     "cells": [
+      "GUAM",
+      "100"
+     ]
+    },
+    {
+     "row": 663,
+     "cells": [
+      "GUATEMALA",
+      "101"
+     ]
+    },
+    {
+     "row": 664,
+     "cells": [
+      "GUERNSEY",
+      "102"
+     ]
+    },
+    {
+     "row": 665,
+     "cells": [
+      "GUINEA",
+      "103"
+     ]
+    },
+    {
+     "row": 666,
+     "cells": [
+      "GUINEABISSAU",
+      "104"
+     ]
+    },
+    {
+     "row": 667,
+     "cells": [
+      "GUYANA",
+      "105"
+     ]
+    },
+    {
+     "row": 668,
+     "cells": [
+      "HAITI",
+      "106"
+     ]
+    },
+    {
+     "row": 669,
+     "cells": [
+      "HEARD ISLAND AND MCDONALD ISLANDS",
+      "107"
+     ]
+    },
+    {
+     "row": 670,
+     "cells": [
+      "HONDURAS",
+      "108"
+     ]
+    },
+    {
+     "row": 671,
+     "cells": [
+      "HONG KONG",
+      "109"
+     ]
+    },
+    {
+     "row": 672,
+     "cells": [
+      "HOWLAND ISLAND",
+      "110"
+     ]
+    },
+    {
+     "row": 673,
+     "cells": [
+      "HUNGARY",
+      "111"
+     ]
+    },
+    {
+     "row": 674,
+     "cells": [
+      "ICELAND",
+      "112"
+     ]
+    },
+    {
+     "row": 675,
+     "cells": [
+      "INDIA",
+      "113"
+     ]
+    },
+    {
+     "row": 676,
+     "cells": [
+      "INDONESIA",
+      "114"
+     ]
+    },
+    {
+     "row": 677,
+     "cells": [
+      "IRAN",
+      "115"
+     ]
+    },
+    {
+     "row": 678,
+     "cells": [
+      "IRAQ",
+      "116"
+     ]
+    },
+    {
+     "row": 679,
+     "cells": [
+      "IRELAND",
+      "117"
+     ]
+    },
+    {
+     "row": 680,
+     "cells": [
+      "ISLE OF MAN",
+      "118"
+     ]
+    },
+    {
+     "row": 681,
+     "cells": [
+      "ISRAEL",
+      "119"
+     ]
+    },
+    {
+     "row": 682,
+     "cells": [
+      "ITALY",
+      "120"
+     ]
+    },
+    {
+     "row": 683,
+     "cells": [
+      "JAMAICA",
+      "121"
+     ]
+    },
+    {
+     "row": 684,
+     "cells": [
+      "JAN MAYEN",
+      "122"
+     ]
+    },
+    {
+     "row": 685,
+     "cells": [
+      "JAPAN",
+      "123"
+     ]
+    },
+    {
+     "row": 686,
+     "cells": [
+      "JARVIS ISLAND",
+      "124"
+     ]
+    },
+    {
+     "row": 687,
+     "cells": [
+      "JERSEY",
+      "125"
+     ]
+    },
+    {
+     "row": 688,
+     "cells": [
+      "JOHNSTON ATOLL",
+      "126"
+     ]
+    },
+    {
+     "row": 689,
+     "cells": [
+      "JORDAN",
+      "127"
+     ]
+    },
+    {
+     "row": 690,
+     "cells": [
+      "KAZAKHSTAN",
+      "128"
+     ]
+    },
+    {
+     "row": 691,
+     "cells": [
+      "KENYA",
+      "129"
+     ]
+    },
+    {
+     "row": 692,
+     "cells": [
+      "KINGMAN REEF",
+      "130"
+     ]
+    },
+    {
+     "row": 693,
+     "cells": [
+      "KIRIBATI",
+      "131"
+     ]
+    },
+    {
+     "row": 694,
+     "cells": [
+      "KOREA, NORTH",
+      "132"
+     ]
+    },
+    {
+     "row": 695,
+     "cells": [
+      "KOREA, SOUTH",
+      "133"
+     ]
+    },
+    {
+     "row": 696,
+     "cells": [
+      "KOSOVO",
+      "134"
+     ]
+    },
+    {
+     "row": 697,
+     "cells": [
+      "KUWAIT",
+      "135"
+     ]
+    },
+    {
+     "row": 698,
+     "cells": [
+      "KYRGYZSTAN",
+      "136"
+     ]
+    },
+    {
+     "row": 699,
+     "cells": [
+      "LAOS",
+      "137"
+     ]
+    },
+    {
+     "row": 700,
+     "cells": [
+      "LATVIA",
+      "138"
+     ]
+    },
+    {
+     "row": 701,
+     "cells": [
+      "LEBANON",
+      "139"
+     ]
+    },
+    {
+     "row": 702,
+     "cells": [
+      "LESOTHO",
+      "140"
+     ]
+    },
+    {
+     "row": 703,
+     "cells": [
+      "LIBERIA",
+      "141"
+     ]
+    },
+    {
+     "row": 704,
+     "cells": [
+      "LIBYA",
+      "142"
+     ]
+    },
+    {
+     "row": 705,
+     "cells": [
+      "LIECHTENSTEIN",
+      "143"
+     ]
+    },
+    {
+     "row": 706,
+     "cells": [
+      "LITHUANIA",
+      "144"
+     ]
+    },
+    {
+     "row": 707,
+     "cells": [
+      "LUXEMBOURG",
+      "145"
+     ]
+    },
+    {
+     "row": 708,
+     "cells": [
+      "MACAU",
+      "146"
+     ]
+    },
+    {
+     "row": 709,
+     "cells": [
+      "MACEDONIA",
+      "147"
+     ]
+    },
+    {
+     "row": 710,
+     "cells": [
+      "MADAGASCAR",
+      "148"
+     ]
+    },
+    {
+     "row": 711,
+     "cells": [
+      "MALAWI",
+      "149"
+     ]
+    },
+    {
+     "row": 712,
+     "cells": [
+      "MALAYSIA",
+      "150"
+     ]
+    },
+    {
+     "row": 713,
+     "cells": [
+      "MALAYSIA (LABUAN)",
+      "151"
+     ]
+    },
+    {
+     "row": 714,
+     "cells": [
+      "MALDIVES",
+      "152"
+     ]
+    },
+    {
+     "row": 715,
+     "cells": [
+      "MALI",
+      "153"
+     ]
+    },
+    {
+     "row": 716,
+     "cells": [
+      "MALTA",
+      "154"
+     ]
+    },
+    {
+     "row": 717,
+     "cells": [
+      "MARSHALLISLANDS",
+      "155"
+     ]
+    },
+    {
+     "row": 718,
+     "cells": [
+      "MARTINIQUE",
+      "156"
+     ]
+    },
+    {
+     "row": 719,
+     "cells": [
+      "MAURITANIA",
+      "157"
+     ]
+    },
+    {
+     "row": 720,
+     "cells": [
+      "MAURITIUS",
+      "158"
+     ]
+    },
+    {
+     "row": 721,
+     "cells": [
+      "MAYOTTE",
+      "159"
+     ]
+    },
+    {
+     "row": 722,
+     "cells": [
+      "UNITED MEXICAN STATES",
+      "160"
+     ]
+    },
+    {
+     "row": 723,
+     "cells": [
+      "MICRONESIA, FEDERATED STATES OF",
+      "161"
+     ]
+    },
+    {
+     "row": 724,
+     "cells": [
+      "MIDWAY ISLANDS",
+      "162"
+     ]
+    },
+    {
+     "row": 725,
+     "cells": [
+      "MOLDOVA",
+      "163"
+     ]
+    },
+    {
+     "row": 726,
+     "cells": [
+      "MONACO",
+      "164"
+     ]
+    },
+    {
+     "row": 727,
+     "cells": [
+      "MONGOLIA",
+      "165"
+     ]
+    },
+    {
+     "row": 728,
+     "cells": [
+      "MONTENEGRO",
+      "166"
+     ]
+    },
+    {
+     "row": 729,
+     "cells": [
+      "MONTSERRAT",
+      "167"
+     ]
+    },
+    {
+     "row": 730,
+     "cells": [
+      "MOROCCO",
+      "168"
+     ]
+    },
+    {
+     "row": 731,
+     "cells": [
+      "MOZAMBIQUE",
+      "169"
+     ]
+    },
+    {
+     "row": 732,
+     "cells": [
+      "MYANMAR (BURMA)",
+      "170"
+     ]
+    },
+    {
+     "row": 733,
+     "cells": [
+      "NAMIBIA",
+      "171"
+     ]
+    },
+    {
+     "row": 734,
+     "cells": [
+      "NAURU",
+      "172"
+     ]
+    },
+    {
+     "row": 735,
+     "cells": [
+      "NAVASSA ISLAND",
+      "173"
+     ]
+    },
+    {
+     "row": 736,
+     "cells": [
+      "NEPAL",
+      "174"
+     ]
+    },
+    {
+     "row": 737,
+     "cells": [
+      "NETHERLANDS",
+      "175"
+     ]
+    },
+    {
+     "row": 738,
+     "cells": [
+      "NETHERLANDS ANTILLES",
+      "176"
+     ]
+    },
+    {
+     "row": 739,
+     "cells": [
+      "NEW CALEDONIA",
+      "177"
+     ]
+    },
+    {
+     "row": 740,
+     "cells": [
+      "NEWZEALAND",
+      "178"
+     ]
+    },
+    {
+     "row": 741,
+     "cells": [
+      "NICARAGUA",
+      "179"
+     ]
+    },
+    {
+     "row": 742,
+     "cells": [
+      "NIGER",
+      "180"
+     ]
+    },
+    {
+     "row": 743,
+     "cells": [
+      "NIGERIA",
+      "181"
+     ]
+    },
+    {
+     "row": 744,
+     "cells": [
+      "NIUE",
+      "182"
+     ]
+    },
+    {
+     "row": 745,
+     "cells": [
+      "NORFOLK ISLAND",
+      "183"
+     ]
+    },
+    {
+     "row": 746,
+     "cells": [
+      "NORTHERN MARIANA ISLANDS",
+      "184"
+     ]
+    },
+    {
+     "row": 747,
+     "cells": [
+      "NORWAY",
+      "185"
+     ]
+    },
+    {
+     "row": 748,
+     "cells": [
+      "OMAN",
+      "186"
+     ]
+    },
+    {
+     "row": 749,
+     "cells": [
+      "PAKISTAN",
+      "187"
+     ]
+    },
+    {
+     "row": 750,
+     "cells": [
+      "PALAU",
+      "188"
+     ]
+    },
+    {
+     "row": 751,
+     "cells": [
+      "PALMYRA ATOLL",
+      "189"
+     ]
+    },
+    {
+     "row": 752,
+     "cells": [
+      "PANAMA",
+      "190"
+     ]
+    },
+    {
+     "row": 753,
+     "cells": [
+      "PAPUA NEW GUINEA",
+      "191"
+     ]
+    },
+    {
+     "row": 754,
+     "cells": [
+      "PARACEL ISLANDS",
+      "192"
+     ]
+    },
+    {
+     "row": 755,
+     "cells": [
+      "PARAGUAY",
+      "193"
+     ]
+    },
+    {
+     "row": 756,
+     "cells": [
+      "PERU",
+      "194"
+     ]
+    },
+    {
+     "row": 757,
+     "cells": [
+      "PHILIPPINES",
+      "195"
+     ]
+    },
+    {
+     "row": 758,
+     "cells": [
+      "PITCAIRN ISLANDS",
+      "196"
+     ]
+    },
+    {
+     "row": 759,
+     "cells": [
+      "PITCAIRN, HENDERSON, DUCIE, AND OENO ISLANDS",
+      "197"
+     ]
+    },
+    {
+     "row": 760,
+     "cells": [
+      "POLAND",
+      "198"
+     ]
+    },
+    {
+     "row": 761,
+     "cells": [
+      "PORTUGAL",
+      "199"
+     ]
+    },
+    {
+     "row": 762,
+     "cells": [
+      "PUERTO RICO",
+      "200"
+     ]
+    },
+    {
+     "row": 763,
+     "cells": [
+      "QATAR",
+      "201"
+     ]
+    },
+    {
+     "row": 764,
+     "cells": [
+      "REUNION",
+      "202"
+     ]
+    },
+    {
+     "row": 765,
+     "cells": [
+      "ROMANIA",
+      "203"
+     ]
+    },
+    {
+     "row": 766,
+     "cells": [
+      "RUSSIA",
+      "204"
+     ]
+    },
+    {
+     "row": 767,
+     "cells": [
+      "RWANDA",
+      "205"
+     ]
+    },
+    {
+     "row": 768,
+     "cells": [
+      "SAINT BARTHELEMY",
+      "206"
+     ]
+    },
+    {
+     "row": 769,
+     "cells": [
+      "SAINT HELENA",
+      "207"
+     ]
+    },
+    {
+     "row": 770,
+     "cells": [
+      "SAINT KITTS AND NEVIS",
+      "208"
+     ]
+    },
+    {
+     "row": 771,
+     "cells": [
+      "SAINT LUCIA",
+      "209"
+     ]
+    },
+    {
+     "row": 772,
+     "cells": [
+      "SAINT MARTIN",
+      "210"
+     ]
+    },
+    {
+     "row": 773,
+     "cells": [
+      "SAINT PIERRE AND MIQUELON",
+      "211"
+     ]
+    },
+    {
+     "row": 774,
+     "cells": [
+      "SAINT VINCENT AND THE GRENADINES",
+      "212"
+     ]
+    },
+    {
+     "row": 775,
+     "cells": [
+      "SAMOA",
+      "213"
+     ]
+    },
+    {
+     "row": 776,
+     "cells": [
+      "SANMARINO",
+      "214"
+     ]
+    },
+    {
+     "row": 777,
+     "cells": [
+      "SAO TOME AND PRINCIPE",
+      "215"
+     ]
+    },
+    {
+     "row": 778,
+     "cells": [
+      "SAUDI ARABIA",
+      "216"
+     ]
+    },
+    {
+     "row": 779,
+     "cells": [
+      "SENEGAL",
+      "217"
+     ]
+    },
+    {
+     "row": 780,
+     "cells": [
+      "SERBIA",
+      "218"
+     ]
+    },
+    {
+     "row": 781,
+     "cells": [
+      "SEYCHELLES",
+      "219"
+     ]
+    },
+    {
+     "row": 782,
+     "cells": [
+      "SIERRA LEONE",
+      "220"
+     ]
+    },
+    {
+     "row": 783,
+     "cells": [
+      "SINGAPORE",
+      "221"
+     ]
+    },
+    {
+     "row": 784,
+     "cells": [
+      "SLOVAKIA",
+      "222"
+     ]
+    },
+    {
+     "row": 785,
+     "cells": [
+      "SLOVENIA",
+      "223"
+     ]
+    },
+    {
+     "row": 786,
+     "cells": [
+      "SOLOMON ISLANDS",
+      "224"
+     ]
+    },
+    {
+     "row": 787,
+     "cells": [
+      "SOMALIA",
+      "225"
+     ]
+    },
+    {
+     "row": 788,
+     "cells": [
+      "SOUTH AFRICA",
+      "226"
+     ]
+    },
+    {
+     "row": 789,
+     "cells": [
+      "SOUTH GEORGIA AND SOUTH SANDWICH ISLANDS",
+      "227"
+     ]
+    },
+    {
+     "row": 790,
+     "cells": [
+      "SPRATLY ISLANDS",
+      "228"
+     ]
+    },
+    {
+     "row": 791,
+     "cells": [
+      "SPAIN",
+      "229"
+     ]
+    },
+    {
+     "row": 792,
+     "cells": [
+      "SRI LANKA",
+      "230"
+     ]
+    },
+    {
+     "row": 793,
+     "cells": [
+      "ST. VINCENT & GRENADINES",
+      "231"
+     ]
+    },
+    {
+     "row": 794,
+     "cells": [
+      "SUDAN",
+      "232"
+     ]
+    },
+    {
+     "row": 795,
+     "cells": [
+      "SURINAME",
+      "233"
+     ]
+    },
+    {
+     "row": 796,
+     "cells": [
+      "SVALBARD",
+      "234"
+     ]
+    },
+    {
+     "row": 797,
+     "cells": [
+      "SWAZILAND",
+      "235"
+     ]
+    },
+    {
+     "row": 798,
+     "cells": [
+      "SWEDEN",
+      "236"
+     ]
+    },
+    {
+     "row": 799,
+     "cells": [
+      "SWITZERLAND",
+      "237"
+     ]
+    },
+    {
+     "row": 800,
+     "cells": [
+      "SYRIA",
+      "238"
+     ]
+    },
+    {
+     "row": 801,
+     "cells": [
+      "TAIWAN",
+      "239"
+     ]
+    },
+    {
+     "row": 802,
+     "cells": [
+      "TAJIKISTAN",
+      "240"
+     ]
+    },
+    {
+     "row": 803,
+     "cells": [
+      "TANZANIA",
+      "241"
+     ]
+    },
+    {
+     "row": 804,
+     "cells": [
+      "TERRITORIAL COLLECTIVITY OF ST. PIERRE & MIQUELON",
+      "242"
+     ]
+    },
+    {
+     "row": 805,
+     "cells": [
+      "TERRITORY OF AMERICAN SAMOA",
+      "243"
+     ]
+    },
+    {
+     "row": 806,
+     "cells": [
+      "TERRITORY OF ASHMORE AND CARTIER ISLANDS",
+      "244"
+     ]
+    },
+    {
+     "row": 807,
+     "cells": [
+      "TERRITORY OF CHRISTMAS ISLAND",
+      "245"
+     ]
+    },
+    {
+     "row": 808,
+     "cells": [
+      "TERRITORY OF COCOS (KEELING) ISLANDS",
+      "246"
+     ]
+    },
+    {
+     "row": 809,
+     "cells": [
+      "TERRITORY OF GUAM",
+      "247"
+     ]
+    },
+    {
+     "row": 810,
+     "cells": [
+      "TERRITORY OF HEARD ISLAND & MCDONALD ISLANDS",
+      "248"
+     ]
+    },
+    {
+     "row": 811,
+     "cells": [
+      "TERRITORY OF NORFOLK ISLAND",
+      "249"
+     ]
+    },
+    {
+     "row": 812,
+     "cells": [
+      "THAILAND",
+      "250"
+     ]
+    },
+    {
+     "row": 813,
+     "cells": [
+      "THE BAHAMAS",
+      "251"
+     ]
+    },
+    {
+     "row": 814,
+     "cells": [
+      "THE GAMBIA",
+      "252"
+     ]
+    },
+    {
+     "row": 815,
+     "cells": [
+      "TOGO",
+      "253"
+     ]
+    },
+    {
+     "row": 816,
+     "cells": [
+      "TOKELAU",
+      "254"
+     ]
+    },
+    {
+     "row": 817,
+     "cells": [
+      "TONGA",
+      "255"
+     ]
+    },
+    {
+     "row": 818,
+     "cells": [
+      "TRINIDAD AND TOBAGO",
+      "256"
+     ]
+    },
+    {
+     "row": 819,
+     "cells": [
+      "TUNISIA",
+      "257"
+     ]
+    },
+    {
+     "row": 820,
+     "cells": [
+      "TURKEY",
+      "258"
+     ]
+    },
+    {
+     "row": 821,
+     "cells": [
+      "TURKMENISTAN",
+      "259"
+     ]
+    },
+    {
+     "row": 822,
+     "cells": [
+      "TURKS AND CAICOS ISLANDS",
+      "260"
+     ]
+    },
+    {
+     "row": 823,
+     "cells": [
+      "TUVALU",
+      "261"
+     ]
+    },
+    {
+     "row": 824,
+     "cells": [
+      "UGANDA",
+      "262"
+     ]
+    },
+    {
+     "row": 825,
+     "cells": [
+      "UKRAINE",
+      "263"
+     ]
+    },
+    {
+     "row": 826,
+     "cells": [
+      "UNITED ARAB EMIRATES",
+      "264"
+     ]
+    },
+    {
+     "row": 827,
+     "cells": [
+      "UNITED KINGDOM",
+      "265"
+     ]
+    },
+    {
+     "row": 828,
+     "cells": [
+      "UNITED STATES VIRGIN ISLANDS",
+      "266"
+     ]
+    },
+    {
+     "row": 829,
+     "cells": [
+      "UNITED STATES OF AMERICA",
+      "267"
+     ]
+    },
+    {
+     "row": 830,
+     "cells": [
+      "URUGUAY",
+      "268"
+     ]
+    },
+    {
+     "row": 831,
+     "cells": [
+      "UZBEKISTAN",
+      "269"
+     ]
+    },
+    {
+     "row": 832,
+     "cells": [
+      "VANUATU",
+      "270"
+     ]
+    },
+    {
+     "row": 833,
+     "cells": [
+      "VATICAN CITY (HOLYSEE)",
+      "271"
+     ]
+    },
+    {
+     "row": 834,
+     "cells": [
+      "VENEZUELA",
+      "272"
+     ]
+    },
+    {
+     "row": 835,
+     "cells": [
+      "VIETNAM",
+      "273"
+     ]
+    },
+    {
+     "row": 836,
+     "cells": [
+      "VIRGIN ISLANDS, BRITISH",
+      "274"
+     ]
+    },
+    {
+     "row": 837,
+     "cells": [
+      "VIRGIN ISLANDS, U.S.",
+      "275"
+     ]
+    },
+    {
+     "row": 838,
+     "cells": [
+      "WAKE ISLAND",
+      "276"
+     ]
+    },
+    {
+     "row": 839,
+     "cells": [
+      "WALLIS AND FUTUNA",
+      "277"
+     ]
+    },
+    {
+     "row": 840,
+     "cells": [
+      "WESTERN SAHARA",
+      "278"
+     ]
+    },
+    {
+     "row": 841,
+     "cells": [
+      "YEMEN",
+      "279"
+     ]
+    },
+    {
+     "row": 842,
+     "cells": [
+      "ZAMBIA",
+      "280"
+     ]
+    },
+    {
+     "row": 843,
+     "cells": [
+      "ZIMBABWE",
+      "281"
+     ]
+    },
+    {
+     "row": 844,
+     "cells": [
+      "COMBODIA",
+      "282"
+     ]
+    },
+    {
+     "row": 845,
+     "cells": [
+      "CONGO",
+      "283"
+     ]
+    },
+    {
+     "row": 846,
+     "cells": [
+      "IVORY COAST",
+      "284"
+     ]
+    },
+    {
+     "row": 847,
+     "cells": [
+      "WEST INDIES",
+      "285"
+     ]
+    },
+    {
+     "row": 848,
+     "cells": [
+      "BRITISH VIRGIN ISLANDS",
+      "286"
+     ]
+    }
+   ]
+  }
+ ]
+}

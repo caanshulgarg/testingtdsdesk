@@ -1,0 +1,3263 @@
+{
+ "form": "143",
+ "workbook": "Form_Number_143-27EQ_-_Q1_to_Q4_22072026.xlsx",
+ "sheet": "FIleformat_R",
+ "title": "File Format for TCS File - Form Number 143 (27EQ) - Q1 to Q4 (Version 1.1) for Tax Year 2026-27 and onwards",
+ "notes": [
+  {
+   "no": "1",
+   "text": "File should be generated in ASCII Format with \"txt\" as filename extension.",
+   "row": 5
+  },
+  {
+   "no": "2",
+   "text": "Each Record (including last record) must start on new line and must end with a newline character. Hex Values : \"0D\" & \"0A\".",
+   "row": 6
+  },
+  {
+   "no": "3",
+   "text": "The constant values as mentioned in the file format below (values of fields viz. 'Record Type', 'Upload Type' etc.) need to be mentioned  In BLOCK letters only. i.e.. value of field 'Record Type' in case of 'File Header' should be specified as 'FH' and not 'fh'.",
+   "row": 7
+  },
+  {
+   "no": "4",
+   "text": "For all amount fields decimal value with precision of 2 should be provided e.g. 1000.50, 2345.00. It may be noted that in case of certain amount fields where fractional portion is not allowed, the value should contain decimal point followed by two zeros i.e. value - 2345 will not be allowed, whereas value - 2345.00 will be allowed.",
+   "row": 8
+  },
+  {
+   "no": "5",
+   "text": "For Rate at which tax Deducted (DD), decimal with precision value 4 should be provided e.g. if the rate is 2 then the same should be mentioned as 2.0000",
+   "row": 9
+  },
+  {
+   "no": "6",
+   "text": "M indicates mandatory field and  O indicates - Optional.",
+   "row": 10
+  },
+  {
+   "no": "7",
+   "text": "All dates should be in 'ddmmyyyy' format. No date should be a future date.",
+   "row": 11
+  },
+  {
+   "no": "8",
+   "text": "This is a ^ delimited variable field width file. This means that in case of empty spaces there is no need to provide leading '0' for numerals and trailing spaces for character fields.",
+   "row": 12
+  },
+  {
+   "no": "9",
+   "text": "The total number of delimiters (i.e. \"^\") in any type of record should be one less than the total number of fields in the respective record. For example the total number of fields in \"File Header record\" is 16, hence the total no. of delimiters in 'File Header record' would be 15.",
+   "row": 13
+  },
+  {
+   "no": "10",
+   "text": "Nil challans/transfer vouchers need to mandatorily have Collectee records with flag  'A' , 'B','F','K','Y','Z' in the remarks for lower or non-deduction.",
+   "row": 14
+  },
+  {
+   "no": "11",
+   "text": "It is mandatory to import .csi file downloaded from TIN website (under Challan Status Inquiry tab) to verify the correctness of Challan details mentioned in the statement.",
+   "row": 15
+  },
+  {
+   "no": "12",
+   "text": "TAN & TAN name present in TDS Statement should match with TAN & TAN name present under .csi file downloaded from TIN website.",
+   "row": 16
+  },
+  {
+   "no": "13",
+   "text": "Changes/ Updates done in the file format is highlighted in green.",
+   "row": 17
+  },
+  {
+   "no": "14",
+   "text": "At least one Collectee/collectee details should be mentioned in regular statement. Statements with zero/no Collectee/collectee details should not be allowed to validate through FVU.",
+   "row": 18
+  }
+ ],
+ "records": {
+  "FH": {
+   "heading": "TCS Statement (File Header Record)",
+   "row": 20,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file.",
+     "row": 22
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be \"FH\" signifying 'File Header' record",
+     "row": 23
+    },
+    {
+     "no": 3,
+     "name": "File Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "Value should be \"TC1\" for FN 143.",
+     "row": 24
+    },
+    {
+     "no": 4,
+     "name": "Upload Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be R",
+     "row": 25
+    },
+    {
+     "no": 5,
+     "name": "File Creation Date",
+     "col": "NA",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Mention the date of creation of the file in ddmmyyyy format.",
+     "row": 26
+    },
+    {
+     "no": 6,
+     "name": "File Sequence No.",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Indicates the running sequence number for the file. (Should be unique across all the files)",
+     "row": 27
+    },
+    {
+     "no": 7,
+     "name": "Uploader Type",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be D",
+     "row": 28
+    },
+    {
+     "no": 8,
+     "name": "TAN of Collector",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "TAN of Collector",
+     "row": 29
+    },
+    {
+     "no": 9,
+     "name": "Total No. of Batches",
+     "col": "NA",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Indicates the number of batches that the file contains.",
+     "row": 30
+    },
+    {
+     "no": 10,
+     "name": "Name of Return Preparation Utility",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Name of the software used for preparing the Quarterly e-TDS/TCS statement should be mentioned.",
+     "row": 31
+    },
+    {
+     "no": 11,
+     "name": "Record Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 32
+    },
+    {
+     "no": 12,
+     "name": "FVU Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 33
+    },
+    {
+     "no": 13,
+     "name": "File Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 34
+    },
+    {
+     "no": 14,
+     "name": "Sam Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 35
+    },
+    {
+     "no": 15,
+     "name": "SAM Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 36
+    },
+    {
+     "no": 16,
+     "name": "SCM Version (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 37
+    },
+    {
+     "no": 17,
+     "name": "SCM Hash (Not applicable)",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 38
+    },
+    {
+     "no": 18,
+     "name": "Consolidated file hash",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 39
+    }
+   ],
+   "after": [
+    {
+     "row": 40,
+     "text": "Note: | Single File Header record for the entire file"
+    }
+   ]
+  },
+  "BH": {
+   "heading": "TDS Statement for Salary category (Batch Header Record)",
+   "row": 42,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file",
+     "row": 44
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value should be \"BH\" (Batch Header) for the batch header record",
+     "row": 45
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value must start with 1.",
+     "row": 46
+    },
+    {
+     "no": 4,
+     "name": "Count of Challan/transfer voucher Records",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Count of total number of challans/transfer vouchers contained within the batch.",
+     "row": 47
+    },
+    {
+     "no": 5,
+     "name": "Form Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "Value must be 143",
+     "row": 48
+    },
+    {
+     "no": 6,
+     "name": "Transaction Type  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 49
+    },
+    {
+     "no": 7,
+     "name": "Batch Updation Indicator  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 50
+    },
+    {
+     "no": 8,
+     "name": "Original Token Number (Token Number of Regular statement) - (Not applicable) of the statement",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 51
+    },
+    {
+     "no": 9,
+     "name": "Token no. of previous regular statement (Form no. 143).",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "O",
+     "remarks": "If value present in field no. 52 is \"Y\", mandatory to mention 15 digit Token number of immediate previous regular statement for Form 143, else no value to be provided.",
+     "row": 52
+    },
+    {
+     "no": 10,
+     "name": "Token Number of the statement submitted -- (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 53
+    },
+    {
+     "no": 11,
+     "name": "Token Number date - (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 54
+    },
+    {
+     "no": 12,
+     "name": "Last TAN of Collector /  Collector ( Used for Verification)  (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 55
+    },
+    {
+     "no": 13,
+     "name": "TAN of Collector",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Mention the 10 Character  TAN of the Collector.  Should be all CAPITALS.",
+     "row": 56
+    },
+    {
+     "no": 14,
+     "name": "Receipt number (eight digit) provided by TIN",
+     "col": "",
+     "type": "CHAR",
+     "size": "8",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 57
+    },
+    {
+     "no": 15,
+     "name": "PAN of Collector",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Mandatory to mention the PAN  of the Collector. If Collector is not required to have a PAN mention PANNOTREQD",
+     "row": 58
+    },
+    {
+     "no": 16,
+     "name": "Assessment Yr",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "Assessment year e.g. value should be 202728 for Tax Year 2026-07. Value should be greater than or equal to 202728.",
+     "row": 59
+    },
+    {
+     "no": 17,
+     "name": "Tax Year",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "Tax Year (YYYYYY) as per Act; e.g., 202627 for Tax Year 2026-27",
+     "row": 60
+    },
+    {
+     "no": 18,
+     "name": "Period",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Valid values Q1, Q2, Q3, Q4 of the financial Year. Q1 for 1st Quarter, Q2 for 2nd Quarter, Q3 for 3rd Quarter and Q4 for 4th Quarter.",
+     "row": 61
+    },
+    {
+     "no": 19,
+     "name": "Name of  Collector",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of the Employer / Collector I.e. Employer / Collector who deducts tax. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 62
+    },
+    {
+     "no": 20,
+     "name": "Collector Address 6 (Country/Region)",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 6 of the Employer. Only special characters are not allowed under this field.",
+     "row": 63
+    },
+    {
+     "no": 21,
+     "name": "Collector Address1 (Flat/Door/Block number)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 1 of the Employer. Only special characters are not allowed under this field.",
+     "row": 64
+    },
+    {
+     "no": 22,
+     "name": "Collector Address2 (Post Office)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 2 of the Employer. Only special characters are not allowed under this field.",
+     "row": 65
+    },
+    {
+     "no": 23,
+     "name": "Collector Address3 (Road/Street/Block/Sector)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 3 of the Employer. Only special characters are not allowed under this field.",
+     "row": 66
+    },
+    {
+     "no": 24,
+     "name": "Collector Address4 (Area/locality)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 4 of the Employer. Only special characters are not allowed under this field.",
+     "row": 67
+    },
+    {
+     "no": 25,
+     "name": "Collector Address5 (District)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 5 of the Employer. Only special characters are not allowed under this field.",
+     "row": 68
+    },
+    {
+     "no": 26,
+     "name": "Collector's Address - State",
+     "col": "",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Numeric code for state. For list of State codes, refer to the Annexure 1 below.",
+     "row": 69
+    },
+    {
+     "no": 27,
+     "name": "Collector's Address - Pincode",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "PIN Code of  Collector .",
+     "row": 70
+    },
+    {
+     "no": 28,
+     "name": "Collector's Email ID",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Valid E-mail  should be provided.\n1. Email format must be checked -atleast @ and '.' should be mentioned. \n2. Both @ and '.' should be preceded and succeeded by atleast one character.\n3. At least one '.' should come after '@'.\n4. All printable characters allowed except '^' and space.\n5. This field is mandatory if no value is provided under field no. 42 i.e. \"Responsible Person's Email ID -1\" of Batch Header.\n E-mail id of Collector/collector or person responsible for deducting/collecting tax should be provided.",
+     "row": 71
+    },
+    {
+     "no": 29,
+     "name": "Collector Contact Country Code",
+     "col": "",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "M",
+     "remarks": "Country calling code for Collector contact number (e.g., 91 for India).\nMention STD code if value is present in field no.30 (Employer / Deductor's Tel-Phone No.)",
+     "row": 72
+    },
+    {
+     "no": 30,
+     "name": "Collector Contact Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Collector contact number without country code; digits only. Max 15.",
+     "row": 73
+    },
+    {
+     "no": 31,
+     "name": "Filler 1",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 74
+    },
+    {
+     "no": 32,
+     "name": "Collector   Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Collector category code to be mentioned as per Annexure 4",
+     "row": 75
+    },
+    {
+     "no": 33,
+     "name": "Name of Person responsible for Deduction",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of Person responsible for paying salary on behalf of the Collector. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 76
+    },
+    {
+     "no": 34,
+     "name": "Designation of the Person responsible for Deduction",
+     "col": "",
+     "type": "CHAR",
+     "size": "20",
+     "mo": "M",
+     "remarks": "Mention the designation of Person responsible for paying salary on behalf of the Collector. Only blank values or only special characters or only dots, spaces etc. (i.e. `~!@#$%^&*( )_+,./?;:’”[{]}\\|) are not allowed under this field.",
+     "row": 77
+    },
+    {
+     "no": 35,
+     "name": "Responsible Person's  Address1 (Flat/Door/Block number)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the address line 1 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 78
+    },
+    {
+     "no": 36,
+     "name": "Responsible Person's  Address2 (Post Office)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 2 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 79
+    },
+    {
+     "no": 37,
+     "name": "Responsible Person's  Address3 (Road/Street/Block/Sector)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 3 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 80
+    },
+    {
+     "no": 38,
+     "name": "Responsible Person's  Address4 (Area/locality)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 4 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 81
+    },
+    {
+     "no": 39,
+     "name": "Responsible Person's  Address5(District)",
+     "col": "",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "O",
+     "remarks": "Mention the address line 5 of the responsible Person. Only special characters are not allowed under this field.",
+     "row": 82
+    },
+    {
+     "no": 40,
+     "name": "Responsible Person's State",
+     "col": "",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Numeric code for state. For list of State codes, refer to the Annexure 1 below.",
+     "row": 83
+    },
+    {
+     "no": 41,
+     "name": "Responsible Person's PIN",
+     "col": "",
+     "type": "INTEGER",
+     "size": "6",
+     "mo": "M",
+     "remarks": "PIN Code of Responsible Person .",
+     "row": 84
+    },
+    {
+     "no": 42,
+     "name": "Responsible Person's Email ID -1",
+     "col": "",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Valid E-mail  should be provided.\n1. Email format must be checked -atleast @ and '.' should be mentioned. \n2. Both @ and '.' should be preceded and succeeded by atleast one character.\n3. At least one '.' should come after '@'.\n4. All printable characters allowed except '^' and space.\n5. This field is mandatory if no value is provided under field no. 28 i.e. \"Collector's Email ID\" of Batch Header.\n E-mail id of Collector/collector or person responsible for deducting/collecting tax should be provided.",
+     "row": 85
+    },
+    {
+     "no": 43,
+     "name": "Responsible Persons country region",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "25",
+     "mo": "M",
+     "remarks": "Mention the country of the responsible person . Only special characters are not allowed under this field.",
+     "row": 86
+    },
+    {
+     "no": 44,
+     "name": "Responsible Person Contact Country Code",
+     "col": "",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "M",
+     "remarks": "Country calling code for person responsible contact number (e.g., 91).\nMention STD code if value is present in field no.45 (Responsible person's Tel-Phone No.)",
+     "row": 87
+    },
+    {
+     "no": 45,
+     "name": "Responsible Person Contact Number",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Contact number (digits) for person responsible; max 15.",
+     "row": 88
+    },
+    {
+     "no": 46,
+     "name": "Filler 3",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 89
+    },
+    {
+     "no": 47,
+     "name": "Batch Total of - Total of Deposit Amount as per Challan",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the Total of Deposit Amount as per Challan.The value here should be same as sum of values in field 'Total of Deposit Amount as per Challan'  in the 'Challan Detail' record ( please refer to the Challan Detail' record section below ).  Paisa Field (Decimal Value) of the Amount must be 00.",
+     "row": 90
+    },
+    {
+     "no": 48,
+     "name": "Unmatched challan count",
+     "col": "",
+     "type": "CHAR",
+     "size": "9",
+     "mo": "O",
+     "remarks": "No value to be specified.",
+     "row": 91
+    },
+    {
+     "no": 49,
+     "name": "Count of Salary Details  Records (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 92
+    },
+    {
+     "no": 50,
+     "name": "Batch Total of - Gross Total Income as per Salary Detail (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 93
+    },
+    {
+     "no": 51,
+     "name": "Filler 4",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 94
+    },
+    {
+     "no": 52,
+     "name": "Whether regular statement for Form 144 filed for earlier period",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "\"Y\" if regular statement for Form 143 has been filed for earlier period, else value \"N\" should be provided.",
+     "row": 95
+    },
+    {
+     "no": 53,
+     "name": "Last Collector Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 96
+    },
+    {
+     "no": 54,
+     "name": "State Name",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "O",
+     "remarks": "Numeric code for state should be mentioned as per Annexure 5. Mandatory if Collector type is State Govt. (code S), Statutory body - State Govt. (code E), Autonomous body - State Govt. code H) and Local Authority - State Govt. (code N). For other Collector category no value should be provided.",
+     "row": 97
+    },
+    {
+     "no": 55,
+     "name": "Filler 5",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 98
+    },
+    {
+     "no": 56,
+     "name": "Filler 6",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 99
+    },
+    {
+     "no": 57,
+     "name": "Ministry Name",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "3",
+     "mo": "O",
+     "remarks": "Numeric code for Ministry name should be provided. For list of Ministry name codes, refer to the Annexure 3 below. Mandatory for following Collector types:\nCentral Govt (A), Statutory body - Central Govt. (D) & Autonomous body - Central Govt. (G). Optional for Collector type Statutory body - State Govt. (E), Autonomous body - State Govt. (H), Local Authority - Central Govt. (L) & Local Authority -State Govt. (N). \n\nFor other Collector type no value should be provided.",
+     "row": 100
+    },
+    {
+     "no": 58,
+     "name": "Ministry Name (Others)",
+     "col": "NA",
+     "type": "CHAR",
+     "size": "150",
+     "mo": "O",
+     "remarks": "If numeric code '99' (i.e. Other) is provided in Ministry Name field then value in Ministry Name \"Other\" field should be provided",
+     "row": 101
+    },
+    {
+     "no": 59,
+     "name": "PAN of Responsible Person",
+     "col": "",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "Quote ten digit valid PAN of the person responsible (as quoted in field no. 33 above) for deducting tax.",
+     "row": 102
+    },
+    {
+     "no": 60,
+     "name": "Filler 7",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 103
+    },
+    {
+     "no": 61,
+     "name": "Filler 8",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 104
+    },
+    {
+     "no": 62,
+     "name": "Filler 9",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 105
+    },
+    {
+     "no": 63,
+     "name": "Filler 10",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 106
+    },
+    {
+     "no": 64,
+     "name": "Filler 11",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 107
+    },
+    {
+     "no": 65,
+     "name": "Filler 12",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 108
+    },
+    {
+     "no": 66,
+     "name": "Filler 13",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 109
+    },
+    {
+     "no": 67,
+     "name": "Filler 14",
+     "col": "NA",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 110
+    },
+    {
+     "no": 68,
+     "name": "Account Office Identification Number (AIN) of PAO/ TO/ CDDO",
+     "col": "",
+     "type": "CHAR",
+     "size": "7",
+     "mo": "O",
+     "remarks": "Mandatory to mention value for statements pertaining to FY 2013-14 onwards.\nApplicable only in case the Collector category is \"Central Govt.\" or \"State Govt.\" and mode of deposit of TDS/TCS is through 'Book Entry' i.e., value in the field no. 37 of challan/ transfer voucher details is \"Y\". Mention AIN of the below:\n1) Pay and Account Office (PAO)\n2) Treasure Office (TO)\n3) Cheque Drawing and Disbursing Officer (CDDO)",
+     "row": 111
+    },
+    {
+     "no": 69,
+     "name": "Goods and Service Tax Number (GSTN)",
+     "col": "",
+     "type": "CHAR",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mention 15 digit valid Goods and Service Tax Number (GSTIN).",
+     "row": 112
+    },
+    {
+     "no": 70,
+     "name": "Count of Section 194P Detail Records (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 113
+    },
+    {
+     "no": 71,
+     "name": "Batch Total of - Gross Total Income as per Section 194P Detail (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 114
+    },
+    {
+     "no": 72,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 115
+    }
+   ],
+   "after": [
+    {
+     "row": 116,
+     "text": "Note: | Single Batch Header record for the entire file"
+    }
+   ]
+  },
+  "CD": {
+   "heading": "TDS Statement for Salary category (Challan Detail Record)",
+   "row": 118,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running sequence number for each line in the file",
+     "row": 120
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value \"CD\" (Challan Detail) for Challan Detail record",
+     "row": 121
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value should be same as 'Batch Number' field in 'Batch Header' record.",
+     "row": 122
+    },
+    {
+     "no": 4,
+     "name": "Challan-Detail Record Number",
+     "col": "A",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial number for 'Challan Detail' records in a batch. Should start with 1",
+     "row": 123
+    },
+    {
+     "no": 5,
+     "name": "Count of Collectee / Party Records",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Count of total number of 'Collectee Detail Records' within e-TDS statement. Value Should be  >= 0",
+     "row": 124
+    },
+    {
+     "no": 6,
+     "name": "NIL Challan Indicator",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be \"N\". In cases where no tax has been deposited in bank, value should be \"Y\" (applicable in case of NIL return)",
+     "row": 125
+    },
+    {
+     "no": 7,
+     "name": "Challan Updation Indicator (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 126
+    },
+    {
+     "no": 8,
+     "name": "Total tax Deducted",
+     "col": "B",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Income Tax\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 127
+    },
+    {
+     "no": 9,
+     "name": "Total Interest",
+     "col": "C",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Interest\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 128
+    },
+    {
+     "no": 10,
+     "name": "Total fee",
+     "col": "D",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Fee\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 129
+    },
+    {
+     "no": 11,
+     "name": "Total Penalty/ Others",
+     "col": "E",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of \"Penalty\" out of the 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value.",
+     "row": 130
+    },
+    {
+     "no": 12,
+     "name": "Total of Deposit Amount as per Challan/Total Amount adjusted through Book Adjustment (Total of values in B+C+D+E)",
+     "col": "F",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the amount of 'Total tax deposited' through Challan. No fractional portion is allowed in this field (value should be integer) , I.e. value \"1000.50\" will not be allowed, whereas value \"1000.00\" will be considered to be valid value. \nValue in this field should be equal to total of values in column numbers B, C, D, E.\n\nIn case of challan (i.e. value under field 13 is C), value in this field should be greater than or equal to:\nTotal tax deposited amount (field no. 25 of all deductee details mapped to corresponding challan) + Interest allocation (field no. 24 of challan details) + Other allocation (field no. 25 of challan details) + Fee amount (field no. 10 of challan details)\n\nIn case of transfer voucher (i.e. value under field 13 is B), value in this field should be greater than or equal to:\nTotal tax deposited amount (field no. 25 of all deductee details mapped to corresponding challan) + Interest allocation (field no. 24 of challan details) + Other allocation (field no. 25 of challan details)",
+     "row": 131
+    },
+    {
+     "no": 13,
+     "name": "Mode of payment of tax (by way of challan/by way of book adjustment)",
+     "col": "G",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "Allowed values C or B\nIf Transfer Voucher Number is provided this is mandatory and only allowed value is 'B'. If Bank Challan Number is provided , then mention value as \"C\". For a Nil statement no value to be provided.\nValue 'N' to be provided, if values under field no. 15 of DD details are '1059' or '1061'",
+     "row": 132
+    },
+    {
+     "no": 14,
+     "name": "Last BSR Code/ Form 24G Receipt Number ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 133
+    },
+    {
+     "no": 15,
+     "name": "BSR Code/ Form 24G Receipt Number",
+     "col": "H",
+     "type": "INTEGER",
+     "size": "7",
+     "mo": "M",
+     "remarks": "In case TDS deposited by \n1) Challan:BSR Code of the receiving branch\n2) Book Adjustment: Quote seven digit receipt number provided by AO. Applicable for govt. Collector/ collector where TDS is deposited by book entry. \n3) No value to be quoted in case of Nil Statement (value in field \"NIL Challan Indicator\" field is \"Y\").",
+     "row": 134
+    },
+    {
+     "no": 16,
+     "name": "Last Bank Challan No/DDO Serial Number ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 135
+    },
+    {
+     "no": 17,
+     "name": "Bank Challan No/DDO Serial Number",
+     "col": "I",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "O",
+     "remarks": "Challan Number issued by Bank if value in field G is C\nDDO Serial Number if value in column G is B\n Applicable to both Govt and Non Govt, Non-Nil statements.  No value is required to be provided in case of a NIL return (I.e. the cases in which the value in field 'NIL Challan Indicator' is \"Y\").",
+     "row": 136
+    },
+    {
+     "no": 18,
+     "name": "Last Date of 'Bank Challan No / DDO Serial Number' ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 137
+    },
+    {
+     "no": 19,
+     "name": "Date of 'Bank Challan / DDO Serial Number' (DDMMYYYY)",
+     "col": "J",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Date of payment of tax to Govt. It can be any date on or after 1st April of immediate previous financial year for which the return is prepared. Value should be equal to last date of respective quarter if the value in field \"NIL Challan Indicator\" is \"Y\". \nDate of 'Bank Challan / Book Adjustment' should be within the respective quarter for which statement is being filed, in case of minor head code value selected under field no. 23 is '100'. Also this date has to be on or before date present under field 'Date on which Amount paid / Credited' field no. 19 of DD record (which is mapped to this challan with minor head code value '100')",
+     "row": 138
+    },
+    {
+     "no": 20,
+     "name": "Last Total of Deposit Amount as per Challan ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 139
+    },
+    {
+     "no": 21,
+     "name": "Total Tax Deposited Amount as per Collectee annexure  (Total Sum of column no. N) for the specified challan",
+     "col": "",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the sum of  'Collectee Deposit Amount' of the underlying Collectee Records",
+     "row": 140
+    },
+    {
+     "no": 22,
+     "name": "Total Tax Deducted Amount as per Collector annexure (Total sum of Column no.L) for the specified challan",
+     "col": "",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Total sum of tax collected of the Collectee details for the respective Challan",
+     "row": 141
+    },
+    {
+     "no": 23,
+     "name": "Minor Head of Challan",
+     "col": "K",
+     "type": "INTEGER",
+     "size": "3",
+     "mo": "O",
+     "remarks": "Mention value as marked on challan - refer Annexure 7 for minor head",
+     "row": 142
+    },
+    {
+     "no": 24,
+     "name": "Interest Allocation",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention interest allocation. Only integer values are allowed. The value of 1000 should be represented as 1000.00 in this field. Mention value as provided in field no. 9 of CD details.",
+     "row": 143
+    },
+    {
+     "no": 25,
+     "name": "Others Allocation",
+     "col": "",
+     "type": "INTEGER",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention fees allocation. Only integer values are allowed for this field. The value of 1000 should be represented as 1000.00 in this field. Mention value as provided in field no. 11 of CD details.",
+     "row": 144
+    },
+    {
+     "no": 26,
+     "name": "Filler 3",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 145
+    },
+    {
+     "no": 27,
+     "name": "Filler 4",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 146
+    },
+    {
+     "no": 28,
+     "name": "Filler 5",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 147
+    },
+    {
+     "no": 29,
+     "name": "Filler 6",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 148
+    },
+    {
+     "no": 30,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 149
+    }
+   ],
+   "after": [
+    {
+     "row": 150,
+     "text": "Separate records for each Challan"
+    }
+   ]
+  },
+  "DD": {
+   "heading": "TDS Statement for Salary category (Collectee Detail Record)",
+   "row": 152,
+   "fields": [
+    {
+     "no": 1,
+     "name": "Line Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running Sequence Number for each line in the file",
+     "row": 154
+    },
+    {
+     "no": 2,
+     "name": "Record Type",
+     "col": "",
+     "type": "CHAR",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Value \"DD\"(Deductee Detail) for Collectee-detail record",
+     "row": 155
+    },
+    {
+     "no": 3,
+     "name": "Batch Number",
+     "col": "",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Value should be same as 'Batch Number' field in 'Batch Header' record",
+     "row": 156
+    },
+    {
+     "no": 4,
+     "name": "Collectee / Party Detail Record No",
+     "col": "A",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial no to indicate detail record no.",
+     "row": 157
+    },
+    {
+     "no": 5,
+     "name": "Challan reference Number",
+     "col": "B",
+     "type": "INTEGER",
+     "size": "9",
+     "mo": "M",
+     "remarks": "Running serial number for 'Challan Detail' records in a batch.",
+     "row": 158
+    },
+    {
+     "no": 6,
+     "name": "Mode",
+     "col": "",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be O",
+     "row": 159
+    },
+    {
+     "no": 7,
+     "name": "Last Collectee PAN ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 160
+    },
+    {
+     "no": 8,
+     "name": "Collectee's PAN",
+     "col": "C",
+     "type": "CHAR",
+     "size": "10",
+     "mo": "M",
+     "remarks": "PAN of the Collectee. If available should be Valid PAN Format. There may be Collectees who have not been issued PAN however who have applied for a PAN and have given adequate declaration to the collector indicating the same.  In such cases, deduction schedule in the statement will not reflect PAN and instead state PAN Ref. Number. The collector will however have to mention ‘PANAPPLIED’ in place of PAN. If the Collectee is not sure of the PAN format he will have to mention 'PANINVALID'.  However if the Collectee has not given any declaration, collector will have to mention ‘PANNOTAVBL’ in place of PAN.  \n\nFor section codes '393(3) [Table: Sl. No. 1]', '393(3) [Table: Sl. No. 2] ', no default PAN values should be allowed under this field. That means default PAN values in case of non-availablity of valid PAN ('PANNOTAVBL', 'PANAPPLIED', 'PANINVALID') will not be allowed for these sections.",
+     "row": 161
+    },
+    {
+     "no": 9,
+     "name": "Name of Collectee",
+     "col": "D",
+     "type": "CHAR",
+     "size": "75",
+     "mo": "M",
+     "remarks": "Mention the Name of the deductee.",
+     "row": 162
+    },
+    {
+     "no": 10,
+     "name": "Remarks 1 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 163
+    },
+    {
+     "no": 11,
+     "name": "Whether non- resident (Y/N)",
+     "col": "E",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should be Y/N for (Yes or No)",
+     "row": 164
+    },
+    {
+     "no": 12,
+     "name": "Collectee Code",
+     "col": "F",
+     "type": "INTEGER",
+     "size": "2",
+     "mo": "M",
+     "remarks": "Collectee Code as per Annexure 8",
+     "row": 165
+    },
+    {
+     "no": 13,
+     "name": "Whether collectee has a permanent establishment in India",
+     "col": "G",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "Mandatory if Collectee is non-resident (value in field 11 is Y)(No value should be specified if value in field 11 is N)\nValue should be Y/N (Yes or No)",
+     "row": 166
+    },
+    {
+     "no": 14,
+     "name": "Whether collectee opting out of taxation regime u/s 202(1)",
+     "col": "H",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Mention value Y or N (Yes or No)",
+     "row": 167
+    },
+    {
+     "no": 15,
+     "name": "Collection Code",
+     "col": "K",
+     "type": "CHAR",
+     "size": "4",
+     "mo": "M",
+     "remarks": "As per Annexure 2",
+     "row": 168
+    },
+    {
+     "no": 16,
+     "name": "Remarks 6 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 169
+    },
+    {
+     "no": 17,
+     "name": "Remarks 7 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 170
+    },
+    {
+     "no": 18,
+     "name": "Whether the total amount of tax collected as mentioned in Column (L) has been deposited (Yes/No)",
+     "col": "M",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "M",
+     "remarks": "Value should either \"Y\" or \"N\"",
+     "row": 171
+    },
+    {
+     "no": 19,
+     "name": "Date on which Amount received/ Debited (dd/mm/yyyy)",
+     "col": "J",
+     "type": "DATE",
+     "size": "8",
+     "mo": "M",
+     "remarks": "Date on which Amount paid/ Credited /Debited to deductee. The value under the “Date of Payment / Date on which Amount Collected / Debited” field shall fall within the quarter and financial year to which the statement pertains·",
+     "row": 172
+    },
+    {
+     "no": 20,
+     "name": "Amount Received/Debited",
+     "col": "I",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the Amount paid to Collectee. Value should always be greater than 0.00",
+     "row": 173
+    },
+    {
+     "no": 21,
+     "name": "Grossing up Indicator (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 174
+    },
+    {
+     "no": 22,
+     "name": "Remarks 9 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 175
+    },
+    {
+     "no": 23,
+     "name": "Remarks 10 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 176
+    },
+    {
+     "no": 24,
+     "name": "Total Tax Collected",
+     "col": "L",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Value in this field should be equal to Total Tax Deposited in field no. 25 (pertaining to deductee details).",
+     "row": 177
+    },
+    {
+     "no": 25,
+     "name": "Total Tax Deposited",
+     "col": "N",
+     "type": "DECIMAL",
+     "size": "15",
+     "mo": "M",
+     "remarks": "Mention the Total Tax Collected for the Deductee. Value in this field should be equal to Total Tax deducted mentioned in field no.24 (pertaining to deductee details) .",
+     "row": 178
+    },
+    {
+     "no": 26,
+     "name": "Last total Tax Collected (Used for Verification) (Not Applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 179
+    },
+    {
+     "no": 27,
+     "name": "Date of Collection (dd/mm/yyyy)",
+     "col": "O",
+     "type": "DATE",
+     "size": "8",
+     "mo": "O",
+     "remarks": "Date of tax deduction. Mandatory  if 'Total tax collected' is greater than Zero (0.00) . No value needs to be specified if 'Total Tax Collected' is Zero (0.00) . Date to be mentioned in DDMMYYYY format. Also, this date should not be less than the relevant quarter. E.g. If the statement is being prepared for Q2 of Tax Year 2026-27, then date of deduction should be greater than or equal to 01/07/2026.",
+     "row": 180
+    },
+    {
+     "no": 28,
+     "name": "Rate at which Tax Collected",
+     "col": "P",
+     "type": "DECIMAL",
+     "size": "7",
+     "mo": "M",
+     "remarks": "Rate at which Tax is deducted, with  decimal precision of 4 point. E.g. if the rate is 2 then the same should be mentioned as 2.0000. If value in field 'Total tax collected' is 0.00 then rate at which tax deducted should be 0.0000",
+     "row": 181
+    },
+    {
+     "no": 29,
+     "name": "Remarks 11 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 182
+    },
+    {
+     "no": 30,
+     "name": "Remarks 12 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 183
+    },
+    {
+     "no": 31,
+     "name": "Remarks 13 (for future use)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 184
+    },
+    {
+     "no": 32,
+     "name": "Reason for lower collection/collection at higher rate",
+     "col": "Q",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "1.\tWrite \"A\" if \"lower collection\" is on account of a certificate under section 395(3).\n2.\tWrite \"B\" if \"non-collection\" is on account of furnishing of declaration under section 394(2).\n3.\tWrite \"C\" if collection is at higher rate under section 397(2) on account of non-furnishing of PAN.\n4.\tWrite \"F\" if no collection is on account of section 394(5) or section 402(6) [Table: Sl. No. 4 & 5, Column D].\n5.\tWrite “K” if no collection as per the provisions of section 394(4).\n6. \tWrite “Y” if no collection is on account of receipt below threshold limit as specified in section 394(1) [Table: Sl. No. 7].\n7.\tWrite “Z” if no collection or lower collection is in view of notification issued under section 400(1) of the Income-tax Act, 2025.",
+     "row": 185
+    },
+    {
+     "no": 33,
+     "name": "Certificate number under section 395 (3) for lower collection of tax (if applicable)",
+     "col": "R",
+     "type": "CHAR",
+     "size": "15",
+     "mo": "O",
+     "remarks": "Mandatory to mention 10 or 15 digit alphanumeric value if, \"A\" is mentioned in field no. 32 (Remark field).",
+     "row": 186
+    },
+    {
+     "no": 34,
+     "name": "Whether the payment by collectee is liable to TDS as per section 394(5) and whether TDS has been deducted from such payment [if “F” is selected in column (Q)] (Yes/No)",
+     "col": "S",
+     "type": "CHAR",
+     "size": "1",
+     "mo": "O",
+     "remarks": "Applicable only if reason for lower/higher collection code is F in column Q - Applicable for sections 1086, 1087, 1088, 1089\n\nValue should be Y/N for (Yes or No)",
+     "row": 187
+    },
+    {
+     "no": 35,
+     "name": "Challan Number",
+     "col": "T",
+     "type": "INTEGER",
+     "size": "5",
+     "mo": "O",
+     "remarks": "Value to be specified if Value in Column S is Y",
+     "row": 188
+    },
+    {
+     "no": 36,
+     "name": "Date of Payment",
+     "col": "U",
+     "type": "DATE",
+     "size": "8",
+     "mo": "O",
+     "remarks": "Date in DD/MM/YYYY format. Value to be specified if Value in Column S is Y",
+     "row": 189
+    },
+    {
+     "no": 37,
+     "name": "Filler 4",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 190
+    },
+    {
+     "no": 38,
+     "name": "Filler 5",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 191
+    },
+    {
+     "no": 39,
+     "name": "Filler 6",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 192
+    },
+    {
+     "no": 40,
+     "name": "Filler 7",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 193
+    },
+    {
+     "no": 41,
+     "name": "Filler 8",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 194
+    },
+    {
+     "no": 42,
+     "name": "Last Total Tax Deposited  ( Used for Verification) (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "0",
+     "mo": "O",
+     "remarks": "No value should be specified",
+     "row": 195
+    },
+    {
+     "no": 43,
+     "name": "Filler 10",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 196
+    },
+    {
+     "no": 44,
+     "name": "Filler 11",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 197
+    },
+    {
+     "no": 45,
+     "name": "Record Hash (Not applicable)",
+     "col": "",
+     "type": "NA",
+     "size": "NA",
+     "mo": "NA",
+     "remarks": "No value should be specified",
+     "row": 198
+    }
+   ],
+   "after": [
+    {
+     "row": 199,
+     "text": "Separate records for each Deductee"
+    }
+   ]
+  }
+ },
+ "annexures": [
+  {
+   "name": "Annexure - 1",
+   "row": 201,
+   "rows": [
+    {
+     "row": 202,
+     "cells": [
+      "State Name",
+      "State Code"
+     ]
+    },
+    {
+     "row": 203,
+     "cells": [
+      "ANDAMAN AND NICOBAR ISLANDS",
+      "01"
+     ]
+    },
+    {
+     "row": 204,
+     "cells": [
+      "ANDHRA PRADESH",
+      "02"
+     ]
+    },
+    {
+     "row": 205,
+     "cells": [
+      "ARUNACHAL PRADESH",
+      "03"
+     ]
+    },
+    {
+     "row": 206,
+     "cells": [
+      "ASSAM",
+      "04"
+     ]
+    },
+    {
+     "row": 207,
+     "cells": [
+      "BIHAR",
+      "05"
+     ]
+    },
+    {
+     "row": 208,
+     "cells": [
+      "CHANDIGARH",
+      "06"
+     ]
+    },
+    {
+     "row": 209,
+     "cells": [
+      "DADRA & NAGAR HAVELI AND DAMAN & DIU",
+      "07"
+     ]
+    },
+    {
+     "row": 210,
+     "cells": [
+      "DELHI",
+      "09"
+     ]
+    },
+    {
+     "row": 211,
+     "cells": [
+      "GOA",
+      "10"
+     ]
+    },
+    {
+     "row": 212,
+     "cells": [
+      "GUJARAT",
+      "11"
+     ]
+    },
+    {
+     "row": 213,
+     "cells": [
+      "HARYANA",
+      "12"
+     ]
+    },
+    {
+     "row": 214,
+     "cells": [
+      "HIMACHAL PRADESH",
+      "13"
+     ]
+    },
+    {
+     "row": 215,
+     "cells": [
+      "JAMMU & KASHMIR",
+      "14"
+     ]
+    },
+    {
+     "row": 216,
+     "cells": [
+      "KARNATAKA",
+      "15"
+     ]
+    },
+    {
+     "row": 217,
+     "cells": [
+      "KERALA",
+      "16"
+     ]
+    },
+    {
+     "row": 218,
+     "cells": [
+      "LAKSHWADEEP",
+      "17"
+     ]
+    },
+    {
+     "row": 219,
+     "cells": [
+      "MADHYA PRADESH",
+      "18"
+     ]
+    },
+    {
+     "row": 220,
+     "cells": [
+      "MAHARASHTRA",
+      "19"
+     ]
+    },
+    {
+     "row": 221,
+     "cells": [
+      "MANIPUR",
+      "20"
+     ]
+    },
+    {
+     "row": 222,
+     "cells": [
+      "MEGHALAYA",
+      "21"
+     ]
+    },
+    {
+     "row": 223,
+     "cells": [
+      "MIZORAM",
+      "22"
+     ]
+    },
+    {
+     "row": 224,
+     "cells": [
+      "NAGALAND",
+      "23"
+     ]
+    },
+    {
+     "row": 225,
+     "cells": [
+      "ODISHA",
+      "24"
+     ]
+    },
+    {
+     "row": 226,
+     "cells": [
+      "PONDICHERRY",
+      "25"
+     ]
+    },
+    {
+     "row": 227,
+     "cells": [
+      "PUNJAB",
+      "26"
+     ]
+    },
+    {
+     "row": 228,
+     "cells": [
+      "RAJASTHAN",
+      "27"
+     ]
+    },
+    {
+     "row": 229,
+     "cells": [
+      "SIKKIM",
+      "28"
+     ]
+    },
+    {
+     "row": 230,
+     "cells": [
+      "TAMIL NADU",
+      "29"
+     ]
+    },
+    {
+     "row": 231,
+     "cells": [
+      "TRIPURA",
+      "30"
+     ]
+    },
+    {
+     "row": 232,
+     "cells": [
+      "UTTAR PRADESH",
+      "31"
+     ]
+    },
+    {
+     "row": 233,
+     "cells": [
+      "WEST BENGAL",
+      "32"
+     ]
+    },
+    {
+     "row": 234,
+     "cells": [
+      "CHHATTISGARH",
+      "33"
+     ]
+    },
+    {
+     "row": 235,
+     "cells": [
+      "UTTARAKHAND",
+      "34"
+     ]
+    },
+    {
+     "row": 236,
+     "cells": [
+      "JHARKHAND",
+      "35"
+     ]
+    },
+    {
+     "row": 237,
+     "cells": [
+      "TELANGANA",
+      "36"
+     ]
+    },
+    {
+     "row": 238,
+     "cells": [
+      "LADAKH",
+      "37"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 2",
+   "row": 240,
+   "rows": [
+    {
+     "row": 241,
+     "cells": [
+      "Nature of Payment",
+      "Section",
+      "Section code to be used in the return"
+     ]
+    },
+    {
+     "row": 242,
+     "cells": [
+      "Sale of alcoholic liquor for human consumption.",
+      "394(1) [Table: Sl. No. 1]",
+      "1068"
+     ]
+    },
+    {
+     "row": 243,
+     "cells": [
+      "Sale of tendu leaves",
+      "394(1) [Table: Sl. No. 2]",
+      "1069"
+     ]
+    },
+    {
+     "row": 244,
+     "cells": [
+      "Sale of timber obtained under a forest lease",
+      "394(1) [Table: Sl. No. 3]",
+      "1070"
+     ]
+    },
+    {
+     "row": 245,
+     "cells": [
+      "Sale of timber obtained by any mode other than a forest lease",
+      "394(1) [Table: Sl. No. 3]",
+      "1071"
+     ]
+    },
+    {
+     "row": 246,
+     "cells": [
+      "Sale of any other forest produce (not being timber or tendu leaves) obtained under a forest lease.",
+      "394(1) [Table: Sl. No. 3]",
+      "1072"
+     ]
+    },
+    {
+     "row": 247,
+     "cells": [
+      "Sale of Scrap",
+      "394(1) [Table: Sl. No. 4]",
+      "1073"
+     ]
+    },
+    {
+     "row": 248,
+     "cells": [
+      "Sale of minerals, being coal or lignite or iron ore.",
+      "394(1) [Table: Sl. No. 5]",
+      "1074"
+     ]
+    },
+    {
+     "row": 249,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of motor vehicle",
+      "394(1) [Table: Sl. No. 6.D(a)]",
+      "1075"
+     ]
+    },
+    {
+     "row": 250,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of wrist watch",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1076"
+     ]
+    },
+    {
+     "row": 251,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of art piece such as antiques, painting, sculpture",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1077"
+     ]
+    },
+    {
+     "row": 252,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of collectibles such as coin, stamp",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1078"
+     ]
+    },
+    {
+     "row": 253,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of yacht, rowing boat, canoe, helicopter",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1079"
+     ]
+    },
+    {
+     "row": 254,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of pair of sunglasses",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1080"
+     ]
+    },
+    {
+     "row": 255,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of bag such as handbag, purse",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1081"
+     ]
+    },
+    {
+     "row": 256,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of pair of shoes",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1082"
+     ]
+    },
+    {
+     "row": 257,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of sportswear and equipment such as golf kit, ski-wear",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1083"
+     ]
+    },
+    {
+     "row": 258,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of home theatre system",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1084"
+     ]
+    },
+    {
+     "row": 259,
+     "cells": [
+      "Sale consideration exceeding threshold limit in case of sale of horse for horse racing in race clubs and horse for polo",
+      "394(1) [Table: Sl. No. 6.D(b)]",
+      "1085"
+     ]
+    },
+    {
+     "row": 260,
+     "cells": [
+      "Remittance under the Liberalised Remittance Scheme of an amount or aggregate of the amounts exceeding threshold limit for purposes of education or medical treatment",
+      "394(1) [Table: Sl. No. 7.D(a)]",
+      "1086"
+     ]
+    },
+    {
+     "row": 261,
+     "cells": [
+      "Remittance under the Liberalised Remittance Scheme of an amount or aggregate of the amounts exceeding threshold limit for purposes other than education or medical treatment",
+      "394(1) [Table: Sl. No. 7.D(b)]",
+      "1087"
+     ]
+    },
+    {
+     "row": 262,
+     "cells": [
+      "Sale of “overseas tour programme package” including expenses for travel or hotel stay or boarding or lodging or any such similar or related expenditure with amount or aggregate of amounts up to threshold limit.",
+      "394(1) [Table: Sl. No. 8.D(a)]",
+      "1088"
+     ]
+    },
+    {
+     "row": 263,
+     "cells": [
+      "Sale of “overseas tour programme package” including expenses for travel or hotel stay or boarding or lodging or any such similar or related expenditure with amount or aggregate of amounts above threshold limit.",
+      "394(1) [Table: Sl. No. 8.D(b)]",
+      "1089"
+     ]
+    },
+    {
+     "row": 264,
+     "cells": [
+      "Use of parking lot for the purpose of business, excluding mining and quarrying of mineral oil (including petroleum and natural gas).",
+      "394(1) [Table: Sl. No. 9]",
+      "1090"
+     ]
+    },
+    {
+     "row": 265,
+     "cells": [
+      "Use of toll plaza for the purpose of business, excluding mining and quarrying of mineral oil (including petroleum and natural gas).",
+      "394(1) [Table: Sl. No. 9]",
+      "1091"
+     ]
+    },
+    {
+     "row": 266,
+     "cells": [
+      "Use of mine or quarry for the purpose of business, excluding mining and quarrying of mineral oil (including petroleum and natural gas).",
+      "394(1) [Table: Sl. No. 9]",
+      "1092"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 3",
+   "row": 268,
+   "rows": [
+    {
+     "row": 270,
+     "cells": [
+      "Ministry name",
+      "Ministry code"
+     ]
+    },
+    {
+     "row": 271,
+     "cells": [
+      "Agriculture",
+      "01"
+     ]
+    },
+    {
+     "row": 272,
+     "cells": [
+      "Atomic Energy",
+      "02"
+     ]
+    },
+    {
+     "row": 273,
+     "cells": [
+      "Fertilizers",
+      "03"
+     ]
+    },
+    {
+     "row": 274,
+     "cells": [
+      "Chemicals and Petrochemicals",
+      "04"
+     ]
+    },
+    {
+     "row": 275,
+     "cells": [
+      "Civil Aviation and Tourism",
+      "05"
+     ]
+    },
+    {
+     "row": 276,
+     "cells": [
+      "Coal",
+      "06"
+     ]
+    },
+    {
+     "row": 277,
+     "cells": [
+      "Consumer Affairs, Food and Public Distribution",
+      "07"
+     ]
+    },
+    {
+     "row": 278,
+     "cells": [
+      "Commerce and Textiles",
+      "08"
+     ]
+    },
+    {
+     "row": 279,
+     "cells": [
+      "Environment and Forests and Ministry of Earth Science",
+      "09"
+     ]
+    },
+    {
+     "row": 280,
+     "cells": [
+      "External Affairs and Overseas Indian Affairs",
+      "10"
+     ]
+    },
+    {
+     "row": 281,
+     "cells": [
+      "Finance",
+      "11"
+     ]
+    },
+    {
+     "row": 282,
+     "cells": [
+      "Central Board of Direct Taxes",
+      "12"
+     ]
+    },
+    {
+     "row": 283,
+     "cells": [
+      "Central Board of Excise and Customs",
+      "13"
+     ]
+    },
+    {
+     "row": 284,
+     "cells": [
+      "Contoller of Aid Accounts and Audit",
+      "14"
+     ]
+    },
+    {
+     "row": 285,
+     "cells": [
+      "Central Pension Accounting Office",
+      "15"
+     ]
+    },
+    {
+     "row": 286,
+     "cells": [
+      "Food Processing Industries",
+      "16"
+     ]
+    },
+    {
+     "row": 287,
+     "cells": [
+      "Health and Family Welfare",
+      "17"
+     ]
+    },
+    {
+     "row": 288,
+     "cells": [
+      "Home Affairs and Development of North Eastern Region",
+      "18"
+     ]
+    },
+    {
+     "row": 289,
+     "cells": [
+      "Human Resource Development",
+      "19"
+     ]
+    },
+    {
+     "row": 290,
+     "cells": [
+      "Industry",
+      "20"
+     ]
+    },
+    {
+     "row": 291,
+     "cells": [
+      "Information and Broadcasting",
+      "21"
+     ]
+    },
+    {
+     "row": 292,
+     "cells": [
+      "Telecommunication and Information Technology",
+      "22"
+     ]
+    },
+    {
+     "row": 293,
+     "cells": [
+      "Labour",
+      "23"
+     ]
+    },
+    {
+     "row": 294,
+     "cells": [
+      "Law and Justice and Company Affairs",
+      "24"
+     ]
+    },
+    {
+     "row": 295,
+     "cells": [
+      "Personnel, Public Grievances and Pensions",
+      "25"
+     ]
+    },
+    {
+     "row": 296,
+     "cells": [
+      "Petroleum and Natural Gas",
+      "26"
+     ]
+    },
+    {
+     "row": 297,
+     "cells": [
+      "Plannning, Statistics and Programme Implementation",
+      "27"
+     ]
+    },
+    {
+     "row": 298,
+     "cells": [
+      "Power",
+      "28"
+     ]
+    },
+    {
+     "row": 299,
+     "cells": [
+      "New and Renewable Energy",
+      "29"
+     ]
+    },
+    {
+     "row": 300,
+     "cells": [
+      "Rural Development and Panchayati Raj",
+      "30"
+     ]
+    },
+    {
+     "row": 301,
+     "cells": [
+      "Science And Technology",
+      "31"
+     ]
+    },
+    {
+     "row": 302,
+     "cells": [
+      "Space",
+      "32"
+     ]
+    },
+    {
+     "row": 303,
+     "cells": [
+      "Steel",
+      "33"
+     ]
+    },
+    {
+     "row": 304,
+     "cells": [
+      "Mines",
+      "34"
+     ]
+    },
+    {
+     "row": 305,
+     "cells": [
+      "Social Justice and Empowerment",
+      "35"
+     ]
+    },
+    {
+     "row": 306,
+     "cells": [
+      "Tribal Affairs",
+      "36"
+     ]
+    },
+    {
+     "row": 307,
+     "cells": [
+      "D/o Commerce (Supply Division)",
+      "37"
+     ]
+    },
+    {
+     "row": 308,
+     "cells": [
+      "Shipping and Road Transport and Highways",
+      "38"
+     ]
+    },
+    {
+     "row": 309,
+     "cells": [
+      "Urban Development, Urban Employment and Poverty Alleviation",
+      "39"
+     ]
+    },
+    {
+     "row": 310,
+     "cells": [
+      "Water Resources",
+      "40"
+     ]
+    },
+    {
+     "row": 311,
+     "cells": [
+      "President's Secretariat",
+      "41"
+     ]
+    },
+    {
+     "row": 312,
+     "cells": [
+      "Lok Sabha Secretariat",
+      "42"
+     ]
+    },
+    {
+     "row": 313,
+     "cells": [
+      "Rajya Sabha secretariat",
+      "43"
+     ]
+    },
+    {
+     "row": 314,
+     "cells": [
+      "Election Commission",
+      "44"
+     ]
+    },
+    {
+     "row": 315,
+     "cells": [
+      "Ministry of Defence (Controller General of Defence Accounts)",
+      "45"
+     ]
+    },
+    {
+     "row": 316,
+     "cells": [
+      "Ministry of Railways",
+      "46"
+     ]
+    },
+    {
+     "row": 317,
+     "cells": [
+      "Department of Posts",
+      "47"
+     ]
+    },
+    {
+     "row": 318,
+     "cells": [
+      "Department of Telecommunications",
+      "48"
+     ]
+    },
+    {
+     "row": 319,
+     "cells": [
+      "Andaman and Nicobar Islands Administration",
+      "49"
+     ]
+    },
+    {
+     "row": 320,
+     "cells": [
+      "Chandigarh Administration",
+      "50"
+     ]
+    },
+    {
+     "row": 321,
+     "cells": [
+      "Dadra and Nagar Haveli",
+      "51"
+     ]
+    },
+    {
+     "row": 322,
+     "cells": [
+      "Goa, Daman and Diu",
+      "52"
+     ]
+    },
+    {
+     "row": 323,
+     "cells": [
+      "Lakshadweep",
+      "53"
+     ]
+    },
+    {
+     "row": 324,
+     "cells": [
+      "Pondicherry Administration",
+      "54"
+     ]
+    },
+    {
+     "row": 325,
+     "cells": [
+      "Pay and Accounts Officers (Audit)",
+      "55"
+     ]
+    },
+    {
+     "row": 326,
+     "cells": [
+      "Ministry of Non-conventional energy sources",
+      "56"
+     ]
+    },
+    {
+     "row": 327,
+     "cells": [
+      "Government Of NCT of Delhi",
+      "57"
+     ]
+    },
+    {
+     "row": 328,
+     "cells": [
+      "Others",
+      "99"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 4",
+   "row": 330,
+   "rows": [
+    {
+     "row": 331,
+     "cells": [
+      "Category (Collector/collector) description",
+      "Value for Category in database / FVU"
+     ]
+    },
+    {
+     "row": 332,
+     "cells": [
+      "Central Government",
+      "A"
+     ]
+    },
+    {
+     "row": 333,
+     "cells": [
+      "State Government",
+      "S"
+     ]
+    },
+    {
+     "row": 334,
+     "cells": [
+      "Statutory body (Central Govt.)",
+      "D"
+     ]
+    },
+    {
+     "row": 335,
+     "cells": [
+      "Statutory body (State Govt.)",
+      "E"
+     ]
+    },
+    {
+     "row": 336,
+     "cells": [
+      "Autonomous body (Central Govt.)",
+      "G"
+     ]
+    },
+    {
+     "row": 337,
+     "cells": [
+      "Autonomous body (State Govt.)",
+      "H"
+     ]
+    },
+    {
+     "row": 338,
+     "cells": [
+      "Local Authority (Central Govt.)",
+      "L"
+     ]
+    },
+    {
+     "row": 339,
+     "cells": [
+      "Local Authority (State Govt.)",
+      "N"
+     ]
+    },
+    {
+     "row": 340,
+     "cells": [
+      "Company",
+      "K"
+     ]
+    },
+    {
+     "row": 341,
+     "cells": [
+      "Branch / Division of Company",
+      "M"
+     ]
+    },
+    {
+     "row": 342,
+     "cells": [
+      "Association of Person (AOP)",
+      "P"
+     ]
+    },
+    {
+     "row": 343,
+     "cells": [
+      "Association of Person (Trust)",
+      "T"
+     ]
+    },
+    {
+     "row": 344,
+     "cells": [
+      "Artificial Juridical Person",
+      "J"
+     ]
+    },
+    {
+     "row": 345,
+     "cells": [
+      "Body of Individuals",
+      "B"
+     ]
+    },
+    {
+     "row": 346,
+     "cells": [
+      "Individual/HUF",
+      "Q"
+     ]
+    },
+    {
+     "row": 347,
+     "cells": [
+      "Firm",
+      "F"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure - 5",
+   "row": 349,
+   "rows": [
+    {
+     "row": 350,
+     "cells": [
+      "State Name",
+      "State Code"
+     ]
+    },
+    {
+     "row": 351,
+     "cells": [
+      "ANDAMAN AND NICOBAR ISLANDS",
+      "01"
+     ]
+    },
+    {
+     "row": 352,
+     "cells": [
+      "ANDHRA PRADESH",
+      "02"
+     ]
+    },
+    {
+     "row": 353,
+     "cells": [
+      "ARUNACHAL PRADESH",
+      "03"
+     ]
+    },
+    {
+     "row": 354,
+     "cells": [
+      "ASSAM",
+      "04"
+     ]
+    },
+    {
+     "row": 355,
+     "cells": [
+      "BIHAR",
+      "05"
+     ]
+    },
+    {
+     "row": 356,
+     "cells": [
+      "CHANDIGARH",
+      "06"
+     ]
+    },
+    {
+     "row": 357,
+     "cells": [
+      "DADRA & NAGAR HAVELI AND DAMAN & DIU",
+      "07"
+     ]
+    },
+    {
+     "row": 358,
+     "cells": [
+      "DELHI",
+      "09"
+     ]
+    },
+    {
+     "row": 359,
+     "cells": [
+      "GOA",
+      "10"
+     ]
+    },
+    {
+     "row": 360,
+     "cells": [
+      "GUJARAT",
+      "11"
+     ]
+    },
+    {
+     "row": 361,
+     "cells": [
+      "HARYANA",
+      "12"
+     ]
+    },
+    {
+     "row": 362,
+     "cells": [
+      "HIMACHAL PRADESH",
+      "13"
+     ]
+    },
+    {
+     "row": 363,
+     "cells": [
+      "JAMMU & KASHMIR",
+      "14"
+     ]
+    },
+    {
+     "row": 364,
+     "cells": [
+      "KARNATAKA",
+      "15"
+     ]
+    },
+    {
+     "row": 365,
+     "cells": [
+      "KERALA",
+      "16"
+     ]
+    },
+    {
+     "row": 366,
+     "cells": [
+      "LAKSHWADEEP",
+      "17"
+     ]
+    },
+    {
+     "row": 367,
+     "cells": [
+      "MADHYA PRADESH",
+      "18"
+     ]
+    },
+    {
+     "row": 368,
+     "cells": [
+      "MAHARASHTRA",
+      "19"
+     ]
+    },
+    {
+     "row": 369,
+     "cells": [
+      "MANIPUR",
+      "20"
+     ]
+    },
+    {
+     "row": 370,
+     "cells": [
+      "MEGHALAYA",
+      "21"
+     ]
+    },
+    {
+     "row": 371,
+     "cells": [
+      "MIZORAM",
+      "22"
+     ]
+    },
+    {
+     "row": 372,
+     "cells": [
+      "NAGALAND",
+      "23"
+     ]
+    },
+    {
+     "row": 373,
+     "cells": [
+      "ODISHA",
+      "24"
+     ]
+    },
+    {
+     "row": 374,
+     "cells": [
+      "PONDICHERRY",
+      "25"
+     ]
+    },
+    {
+     "row": 375,
+     "cells": [
+      "PUNJAB",
+      "26"
+     ]
+    },
+    {
+     "row": 376,
+     "cells": [
+      "RAJASTHAN",
+      "27"
+     ]
+    },
+    {
+     "row": 377,
+     "cells": [
+      "SIKKIM",
+      "28"
+     ]
+    },
+    {
+     "row": 378,
+     "cells": [
+      "TAMIL NADU",
+      "29"
+     ]
+    },
+    {
+     "row": 379,
+     "cells": [
+      "TRIPURA",
+      "30"
+     ]
+    },
+    {
+     "row": 380,
+     "cells": [
+      "UTTAR PRADESH",
+      "31"
+     ]
+    },
+    {
+     "row": 381,
+     "cells": [
+      "WEST BENGAL",
+      "32"
+     ]
+    },
+    {
+     "row": 382,
+     "cells": [
+      "CHHATTISGARH",
+      "33"
+     ]
+    },
+    {
+     "row": 383,
+     "cells": [
+      "UTTARAKHAND",
+      "34"
+     ]
+    },
+    {
+     "row": 384,
+     "cells": [
+      "JHARKHAND",
+      "35"
+     ]
+    },
+    {
+     "row": 385,
+     "cells": [
+      "TELANGANA",
+      "36"
+     ]
+    },
+    {
+     "row": 386,
+     "cells": [
+      "LADAKH",
+      "37"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 6",
+   "row": 388,
+   "rows": [
+    {
+     "row": 389,
+     "cells": [
+      "Flag",
+      "New Section as per IT Act, 2025",
+      "Code in FN 139",
+      "Flag Value"
+     ]
+    },
+    {
+     "row": 390,
+     "cells": [
+      "A",
+      "\"Lower collection\" is on account of a certificate under section 395(3).",
+      "394(1) [Table: Sl. No. 1]\n394(1) [Table: Sl. No. 2]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 4]\n394(1) [Table: Sl. No. 5]\n394(1) [Table: Sl. No. 6.D(a)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 7.D(a)]\n394(1) [Table: Sl. No. 7.D(b)]\n394(1) [Table: Sl. No. 8.D(a)]\n394(1) [Table: Sl. No. 8.D(b)]\n394(1) [Table: Sl. No. 9]\n394(1) [Table: Sl. No. 9]\n394(1) [Table: Sl. No. 9]",
+      "1068\n1069\n1070\n1071\n1072\n1073\n1074\n1075\n1076\n1077\n1078\n1079\n1080\n1081\n1082\n1083\n1084\n1085\n1086\n1087\n1088\n1089\n1090\n1091\n1092"
+     ]
+    },
+    {
+     "row": 391,
+     "cells": [
+      "B",
+      "\"Non-collection\" is on account of furnishing of declaration under section 394(2)",
+      "394(1) [Table: Sl. No. 1]\n394(1) [Table: Sl. No. 2]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 4]\n394(1) [Table: Sl. No. 5]",
+      "1068\n1069\n1070\n1071\n1072\n1073\n1074"
+     ]
+    },
+    {
+     "row": 392,
+     "cells": [
+      "C",
+      "Collection is at higher rate under section 397(2) on account of non-furnishing of PAN",
+      "394(1) [Table: Sl. No. 1]\n394(1) [Table: Sl. No. 2]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 3]\n394(1) [Table: Sl. No. 4]\n394(1) [Table: Sl. No. 5]\n394(1) [Table: Sl. No. 6.D(a)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 7.D(a)]\n394(1) [Table: Sl. No. 7.D(b)]\n394(1) [Table: Sl. No. 8.D(a)]\n394(1) [Table: Sl. No. 8.D(b)]\n394(1) [Table: Sl. No. 9]\n394(1) [Table: Sl. No. 9]\n394(1) [Table: Sl. No. 9]",
+      "1068\n1069\n1070\n1071\n1072\n1073\n1074\n1075\n1076\n1077\n1078\n1079\n1080\n1081\n1082\n1083\n1084\n1085\n1086\n1087\n1088\n1089\n1090\n1091\n1092"
+     ]
+    },
+    {
+     "row": 393,
+     "cells": [
+      "F",
+      "No collection is on account of section 394(5) or section 402(6) [Table: Sl. No. 4 & 5, Column D]",
+      "394(1) [Table: Sl. No. 7.D(a)]\n394(1) [Table: Sl. No. 7.D(b)]\n394(1) [Table: Sl. No. 8.D(a)]\n394(1) [Table: Sl. No. 8.D(b)]",
+      "1086\n1087\n1088\n1089"
+     ]
+    },
+    {
+     "row": 394,
+     "cells": [
+      "K",
+      "No collection as per the provisions of section 394(4)",
+      "394(1) [Table: Sl. No. 7.D(a)]\n394(1) [Table: Sl. No. 7.D(b)]",
+      "1086\n1087"
+     ]
+    },
+    {
+     "row": 395,
+     "cells": [
+      "Y",
+      "No collection is on account of receipt below threshold limit as specified in section 394(1) [Table: Sl. No. 7]",
+      "394(1) [Table: Sl. No. 7.D(a)]\n394(1) [Table: Sl. No. 7.D(b)]",
+      "1086\n1087"
+     ]
+    },
+    {
+     "row": 396,
+     "cells": [
+      "Z",
+      "No collection or lower collection is in view of notification issued under section 400(1) of the Income-tax Act, 2025",
+      "394(1) [Table: Sl. No. 6.D(a)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]\n394(1) [Table: Sl. No. 6.D(b)]",
+      "1075\n1076\n1077\n1078\n1079\n1080\n1081\n1082\n1083\n1084\n1085"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 7 - Minor head code",
+   "row": 399,
+   "rows": [
+    {
+     "row": 400,
+     "cells": [
+      "Particulars",
+      "Code"
+     ]
+    },
+    {
+     "row": 401,
+     "cells": [
+      "TDS payable by taxpayer",
+      "200"
+     ]
+    },
+    {
+     "row": 402,
+     "cells": [
+      "TDS regular assessment (Raised by I. T, Dept.)",
+      "400"
+     ]
+    },
+    {
+     "row": 403,
+     "cells": [
+      "Advance Tax",
+      "100"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Annexure 8 - Collectee Code",
+   "row": 405,
+   "rows": [
+    {
+     "row": 406,
+     "cells": [
+      "Collectee Type",
+      "Code"
+     ]
+    },
+    {
+     "row": 407,
+     "cells": [
+      "Company",
+      "1"
+     ]
+    },
+    {
+     "row": 408,
+     "cells": [
+      "Individual",
+      "2"
+     ]
+    },
+    {
+     "row": 409,
+     "cells": [
+      "Hindu undivided family",
+      "3"
+     ]
+    },
+    {
+     "row": 410,
+     "cells": [
+      "Association of Persons (AOP) except in case of AOP consisting of only companies as its members",
+      "4"
+     ]
+    },
+    {
+     "row": 411,
+     "cells": [
+      "Association of Persons (AOP) consisting of only companies as its members",
+      "5"
+     ]
+    },
+    {
+     "row": 412,
+     "cells": [
+      "Co-operative society",
+      "6"
+     ]
+    },
+    {
+     "row": 413,
+     "cells": [
+      "Firm",
+      "7"
+     ]
+    },
+    {
+     "row": 414,
+     "cells": [
+      "Body of individuals",
+      "8"
+     ]
+    },
+    {
+     "row": 415,
+     "cells": [
+      "Artificial juridical person referred to in clause (g) of sub-section (77) of section 2 of the Income-tax Act, 2025",
+      "9"
+     ]
+    },
+    {
+     "row": 416,
+     "cells": [
+      "Others",
+      "10"
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -80,7 +80,7 @@ const Payroll = {
   groups(){ return this.data().employees.filter(e => e.group); },
   empByName(name){ const k = normName(name); return this.employees().find(e => normName(e.name) === k) || null; },
   // ---------- the details FinCom keeps for an employee (items: b.payDetails, id "emp:<Tally GUID>")
-  FIELDS: ["regime", "senior", "hraMetro", "rent", "landlordPan", "hlInterest", "lenderPan", "prevSalary", "prevTds", "address",
+  FIELDS: ["regime", "senior", "hraMetro", "rent", "landlordPan", "landlordName", "hlInterest", "lenderPan", "lenderName", "prevSalary", "prevTds", "address",
     "d80C", "d80CCD1B", "d80D", "d80DParents", "parentsSenior", "d80E", "d80G", "d80TTA", "d80CCD2", "dOther"],
   detail(e){
     const id = "emp:" + (e && e.guid || ""), list = this.books().payDetails || [];
@@ -98,6 +98,7 @@ const Payroll = {
     if (k === "regime") val = val === "old" ? "old" : "new";
     if (k === "senior" || k === "hraMetro" || k === "parentsSenior") val = val === true || val === "yes" ? "yes" : "no";
     if (k === "address") val = String(val || "").slice(0, 300);
+    if (k === "landlordName" || k === "lenderName") val = String(val || "").slice(0, 75);
     const next = Object.assign({}, cur, {[k]: val, name: e.name, at: new Date().toISOString()});
     if (i >= 0) b.payDetails[i] = next; else b.payDetails.push(next);
     return true;
@@ -206,7 +207,7 @@ const Payroll = {
       prevSalary: num(d.prevSalary), prevTds: num(d.prevTds), tdsHere: y.tds, pan: e.pan,
       ded: {c80C: num(d.d80C), c80CCD1B: num(d.d80CCD1B), c80D: num(d.d80D), c80DParents: num(d.d80DParents), c80E: num(d.d80E), c80G: num(d.d80G), c80TTA: num(d.d80TTA), c80CCD2: num(d.d80CCD2), other: num(d.dOther)}});
     return Object.assign({name: e.name, pan: e.pan, guid: e.guid, designation: e.designation, joined: e.joined, left: e.left, address: d.address || "",
-      landlordPan: d.landlordPan || "", lenderPan: d.lenderPan || "", regimeChosen: d.regime ? true : false, months: y.months,
+      landlordPan: d.landlordPan || "", lenderPan: d.lenderPan || "", landlordName: d.landlordName || "", lenderName: d.lenderName || "", regimeChosen: d.regime ? true : false, months: y.months,
       senior: old && d.senior === "yes", category: old && d.senior === "yes" ? "S" : "G"}, c);
   },
   // ---------- before filing
@@ -221,6 +222,9 @@ const Payroll = {
       if (noReg.length) out.push({what: "Employees without a tax regime chosen", n: noReg.length, how: "The new regime is taken until one is chosen (Salary, Employees).", who: noReg.slice(0, 4).map(e => e.name)});
       const rentNoPan = emp.filter(e => this.detail(e).regime === "old" && num(this.detail(e).rent) > 100000 && !Certs.validPan(this.detail(e).landlordPan));
       if (rentNoPan.length) out.push({what: "Rent over ₹1,00,000 a year without the landlord's PAN", n: rentNoPan.length, how: "The landlord's PAN is needed for the HRA exemption on rent over ₹1,00,000 a year.", who: rentNoPan.slice(0, 4).map(e => e.name)});
+      // 24Q's salary record asks the landlord's and the lender's name with the PAN (FVU 8.7, T_FV_6073 / T_FV_6083)
+      const noName = emp.filter(e => this.detail(e).regime === "old" && (num(this.detail(e).rent) > 100000 && !String(this.detail(e).landlordName || "").trim() || num(this.detail(e).hlInterest) > 0 && !String(this.detail(e).lenderName || "").trim()));
+      if (noName.length) out.push({what: "Landlord's or lender's name missing", n: noName.length, how: "24Q's salary record asks the name with the PAN (Salary, Employees).", who: noName.slice(0, 4).map(e => e.name)});
       const hlNoPan = emp.filter(e => this.detail(e).regime === "old" && num(this.detail(e).hlInterest) > 0 && !this.detail(e).lenderPan);
       if (hlNoPan.length) out.push({what: "Housing-loan interest without the lender's PAN", n: hlNoPan.length, how: "Annexure II asks the lender's PAN with the interest.", who: hlNoPan.slice(0, 4).map(e => e.name)});
       const short = this.annexII(fy).filter(x => x.shortfall > 1);
@@ -323,6 +327,8 @@ const PayTax = {
 // the FVU before filing (NEW_FORMS_VALIDATED, src/js/16).
 const TDS24Q_FILE = {
   build(fy, q, firm){
+    // tax year 2026-27 on: Form 138 as Protean's file format has it (src/js/83); earlier years below, as before
+    if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, "24Q");
     const rows = Payroll.annexI(fy, q).filter(r => r.tds > 0.005 && r.challan);
     if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
     const ch = {}; (Payroll.books().challans || []).forEach(c => { ch[c.id] = c; });
@@ -335,6 +341,8 @@ const TDS24Q_FILE = {
     const today = new Date(), fileDate = String(today.getDate()).padStart(2, "0") + String(today.getMonth() + 1).padStart(2, "0") + today.getFullYear();
     const ay = (num(fy.slice(0, 4)) + 1) + "-" + String(num(fy.slice(0, 4)) + 2).slice(2);
     const isNew = TDS.isNew(fy), fno = TDS.formNo("24Q", fy);
+    // up to FY 2025-26: 24Q laid out as Protean's file format (oldBuild, below)
+    if (!isNew) return this.oldBuild(fy, q, firm, rows, live, used);
     const lines = []; let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
     put(["FH", "SL1", "R", fileDate, "1", "D", firm.tan, "1", "FinCom", "", "", "", "", "", "", "", ""]);
@@ -373,6 +381,49 @@ const TDS24Q_FILE = {
   }
 };
 
+// 24Q up to FY 2025-26 (the Income-tax Act, 1961), laid out as Protean's file format and checked with its FVU 8.7
+// (TDS26Q.oldText, src/js/16): Annexure I, one deductee record (DD) per employee and payroll entry under its challan; in the
+// fourth quarter Annexure II, one salary record (SD) per employee, each followed by its section 16 records (S16: the standard
+// deduction 16(ia), professional tax 16(iii)) and its Chapter VI-A records (C6A), from Payroll.annexII (FinCom's own rule).
+TDS24Q_FILE.oldBuild = function(fy, q, firm, rows, live, used){
+  const money = v => r2(num(v)).toFixed(2), dmy = s => s ? String(s).slice(6, 8) + String(s).slice(4, 6) + String(s).slice(0, 4) : "";
+  const txt = (v, n) => String(v == null ? "" : v).replace(/[\^\r\n]/g, " ").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().slice(0, n || 75);
+  const panOf = p => Certs.validPan(p) ? p : "PANNOTAVBL";
+  // the employee's reference number (Annexure I and II): nine digits, the same for the employee in every return
+  const ref = name => TDS26Q.oldRefNo(name).slice(1);
+  const chs = live.map(c => ({c, part: typeof TDSReg === "object" ? TDSReg.portionFor(c, "24Q", fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)},
+    dds: used[c.id].map(r => ({7: ref(r.employee), 10: panOf(r.pan), 13: txt(r.employee), 14: money(r.tds), 15: "0.00", 16: "0.00", 17: money(r.tds), 19: money(r.tds),
+      22: money(r.paid), 23: dmy(r.date), 24: dmy(r.date), 25: dmy(c.date), 30: Certs.validPan(r.pan) ? "" : "C", 33: "92B"}))}));
+  const sds = [], subs = [];
+  if (q === "Q4"){
+    const a2 = Payroll.annexII(fy);
+    if (a2.some(e => !e.rulesKnown)) return {error: "FinCom works out salary tax for " + PayTax.YEARS.join(" and ") + " only: Annexure II of " + fy + " is not built."};
+    const y0 = fy.slice(0, 4) + "0401", y1 = (num(fy.slice(0, 4)) + 1) + "0331";
+    a2.forEach((e, i) => {
+      const old = e.regime === "old", via = e.via || {};
+      const s16 = [["16(iii)", e.profTax], ["16(ia)", e.standard]].filter(([, v]) => num(v) > 0);
+      // Chapter VI-A: [section, gross (as declared), deductible (within its limit)]
+      const dd = Payroll.detail(e);
+      const c6 = [["80C", dd.d80C, via.c80C], ["80CCD(1B)", dd.d80CCD1B, via.c80CCD1B], ["80CCD(2)", dd.d80CCD2, via.c80CCD2],
+        ["80D", r2(num(dd.d80D) + num(dd.d80DParents)), r2(num(via.c80D) + num(via.c80DParents))], ["80E", dd.d80E, via.c80E], ["80G", dd.d80G, via.c80G],
+        ["80TTA", dd.d80TTA, via.c80TTA], ["OTHERS", dd.dOther, via.other]].filter(([, , v]) => num(v) > 0).map(([id, g, v]) => [id, Math.max(num(g), num(v)), v]);
+      const rent = old && num(dd.rent) > 100000, hl = old && num(dd.hlInterest) > 0;
+      sds.push({6: "", 7: panOf(e.pan), 8: "", 9: txt(e.name), 10: e.category || "G", 11: dmy(e.joined && e.joined > y0 ? e.joined : y0), 12: dmy(e.left && e.left < y1 ? e.left : y1),
+        13: money(e.gross), 15: String(s16.length), 16: money(r2(num(e.standard) + num(e.profTax))), 17: money(e.incomeSalary), 18: money(e.houseProperty), 19: money(e.grossTotal),
+        21: String(c6.length), 22: money(e.chapter6), 23: money(e.totalIncome), 24: money(e.slabTax), 25: money(e.surcharge), 26: money(e.cess), 27: money(e.relief89), 28: money(e.taxPayable),
+        29: money(e.tdsTotal), 30: money(e.balance), 31: money(via.c80C), 34: money(e.salary), 35: money(e.prevSalary), 36: money(e.tdsHere), 37: money(e.prevTds),
+        38: e.noPan ? "Y" : "N", 39: rent ? "Y" : "N", 40: rent ? "1" : "0", 41: rent ? e.landlordPan : "", 42: rent ? txt(e.landlordName) : "", 49: hl ? "Y" : "N", 50: hl ? "1" : "0", 51: hl ? e.lenderPan : "", 52: hl ? txt(e.lenderName) : "", 59: "N",
+        67: money(e.salary), 68: money(e.perquisites), 69: money(e.profitsInLieu), 70: old ? "0.00" : "", 71: "0.00", 72: "0.00", 73: "0.00", 74: old ? money(e.hraExempt) : "", 75: "0.00", 76: money(e.hraExempt),
+        77: "0.00", 78: money(e.rebate), 79: old ? "Y" : "N", 80: "0.00"});
+      subs.push({s16, c6});
+    });
+  }
+  const text = TDS26Q.oldText("24Q", fy, q, firm, chs, sds, subs);
+  return {text, rows: rows.length, challans: live.length, salaryRecords: sds.length, form: "24Q", formNo: "24Q", isNew: false, draft: false,
+    firmMissing: TDS26Q.oldAsks("24Q", fy, q, firm), name: (firm.tan || "TAN") + "_24Q_" + q + "_" + fy.replace("-", "") + ".txt",
+    words: "Built to Protean's 24Q file format as its FVU 8.7 checks it. Run it through Protean's FVU before filing."};
+};
+
 /* ---------- the page's actions (app/src/screens/tds/Payroll.jsx) ---------- */
 function payDetailSet(guid, k, v){
   const e = Payroll.employees().find(x => x.guid === guid);
@@ -383,5 +434,9 @@ function payFvuDownload(fy, q){
   const r = TDS24Q_FILE.build(fy, q, TDS26Q.firmDetails());
   if (r.error){ toast(r.error); return; }
   saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-  toast(r.rows + " salary payment" + (r.rows === 1 ? "" : "s") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.salaryRecords ? ", " + r.salaryRecords + " salary record" + (r.salaryRecords === 1 ? "" : "s") : "") + ". Check before filing: run it through the FVU.");
+  if (r.firmMissing && r.firmMissing.length) toast("The deductor's details the FVU asks are missing: " + r.firmMissing.join(", ") + ".");
+  else toast(r.rows + " salary payment" + (r.rows === 1 ? "" : "s") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.salaryRecords ? ", " + r.salaryRecords + " salary record" + (r.salaryRecords === 1 ? "" : "s") : "") +
+    (r.missingCodes && r.missingCodes.length ? ". No section code yet: " + r.missingCodes.join(", ") : "") +
+    (r.problems && r.problems.length ? ". " + r.problems.length + " thing" + (r.problems.length === 1 ? "" : "s") + " to fix first: " + r.problems.slice(0, 3).join(" ") + (r.problems.length > 3 ? " \u2026" : "") : "") +
+    ". Check before filing: run it through the FVU.");
 }

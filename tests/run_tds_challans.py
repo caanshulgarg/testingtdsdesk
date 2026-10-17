@@ -238,14 +238,16 @@ try:
         lines = [l.split("^") for l in f.get("text", "").split("\r\n") if l]
         cd = [l for l in lines if len(l) > 1 and l[1] == "CD"]; dd = [l for l in lines if len(l) > 1 and l[1] == "DD"]
         want = pg.evaluate("""(() => { const out = {}; TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan).forEach(r => { const c = S.books.challans.find(x => x.id === r.challan);
-          const k = c.serial; out[k] = out[k] || {n: 0, tax: 0, bsr: c.bsr, date: c.date.slice(6, 8) + c.date.slice(4, 6) + c.date.slice(0, 4), extra: Math.round((num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100}; out[k].n++; out[k].tax = Math.round((out[k].tax + r.tds) * 100) / 100; });
-          Object.values(out).forEach(v => { v.total = Math.round((v.tax + v.extra) * 100) / 100; }); return out; })()""")
-        got = {l[15]: {"n": int(l[4]), "tax": float(l[6]), "bsr": l[13], "date": l[14], "total": float(l[11])} for l in cd}
+          const k = c.serial; out[k] = out[k] || {n: 0, tax: 0, bsr: c.bsr, date: c.date.slice(6, 8) + c.date.slice(4, 6) + c.date.slice(0, 4), extra: Math.round((num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100, ctax: num(c.tax)}; out[k].n++; out[k].tax = Math.round((out[k].tax + r.tds) * 100) / 100; });
+          Object.values(out).forEach(v => { v.total = Math.round((v.ctax + v.extra) * 100) / 100; }); return out; })()""")
+        # next-tds-forms-2025: Form 140's challan record (Protean's file format 1.1): BSR field 15, serial 17, date 19; the
+        # challan as deposited in 8 to 12 (Gazette Note 6), the deductions' tax as tagged in field 21
+        got = {l[16]: {"n": int(l[4]), "tax": float(l[20]), "bsr": l[14], "date": l[18], "total": float(l[11])} for l in cd}
         ok(len(cd) == 5 and set(got) == {"00123", "00456", "00222", "00301", "00302"}, "the file: one CD record per challan with confirmed 26Q deductions, none for 192 or the 400 challan (%s)" % sorted(got))
         ok(got == {k: {"n": v["n"], "tax": v["tax"], "bsr": v["bsr"], "date": v["date"], "total": v["total"]} for k, v in want.items()},
-           "each CD: BSR, date, serial, number of deductions, tax as tagged; its total the tax and the interest and fee it carries (the TDS review, H5) (%s)" % got.get("00456"))
+           "each CD: BSR, date, serial, number of deductions, tax as tagged; its total the challan as deposited (%s)" % got.get("00456"))
         ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 7 + 1, "DD records: the 28 confirmed deductions (%d)" % len(dd))
-        ok(all(l[17] == "200" for l in cd), "minor head 200 on every CD record")
+        ok(all(l[22] == "200" for l in cd), "minor head 200 on every CD record")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
         br.close()
 finally:

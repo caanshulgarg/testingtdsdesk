@@ -1811,7 +1811,10 @@ function doAct(act, t){
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
       toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
-        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") + (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
+        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") +
+        (r.firmMissing && r.firmMissing.length ? ". The deductor's details the FVU asks are missing: " + r.firmMissing.join(", ") : "") +
+        (r.problems && r.problems.length ? ". " + r.problems.length + " thing" + (r.problems.length === 1 ? "" : "s") + " to fix first: " + r.problems.slice(0, 3).join(" ") + (r.problems.length > 3 ? " \u2026" : "") : "") +
+        (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
       break;
     }
     case "tdsFvu": { if (!ledgersReady("tds")) break;
@@ -2116,14 +2119,14 @@ const SETUP_PREV = {};
 function coSetText(path, v){
   const co = CO(); if (!co) return;
   if (/^gst\./.test(path) && !((co.id + path) in SETUP_PREV)) SETUP_PREV[co.id + path] = (co.gst || {})[path.slice(4)] || "";
-  setPath(co, path, /^(gstin|pan)$/.test(path) ? String(v).toUpperCase().trim() : v);
+  setPath(co, path, /^(gstin|pan|tan|tds26q\.(personPan|gstin))$/.test(path) ? String(v).toUpperCase().trim() : v);
   later("c" + co.id, () => Store.saveCompany(co), 600);
   if (path === "name") later("top", renderTop, 200);
 }
 // a client's setting chosen or finished (ticked, picked, or a box left): checked, saved, and the page drawn again
 function coCommit(path, v){
   const co = CO(); if (!co) return;
-  if (v !== undefined) setPath(co, path, /^(gstin|pan)$/.test(path) ? String(v).toUpperCase().trim() : v);
+  if (v !== undefined) setPath(co, path, /^(gstin|pan|tan|tds26q\.(personPan|gstin))$/.test(path) ? String(v).toUpperCase().trim() : v);
   if (path === "gstin"){
     const g = String(co.gstin || "").toUpperCase().trim();
     if (g && !gstinValid(g)) toast("That GSTIN fails its check digit. Check each character.");
@@ -2216,7 +2219,7 @@ function firmNameToAccount(v){
   Cloud.rpc("firm_name_set", {p_name: n}).then(() => { if (S.account.firm) S.account.firm.name = n; }, e => { if (!/firm_name_set|PGRST202|schema cache/i.test(String(e && e.message || e))) toast("The firm's name could not be saved to the firm account: " + ((e && e.message) || e)); });
 }
 function firmSetName(v){ S.firm.firmName = v; later("firm", () => { if (typeof Drafts === "object" && Drafts.hold("firm")) return; Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
-function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
+function setPath(o, path, v){ const k = path.split("."); if (k.length === 2){ if (!o[k[0]] || typeof o[k[0]] !== "object") o[k[0]] = {}; o[k[0]][k[1]] = v; } else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;

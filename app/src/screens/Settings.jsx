@@ -278,6 +278,65 @@ function RuleLedger({ kind, r }) {
     {v && <div><ChoiceTag co={co} k={(kind === "tds" ? "tds:" : "exp:") + r.id} value={v} /></div>}</>;
 }
 
+// next-tds-forms-2025 (the owner, 17-Oct-2026): the deductor's details the TDS statements need (Forms 138, 140, 143, 144;
+// the old 24Q / 26Q / 27Q / 27EQ read the same keys), kept as co.tds26q. Checked by the same function the files use
+// (TDSF25.deductorProblems, src/js/83): each problem shown beside its field. Required fields are marked *.
+// the deductor's fields (module level, so React keeps each box while typing)
+const DedErr = ({ p, k }) => p[k] ? <small className="err" style={{ color: "var(--danger, #b42318)", display: "block" }}>{p[k].join(" ")}</small> : null;
+const DedLab = ({ label, req }) => <span>{label}{req && <b className="req" title="Required" aria-label="required"> *</b>}</span>;
+function DedT({ p, k, label, req, max, placeholder, path }) {
+  const co = CO(), pth = path || "tds26q." + k, v = pth.split(".").reduce((o, x) => (o || {})[x], co);
+  return <label className="f" data-ded={k}><DedLab label={label} req={req} />
+    <input type="text" value={v || ""} maxLength={max} placeholder={placeholder} aria-label={label}
+      onChange={(ev) => { coSetText(pth, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommit(pth)} /><DedErr p={p} k={k} /></label>;
+}
+function DedSel({ p, k, label, req, opts, first }) {
+  const d = CO().tds26q || {};
+  return <label className="f" data-ded={k}><DedLab label={label} req={req} />
+    <select aria-label={label} value={d[k] || ""} onChange={(ev) => coCommit("tds26q." + k, ev.target.value)}>
+      <option value="">{first}</option>{opts.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select><DedErr p={p} k={k} /></label>;
+}
+function DeductorDetails() {
+  const co = CO(), d = co.tds26q || {}, firm = TDS26Q.firmDetails();
+  const probs = {}; TDSF25.deductorProblems(firm).forEach((p) => { (probs[p.k] = probs[p.k] || []).push(p.why); });
+  const catPan = TDSF25.categoryOf(co.pan), cat = TDSF25.categoryFor(firm), govt = TDSF25.GOVT.test(cat);
+  const states = Object.entries(TDSF25.STATES).map(([n, c]) => [c, c + " · " + n]);
+  const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px 14px" };
+  return <Card title="Deductor details for the TDS statements" note="Used in every TDS / TCS statement file (Forms 138, 140, 143, 144, and the old 24Q, 26Q, 27Q, 27EQ). Fields marked * are required; each is checked as Protean's file format asks.">
+    <div data-deductor="">
+      <div style={grid}>
+        <DedSel p={probs} k="deductorType" label="Deductor category" req opts={Object.entries(TDSF25.CATEGORY)} first={catPan ? "From the PAN: " + TDSF25.CATEGORY[catPan] : "From the PAN (none yet)"} />
+        <DedT p={probs} k="tan" label="TAN" req max={10} path="tan" />
+        <DedT p={probs} k="gstin" label="GSTIN" max={15} placeholder={co.gstin || ""} />
+      </div>
+      <label className="chk" data-ded="isBank"><input type="checkbox" checked={!!d.isBank} onChange={(ev) => coCommit("tds26q.isBank", ev.target.checked)} /> This client is a bank, co-operative bank or post office
+        <span className="note" style={{ display: "block" }}>{d.isBank ? "Interest it pays (old 194A) is 1020 for a senior citizen or 1021 for others; FinCom asks which for each deductee (To fix). Cash withdrawals (old 194N) are 1064 / 1065." : "No: interest it pays (old 194A) is written as 1022."}</span></label>
+      {govt && <div style={grid}>
+        {/^[SEHN]$/.test(cat) && <DedSel p={probs} k="stateName" label="State (of the State Government)" req opts={states} first="Choose the State" />}
+        {/^[ADGEHLN]$/.test(cat) && <DedSel p={probs} k="ministry" label={"Ministry" + (/^[ADG]$/.test(cat) ? "" : " (optional)")} req={/^[ADG]$/.test(cat)} opts={Object.entries(TDSF25.MINISTRIES).map(([c, n]) => [c, c + " · " + n])} first="Choose the Ministry" />}
+        {d.ministry === "99" && <DedT p={probs} k="ministryOther" label="Ministry's name" req max={150} />}
+        {/^[AS]$/.test(cat) && <DedT p={probs} k="ain" label="AIN of the PAO / DTO / CDDO" max={7} placeholder="7 digits, for book adjustment" />}
+      </div>}
+      <h4 style={{ margin: "14px 0 6px" }}>The deductor's address</h4>
+      <div style={grid}>
+        <DedT p={probs} k="branch" label="Branch / division (old 24Q, 26Q, 27Q, 27EQ)" max={75} />
+        <DedT p={probs} k="flat" label="Flat / door / block" req max={25} /><DedT p={probs} k="postOffice" label="Post office" max={25} /><DedT p={probs} k="premises" label="Building" />
+        <DedT p={probs} k="road" label="Road / street / sector" /><DedT p={probs} k="area" label="Area / locality" max={25} /><DedT p={probs} k="town" label="District" max={25} />
+        <DedSel p={probs} k="state" label="State" req opts={states} first="Choose the State" /><DedT p={probs} k="pin" label="PIN code" req max={6} /><DedT p={probs} k="country" label="Country" max={25} placeholder="INDIA" />
+        <DedT p={probs} k="email" label="E-mail" req={!d.personEmail} max={75} /><DedT p={probs} k="phoneCc" label="Phone country code" max={5} placeholder="91" /><DedT p={probs} k="phone" label="Phone" req max={10} />
+      </div>
+      <h4 style={{ margin: "14px 0 6px" }}>The person responsible for deducting</h4>
+      <div style={grid}>
+        <DedT p={probs} k="person" label="Name" req max={75} /><DedT p={probs} k="personDesignation" label="Designation" req max={20} /><DedT p={probs} k="personPan" label="PAN" req max={10} />
+        <DedT p={probs} k="personFlat" label="Flat / door / block" req max={25} /><DedT p={probs} k="personPostOffice" label="Post office" max={25} /><DedT p={probs} k="personPremises" label="Building" />
+        <DedT p={probs} k="personRoad" label="Road / street / sector" /><DedT p={probs} k="personArea" label="Area / locality" max={25} /><DedT p={probs} k="personTown" label="District" max={25} />
+        <DedSel p={probs} k="personState" label="State" req opts={states} first="Choose the State" /><DedT p={probs} k="personPin" label="PIN code" req max={6} /><DedT p={probs} k="personCountry" label="Country" max={25} placeholder="INDIA" />
+        <DedT p={probs} k="personEmail" label="E-mail" req={!d.email} max={75} /><DedT p={probs} k="personPhoneCc" label="Mobile country code" max={5} placeholder="91" /><DedT p={probs} k="personPhone" label="Mobile" req max={10} />
+      </div>
+    </div>
+  </Card>;
+}
+
 function TdsSetup() {
   const co = CO();
   return <>
@@ -291,6 +350,7 @@ function TdsSetup() {
         <p className="note">Untick if this client books TDS separately, for example at the time of payment. TDS is still worked out and shown.</p>
       </div>
     </Card>
+    <DeductorDetails />
     <Card title="Expense ledger by payment type" note="The expense ledger a bill goes to unless you choose another.">
       <LedgerPointer />
       <div className="tblwrap"><table className="data" data-statement="">

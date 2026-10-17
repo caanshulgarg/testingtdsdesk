@@ -109,25 +109,28 @@ with sync_playwright() as p:
     ok(n[0][0] == "DELT12345A_Form140_Q2_202627_DRAFT.txt" and n[0][1] == "140" and n[0][2] and n[0][4] == "140", "2026-27 Q2 other than salary: Form 140 (was 26Q), file named DRAFT, batch header says 140")
     ok(n[1][1] == "144" and n[1][4] == "144" and n[2][1] == "143" and n[2][4] == "143", "non-residents: Form 144 (was 27Q); TCS: Form 143 (was 27EQ)")
     # tds-layout (14-Oct-2026, H4): the confirmed payment codes are filled in (194J(a) 1026, 194J(b) 1027, scrap 1073, …);
-    # one without a confirmed code (194C here; a 194J whose kind is not known) is still named, never guessed
-    ok("194C" in n[0][3].split(",") and n[2][3] == "", "the payment codes not confirmed are named, the confirmed ones written (%s; %s)" % (n[0][3], n[2][3]))
+    # one without a confirmed code (a 194J whose kind is not known) is still named, never guessed. next-tds-forms-2025:
+    # 194C is coded from Annexure 2 of Protean's file format (1023 an individual or HUF, 1024 others, by the PAN)
+    ok("194J" in n[0][3] and "194C" not in n[0][3] and n[2][3] == "", "the payment codes not confirmed are named, the confirmed ones written (%s; %s)" % (n[0][3], n[2][3]))
     # up to 2025-26: 26Q / 27Q / 27EQ as before (late returns and corrections)
     pg.evaluate("""() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) - 1) + v.date.slice(4); });
       S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) - 1) + c.date.slice(4); }); S.books.certs[0].from = '20250401'; S.books.certs[0].to = '20260331'; }""")
     f26 = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', pan: 'AANFG3202D', name: 'Testing TDS'}, '26Q')")
+    # the deductee record as Protean's file format numbers it (FVU 8.7, run_fvu_layout.js): field n is d[n - 1]: PAN 10,
+    # name 13, remark 30, section code 33, certificate 34; 27Q's rate type, nature, 15CA and country 35 to 38
     dd = [l.split("^") for l in f26["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
-    by = {d[8]: d for d in dd}
+    by = {d[12]: d for d in dd}
     ok(f26["name"].endswith("_26Q_Q2_202526.txt") and not f26["draft"] and len(dd) == 3, "2025-26: 26Q file, not a draft, three deductions (%d)" % len(dd))
-    ok(by["Cert Contractor"][21] == "A" and by["Cert Contractor"][22] == "CERT000001", "26Q: the certificate deduction carries remark A and the certificate number")
-    ok(by["No Pan Prof"][21] == "C" and by["No Pan Prof"][7] == "PANNOTAVBL", "26Q: the deduction without PAN carries remark C and PANNOTAVBL")
-    ok(by["Ok Contractor"][21] == "" and by["Ok Contractor"][20] == "94C", "26Q: a plain deduction has no remark; section code 94C")
+    ok(by["Cert Contractor"][29] == "A" and by["Cert Contractor"][33] == "CERT000001", "26Q: the certificate deduction carries remark A and the certificate number")
+    ok(by["No Pan Prof"][29] == "C" and by["No Pan Prof"][9] == "PANNOTAVBL", "26Q: the deduction without PAN carries remark C and PANNOTAVBL")
+    ok(by["Ok Contractor"][29] == "" and by["Ok Contractor"][32] == "94C", "26Q: a plain deduction has no remark; section code 94C")
     f27 = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27Q')")
     d27 = [l.split("^") for l in f27["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
     bh27 = [l.split("^") for l in f27["text"].strip().split("\r\n") if l.split("^")[1] == "BH"][0]
-    ok(bh27[4] == "27Q" and len(d27) == 1 and d27[0][20] == "195" and d27[0][30:34] == ["A", "49", "", "US"], "27Q file: form 27Q in the batch header, section 195, Act rate (A), nature 49, country US")
+    ok(bh27[4] == "27Q" and len(d27) == 1 and d27[0][32] == "195" and d27[0][34:38] == ["A", "49", "", "US"], "27Q file: form 27Q in the batch header, section 195, Act rate (A), nature 49, country US")
     fq = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27EQ')")
     dq = [l.split("^") for l in fq["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
-    ok(fq["name"].endswith("_27EQ_Q2_202526.txt") and len(dq) == 1 and dq[0][20] == "6CE" and dq[0][10] == "100000.00", "27EQ file: the scrap collection, code 6CE, received ₹1,00,000")
+    ok(fq["name"].endswith("_27EQ_Q2_202526.txt") and len(dq) == 1 and dq[0][32] == "E" and dq[0][21] == "100000.00", "27EQ file: the scrap collection, code 6CE (written E, as the FVU reads it), received ₹1,00,000")
     # TCS rates by date: scrap 1% before April 2026, 2% from then; overseas tours 2% flat from then
     ok(pg.evaluate("() => [TDS.tcsRate('6CE', '20251001'), TDS.tcsRate('6CE', '20260401'), TDS.tcsRate('6CJ', '20260501'), TDS.tcsRate('6CO', '20260401'), TDS.tcsRate('6CO', '20250401')].join()") == "1,2,2,2,5",
        "TCS by date: scrap 1% then 2%, minerals 2%, overseas tour 2% from April 2026 (5% before)")

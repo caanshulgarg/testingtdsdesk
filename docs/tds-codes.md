@@ -18,15 +18,21 @@ FinCom keeps the codes it writes into the 26Q, 27Q and 27EQ text files in **one 
 
 | Section | What was paid for (FinCom's `r.pay`) | Code FinCom writes | Status |
 |---|---|---|---|
-| 194J(a): fees for technical services | `technical` | 4JA | **unverified** |
-| 194J(b): professional fees | `professional` | 4JB | **unverified** (Protean's 2018 annexure lists only 94J for 194J) |
+| 194J(a): fees for technical services | `technical` | 4JA | in FVU 8.7's list of 26Q codes (17-Oct-2026); that 4JA is the technical one is **unverified** |
+| 194J(b): professional fees | `professional` | 4JB | in FVU 8.7's list; that 4JB is the professional one is **unverified** (Protean's 2018 annexure lists only 94J for 194J) |
 | 194J: director's fees, or kind not known | none | **no code**. The file names the deduction and asks for the kind | |
 | 194-I(a): rent of plant and machinery | `rent_machinery` | 4IA | confirmed: Protean's 2018 annexure (as quoted by the coordinator's sources) |
 | 194-I(b): rent of land, building or furniture | `rent_building` | 4IB | confirmed: Protean's 2018 annexure |
 | 194-I, kind not known | none | **no code**, as above | |
-| 194DA | | 4DA | **unverified** |
-| 194BB | | 4BB | **unverified** |
-| 194LA | | 4LA | **unverified** |
+| 194DA | | 4DA | in FVU 8.7's list of 26Q codes |
+| 194BB | | 4BB | in FVU 8.7's list of 26Q codes |
+| 194LA | | 94L | changed 17-Oct-2026: FVU 8.7's list has 94L and no 4LA (it rejects 4LA) |
+
+FVU 8.7's own list (read from the FVU, 17-Oct-2026) of the codes a 26Q deductee record may carry: 193, 94A, 94B, 4BB, 94C,
+94D, 4EE, 94F, 94G, 94H, 4IA, 4IB, 94J, 94L, 194, 4BA, 4DA, LBB, 9IA, 2AA, LBC, 4IC, 94N, 94K, 4JA, 4JB, BA1, BA2, 4NF, 94O,
+94Q, 94S, 94R, 4BP, 4RP, 4SP, 9BA, 4NC, 9FT, 4AP; 27Q's: 94E, 195, 96A, 96B, 96C, 96D, 4LB, 4LC, 4LD, 4BA, LBB, 2AA, LBC, 94N,
+BA1, BA2, BA3, 4NF, 6DA, LC1, LC2, LC3, 94B, 4BP, 9BA, 4AP, 4BB, 4NC, 9FT. 194T (from April 2025) is not in FVU 8.7's list: a
+later FVU is needed for it. 27EQ's collection code is written as its letter (6CE is E).
 
 What FinCom used to write before 14-Oct-2026:
 
