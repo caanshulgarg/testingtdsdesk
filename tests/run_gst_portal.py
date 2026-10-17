@@ -84,7 +84,7 @@ R3B_CHECK = """([ym, reg]) => { const t = GSTR.threeB(ym, reg), j = GSTR.threeBJ
   five('4B1', rv('RUL'), '4(B)(1)', T4); five('4B2', rv('OTH'), '4(B)(2)', T4); five('4C', itc.itc_net, '4(C)', T4); five('4D1', ie('RUL'), '4(D)(1)', T4); five('4D2', ie('OTH'), '4(D)(2)', T4);
   // 4(A)(3): the screen's figure (threeB's rcmIn); the JSON's ISRC must be the same or the row says it differs
   const a3 = row('4A3'), isrc = av('ISRC'); ['igst', 'cgst', 'sgst', 'cess'].forEach((k) => eq(a3[k], t.rcmIn[k], '4(A)(3) screen ' + k));
-  const same = ['igst', 'cgst', 'sgst', 'cess'].every((k) => Math.abs(num(a3[k]) - num(isrc[{igst: 'iamt', cgst: 'camt', sgst: 'samt', cess: 'csamt'}[k]])) < 0.005); if (!same && !a3.fileDiff) bad.push('4(A)(3): JSON differs and the row does not say so');
+  const same = ['igst', 'cgst', 'sgst', 'cess'].every((k) => Math.abs(num(a3[k]) - num(isrc[{igst: 'iamt', cgst: 'camt', sgst: 'samt', cess: 'csamt'}[k]])) < 0.005); if (!same) bad.push('4(A)(3): the JSON ISRC differs from the screen (imported services counted twice?)'); if (a3.fileDiff) bad.push('4(A)(3): the row still says the JSON differs');
   const g5 = j.inward_sup.isup_details; eq(row('5gst').inter, g5[0].inter, '5 gst inter'); eq(row('5gst').intra, g5[0].intra, '5 gst intra'); eq(row('5ng').inter, g5[1].inter, '5 ng inter'); eq(row('5ng').intra, g5[1].intra, '5 ng intra');
   const u = (j.inter_sup || {}).unreg_details || [], r32 = T.find(x => x.id === '3.2').rows.filter(r => Math.abs(r.taxable) >= 0.01);
   if (u.length !== r32.length) bad.push('3.2 rows ' + r32.length + ' / ' + u.length); u.forEach((x, i) => { eq(r32[i] && r32[i].taxable, x.txval, '3.2 ' + x.pos); eq(r32[i] && r32[i].igst, x.iamt, '3.2 igst ' + x.pos); });

@@ -530,7 +530,9 @@ const GSTR = {
       itc_elg: {itc_avl: [
         {ty: "IMPG", iamt: r2(t.impGoods.igst), camt: 0, samt: 0, csamt: r2(t.impGoods.cess)},
         {ty: "IMPS", iamt: r2(t.impServ.igst), camt: 0, samt: 0, csamt: r2(t.impServ.cess)},
-        {ty: "ISRC", iamt: r2(t.rcmOut.igst), camt: r2(t.rcmOut.cgst), samt: r2(t.rcmOut.sgst), csamt: r2(t.rcmOut.cess)},
+        // 4(A)(3) is reverse charge OTHER than imports: imported services are already in IMPS (4(A)(2)), so they are not
+        // counted again here (the owner, 17-Oct-2026: "should not be double")
+        {ty: "ISRC", iamt: r2(t.rcmIn.igst), camt: r2(t.rcmIn.cgst), samt: r2(t.rcmIn.sgst), csamt: r2(t.rcmIn.cess)},
         {ty: "OTH", iamt: r2(t.other.igst), camt: r2(t.other.cgst), samt: r2(t.other.sgst), csamt: r2(t.other.cess)}
       ], itc_rev: [{ty: "RUL", iamt: r2(t.rev1.igst), camt: r2(t.rev1.cgst), samt: r2(t.rev1.sgst), csamt: r2(t.rev1.cess)},
         {ty: "OTH", iamt: r2(t.rev2.igst), camt: r2(t.rev2.cgst), samt: r2(t.rev2.sgst), csamt: r2(t.rev2.cess)}],
@@ -584,7 +586,7 @@ const GSTR = {
       ["3.2 Inter-state to unregistered", t.toUnreg.taxable, t.toUnreg.igst, "", "", ""],
       [], ["4(A)(1) Import of goods", t.impGoods.taxable, t.impGoods.igst, t.impGoods.cgst, t.impGoods.sgst, t.impGoods.cess],
       ["4(A)(2) Import of services", t.impServ.taxable, t.impServ.igst, t.impServ.cgst, t.impServ.sgst, t.impServ.cess],
-      ["4(A)(3) Inward on reverse charge", t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess],
+      ["4(A)(3) Inward on reverse charge", t.rcmIn.taxable, t.rcmIn.igst, t.rcmIn.cgst, t.rcmIn.sgst, t.rcmIn.cess],
       ["4(A)(5) All other ITC", t.other.taxable, t.other.igst, t.other.cgst, t.other.sgst, t.other.cess],
       ["4(B)(1) Reversed: rule 42", "", t.r42.igst, t.r42.cgst, t.r42.sgst, t.r42.cess],
       ["4(B)(1) Reversed: rule 43", "", t.r43.igst, t.r43.cgst, t.r43.sgst, t.r43.cess],

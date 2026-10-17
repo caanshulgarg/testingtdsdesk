@@ -19,7 +19,9 @@ const M2B = {
   gstinOf(reg){ return ((typeof GSTR === "object" && GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ((GST2B.all2b(reg)[0] || {}).gstin) || ""; },
   key(reg, fy){ return (reg || "") + "|" + fy; },
   // AI only where the firm's AI help is on for 2B (Settings, AI help) and the client is not left out of it
-  aiAllowed(){ return typeof AIH === "object" && AIH.enabled("r2b"); },
+  // on by default (the owner, 17-Oct-2026): only a firm whose owner switched AI help off, 2B's part switched off, or a client
+  // left out of AI help is matched by the rules alone; the daily cost cap stays
+  aiAllowed(){ if (typeof AIH !== "object") return false; const f = (S.firm || {}).ai || {}, c = AIH.cfg(), co = CO(); return f.on !== false && c.r2b !== false && !(co && co.aiOff); },
   // the year's 2B documents (not those rejected in IMS: no credit, nothing to match) and the purchases, as GST2B.run reads
   // them (its result is kept until the books or the 2Bs change, so this is cheap on every render)
   _in: new WeakMap(),
