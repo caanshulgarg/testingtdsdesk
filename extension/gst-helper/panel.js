@@ -20,22 +20,39 @@ async function tab() {
   if (!job || !job.tabId) return null;
   return chrome.tabs.get(job.tabId).catch(() => null);
 }
+// The portal refuses a returns / payment page opened by its address ("Access Denied", the owner's report of
+// 17-Oct-2026): the helper never moves the tab by an address. It waits while the login page is open (never touching
+// it), and goes to a page through the portal's own menu.
+const DENIED = "The portal wants to be opened from its own menu. Click ‘Click here to Login’ / the Home logo on the portal; once you are on the portal's home page, press Run again — the helper goes through RETURN DASHBOARD.";
+class Denied extends Stop {}
+const LOGIN_RE = new RegExp(P.login.match);
+async function pageNow(t) {
+  if (!t || t.status !== "complete") return "";
+  if (LOGIN_RE.test(t.url || "")) return "login";
+  try { const r = await chrome.tabs.sendMessage(t.id, { cmd: "ping" }); return r && r.ok ? (r.page || "other") : ""; } catch (e) { return ""; }
+}
 async function waitPage(pageKey, ms) {
-  const re = new RegExp(P[pageKey].match), end = Date.now() + (ms || 30000);
+  const end = Date.now() + (ms || 30000);
   for (;;) {
-    const t = await tab();
-    if (t && t.status === "complete" && re.test(t.url || "")) {
-      try { const r = await chrome.tabs.sendMessage(t.id, { cmd: "ping" }); if (r && r.ok) return t; } catch (e) {}
-    }
+    const t = await tab(), pg = await pageNow(t);
+    if (pg === "denied") throw new Denied(DENIED);
+    if (pg === pageKey) return t;
     if (Date.now() > end) throw new Stop("The portal page “" + pageKey + "” did not open in the portal tab" + (t ? " (it shows " + (t.url || "").split("?")[0] + ")" : "") + ". If the portal logged you out, log in again and run this step again.");
     await sleep(250);
   }
 }
-async function goTo(pageKey, extra) {
+// to the returns dashboard, the return status or a ledger: through the portal's menu (or the home page's RETURN DASHBOARD)
+async function goTo(pageKey) {
   const t = await tab();
-  const url = P[pageKey].url + (extra || "");
-  if (!t) { const r = await chrome.runtime.sendMessage({ type: "openPortal", url }); job.tabId = r.tabId; await saveJob(); }
-  else await chrome.tabs.update(t.id, { url });
+  if (!t) throw new Stop("The portal tab is not open. Press Run on the first step.");
+  const pg = await pageNow(t);
+  if (pg === "denied") throw new Denied(DENIED);
+  if (pg === "login" || !pg) throw new Stop("Log in to the portal first (the first step).");
+  if (pg === pageKey) return t;
+  const path = SEL.menu.paths[pageKey];
+  if (!path) throw new Stop("The helper has no way through the portal's menu to “" + pageKey + "”.");
+  const r = await chrome.tabs.sendMessage(t.id, { cmd: "menu", path });
+  if (!r || (!r.ok && r.stop)) throw new Stop((r && r.message) || "The portal page did not answer.");
   return waitPage(pageKey);
 }
 async function on(pageKey, cmd) {
@@ -89,13 +106,16 @@ function stepsFor(j) {
 
 async function stepLogin() {
   let t = await tab();
-  if (!t) { const r = await chrome.runtime.sendMessage({ type: "openPortal", url: P.dashboard.url }); job.tabId = r.tabId; await saveJob(); t = await tab(); }
-  const end = Date.now() + 10 * 60000, login = new RegExp(P.login.match);
+  if (!t) { const r = await chrome.runtime.sendMessage({ type: "showPortal" }); job.tabId = r.tabId; await saveJob(); }
+  const end = Date.now() + 10 * 60000;
   for (;;) {
     t = await tab();
     if (!t) throw new Stop("The portal tab was closed.");
-    if (t.status === "complete" && /^https:\/\/[a-z0-9.-]*gst\.gov\.in\//.test(t.url || "") && !login.test(t.url || "")) return { message: "Logged in." };
-    setMsg("login", "Waiting for you to type the captcha and press LOGIN in the portal tab…");
+    const pg = await pageNow(t);
+    if (pg === "denied") throw new Denied(DENIED);
+    if (pg && pg !== "login") return { message: "Logged in." };
+    // the login page (or a page still loading): never touched; the person types the captcha and presses LOGIN
+    setMsg("login", "Waiting for you to log in on the portal tab (type the captcha, and the OTP if asked). The helper does not touch that tab until you are in.");
     if (Date.now() > end) throw new Stop("Not logged in after 10 minutes. Log in on the portal and run this step again.");
     await sleep(500);
   }
@@ -119,7 +139,8 @@ async function stepProcess() {
     if (/error/i.test(r.status || "")) throw new Stop(r.message);
     setMsg("process", r.message);
     await sleep(5000);
-    const t = await tab(); if (t) { await chrome.tabs.reload(t.id); await waitPage("upload"); }
+    // the upload history is read again by coming back to the upload page the portal's way (never a reload or an address)
+    await stepPeriod("r1Offline");
   }
   throw new Stop("The portal has not finished processing the file in 2 minutes. Check the upload history on the portal and run this step again.");
 }
@@ -221,7 +242,7 @@ async function runStep(s, auto) {
     run.steps[s.id] = { status: "done", message: (r && r.message) || "Done.", differences: r && r.differences };
     ok = true;
   } catch (e) {
-    run.steps[s.id] = { status: "stopped", message: e instanceof Stop ? e.message : "The helper met an error and stopped: " + ((e && e.message) || e) };
+    run.steps[s.id] = { status: "stopped", denied: e instanceof Denied, message: e instanceof Stop ? e.message : "The helper met an error and stopped: " + ((e && e.message) || e) };
   }
   busy = false; await setS("run", run); draw();
   const last = job.steps.filter((x) => !x.you).slice(-1)[0];
@@ -280,8 +301,10 @@ function draw() {
   st.innerHTML = "<div class=row style='justify-content:space-between'><h3>Steps</h3><button id=runAll" + (busy ? " disabled" : "") + ">Run all steps</button></div>" +
     job.steps.map((s, i) => { const r = (run.steps || {})[s.id] || { status: s.you ? "you" : "waiting" };
       return "<div class=step data-step=" + s.id + " data-status=" + r.status + "><div>" + (i + 1) + ". " + esc(s.label) + "</div><div class=row><span class='badge " + r.status + "'>" + ({ waiting: "to do", running: "running", done: "done", stopped: "stopped", you: "yours" })[r.status] + "</span>" +
-        (s.you ? "" : "<button class=ghost data-run=" + s.id + (busy ? " disabled" : "") + ">Run</button>") + "</div><div class=msg>" + esc(r.message || (s.you ? youText() : "")) + "</div></div>"; }).join("");
+        (s.you ? "" : "<button class=ghost data-run=" + s.id + (busy ? " disabled" : "") + ">Run</button>") + "</div><div class=msg>" + esc(r.message || (s.you ? youText() : "")) + "</div>" +
+        (r.denied ? "<div class=row style='grid-column:1/-1'><button data-relogin>Open the portal's login page</button></div>" : "") + "</div>"; }).join("");
   $("#runAll").onclick = () => runAll();
+  st.querySelectorAll("[data-relogin]").forEach((b) => { b.onclick = () => chrome.runtime.sendMessage({ type: "openLogin" }); });
   st.querySelectorAll("[data-run]").forEach((b) => { b.onclick = () => runStep(job.steps.find((s) => s.id === b.dataset.run)); });
   drawFigures(); drawCompare();
 }

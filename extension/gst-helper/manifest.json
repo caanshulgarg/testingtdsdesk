@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FinCom GST helper",
   "short_name": "FinCom GST",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fills GSTR-1, IFF and GSTR-3B on the GST portal from FinCom's figures, in your own logged-in tab, and stops before File. You type the captcha, the OTP and you file.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApMcd1fmznIW8llDunfVre2nkwM1b96DPGE8UXE9rb+2NsAMPO1AHiSVqumvewmpomOiWrB/ME5b9a0v8mjh8quEp5kns+/65u/u2eSYknk9eMnjNWMaDZPRxrq3HnWWroof3T8A5oE2GBwtE0bSy4ViP4iMRqS1dE0OAvi+ix8SMTiJ9u6+XbG7xfXEE2GUpJ+VOSwiPyxbms3spCUMz7BSgU6EzdarkL5GxW10MNu31zGoYFYL62YltZR1vfD79KetrGSRqR6B6B8vEuA68teEjK7hgMGdIW6PxHTiQ8sFwG8qOyvCU12NTItAeQ1vIY+olEAWlCYU+g0/B3PHS1QIDAQAB",
   "minimum_chrome_version": "116",

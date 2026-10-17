@@ -1,4 +1,5 @@
-{"_note": "The real portal addresses each look-alike page stands in for (tests route these to the files here; nothing reaches gst.gov.in).",
+{
+ "_note": "The real portal addresses each look-alike page stands in for (tests route these to the files here; nothing reaches gst.gov.in).",
  "https://services.gst.gov.in/services/login": "login.html",
  "https://return.gst.gov.in/returns/auth/dashboard": "dashboard.html",
  "https://return.gst.gov.in/returns/auth/gstr1": "gstr1.html",
@@ -8,4 +9,6 @@
  "https://gstr2b.gst.gov.in/gstr2b/auth/": "gstr2b.html",
  "https://payment.gst.gov.in/payment/auth/ledger/cashledger": "cashledger.html",
  "https://payment.gst.gov.in/payment/auth/ledger/creditledger": "creditledger.html",
- "https://return.gst.gov.in/returns/auth/trackreturnstatus": "status.html"}
+ "https://return.gst.gov.in/returns/auth/trackreturnstatus": "status.html",
+ "https://services.gst.gov.in/services/auth/fowelcome": "home.html"
+}

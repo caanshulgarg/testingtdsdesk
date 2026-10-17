@@ -33,7 +33,7 @@
   const tile = (text, summary, form, extra) => Object.assign({ tile: { css: ".tile, .card, a, div[role=button]", text, click: true }, summary: { css: "table#summary tbody tr", text: summary }, cols: SUM_COLS, form }, extra || {});
 
   const SEL = {
-    version: "2026.10.17-1",
+    version: "2026.10.17-2",
     verified: false,
     pages: {
       login: {
@@ -44,6 +44,12 @@
           password: { css: "input#user_pass" },
           captcha: { css: "input#captcha" },          // typed by the person; the helper only puts the cursor there
         },
+      },
+      // the portal's home page after login (Welcome): its RETURN DASHBOARD button is the way into returns
+      home: {
+        url: "https://services.gst.gov.in/services/auth/fowelcome",
+        match: "^https://services\\.gst\\.gov\\.in/services/auth/",
+        fields: { returnDashboard: btn("RETURN DASHBOARD") },
       },
       dashboard: {
         url: "https://return.gst.gov.in/returns/auth/dashboard",
@@ -169,6 +175,30 @@
       },
     },
   };
+  // The owner's report of 17-Oct-2026: the real portal answers "Access Denied! Your session is expired or you don't have
+  // permission…" to a returns / payment page opened by typing its address. So the helper NEVER types an address after
+  // login (the pages' `url` above are for reference only; only pages.login.url is ever opened, and only when no logged-in
+  // portal tab exists). It goes through the portal's own menu and buttons, written here, item by item, in the order clicked.
+  SEL.menu = {
+    fields: {
+      services: { css: "nav a, nav button, nav li > span", text: "Services", click: true },
+      returns: { css: "nav a, nav button, nav li > span", text: "Returns", click: true },
+      returnsDashboard: { css: "nav a, nav button", text: "Returns Dashboard", click: true },
+      trackStatus: { css: "nav a, nav button", text: "Track Return Status", click: true },
+      ledgers: { css: "nav a, nav button, nav li > span", text: "Ledgers", click: true },
+      cashLedger: { css: "nav a, nav button", text: "Electronic Cash Ledger", click: true },
+      creditLedger: { css: "nav a, nav button", text: "Electronic Credit Ledger", click: true },
+    },
+    paths: {
+      dashboard: ["services", "returns", "returnsDashboard"],
+      status: ["services", "returns", "trackStatus"],
+      cashLedger: ["services", "ledgers", "cashLedger"],
+      creditLedger: ["services", "ledgers", "creditLedger"],
+    },
+  };
+  // the portal's refusal page (the words it shows): the helper stops there and says how to get back in
+  SEL.denied = { words: ["Access Denied", "session is expired"] };
+
   // the 3B boxes: where each is typed, and the tile it is in
   const BOX = {
     "3.1a": ["t31", "osup_det", ["txval", "iamt", "camt", "samt", "csamt"]], "3.1b": ["t31", "osup_zero", ["txval", "iamt", "csamt"]], "3.1c": ["t31", "osup_nil_exmp", ["txval"]],

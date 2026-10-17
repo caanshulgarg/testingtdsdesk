@@ -48,8 +48,24 @@ server (`gst_helper_runs`) and with the client's books.
 5. "FinCom GST helper" appears. Click the puzzle icon and pin it.
 6. Open staging.fincom.live/review/ (signed in) → GST → Files: the card says "installed".
 
-To update: replace the folder's files with the new ones and press the reload arrow on the helper in
+To update (0.1.0 → 0.1.1): replace the folder's files with the new ones and press the reload arrow on the helper in
 `chrome://extensions`. The helper's id is fixed (`okajonmmjoidmaapknhpphpojodaocmg`), so FinCom finds it after an update.
+
+## How it gets around the portal (0.1.1)
+
+The real portal refuses its returns, payment and 2B pages when they are opened by typing their address ("Access Denied!
+Your session is expired or you don't have permission to access the requested page", the owner's first run, 17-Oct-2026).
+So the helper:
+
+- **never types an address after login.** The only address it ever opens is the **login page**, and only when no logged-in
+  portal tab exists; otherwise it uses your portal tab as it is.
+- **waits while the login page is open** and does not touch that tab until you are in (home page or dashboard).
+- goes everywhere through the **portal's own buttons and menu**: the home page's RETURN DASHBOARD (or Services → Returns →
+  Returns Dashboard), then the period and the return's own buttons; Services → Returns → Track Return Status; Services →
+  Ledgers → Electronic Cash Ledger / Electronic Credit Ledger. The menu words are in `selectors.js` (`SEL.menu`).
+- on the **Access Denied** page it stops and says: *The portal wants to be opened from its own menu. Click 'Click here to
+  Login' / the Home logo; once you are on the portal's home page, press Run again — the helper goes through RETURN
+  DASHBOARD.* A button in the panel opens the login page (nothing else).
 
 ## Permissions, and why
 
@@ -95,7 +111,7 @@ Everything the helper knows about the portal's pages is in **one file**: `extens
    `tests/fixtures/gst-portal-fake` changed the same way, and `tests/run_gst_browser_helper.py` run.
 4. Replace the helper's folder and press reload in `chrome://extensions`.
 
-**Not yet checked on the live portal (version 2026.10.17-1).** The selectors were written from the portal's public user
+**Not yet checked on the live portal (version 2026.10.17-2).** The selectors were written from the portal's public user
 manuals and screenshots and tested on the look-alike only. The first run on the real portal will probably stop at one or
 more fields — by design — and each stop names the field to correct.
 
