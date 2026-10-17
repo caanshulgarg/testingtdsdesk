@@ -97,6 +97,14 @@ with sync_playwright() as p:
     card = pg.query_selector('[data-browser-helper="R1"]')
     ok(card is not None and pg.query_selector("[data-helper-installed]") is not None, "GSTR-1's Files tab has the Browser helper step, and sees the helper installed")
     ok("How to install" not in pg.inner_text('[data-browser-helper="R1"]') and "captcha, the OTP and signing" in pg.inner_text('[data-browser-helper="R1"]'), "it says what the helper does and what is always the person's")
+    # 17-Oct-2026 (the owner: "it does not show filing in IFF"): a quarterly (QRMP) client, a quarter's first or second
+    # month: GSTR-1's Files tab offers the IFF (JSON, the GST API steps and the browser helper), not only "no GSTR-1"
+    m1 = YM[:4] + "%02d" % (((int(YM[4:]) - 4) % 12) // 3 * 3 + 4 if int(YM[4:]) >= 4 else 1)
+    pg.evaluate("window.__typeOf = GSTSet.typeOf; GSTSet.typeOf = () => 'qrmp'; S.gstYm = '%s'; render(); S.gstPart = 'r1'; S.gstView = 'return'; S.gstSub = 'file'; render();" % m1); pg.wait_for_timeout(2500)
+    ok(pg.query_selector('[data-browser-helper="IFF"]') is not None, "QRMP, month 1 of the quarter: GSTR-1's Files tab has the browser helper for the IFF")
+    ok(pg.query_selector('[data-gst-file="IFF"]') is not None, "... and the IFF through the GST API (File through)")
+    ok(pg.query_selector('[data-iff-json]') is not None, "... and Download IFF JSON")
+    pg.evaluate("GSTSet.typeOf = window.__typeOf; S.gstYm = '%s'; render();" % YM); pg.wait_for_timeout(1500)
 
     # ---------- GSTR-1: Open the portal -> the extension gets FinCom's own JSON ----------
     panel = ctx.new_page(); panel.goto("chrome-extension://%s/panel.html" % ext)

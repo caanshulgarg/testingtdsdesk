@@ -247,7 +247,7 @@ export default function Gst() {
   S.gstSeen = seen;
   // without a day book there is no grid: the year opens on the first part (2B)
   if (noBooks && S.gstView === "year") S.gstView = "return";
-  const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
+  const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), iffNow = noReturn && part === "r1", gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
   const subs = S.gstView === "return" && !noBooks ? SUBS[part] : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";
   const sub = subs ? S.gstSub : undefined;
@@ -292,18 +292,20 @@ export default function Gst() {
     {!noBooks && (part === "r1" || part === "r3b" || part === "qtr") && <OptionalNote />}
     {noBooks && <p className="note" style={{ margin: "0 0 10px" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally”.</p>}
     {sub === "file" && <section className="dash-card" style={{ marginBottom: 12 }} data-file={part}><h3>{part === "r1" ? "GSTR-1" : "GSTR-3B"} for {periodLabel(S.gstYm || "", S.gstReg || "")}</h3>
-      {noReturn && <p className="note">This month has no {part === "r1" ? "GSTR-1" : "GSTR-3B"} of its own: the quarter’s is made at its last month.</p>}
+      {iffNow ? <p className="note" data-iff-files="">A quarterly (QRMP) client: this month files the <b>IFF</b> (optional, by the 13th) with the invoices and notes to registered customers, so they get the credit now. The quarter’s GSTR-1 is made at its last month.</p>
+        : noReturn && <p className="note">This month has no {part === "r1" ? "GSTR-1" : "GSTR-3B"} of its own: the quarter’s is made at its last month.</p>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <button className="btn small" onClick={() => doAct("gstExcel")}>Download GSTR-1 and 3B</button>
         {part === "r1" && !noReturn && <button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button>}
+        {iffNow && <button className="btn small primary" data-iff-json="" onClick={() => gqIffJson()}>Download IFF JSON</button>}
         {part === "r3b" && !noReturn && <button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button>}
       </div>
       <p className="note" style={{ marginTop: 8 }}>Check the JSON in the portal’s offline tool before filing.</p>
       {/* 17-Oct-2026: filing through the GST API, or the browser helper (the client's choice) */}
-      {!noReturn && (part === "r1" || part === "r3b") && <FileApi form={part === "r3b" ? "3B" : ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || "") ? "IFF" : "R1"} ym={S.gstYm || ""} reg={S.gstReg || ""}
+      {(!noReturn || iffNow) && (part === "r1" || part === "r3b") && <FileApi form={part === "r3b" ? "3B" : ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || "") ? "IFF" : "R1"} ym={S.gstYm || ""} reg={S.gstReg || ""}
         label={part === "r3b" ? "GSTR-3B" + (ftype === "qrmp" ? " for the quarter" : "") : ftype === "qrmp" ? (GSTSet.isQEnd(S.gstYm || "") ? "GSTR-1 for the quarter" : "IFF") : "GSTR-1"} />}</section>}
     {/* the browser helper (next-gst-browser): fills the return on the portal and stops before File */}
-    {sub === "file" && !noReturn && S.gstYm && <BrowserHelper form={part === "r1" ? "R1" : "3B"} ym={S.gstYm} reg={S.gstReg || ""} />}
+    {sub === "file" && (!noReturn || iffNow) && S.gstYm && <BrowserHelper form={iffNow ? "IFF" : part === "r1" ? "R1" : "3B"} ym={S.gstYm} reg={S.gstReg || ""} />}
     {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
     </>}
