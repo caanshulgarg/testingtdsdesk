@@ -97,7 +97,17 @@ function preloadFonts() {
         const want = [/^assets\/inter-latin-wght-normal-[\w-]+\.woff2$/, /^assets\/geist-latin-wght-normal-[\w-]+\.woff2$/];
         const files = Object.keys(ctx.bundle).filter((f) => want.some((r) => r.test(f)));
         const links = files.map((f) => '<link rel="preload" as="font" type="font/woff2" crossorigin href="./' + f + '">').join("\n");
-        return html.replace("</head>", links + "\n</head>");
+        html = html.replace("</head>", links + "\n</head>");
+        // round 73 B: legacy.js is deferred, and deferred scripts run in the page's order, so the app's entry (which Vite
+        // puts in <head>) goes right after it, as before: the program first, then the React screens. It is still fetched
+        // from the start (modulepreload in <head>)
+        const entry = html.match(/<script type="module" crossorigin src="([^"]+)"><\/script>\n?/);
+        const leg = html.match(/<script defer src="\.\/legacy\.js[^"]*"><\/script>/);
+        if (entry && leg && html.indexOf(entry[0]) < html.indexOf(leg[0])) {
+          html = html.replace(entry[0], '<link rel="modulepreload" crossorigin href="' + entry[1] + '">\n');
+          html = html.replace(leg[0], leg[0] + "\n" + entry[0].trim());
+        }
+        return html;
       },
     },
   };
@@ -127,7 +137,11 @@ function fresh() {
 }
 
 // stability batch 4: the service worker (sw/sw.js), with this build's id and the files of its first open: the page, the
-// program (legacy.js?v=…), the app's scripts, styles and fonts (not the source maps, not the downloads)
+// program (legacy.js?v=…), the app's scripts, styles and fonts (not the source maps, not the downloads). Round 73 B: in two
+// parts. SHELL, kept when the worker is installed: what the first page needs (the page, the two little scripts, the
+// program, the app's entry with what it imports at once and its styles, the two faces preloaded); REST, the other screens'
+// files, the OCR and spreadsheet engines and the other fonts, kept once the first page is up and the computer is idle
+// (the page asks: main.jsx, "fincom:keep-rest")
 function serviceWorker(mode) {
   const legacyFile = new URL("./legacy/" + (mode === "test" ? "test" : "live") + ".js", import.meta.url);
   return {
@@ -135,8 +149,18 @@ function serviceWorker(mode) {
     // written once the files are on disk (Vite drops a CSS-only chunk after generateBundle): only files that are there
     writeBundle(o, bundle) {
       const v = fs.existsSync(legacyFile) ? crypto.createHash("sha256").update(fs.readFileSync(legacyFile, "utf8")).digest("hex").slice(0, 12) : "";
-      const files = ["./", "./legacy.js?v=" + v, "./guard.js", "./oldcheck.js"].concat(Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f)).map((f) => "./" + f));
-      const src = fs.readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8").replace("__SW_BUILD__", BUILD_ID).replace("__SW_FILES__", JSON.stringify(files));
+      const all = Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f));
+      // the entry chunk and what it imports at once (not import()), with their styles
+      const first = new Set(), walk = (f) => {
+        const c = bundle[f]; if (!c || first.has(f)) return; first.add(f);
+        ((c.viteMetadata && c.viteMetadata.importedCss) || []).forEach((x) => first.add(x));
+        (c.imports || []).forEach(walk);
+      };
+      Object.keys(bundle).filter((f) => bundle[f].type === "chunk" && bundle[f].isEntry).forEach(walk);
+      const isShell = (f) => first.has(f) || /^assets\/(inter|geist)-latin-wght-normal-[\w-]+\.woff2$/.test(f);
+      const shell = ["./", "./legacy.js?v=" + v, "./guard.js", "./oldcheck.js"].concat(all.filter(isShell).map((f) => "./" + f));
+      const rest = all.filter((f) => !isShell(f)).map((f) => "./" + f);
+      const src = fs.readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8").replace("__SW_BUILD__", BUILD_ID).replace("__SW_FILES__", JSON.stringify(shell)).replace("__SW_REST__", JSON.stringify(rest));
       fs.writeFileSync(o.dir + "/sw.js", src);
     },
   };

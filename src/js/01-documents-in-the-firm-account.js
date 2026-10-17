@@ -379,7 +379,7 @@ const negAmounts = {
     this.run();
   }
 };
-if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => negAmounts.start()); else setTimeout(() => negAmounts.start(), 0); }
+if (typeof document !== "undefined") { if (domLoading()) document.addEventListener("DOMContentLoaded", () => negAmounts.start()); else setTimeout(() => negAmounts.start(), 0); }
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function norm(s){ return String(s || "").toLowerCase().replace(/\b(m\/s|messrs|pvt|private|ltd|limited|llp|the)\b/g, "").replace(/[^a-z0-9]/g, ""); }
 function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client"; }
@@ -1541,7 +1541,10 @@ function isImage(file){ return /^image\//.test(file.type) || /\.(jpe?g|jpe|jfif|
 let ocrEngineP = null, ocrChain = Promise.resolve();
 function withTimeout(p, ms, code){ return Promise.race([p, new Promise((_, bad) => setTimeout(() => bad({code}), ms))]); }
 // The engine sits at the end of this (large) file, so wait until the page has been read in full.
-function domReady(){ return document.readyState === "loading" ? new Promise(r => document.addEventListener("DOMContentLoaded", r, {once:true})) : Promise.resolve(); }
+// the page not yet read in full: still loading, or (the React app, which runs this program deferred: round 73 B) its
+// DOMContentLoaded not yet come (index.html's first script notes it in __fincomDcl), so what waited for it still does
+function domLoading(){ return document.readyState === "loading" || (typeof window !== "undefined" && window.__fincomDcl === 0); }
+function domReady(){ return domLoading() ? new Promise(r => document.addEventListener("DOMContentLoaded", r, {once:true})) : Promise.resolve(); }
 const blockCache = {};
 function blockText(id){
   const el = document.getElementById(id);

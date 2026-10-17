@@ -9,20 +9,37 @@
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
 const VERSION = "__SW_BUILD__";
+// round 73 B: FILES, kept at install, are what the first page needs; REST, the other files of this build, are kept once
+// the first page is up and the computer is idle (the page sends "fincom:keep-rest", main.jsx)
 const FILES = __SW_FILES__;
+const REST = __SW_REST__;
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = "fincom-shell:" + SCOPE + ":" + VERSION, RUNTIME = "fincom-files:" + SCOPE;
 const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
 
+// a file whose name or address carries its build's hash may come from the browser's cache (the page has just fetched it:
+// not again over the line); the page and the two little scripts without a hash past it
+const HASHED = (f) => /^\.\/assets\//.test(f) || /^\.\/legacy\.js\?v=/.test(f);
+const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map(ask))).then(() => self.skipWaiting()));
 });
+// the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
+let keeping = null;
+function keepRest() {
+  return keeping || (keeping = caches.open(SHELL).then(async (c) => {
+    for (const f of REST) {
+      try { if (!(await caches.match(f, { ignoreVary: true }))) await c.add(ask(f)); } catch (e) { /* kept when it is first used */ }
+    }
+  }).finally(() => { keeping = null; }));
+}
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith("fincom-shell:" + SCOPE + ":") && k !== SHELL) || k === RUNTIME).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener("message", (e) => {
   if (e.data === "fincom:signed-out") e.waitUntil(caches.delete(RUNTIME));
+  if (e.data === "fincom:keep-rest") e.waitUntil(keepRest());
 });
 
 // the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).

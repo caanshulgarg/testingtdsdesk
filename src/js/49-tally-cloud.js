@@ -1027,7 +1027,7 @@ function resumeRows(all){
     // after the page has drawn itself
     setTimeout(go, 600);
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", take); else take();
+  if (domLoading()) document.addEventListener("DOMContentLoaded", take); else take();
 })();
 
 // Files exported from Tally and chosen in FinCom (the day book part by part, the trial balance) go to FinCom's cloud
