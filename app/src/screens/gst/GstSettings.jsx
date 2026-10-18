@@ -10,6 +10,8 @@ import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Loading from "../../parts/Loading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+// EINV (src/js/55-einvoice.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/55-einvoice.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const H4 = ({ children, top = 12 }) => <h4 style={{ margin: top + "px 0 4px" }}>{children}</h4>;

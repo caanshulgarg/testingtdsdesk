@@ -16,7 +16,7 @@ const leaks = (x) => { const s = typeof x === "string" ? x : JSON.stringify(x); 
 const ALLOWED = {
   top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk", "fingerprint", "extra"],
   exception: ["type", "value", "mechanism", "stacktrace"], mechanism: ["type", "handled"], frame: ["filename", "function", "module", "lineno", "colno", "in_app"],
-  breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to"],
+  breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to", "size_mb", "kind", "ready", "pieces", "piece", "of", "state", "reason"],
   tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
   contexts: ["os", "runtime", "browser"], context: ["name", "version"], sdk: ["name", "version", "settings"], settings: ["infer_ip"],
 };
@@ -78,6 +78,23 @@ ok(kept.length === 2 && kept[0].category === "navigation" && kept[0].data.from =
   "only a navigation between named pages and a console error are kept (" + JSON.stringify(kept) + ")");
 ok(!leaks(kept).length, "no business data in the kept breadcrumbs" + (leaks(kept).length ? ": " + leaks(kept) : ""));
 ok(kept[1].message.startsWith("[FinCom] the page could not be drawn:") && !("data" in kept[1]), "the console error's words, scrubbed, never its arguments: " + kept[1].message);
+
+// 18-Oct-2026: Books › From Tally's steps (tallyCrumb, src/js/23): the step's code name and its numbers, kinds and states
+// kept; a file name, a client or anything else in its data dropped; the reason scrubbed
+{
+  const ft = [
+    { category: "fromtally", timestamp: T, message: "file_chosen", data: { size_mb: 170, kind: "xml", name: "ALPHA TRADERS DayBook.xml", client: "Kappa Labs" } },
+    { category: "fromtally", timestamp: T, message: "books_ready", data: { ready: false, reason: "Party ALPHA TRADERS 09AANFG3202D1ZR could not be opened" } },
+    { category: "fromtally", timestamp: T, message: "cloud_send", data: { state: "piece", piece: 2, of: 4 } },
+    { category: "fromtally", timestamp: T, message: "cloud_send", data: { state: "failed", reason: "Storage refused the file (413)" } },
+    { category: "fromtally", timestamp: T, message: "ALPHA TRADERS opened", data: { size_mb: 1 } },
+  ].map((b) => S.scrubBreadcrumb(JSON.parse(JSON.stringify(b)))).filter(Boolean);
+  ok(ft.length === 4 && ft[0].message === "file_chosen" && ft[0].data.size_mb === 170 && ft[0].data.kind === "xml" && !("name" in ft[0].data) && !("client" in ft[0].data),
+    "From Tally's file chosen: size and kind kept, the file's name and the client dropped (" + JSON.stringify(ft[0]) + ")");
+  ok(ft[2].data.piece === 2 && ft[2].data.of === 4 && ft[2].data.state === "piece" && ft[1].data.ready === false, "From Tally's piece n of m and books ready kept");
+  ok(!leaks(ft).length && !/ALPHA|09AANFG/.test(JSON.stringify(ft)), "no business data in From Tally's breadcrumbs" + (leaks(ft).length ? ": " + leaks(ft) : ""));
+  ok(ft.every((b) => Object.keys(b.data).every((k) => ALLOWED.crumbData.includes(k))), "From Tally's breadcrumbs carry the allowed fields only");
+}
 
 // ---- 3. a whole event as the browser SDK makes it, with everything the SDK or a scope could add
 const frames = [

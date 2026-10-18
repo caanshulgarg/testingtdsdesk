@@ -77,6 +77,10 @@ export function start() {
   onDraw(); subscribe(onDraw);
   // errors from before Sentry was loaded (main.jsx loads it once the page is up): reported now
   try { (window.__fincomEarly || []).splice(0).forEach((e) => { if (e instanceof Error) captureException(e); }); } catch { /* never in the way */ }
+  // 18-Oct-2026: Books › From Tally's steps (tallyCrumb, src/js/23): file chosen (size, kind), books ready, cloud send
+  // started / piece n / done / failed and why; the scrubber keeps only those fields (scrubBreadcrumb, category fromtally)
+  window.__fincomCrumb = (category, step, data) => { try { addBreadcrumb({ category, message: step, data }); } catch { /* never in the way */ } };
+  try { (window.__fincomCrumbsEarly || []).splice(0).forEach((c) => addBreadcrumb({ category: c.category, message: c.step, data: c.data, timestamp: c.timestamp })); } catch { /* never in the way */ }
   // a part of the page that failed to draw (Guard.jsx): reported with the part's name
   window.__fincomReport = (error, guard) => { try { captureException(error, { tags: { guard: String(guard || "") } }); } catch { /* never in the way */ } };
   return true;

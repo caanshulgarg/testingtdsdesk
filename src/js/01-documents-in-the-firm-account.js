@@ -1742,16 +1742,6 @@ async function googleOcr(canvas){
   }
   throw {code:"no_google_key"};
 }
-async function dailyGoogleCheck(){
-  if (!googleSettings().key || window.claude) return;   // through the platform there is no key here to check
-  let last = null;
-  try { last = JSON.parse(lsGet("tdsdesk:gcheck") || "null"); } catch (e){ last = null; }
-  if (last && last.key === googleSettings().key.slice(-6) && Date.now() - last.at < 20 * 3600e3 && last.ok){ S.googleAuto = last; render(); return; }
-  await testGoogle();
-  S.googleAuto = {ok: !!(S.googleTest && S.googleTest.ok), msg: S.googleTest ? S.googleTest.msg : "", at: Date.now(), key: googleSettings().key.slice(-6)};
-  lsSet("tdsdesk:gcheck", JSON.stringify(S.googleAuto));
-  render();
-}
 // what to do when Google refuses, based on the reason it gave
 async function testGoogle(){
   S.googleTest = {busy: true}; render();
@@ -3952,15 +3942,6 @@ async function rereadCarefully(e){
   Store.saveEntry(cid, e); refreshStats(cid); render();
 }
 function cidForCount(j){ return j.target && j.target !== "auto" ? j.target : null; }
-function busyCard(title, detail, done, total){
-  const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;
-  const m = pct === null && detail ? String(detail).match(/(?:page )?(\d+) of (\d+)/i) : null;
-  const p2 = m ? Math.round(m[1] / m[2] * 100) : pct;
-  return '<div class="busycard" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>' +
-    '<div class="busytext"><b>' + esc(title) + "</b>" + (detail ? '<span class="note">' + esc(detail) + "</span>" : "") +
-    (p2 === null ? "" : '<div class="busybar"><i style="width:' + p2 + '%"></i></div>') + "</div>" +
-    (total ? '<span class="busyn">' + num(done) + " / " + num(total) + "</span>" : "") + "</div>";
-}
 // the reading queue, the reading check, the upload options and the "reading…" cards are React (app/src/parts/Reading.jsx)
 // which: "auto" (uploads for any client) or a client's id
 function viewJobs(which){ return S.jobs.some(j => which === "auto" ? j.target === "auto" : j.target === which || j.cid === which || j.target === "auto") ? '<div data-react="Jobs" data-which="' + esc(which) + '"></div>' : ""; }
@@ -3978,16 +3959,6 @@ function setSplitPdf(on){ S.splitPdf = on; lsSet("tdsdesk:splitPdf", on ? "1" : 
 function freeRate(co){
   const rc = (co && co.readCounts) || {}, n = (rc.free || 0) + (rc.google || 0) + (rc.claude || 0);
   return n ? {n, pct: Math.round(100 * (rc.free || 0) / n), google: rc.google || 0, claude: rc.claude || 0, free: rc.free || 0} : null;
-}
-// "Working on it": a spinner, what it is doing now, and how far it has got
-function readerStatus(){
-  const fix = ' <button class="linkbtn" data-act="goReading">Fix</button>';
-  if (!S.sampleReady) return '<span class="tag no">Connecting to Claude…</span>';
-  if (S.engine === "api") return '<span class="tag ok">Reading with your Claude API key</span>';
-  if (!S.engine) return S.freeFirst ? '<span class="tag warn">Free reading only (printed bills and PDFs)</span>' + fix : '<span class="tag bad">Bills cannot be read in this view</span>' + fix;
-  if (S.readBlocked || S.samplePerm === "denied") return '<span class="tag bad">Claude access was declined</span>' + fix;
-  if (S.samplePerm === "prompt") return '<span class="tag warn">Claude will ask permission on the first bill</span>' + fix;
-  return S.imgMax ? '<span class="tag ok">Reads PDFs, scans and photos</span>' : '<span class="tag warn">Reads text PDFs only in this view</span>' + fix;
 }
 function routeCompany(j){
   const cos = Object.values(S.companies);

@@ -4,6 +4,8 @@
 // GST settings), the status of each step, the comparison with the portal, and the ARN once filed. The talking to the
 // extension is GSTB (src/js/84-gst-browser.js).
 import { useEffect, useState } from "react";
+// GSTB (src/js/84-gst-browser.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/84-gst-browser.js";
 
 const HOWTO = "https://github.com/caanshulgarg/testingtdsdesk/blob/next-gst-browser/docs/gst-browser-helper.md";
 const BADGE = { done: "ok", stopped: "bad", running: "warn", you: "warn", waiting: "" };

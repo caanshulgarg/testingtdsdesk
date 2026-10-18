@@ -83,9 +83,14 @@ export default function Books() {
 
 function BooksPage() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" page="books" />; }
+  // 18-Oct-2026: a Tally file chosen before the books were open (tallyFiles, src/js/23) says so while they open, and why
+  // if they could not be opened; never a page that shows nothing about it
+  const up = S.tallyUp && S.tallyUp.cid === co.id && booksTab() === "import" ? S.tallyUp : null;
+  const upLine = up && <div data-up-result="" data-up-waiting="" role="status">{up.lines.map((l, i) => <p key={i} className={l.ok ? "note" : "bad"} data-up-line={l.kind || "none"} style={{ margin: "4px 0 10px" }}>{l.text}</p>)}</div>;
+  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <>{upLine}<Loading what="the books" page="books" /></>; }
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
-  if (S.books.loading) return <Loading what="the books" page="books" note="The latest from FinCom’s server." />;
+  if (S.books.loading && S.books.openFailed && !upLine) return <p className="bad" role="alert" data-books-failed="">{"These books could not be opened on this page: " + S.books.openFailed + ". Reload FinCom to try again."}</p>;
+  if (S.books.loading) return <>{upLine}<Loading what="the books" page="books" note="The latest from FinCom’s server." /></>;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);

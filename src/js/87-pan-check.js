@@ -1,3 +1,4 @@
+/* @react-lazy: begin 87-pan-check.js (the React app loads this file with its TDS screens: app/src/lib/tdsGlobals.js; build.py react_parts) */
 /* ================================================================== */
 /* Deductees and their PANs (the Deductees (PAN) tab of every TDS     */
 /* return, next-challan-match, the owner's direction of 18-Oct-2026)  */
@@ -116,3 +117,5 @@ function tdsDeducteeSet(party, x){
   render(); return r;
 }
 async function tdsPanCheck(pans){ const r = await PANCheck.request(pans); toast(r.ok ? r.n + " PAN" + (r.n === 1 ? "" : "s") + " checked on TRACES." : r.why); render(); return r; }
+if (typeof globalThis === "object") Object.assign(globalThis, {PANCheck, TDSPanFix, tdsDeducteeOpen, tdsDeducteeSet, tdsPanCheck});
+/* @react-lazy: end */

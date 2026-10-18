@@ -269,7 +269,10 @@ with sync_playwright() as p:
     c = pg.evaluate(CHECK)
     print("  own save: %d render() after the one asked for" % (c["renders"] - 1))
     # the one drawing asked for, and at most one more when the firm's sync sends it meanwhile (its "Saving…" comes and goes)
-    ok(c["renders"] <= 2, "this computer's own save coming back through Realtime is not drawn again (%d extra, at most the sync's own)" % (c["renders"] - 1))
+    # when it fails, the extra drawings' callers and the top bar's words go with the FAIL line (CI's annotations carry the
+    # FAIL lines only, not the log: runs 39033997284, 39038344160, 39055619436 failed here with "2 extra" and nothing more)
+    ok(c["renders"] <= 2, "this computer's own save coming back through Realtime is not drawn again (%d extra, at most the sync's own)%s" % (c["renders"] - 1,
+       "" if c["renders"] <= 2 else "; drawn at: %s; top bar: %s" % (c["rt"][1:], c["flick"][:12])))
     pg.evaluate("() => { clearInterval(window.__qw.iv); window.__qw.mo.disconnect(); }")
     # a newer build: a calm bar (17-Oct-2026: "A new version of FinCom is ready · Reload"), never a reload while the page is in use
     navs.clear(); BUILD["id"] = "zz-newer-build"

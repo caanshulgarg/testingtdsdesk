@@ -6,6 +6,7 @@
 // way shows the page's shape (Main.jsx: <Suspense fallback={<PageSkeleton/>}>) and the page is drawn again when it comes.
 import { createElement } from "react";
 import { FinComNav } from "../nav.js";
+import { staleReload } from "../staleChunk.js";
 
 const loaders = [];
 export function lazyModule(load) {
@@ -17,12 +18,12 @@ export function lazyModule(load) {
   }, (e) => {
     failed = e; p = null;
     // 16-Oct-2026 (the owner's TDS page on Safari): say why in the console and report it (Sentry takes uncaught errors),
-    // and reload FinCom once by itself (a browser holding an older copy of the program gets the new one)
+    // and reload FinCom once by itself (a browser holding an older copy of the program gets the new one). 18-Oct-2026:
+    // once per BUILD (src/staleChunk.js), not once per tab: the guard of "fincom:lazy-reloaded" stopped the reload after
+    // the second publish of a day, and the owner's tab was left asking for files that were gone
     try { console.error("FinCom: a page's program file could not be loaded:", e); } catch (x) { /* */ }
+    if (staleReload(e, true)) return;
     setTimeout(() => { throw (e instanceof Error ? e : new Error("FinCom page file not loaded: " + String(e))); }, 0);
-    let again = false;
-    try { again = !sessionStorage.getItem("fincom:lazy-reloaded"); if (again) sessionStorage.setItem("fincom:lazy-reloaded", "1"); } catch (x) { again = false; }
-    if (again) { location.reload(); return; }
     try { if (typeof window.render === "function") window.render(); } catch (x) { /* */ }
   }));
   loaders.push(get);

@@ -1,3 +1,4 @@
+/* @react-lazy: begin 77-audit.js (the React app loads this file with its Audit › Working papers screen and with the statements' 3CD draft: build.py react_parts) */
 /* ================================================================== */
 /* Audit the books: the working papers (FinCom Assistant, step 2)      */
 /* ================================================================== */
@@ -378,3 +379,5 @@ const AuditWP = {
   },
   pdf(res){ printView((res.client || "Client") + " audit working papers " + res.from + "-" + res.to, this.html(res, S.books)); },
 };
+if (typeof globalThis === "object") globalThis.AuditWP = AuditWP;
+/* @react-lazy: end */

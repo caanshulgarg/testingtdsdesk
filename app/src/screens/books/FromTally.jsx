@@ -113,8 +113,11 @@ function TbAsk() {
 function Upload({ b }) {
   const lim = S.dbFrom || S.dbTo ? [S.dbFrom || S.dbTo, S.dbTo || S.dbFrom] : null;
   const u = S.tallyUp && S.tallyUp.cid === S.coId ? S.tallyUp : null;
-  // a Day Book that could not go to FinCom's cloud yet goes on its own; said once, quietly
-  const waiting = ((b.meta || {}).parts || []).filter((p) => /^(not sent|waiting)/.test(String(p.cloud || "")));
+  // a Day Book waiting for the sign-in goes on its own; said once, quietly. 17-Oct-2026 (staging: a 170 MB Day Book refused
+  // by Storage, said nowhere): one that could not go says why, plainly, with Send again (tallySendAgain, src/js/23)
+  const parts = (b.meta || {}).parts || [];
+  const waiting = parts.filter((p) => /^waiting/.test(String(p.cloud || "")));
+  const notSent = parts.map((p, i) => ({ p, i })).filter((x) => /^not sent/.test(String(x.p.cloud || "")));
   // from Getting ready's "Read the balances" (smart moves round 1): where the opening balances come from, said here
   const opening = S.upFocus === "opening" && !(b.tb && Object.keys(b.tb.led || {}).length);
   return <section className="dash-card" data-up-card="" style={{ marginBottom: 12 }}><h3>Bring in from Tally</h3>
@@ -127,6 +130,9 @@ function Upload({ b }) {
       {b.busy && <p className="note" style={{ margin: "4px 0" }}>{b.busy}</p>}
       <JobsNote cid={S.coId} compact />
       {waiting.length > 0 && <p className="note" style={{ margin: "4px 0" }}>{plural(waiting.length, "Day Book is", "Day Books are") + " still to go to FinCom’s cloud; " + (waiting.length === 1 ? "it goes" : "they go") + " on their own when this client is opened while signed in."}</p>}
+      {notSent.map(({ p, i }) => <p key={"ns" + i} className="bad" data-cloud-notsent={p.file || ""} role="alert" style={{ margin: "4px 0" }}>
+        {(p.file ? p.file + ": " : "") + "Saved on this computer, but not sent to FinCom’s cloud: " + String(p.cloud).replace(/^not sent:\s*/, "") + ". Other logins will not see it until it is sent."}
+        {p.again !== false && <>{" "}<button className="linkbtn" data-send-again="" onClick={() => tallySendAgain(i)}>Send again</button></>}</p>)}
     </div>
     {u && <div data-up-result="" role="status" style={{ marginTop: 6 }}>
       {u.busy && !u.lines.length && <p className="note" style={{ margin: "4px 0" }}>Reading the file…</p>}

@@ -14,6 +14,7 @@ run_assistant_sql.py                  300
 run_assistant_settings_ui.py          180  TDSDESK_SITE=../app/dist-test
 run_bottom_banner_ui.py               180  TDSDESK_SITE=../app/dist-test
 run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
+run_ask_fab_overlap.py                480  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_no_lookbehind_same.js             120
 run_safari_compat.py                  300
@@ -317,6 +318,11 @@ run_tds_forms_2025.js                 120
 run_fvu12_forms.py                    600
 # the owner's answers of 17-Oct-2026: Client setup → TDS, the deductor's details for the statements (desktop and phone)
 run_tds_deductor_ui.py                240  TDSDESK_SITE=../app/dist-test
+# next-challan-match (17/18-Oct-2026): the one challan matcher rule by rule, the 98% measure, splits, interest allocated,
+# Form 138 from the salary sheet, the PAN corrected once; the return as Winman lays it out (four tabs, a challan's two panels)
+run_tds_match.js                      120
+run_tds_match_ui.py                   300  TDSDESK_SITE=../app/dist-test
+run_tds_challan_match_server.py       120
 # ledger-confirm (14-Oct-2026): TDS and GST ledgers confirmed (and unconfirmed) on the TDS and GST pages, the Tally ledgers
 # listed and picked, the AI guess (a fake AI; the server's batch with Claude and Supabase faked), Settings' pointer
 run_ledger_confirm.py                 300  TDSDESK_SITE=../app/dist-test
@@ -381,3 +387,6 @@ run_2b_automatch.js                   120
 run_2b_automatch_server.py            120
 run_migration95.py                    120
 run_2b_automatch_ui.py                300  TDSDESK_SITE=../app/dist-test
+# 18-Oct-2026 (Sentry FINCOM-APP-STAGING-1, "Importing a module script failed" after a publish): a screen's file the publish
+# replaced reloads FinCom once (src/staleChunk.js), the screen opens; files gone for good reload once, never a loop
+run_stale_chunk.py                    120  TDSDESK_SITE=../app/dist-test

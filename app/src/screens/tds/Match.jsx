@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { AddChallan, SrcBadge } from "./Register.jsx";
+import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");

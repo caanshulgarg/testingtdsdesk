@@ -29,6 +29,9 @@ import { Limits, TieOut } from "./tds/Smart.jsx";
 import { ChallanCell, MatchDialogs, FileChecks, PlainDeductions, ChallanSelect, ChallanTicker } from "./tds/Match.jsx";
 import DeducteesPan, { DeducteeDetails, PanState } from "./tds/Deductees.jsx";
 import { DeductorDetails } from "./Settings.jsx";
+// TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../src/js/83-tds-forms-2025.js";
+import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));

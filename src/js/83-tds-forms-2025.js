@@ -1,3 +1,4 @@
+/* @react-lazy: begin 83-tds-forms-2025.js (the React app loads this file with its TDS return, Payroll and Settings screens: build.py react_parts) */
 /* ================================================================== */
 /* Forms 138, 140, 143 and 144 (Income-tax Act, 2025): the text file  */
 /* as Protean's file format has it                                    */
@@ -467,3 +468,5 @@ const TDSF25 = {
   yn(v){ return v === true || /^(Y|YES)$/i.test(String(v || "")) ? "Y" : v === false || /^(N|NO)$/i.test(String(v || "")) ? "N" : ""; },
   statusOf(r){ const i = typeof TDS26Q === "object" ? TDS26Q.nrInfo(r.party) : {}; const s = this.ascii(i.status); return s ? String(+s) : this.STATUS_BY_PAN[this.panLetter(r.pan)] || ""; }
 };
+if (typeof globalThis === "object") globalThis.TDSF25 = TDSF25;
+/* @react-lazy: end */

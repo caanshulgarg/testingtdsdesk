@@ -4,6 +4,8 @@
 // (a person's click) → the ARN. The talking to the server is GSTFILE (src/js/83-gst-file-api.js); the OTP is typed
 // here, sent once, and kept nowhere.
 import { useEffect, useState } from "react";
+// GSTFILE and gstFileRoute (src/js/83-gst-file-api.js) come with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/83-gst-file-api.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => (s ? GSTAmend.dmy(String(s).slice(0, 10).replace(/-/g, "")) : "");

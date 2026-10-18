@@ -1,3 +1,4 @@
+/* @react-lazy: begin 86-tds-match.js (the React app loads this file with its TDS screens: app/src/lib/tdsGlobals.js; build.py react_parts) */
 /* ================================================================== */
 /* Which challan pays which deduction: the one matcher (next-challan- */
 /* match, the owner's request of 17-Oct-2026)                         */
@@ -155,27 +156,7 @@ const TDSMatch = {
   baseRow(rowId){ return (this._base || {})[rowId] || null; },
   // a row with a split, as its parts (the tax as split; the amount paid in the same proportion, the last part the rest;
   // the same dates); a split whose parts no longer add up to the row (the books changed) is not used: the row whole, said
-  expand(rows){
-    const sp = this.books().tdsSplits || {}, alloc = this.books().alloc || {};
-    if (!Object.keys(sp).length) return rows;
-    this._base = this._base || {};
-    const out = [];
-    rows.forEach(r => {
-      const s = sp[r.id];
-      if (!s || !(s.parts || []).length){ out.push(r); return; }
-      this._base[r.id] = r;
-      const tot = s.parts.reduce((a, p) => a + TDSCH.p(p.tds), 0);
-      if (tot !== TDSCH.p(r.tds)){ out.push(Object.assign(r, {splitStale: true})); return; }
-      let paidLeft = TDSCH.p(r.paid);
-      s.parts.forEach((p, i) => {
-        const last = i === s.parts.length - 1, pp = last ? paidLeft : Math.round(TDSCH.p(r.paid) * TDSCH.p(p.tds) / tot);
-        paidLeft -= pp;
-        const id = r.id + "#" + (i + 1);
-        out.push(Object.assign({}, r, {id, splitOf: r.id, part: i + 1, parts: s.parts.length, tds: TDSCH.p(p.tds) / 100, paid: pp / 100, challan: alloc[id] || ""}));
-      });
-    });
-    return out;
-  },
+  expand(rows){ return TDS.expandSplits(rows); },
   // parts: [{chId, tds (rupees)}]: two or more, adding up to the deduction to the paisa, each within its challan's balance
   split(rowId, parts){
     const b = S.books; if (!b) return {ok: false, why: "Open the client's books first."};
@@ -366,3 +347,5 @@ function tdsPortionSet(chId, interest, fee){
   const t = tdsRet(), r = TDSReg.setPortion(chId, t.form, t.fy, t.q, interest, fee);
   toast(r.ok ? "Interest " + money(num(interest)) + " and fee " + money(num(fee)) + " of this challan allocated to " + t.form + " " + t.q + " " + t.fy + "." : r.why); render(); return r;
 }
+if (typeof globalThis === "object") Object.assign(globalThis, {TDSMatch, tdsRet, tdsMatchConfirm, tdsMatchConfirmAll, tdsMatchNo, tdsMoveOpen, tdsMoveTo, tdsTakeOff, tdsSplitOpen, tdsSplitRow, tdsSplitDo, tdsUnsplit, tdsPortionSet});
+/* @react-lazy: end */

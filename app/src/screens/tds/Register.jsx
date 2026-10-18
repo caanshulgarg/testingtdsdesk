@@ -15,6 +15,7 @@ import DetailDrawer from "../../parts/DetailDrawer.jsx";
 import Filters, { Field as FbField } from "../../parts/Filters.jsx";
 import { Info } from "../../parts/Answer.jsx";
 import { Lock as LockIcon } from "lucide-react";
+import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");

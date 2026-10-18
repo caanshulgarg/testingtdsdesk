@@ -1030,6 +1030,116 @@ function resumeRows(all){
   if (domLoading()) document.addEventListener("DOMContentLoaded", take); else take();
 })();
 
+// ---- DayCut (begin) 17-Oct-2026 (staging: a 170,536,990-byte Day Book refused by Storage with 413; the project takes at most
+// 50 MB a file). A Day Book larger than DayCut.PIECE (45 MB) is cut in this browser into several Day Book files, each at
+// most 45 MB, each sent as its own upload (its own job, its own period). The cut rule:
+//   - vouchers are found as FinCom's server finds them (/<VOUCHER\b[\s\S]*?<\/VOUCHER>/, the first <DATE>), by reading the
+//     file in slices (File.slice, 8 MB at a time): the file's text is never held whole;
+//   - a piece holds WHOLE DAYS only: the server empties (soft-marks) the entries of a day of a job's period that are not in
+//     its file, so a day cut in two would lose its other half. Every voucher of a day (wherever it is in the file) goes in
+//     that day's piece; a voucher with no date, or a date outside the period, goes with the voucher before it (the server
+//     leaves it out anyway);
+//   - pieces are cut between days, at the start of a month where that leaves the piece at least half full;
+//   - each piece is the original file's envelope (every byte before the first <VOUCHER, the byte-order mark, header,
+//     company, SVCURRENTCOMPANY), the vouchers' own bytes, and the original closing (every byte after the last
+//     </VOUCHER>): the same encoding as the file (UTF-16LE with its BOM, or UTF-8), made of File.slice parts (a Blob);
+//   - the periods of the pieces follow one another and together are the period asked: the first piece starts on its first
+//     day, each next one the day after the one before ends, the last ends on its last day; each ends on its last voucher's day;
+//   - a day larger than a piece by itself: said plainly, nothing is sent.
+const DayCut = {
+  PIECE: 45 * 1024 * 1024,
+  READ: 8 * 1024 * 1024,
+  add(d, n){ const t = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)); return t.toISOString().slice(0, 10).replace(/-/g, ""); },
+  say(d){ const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return d.slice(6, 8) + "-" + m[+d.slice(4, 6) - 1] + "-" + d.slice(0, 4); },
+  mb(n){ return (n / 1048576).toFixed(1) + " MB"; },
+  fail(why){ const e = new Error(why); e.final = true; return e; },
+  // the file's vouchers: {enc, bom, s[], e[], d[] (yyyymmdd as a number, 0: none)}; byte offsets
+  async scan(blob, onStep){
+    const size = blob.size, h = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    if (h[0] === 0xFE && h[1] === 0xFF) throw this.fail("the file is UTF-16 big-endian, which Tally does not write: export the Day Book from Tally again");
+    const u16 = (h[0] === 0xFF && h[1] === 0xFE) || (h.length > 1 && h[1] === 0 && h[0] !== 0), bom = u16 && h[0] === 0xFF && h[1] === 0xFE ? 2 : 0;
+    // UTF-8 read as windows-1252: one character a byte, so a character's place is its byte's (the tags are ASCII)
+    const dec = new TextDecoder(u16 ? "utf-16le" : "windows-1252", {ignoreBOM: true}), at = i => u16 ? bom + 2 * i : i;
+    const s = [], e = [], d = [], reV = /<VOUCHER\b/g, reD = /<DATE>(\d{8})<\/DATE>/;
+    let buf = "", base = 0, off = u16 ? bom : 0;
+    for (;;){
+      if (off < size){ const end = Math.min(size, off + this.READ); buf += dec.decode(new Uint8Array(await blob.slice(off, end).arrayBuffer()), {stream: end < size}); off = end; }
+      let pos = 0, keep = -1;
+      for (;;){
+        reV.lastIndex = pos; const m = reV.exec(buf);
+        if (!m){ keep = Math.max(pos, buf.length - 9); break; }
+        if (!(off >= size) && m.index + 9 > buf.length){ keep = m.index; break; }
+        const c = buf.indexOf("</VOUCHER>", m.index + 8);
+        if (c < 0){ keep = m.index; break; }
+        const v = buf.slice(m.index, c + 10), md = v.match(reD);
+        s.push(at(base + m.index)); e.push(at(base + c + 10)); d.push(md ? +md[1] : 0);
+        pos = c + 10;
+      }
+      if (off >= size) break;
+      if (keep > 0){ buf = buf.slice(keep); base += keep; }
+      if ((u16 ? 2 : 1) * buf.length > this.PIECE) throw this.fail("an entry near byte " + at(base) + " is larger than " + this.mb(this.PIECE) + " by itself: check that entry in Tally");
+      if (onStep) onStep(Math.floor(off * 100 / (size || 1)));
+    }
+    return {enc: u16 ? "utf-16le" : "utf-8", bom, s, e, d, size};
+  },
+  // the pieces: [{from, to, days, blob, vouchers}]; one piece (the whole file) when it is not larger than a piece
+  async plan(blob, range, onStep, piece){
+    const P = piece || this.PIECE;
+    const sc = await this.scan(blob, onStep), n = sc.s.length;
+    if (!n) throw this.fail("FinCom found no entries in the file to send");
+    const head = sc.s[0], foot = sc.size - sc.e[n - 1], room = P - head - foot;
+    const f0 = +range.from, t0 = +range.to;
+    // each voucher's day (its own, or the day of the voucher before it), and each day's bytes
+    const own = new Array(n), bytes = new Map();
+    let prev = 0;
+    for (let j = 0; j < n; j++){ const dj = sc.d[j]; if (dj >= f0 && dj <= t0){ prev = dj; break; } }
+    for (let j = 0; j < n; j++){
+      const dj = sc.d[j]; if (dj >= f0 && dj <= t0) prev = dj;
+      own[j] = prev;
+      const unit = (j + 1 < n ? sc.s[j + 1] : sc.e[j]) - sc.s[j];
+      bytes.set(prev, (bytes.get(prev) || 0) + unit);
+    }
+    const days = [...bytes.keys()].filter(Boolean).sort((a, b) => a - b);
+    if (!days.length) throw this.fail("the file has no entries between " + this.say(range.from) + " and " + this.say(range.to));
+    if (room <= 0) throw this.fail("the part of the file before its first entry (and after its last) is " + this.mb(head + foot) + ", more than FinCom’s cloud takes in one piece (" + this.mb(P) + ")");
+    const big = days.find(x => bytes.get(x) > room);
+    if (big) throw this.fail("the entries of " + this.say(String(big)) + " alone come to " + this.mb(bytes.get(big) + head + foot) + ", more than FinCom’s cloud takes in one piece (" + this.mb(P) + "), and a day is never cut in two: tell FinCom’s support");
+    // whole days, cut at a month's start where the piece is then at least half full
+    const groups = []; let cur = [], sz = 0;
+    for (const x of days){
+      const b = bytes.get(x);
+      if (cur.length && sz + b > room){
+        let cut = cur.length, before = 0;
+        for (let i = 1; i < cur.length; i++){ if (Math.floor(cur[i] / 100) !== Math.floor(cur[i - 1] / 100)) before = i; }
+        if (before > 0){ let a = 0; for (let i = 0; i < before; i++) a += bytes.get(cur[i]); if (a >= room / 2) cut = before; }
+        groups.push(cur.slice(0, cut)); cur = cur.slice(cut); sz = cur.reduce((a, y) => a + bytes.get(y), 0);
+        if (cur.length && sz + b > room){ groups.push(cur); cur = []; sz = 0; }
+      }
+      cur.push(x); sz += b;
+    }
+    if (cur.length) groups.push(cur);
+    const which = new Map(); groups.forEach((g, i) => g.forEach(x => which.set(x, i)));
+    const out = groups.map((g, i) => ({from: "", to: String(g[g.length - 1]), days: g.length, parts: [blob.slice(0, head)], vouchers: 0, i}));
+    out.forEach((p, i) => { p.from = i ? this.add(out[i - 1].to, 1) : range.from; if (i === out.length - 1) p.to = range.to; });
+    // each piece's vouchers in the file's order: runs of vouchers next to each other, the bytes between two runs kept
+    let j = 0;
+    while (j < n){
+      const pi = which.get(own[j]) || 0, p = out[pi];
+      let k = j; while (k + 1 < n && (which.get(own[k + 1]) || 0) === pi) k++;
+      if (p.parts.length > 1) p.parts.push(blob.slice(p.gapA, p.gapB));
+      p.parts.push(blob.slice(sc.s[j], sc.e[k])); p.vouchers += k - j + 1;
+      if (k + 1 < n){ p.gapA = sc.e[k]; p.gapB = sc.s[k + 1]; }
+      j = k + 1;
+    }
+    return out.map(p => {
+      const b = new Blob(p.parts.concat([blob.slice(sc.size - foot)]), {type: blob.type || "text/xml"});
+      if (b.size > P) throw this.fail("a piece came to " + this.mb(b.size) + ", more than " + this.mb(P));
+      return {from: p.from, to: p.to, days: p.days, vouchers: p.vouchers, blob: b, enc: sc.enc};
+    });
+  }
+};
+// ---- DayCut (end)
+
 // Files exported from Tally and chosen in FinCom (the day book part by part, the trial balance) go to FinCom's cloud
 // too, into the same copy a connected computer fills: everyone in the firm then works on the same books, from any
 // computer. Every day of the dates chosen is sent (an empty day as empty, so a deleted entry goes too)
@@ -1067,14 +1177,23 @@ const TCloudUp = {
     return {days: sent};
   },
   // server-books: a day book file waiting to go to the cloud ("tcup:<client>:<from>-<to>" in this browser's store)
-  async hold(cid, file, range, who){
+  // 18-Oct-2026: keep (this page holds the file, not sent twice) apart from hold (this browser's whole copy, written to
+  // IndexedDB): hold throws when the copy could not be written, and the caller says so; neither waits on the cloud send
+  keep(cid, file, range){
     const k = "tcup:" + cid + ":" + range.from + "-" + range.to;
-    this.live.add(k);
-    try { await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]); } catch (e){}
+    this.live.add(k); this.files[k] = file;
+    return k;
+  },
+  async hold(cid, file, range, who){
+    const k = this.keep(cid, file, range);
+    await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]);
     return k;
   },
   live: new Set(),          // the files this page is sending now (not to be sent twice)
-  async drop(k){ this.live.delete(k); try { await IDBStore.write([[k, null]]); } catch (e){} },
+  files: {},               // 17-Oct-2026: the files chosen on this page (key -> File), for Send again without choosing it again
+  // the line on Books > From Tally for a Day Book that did not go (p.cloud "not sent: <reason>")
+  notSent(e){ return "not sent: " + String((e && e.message) || e).replace(/[.\s]+$/, ""); },
+  async drop(k){ this.live.delete(k); delete this.files[k]; try { await IDBStore.write([[k, null]]); } catch (e){} },
   async waiting(cid){ try { return await IDBStore.prefix("tcup:" + cid + ":"); } catch (e){ return []; } },
   // sent again on opening the client; true when something went
   async retry(cid, onStep){
@@ -1085,7 +1204,11 @@ const TCloudUp = {
     try {
       for (const [k, x] of list){
         try { const r = await this.handOver(x.blob, {from: x.from, to: x.to}, onStep, x.who, x.name); if (r && r.days != null){ await this.drop(k); sent++; } }
-        catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
+        catch (e){
+          toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e));
+          // the line on From Tally says why (with Send again)
+          const b = S.books; if (b && b.cid === cid) ((b.meta || {}).parts || []).forEach(p => { if (p.from === x.from && p.to === x.to){ p.cloud = this.notSent(e); p.wait = k; p.again = !(e && e.final); } });
+        }
       }
     } finally { this.retrying = false; }
     if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
@@ -1105,7 +1228,9 @@ const TCloudUp = {
     if (!this.on()) return {skipped: "not signed in to the firm account"};
     who = who || {client: S.coId, company: BridgeSeed.company()};
     if (typeof Blob === "function" && typeof IDBStore === "object"){
-      const up = await this.storageUp(src instanceof Blob ? src : new Blob([String(src)], {type: "text/xml"}), range, onStep, who, name);
+      const blob = src instanceof Blob ? src : new Blob([String(src)], {type: "text/xml"});
+      // 17-Oct-2026: a file larger than a piece (45 MB; Storage takes at most 50 MB a file) goes as several Day Books
+      const up = blob.size > DayCut.PIECE ? await this.piecesUp(blob, range, onStep, who, name) : await this.storageUp(blob, range, onStep, who, name);
       if (up) return up;
     }
     // a Tally export is often UTF-16LE: decoded by its byte-order mark (Blob.text() is UTF-8 only)
@@ -1153,7 +1278,38 @@ const TCloudUp = {
     try { const m = JSON.parse(localStorage.getItem("tcup-periods") || "{}"); if (m[j.id]) return (this.periods[j.id] = m[j.id]); } catch (e){}
     return "";
   },
-  async storageUp(blob, range, onStep, who, name){
+  // 17-Oct-2026: a Day Book larger than DayCut.PIECE, cut into Day Books of whole days (DayCut.plan) and sent one after
+  // another, each its own upload_new / upload, upload_done (its own job, its own period). The pieces sent are kept in this
+  // browser's store ("tcpieces:<client>:<from>-<to>:<size>"), so a send again goes on with the pieces not sent yet
+  async piecesUp(blob, range, onStep, who, name){
+    if (onStep) onStep("Cutting the day book (" + DayCut.mb(blob.size) + ") into pieces of at most " + DayCut.mb(DayCut.PIECE) + " for FinCom’s cloud…");
+    const ps = await DayCut.plan(blob, range, pct => { if (onStep) onStep("Cutting the day book into pieces for FinCom’s cloud (" + pct + "%)…"); });
+    const key = "tcpieces:" + who.client + ":" + range.from + "-" + range.to + ":" + blob.size;
+    let sent = [];
+    try { sent = ((await IDBStore.get(key)) || {}).sent || []; } catch (e){}
+    const jobs = [];
+    for (let i = 0; i < ps.length; i++){
+      const p = ps[i], tag = p.from + "-" + p.to + ":" + p.blob.size, label = "piece " + (i + 1) + " of " + ps.length;
+      if (sent.indexOf(tag) >= 0) continue;
+      const nm = String(name || "Day Book").slice(0, 100) + " (" + label + ")";
+      const r = await this.storageUp(p.blob, {from: p.from, to: p.to}, onStep, who, nm, label);
+      if (!r){ if (!i) return null; throw new Error("FinCom’s cloud stopped taking Day Book uploads after " + label + "."); }
+      jobs.push(r.job); sent.push(tag);
+      if (typeof tallyCrumb === "function") tallyCrumb("cloud_send", {state: "piece", piece: i + 1, of: ps.length});
+      try { await IDBStore.write([[key, {sent, at: new Date().toISOString()}]]); } catch (e){}
+    }
+    try { await IDBStore.write([[key, null]]); } catch (e){}
+    let days = 0; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) days++;
+    return {days, job: jobs[jobs.length - 1] || "", jobs, pieces: ps.length, storage: true};
+  },
+  // 17-Oct-2026: an upload that could not go: its job (kind upload, not sealed) is marked failed with the reason by
+  // tally-ingest upload_fail, never left 'queued'. A cloud without upload_fail: nothing more (the line here says it)
+  async failJob(rec, e, who){
+    if (!rec || !rec.job) return;
+    try { await this.post({kind: "upload_fail", job: rec.job, path: rec.path, reason: String((e && e.message) || e).slice(0, 240)}, who); } catch (x){}
+    try { TCloud.jobsLoad(who.client); } catch (x){}
+  },
+  async storageUp(blob, range, onStep, who, name, label){
     const key = "tus:" + who.client + ":" + range.from + "-" + range.to + ":" + blob.size;
     const keep = async rec => { try { await IDBStore.write([[key, rec]]); } catch (e){} };
     let rec = null;
@@ -1168,12 +1324,25 @@ const TCloudUp = {
     }
     this.periodSave(rec.job, range);
     if (!rec.uploaded){
-      try { await this.tus(blob, rec, keep, who.client, onStep); }
+      try { await this.tus(blob, rec, keep, who.client, onStep, label); }
+      catch (e){
+        // the job is marked failed (with the reason); the upload's record stays, so a send again goes on from where
+        // Storage stopped, unless Storage refused the file itself (413: a new upload, a new job)
+        await this.failJob(rec, e, who);
+        if (e && e.fresh){ try { await IDBStore.write([[key, null]]); } catch (x){} }
+        throw e;
+      }
       finally { delete this.prog[who.client]; if (typeof render === "function") render(); }
       rec.uploaded = true; await keep(rec);
     }
-    if (onStep) onStep("The day book is in FinCom’s cloud; FinCom’s server reads it now…");
-    await this.post({kind: "upload_done", job: rec.job, path: rec.path}, who);
+    if (onStep) onStep(label ? "The day book’s " + label + " is in FinCom’s cloud; FinCom’s server reads it now…" : "The day book is in FinCom’s cloud; FinCom’s server reads it now…");
+    try { await this.post({kind: "upload_done", job: rec.job, path: rec.path}, who); }
+    catch (e){
+      // the file is in Storage but the job was not started: marked failed (the stored file removed); sent again from the start
+      await this.failJob(rec, e, who);
+      try { await IDBStore.write([[key, null]]); } catch (x){}
+      throw e;
+    }
     try { await IDBStore.write([[key, null]]); } catch (e){}
     let days = 0; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) days++;
     try { TCloud.jobsLoad(who.client); } catch (e){}
@@ -1198,18 +1367,19 @@ const TCloudUp = {
     const b64 = v => btoa(unescape(encodeURIComponent(String(v))));
     const meta = [["bucketName", "tally-uploads"], ["objectName", rec.path], ["contentType", blob.type || "text/xml"]].map(([k, v]) => k + " " + b64(v)).join(",");
     const r = await fetch(base, {method: "POST", headers: Object.assign(await this.tusHeaders(), {"Upload-Length": String(blob.size), "Upload-Metadata": meta, "x-upsert": "false"})});
+    if (r.status === 413){ await r.text().catch(() => ""); const e = new Error("FinCom’s cloud refused the file as too large (" + DayCut.mb(blob.size) + "; it takes at most 50 MB a file)"); e.fresh = true; e.status = 413; throw e; }
     if (!r.ok){ const t = await r.text().catch(() => ""); throw new Error("Storage did not take the day book (" + r.status + (t ? ": " + t.slice(0, 160) : "") + ")"); }
     const loc = r.headers.get("Location");
     if (!loc) throw new Error("Storage gave no address for the upload.");
     rec.url = new URL(loc, base).href;
     await keep(rec);
   },
-  async tus(blob, rec, keep, cid, onStep){
+  async tus(blob, rec, keep, cid, onStep, label){
     const size = blob.size, name = rec.name || "the day book";
     let off = 0, fails = 0;
     if (rec.url){ const h = await this.tusHead(rec.url).catch(() => undefined); if (h === null) rec.url = ""; else if (typeof h === "number") off = h; }
     if (!rec.url) await this.tusCreate(blob, rec, keep);
-    const say = () => { this.prog[cid] = {name, sent: off, size}; if (onStep) onStep("Sending the day book to FinCom’s cloud (" + Math.floor(off * 100 / (size || 1)) + "%)…"); if (typeof render === "function") render(); };
+    const say = () => { this.prog[cid] = {name, sent: off, size}; if (onStep) onStep("Sending the day book" + (label ? ", " + label + "," : "") + " to FinCom’s cloud (" + Math.floor(off * 100 / (size || 1)) + "%)…"); if (typeof render === "function") render(); };
     while (off < size){
       say();
       const end = Math.min(size, off + this.CHUNK);
@@ -2144,13 +2314,4 @@ function tallyLinkOf(co){
   if (l && (l.state === "notanswering" || l.state === "paused")) needs.push({kind: l.state});
   if (needs.length) return out("needs", needs);
   return out(l && l.state === "open" ? "reading" : "waiting");
-}
-// a new client linked to its Tally company in the cloud: the client is sent to the server first, then linked
-// (round 39: a company the cloud has not seen yet is not linked here: the client's Link to Tally card, where Add client
-// lands, lists it once a Tally computer reports it, and a person links it there)
-async function linkNewClient(co, company){
-  if (typeof TCloud !== "object" || !TCloud.on()) return false;
-  const seen = tallyCompaniesSeen().find(x => x.name === ledNm(company));
-  if (!seen || !seen.reported) return false;
-  return tallyLinkClient(seen.name, co.id);
 }

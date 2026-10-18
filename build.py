@@ -19,6 +19,9 @@ def read(p): return open(os.path.join(ROOT, p), encoding="utf-8").read()
 NAMES_JS = "server/_shared/names.js"
 # plain JavaScript shared with the server functions, put at the head of the app without its export line, in this order
 SHARED_JS = [NAMES_JS, "server/_shared/match2b.js", "server/_shared/tdsmatch.js"]
+# of those, the ones the React app loads with a screen of its own (its lazy chunk imports the module itself and puts its
+# names on globalThis: app/src/lib/tdsGlobals.js), kept out of legacy.js and its size budget (tests/run_stability.py)
+SHARED_LAZY = ["server/_shared/tdsmatch.js"]
 
 def assemble():
     shell = read("src/shell.html")
@@ -34,6 +37,7 @@ def assemble():
         if len(re.findall(r"(?m)^export \{[^}]*\};\s*$", t)) != 1: sys.exit(f + " must end with one export { ... }; line")
         t = re.sub(r"(?m)^export \{[^}]*\};\s*$", "", t)
         if re.search(r"(?m)^\s*(import|export)\b", t): sys.exit(f + " must have no imports and only its one export line")
+        if f in SHARED_LAZY: t = "/* @react-lazy-shared: begin " + f + " */\n" + t + "/* @react-lazy-shared: end */\n"
         shared.append((f, t))
     srcs = shared + [("src/js/" + f, read("src/js/" + f)) for f in order]
     js = "".join(t for _, t in srcs)
@@ -109,16 +113,32 @@ def add_csp(html):
     j = html.index("</head>")
     return html[:j] + meta + html[j:]
 
+def lazy_files():
+    """The src/js files kept out of legacy.js (marked @react-lazy at their head): each must be imported by a screen in
+    app/src, or the React app would never have its names."""
+    import glob
+    lazy = sorted(f for f in os.listdir(os.path.join(ROOT, "src/js")) if f.endswith(".js") and read("src/js/" + f).startswith("/* @react-lazy: begin "))
+    app = "".join(open(p, encoding="utf-8").read() for p in glob.glob(os.path.join(ROOT, "app", "src", "**", "*.js*"), recursive=True))
+    for f in lazy:
+        if not re.search(r"""import\s*(?:\(\s*)?["'][./]*/src/js/""" + re.escape(f) + """["']""", app): sys.exit("src/js/" + f + " is @react-lazy but no screen in app/src imports it")
+        t = read("src/js/" + f)
+        if t.count("/* @react-lazy: begin ") != 1 or not t.rstrip().endswith("/* @react-lazy: end */"): sys.exit("src/js/" + f + ": one @react-lazy block, the whole file")
+    return lazy
+
 def react_parts():
     """The program and CSS for the React app in app/: live and test, the same rules as the one-file site."""
     html = assemble(); live_checks(html)
+    lazy = lazy_files()
     out = os.path.join(ROOT, "app", "legacy"); os.makedirs(out, exist_ok=True)
     for name, h in [("live", html), ("test", to_test(html))]:
         js = re.search(r'<script id="app-main">(.*?)</script>', h, re.S).group(1)
-        # a module the React app loads with its own screen (its lazy chunk), kept out of legacy.js and its size budget:
-        # src/js/78-reports.js (FSX) and src/js/80-assets.js (FAR), imported by app/src/screens/books/Statements.jsx
+        # a module the React app loads with its own screen (its lazy chunk), kept out of legacy.js and its size budget
+        # (tests/run_stability.py): each src/js file marked @react-lazy, imported by the screens that use it and setting
+        # its names on globalThis (78-reports.js FSX and 80-assets.js FAR with Statements.jsx; the rest: lazy_files())
         js, n = re.subn(r"/\* @react-lazy: begin .*?/\* @react-lazy: end \*/\n?", "", js, flags=re.S)
-        if n != 2: sys.exit("expected two @react-lazy blocks (src/js/78-reports.js, src/js/80-assets.js), found %d" % n)
+        if n != len(lazy): sys.exit("expected %d @react-lazy blocks (%s), found %d" % (len(lazy), ", ".join(lazy), n))
+        js, n = re.subn(r"/\* @react-lazy-shared: begin .*?/\* @react-lazy-shared: end \*/\n?", "", js, flags=re.S)
+        if n != len(SHARED_LAZY): sys.exit("expected %d @react-lazy-shared blocks, found %d" % (len(SHARED_LAZY), n))
         open(os.path.join(out, name + ".js"), "w", encoding="utf-8").write(js)
     open(os.path.join(out, "app.css"), "w", encoding="utf-8").write(read("src/css/app.css"))
     open(os.path.join(out, "test-style.html"), "w", encoding="utf-8").write(read("build/test-style.html"))

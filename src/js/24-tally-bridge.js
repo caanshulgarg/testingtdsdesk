@@ -462,11 +462,7 @@ function bridgeChip(co){
 // The client's ledgers are one list for the whole app (Ledgers, src/js/58-ledgers.js): read from FinCom's cloud copy
 // whenever the client is linked to it, else from the bridge (review of 02-Oct-2026: an older, shorter list kept in this
 // browser was never replaced while the bridge was live, as the ledgers were read again only when that list was empty,
-// and the cloud copy only when the bridge was not live). These two keep their names for their callers.
-async function ensureCloudLedgers(cid){
-  const r = await Ledgers.load(cid);
-  return !!(r && r.ok);
-}
+// and the cloud copy only when the bridge was not live). This one keeps its name for its callers.
 async function syncLedgersFromTally(silent){
   const b = B(), co = CO(b && b.cid);
   if (!co) return false;

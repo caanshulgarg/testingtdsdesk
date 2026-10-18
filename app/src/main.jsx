@@ -1,3 +1,5 @@
+// first of all: a screen's file replaced by a publish while this tab was open reloads FinCom once (src/staleChunk.js)
+import { staleReload } from "./staleChunk.js";
 import { createRoot } from "react-dom/client";
 // Arc's typefaces, bundled with the app (no font is fetched from elsewhere): Inter for text, Geist for headings
 import "@fontsource-variable/inter";
@@ -17,7 +19,7 @@ import "./nav.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
-window.loadRegisters = () => import("./lib/registers.js");
+window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path
 import { MotionConfig } from "motion/react";
 
@@ -65,6 +67,9 @@ function start() {
   // an error before then is kept (window.__fincomEarly, below) and reported when it starts
   if (import.meta.env.MODE === "test" && __FINCOM_SENTRY__) {
     const early = window.__fincomEarly = [];
+    // 18-Oct-2026: the steps of Books › From Tally as breadcrumbs (tallyCrumb, src/js/23), kept until Sentry starts
+    const crumbs = window.__fincomCrumbsEarly = [];
+    window.__fincomCrumb = (category, step, data) => { if (crumbs.length < 30) crumbs.push({ category, step, data, timestamp: Date.now() / 1000 }); };
     const keep = (e) => { if (early.length < 10) early.push(e && (e.reason || e.error) ? (e.reason || e.error) : e); };
     window.addEventListener("error", keep); window.addEventListener("unhandledrejection", keep);
     afterFirstPage(() => import("./sentry.js").then((m) => { window.removeEventListener("error", keep); window.removeEventListener("unhandledrejection", keep); m.start(); }).catch(() => {}), 3000);

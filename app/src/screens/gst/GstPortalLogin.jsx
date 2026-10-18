@@ -4,6 +4,8 @@
 // presses "Log in to GST portal" (each read logged). Only the firm's owner saves, changes or deletes it and picks the
 // staff who may use it. Talking to the server is GSTB (src/js/84-gst-browser.js).
 import { useEffect, useState } from "react";
+// GSTB (src/js/84-gst-browser.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/84-gst-browser.js";
 
 const H4 = ({ children }) => <h4 style={{ margin: "14px 0 4px" }}>{children}</h4>;
 

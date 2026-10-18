@@ -25,6 +25,7 @@ import NotRead from "../parts/NotRead.jsx";
 import NoTds from "./tds/NoTds.jsx";
 import "../parts/returns.css";
 import Filters, { Field } from "../parts/Filters.jsx";
+import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 export const Q_MONTHS = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };

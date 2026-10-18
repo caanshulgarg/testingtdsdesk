@@ -54,8 +54,15 @@ def _site(root, prefix):
 def start(p, fincom_dir=None, two_b=None, extra_routes=()):
     """fincom_dir: a folder served as https://staging.fincom.live/review/ (default: the stand-in page only)."""
     seen = []
+    # the portal's and FinCom's addresses never resolve in this browser: every page the tests use is served by the routes
+    # below, and a load that comes before them (fresh, below) fails here as it does on a machine without internet. On
+    # GitHub's runners, which have internet, that first load of the tab the helper opens reached the real
+    # services.gst.gov.in, came back as a page (not chrome-error://), was not loaded again, and the tests waited 30 s for
+    # the look-alike's #username (CI shard 1, runs 39026690733 to 39055619436: Page.fill / Page.input_value timeouts)
+    rules = "MAP *.gst.gov.in ~NOTFOUND, MAP gst.gov.in ~NOTFOUND, MAP staging.fincom.live ~NOTFOUND"
     ctx = p.chromium.launch_persistent_context("", channel="chromium", headless=True, viewport={"width": 1300, "height": 900},
-                                               args=["--headless=new", "--disable-extensions-except=" + EXT, "--load-extension=" + EXT])
+                                               args=["--headless=new", "--disable-extensions-except=" + EXT, "--load-extension=" + EXT,
+                                                     "--host-resolver-rules=" + rules])
     ctx.route(re.compile(r"^https://[a-z0-9.-]*gst\.gov\.in/"), _portal(two_b or (lambda period: {}), seen))
     for pat, fn in extra_routes: ctx.route(pat, fn)
     if fincom_dir: ctx.route(re.compile(r"^https://staging\.fincom\.live/review/"), _site(fincom_dir, "https://staging.fincom.live/review/"))

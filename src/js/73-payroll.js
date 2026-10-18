@@ -148,8 +148,8 @@ const Payroll = {
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
         src: "payroll", challan: (b.alloc || {})[id] || ""};
     }).sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
-    // next-challan-match: a month's TDS split across challans by a person is its parts (TDSMatch.expand)
-    return typeof TDSMatch === "object" ? TDSMatch.expand(out) : out;
+    // next-challan-match: a month's TDS split across challans by a person is its parts (TDS.expandSplits)
+    return TDS.expandSplits(out);
   },
   // next-challan-match (the owner, 17-Oct-2026: matches are shown and confirmed, never applied by themselves): the months a
   // Tally payroll TDS payment says it pays are now rule a ("From Tally") of the one matcher (TDSMatch.links, src/js/86),

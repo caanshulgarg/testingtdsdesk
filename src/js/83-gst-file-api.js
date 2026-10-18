@@ -1,3 +1,4 @@
+/* @react-lazy: begin 83-gst-file-api.js (the React app loads this file with its GST filing screens: build.py react_parts) */
 /* ================================================================== */
 /* Filing GSTR-1, IFF and GSTR-3B through the GST API (17-Oct-2026)   */
 /* ================================================================== */
@@ -158,3 +159,9 @@ const GSTFILE = {
     return r[k + "Via"] === "api" && r[k + "Arn"] ? {on: r[k], arn: r[k + "Arn"]} : null;
   }
 };
+if (typeof gstFileRoute !== "undefined") globalThis.gstFileRoute = gstFileRoute;
+if (typeof GSTFILE !== "undefined") globalThis.GSTFILE = GSTFILE;
+if (typeof gstSignWith !== "undefined") globalThis.gstSignWith = gstSignWith;
+if (typeof GST_PORTAL_RETURNS !== "undefined") globalThis.GST_PORTAL_RETURNS = GST_PORTAL_RETURNS;
+// (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
+/* @react-lazy: end */

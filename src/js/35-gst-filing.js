@@ -177,7 +177,6 @@ const GSTF = {
     return {balanced, date, narr: "GSTR-3B " + GSTR.label(ym) + ": tax set off against input tax credit and paid in cash (sections 49, 49A; rule 88A)", lines, missing, cash, cashL};
   }
 };
-function label0(ym){ return GSTR.label(ym); }
 // the filing card under GSTR-3B and GSTR-1A under Amendments: React (app/src/screens/gst/Filing.jsx)
 // a filing date (r1, r3b) or a figure from the portal (portalFee1, portalFee3, portalInt) for the month and GSTIN
 function gstfSet(k, v){

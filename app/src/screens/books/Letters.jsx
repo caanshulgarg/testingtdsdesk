@@ -12,6 +12,8 @@ import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import ListTable from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
+// LTR and its buttons' ltr* (src/js/46-letters.js) come with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/46-letters.js";
 
 const Tile = ({ l, v, sub, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b><small>{sub}</small></div>;
 const Sel = ({ label, value, opts, onChange, className }) => <select className={className} aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;

@@ -86,7 +86,7 @@ const TDS24Q = {
       out.push({id: r.id, date, q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.name, employee: r.name, pan: ((b.panFix || {})[r.name] || {}).pan || r.pan || "", section: "192", ledger: "", paid: r2(num(r.gross)), tds: r2(num(r.tds)),
         rate: num(r.gross) ? r2(num(r.tds) / num(r.gross) * 100) : null, voucher: "", src: "sheet", challan: alloc[r.id] || ""});
     });
-    return (typeof TDSMatch === "object" ? TDSMatch.expand(out) : out).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    return (TDS.expandSplits(out)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // Annexure I: employee-wise deductions for the quarter
   annexI(fy, q){

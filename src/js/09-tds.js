@@ -206,8 +206,33 @@ const TDS = {
     });
     // t70: what was corrected in FinCom (the corrected Excel brought back) over the books' deduction (app/src/lib/tdsEdit.js)
     if (typeof TDSEdit === "object" && b.tdsEdits) out.forEach(r => TDSEdit.apply(r));
-    // next-challan-match: a deduction split across challans by a person is its parts, each on its challan (TDSMatch.expand)
-    return (typeof TDSMatch === "object" ? TDSMatch.expand(out) : out).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    // next-challan-match: a deduction split across challans by a person is its parts, each on its challan (TDS.expandSplits)
+    return (TDS.expandSplits(out)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  // next-challan-match: a row with a split (S.books.tdsSplits, made on a return's Challans tab, TDSMatch.split in
+  // src/js/86), as its parts: the tax as split; the amount paid in the same proportion, the last part the rest; the same
+  // dates; each part "<row id>#n" on its own challan. A split whose parts no longer add up to the row is not used (the row
+  // whole, splitStale). Here, in legacy.js, so every figure of every screen sees the parts (src/js/86 loads with the TDS
+  // screens)
+  expandSplits(rows){
+    const sp = (S.books || {}).tdsSplits || {}, alloc = (S.books || {}).alloc || {};
+    if (!Object.keys(sp).length) return rows;
+    
+    const out = [];
+    rows.forEach(r => {
+      const s = sp[r.id];
+      if (!s || !(s.parts || []).length){ out.push(r); return; }
+      const tot = s.parts.reduce((a, p) => a + TDSCH.p(p.tds), 0);
+      if (tot !== TDSCH.p(r.tds)){ out.push(Object.assign(r, {splitStale: true})); return; }
+      let paidLeft = TDSCH.p(r.paid);
+      s.parts.forEach((p, i) => {
+        const last = i === s.parts.length - 1, pp = last ? paidLeft : Math.round(TDSCH.p(r.paid) * TDSCH.p(p.tds) / tot);
+        paidLeft -= pp;
+        const id = r.id + "#" + (i + 1);
+        out.push(Object.assign({}, r, {id, splitOf: r.id, part: i + 1, parts: s.parts.length, tds: TDSCH.p(p.tds) / 100, paid: pp / 100, challan: alloc[id] || ""}));
+      });
+    });
+    return out;
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
   paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },

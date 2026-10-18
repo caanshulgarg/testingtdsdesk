@@ -322,7 +322,6 @@ function saveDraft(){
   render();
   return v;
 }
-function stateOptions(sel){ return '<option value="">\u2014 Choose \u2014</option>' + Object.entries(GST_STATES).map(([c, n]) => '<option value="' + c + '"' + (c === sel ? " selected" : "") + ">" + c + " \u00b7 " + esc(n) + "</option>").join(""); }
 /* ---------- the printed invoice ---------- */
 function invoiceHtml(x, co, cfg){
   const inter = isInterState(x, co);
@@ -808,16 +807,6 @@ function replaceLedgerInWaiting(cid, from, to, role, quiet){
     if (setting) Store.saveCompany(co);
   }
   return n;
-}
-function billLedgerIssues(list){
-  const m = new Map();
-  list.forEach(e => (e.snapshot ? e.snapshot.lines : []).forEach(l => {
-    if (!l.ledger || exactLedger(l.ledger)) return;
-    const k = l.role + "|" + l.ledger;
-    const x = m.get(k) || {name: l.ledger, role: l.role, bills: 0};
-    x.bills++; m.set(k, x);
-  }));
-  return Array.from(m.values());
 }
 function canonicalizeBills(list){
   list.forEach(e => {
