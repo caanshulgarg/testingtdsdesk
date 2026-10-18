@@ -13,7 +13,9 @@
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";
-import { ChallanCell, MatchDialogs } from "./Match.jsx";
+import { ChallanCell, MatchDialogs, FileChecks } from "./Match.jsx";
+import DeducteesPan from "./Deductees.jsx";
+import { DeductorDetails } from "../Settings.jsx";
 import { tabNow, checksToFix, ReturnChallans, ToFix, PreFileSlot, AfterFiling, unknownItem, UnknownChallans } from "./ReturnParts.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -213,8 +215,10 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs }) {
         { label: "TDS deducted", value: money(tds), sub: q + " " + fy + " · from Tally's payroll" },
         { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
       ]} />
-    <Tabs counts={{ deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length || null }} />
-    {S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
+    <Tabs counts={{ deductees: new Set(a1.map((r) => r.employee)).size, deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length || null }} />
+    {S.tdsTab === "deductor" ? <DeductorDetails />
+      : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
+      : S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
         empty="No salary paid or credited in this quarter."
         cols={[
           { k: "emp", role: "party", label: "Employee", v: (r) => r.employee, cell: (r) => r.employee },
@@ -248,6 +252,7 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs }) {
       : <><section className="dash-card" data-file="24Q-tally"><h3>{TDS.formName("24Q", fy)}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
           {/* next-challan-match: the note was stale (it said the new form's layout could not be checked) */}
           <p className="note"><b>Check before filing.</b> {TDS.isNew(fy) ? <>The text file is built to Protean's file format 1.1 for Form 138 (Annexure I, Q1 to Q3) and checked with its FVU 1.2; it stays a draft (named _DRAFT) until a statement with the challan file (CSI) from the portal passes FVU 1.2.{q === "Q4" ? " Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has." : ""}</> : <>The text file is built to Protean's 24Q file format as its FVU 8.7 checks it (Annexure I{q === "Q4" ? " and II" : ""}). Run it through the FVU before filing.</>}</p>
+          <FileChecks form="24Q" fy={fy} q={q} />
           <PreFileSlot />
           <div className="revfilter"><button className="btn small primary" data-pay-fvu="" disabled={TDS.isNew(fy) && q === "Q4"} onClick={() => payFvuDownload(fy, q)}>Download the {TDS.formName("24Q", fy)} text file</button>
             <button className="btn small" onClick={() => printTable("q24A1Table", "24Q Annexure I, " + q + " " + fy)}>Print Annexure I</button></div></section>

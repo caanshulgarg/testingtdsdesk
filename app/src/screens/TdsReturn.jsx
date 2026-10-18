@@ -24,9 +24,11 @@ import Filters, { Search } from "../parts/Filters.jsx";
 import { barSelects } from "../parts/FilterBar.jsx";
 import { Info } from "../parts/Answer.jsx";
 // tds-layout (14-Oct-2026): a return's six tabs in the owner's layout, its challans from the one register, To fix, After filing
-import { returnTabs, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
+import { ReturnNav, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
 import { Limits, TieOut } from "./tds/Smart.jsx";
-import { ChallanCell, MatchDialogs } from "./tds/Match.jsx";
+import { ChallanCell, MatchDialogs, FileChecks, PlainDeductions, ChallanSelect, ChallanTicker } from "./tds/Match.jsx";
+import DeducteesPan from "./tds/Deductees.jsx";
+import { DeductorDetails } from "./Settings.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -81,15 +83,7 @@ const ClearLink = ({ tab, bare }) => (anyOn(tab) ? <>{bare ? "" : " · "}<button
 // filed lock above them, said on every tab
 // t70 (16-Oct-2026; the owner: "TDS and GST pages take too much space"): By deduction · By deductee (side) on the tabs' row
 // (the filed lock is said in the card, under the title)
-function Tabs({ counts, side }) {
-  return <>
-    <div className="tg-tabrow">
-      <nav className="sbar rp-tabs" aria-label="Return" data-return-tabs="">
-        {returnTabs(S.tdsForm || "26Q", counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
-      </nav>
-      {side}
-    </div></>;
-}
+function Tabs({ counts, side }) { return <ReturnNav form={S.tdsForm || "26Q"} counts={counts} side={side} />; }
 
 // the shared list table (spec K6, round 2) with the return's own order (S.tdsSort, tdsSortBy): same headers and arrows
 const via = (tab) => { const s = (S.tdsSort || {})[tab] || {}; return { state: s.k ? { k: s.k, dir: s.d < 0 ? "desc" : "asc" } : null, by: (k) => tdsSortBy(tab, k) }; };
@@ -259,8 +253,15 @@ const Edited = ({ r, k }) => (r.books && Math.abs(num(r.books[k]) - num(r[k])) >
 function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title, probs = {}, unitW, edN = 0, fo }) {
   const f = (S.tdsFl || {}).deductions || {};
   const shown = tdsSorted("deductions", rows.filter((r) => pass(r, f)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
-  const LIMIT = 500, sel = S.tdsSel || {};
+  const LIMIT = 500, sel = S.tdsSel || {}, form = S.tdsForm || "26Q";
+  // next-challan-match (the owner, 18-Oct-2026, as Winman): challan first. A challan chosen at the top: its available
+  // balance big and the deductions to tick onto it (tds/Match.jsx ChallanTicker); none chosen: every deduction with its
+  // challan, as before
+  const chSel = S.tdsDedCh ? TDS.challans().find((c) => c.id === S.tdsDedCh) : null;
+  const picker = <div className="row cm-filters cm-dedch"><ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} /></div>;
+  if (chSel) return <>{picker}<ChallanTicker c={chSel} form={form} fy={fy} q={q} locked={TDSReg.locked(fy, q, form)} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /></>;
   return <>
+    {picker}
     <ImportPreview rows={rows} />
     <TagBar rows={rows} chOpts={chOpts} />
     {/* t70: how many are shown, the table's caption */}
@@ -366,7 +367,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
   S.tdsTab = tabNow(S.tdsTab, form);
-  if (!["challans", "deductions", "checks", "file", "after"].includes(S.tdsTab)) S.tdsTab = "deductions";
+  if (!["deductor", "deductees", "challans", "deductions", "checks", "file", "after"].includes(S.tdsTab)) S.tdsTab = "deductions";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan);
   // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
   // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
@@ -445,20 +446,20 @@ export function Return26({ b, allRows, form = "26Q" }) {
         { label: "Not against a challan", value: money(notCh), sub: un.length + " " + unit, warn: un.length > 0 },
         { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
       ]} />
-    <Tabs counts={{ deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
-      side={S.tdsTab === "deductions" ? <div className="tg-tabside">
-        <DedSwitch unit={form === "27EQ" ? "Buyer" : "Deductee"} />{tools}</div> : null} />
+    <Tabs counts={{ deductees: deductees, deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
+      side={S.tdsTab === "deductions" ? <div className="tg-tabside">{tools}</div> : null} />
     <MatchDialogs form={form} fy={fy} q={q} />
     {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
         <TallyPays fy={fy} q={q} /></ReturnChallans>
-      : S.tdsTab === "deductions" ? <>{S.tdsDedView === "deductees" ? <Deductees deductees={deductees} {...common_} />
-        : <><Deductions fy={fy} q={q} {...common_} unitW={unit} edN={edN} /><BySection fy={fy} q={q} form={form} /></>}</>
+      : S.tdsTab === "deductor" ? <DeductorDetails />
+      : S.tdsTab === "deductees" ? <DeducteesPan form={form} fy={fy} q={q} />
+      : S.tdsTab === "deductions" ? <><Deductions fy={fy} q={q} {...common_} unitW={unit} edN={edN} /><BySection fy={fy} q={q} form={form} /></>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
       : S.tdsTab === "file" ? <>
         {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (earlier {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
         <FvuResult form={form} />
         <section className="dash-card" data-file={form}><h3>The file for {fname}, {q} {fy}</h3>
-          {un.length > 0 && <p className="note bad">{un.length} {unit} not against a challan: <button className="linkbtn" onClick={() => tdsTabGo("challans")}>tag them to challans</button> first.</p>}
+          <FileChecks form={form} fy={fy} q={q} />
           <p className="note" style={{ margin: "0 0 12px" }}>Check the working, download the text file, run it through the FVU, then file it.</p>
           {/* the TDS review, H5: the record layout is not yet checked against Protean's format (docs/fvu-check.md) */}
           <p className="note warn" data-fvu-check=""><b>Check with Protean’s FVU before filing.</b> The file’s layout and some section codes are not yet confirmed against Protean’s current format.</p>
@@ -586,18 +587,13 @@ export function Return24({ b }) {
     return <>
       <ReturnCard fy={fy} q={q} form="24Q" filed={filed0} errN={0} driftN={0} draft={false} primary={["Bring in the salary sheet", () => doAct("salaryPick")]}
         figs={[{ label: "Salary TDS in the books", value: money(inB.reduce((a, r) => a + num(r.tds), 0)), sub: inB.length + " deduction" + (inB.length === 1 ? "" : "s") + " under 192" }]} />
-      {inB.length > 0 && <section className="dash-card" style={{ maxWidth: 760, marginBottom: 12 }}><h3>Salary TDS in the books</h3>
-        <ListTable name="q24InBooks" rows={inB} rowKey={(r, i) => i} unit={["deduction", "deductions"]}
-          cols={[
-            { k: "date", role: "date", label: "Date", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => day(r.date) },
-            { k: "party", role: "party", label: "Employee", v: (r) => r.party, cell: (r) => r.party },
-            { k: "paid", role: "amount", label: "Paid", cls: "n", v: (r) => num(r.paid), fmt: money, cell: (r) => money(r.paid) },
-            { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => num(r.tds), fmt: money, cell: (r) => money(r.tds) },
-            { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => r.pan || "—" },
-          ]} />
-        <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
-      {/* next-challan-match: the 192 the books carry, matched to their challans here too (the file needs the sheet) */}
-      {inB.length > 0 && <><MatchDialogs form="24Q" fy={fy} q={q} /><ReturnChallans fy={fy} q={q} form="24Q" /></>}
+      {/* next-challan-match (18-Oct-2026): the four tabs here too; the 192 the books carry are matched to their challans (the
+          file needs the salary sheet or Tally's payroll, as the books do not say whose TDS it is) */}
+      <MatchDialogs form="24Q" fy={fy} q={q} />
+      <Tabs counts={{ deductions: inB.length || null }} />
+      {S.tdsTab === "deductor" ? <DeductorDetails /> : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
+        : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" /> : S.tdsTab === "deductions" ? <PlainDeductions form="24Q" fy={fy} q={q} />
+        : <p className="note" data-needs-sheet-act="">Bring in the salary sheet first: the file, To fix and After filing need it.</p>}
       <section className="dash-card" style={{ maxWidth: 760 }} data-needs-sheet=""><h3>24Q needs the salary sheet</h3>
         <p className="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare — Excel or CSV — and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>
     </>;
@@ -618,16 +614,18 @@ export function Return24({ b }) {
         { label: "TDS deducted", value: money(sheetTds), sub: q + " " + fy },
         { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
       ]} />
-    <Tabs counts={{ deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length + late || null }} />
+    <Tabs counts={{ deductees: a1.length, deductions: inBooks.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length + late || null }} />
     <MatchDialogs form="24Q" fy={fy} q={q} />
-    {S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
+    {S.tdsTab === "file" ? <><section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3><FileChecks form="24Q" fy={fy} q={q} />
         <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}
         {/* next-challan-match: the text file from the salary sheet, as from Tally's payroll (TDS24Q_FILE.build) */}
         {TDS.isNew(fy) && q === "Q4" ? <p className="note" data-q4-wait="">Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has.</p>
           : <div className="revfilter"><button className="btn small primary" data-sheet-fvu="" onClick={() => payFvuDownload(fy, q)}>Download the {fname} text file</button></div>}</section>
         <PreFileSlot />
         <MarkFiled fy={fy} q={q} form="24Q" /></>
-      : S.tdsTab === "deductions" ? <Employees fy={fy} q={q} a1={a1} />
+      : S.tdsTab === "deductor" ? <DeductorDetails />
+      : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
+      : S.tdsTab === "deductions" ? <><PlainDeductions form="24Q" fy={fy} q={q} /><h3 style={{ margin: "14px 0 6px" }}>By employee (Annexure I)</h3><Employees fy={fy} q={q} a1={a1} /></>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
       : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" />
       : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">

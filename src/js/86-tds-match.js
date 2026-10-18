@@ -354,6 +354,8 @@ function tdsTakeOff(ids){
   toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r;
 }
 function tdsSplitOpen(key){ S.tdsSplit = {key}; render(); }
+// Split… on a deduction more than a challan's balance (the challan panel): that challan first, the rest on another
+function tdsSplitRow(rowId, chId){ S.tdsSplit = {rowId, chId}; render(); }
 function tdsSplitDo(rowId, parts){
   const r = TDSMatch.split(rowId, parts);
   if (!r.ok){ toast(r.why); return r; }

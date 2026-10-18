@@ -415,7 +415,7 @@ const TDSF25 = {
     const nodef = (this.NO_DEFAULT_PAN[form] || []).includes(code);
     if (nodef && !valid) P(who + ": section code " + code + " needs the deductee's PAN.");
     const date = this.dmy(r.credit || r.date), ded = tds > 0 ? this.dmy(r.date) : "";
-    const at = {8: valid ? pan : "PANNOTAVBL", 9: this.ascii(r.party || r.employee).slice(0, 75) || "", 15: code, 18: "Y", 19: date, 20: this.money(paid),
+    const at = {8: valid ? pan : "PANNOTAVBL", 9: this.ascii(TDS26Q.fileName(r)).slice(0, 75) || "", 15: code, 18: "Y", 19: date, 20: this.money(paid),
       24: this.money(tds), 25: this.money(tds), 27: ded};
     if (!at[9]) P(who + ": the name is missing.");
     if (form === "24Q"){ at[29] = this.dmy(c.date); at[32] = remark; at[33] = cert; return at; }

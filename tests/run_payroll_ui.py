@@ -61,7 +61,7 @@ try:
         pg.evaluate(LOAD, {"tables": TABLES, "details": SETUP["details"]}); pg.wait_for_timeout(800)
         print("== 1. the Salary tab and the employees")
         # tds-layout (14-Oct-2026): no Salary tab on the TDS page; the salary pages are 24Q's "Employees & declarations"
-        ok(pg.locator('[data-ret-tab="people"][aria-selected="true"]').count() == 1 and pg.evaluate("[S.tdsForm, S.tdsTab]") == ["24Q", "people"],
+        ok(pg.locator('[data-ret-tab="people"][aria-pressed="true"]').count() == 1 and pg.evaluate("[S.tdsForm, S.tdsTab]") == ["24Q", "people"],
            "the salary pages: 24Q's Employees & declarations (the old Salary address leads there)")
         t = txt(pg)
         names = sorted(e[0] for e in SETUP["employees"])
@@ -104,7 +104,7 @@ try:
         a1 = pg.inner_text('[data-list="q24Annex1"]')
         ok(pg.locator('[data-list="q24Annex1"] tbody tr').count() == len(EXP["annex1"]["Q1"]), "Q1 Annexure I: one row per employee per month (%d)" % len(EXP["annex1"]["Q1"]))
         cells = pg.locator('[data-list="q24Annex1"] [data-ch-cell]').all_inner_texts()
-        ok(cells and all(c.startswith("0510308 · ") and c.endswith("· 192") for c in cells), "each month's challan beside its TDS: BSR · date · section, opening the Move dialog (%s)" % cells[:3])
+        ok(cells and all(c.startswith("0510308 · ") and c.strip().endswith("192") for c in cells), "each month's challan beside its TDS: BSR · date · section, opening the Move dialog (%s)" % cells[:3])
         ok(pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).map(r => r.challanNo).sort().join(',')").count("01001") >= 1 and pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).every(r => r.challan)"), "every month's TDS on its challan (01001 … 01003), from Tally's payment's months")
         pg.evaluate("() => { S.tdsQ = 'Q4'; S.tdsTab = 'annex2'; render(); }"); pg.wait_for_timeout(400)
         a2 = pg.inner_text('[data-list="q24Annex2"]')

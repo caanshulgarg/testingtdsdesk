@@ -140,3 +140,54 @@
   .cm-sugg .cm-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "d a" "p p"; }
   .cm-cell { white-space: normal; }
 }
+
+/* next-challan-match (18-Oct-2026, the owner: "like Winman"): four tabs and the return's actions beside them; the
+   challans as a list on the left and the one chosen on the right with its available balance big, each deduction on it
+   with the balance after it; the deductees with a PAN to fix first, in red */
+.rp-navrow { flex-wrap: wrap; row-gap: 6px; }
+.rp-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rp-acts .btn.on { box-shadow: inset 0 0 0 2px var(--brand); }
+.cm-two { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 12px; align-items: start; }
+.cm-chlist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+.cm-chbtn { display: grid; gap: 2px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control, 6px); background: var(--surface-raised, var(--surface)); cursor: pointer; font-size: 13px; }
+.cm-chbtn.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.cm-chbtn .bad { color: var(--bad); }
+.cm-panel { margin: 0; }
+.cm-panel-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.cm-avail { display: grid; text-align: right; }
+.cm-avail span { font-size: 12px; color: var(--text-secondary); }
+.cm-avail b { font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ok); }
+.cm-avail.bad b { color: var(--bad); }
+.cm-run td.n, .cm-run th.n { white-space: nowrap; }
+.cm-run tr.cm-open td { color: var(--text-secondary); }
+.cm-pick-h { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 10px 0 4px; font-size: 13px; }
+.cm-grey { opacity: .65; }
+.cm-else { margin-top: 8px; font-size: 13px; }
+.cm-chsel { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-weight: 600; font-size: 14px; }
+.cm-chsel { max-width: 100%; min-width: 0; }
+.cm-chsel select { min-width: 0; max-width: 100%; width: 100%; flex: 1 1 260px; font-weight: 400; }
+.cm-dedch { max-width: 100%; }
+.cm-checks-l ul { margin: 4px 0 10px; padding-left: 18px; }
+#tdsDeTable tr.dee-row { cursor: pointer; }
+#tdsDeTable tr.dee-row.bad td { color: var(--bad); background: var(--bad-soft); }
+#tdsDeTable tr.dee-row:hover td { background: var(--surface-hover, rgb(0 0 0 / .03)); }
+@media (max-width: 760px) {
+  .cm-two { grid-template-columns: minmax(0, 1fr); }
+  .cm-avail { text-align: left; }
+  .rp-acts { width: 100%; }
+}
+.cm-pan2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.cm-pan2 h4 { margin: 4px 0 6px; font-size: 14px; }
+.cm-pan2 .bk-table { font-size: 12.5px; }
+.cm-pan2 .bk-table td, .cm-pan2 .bk-table th { padding: 4px 6px; }
+.cm-pan2 td.pty { min-width: 120px; }
+.cm-left { border-right: 1px solid var(--rule, var(--border)); padding-right: 12px; min-width: 0; }
+.cm-right { min-width: 0; }
+.cm-sg-group { display: grid; gap: 8px; margin-bottom: 10px; padding: 8px; border-radius: var(--radius-control, 6px); background: color-mix(in oklab, var(--warn-soft) 55%, transparent); }
+tr.cm-over td { color: var(--text-secondary); }
+@media (max-width: 1180px) { .cm-pan2 { grid-template-columns: minmax(0, 1fr); } .cm-left { border-right: 0; padding-right: 0; } }
+.cm-pick-h select { width: auto; max-width: 100%; flex: 0 1 auto; }
+.cm-sugg, .cm-sg-group { min-width: 0; }
+.cm-pan2 .bk-tablewrap { max-width: 100%; overflow-x: auto; }
+.cm-pan2 td, .cm-pan2 th { white-space: nowrap; }
+.cm-pan2 td.pty { white-space: normal; }

@@ -88,6 +88,8 @@ const TDS26Q = {
       " on the return's Challans tab first; the file is not made while any is left out. " + un.slice(0, 5).map(r => (r.party || r.employee || "?") + " " + dt(r.date) + " " + rs(r.tds)).join("; ") + (un.length > 5 ? " \u2026" : ""),
       untagged: un.map(r => r.id)};
   },
+  // the deductee's name as the file writes it: the name corrected in FinCom (Deductees (PAN), b.panFix), else the books'
+  fileName(r){ const f = ((S.books || {}).panFix || {})[r.party || r.employee] || {}; return f.name || r.party || r.employee || ""; },
   nilOut(rows){ return (rows || []).filter(r => !r.challan && !(num(r.tds) > 0.005)).length; },
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){
@@ -151,7 +153,7 @@ const TDS26Q = {
         if (isNew && !code) missing.add(form === "27EQ" ? r.code || r.ledger : TDS.sec(r.section));
         const tail = form === "27Q" ? this.nrTail(r) : form === "27EQ" ? this.tcsTail(r) : [];
         put(["DD", "1", String(ci + 1), String(di + 1), "", r.dcode || (r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02"),
-          r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
+          r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(this.fileName(r)), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
           dmy(r.credit || r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, m.remark, m.certNo, "", "", "", "", "", "", ""].concat(tail));
       });
     });
@@ -354,7 +356,7 @@ const TDS26Q = {
         const pan = r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL";
         const dc = this.oldDeducteeCode(r, form, pan);
         if (dc.why) missing.add(r.party + ": " + dc.why);
-        const d = {8: dc.code, 10: pan, 12: pan === "PANNOTAVBL" ? this.oldRefNo(r.party) : "", 13: txt(r.party),
+        const d = {8: dc.code, 10: pan, 12: pan === "PANNOTAVBL" ? this.oldRefNo(r.party) : "", 13: txt(this.fileName(r)),
           14: money(r.tds), 15: "0.00", 16: "0.00", 17: money(r.tds), 19: money(r.tds), 22: money(r.paid), 23: dmy(r.credit || r.date), 24: dmy(r.date),
           26: r.rate == null ? "" : r2(r.rate).toFixed(4), 30: m.remark, 33: form === "27EQ" ? code.slice(-1) : code, 34: m.certNo};
         // 27EQ: the total value of the purchase (what the buyer was charged, without the TCS)

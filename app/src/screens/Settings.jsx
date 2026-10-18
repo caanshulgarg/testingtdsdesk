@@ -296,7 +296,7 @@ function DedSel({ p, k, label, req, opts, first }) {
     <select aria-label={label} value={d[k] || ""} onChange={(ev) => coCommit("tds26q." + k, ev.target.value)}>
       <option value="">{first}</option>{opts.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select><DedErr p={p} k={k} /></label>;
 }
-function DeductorDetails() {
+export function DeductorDetails() {
   const co = CO(), d = co.tds26q || {}, firm = TDS26Q.firmDetails();
   const probs = {}; TDSF25.deductorProblems(firm).forEach((p) => { (probs[p.k] = probs[p.k] || []).push(p.why); });
   const catPan = TDSF25.categoryOf(co.pan), cat = TDSF25.categoryFor(firm), govt = TDSF25.GOVT.test(cat);

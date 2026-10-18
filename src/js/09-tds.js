@@ -98,6 +98,8 @@ const TDS = {
   panOf(party){
     const b = S.books || {}, pans = b.pans || {};
     if (!party) return "";
+    // next-challan-match: a PAN corrected in FinCom for this deductee (Deductees (PAN) tab, b.panFix) first
+    if (b.panFix && b.panFix[party] && b.panFix[party].pan) return b.panFix[party].pan;
     if (pans[party]) return pans[party];
     if (!b.panIndex || b.panIndexFor !== Object.keys(pans).length){
       b.panIndex = {}; b.panIndexFor = Object.keys(pans).length;

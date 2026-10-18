@@ -142,7 +142,9 @@ const Payroll = {
       const e = this.empByName(r.employee), pay = d.pays.filter(p => normName(p.employee) === normName(r.employee) && p.paidOn >= r.credit && TDS.monthsBetween(r.credit, p.paidOn) <= 2)
         .sort((x, y) => x.paidOn.localeCompare(y.paidOn))[0];
       const date = r.credit, id = "pay:" + r.guid + "|" + r.employee;
-      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: e ? e.pan : "", guid: e ? e.guid : "",
+      // next-challan-match: a PAN corrected in FinCom (Deductees (PAN), b.panFix) over the one in Tally's payroll
+      const fix = ((b.panFix || {})[r.employee] || {}).pan;
+      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: fix || (e ? e.pan : ""), guid: e ? e.guid : "",
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
         src: "payroll", challan: (b.alloc || {})[id] || ""};
     }).sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
@@ -385,7 +387,7 @@ TDS24Q_FILE.oldBuild = function(fy, q, firm, rows, live, used){
   // the employee's reference number (Annexure I and II): nine digits, the same for the employee in every return
   const ref = name => TDS26Q.oldRefNo(name).slice(1);
   const chs = live.map(c => ({c, part: typeof TDSReg === "object" ? TDSReg.portionFor(c, "24Q", fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)},
-    dds: used[c.id].map(r => ({7: ref(r.employee), 10: panOf(r.pan), 13: txt(r.employee), 14: money(r.tds), 15: "0.00", 16: "0.00", 17: money(r.tds), 19: money(r.tds),
+    dds: used[c.id].map(r => ({7: ref(r.employee), 10: panOf(r.pan), 13: txt(TDS26Q.fileName(r)), 14: money(r.tds), 15: "0.00", 16: "0.00", 17: money(r.tds), 19: money(r.tds),
       22: money(r.paid), 23: dmy(r.date), 24: dmy(r.date), 25: dmy(c.date), 30: Certs.validPan(r.pan) ? "" : "C", 33: "92B"}))}));
   const sds = [], subs = [];
   if (q === "Q4"){

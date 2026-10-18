@@ -154,10 +154,14 @@ try:
 
         # ---- the screen: suggestions, one click each, Confirm all
         pg.evaluate(GO); tab(pg, "Challans")
-        txt = pg.locator("#app [data-challan-match]").inner_text() if pg.locator("#app [data-challan-match]").count() else ""
-        ok("From Tally" in txt and "Same section, same month, exact amount" in txt, "Challans: the suggestions with their rules, “From Tally” and “Same section, same month, exact amount”")
-        chT = pg.evaluate("S.books.challans.find(c => c.serial === '00222').id")
-        pg.click('#app [data-cm-ch="%s"] [data-cm-confirm]' % chT); pg.wait_for_timeout(500)
+        # next-challan-match (18-Oct-2026, as Winman): a challan chosen from the list shows its own suggestions
+        chT = pg.evaluate("S.books.challans.find(c => c.serial === '00222').id"); chA = pg.evaluate("S.books.challans.find(c => c.serial === '00123').id")
+        pg.click('#app [data-cm-ch="%s"]' % chA); pg.wait_for_timeout(400)
+        ta = pg.locator('#app [data-cm-panel="%s"]' % chA).inner_text()
+        pg.click('#app [data-cm-ch="%s"]' % chT); pg.wait_for_timeout(400)
+        txt = pg.locator('#app [data-cm-panel="%s"]' % chT).inner_text()
+        ok("From Tally" in txt and "Same section, same month, exact amount" in ta, "Challans: the suggestions with their rules, “From Tally” and “Same section, same month, exact amount”")
+        pg.click('#app [data-cm-panel="%s"] [data-cm-confirm]' % chT); pg.wait_for_timeout(500)
         ok(sorted(pg.evaluate("Object.keys(S.books.alloc).filter(k => S.books.alloc[k] === S.books.challans.find(c => c.serial === '00222').id)")) == sorted(want_bw), "confirmed: exactly those four tagged to it")
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
         tagged = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")

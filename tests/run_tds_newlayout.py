@@ -113,13 +113,16 @@ try:
         J("(fy) => tdsGo(fy)", fy); pg.wait_for_timeout(300)
         pg.locator('[data-cell="26Q|Q1"]').click(); pg.wait_for_timeout(500)
         tabs = pg.locator('[data-return-tabs] button').all_inner_texts()
-        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductions", "Challans", "To fix", "Return file", "After filing"], "2. 26Q's tabs: %s" % tabs)
-        marks = {"deductions": "#tdsDnTable", "challans": "[data-ret-challans]", "checks": "[data-to-fix]", "file": "[data-file]", "after": "[data-after-filing]"}
+        # next-challan-match (the owner, 18-Oct-2026, as Winman): four tabs; To fix, Make the file and After filing are actions
+        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "2. 26Q's tabs: %s" % tabs)
+        acts = [re.sub(r"\s*\d+$", "", t).strip() for t in pg.locator('[data-return-acts] button').all_inner_texts()]
+        ok(acts == ["To fix", "Make the file", "After filing"], "2. 26Q's actions beside the tabs: %s" % acts)
+        marks = {"deductor": "[data-deductor]", "deductees": "#tdsDeTable", "deductions": "#tdsDnTable", "challans": "[data-ret-challans]", "checks": "[data-to-fix]", "file": "[data-file]", "after": "[data-after-filing]"}
         for k, sel in marks.items():
             pg.click('[data-ret-tab="%s"]' % k); pg.wait_for_timeout(300)
             ok(pg.locator(sel).count() >= 1, "2. 26Q › %s reachable, shows its part" % k)
-        pg.click('[data-ret-tab="deductions"]'); pg.wait_for_timeout(200); pg.click('[data-ded-switch="deductees"]'); pg.wait_for_timeout(300)
-        ok(pg.locator('#tdsDeTable').count() == 1, "2. Deductions by deductee (the old Deductees tab)")
+        pg.click('[data-ret-tab="deductees"]'); pg.wait_for_timeout(300)
+        ok(pg.locator('#tdsDeTable').count() == 1, "2. Deductees (PAN), a tab of its own")
         pg.click('[data-ret-tab="checks"]'); pg.wait_for_timeout(300)
         fx = pg.locator('[data-fix]').all()
         words = pg.locator('[data-fix-line]').inner_text()
@@ -135,7 +138,9 @@ try:
         if SHOTS: pg.click('[data-ret-tab="checks"]'); pg.wait_for_timeout(300); pg.screenshot(path=os.path.join(SHOTS, "after-return-26q.png"), full_page=True)
         J("(fy) => tdsGo(fy, 'Q1', '24Q')", fy); pg.wait_for_timeout(500)
         tabs = pg.locator('[data-return-tabs] button').all_inner_texts()
-        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductions", "Employees & declarations", "Challans", "To fix", "Return file", "After filing"], "2. 24Q's tabs: %s" % tabs)
+        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "2. 24Q's tabs: %s" % tabs)
+        acts = [re.sub(r"\s*\d+$", "", t).strip() for t in pg.locator('[data-return-acts] button').all_inner_texts()]
+        ok(acts == ["Employees & declarations", "To fix", "Make the file", "After filing"], "2. 24Q's actions: %s" % acts)
         pg.click('[data-ret-tab="people"]'); pg.wait_for_timeout(300)
         ok(pg.locator('[data-salary-empty], [data-salary-tiles]').count() >= 1, "2. Employees & declarations has the old Salary tab's content")
         # 3. the old addresses
@@ -153,7 +158,7 @@ try:
         go(fy + "/salary/form16"); ok(J("[S.tdsView, S.tdsForm, S.tdsTab, S.paySub]") == ["return", "24Q", "people", "form16"], "3. …/salary/form16 -> 24Q › Employees & declarations, Form 16 (%s)" % J("[S.tdsView, S.tdsForm, S.tdsTab, S.paySub]"))
         go(fy + "/checks/limits"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "limits"], "3. …/checks/limits -> a return's To fix, TDS limits")
         go(fy + "/certs"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"], "3. …/certs -> To fix, section 197 certificates")
-        go(fy + "/Q1/26Q/deductees"); ok(J("[S.tdsTab, S.tdsDedView]") == ["deductions", "deductees"] and pg.locator('#tdsDeTable').count() == 1, "3. a return's old …/deductees -> Deductions by deductee")
+        go(fy + "/Q1/26Q/deductees"); ok(J("S.tdsTab") == "deductees" and pg.locator('#tdsDeTable').count() == 1, "3. a return's …/deductees -> Deductees (PAN)")
         go(fy + "/Q1/26Q/summary"); ok(J("S.tdsTab") == "deductions", "3. …/summary -> Deductions")
         go(fy + "/Q4/24Q/annex2"); ok(J("S.tdsTab") == "people", "3. 24Q's …/annex2 -> Employees & declarations")
         go(fy + "/Q1/24Q/employees"); ok(J("S.tdsTab") == "deductions", "3. 24Q's …/employees -> Deductions (Annexure I)")

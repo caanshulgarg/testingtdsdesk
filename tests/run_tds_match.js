@@ -18,7 +18,7 @@ const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
   "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "Market", "monthName",
-  "TDSMatch"].concat(require("./harness").TM_NAMES);
+  "TDSMatch", "PANCheck", "TDSPanFix"].concat(require("./harness").TM_NAMES);
 const fails = [];
 function ok(c, w){ console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails.push(w); }
 const J = JSON.stringify;
@@ -254,6 +254,28 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   ok(r4[0].step === "pay" && /minor head 400/.test(r4[0].words), "R. only a minor head 400 challan: " + r4[0].words);
   const r5 = x.tmReasons([R("o3", "194C", "20260410", 5000)], [C("OS", "194C", "20260507", 3000)], [], {fy: "2026-27", q: "Q1", today: "20261017"});
   ok(r5[0].step === "pay" && /has ₹3,000 left but this needs ₹5,000: pay ₹2,\d{3} \(the TDS short ₹2,000 \+ interest ₹\d+ to 17-10-2026\), then split/.test(r5[0].words), "R. a challan short: " + r5[0].words);
+}
+
+// ---------------------------------------------------------------- P. Deductees (PAN): a PAN corrected once, for the deductee
+{
+  b = books([V("p1", "20260410", "Nopan Traders", 100000, 20000, "TDS 194C"), V("p2", "20260420", "Nopan Traders", 50000, 10000, "TDS 194C"), V("p3", "20260421", "Alpha Ltd", 100000, 2000, "TDS 194C")],
+    [CH("chP", "20260507", 32000, "194C")]);
+  ctx.S.firm = {};
+  b.alloc = {"p1|TDS 194C": "chP", "p2|TDS 194C": "chP", "p3|TDS 194C": "chP"};
+  let L = x.TDSPanFix.list("26Q", "2026-27", "Q1");
+  ok(L[0].party === "Nopan Traders" && L[0].bad && L[0].n === 2 && L[0].status.state === "invalid" && !L[1].bad, "P. the deductee with no PAN first, marked (" + L.map(p => p.party + ":" + p.status.state).join(", ") + ")");
+  ok(x.TDS.rows().filter(r => r.party === "Nopan Traders").every(r => x.TDS26Q.remark(r, "26Q").remark === "C"), "P. before: remark C (no PAN) on both its deductions");
+  ok(!x.TDSPanFix.set("Nopan Traders", {pan: "ABCD1234"}, "26Q", "2026-27", "Q1").ok, "P. a PAN in the wrong form refused");
+  ok(x.PANCheck.offline("AAACN1234Q", "Nopan Traders", L).length === 0 && x.PANCheck.offline("AAAPN1234Q", "Nopan Pvt Ltd", L).some(z => z.k === "type"), "P. the 4th letter checked against the name (a company's PAN has C)");
+  ok(x.PANCheck.offline("AAACA1234A", "Nopan Traders", L).some(z => z.k === "dup"), "P. the same PAN on another deductee: said");
+  const r = x.TDSPanFix.set("Nopan Traders", {pan: "aaacn1234q", name: "Nopan Traders Private Limited"}, "26Q", "2026-27", "Q1");
+  const rows = x.TDS.rows().filter(r => r.party === "Nopan Traders");
+  ok(r.ok && r.n === 2 && rows.every(r => r.pan === "AAACN1234Q" && x.TDS26Q.remark(r, "26Q").remark === ""), "P. saved once: both deductions carry the PAN, remark C gone (" + J(rows.map(r => r.pan)) + ")");
+  const f = x.TDS26Q.build("2026-27", "Q1", FIRM, "26Q");
+  ok(!f.error && /\^AAACN1234Q\^Nopan Traders Private Limited\^/.test(f.text), "P. the file: the PAN and the name corrected (" + (f.error || "") + ")");
+  ok(x.PANCheck.status("AAACN1234Q").state === "unknown" && /Not checked yet/.test(x.PANCheck.status("AAACN1234Q").words), "P. its status: Not checked yet, until TRACES' check is connected");
+  ok(x.PANCheck.set("AAACN1234Q", {state: "inoperative", name: "NOPAN TRADERS PRIVATE LIMITED"}) && x.PANCheck.status("AAACN1234Q").state === "inoperative" && x.Certs.inoperative("AAACN1234Q"), "P. a result kept per firm: inoperative, and Certs.inoperative reads it directly");
+  ok(rows.every(r => x.TDS26Q.remark(x.TDS.rows().find(z => z.id === r.id), "26Q").remark === "C"), "P. an inoperative PAN: remark C again, the higher rate expected");
 }
 
 console.log(fails.length ? "\nFAILED: " + fails.length : "\nall passed");

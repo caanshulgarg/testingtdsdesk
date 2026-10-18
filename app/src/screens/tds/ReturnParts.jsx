@@ -19,19 +19,35 @@ import { Lock as LockIcon } from "lucide-react";
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 
-// the tabs of each form, in order: [id, label]
-const TABS = {
-  "24Q": [["deductions", "Deductions"], ["people", "Employees & declarations"], ["challans", "Challans"], ["checks", "To fix"], ["file", "Return file"], ["after", "After filing"]],
-  other: [["deductions", "Deductions"], ["challans", "Challans"], ["checks", "To fix"], ["file", "Return file"], ["after", "After filing"]],
-};
-export const tabsOf = (form) => TABS[form === "24Q" ? "24Q" : "other"];
+// the tabs of each form, in order: [id, label]. next-challan-match, the owner's direction of 18-Oct-2026 ("like Winman, so
+// anyone can see which challan pays which deduction"): exactly four tabs for every form: Deductor · Deductees (PAN) ·
+// Challans · Deductions. To fix, the file and After filing are actions under the tabs (ACTS), not tabs; for 24Q /
+// Form 138 also Employees & declarations
+const TABS = [["deductor", "Deductor"], ["deductees", "Deductees (PAN)"], ["challans", "Challans"], ["deductions", "Deductions"]];
+const ACTS = { "24Q": [["people", "Employees & declarations"], ["checks", "To fix"], ["file", "Make the file"], ["after", "After filing"]],
+  other: [["checks", "To fix"], ["file", "Make the file"], ["after", "After filing"]] };
+export const tabsOf = () => TABS;
+export const actsOf = (form) => ACTS[form === "24Q" ? "24Q" : "other"];
 // the tabs with their counts ({deductions, challans, checks}): [[id, label, count]]
 export const returnTabs = (form, counts) => tabsOf(form).map(([id, l]) => [id, l, counts && counts[id] != null ? counts[id] : null]);
+export const returnActs = (form, counts) => actsOf(form).map(([id, l]) => [id, l, counts && counts[id] != null ? counts[id] : null]);
 // a tab asked for (an old id, an old address) to one the form has
 export function tabNow(tab, form) {
-  if (tab === "deductees") S.tdsDedView = "deductees";
-  const t = { summary: "deductions", entries: "deductions", deductees: "deductions", employees: "deductions", annex2: form === "24Q" ? "people" : "deductions", salary: form === "24Q" ? "people" : "deductions" }[tab] || tab;
-  return tabsOf(form).some(([id]) => id === t) ? t : "deductions";
+  const t = { summary: "deductions", entries: "deductions", employees: "deductions", annex2: form === "24Q" ? "people" : "deductions", salary: form === "24Q" ? "people" : "deductions" }[tab] || tab;
+  return tabsOf(form).concat(actsOf(form)).some(([id]) => id === t) ? t : "deductions";
+}
+// the four tabs and, beside them, the return's actions (To fix, Make the file, After filing)
+export function ReturnNav({ form, counts, side }) {
+  const cur = S.tdsTab;
+  return <div className="tg-tabrow rp-navrow">
+    <nav className="sbar rp-tabs" aria-label="Return" data-return-tabs="">
+      {returnTabs(form, counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={cur === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
+    </nav>
+    <nav className="rp-acts" aria-label="Return actions" data-return-acts="">
+      {returnActs(form, counts).map(([id, l, n]) => <button key={id} type="button" className={"btn small" + (cur === id ? " on" : "") + (id === "file" ? " primary" : "")} data-ret-tab={id} aria-pressed={cur === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
+    </nav>
+    {side}
+  </div>;
 }
 // a salary return's "before filing" checks as To fix's lines and lists ([{what, n, how, who}] -> {items, parts})
 export function checksToFix(checks) {
