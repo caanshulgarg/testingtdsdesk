@@ -102,7 +102,7 @@ try:
         J("() => PreFile.open('tds', '26Q', '2025-26', 'Q1')"); W(1200)
         ok(pg.locator('[data-overlay="prefile"]').count() == 1, "Check before filing opens")
         tab = J("S.tdsTab")
-        pg.locator('#app nav[aria-label=Return] button:has-text("To fix")').click(); W(600)
+        pg.locator('#app nav[aria-label=Return] button:has-text("Deductees")').click(); W(600)
         ok(not J("!!(S.prefile && S.prefile.open)") and J("S.tdsTab") == tab, "a click outside closes it, and the first click only closes (the tab under it is not pressed: %s)" % J("S.tdsTab"))
         J("() => PreFile.open('tds', '26Q', '2025-26', 'Q1')"); W(1000); pg.keyboard.press("Escape"); W(500)
         ok(not J("!!(S.prefile && S.prefile.open)") and in_client(), "Esc closes it, the client stays")

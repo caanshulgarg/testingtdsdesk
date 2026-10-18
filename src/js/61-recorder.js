@@ -438,13 +438,24 @@ const Rec = {
   async unkLoad(books){
     const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, known: {}, at: 0, busy: false, none: false, err: ""});
     u.busy = true;
+    const was = this.unkSig(u);
     try {
       const out = [];
       for (const b of (books && books.length ? books : [null])) out.push(...[].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: b}) || []));
       u.known = await this.unkKnown([...new Set(out.map(r => String((r && r.book_id) || "")).filter(Boolean))]);
       u.rows = out; u.none = false; u.err = "";
     } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
-    u.busy = false; u.at = Date.now(); render();
+    u.busy = false; u.at = Date.now();
+    // drawn only when what it shows changed: the minute's re-read that finds the same lines draws nothing (a page drawn
+    // again for nothing; run_quiet_refresh.py's own-save check caught it as an extra drawing)
+    if (this.unkSig(u) !== was) render();
+  },
+  // what the unknown-ledger line shows, as one string (to tell a re-read that changed nothing)
+  unkSig(u){
+    const kn = {};
+    Object.keys(u.known || {}).sort().forEach(b => { const k = u.known[b] || {};
+      kn[b] = [[...(k.names || new Map()).entries()].sort(), [...(k.alias || new Map()).entries()].sort()]; });
+    try { return JSON.stringify([u.rows, u.none, u.err, kn]); } catch (e){ return String(Math.random()); }
   },
   // the name for matching a ledger as Tally does: no capitals, no spaces ("PURCHASE @18%" and "Purchase@18%")
   unkLoose(n){ return String(typeof ledNm === "function" ? ledNm(n) : n || "").toLowerCase().replace(/\s+/g, ""); },
