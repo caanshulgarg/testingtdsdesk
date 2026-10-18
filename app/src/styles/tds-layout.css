@@ -191,3 +191,6 @@ tr.cm-over td { color: var(--text-secondary); }
 .cm-pan2 .bk-tablewrap { max-width: 100%; overflow-x: auto; }
 .cm-pan2 td, .cm-pan2 th { white-space: nowrap; }
 .cm-pan2 td.pty { white-space: normal; }
+.tg-tabside .cm-chsel { font-size: 13px; font-weight: 400; }
+.tg-tabside .cm-chsel select { flex: 0 1 220px; width: 220px; }
+#tdsDeTable tr.dee-row.bad td.pty .linkbtn { color: var(--bad); }

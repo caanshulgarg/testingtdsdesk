@@ -190,7 +190,7 @@ try:
         # ---- the Deductions tab: the Challan column, and challan first
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductions"]'); pg.wait_for_timeout(600)
         cell = pg.locator("#app [data-ch-cell]").first
-        ok(cell.count() == 1 and re.search(r"0510308 · \d\d-\w{3}-2026 · \d{5}.*194[CJ]", cell.inner_text(), re.S), "the Challan column: BSR · date · serial, its section (%s)" % cell.inner_text().replace("\n", " "))
+        ok(cell.count() == 1 and re.search(r"0510308 · \d\d-\w{3}-2026.*\d{5} · 194[CJ]", cell.inner_text(), re.S), "the Challan column: BSR · date, serial · section (%s)" % cell.inner_text().replace("\n", " "))
         ok(pg.locator("#app select[aria-label^='Challan for']").count() == 0, "no dropdown that re-tags silently")
         cell.click(); pg.wait_for_timeout(400)
         ok(pg.locator("[data-cm-move-dialog]").count() == 1, "a click opens the Move dialog")

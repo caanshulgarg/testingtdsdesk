@@ -63,7 +63,8 @@ try:
         ok(st == ["return", "2025-26", "Q4", "26Q", "deductions"] and pg.locator("#app [data-return-card]").count() == 1, "year → quarter → form opens 26Q Q4 2025-26: the summary card, then its Entries (%s)" % st)
         tabs = pg.evaluate("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
         # tds-layout (14-Oct-2026): the owner's tabs (Deductees is Deductions' "by deductee"; Errors to fix is To fix)
-        ok(tabs == ["Deductions", "Challans", "To fix", "Return file", "After filing"], "the return's tabs: %s" % tabs)
+        # next-challan-match (18-Oct-2026, as Winman): four tabs; To fix, Make the file and After filing are actions
+        ok(tabs == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "the return's tabs: %s" % tabs)
         pg.click('#app nav[aria-label="Return"] button:has-text("Deductions")'); pg.wait_for_timeout(400)
         t = app(pg)
         ok("194C" in t and "393(" not in t and "Form 140" not in t and "earlier" not in t, "2025-26 entries: the old section alone (194C), no new form or section")
@@ -87,7 +88,7 @@ try:
             rows = pg.locator("#tdsDnTable > tbody > tr").count()
             ok(0 < rows < n0 and "[old 194C]" in pg.inner_text("#tdsDnTable > tbody"), "find by the %s “%s”: %d of %d" % (want, q, rows, n0))
         pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
-        pg.click('#app nav[aria-label="Return"] button:has-text("Return file")'); pg.wait_for_timeout(300)
+        pg.click('#app nav[aria-label="Return actions"] [data-ret-tab="file"]'); pg.wait_for_timeout(300)
         ok(pg.locator('#app button:has-text("Download the Form 140 text file (draft)")').count() == 1 and pg.locator('#app [data-draft="140"]').count() == 1,
            "File: the download (a draft for Form 140) and the warning")
         # the address: Back and Refresh

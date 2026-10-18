@@ -44,7 +44,7 @@ export function ReturnNav({ form, counts, side }) {
       {returnTabs(form, counts).map(([id, l, n]) => <button key={id} data-ret-tab={id} aria-selected={cur === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
     </nav>
     <nav className="rp-acts" aria-label="Return actions" data-return-acts="">
-      {returnActs(form, counts).map(([id, l, n]) => <button key={id} type="button" className={"btn small" + (cur === id ? " on" : "") + (id === "file" ? " primary" : "")} data-ret-tab={id} aria-pressed={cur === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
+      {returnActs(form, counts).map(([id, l, n]) => <button key={id} type="button" className={"btn small" + (cur === id ? " on" : "")} data-ret-tab={id} aria-pressed={cur === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
     </nav>
     {side}
   </div>;

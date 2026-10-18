@@ -43,7 +43,7 @@ export default function DeducteesPan({ form, fy, q }) {
   </div>;
 }
 
-function DeducteeDetails({ list, form, fy, q, locked }) {
+export function DeducteeDetails({ list, form, fy, q, locked }) {
   const p = list.find((x) => x.key === S.tdsDee) || null, [pan, setPan] = useState(null), [name, setName] = useState(null);
   const close = () => { S.tdsDee = ""; setPan(null); setName(null); render(); };
   if (!p) return <Dialog open={false} onOpenChange={() => {}} />;

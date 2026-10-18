@@ -27,7 +27,7 @@ import { Info } from "../parts/Answer.jsx";
 import { ReturnNav, tabNow, checksToFix, LockLine, DedSwitch, ReturnChallans, ToFix, FixRows, PreFileSlot, AfterFiling, unknownItem, overItem, UnknownChallans } from "./tds/ReturnParts.jsx";
 import { Limits, TieOut } from "./tds/Smart.jsx";
 import { ChallanCell, MatchDialogs, FileChecks, PlainDeductions, ChallanSelect, ChallanTicker } from "./tds/Match.jsx";
-import DeducteesPan from "./tds/Deductees.jsx";
+import DeducteesPan, { DeducteeDetails, PanState } from "./tds/Deductees.jsx";
 import { DeductorDetails } from "./Settings.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -192,10 +192,13 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title, fo }
     if (issueOf[r.id]) p.issues++;
     p.rows.push(r);
   });
-  const list = tdsSorted("deductees", Object.values(by).sort((a, c) => c.tds - a.tds), (p, k) => k === "secs" ? Array.from(p.secs).join(",") : p[k]);
+  // next-challan-match (18-Oct-2026): the Deductees (PAN) tab: no PAN, or an invalid or inoperative one, first and in red;
+  // a name opens Deductee details, where the PAN is corrected once for every deduction (tds/Deductees.jsx)
+  Object.values(by).forEach((p) => { p.st = PANCheck.status(p.pan); p.bad = !Certs.validPan(p.pan) || p.st.state === "invalid" || p.st.state === "inoperative"; });
+  const list = tdsSorted("deductees", Object.values(by).sort((a, c) => (c.bad - a.bad) || c.tds - a.tds), (p, k) => k === "secs" ? Array.from(p.secs).join(",") : p[k]);
   return <>
     {/* the one list table (spec K6): deductee (party), paid and TDS (amounts), then the rest */}
-    <ListTable name="tdsDeductees" id="tdsDeTable" className="bk-table tg-fit gf-off" rows={list} footNote={<span className="note tg-dcount" data-dee-count="">{list.length + " of " + deductees + " deductees"}<ClearLink tab="deductees" /></span>} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
+    <ListTable name="tdsDeductees" id="tdsDeTable" className="bk-table tg-fit gf-off" rows={list} rowProps={(p) => ({ className: "dee-row" + (p.bad ? " bad" : ""), "data-dee": normName(p.party), "data-dee-bad": p.bad ? "1" : undefined })} footNote={<span className="note tg-dcount" data-dee-count="">{list.length + " of " + deductees + " deductees"}<ClearLink tab="deductees" /></span>} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
       empty="No deductee matches these filters. Use Clear filters to see all." keepHead={rows.length ? <p className="note" style={{ textAlign: "center" }}><ClearLink tab="deductees" bare /></p> : null}
       after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th><th>From</th></tr></thead>
@@ -203,11 +206,11 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title, fo }
             <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td><td><SrcTag r={r} /></td></tr>)}</tbody>
         </table>}
       cols={[
-        { k: "party", role: "party", label: "Deductee", cls: "pty", thCls: hfOn("deductees", "pan"), filter: <HeadFilter tab="deductees" k="pan" label="PAN" options={fo.pan} />, v: (p) => p.party, cell: (p) => <div className="tg-pty"><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</div> },
+        { k: "party", role: "party", label: "Deductee", cls: "pty", thCls: hfOn("deductees", "pan"), filter: <HeadFilter tab="deductees" k="pan" label="PAN" options={fo.pan} />, v: (p) => p.party, cell: (p) => <div className="tg-pty"><button type="button" className="linkbtn" data-dee-open={normName(p.party)} onClick={() => tdsDeducteeOpen(normName(p.party))}>{p.party}</button>{TDSPanFix.of(p.party) ? <small className="tg-sub" data-dee-fixed="">corrected in FinCom</small> : null}{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</div> },
         { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (p) => p.paid, fmt: money, cell: (p) => money(p.paid) },
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
         { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <><Pan pan={p.pan} /><F16Link pan={p.pan} fy={S.tdsFy} q={S.tdsQ} /></> },
-        { k: "code", label: "Code", cell: (p) => (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—") },
+        { k: "pst", label: "PAN status", v: (p) => p.st.state, cell: (p) => <><PanState st={p.st} />{p.pan && p.st.state === "unknown" ? <div className="tg-sub"><button type="button" className="linkbtn" data-dee-check-row="" onClick={() => tdsPanCheck([p.pan])}>Check on TRACES</button></div> : null}</> },
         { k: "secs", label: "Sections", thCls: hfOn("deductees", "section"), filter: <HeadFilter tab="deductees" k="section" label="Section" options={fo.section} />, v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).map((x) => <Sec key={x} s={x} />) },
         { k: "n", label: "Deductions", cls: "n", thCls: hfOn("deductees", "rate"), filter: <HeadFilter tab="deductees" k="rate" label="Rate" options={fo.rate} />, v: (p) => p.n, sum: true, fmt: String, cell: (p) => <button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button> },
         { k: "unallocated", label: "Not against a challan", cls: "n", thCls: hfOn("deductees", "challan"), filter: <HeadFilter tab="deductees" k="challan" label="Challan" options={fo.challan} />, v: (p) => p.unallocated, sum: true, fmt: money, td: (p) => ({ className: p.unallocated ? "bad" : undefined }), cell: (p) => (p.unallocated ? money(p.unallocated) : "—") },
@@ -258,10 +261,8 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title, probs =
   // balance big and the deductions to tick onto it (tds/Match.jsx ChallanTicker); none chosen: every deduction with its
   // challan, as before
   const chSel = S.tdsDedCh ? TDS.challans().find((c) => c.id === S.tdsDedCh) : null;
-  const picker = <div className="row cm-filters cm-dedch"><ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} /></div>;
-  if (chSel) return <>{picker}<ChallanTicker c={chSel} form={form} fy={fy} q={q} locked={TDSReg.locked(fy, q, form)} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /></>;
+  if (chSel) return <><ChallanTicker c={chSel} form={form} fy={fy} q={q} locked={TDSReg.locked(fy, q, form)} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /></>;
   return <>
-    {picker}
     <ImportPreview rows={rows} />
     <TagBar rows={rows} chOpts={chOpts} />
     {/* t70: how many are shown, the table's caption */}
@@ -420,7 +421,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   };
   const common_ = { rows, issueOf, pass, common, chOpts, title, probs, fo };
   // the tabs' row, at its right: By deduction / By deductee, then find, Needs fixing, Export and Import (round 4)
-  const dv = S.tdsDedView === "deductees" ? "deductees" : "deductions", fD = (S.tdsFl || {}).deductions || {};
+  const dv = S.tdsTab === "deductees" ? "deductees" : "deductions", fD = (S.tdsFl || {}).deductions || {};
   const shownD = tdsSorted("deductions", rows.filter((r) => pass(r, fD)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
   const fixN = rows.filter((r) => probs[r.id]).length, file = useRef(null);
   const chip = <button type="button" className={"btn small fb-chip" + (fD.fix ? " on" : "")} data-ded-filter="fix" aria-pressed={!!fD.fix} title="Only the deductions with something to fix: no valid PAN, the rate, the section, no challan, the payment code"
@@ -447,12 +448,12 @@ export function Return26({ b, allRows, form = "26Q" }) {
         { label: "To look at", value: toLook, sub: noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing"), warn: toLook > 0 },
       ]} />
     <Tabs counts={{ deductees: deductees, deductions: rows.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key(form, fy, q)]).length || null, checks: errN || checksN || null }}
-      side={S.tdsTab === "deductions" ? <div className="tg-tabside">{tools}</div> : null} />
+      side={S.tdsTab === "deductions" || S.tdsTab === "deductees" ? <div className="tg-tabside">{S.tdsTab === "deductions" ? <ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} /> : null}{tools}</div> : null} />
     <MatchDialogs form={form} fy={fy} q={q} />
     {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form}>
         <TallyPays fy={fy} q={q} /></ReturnChallans>
       : S.tdsTab === "deductor" ? <DeductorDetails />
-      : S.tdsTab === "deductees" ? <DeducteesPan form={form} fy={fy} q={q} />
+      : S.tdsTab === "deductees" ? <><Deductees deductees={deductees} {...common_} /><DeducteeDetails list={TDSPanFix.list(form, fy, q)} form={form} fy={fy} q={q} locked={TDSReg.locked(fy, q, form)} /></>
       : S.tdsTab === "deductions" ? <><Deductions fy={fy} q={q} {...common_} unitW={unit} edN={edN} /><BySection fy={fy} q={q} form={form} /></>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
       : S.tdsTab === "file" ? <>

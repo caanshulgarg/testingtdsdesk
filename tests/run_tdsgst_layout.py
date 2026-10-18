@@ -105,15 +105,16 @@ try:
         ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said above the tabs")
         ok(all(x in text(card) for x in ["TDS deducted", "Challans", "Not against a challan", "To look at"]), "the card's key figures")
         tabs = E("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
-        ok(tabs == ["Deductions", "Challans", "To fix", "Return file", "After filing"], "tabs below: %s" % tabs)
+        # next-challan-match (18-Oct-2026, as Winman): four tabs; To fix, Make the file, After filing are actions beside them
+        ok(tabs == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "tabs below: %s" % tabs)
         hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
         ok(vis("#app .btn.primary") == 1 and pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]").count() == 1, "a return not filed: one main button, on the card (%d)" % vis("#app .btn.primary"))
         pg.click("#app [data-return-card='26Q|Q2'] [data-card-primary]"); W(400)
         ok(E("S.tdsTab") == "file" and vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0, "Make the file → Return file, whose download is then the one main button")
         pg.click("#app [data-return-card] details.more > summary"); W(200)
         ok(any("working" in x for x in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")), "the card's More: the working (Excel)")
-        for t in ["Deductions", "Challans", "To fix", "Return file", "After filing"]:
-            pg.click('#app nav[aria-label="Return"] button:has-text("%s")' % t); W(300)
+        for t in ["deductor", "deductees", "challans", "deductions", "checks", "file", "after"]:
+            pg.click('#app [data-ret-tab="%s"]' % t); W(300)
         ok(not errors, "every tab of the return draws")
         pg.click("#app [data-return-card] .ret-back"); W(400)
         ok(E("S.tdsView") == "year", "← the year, from the card")
@@ -163,7 +164,7 @@ try:
         views = [("gst-summary", "/books/gst/07/202603/r1/summary", None, None), ("gst-bills", "/books/gst/07/202603/r1/details", "[data-r1-switch=bill]", "#r1Bills"),
                  ("gst-details", "/books/gst/07/202603/r1/details", "[data-r1-switch=customer]", "#r1Table"),
                  ("gst-details-open", "/books/gst/07/202603/r1/details", ["[data-r1-switch=customer]", "#r1Table tbody tr td button >> nth=0"], "#r1Table"), ("gst-3b", "/books/gst/07/202603/r3b/summary", None, None),
-                 ("tds-deductions", "/books/tds/2026-27/Q1/26Q/deductions", None, "#tdsDnTable"), ("tds-deductees", "/books/tds/2026-27/Q1/26Q/deductions", "[data-ded-switch=deductees]", "#tdsDeTable")]
+                 ("tds-deductions", "/books/tds/2026-27/Q1/26Q/deductions", None, "#tdsDnTable"), ("tds-deductees", "/books/tds/2026-27/Q1/26Q/deductees", None, "#tdsDeTable")]
         FIX = os.path.join(HERE, "fixtures", "tdsgst-t70-amounts.json")
         capture = os.environ.get("TDSGST_CAPTURE") == "1"
         before = {} if capture else json.load(open(FIX))
@@ -235,7 +236,9 @@ try:
                 at = "%s at %d×%d" % (name, vw, vh)
                 if vw == 1440: got[name] = amts
                 if name in ("gst-bills", "gst-details", "tds-deductions") and vw == 1440:
-                    lim = 260 if name == "tds-deductions" else 230
+                    # next-challan-match (the owner, 18-Oct-2026): the tabs' row also carries the return's actions (To fix, Make
+                    # the file, After filing) and the challan chosen at the top of Deductions: it may take a second line
+                    lim = 310 if name == "tds-deductions" else 230
                     ok(m["top"] is not None and m["top"] <= lim, "%s: the table's header %s px below the top of the page (at most %d)" % (at, m["top"], lim))
                 if name in ("gst-bills", "gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
                     ok(m["wrap"] and m["wrap"][0] <= m["wrap"][1] + 1, "%s: every column in view, no sideways scroll inside the table (%s)" % (at, m["wrap"]))
