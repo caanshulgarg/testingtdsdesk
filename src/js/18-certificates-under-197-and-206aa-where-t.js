@@ -145,8 +145,21 @@ const TDSYear = {
 /* ---------- Books, TDS and GST: the screens ---------- */
 // ledger-confirm (14-Oct-2026): the old Tally ledgers tab, asked for anywhere, is the TDS page's Ledgers (TaxLed.redirect)
 function booksTab(){ if (S.booksTab === "ledgers" && typeof TaxLed === "object") TaxLed.redirect(); return S.booksTab || "import"; }
-async function openBooks(cid){
-  if (S.books && S.books.cid === cid) return;
+// 18-Oct-2026: one opening at a time per client, and its promise kept (booksOpening), so a caller that finds the books
+// already opening can wait for them (tallyFiles, src/js/23). Books that cannot be opened (this browser's store not read)
+// are marked openFailed with the reason, said on the Books page, never left "loading" in silence
+let booksOpening = null;
+function openBooks(cid){
+  if (S.books && S.books.cid === cid) return booksOpening && booksOpening.cid === cid ? booksOpening.p : Promise.resolve();
+  const me = {cid};
+  me.p = openBooksNow(cid).catch(e => {
+    const why = String((e && e.message) || e).replace(/[.\s]+$/, "");
+    if (S.books && S.books.cid === cid){ S.books.openFailed = why; render(); }
+  }).then(() => { if (booksOpening === me) booksOpening = null; });
+  booksOpening = me;
+  return me.p;
+}
+async function openBooksNow(cid){
   S.books = {cid, loading: true};
   render();
   const t0 = Date.now(), saved = await Books.load(cid);

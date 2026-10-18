@@ -1177,10 +1177,16 @@ const TCloudUp = {
     return {days: sent};
   },
   // server-books: a day book file waiting to go to the cloud ("tcup:<client>:<from>-<to>" in this browser's store)
-  async hold(cid, file, range, who){
+  // 18-Oct-2026: keep (this page holds the file, not sent twice) apart from hold (this browser's whole copy, written to
+  // IndexedDB): hold throws when the copy could not be written, and the caller says so; neither waits on the cloud send
+  keep(cid, file, range){
     const k = "tcup:" + cid + ":" + range.from + "-" + range.to;
     this.live.add(k); this.files[k] = file;
-    try { await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]); } catch (e){}
+    return k;
+  },
+  async hold(cid, file, range, who){
+    const k = this.keep(cid, file, range);
+    await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]);
     return k;
   },
   live: new Set(),          // the files this page is sending now (not to be sent twice)
@@ -1289,6 +1295,7 @@ const TCloudUp = {
       const r = await this.storageUp(p.blob, {from: p.from, to: p.to}, onStep, who, nm, label);
       if (!r){ if (!i) return null; throw new Error("FinCom’s cloud stopped taking Day Book uploads after " + label + "."); }
       jobs.push(r.job); sent.push(tag);
+      if (typeof tallyCrumb === "function") tallyCrumb("cloud_send", {state: "piece", piece: i + 1, of: ps.length});
       try { await IDBStore.write([[key, {sent, at: new Date().toISOString()}]]); } catch (e){}
     }
     try { await IDBStore.write([[key, null]]); } catch (e){}

@@ -10,6 +10,7 @@
 // No AI in any figure. Nothing here writes to the books: the mapping and the details are kept with the client (b.fs.rx).
 // State: S.rxView, S.rxFy, S.rxTab.
 import { useState } from "react";
+import { staleReload } from "../../staleChunk.js";
 // FSX (src/js/78-reports.js) is its own file, fetched the first time a report is opened (not in legacy.js, build.py
 // react_parts; not with the page): "Preparing…" meanwhile. It sets globalThis.FSX. The fixed asset register's code, FAR
 // (src/js/80-assets.js, globalThis.FAR), comes with it: the statements and the 3CD draft take the register's figures.
@@ -18,12 +19,12 @@ let fsxLoad = null, farLoad = null;
 export function loadFAR() {
   if (globalThis.FAR) return Promise.resolve(globalThis.FAR);
   return farLoad || (farLoad = import("../../../../src/js/80-assets.js").then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FAR; },
-    (e) => { farLoad = null; S.farLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
+    (e) => { farLoad = null; if (staleReload(e, true)) throw e; S.farLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
 }
 export function loadFSX() {
   if (globalThis.FSX && globalThis.FAR) return Promise.resolve(globalThis.FSX);
   return fsxLoad || (fsxLoad = Promise.all([import("../../../../src/js/78-reports.js"), loadFAR(), import("../../../../src/js/77-audit.js")]).then(() => { try { render(); } catch (e) { /* the next drawing shows it */ } return globalThis.FSX; },
-    (e) => { fsxLoad = null; S.rxLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
+    (e) => { fsxLoad = null; if (staleReload(e, true)) throw e; S.rxLoadFailed = String((e && e.message) || e); try { render(); } catch (x) { /* */ } throw e; }));
 }
 
 const today = () => new Date().toISOString().slice(0, 10);

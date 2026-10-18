@@ -108,6 +108,34 @@ with sync_playwright() as p:
     ok(big[1] == "daybook" and big[2] < 15000, "a %.0f MB file, its one voucher at the very end: a Day Book, found in %.0f ms" % (big[0] / 1048576, big[2]))
     ok(big[3] == "daybook" and big[4] < 500, "the same size, a voucher at the start: found at once (%.0f ms)" % big[4])
 
+    # 18-Oct-2026 (the owner's 170 MB Day Book: "Nothing happened at all"): a file chosen while this client's books are not
+    # open yet (the top bar's Upload Tally data on another page; the books still coming from the server) is kept, From
+    # Tally says "Opening <client>'s books…", and the file is read once they are open; books that cannot open say why
+    print("== chosen before the client's books are open: said, then read")
+    name = E("CO().name"); n0 = E("S.books.vouchers.length")
+    E("""() => { window.__L = Books.load; Books.load = async (c) => { await new Promise(r => setTimeout(r, 2500)); return window.__L.call(Books, c); };
+      S.tallyUp = null; S.dbFrom = ''; S.dbTo = ''; S.tab = 'dash'; S.books = null; render(); }""")
+    pg.wait_for_timeout(100)
+    pg.set_input_files("#tallyIn", JUL); pg.wait_for_timeout(700)
+    wait = txt("#app [data-up-result]")
+    ok(wait == "Opening " + name + "’s books… the file is read as soon as they are open." and E("S.tab") == "books" and E("booksTab()") == "import",
+       "books not open: From Tally is shown at once and says it opens the books first (%s, on %s/%s)" % (wait, E("S.tab"), E("booksTab()")))
+    ok(E("!!(S.books && S.books.loading)"), "the books are opening meanwhile")
+    idle(); res = txt("#app [data-up-result]")
+    ok(re.search(taken, res) is not None and E("S.tallyUp.lines[0].kind") == "daybook" and E("S.tallyUp.lines[0].ok") is True,
+       "once they are open, the file is read (%s)" % res)
+    E("() => { Books.load = window.__L; }")
+    E("""() => { Books.load = async () => { throw new Error('this browser could not read its store'); }; S.tallyUp = null; S.tab = 'dash'; S.books = null; render(); }""")
+    pg.wait_for_timeout(100)
+    pg.set_input_files("#tallyIn", JUL); pg.wait_for_timeout(1500)
+    res = txt("#app [data-up-result]")
+    ok(res == name + "’s books could not be opened (this browser could not read its store), so " + os.path.basename(JUL) + " was not read. Open the client again and choose the file once more."
+       and E("S.tallyUp.busy") is False and E("S.tallyUp.lines[0].ok") is False, "books that cannot open: said why, plainly (%s)" % res)
+    E("async () => { Books.load = window.__L; S.books = null; S.tallyUp = null; await openBooks(S.coId); render(); }"); pg.wait_for_timeout(500)
+    ok(E("S.books.vouchers.length") == n0 and not E("S.books.loading"), "the books open again afterwards, as they were (%d entries)" % n0)
+    E("() => { S.tallyUp = null; tallyFiles([]); }"); pg.wait_for_timeout(300)
+    ok(txt("#app [data-up-result]").startswith("No file came with that:"), "nothing in a drop: said (%s)" % txt("#app [data-up-result]"))
+
     print("== refused or said plainly, nothing changed")
     n1 = E("S.books.vouchers.length")
     res = up(EMPTY_PERIOD)

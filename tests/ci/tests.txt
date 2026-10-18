@@ -382,3 +382,6 @@ run_2b_automatch.js                   120
 run_2b_automatch_server.py            120
 run_migration95.py                    120
 run_2b_automatch_ui.py                300  TDSDESK_SITE=../app/dist-test
+# 18-Oct-2026 (Sentry FINCOM-APP-STAGING-1, "Importing a module script failed" after a publish): a screen's file the publish
+# replaced reloads FinCom once (src/staleChunk.js), the screen opens; files gone for good reload once, never a loop
+run_stale_chunk.py                    120  TDSDESK_SITE=../app/dist-test

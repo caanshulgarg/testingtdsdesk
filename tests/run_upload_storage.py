@@ -169,6 +169,7 @@ def vouchers(raw):
 YEAR = dlist("20260401", "20270331")
 FILES["big16"] = book(YEAR, 120, "Sale to Ramesh & Sons " + "x" * 1080, tag="b")
 FILES["f413"] = book(YEAR[:120], 300, "Sale " + "z" * 1300, enc="utf-8", tag="c")
+FILES["small"] = book(dlist("20260501", "20260510"), 20, "Sale", enc="utf-8", tag="s")
 FILES["hugeday"] = book(dlist("20260401", "20260420"), 30, "Sale", tag="h", big={"20260415": 30000})
 
 SETUP = """async () => {
@@ -415,6 +416,47 @@ with sync_playwright() as p:
     ok(re.search(r"^DayBook-April\.xml: Saved on this computer, but not sent to FinCom’s cloud: the entries of 15-Apr-2026 alone come to 1\.\d MB, more than FinCom’s cloud takes in one piece \(1\.0 MB\), and a day is never cut in two: tell FinCom’s support\. Other logins will not see it until it is sent\.$", line),
        "7. a day larger than a piece: said plainly")
     ok(not pg.locator("#app [data-send-again]").count() and not state()["ingest"] and not state()["creates"], "7. nothing sent, no Send again (it cannot help)")
+    # ---- 8. 18-Oct-2026 (the owner's 170 MB Day Book never reached FinCom's server): Books › From Tally sends to the cloud
+    # FIRST and on its own. This browser's copy (TCloudUp.hold) failing, or slow, neither stops nor delays the send, and a
+    # line says the local copy was not made; the bridge's copy comes after the send and its failure is said too
+    reset("")
+    E("""async (cid) => { S.books = {loading: false, cid, vouchers: [], map: {}, meta: {}, alloc: {}, challans: [], misCfg: {freq: "off"}, auditCfg: {freq: "off"}}; goClient("books:import");
+      const r = await fetch("http://localhost:9342/__file/small"); window.__small = new File([await r.blob()], "DayBook-May.xml", {type: "text/xml"});
+      window.__hold = TCloudUp.hold; window.__holdSaw = null; window.__bridgeSaw = null;
+      TCloudUp.hold = async () => { await new Promise(ok => setTimeout(ok, 3000)); window.__holdSaw = (await (await fetch("http://localhost:9342/__state")).json()).ingest.map(x => x.body.kind); throw new Error("QuotaExceededError: the browser's storage is full"); };
+      window.__bon = Bridge.on; window.__bsend = BridgeSeed.send; Bridge.on = () => true;
+      BridgeSeed.send = async () => { window.__bridgeSaw = (await (await fetch("http://localhost:9342/__state")).json()).ingest.map(x => x.body.kind); throw new Error("the bridge is not running"); };
+      tallyFiles([window.__small]); }""", cid)
+    for _ in range(300):
+        if E("window.__holdSaw && window.__bridgeSaw && S.books && !S.books.busy && S.tallyUp && !S.tallyUp.busy"): break
+        pg.wait_for_timeout(200)
+    E("() => { TCloudUp.hold = window.__hold; Bridge.on = window.__bon; BridgeSeed.send = window.__bsend; }")
+    s = state()
+    kinds = [x["body"]["kind"] for x in s["ingest"]]
+    lines = E("(S.tallyUp && S.tallyUp.lines || []).map(l => l.text)") or []
+    print("     lines: " + " | ".join(lines))
+    ok(kinds == ["upload_new", "upload_done"] and len(s["creates"]) == 1, "8. the local copy failing: the cloud send still ran (%s)" % kinds)
+    ok("upload_new" in (E("window.__holdSaw") or []), "8. the cloud send started before the slow local copy had even failed: never waits on it (%s)" % E("window.__holdSaw"))
+    ok(any(l.startswith("DayBook-May.xml: the copy kept on this computer (to send it again after a reload) could not be made: QuotaExceededError: the browser's storage is full. It still goes to FinCom’s cloud now") for l in lines),
+       "8. a line on From Tally says the local copy failed")
+    ok((E("window.__bridgeSaw") or [])[-1:] == ["upload_done"], "8. the bridge's copy only after the cloud send (%s)" % E("window.__bridgeSaw"))
+    ok(any(l.startswith("DayBook-May.xml: the FinCom Bridge’s copy on this computer was not filled: the bridge is not running. FinCom’s cloud is not affected.") for l in lines),
+       "8. the bridge failing: a line says so")
+    ok(any(l.startswith("Read 200 entries for 01-May-2026 to 10-May-2026") for l in lines) and not pg.locator("#app [data-cloud-notsent]").count(), "8. the Day Book itself read, nothing marked not sent")
+    # a file larger than a piece (45 MB): no whole copy in this browser (its pieces sent are kept instead), still sent
+    reset("")
+    E("""async () => { window.__holds = 0; window.__hold = TCloudUp.hold; TCloudUp.hold = async (...a) => { window.__holds++; return window.__hold.apply(TCloudUp, a); };
+      S.tallyUp = null; tallyFiles([window.__f413]); }""")
+    for _ in range(600):
+        if E("S.books && !S.books.busy && S.tallyUp && !S.tallyUp.busy") and state()["ingest"][-1:] and state()["ingest"][-1]["body"]["kind"] == "upload_done" and len([x for x in state()["ingest"] if x["body"]["kind"] == "upload_done"]) >= 2: break
+        pg.wait_for_timeout(200)
+    pg.wait_for_timeout(500)
+    E("() => { TCloudUp.hold = window.__hold; }")
+    s = state()
+    kinds = [x["body"]["kind"] for x in s["ingest"]]
+    ok(E("window.__f413.size") > 45 * 1048576 and E("window.__holds") == 0, "8. a %.1f MB file: no whole copy kept in this browser (hold called %d times)" % (E("window.__f413.size") / 1048576, E("window.__holds")))
+    ok(E("(async () => (await IDBStore.prefix('tcup:')).filter(([k, x]) => x && x.blob && x.blob.size > 45 * 1048576).length)()") == 0, "8. nothing of its size in this browser's store")
+    ok(kinds == ["upload_new", "upload_done", "upload_new", "upload_done"], "8. still sent, in pieces (%s)" % kinds)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown(); fake.shutdown()

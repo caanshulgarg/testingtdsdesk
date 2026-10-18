@@ -2,11 +2,14 @@
 // The error goes to the browser console (and to Help → support, which reads the console log), and on the staging build
 // to Sentry, scrubbed (src/sentry.js sets window.__fincomReport; docs/sentry.md).
 import { Component } from "react";
+import { staleReload } from "./staleChunk.js";
 
 export default class Guard extends Component {
   state = { error: null };
   static getDerivedStateFromError(error) { return { error }; }
   componentDidCatch(error, info) {
+    // a screen's file a publish replaced (React.lazy): FinCom reloads once (src/staleChunk.js)
+    if (staleReload(error)) return;
     console.error("[FinCom] " + (this.props.name || "a part of the page") + " could not be drawn:", error, info && info.componentStack);
     if (typeof window.__fincomReport === "function") window.__fincomReport(error, this.props.name || "a part of the page");
   }

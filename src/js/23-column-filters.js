@@ -1020,23 +1020,27 @@ async function companyGate(fc, b, co, fname, quiet){
 // a Day Book brought in on this computer, sent to FinCom's cloud (handOver: through Storage, cut into pieces of at most
 // 45 MB when larger). 17-Oct-2026: a send that fails says so on Books > From Tally, with the reason and Send again
 // (part.cloud "not sent: <reason>", part.again), and its job is marked failed (TCloudUp.failJob), never left queued
-async function tallyCloudSend(b, part, f, wait, who, step){
+async function tallyCloudSend(b, part, f, wait, who, step, held){
   const from = part.from, to = part.to;
   // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
   // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
   const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
   window.addEventListener("beforeunload", stay);
   part.cloud = "going to the cloud…"; delete part.again;
+  tallyCrumb("cloud_send", {state: "started", size_mb: Math.round((f.size || 0) / 1048576), pieces: f.size > DayCut.PIECE});
   try {
     // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
     // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
     const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name || part.file);
     part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days" + (r.pieces > 1 ? ", in " + r.pieces + " pieces" : "") + "), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-    if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? (f.name || part.file) + " is in FinCom’s cloud" + (r.pieces > 1 ? " (in " + r.pieces + " pieces)" : "") + "; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? (f.name || part.file) + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : (f.name || part.file) + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+    tallyCrumb("cloud_send", {state: r && r.skipped ? "skipped" : "done", pieces: (r && r.pieces) || 1});
+    // this browser's copy (written beside the send, held) is dropped once it is written, so it never outlives the send
+    if (r && r.days != null){ try { await held; } catch (e){} await TCloudUp.drop(wait); toast(r.storage ? (f.name || part.file) + " is in FinCom’s cloud" + (r.pieces > 1 ? " (in " + r.pieces + " pieces)" : "") + "; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? (f.name || part.file) + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : (f.name || part.file) + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
     return true;
   }
   catch (e){
     part.cloud = TCloudUp.notSent(e); part.again = !(e && e.final);
+    tallyCrumb("cloud_send", {state: "failed", reason: String((e && e.message) || e)});
     toast("Saved on this computer, but not sent to FinCom’s cloud: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + ".");
     return false;
   }
@@ -1059,9 +1063,10 @@ async function tallySendAgain(i){
     return;
   }
   const who = (x && x.who) || {client: cid, company: BridgeSeed.company()};
-  if (!(x && x.blob)) await TCloudUp.hold(cid, f, {from: p.from, to: p.to}, who); else { TCloudUp.live.add(k); TCloudUp.files[k] = f; }
+  TCloudUp.keep(cid, f, {from: p.from, to: p.to});
+  const held = !(x && x.blob) && f.size <= DayCut.PIECE ? TCloudUp.hold(cid, f, {from: p.from, to: p.to}, who).catch(() => {}) : null;
   p.wait = k; b.busy = "Sending " + (p.file || "the day book") + " to FinCom’s cloud…"; render();
-  await tallyCloudSend(b, p, f, k, who, m => { b.busy = m; softRender(); });
+  await tallyCloudSend(b, p, f, k, who, m => { b.busy = m; softRender(); }, held);
   b.busy = ""; await saveBooks(null, b); render();
 }
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
@@ -1101,20 +1106,30 @@ async function bringDayBookFile(f, from0, to0, opts){
       if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
       if (loud) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
-      // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
-      // cloud (everyone in the firm sees the same books)
+      // the same file goes to FinCom's cloud (everyone in the firm sees the same books) and fills the bridge's copy for these
+      // dates (the bridge never reads them from Tally itself). 18-Oct-2026 (the owner's 170 MB Day Book never reached the
+      // server): the cloud send goes FIRST and on its own. This browser's copy of the file (TCloudUp.hold, to send again
+      // after a reload) is written beside it, not before it; a file larger than a piece (DayCut.PIECE) keeps no whole copy
+      // (its pieces sent are kept, piecesUp, so a send again goes on from there). The bridge's copy comes after the cloud
+      // send. Either failing says so on From Tally and never stops or delays the cloud send
       (async () => {
         const step = m => { b.busy = m; softRender(); };
-        if (Bridge.on()){
-          try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
-          catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
-        } else part.bridge = "not connected on this computer";
-        // server-books: the file waits in this browser until FinCom's cloud has every day of it; a send cut short (or
-        // made before signing in) goes again on its own the next time the client is opened, so it is never left here only
-        const wait = await TCloudUp.hold(who.client, f, {from, to}, who);
+        const note = t => { const u = S.tallyUp; if (u && u.cid === who.client){ u.lines.push({kind: "daybook", name: f.name, ok: false, text: t}); } else toast(t); render(); };
+        const big = f.size > DayCut.PIECE, range = {from, to};
+        const wait = TCloudUp.keep(who.client, f, range);
         part.wait = wait;
-        if (TCloudUp.on()) await tallyCloudSend(b, part, f, wait, who, step);
-        else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
+        let held = Promise.resolve();
+        if (!big) held = TCloudUp.hold(who.client, f, range, who).catch(e => {
+          note(f.name + ": the copy kept on this computer (to send it again after a reload) could not be made: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + ". It still goes to FinCom’s cloud now; if the page is reloaded before it is there, choose the file again.");
+        });
+        try {
+          if (TCloudUp.on()) await tallyCloudSend(b, part, f, wait, who, step, held);
+          else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
+        } catch (e){ part.cloud = TCloudUp.notSent(e); part.again = true; note(f.name + ": not sent to FinCom’s cloud: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + "."); }
+        if (Bridge.on()){
+          try { const r = await BridgeSeed.send(f, step, range, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
+          catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); note(f.name + ": the FinCom Bridge’s copy on this computer was not filled: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + ". FinCom’s cloud is not affected."); }
+        } else part.bridge = "not connected on this computer";
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
@@ -1214,11 +1229,47 @@ async function tallyFileKind(f){
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};
 }
+// the client's books open on this page (openBooks, src/js/18), waited for: {ok} or {why} (said on From Tally)
+async function tallyBooksReady(cid, ms){
+  if (S.books && S.books.cid === cid && S.books.loading && S.books.openFailed) S.books = null;          // tried again
+  try { await openBooks(cid); }
+  catch (e){ return {why: String((e && e.message) || e).replace(/[.\s]+$/, "")}; }
+  const t0 = Date.now(), most = ms || 120000;
+  while (S.books && S.books.cid === cid && S.books.loading && !S.books.openFailed && S.coId === cid && Date.now() - t0 < most) await new Promise(ok => setTimeout(ok, 150));
+  if (S.coId !== cid) return {why: "another client was opened meanwhile"};
+  if (!S.books || S.books.cid !== cid) return {why: "they did not open on this page"};
+  if (S.books.loading && S.books.openFailed) return {why: S.books.openFailed};
+  if (S.books.loading) return {why: "they were still opening after " + Math.round(most / 1000) + " seconds: FinCom’s server did not answer"};
+  return {ok: true};
+}
+// staging only: a step of From Tally as a Sentry breadcrumb (app/src/sentry.js; the scrubber keeps these fields only:
+// sizes, kinds, yes/no, piece numbers and a scrubbed reason; never a file's content, its name or a client's)
+function tallyCrumb(step, data){ try { if (typeof window.__fincomCrumb === "function") window.__fincomCrumb("fromtally", step, data || {}); } catch (e){} }
 // the files chosen or dropped: the masters first (the PANs and groups the day book's figures use), then the day books,
 // then a trial balance (asked its date on the page). S.tallyUp = {cid, at, busy, lines: [{kind, name, ok, text}]}
+// 18-Oct-2026 (the owner's 170 MB Day Book: "Nothing happened at all"): never silent. The files chosen while this client's
+// books are not open yet (the top bar's Upload Tally data on another page, or the books still coming from the server) are
+// kept: From Tally says "Opening <client>'s books…", the books are opened (openBooks), and the files are read then; books
+// that cannot be opened say why. Every other early exit says its reason too
 async function tallyFiles(files){
-  const b = S.books, cid = S.coId;
-  if (!b || b.cid !== cid || !(files || []).length) return;
+  const cid = S.coId, co = CO(), name = (co && co.name) || "this client";
+  files = Array.from(files || []);
+  if (!cid){ toast("Open a client first, then choose its Tally file: FinCom reads it into that client’s books."); return; }
+  if (!files.length){ S.tallyUp = {cid, at: Date.now(), busy: false, lines: [{kind: "", ok: false, text: "No file came with that: drop or choose the XML file itself (exported from Tally), not a link or a folder."}]}; render(); return; }
+  files.forEach(f => tallyCrumb("file_chosen", {size_mb: Math.round((f.size || 0) / 1048576), kind: /\.xml$/i.test(f.name || "") ? "xml" : "other"}));
+  if (!S.books || S.books.cid !== cid || S.books.loading){
+    tallyCrumb("books_ready", {ready: false});
+    S.tallyUp = {cid, at: Date.now(), busy: true, lines: [{kind: "wait", ok: true, text: "Opening " + name + "’s books… the file is read as soon as they are open."}]};
+    if (!(S.view === "company" && S.tab === "books" && booksTab() === "import") && typeof goClient === "function") goClient("books:import"); else render();
+    const r = await tallyBooksReady(cid);
+    if (!r.ok){
+      tallyCrumb("books_ready", {ready: false, reason: r.why});
+      S.tallyUp = {cid, at: Date.now(), busy: false, lines: [{kind: "", ok: false, text: name + "’s books could not be opened (" + r.why + "), so " + (files.length === 1 ? files[0].name + " was" : "the files were") + " not read. Open the client again and choose the file once more."}]};
+      render(); return;
+    }
+  }
+  tallyCrumb("books_ready", {ready: true});
+  const b = S.books;
   const u = S.tallyUp = {cid, at: Date.now(), busy: true, lines: []}; render();
   const said = l => { u.lines.push(l); render(); };
   const seen = [];

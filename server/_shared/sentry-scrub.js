@@ -164,6 +164,23 @@ export function scrubBreadcrumb(b) {
     if (to === "other") return null;
     return { type: "navigation", category: "navigation", timestamp: ts, data: { from, to } };
   }
+  // 18-Oct-2026: Books › From Tally's steps (tallyCrumb, src/js/23): a step's code name and these fields only, each its
+  // own shape (sizes in MB, a kind, yes/no, piece numbers, a state, and a scrubbed reason); never a file's name or content
+  if (b.category === "fromtally") {
+    const step = typeof b.message === "string" && /^[a-z][a-z_]{0,30}$/.test(b.message) ? b.message : null;
+    if (!step) return null;
+    const d = b.data || {}, data = {};
+    const int = (v) => (typeof v === "number" && isFinite(v) && v >= 0 && v < 1e7 ? Math.round(v) : undefined);
+    if (int(d.size_mb) !== undefined) data.size_mb = int(d.size_mb);
+    if (d.kind === "xml" || d.kind === "other") data.kind = d.kind;
+    if (typeof d.ready === "boolean") data.ready = d.ready;
+    if (typeof d.pieces === "boolean") data.pieces = d.pieces; else if (int(d.pieces) !== undefined) data.pieces = int(d.pieces);
+    if (int(d.piece) !== undefined) data.piece = int(d.piece);
+    if (int(d.of) !== undefined) data.of = int(d.of);
+    if (["started", "piece", "done", "skipped", "failed"].includes(d.state)) data.state = d.state;
+    if (typeof d.reason === "string" && d.reason) data.reason = scrubText(d.reason, 160);
+    return { type: "default", category: "fromtally", timestamp: ts, message: step, data };
+  }
   if (b.category === "console" && b.level === "error") return { type: "default", category: "console", level: "error", timestamp: ts, message: scrubText(b.message, 200) };
   return null;
 }
