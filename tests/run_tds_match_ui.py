@@ -198,15 +198,17 @@ try:
         # ---- the Deductions tab: the Challan column, and challan first
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductions"]'); pg.wait_for_timeout(600)
         cell = pg.locator("#app [data-ch-cell]").first
-        ok(cell.count() == 1 and re.search(r"^\d{5} · \d\d-\w{3} · 194[CJ]", cell.inner_text()) and "0510308" in (cell.get_attribute("title") or ""), "the Challan column, one line: serial · date · section, the BSR on a hover (%s)" % cell.inner_text().replace("\n", " "))
+        ok(cell.count() == 1 and re.search(r"^\d{5} · \d\d-\w{3}$", cell.inner_text().strip()) and re.search(r"0510308 .*194[CJ]", cell.get_attribute("title") or ""), "the Challan column, one line: serial · date, the BSR and section on a hover (%s)" % cell.inner_text().replace("\n", " "))
         ok(pg.locator("#app select[aria-label^='Challan for']").count() == 0, "no dropdown that re-tags silently")
         cell.click(); pg.wait_for_timeout(400)
         ok(pg.locator("[data-cm-move-dialog]").count() == 1, "a click opens the Move dialog")
         pg.evaluate("() => { S.tdsMove = null; render(); }"); pg.wait_for_timeout(300)
         pg.evaluate("() => { const b = S.books; TDSCH.untag(TDS.rows().filter(r => r.challan === 'chM2').map(r => r.id)); render(); }"); pg.wait_for_timeout(300)
-        pg.select_option("#app [data-cm-chsel]", "chM2"); pg.wait_for_timeout(500)
-        pd = '#app [data-cm-panel="chM2"][data-cm-mode="deductions"]'
-        ok(pg.locator(pd).count() == 1 and float(pg.locator(pd + " [data-cm-avail]").get_attribute("data-cm-avail")) == 1000, "challan first: chM2 chosen at the top, its available balance ₹1,000 big")
+        # next-tds-clear (the owner, 19-Oct-2026): Deductions is the one screen with the challans panel; the challan-first
+        # two-panel view stays on Challans for those who prefer it
+        pg.evaluate("() => { S.tdsTab = 'challans'; S.tdsChSel = 'chM2'; render(); }"); pg.wait_for_timeout(500)
+        pd = '#app [data-cm-panel="chM2"]'
+        ok(pg.locator(pd).count() == 1 and float(pg.locator(pd + " [data-cm-avail]").get_attribute("data-cm-avail")) == 1000, "challan first (Challans): chM2 chosen, its available balance ₹1,000 big")
         ok(pg.locator(pd + " [data-cm-left]").count() == 1 and pg.locator(pd + " [data-cm-right]").count() == 1, "two panels: On this challan, Deductions to add")
         ok(pg.locator(pd + " [data-cm-else-row]").count() == 0 and "on other challans" in pg.locator(pd + " [data-cm-else-link]").inner_text(), "deductions on other challans not on the right; a link says how many")
         pg.click(pd + " [data-cm-else-link]"); pg.wait_for_timeout(300)
@@ -215,9 +217,9 @@ try:
         pg.click(pd + ' [data-cm-add-all="chM2"]'); pg.wait_for_timeout(450)
         ok(float(pg.locator(pd + " [data-cm-avail]").get_attribute("data-cm-avail")) == 0 and pg.locator(pd + " [data-cm-on-row]").count() == 1 and pg.locator(pd + " [data-cm-on-row] [data-cm-run]").get_attribute("data-cm-run") == "0", "added: moved to the left panel, the balance 0, its balance after shown")
         over = pg.locator(pd + " [data-cm-free-row] [data-cm-split-row]")
-        ok(pg.locator(pd + " [data-cm-free-row] input").count() == 0 and (over.count() == 0 or over.first.is_disabled()), "nothing more can go on it: no tick goes below 0 (Split only where a balance is left)")
-        pg.select_option("#app [data-cm-chsel]", ""); pg.wait_for_timeout(400)
-        ok(pg.locator("#tdsDnTable").count() == 1, "no challan chosen: every deduction with its Challan column")
+        ok(pg.locator(pd + " [data-cm-free-row] input[type=checkbox]").count() == 0 and (over.count() == 0 or over.first.is_disabled()), "nothing more can go on it: no tick goes below 0 (Split only where a balance is left)")
+        pg.click('#app [data-ret-tab="deductions"]'); pg.wait_for_timeout(400)
+        ok(pg.locator("#tdsDnTable").count() == 1 and pg.locator("#app [data-dd-side]").count() == 1, "Deductions: every deduction with its challan, the challans panel beside")
         # ---- Deductees (PAN): a deductee with no PAN on top in red; fixed once, every deduction follows
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductees"]'); pg.wait_for_timeout(500)
         first = pg.locator("#tdsDeTable tbody tr").first
@@ -250,10 +252,10 @@ try:
         pg.evaluate("() => { S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(400)
         ok(J("document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone: no sideways scroll on Deductees (PAN)")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-phone-2-deductees.png"), full_page=True)
-        pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedCh = 'chA'; render(); }"); pg.wait_for_timeout(400)
+        pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedChF = 'chA'; render(); }"); pg.wait_for_timeout(400)
         ok(J("document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone: no sideways scroll on Deductions, challan first")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-phone-3-deductions-challan.png"), full_page=True)
-        pg.evaluate("() => { S.tdsDedCh = ''; S.tdsTab = 'challans'; render(); }")
+        pg.evaluate("() => { S.tdsDedChF = ''; S.tdsTab = 'challans'; render(); }")
         pg.set_viewport_size({"width": 1400, "height": 1000}); pg.wait_for_timeout(300)
 
         # ---- Form 138 from the salary sheet

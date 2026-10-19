@@ -29,7 +29,7 @@ export function ChallanOrSugg({ r, m, locked }) {
   if (r.challan) {
     const c = chs.find((x) => x.id === r.challan);
     return <span className="dd-ch on" data-dd-on={r.id}>{!locked && <input type="checkbox" checked aria-label={"Take " + (r.party || "") + " off its challan"} data-dd-off={r.id} onChange={() => { const x = TDSMatch.takeOff([r.id]); if (!x.ok) toast(x.why); render(); }} />}
-      <button type="button" className="linkbtn cm-cell" data-ch-cell={r.id} title={c ? c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + TDSMatch.matchedBy(r.id).words : ""} onClick={() => tdsMoveOpen([r.id])}>{c ? c.serial + " · " + day(c.date).slice(0, 6) : r.challan}</button></span>;
+      <button type="button" className="linkbtn cm-cell" data-ch-cell={r.id} title={c ? c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + (chSec(c) || "no section") + " · " + TDSMatch.matchedBy(r.id).words : ""} onClick={() => tdsMoveOpen([r.id])}>{c ? c.serial + " · " + day(c.date).slice(0, 6) : r.challan}</button></span>;
   }
   const s = m.byRow[r.id];
   if (s && s.rule === "split") return <span className="dd-ch" data-dd-split={r.id}><button type="button" className="linkbtn" onClick={() => tdsSplitOpen(s.key)}>Split across challans…</button><small className="dd-why">{s.reason}</small></span>;

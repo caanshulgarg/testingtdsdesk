@@ -180,9 +180,9 @@ try:
         if ch:
             J("(c) => { S.tdsTab = 'challans'; S.tdsChSel = c; render(); }", ch); pg.wait_for_timeout(500)
             ok(pg.locator('#app [data-cm-on-row="%s"]' % rid).count() == 1, "the challan's panel lists it, with the balance after it")
-            J("(c) => { S.tdsTab = 'deductions'; S.tdsDedCh = c; render(); }", ch); pg.wait_for_timeout(500)
-            ok(pg.locator('#tdsDnTable').count() == 0 and not any(h.strip().startswith("Challan") for h in pg.locator('#app [data-cm-run-table] thead th').all_inner_texts()), "a challan chosen at the top: no Challan column (the challan's two panels)")
-            J("() => { S.tdsDedCh = ''; render(); }"); pg.wait_for_timeout(300)
+            J("(c) => { S.tdsTab = 'deductions'; S.tdsDedChF = c; render(); }", ch); pg.wait_for_timeout(500)
+            ok(pg.locator('#tdsDnTable tr[data-ded-row="%s"]' % rid).count() == 1 and pg.locator('#app [data-dd-ch="%s"].on' % ch).count() == 1, "the challan clicked in the Deductions panel: the table shows its deductions, the new one among them")
+            J("() => { S.tdsDedChF = ''; render(); }"); pg.wait_for_timeout(300)
         # one more, on no challan: Validate & file counts it
         J("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(400)
         e0 = int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors'))
