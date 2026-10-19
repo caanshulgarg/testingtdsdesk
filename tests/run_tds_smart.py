@@ -32,7 +32,7 @@ books = json.load(open(CACHE))
 
 # check: the page under TDS › Checks (round 46: the tie-out and the limits moved there from under the year's grid)
 def go(pg, fy, q="", form="", tab="", view="", check=""):
-    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsCheck = a[5]; if (a[4]) { S.tdsView = a[4]; } else if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab, view, check])
+    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsCheck = a[5]; S.tdsValOpen = a[3] === 'checks' ? '*' : ''; if (a[4]) { S.tdsView = a[4]; } else if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab, view, check])
     pg.wait_for_timeout(400)
 def app(pg): return pg.inner_text("#app")
 def yes(pg):
@@ -133,7 +133,9 @@ try:
         ok(sorted(d) == sorted([["Juniper Legal Associates", "changed", "C3"], ["Peregrine Tent Works", "added", "C3"]]), "Juniper's TDS changed and a new deduction added in Tally: two C3 changes (%s)" % d)
         go(pg, "2025-26")
         c = pg.evaluate("(() => { const c = document.querySelector('#app [data-cell=\"26Q|Q3\"]'); return [c.dataset.status, c.innerText.replace(/\\s+/g, ' ')]; })()")
-        ok(c[0] == "bad" and "Correction 2" in c[1], "the grid: 26Q Q3 shows 'Correction 2' in red, with its filed date (%s)" % c)
+        # next-tds-clear (19-Oct-2026): one status vocabulary; a filed return changed in Tally since is In progress again, its
+        # changes Validate & file's warning ("file a correction")
+        ok(c[0] == "prog" and "In progress" in c[1], "the grid: 26Q Q3 is In progress again (%s)" % c)
         go(pg, "2025-26", "Q3", "26Q", "checks"); t = app(pg)
         ok(pg.locator('#app [data-correction="26Q|Q3"]').count() == 1 and "Correction needed: 2 entries changed in Tally since filing" in t, "Errors to fix: the correction needed, with each change")
         pg.evaluate("() => { const v = S.books.vouchers.find(v => v.id === 'zz-q3'); S.books.vouchers.splice(S.books.vouchers.indexOf(v), 1); const j = S.books.vouchers.find(v => v.party === 'Juniper Legal Associates' && v.date === '20251105'); j.ent.find(e => /TDS ON PROFESSIONAL/.test(e.l)).a = 6000; S.books.pans['Juniper Legal Associates'] = 'AAFFJ9999Q'; render(); }")

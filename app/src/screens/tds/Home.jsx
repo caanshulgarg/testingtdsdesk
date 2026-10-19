@@ -46,7 +46,7 @@ function LedgerLine({ b }) {
   const p = TaxLed.pending(b, "tds");
   if (!p.length) return null;
   return <p className="tg-ledline hc-led" data-ledger-banner="" title={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")}>
-    <span className="dot" aria-hidden="true" />{p.length} TDS ledger{p.length === 1 ? "" : "s"} to confirm · <button className="linkbtn" data-ledger-confirm="" onClick={() => TaxLed.go("tds")}>Confirm</button></p>;
+    <span className="dot" aria-hidden="true" />{p.length} ledger{p.length === 1 ? "" : "s"} to confirm → <button className="linkbtn" data-ledger-confirm="" onClick={() => TaxLed.go("tds")}>Confirm</button></p>;
 }
 
 // the header line: TDS · client · TAN, the year, ⋯ (the TDS home and the Every year page)

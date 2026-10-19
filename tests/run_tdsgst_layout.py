@@ -101,19 +101,22 @@ try:
         ok(E("S.tdsTab") == "deductions" and E("location.hash").endswith("/Q1/26Q/deductions"), "the old …/summary opens the deductions, and the address follows (%s)" % E("location.hash"))
         card = "#app [data-return-card='26Q|Q1']"
         ok(pg.locator(card).count() == 1 and "Form 140 (earlier 26Q) · Q1" in text(card + " [data-return-title]"), "the summary card, named Form 140 (earlier 26Q) · Q1")
-        ok("Filed 05-Aug-2026" in text(card + " [data-status-tag]"), "the card's status: Filed 05-Aug-2026")
-        ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said above the tabs")
-        ok(all(x in text(card) for x in ["TDS deducted", "Challans", "Not against a challan", "To look at"]), "the card's key figures")
-        tabs = E("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent.replace(/\\s*\\d+$/, '').trim())")
-        # next-challan-match (18-Oct-2026, as Winman): four tabs; To fix, Make the file, After filing are actions beside them
-        ok(tabs == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "tabs below: %s" % tabs)
+        # next-tds-clear (19-Oct-2026): one header line (the status one word of the one vocabulary, its date on a hover), one
+        # summary strip, the step rail
+        st = pg.locator(card + " [data-status-tag]")
+        ok(st.inner_text().strip() == "Filed" and "Filed 05-Aug-2026" in (st.get_attribute("title") or ""), "the header's status: Filed (05-Aug-2026 on a hover)")
+        ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said in the header")
+        ok(all(x in text("#app [data-ret-strip]") for x in ["TDS", "On challans", "Left"]) and "To look at" not in text("#app"), "the summary strip: TDS · On challans · Left; no To look at")
+        steps = E("[...document.querySelectorAll('#app nav[aria-label=Return] button[data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(steps == ["deductor", "deductees", "challans", "deductions", "file", "after"], "the step rail: %s" % steps)
         hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
-        ok(vis("#app .btn.primary") == 1 and pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]").count() == 1, "a return not filed: one main button, on the card (%d)" % vis("#app .btn.primary"))
-        pg.click("#app [data-return-card='26Q|Q2'] [data-card-primary]"); W(400)
-        ok(E("S.tdsTab") == "file" and vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0, "Make the file → Return file, whose download is then the one main button")
+        prim = pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]")
+        ok(vis("#app .btn.primary") == 1 and prim.count() == 1 and prim.inner_text().startswith("Next: "), "a return not filed: one main button, in the header, naming the next step (%d; %s)" % (vis("#app .btn.primary"), prim.inner_text() if prim.count() else ""))
+        E("() => { S.tdsTab = 'file'; render(); }"); W(400)
+        ok(vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0 and pg.locator("#app [data-make-fvu].primary").count() == 1, "Validate & file: Make FVU file is then the one main button")
         pg.click("#app [data-return-card] details.more > summary"); W(200)
         ok(any("working" in x for x in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")), "the card's More: the working (Excel)")
-        for t in ["deductor", "deductees", "challans", "deductions", "checks", "file", "after"]:
+        for t in ["deductor", "deductees", "challans", "deductions", "file"]:
             pg.click('#app [data-ret-tab="%s"]' % t); W(300)
         ok(not errors, "every tab of the return draws")
         pg.click("#app [data-return-card] .ret-back"); W(400)
@@ -121,7 +124,7 @@ try:
         hash_go("#/c/%s/books/tds/2026-27/Q1/24Q" % cid)
         ok(pg.locator("#app [data-return-card='24Q|Q1']").count() == 1 and E("S.tdsTab") == "deductions", "Form 138: its card, opened on Deductions")
         hash_go("#/c/%s/books/tds/2025-26/certs" % cid)
-        ok(E("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old …/certs opens To fix › section 197 certificates (%s)" % E("location.hash"))
+        ok(E("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "file", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old …/certs opens Validate & file › section 197 certificates (%s)" % E("location.hash"))
 
         print("4. GST")
         hash_go("#/c/%s/books/gst/07/202603/year" % cid)
@@ -220,7 +223,7 @@ try:
           out.hfs = t ? [...t.querySelectorAll(':scope > thead select')].map((e) => e.getAttribute('aria-label')) : [];
           out.chips = app.querySelectorAll('[data-return-card] ~ * nav[aria-label=GST], .tg-tabrow nav[aria-label=GST]').length;
           out.sub2 = (app.querySelector('[data-return-card] .ret-line2') || {}).innerText || '';
-          out.inTabs = [...app.querySelectorAll('.tg-tabrow input[type=search], .tg-tabrow [data-ded-filter], .tg-tabrow [data-fb-out], .tg-tabrow [data-ded-import-btn]')].filter(vis).length;
+          out.inTabs = [...app.querySelectorAll('.tg-tabrow input[type=search], .tg-tabrow [data-ded-filter], .tg-tabrow [data-fb-out], .tg-tabrow [data-ded-import-btn], [data-step-tool] input[type=search], [data-step-tool] .segs, [data-step-tool] details.more')].filter(vis).length;
           out.why = [...app.querySelectorAll('.tg-why')].filter(vis).map((e) => [e.innerText, lines(e)]);
           return out; }"""
         AMOUNTS = r"""() => [...new Set((document.querySelector('#app').innerText.match(/₹\s*-?[\d,]+(?:\.\d+)?/g) || []).map((s) => s.replace(/\s/g, '')))].sort()"""
@@ -235,10 +238,10 @@ try:
                 m, amts = E(LAYOUT, main), E(AMOUNTS)
                 at = "%s at %d×%d" % (name, vw, vh)
                 if vw == 1440: got[name] = amts
-                if name in ("gst-bills", "gst-details", "tds-deductions") and vw == 1440:
-                    # next-challan-match (the owner, 18-Oct-2026): the tabs' row also carries the return's actions (To fix, Make
-                    # the file, After filing) and the challan chosen at the top of Deductions: it may take a second line
-                    lim = 310 if name == "tds-deductions" else 230
+                if (name in ("gst-bills", "gst-details") and vw == 1440) or name in ("tds-deductions", "tds-deductees"):
+                    # next-tds-clear (19-Oct-2026): a return's table starts under three bands at most (header, strip, the
+                    # step's toolbar): 260 px again
+                    lim = 260 if name.startswith("tds-") else 230
                     ok(m["top"] is not None and m["top"] <= lim, "%s: the table's header %s px below the top of the page (at most %d)" % (at, m["top"], lim))
                 if name in ("gst-bills", "gst-details", "gst-details-open", "tds-deductions", "tds-deductees") and vw == 1366:
                     ok(m["wrap"] and m["wrap"][0] <= m["wrap"][1] + 1, "%s: every column in view, no sideways scroll inside the table (%s)" % (at, m["wrap"]))
@@ -258,9 +261,9 @@ try:
                     ok("07AAGCL4827M1Z3" not in m["sub2"], "%s: the GSTIN once, in the title (%s)" % (at, m["sub2"][:60]))
                 if name in ("gst-bills", "gst-details", "tds-deductions", "tds-deductees"):
                     ok(m["rowBars"] == 0, "%s: no row of filter boxes over the table (%d)" % (at, m["rowBars"]))
-                    want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": ["PAN", "Section", "Challan", "Rate"], "gst-details": ["Part"], "gst-bills": ["Customer", "Part", "Place of supply", "Rate"]}[name]
+                    want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": [], "gst-details": ["Part"], "gst-bills": ["Customer", "Part", "Place of supply", "Rate"]}[name]
                     ok(sorted(m["hfs"]) == sorted(want), "%s: the filters in the table's headers (%s)" % (at, m["hfs"]))
-                    ok(m["inTabs"] >= (3 if name == "tds-deductions" else 2), "%s: find and Export (and Needs fixing, Import) at the right of the tabs' row (%d)" % (at, m["inTabs"]))
+                    ok(m["inTabs"] >= (3 if name.startswith("tds-") or name == "gst-bills" else 2) if name.startswith("tds-") else m["inTabs"] >= (3 if name == "tds-deductions" else 2), "%s: find, Show and ⋯ (Export, Import) in one toolbar over the table (%d)" % (at, m["inTabs"]))
                 ok(all(n <= 2 for _, n in m["why"]), "%s: a rate's reason on two lines at most (%s)" % (at, m["why"][:2]))
                 ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
                 ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))

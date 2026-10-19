@@ -87,13 +87,16 @@ try:
         J("() => { S.tallyPanel = true; render(); }"); W(500); pg.keyboard.press("Escape"); W(500)
         ok(not J("!!S.tallyPanel") and in_client(), "Esc closes it, the client stays")
         J("() => { S.tdsView = 'return'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'deductions'; render(); }"); W(600)
+        # next-tds-clear (19-Oct-2026): a return's "How this works" is in its header's ⋯
+        moreOpen = lambda: (pg.click("#app [data-return-card] details.more > summary"), W(250))
+        moreOpen()
         hb = pg.locator("#app [data-help]").first
         if hb.count():
             hb.click(); W(400)
             ok(J("!!document.getElementById('helpPanel')"), "the help panel opens")
             pg.mouse.click(*blank()); W(400)
             ok(not J("!!document.getElementById('helpPanel')"), "a click outside closes the help panel")
-            pg.locator("#app [data-help]").first.click(); W(400); pg.keyboard.press("Escape"); W(400)
+            moreOpen(); pg.locator("#app [data-help]").first.click(); W(400); pg.keyboard.press("Escape"); W(400)
             ok(not J("!!document.getElementById('helpPanel')") and in_client(), "Esc closes it, the client stays")
         else:
             ok(False, "the return page has its How this tab works button")

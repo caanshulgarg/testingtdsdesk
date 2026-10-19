@@ -31,8 +31,9 @@ def start(pg):
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
     pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500); pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
 
+# next-tds-clear (19-Oct-2026): To fix ("checks") is Validate & file; its lines' lists open with Review ▸ (all open here)
 def go(pg, fy, q="", form="", tab=""):
-    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab])
+    pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsValOpen = a[3] === 'checks' ? '*' : ''; if (a[2]) { S.tdsView = 'return'; S.tdsForm = a[2]; S.tdsTab = a[3] || 'summary'; } else { S.tdsView = 'year'; S.tdsPickForm = ''; } render(); }", [fy, q, form, tab])
     pg.wait_for_timeout(400)
 
 def app(pg): return pg.inner_text("#app")

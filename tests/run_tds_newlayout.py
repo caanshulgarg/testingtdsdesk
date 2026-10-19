@@ -110,7 +110,7 @@ try:
         ok(bands <= 3, "1. at most three bands above the grid (%d)" % bands)
         led = pg.locator('[data-ledger-banner]')
         ledw = re.sub(r"\s+", " ", led.inner_text()).strip() if led.count() else ""
-        ok(led.count() == 1 and re.fullmatch(r"\d+ TDS ledgers? to confirm · Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
+        ok(led.count() == 1 and re.fullmatch(r"\d+ ledgers? to confirm → Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
         link = pg.locator('[data-tds-grid] ~ [data-ch-register], [data-ch-register]')
         ok(link.count() == 1 and "Open challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register (%r)" % (link.inner_text() if link.count() else ""))
         ok(not any("not deducted" in t.lower() for t in [pg.inner_text('[data-tds-page]')]), "1. nothing about TDS not deducted on the TDS home")

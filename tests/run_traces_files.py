@@ -82,9 +82,15 @@ def upload(pg, paths, password=None, wait=1800):
 # filed. go() with no view opens 26Q Q3 2025-26's After filing (the return the fixtures' files are of).
 def go(pg, view="after", fy="2025-26", q="Q3", form="26Q", tab="after"):
     if view == "after": view = "return"
-    if view == "return": pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsForm = a[2]; S.tdsPickForm = a[2]; S.tdsView = 'return'; S.tdsTab = a[3]; render(); }", [fy, q, form, tab])
+    if view == "return": pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsQ = a[1]; S.tdsForm = a[2]; S.tdsPickForm = a[2]; S.tdsView = 'return'; S.tdsTab = a[3]; S.tdsValOpen = a[3] === 'checks' ? '*' : ''; render(); }", [fy, q, form, tab])
     else: pg.evaluate("(a) => { S.booksTab = 'tds'; S.tdsFy = a[0]; S.tdsView = a[1]; render(); }", [fy, view])
     pg.wait_for_timeout(500)
+# next-tds-clear (19-Oct-2026): After filing is one table of TRACES' files; each row opens its drawer
+def shut(pg):
+    pg.evaluate("() => document.querySelectorAll('[data-drawer] button[aria-label=Close]').forEach(b => b.click())"); pg.wait_for_timeout(300)
+def after(pg, k):
+    shut(pg)
+    pg.click('#app [data-after-open="%s"]' % k); pg.wait_for_timeout(500)
 
 try:
     with sync_playwright() as p:
@@ -112,13 +118,17 @@ try:
         ok(sorted(f16) == sorted([["AAJFJ1234K", "Juniper Legal Associates", "Q3", "2025-26", "JLAQ3XY", "AAJFJ1234K_Q3_2025-26.pdf"], ["ABCPN5555N", "Nightjar Sound & Light Co", "Q3", "2025-26", "NJQ3ABC", "certificate-2.pdf"]]),
            "the locked zip, with a zip inside, opened: two certificates kept, each with its deductee (one by its file name, one by the PAN in its text) (%s)" % f16)
         ok("Form 16A: 2 certificates kept with 2 deductees" in t, "said: 2 certificates kept with 2 deductees")
+        after(pg, "certs")
         ok(pg.locator('#app [data-f16-pan="AAJFJ1234K"]').count() == 1 and "Juniper Legal Associates" in pg.inner_text('#app [data-f16-pan="AAJFJ1234K"]'), "the deductee's line on the return's After filing")
         with pg.expect_download() as dl:
             pg.click('#app [data-f16-pan="AAJFJ1234K"] [data-f16-get]')
         d = dl.value; path = d.path()
         ok(d.suggested_filename == "AAJFJ1234K_Q3_2025-26.pdf" and open(path, "rb").read()[:4] == b"%PDF", "the certificate downloads as it came (%s)" % d.suggested_filename)
+        shut(pg)
         go(pg, "return", "2025-26", "Q3", "26Q", "deductees")
-        ok(pg.locator('#app [data-f16-link="AAJFJ1234K"]').count() == 1, "the return's Deductions, by deductee: Form 16A beside Juniper's PAN")
+        pg.click('#app [data-dee-open]:has-text("Juniper")'); pg.wait_for_timeout(500)
+        ok(pg.locator('#app [data-dee-dialog] [data-f16-link="AAJFJ1234K"]').count() == 1, "the return's Deductees: Form 16A in Juniper's drawer")
+        shut(pg)
         go(pg)
         # the same certificate again: in place of the earlier one
         upload(pg, locked, password="DELZ12345A", wait=3500)
@@ -145,16 +155,18 @@ try:
         ok(["pan", "PANNOTAVBL", "ORCHID EVENTS", "194C", "", "", 1000] in it, "a PAN error: Orchid Events without a PAN")
         ok(jr and jr["diffs"] == [] and jr["summary"].get("total") == 3770, "the report's summary agrees with its lines (total ₹3,770)")
         box = '#app [data-traces-defaults="26Q|Q3|2025-26"]'
+        after(pg, "jr")
         tt = pg.inner_text(box)
         ok("TRACES defaults" in tt and "₹3,770.00 to pay" in tt and "file a correction" in tt.lower(), "the TRACES defaults list on After filing: ₹3,770.00 to pay, with what to do")
         go(pg, "return", "2025-26", "Q3", "26Q", "checks")
-        ok(pg.locator(box).count() == 1, "the return's To fix tab shows the TRACES defaults of that return")
+        shut(pg)
+        ok(pg.locator(box).count() == 1, "the return's Validate & file shows the TRACES defaults of that return")
         go(pg, "return", "2025-26", "Q2", "26Q", "checks")
         ok(pg.locator("#app [data-traces-defaults]").count() == 0, "another quarter's return does not show them")
         go(pg)
         off = open(os.path.join(FX, "jr-26q-q3-2025-26.txt")).read().replace("Short Deduction ^ 1,200.00", "Short Deduction ^ 1,500.00")
         op = os.path.join(OUT, "jr-off.txt"); open(op, "w").write(off)
-        upload(pg, op)
+        upload(pg, op); after(pg, "jr")
         ok(pg.evaluate("TRF.jrs().length") == 1 and pg.locator("#app [data-jr-diff]").count() == 1 and "Short deduction ₹1,500.00 (the lines add up to ₹1,200.00)" in pg.inner_text("#app [data-jr-diff]"),
            "a report whose summary differs from its lines: replaces the earlier one, and the difference is said once")
 
@@ -168,6 +180,7 @@ try:
         ok(["ABCPN5555N", "NIGHTJAR SOUND AND LIGHT", False, "this PAN is not in FinCom's return"] in c["rows"], "a deductee in TRACES' file whose PAN is not in FinCom's return: said")
         ok(["PANNOTAVBL", "ORCHID EVENTS", False, "no PAN in TRACES' statement"] in c["rows"], "PANNOTAVBL in TRACES' file: said")
         ok(c["extra"] == 0, "every deductee of FinCom's Q3 return is in TRACES' file")
+        after(pg, "conso")
         ok(pg.locator('#app [data-conso="26Q|Q3|2025-26"] [data-ok="0"]').count() == 2, "the page marks the two lines to check")
         # nothing changed in the return
         ok(pg.evaluate("TDS.rows().filter(r => r.fy === '2025-26' && r.q === 'Q3').map(r => r.tds)") == [6000], "the return's figures are unchanged")

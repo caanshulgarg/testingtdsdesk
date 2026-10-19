@@ -148,18 +148,18 @@ with sync_playwright() as p:
     # details to fill on Errors to fix, the totals on the Summary
     tl = txt.lower()
     ok("form 144 (earlier 27q)" in tl and "non-residents" in tl and "form 143 (earlier 27eq)" in tl and "tcs" in tl and "form 140 (earlier 26q)" in tl and "form 138 (earlier 24q)" in tl, "2026-27: the year's grid shows Forms 140, 138, 144 and 143 with the old names beside")
-    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27Q'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
+    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27Q'); S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
-    nr = "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1 and "not yet validated" in txt
+    nr = "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1
     pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
     txt = pg.inner_text("#app")
-    ok(nr and "Download the Form 144 text file (draft)" in txt and "draft – not yet validated" in txt, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
-    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
+    ok(nr and "Make FVU file (draft)" in txt and "draft – not yet validated" in txt, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
+    pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(400)
     codes = "Collection codes" in pg.inner_text("#app")
     pg.evaluate("() => { S.tdsTab = 'summary'; render(); }"); pg.wait_for_timeout(300)
-    tcs = "TCS collected" in pg.inner_text("#app")
+    tcs = "TCS" in pg.inner_text("#app [data-ret-strip]")
     pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
-    ok(codes and tcs and "Download the Form 143 text file (draft)" in pg.inner_text("#app"), "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
+    ok(codes and tcs and "Make FVU file (draft)" in pg.inner_text("#app"), "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
     # screens: Parties shows the certificates and the inoperative mark; the year shows 27Q and 27EQ
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.step = null; S.tab = 'deductees'; S.partySel = 'Cert Prof'; render(); }", cid)
     pg.wait_for_timeout(500)

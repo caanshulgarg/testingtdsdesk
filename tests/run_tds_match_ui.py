@@ -84,7 +84,7 @@ try:
         pick("chT")
         ok("From Tally" in pg.locator(panel("chT") + " [data-cm-sugg]").first.inner_text(), "the Tally bill-wise payment's challan: From Tally")
         metric = pg.locator("#app [data-cm-metric]").inner_text()
-        ok(re.search(r"\d+ of \d+ deductions matched automatically · \d+ need you", metric), "the measure: %s" % metric)
+        ok(re.search(r"\d+ of \d+ deductions matched · \d+ needs? you", metric), "the measure: %s" % metric)
         ai = pg.locator("#app [data-cm-ai]")
         aiw = J("(document.querySelector('#app [data-cm-ai]') || {}).textContent || ''")
         ok(len(ai_calls) == 1 and ai.count() == 1 and "AI looked at" in aiw, "the AI asked once for what the rules left, a badge with its words (%s)" % aiw)
@@ -134,7 +134,7 @@ try:
         ok(pg.locator('#app [data-cm-sugg="%s"]' % key).count() == 0 and J("Object.keys(S.books.matchNo).length") == 1, "Not this: gone, kept as set aside")
         # ---- put deductions on the chosen challan by ticking: the balance drops at once
         may = rows("194C", "202605")
-        pg.locator(panel("chM") + ' [data-cm-free-row="%s"] input' % may[0]).click(); pg.wait_for_timeout(450)
+        pg.locator(panel("chM") + ' [data-cm-free-row="%s"] input[type=checkbox]' % may[0]).click(); pg.wait_for_timeout(450)
         ok(J("(id) => S.books.alloc[id]", may[0]) == "chM" and float(pg.locator(panel("chM") + " [data-cm-avail]").get_attribute("data-cm-avail")) == 6000, "ticked onto chM: the balance drops to ₹6,000 at once")
         # ---- take off (untick on the challan)
         pg.click(panel("chM") + ' [data-cm-off="%s"]' % may[0]); pg.wait_for_timeout(450)

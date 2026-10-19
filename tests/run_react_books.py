@@ -44,7 +44,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tdsQ") == (due["q"] if due["fy"] == "2026-27" else pg.evaluate("S.tdsQ")), "the quarter due now is chosen (%s)" % pg.evaluate("S.tdsQ"))
     pg.evaluate("() => tdsPick('2026-27', '', '')"); pg.wait_for_timeout(400)
     q1 = pg.inner_text('#app [data-cell="24Q|Q1"]')
-    ok("7,500" in q1 and "2 employees" in q1, "Q1 24Q: ₹7,500 from two employees" + " [" + q1.replace("\n", " ") + "]")
+    # next-tds-clear: a cell is the return's status and its TDS (two lines)
+    ok("7,500" in q1 and pg.get_attribute('#app [data-cell="24Q|Q1"]', "data-status") in ("prog", "ready"), "Q1 24Q: ₹7,500, with its status" + " [" + q1.replace("\n", " ") + "]")
     pg.click("#app [data-tds-bar] details.more > summary"); pg.click("#app [data-tds-more='years']"); pg.wait_for_timeout(400)
     ok("Every year" in app() and "2026-27" in app(), "TDS: the years")
     pg.click('#app table.bk-table button:has-text("Open")'); pg.wait_for_timeout(400)
@@ -55,7 +56,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
     # tds-layout: the old Checks (certificates and rate questions) is a return's To fix
     pg.evaluate("() => Route.apply('#/c/' + S.coId + '/books/tds/2026-27/checks/rates')"); pg.wait_for_timeout(700)
-    ok(pg.evaluate("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old Checks address: a return's To fix, certificates and rate questions")
+    ok(pg.evaluate("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "file", "rates"] and pg.locator("#app [data-certs]").count() == 1, "the old Checks address: a return's Validate & file, certificates and rate questions")
     pg.evaluate("booksTabGo('ledgers')"); pg.wait_for_timeout(500)
     ok(pg.evaluate("[booksTab(), S.tdsView]") == ["tds", "ledgers"] and pg.locator("#app [data-tax-ledgers]").count() == 1, "the old Tally ledgers tab opens the TDS page's Ledgers")
     pg.evaluate("() => { S.ledKind = ''; tdsNav('year'); }"); pg.wait_for_timeout(300)

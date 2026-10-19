@@ -283,7 +283,8 @@ function retMore({ fy, q, form, extra = [] }) {
   return extra.concat([
     filed && !open && ["Open a correction…", () => openCorrection(fy, q, form), { "data-open-correction": "" }],
     open && ["Close the correction", () => { TDSReg.closeCorrection(fy, q, form); render(); }, { "data-close-correction": "" }],
-    ["How this works", () => { S.tdsHow = true; render(); }, { "data-ret-how": "" }],
+    ["How this works", () => {}, { "data-help": "open", "data-ret-how": "" }],
+    ["Tips for matching challans", () => { S.tdsHow = true; render(); }, { "data-ret-tips": "" }],
     ["The challan register", () => tdsNav("register")],
   ]);
 }
@@ -433,7 +434,9 @@ export function Return26({ b, allRows, form = "26Q" }) {
       draft={draft && !filed} val={val} primary={primary} more={more} strip={strip} steps={steps}>
       {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form} tallyPays={tallyPaysOf(fy, q)} />
         : S.tdsTab === "deductor" ? <DeductorDetails />
-        : S.tdsTab === "deductees" ? <DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
+        : S.tdsTab === "deductees" ? <><DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
+          {/* 27Q's non-resident details and 27EQ's collection codes, filled where the deductees are */}
+          {(form === "27Q" || form === "27EQ") && <div style={{ marginTop: 14 }}><ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} /></div>}</>
         : S.tdsTab === "deductions" ? <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} /></>
         : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
         : <ValidatePanel fy={fy} q={q} form={form} val={val} reviews={reviews} year={yearChecks(fy)} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}

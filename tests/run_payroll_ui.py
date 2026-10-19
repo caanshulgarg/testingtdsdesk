@@ -10,7 +10,7 @@ expected.json, worked out apart). Runs on the React build: app/dist-test (cd app
      file marked check before filing (a _DRAFT name), its download
   5. light and dark, desktop and phone: no page error, no horizontal scroll on the phone
 Run under flock /tmp/fincom-app.lock with the other screen tests."""
-import os, sys, json, threading, functools, http.server
+import os, sys, re, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from playwright.sync_api import sync_playwright
@@ -61,7 +61,7 @@ try:
         pg.evaluate(LOAD, {"tables": TABLES, "details": SETUP["details"]}); pg.wait_for_timeout(800)
         print("== 1. the Salary tab and the employees")
         # tds-layout (14-Oct-2026): no Salary tab on the TDS page; the salary pages are 24Q's "Employees & declarations"
-        ok(pg.locator('[data-ret-tab="people"][aria-pressed="true"]').count() == 1 and pg.evaluate("[S.tdsForm, S.tdsTab]") == ["24Q", "people"],
+        ok(pg.locator('[data-ret-tab="people"][aria-selected="true"]').count() == 1 and pg.evaluate("[S.tdsForm, S.tdsTab]") == ["24Q", "people"],
            "the salary pages: 24Q's Employees & declarations (the old Salary address leads there)")
         t = txt(pg)
         names = sorted(e[0] for e in SETUP["employees"])
@@ -104,14 +104,16 @@ try:
         a1 = pg.inner_text('[data-list="q24Annex1"]')
         ok(pg.locator('[data-list="q24Annex1"] tbody tr').count() == len(EXP["annex1"]["Q1"]), "Q1 Annexure I: one row per employee per month (%d)" % len(EXP["annex1"]["Q1"]))
         cells = pg.locator('[data-list="q24Annex1"] [data-ch-cell]').all_inner_texts()
-        ok(cells and all(c.startswith("0510308 · ") and c.strip().endswith("192") for c in cells), "each month's challan beside its TDS: BSR · date · section, opening the Move dialog (%s)" % cells[:3])
+        # next-tds-clear: one line, serial · date · section (the BSR on a hover)
+        tts = pg.locator('[data-list="q24Annex1"] [data-ch-cell]').evaluate_all("(l) => l.map(e => e.title)")
+        ok(cells and all(re.match(r"^\d{5} · \d\d-\w{3} · 192$", c.strip()) for c in cells) and all(t.startswith("0510308 · ") for t in tts), "each month's challan beside its TDS: serial · date · section, the BSR on a hover, opening the Move dialog (%s)" % cells[:3])
         ok(pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).map(r => r.challanNo).sort().join(',')").count("01001") >= 1 and pg.evaluate("Payroll.annexI('2026-27', 'Q1').filter(r => r.tds > 0).every(r => r.challan)"), "every month's TDS on its challan (01001 … 01003), from Tally's payment's months")
         pg.evaluate("() => { S.tdsQ = 'Q4'; S.tdsTab = 'annex2'; render(); }"); pg.wait_for_timeout(400)
         a2 = pg.inner_text('[data-list="q24Annex2"]')
         ok(inr(EXP["annex2"]["PE Gita Sharma"]["taxPayable"]) in a2 and inr(EXP["annex2"]["PE Chitra Iyer"]["hraExempt"]) in a2, "Q4 Annexure II: the year's tax and exemptions")
         pg.screenshot(path=os.path.join(OUT, "annex2-desktop.png"), full_page=True)
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
-        ok("Check before filing" in pg.inner_text('[data-file="24Q-tally"]'), "the file is marked check before filing")
+        ok("draft" in pg.inner_text('[data-file="24Q-tally"]').lower() or "FVU" in pg.inner_text('[data-file="24Q-tally"]'), "the file is marked check before filing (a draft, run through the FVU)")
         # next-tds-forms-2025: Form 138 (tax year 2026-27) is built to Protean's file format 1.1, which is for Q1 to Q3: the Q4
         # file (Annexure II's salary records) is refused until Protean's Q4 layout is in hand; Q1's file downloads, a draft
         q4 = pg.evaluate("() => TDS24Q_FILE.build('2026-27', 'Q4', TDS26Q.firmDetails())")

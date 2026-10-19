@@ -49,7 +49,7 @@ EDIT = """(changes) => { const ws = window.__wb.Sheets.Deductions;
 RELOAD = """async () => { const cid = S.books.cid; await saveBooks(); S.books = null; await openBooks(cid);
   for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise(r => setTimeout(r, 50)); render(); return !!S.books && !S.books.loading; }"""
 TABLE = """() => [...document.querySelectorAll('#tdsDnTable > tbody > tr')].map(tr => ({id: tr.querySelector('input[type=checkbox]') ? tr.querySelector('input[type=checkbox]').getAttribute('aria-label') : '',
-  text: tr.innerText, pan: (tr.querySelector('[data-pan]') || {}).innerText || '', sec: (tr.querySelector('.rp-sec') || {}).innerText || '', edited: [...tr.querySelectorAll('[data-edited]')].map(e => e.innerText)}))"""
+  text: tr.innerText, pan: (tr.querySelector('[data-pan]') || {}).innerText || '', sec: (tr.querySelector('[data-sec]') || {}).innerText || '', edited: [...tr.querySelectorAll('[data-edited]')].map(e => e.title || e.innerText)}))"""
 
 try:
     with sync_playwright() as p:
@@ -64,7 +64,7 @@ try:
         go("2026-27/Q1/26Q/deductions"); E("() => { S.tdsDedView = ''; S.tdsFl = {}; render(); }"); W(400)
         rows = E("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => ({id: r.id, pan: r.pan, section: r.section, paid: r.paid, tds: r.tds, challan: r.challan}))")
         print("1. Needs fixing")
-        chip = pg.locator("#app [data-filter-bar] [data-ded-filter=fix]")
+        chip = pg.locator("#app [data-step-tool] [data-ded-show=fix]")   # next-tds-clear: a Show pill of the step's toolbar
         ok(chip.count() == 1, "the deductions' filter bar has Needs fixing")
         n = int(chip.locator(".sbar-n").inner_text()) if chip.count() else -1
         flagged = E("""() => { const rs = TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1'), iss = new Set(Certs.issues('2026-27', 'Q1').map(x => x.row.id));
@@ -78,24 +78,24 @@ try:
         E("() => { S.tdsFl = {}; render(); }"); W(300)
 
         print("2. the section's name")
-        secs = E("[...document.querySelectorAll('#tdsDnTable > tbody > tr .rp-sec')].map(e => [e.querySelector('.rp-sec-code') ? e.querySelector('.rp-sec-code').innerText : '', (e.querySelector('small') || {}).innerText || ''])")
-        ok(secs and all(c and s for c, s in secs), "by deduction: each section's code and its name under it (%s)" % secs[:2])
+        secs = E("[...document.querySelectorAll('#tdsDnTable > tbody > tr [data-sec]')].map(e => [e.innerText, e.closest('td').title || ''])")
+        ok(secs and all(c and s for c, s in secs), "by deduction: each section's short code, its name on a hover (%s)" % secs[:2])
         # next-challan-match (18-Oct-2026): the deductees are a tab of their own, Deductees (PAN), with each one's sections
         pg.click("[data-ret-tab=deductees]"); W(400)
         secs = E("[...document.querySelectorAll('#tdsDeTable > tbody > tr > td:nth-child(4)')].map(e => e.innerText)")
         ok(secs and all(secs), "Deductees (PAN): each deductee's sections (%s)" % secs[:2])
         pg.click("[data-ret-tab=deductions]"); W(300)
         go("2025-26/Q2/26Q/deductions"); W(300)
-        secs = E("[...document.querySelectorAll('#tdsDnTable > tbody > tr .rp-sec')].map(e => [(e.querySelector('.rp-sec-code') || {}).innerText || '', (e.querySelector('small') || {}).innerText || ''])")
+        secs = E("[...document.querySelectorAll('#tdsDnTable > tbody > tr [data-sec]')].map(e => [e.innerText, e.closest('td').title || ''])")
         ok(secs and all(c and s for c, s in secs), "2025-26 too: the old section and its name (%s)" % secs[:2])
         go("2026-27/Q1/26Q/deductions"); W(300)
 
         print("3. the Excel to correct")
         E(CATCH)
-        pg.click("#app [data-filter-bar] details.more > summary"); W(200)
-        items = E("[...document.querySelectorAll('#app [data-filter-bar] .more-item')].map(b => b.textContent)")
+        pg.click("#app [data-step-tool] details.more > summary"); W(200)
+        items = E("[...document.querySelectorAll('#app [data-step-tool] .more-item')].map(b => b.textContent)")
         ok(any(i.startswith("Excel to correct") for i in items) and "Import corrected Excel…" in items, "Export: the Excel to correct, and Import corrected Excel (%s)" % items)
-        pg.click('#app [data-filter-bar] .more-item:has-text("Excel to correct")'); W(1500)
+        pg.click('#app [data-step-tool] .more-item:has-text("Excel to correct")'); W(1500)
         x = E(READ) if E("window.__files.length") else None
         ok(x and x["sheets"] == ["Deductions", "Summary"] and x["head"][0].startswith("FinCom id") and x["n"] == len(rows) + 2, "Deductions and Summary; the FinCom id first; one row a deduction and the totals (%s)" % (x and [x["sheets"], x["head"][:3], x["n"]]))
         if x:
@@ -126,14 +126,14 @@ try:
         ok(len(tb) > 1 and tb[1]["sec"].startswith("393(1)") and "194J" in tb[1]["sec"], "the new section on the second deduction (%s)" % (len(tb) > 1 and tb[1]["sec"]))
         ok(tb and any("edited in FinCom: books ₹" in e for e in tb[0]["edited"]) and E("INR.format(%s)" % newtds) in tb[0]["text"], "the new TDS, and 'edited in FinCom: books ₹…' under it (%s)" % (tb and tb[0]["edited"]))
         total = round(sum(r["tds"] for r in rows) + 500, 2)
-        card = pg.inner_text("#app [data-return-card]")
-        ok(E("INR.format(%s)" % total) in card and pg.locator("#app [data-return-card] [data-edited-n='2']").count() == 1, "the card: TDS deducted %s, and 2 rows edited in FinCom" % total)
+        card = pg.inner_text("#app [data-ret-strip]")
+        ok(E("INR.format(%s)" % total) in card, "the summary strip: TDS %s" % total)
         ok("2 edited in FinCom" in pg.inner_text("#app [data-ded-count]"), "the count of deductions shown says it")
         ok(E("(() => { const v = S.books.vouchers.find(v => '%s'.startsWith(v.id + '|')); return JSON.stringify(v).includes('%s'); })()" % (r1["id"], newpan)) is False, "the books from Tally are not changed")
         log = E("S.books.tdsEdits['%s'].log.map(l => [l.field, !!l.by, !!l.at])" % r1["id"])
         ok(sorted(l[0] for l in log) == ["pan", "tds"] and all(l[1] and l[2] for l in log), "each change kept with who and when (%s)" % log)
         E(CATCH)
-        pg.click("#app [data-filter-bar] details.more > summary"); W(200); pg.click('#app [data-filter-bar] .more-item:has-text("Excel to correct")'); W(1500)
+        pg.click("#app [data-step-tool] details.more > summary"); W(200); pg.click('#app [data-step-tool] .more-item:has-text("Excel to correct")'); W(1500)
         y = E(READ)
         ok(y["rows"][1][4] == newpan and y["rows"][2][5] == newsec and abs(y["J2"]["v"] - newtds) < 0.005 and abs(y["K2"]["v"] - r1["tds"]) < 0.005 and abs(y["L2"]["v"] - 500) < 0.005,
            "exported again: the corrections, TDS in books as the books say, the Difference 500 (%s %s %s)" % (y["rows"][1][4], y["J2"], y["L2"]))
@@ -153,7 +153,7 @@ try:
         ok(E(RELOAD), "the books opened again"); W(500)
         go("2026-27/Q1/26Q/deductions"); W(300)
         tb = E(TABLE)
-        ok(tb and tb[0]["pan"] == newpan and pg.locator("#app [data-return-card] [data-edited-n='2']").count() == 1, "the corrections are still there (%s)" % (tb and tb[0]["pan"]))
+        ok(tb and tb[0]["pan"] == newpan and "2 edited in FinCom" in pg.inner_text("#app [data-ded-count]"), "the corrections are still there (%s)" % (tb and tb[0]["pan"]))
         br.close()
 except Exception as e:
     import traceback; traceback.print_exc(); fails.append("crashed: %s" % e)
