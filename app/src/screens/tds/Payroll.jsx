@@ -22,6 +22,7 @@ import { unplacedOf } from "./onChallan.js";
 import { ReturnShell, statusOf, stepName, FvuMade } from "./Shell.jsx";
 import { checkReturn, ValidatePanel, PrnBox } from "./Validate.jsx";
 import { TracesDefaults } from "./Files.jsx";
+import { PanBox } from "./PanBook.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: Form 138's text file, TDS24Q_FILE.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/83-tds-forms-2025.js";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -44,6 +45,7 @@ export default function Salary() {
     </section>;
   }
   return <>
+    <TdsHeads />
     <div className="dtiles" style={{ marginBottom: 12 }} data-salary-tiles="">
       <Tile label="Employees" value={emp.filter((e) => !e.gone).length} sub={Payroll.groups().length + " group" + (Payroll.groups().length === 1 ? "" : "s")} />
       <Tile label={"Months paid in " + fy} value={months.length} sub={months.length ? monthWord(months[0]) + " to " + monthWord(months[months.length - 1]) : "none yet"} />
@@ -52,6 +54,18 @@ export default function Salary() {
     <nav className="sbar rp-tabs" aria-label="Salary">{SUBS.map(([k, l]) => <button key={k} data-pay-sub={k} aria-selected={S.paySub === k} onClick={() => { S.paySub = k; render(); }}>{l}</button>)}</nav>
     {S.paySub === "register" ? <Register fy={fy} months={months} /> : S.paySub === "form16" ? <Form16 fy={fy} /> : <Employees fy={fy} />}
   </>;
+}
+
+/* ---------------------------------------------------------------- round 92 (A, F): which pay head is TDS */
+const HOW = { tally: "Tally's statutory type Income Tax", map: "read as TDS under 192 from its ledger", name: "found by its name; Tally's statutory type is blank", chosen: "you chose it" };
+function TdsHeads() {
+  const heads = Payroll.tdsHeads(), ded = Payroll.dedHeads().filter((h) => !heads.includes(h)), old = Payroll.headsOld();
+  return <section className="dash-card" style={{ marginBottom: 12 }} data-pay-tds-heads="">
+    {heads.length ? <p className="note" style={{ margin: 0 }}>TDS pay head{heads.length > 1 ? "s" : ""}: {heads.map((h, i) => <span key={h}>{i ? " · " : ""}<b>{h}</b> ({HOW[Payroll.tdsHow(h)] || ""}) <button className="linkbtn" data-pay-tds-no={h} onClick={() => payTdsHead(h, false)}>Not TDS</button></span>)}</p>
+      : <p className="note warn" style={{ margin: 0 }} data-pay-tds-none="">No pay head is read as TDS, so no employee's TDS is shown. Which one deducts the income tax?</p>}
+    {!heads.length && ded.length > 0 && <p style={{ margin: "6px 0 0" }}>{ded.map((h) => <button key={h} className="btn small" style={{ marginRight: 6, marginBottom: 4 }} data-pay-tds-yes={h} onClick={() => payTdsHead(h, true)}>{h}: this pay head is TDS</button>)}</p>}
+    {old && <p className="note warn" style={{ margin: "6px 0 0" }} data-pay-heads-old="">Tally's pay heads came without their types (the ledgers were last read before FinCom Bridge 2.4.4), so earnings, deductions and TDS cannot be told apart. <button className="linkbtn" data-pay-ask-ledgers="" onClick={() => payAskLedgers()}>Update ledgers from Tally</button></p>}
+  </section>;
 }
 
 /* ---------------------------------------------------------------- employees, and what FinCom keeps for each */
@@ -217,7 +231,14 @@ export function Return24Tally({ fy, q }) {
   const rc = retChallans("24Q", fy, q), usedN = rc.n, val = checkReturn(fy, q, "24Q");
   const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length, problems: val.n });
   const sal = val.warnings.find((x) => x.k === "salary"), un = val.errors.find((x) => x.k === "unmatched"), np = val.warnings.find((x) => x.k === "nopan");
-  const emps = new Set(a1.map((r) => r.employee)).size;
+  const emps = new Set(a1.filter((r) => !r.unsplit && !r.unsplitBooks).map((r) => r.employee)).size;
+  // round 92 (B, D): TDS not split by employee, and employees with TDS without a PAN (after Tally, the PAN book and the
+  // "Salary <name>" ledger), each with Add PAN
+  const unTds = r2(a1.filter((r) => r.unsplit || r.unsplitBooks).reduce((a, r) => a + r.tds, 0));
+  const noPan = Array.from(new Set(a1.filter((r) => r.tds > 0.005 && !r.unsplit && !r.unsplitBooks && !Certs.validPan(r.pan)).map((r) => r.employee)));
+  const splitNote = unTds > 0.005 ? <p className="note warn" data-pay-split="">TDS deducted {money(tds)} · split by employee {money(r2(tds - unTds))} · <b>{money(unTds)} not split by employee</b>: the books carry it under 192 but no employee's TDS does. Mark the TDS pay head under Employees &amp; declarations, or check the payroll in Tally; the file is made once it is split.</p> : null;
+  const panNote = noPan.length > 0 ? <div className="note warn" data-pay-nopan="" style={{ marginBottom: 8 }}>PAN missing for {noPan.length} employee{noPan.length === 1 ? "" : "s"} with TDS (not in Tally, the PAN book or the “Salary &lt;name&gt;” ledger). Add PAN:
+    {noPan.map((n) => <span key={n} style={{ display: "inline-block", marginLeft: 12 }}>{n} <PanBox party={n} compact /></span>)}</div> : null;
   const steps = [
     { id: "deductor", label: "Deductor", done: !val.warnings.some((x) => x.k === "deductor") },
     { id: "deductees", label: stepName("deductees", "24Q"), count: emps, sub: np ? { text: np.n + " PAN" } : null },
@@ -248,21 +269,22 @@ export function Return24Tally({ fy, q }) {
     <MatchDialogs form="24Q" fy={fy} q={q} />
     <ReturnShell fy={fy} q={q} form="24Q" status={status} draft={TDS.isNew(fy) && !filed} val={val} primary={S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined}
       more={[["The challan register", () => tdsNav("register")]]}
-      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: "from Tally's payroll" }, { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
+      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: unTds > 0.005 ? "deducted · " + money(r2(tds - unTds)) + " split by employee" : "from Tally's payroll" }, { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
     {S.tdsTab === "deductor" ? <DeductorDetails />
       : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
-      : S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" className="bk-table rt-rows" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
+      : S.tdsTab === "deductions" ? <>{splitNote}{panNote}<ListTable name="q24Annex1" id="q24A1Table" className="bk-table rt-rows" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
         empty="No salary paid or credited in this quarter."
         cols={[
-          { k: "emp", role: "party", label: "Employee", v: (r) => r.employee, cell: (r) => r.employee },
-          { k: "pan", label: "PAN", v: (r) => r.pan, cell: (r) => <Pan pan={r.pan} /> },
+          { k: "emp", role: "party", label: "Employee", v: (r) => r.employee || r.party, cell: (r) => (r.unsplit || r.unsplitBooks ? <span data-pay-unsplit={r.id} title={r.note || ""}><span className="tag warn">{Payroll.UNSPLIT}</span>{r.unsplitBooks && r.party ? " " + r.party : ""}</span>
+            : <>{r.employee}{r.note ? <small className="note" title={r.note}> · arrears</small> : null}</>) },
+          { k: "pan", label: "PAN", v: (r) => r.pan, cell: (r) => (r.unsplit || r.unsplitBooks ? "—" : <Pan pan={r.pan} />) },
           { k: "date", role: "date", label: "Paid or credited", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => day(r.date) },
           { k: "paid", role: "amount", label: "Amount", cls: "n", v: (r) => r.paid, fmt: money, sum: true, cell: (r) => money(r.paid) },
           { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, sum: true, cell: (r) => money(r.tds) },
           { k: "ded", role: "date", label: "Deducted on", v: (r) => TDS.ymd(r.deducted), cell: (r) => day(r.deducted) || "—" },
           // next-challan-match: the challan, "BSR · date · section", opening the Move dialog (it was read only)
           { k: "ch", label: "Challan", v: (r) => r.challanNo, cell: (r) => (r.tds > 0 ? <span data-challan-of={r.id}><ChallanCell r={r} /></span> : "—") },
-        ]} />
+        ]} /></>
       : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form="24Q" />
       : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" />
       : S.tdsTab === "people" ? <><Salary />{q === "Q4" && <section className="dash-card" style={{ marginTop: 12 }} data-annex2=""><h3>Annexure II, the year</h3><ListTable name="q24Annex2" id="q24A2Table" rows={Payroll.annexII(fy)} rowKey={(x) => x.guid} unit={["employee", "employees"]}

@@ -66,13 +66,96 @@ const Payroll = {
   // reimb: reimbursements (paid, not salary); loan: loans and advances (recovered, not salary)
   kind(name){
     const t = String(this.head(name).type || "");
-    if (/reimburse/i.test(t)) return "reimb";
+    // round 92 (E): arrears are salary, whatever type the pay head has in Tally (a client's "Arears" typed a reimbursement)
+    if (/reimburse/i.test(t)) return this.isArrears(name) ? "earn" : "reimb";
     if (/loan|advance/i.test(t)) return "loan";
     if (/employer/i.test(t) || /gratuity/i.test(t)) return "employer";
     if (/deduction/i.test(t)) return "ded";
+    if (!t.trim() && this.isTds(name)) return "ded";       // a TDS head Tally gave no type
     return "earn";
   },
-  isTds(name){ return /^income\s*tax$/i.test(String(this.head(name).stat || "").trim()); },
+  isArrears(name){ return /\bar{1,2}ears?\b/i.test(String(name || "")); },
+  // ---------- round 92 (A): the TDS pay head. Tally's statutory type "Income Tax"; else a deduction head the ledger map
+  // reads as TDS under 192 (392 under the Act of 2025), or whose name says so ("TDS 192B", "TDS on Salary", "Income Tax");
+  // a person's choice on the payroll page ("This pay head is TDS" / "Not TDS", kept in the ledger map: payTds) over all
+  // of them. A client's head "TDS 192B" (Deductions From Employees, group TDS) has Tally's statutory type blank: it was
+  // read as no TDS, and every employee's TDS as 0. How it is known: "chosen", "tally", "map", "name"; "" when not TDS
+  tdsChoice(name){ const m = (this.books().map || {})[name]; return m && typeof m.payTds === "boolean" ? m.payTds : null; },
+  tdsName(name){ const u = String(name || "").toUpperCase(); return /\bINCOME[\s-]*TAX\b/.test(u) || /\b(TDS|I\.?\s?T\.?)\b/.test(u) && /SALAR|\b[13]92/.test(u); },
+  tdsHow(name){
+    const c = this.tdsChoice(name);
+    if (c !== null) return c ? "chosen" : "";
+    const h = this.head(name);
+    if (/^income\s*tax$/i.test(String(h.stat || "").trim())) return "tally";
+    if (/earning|reimburse|employer|loan|advance|gratuity/i.test(String(h.type || ""))) return "";
+    const m = typeof Books === "object" ? Books.ledgerOf(name) : null;
+    if (m && m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || ""))) return "map";
+    return this.tdsName(name) ? "name" : "";
+  },
+  isTds(name){ return !!this.tdsHow(name); },
+  tdsHeads(){ return Object.keys(this.data().heads || {}).filter(h => this.isTds(h)).sort(); },
+  // the heads a person may mark as TDS: the employee's deductions (and heads Tally gave no type)
+  dedHeads(){ return Object.keys(this.data().heads || {}).filter(h => { const t = String(this.head(h).type || ""); return /deduction/i.test(t) || !t.trim() && (this.data().allocs || []).some(a => a.head === h); }).sort(); },
+  // F: pay heads read before Bridge 2.4.4 carry no type (the ledgers were last read before it): asked to read them again
+  headsOld(){ const H = this.data().heads || {}, k = Object.keys(H); return k.length > 0 && k.every(n => !String(H[n].type || "").trim() && !String(H[n].stat || "").trim()); },
+  // ---------- D: an employee's PAN: Tally's employee PAN, else FinCom's PAN book by the employee's name (TDS.panPick), else
+  // the PAN of the employee's own ledger, "Salary <name>" (the PAN book, or Tally's ledger PAN)
+  panOf(name, e, ledger){
+    let p = TDS.panPick(name, e ? e.pan : "");
+    if (/^[A-Z]{5}\d{4}[A-Z]$/.test(p)) return p;
+    const ls = Array.from(new Set([ledger, "Salary " + name].filter(Boolean)));
+    for (const l of ls){ const x = TDS.panOf(l); if (/^[A-Z]{5}\d{4}[A-Z]$/.test(x)) return x; }
+    return p;
+  },
+  // ---------- C: salary kept without payroll. An employee's own ledger: "Salary <name>", a ledger under Salary Payable, or
+  // one named as a payroll employee; its employee's name, else ""
+  empLedger(l){
+    const s = String(l || "").trim(), m = s.match(/^salary\s*[-:]?\s+(.+)$/i);
+    if (m && !/^(payable|a\/?c\b|account|exp|expenses?\b|advance|wages|&|and\b|outstanding|due|paid|to\b|on\b|of\b|for\b|staff|allowance|arrear)/i.test(m[1].trim()) &&
+        !/payable|expense|account|\ba\/c\b|wages|provision/i.test(m[1])) return m[1].trim();
+    if (this.empByName(s)) return this.empByName(s).name;
+    const b = this.books(), up = typeof ledUnder === "function" ? String(ledUnder(b, s) || "") : "";
+    if (/^salar(y|ies)\s*payable$/i.test(up.trim()) && !/^salar(y|ies)\b/i.test(s)) return s;
+    return "";
+  },
+  // the books' 192 row of an entry (TDS.allRows) as one row per employee where the entry says whose salary it is: the
+  // employee's own ledger credited with the net (gross = net + TDS) or debited when the tax is deducted on paying (gross =
+  // the debit); several employees in one entry each with their own salary expense line, in the same order. Else null: the
+  // row stays the entry's, said "TDS not split by employee"
+  splitBooks(v, r){
+    if (!v || !(v.ent || []).length) return null;
+    const L = typeof Books === "object" ? Books.lines(v) : {tds: []};
+    if ((L.tds || []).filter(t => /^(192|392)/.test(String(t.section || ""))).length !== 1) return null;
+    const emps = v.ent.filter(e => Math.abs(num(e.a)) >= 0.005 && this.empLedger(e.l));
+    if (!emps.length) return null;
+    const T = r2(r.tds);
+    if (emps.length === 1){
+      const e = emps[0], paid = e.a > 0 ? r2(num(e.a) + T) : r2(-num(e.a));
+      return [{employee: this.empLedger(e.l), ledger: e.l, paid, tds: T}];
+    }
+    const bank = l => { const k = (Books.ledgerOf(l) || {}).kind; return k === "bank" || /tds|tcs|gst|roundoff/.test(String(k || "")); };
+    const exp = v.ent.filter(e => e.a < 0 && !this.empLedger(e.l) && !bank(e.l));
+    if (!emps.every(e => e.a > 0) || exp.length !== emps.length) return null;
+    const parts = emps.map((e, i) => ({employee: this.empLedger(e.l), ledger: e.l, paid: r2(-num(exp[i].a)), tds: r2(-num(exp[i].a) - num(e.a))}));
+    if (parts.some(x => x.tds < -0.005) || Math.abs(r2(parts.reduce((a, x) => a + x.tds, 0)) - T) > 0.01) return null;
+    return parts;
+  },
+  // TDS.salaryRows' books rows (section 192), one per employee where the entry says whose: id "<entry>|<TDS ledger>|<employee
+  // ledger>", from: "books"
+  booksRows(rows){
+    const b = this.books(), by = new Map(); (b.vouchers || []).forEach(v => { if (v && v.id) by.set(v.id, v); });
+    const out = [];
+    rows.forEach(r => {
+      const parts = this.splitBooks(by.get(String(r.id).split("|")[0]), r);
+      if (!parts){ out.push(Object.assign({}, r, {section: r.section || "192", unsplitBooks: true})); return; }
+      parts.forEach(x => {
+        const e = this.empByName(x.employee), name = e ? e.name : x.employee, id = String(r.id) + "|" + x.ledger;
+        out.push(Object.assign({}, r, {id, party: name, employee: name, empLedger: x.ledger, pan: this.panOf(name, e, x.ledger), tallyPan: e ? e.pan : "", guid: e ? e.guid : "",
+          section: "192", paid: x.paid, tds: x.tds, rate: x.paid ? r2(x.tds / x.paid * 100) : null, rateFrom: "books", from: "books", challan: (b.alloc || {})[id] || ""}));
+      });
+    });
+    return out;
+  },
   isPT(name){ return /professional\s*tax/i.test(String(this.head(name).stat || "")); },
   // an earning's part of salary for the forms: basic, HRA, or other
   part(name){ const c = String(this.head(name).it || ""); return /^basic/i.test(c) ? "basic" : /house\s*rent/i.test(c) ? "hra" : /dearness/i.test(c) ? "da" : "other"; },
@@ -131,25 +214,42 @@ const Payroll = {
   // within two months. id "pay:<entry GUID>|<employee>"
   tdsRows(){ return typeof perRender === "function" ? perRender(this, "tdsRows", () => this.tdsRowsNow()) : this.tdsRowsNow(); },
   tdsRowsNow(){
-    const d = this.data(), b = this.books(), by = {};
+    const d = this.data(), b = this.books(), by = {}, ents = {};
     d.allocs.forEach(a => {
       const k = a.guid + "|" + normName(a.employee), kind = this.kind(a.head);
-      const r = by[k] = by[k] || {guid: a.guid, employee: a.employee, credit: a.day, paid: 0, tds: 0};
-      if (kind === "earn") r.paid = r2(r.paid - a.amt);
+      const r = by[k] = by[k] || {guid: a.guid, employee: a.employee, credit: a.day, paid: 0, tds: 0, arrears: 0};
+      if (kind === "earn"){ r.paid = r2(r.paid - a.amt); if (this.isArrears(a.head)) r.arrears = r2(r.arrears - a.amt); }
       if (this.isTds(a.head)) r.tds = r2(r.tds + a.amt);
+      if (!ents[a.guid]) ents[a.guid] = a.day;
     });
     const out = Object.values(by).filter(r => r.paid > 0.005 || r.tds > 0.005).map(r => {
       const e = this.empByName(r.employee), pay = d.pays.filter(p => normName(p.employee) === normName(r.employee) && p.paidOn >= r.credit && TDS.monthsBetween(r.credit, p.paidOn) <= 2)
         .sort((x, y) => x.paidOn.localeCompare(y.paidOn))[0];
       const date = r.credit, id = "pay:" + r.guid + "|" + r.employee;
-      // next-tds-clear: Tally's payroll PAN, else the one in FinCom's PAN book (b.panFix; TDS.panPick, the order of truth)
-      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: TDS.panPick(r.employee, e ? e.pan : ""), tallyPan: e ? e.pan : "", guid: e ? e.guid : "",
+      // next-tds-clear: Tally's payroll PAN, else the one in FinCom's PAN book (b.panFix; TDS.panPick, the order of truth);
+      // round 92 (D): else the PAN of the employee's "Salary <name>" ledger
+      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: this.panOf(r.employee, e), tallyPan: e ? e.pan : "", guid: e ? e.guid : "",
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
-        src: "payroll", challan: (b.alloc || {})[id] || ""};
-    }).sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
+        src: "payroll", challan: (b.alloc || {})[id] || "", ...(r.arrears ? {arrears: r.arrears, note: "includes arrears ₹" + INR.format(r.arrears) + " (a reimbursement head in Tally, counted as salary)"} : {})};
+    });
+    // round 92 (B): the TDS the books' 192 line of a payroll entry carries beyond what its employees' TDS adds up to (a TDS
+    // head not read as TDS, an employee's TDS missing from the split) stays, as its own row "TDS not split by employee"
+    // with a warning: never dropped. id "pay:<entry>|~"
+    const split = {}; out.forEach(r => { const g = r.id.slice(4, r.id.indexOf("|")); split[g] = r2((split[g] || 0) + r.tds); });
+    (b.vouchers || []).forEach(v => {
+      if (!v || !ents[v.id] || !d.vouchers[v.id] || typeof Books !== "object") return;
+      const bk = r2((Books.lines(v).tds || []).filter(t => /^(192|392)/.test(String(t.section || ""))).reduce((a, t) => a + t.amount, 0)), gap = r2(bk - (split[v.id] || 0));
+      if (gap < 0.5) return;
+      const date = ents[v.id], id = "pay:" + v.id + "|~", vv = d.vouchers[v.id];
+      out.push({id, date, credit: date, paidOn: "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: this.UNSPLIT, employee: this.UNSPLIT, pan: "", tallyPan: "", guid: "", section: "192", ledger: "",
+        paid: 0, tds: gap, rate: null, voucher: vv.no || "", type: vv.type || "", src: "payroll", challan: (b.alloc || {})[id] || "", unsplit: true, booksTds: bk,
+        note: "The books' TDS of this payroll entry is ₹" + INR.format(bk) + "; its employees' TDS adds up to ₹" + INR.format(split[v.id] || 0) + ". Mark the TDS pay head (Employees & declarations) or check the payroll in Tally."});
+    });
+    out.sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
     // next-challan-match: a month's TDS split across challans by a person is its parts (TDS.expandSplits)
     return TDS.expandSplits(out);
   },
+  UNSPLIT: "TDS not split by employee",
   // next-challan-match (the owner, 17-Oct-2026: matches are shown and confirmed, never applied by themselves): the months a
   // Tally payroll TDS payment says it pays are now rule a ("From Tally") of the one matcher (TDSMatch.links, src/js/86),
   // shown on Form 138's Challans tab for a person to confirm. Nothing is tagged here any more; kept so its callers (the
@@ -158,7 +258,8 @@ const Payroll = {
   // ---------- 24Q Annexure I: per employee per month, the amount paid or credited, the TDS, the dates and the challan
   annexI(fy, q){
     const ch = {}; (this.books().challans || []).forEach(c => { ch[c.id] = c; });
-    return this.tdsRows().filter(r => r.fy === fy && r.q === q).map(r => {
+    // round 92 (C): with the books' salary entries of the year (months kept without payroll), as TDS.salaryRows has them
+    return TDS.salaryRows().filter(r => r.fy === fy && r.q === q).map(r => {
       const c = ch[r.challan] || null;
       return Object.assign({}, r, {deducted: r.tds > 0.005 ? r.date : "", challanBsr: c ? c.bsr : "", challanNo: c ? c.serial : "", challanDate: c ? c.date : ""});
     });
@@ -173,6 +274,10 @@ const Payroll = {
       if (this.isPT(a.head)) s.pt = r2(s.pt + a.amt);
       if (this.isTds(a.head)) s.tds = r2(s.tds + a.amt);
       s.months.add(this.ym(a.day));
+    });
+    // round 92 (C): a month the books carry for this employee without payroll (a salary journal): its salary and TDS
+    TDS.salaryRows().filter(r => r.from === "books" && r.fy === fy && normName(r.employee) === normName(e.name)).forEach(r => {
+      s.other = r2(s.other + r.paid); s.gross = r2(s.gross + r.paid); s.tds = r2(s.tds + r.tds); s.months.add(this.ym(r.date));
     });
     s.months = s.months.size;
     return s;
@@ -194,6 +299,9 @@ const Payroll = {
     const out = [], rows = this.annexI(fy, q), emp = this.employees();
     const noPan = Array.from(new Set(rows.filter(r => !Certs.validPan(r.pan)).map(r => r.employee)));
     if (noPan.length) out.push({what: "Employees without a valid PAN", n: noPan.length, how: "Tax is at least 20% without one (section 206AA). Add the PAN on the employee in Tally (Payroll Info, Employee).", who: noPan.slice(0, 4)});
+    // round 92 (B): TDS of a salary entry not split by employee
+    const uns = rows.filter(r => r.unsplit || r.unsplitBooks);
+    if (uns.length) out.push({what: "Salary TDS not split by employee", n: uns.length, how: "The books carry ₹" + INR.format(r2(uns.reduce((a, r) => a + r.tds, 0))) + " of TDS under 192 that is not on any employee. Mark the TDS pay head (Employees & declarations), or check the payroll in Tally.", who: uns.slice(0, 4).map(r => fmtDate(tallyDate(r.date)) + " ₹" + INR.format(r.tds))});
     const untagged = rows.filter(r => r.tds > 0.005 && !r.challan);
     if (untagged.length) out.push({what: "Salary TDS not tagged to a challan", n: untagged.length, how: "Pay it with Tally's Stat Payment of Income Tax and its challan (Challan Reconciliation), or tag it under Challans.", who: untagged.slice(0, 4).map(r => r.employee + " " + fmtDate(tallyDate(r.date)))});
     if (q === "Q4"){
@@ -311,8 +419,19 @@ const TDS24Q_FILE = {
   // {error}
   rowsOf(fy, q){
     const src = TDS.salarySource(fy), all = TDS.salaryRows().filter(r => r.fy === fy && r.q === q);
+    // round 92 (C): salary kept without payroll, every entry naming its employee's own ledger: the books' rows by employee
+    if (src === "books" && all.length && all.every(r => r.from === "books")){
+      const un = TDS26Q.untaggedError(all);
+      if (un) return un;
+      const rows = all.filter(r => r.tds > 0.005 && r.challan);
+      return rows.length ? {rows, src: "books"} : {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
+    }
     if (src === "books") return {error: all.length ? "The books' salary TDS under 192 does not say which employee it is for: bring in the salary sheet (or Tally's payroll) to make the " + TDS.formName("24Q", fy) + " file." : "No salary TDS of " + q + " " + fy + "."};
-    const mine = src === "payroll" ? Payroll.tdsRows().filter(r => r.fy === fy && r.q === q) : TDS24Q.dedRows().filter(r => r.fy === fy && r.q === q), un = TDS26Q.untaggedError(mine);
+    // round 92: a payroll year's rows are TDS.salaryRows' (Tally's payroll and the books' salary entries by employee)
+    const mine = src === "payroll" ? all : TDS24Q.dedRows().filter(r => r.fy === fy && r.q === q);
+    const uns = mine.filter(r => r.unsplit || r.unsplitBooks);
+    if (uns.length) return {error: "₹" + INR.format(r2(uns.reduce((a, r) => a + r.tds, 0))) + " of " + q + " " + fy + "'s salary TDS is not split by employee: mark the TDS pay head (Employees & declarations) or check the payroll in Tally, then make the file."};
+    const un = TDS26Q.untaggedError(mine);
     if (un) return un;
     const rows = mine.filter(r => r.tds > 0.005 && r.challan).map(r => Object.assign({}, r, {employee: r.employee || r.party}));
     if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
@@ -323,7 +442,7 @@ const TDS24Q_FILE = {
     if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, "24Q");
     const got = this.rowsOf(fy, q);
     if (got.error) return got;
-    if (q === "Q4" && got.src === "sheet") return {error: "Annexure II (the year's salary details) is built from Tally's payroll only: the salary sheet gives Annexure I. File the fourth quarter's 24Q with Protean's RPU, or bring the payroll in from Tally."};
+    if (q === "Q4" && (got.src === "sheet" || got.src === "books")) return {error: "Annexure II (the year's salary details) is built from Tally's payroll only: the salary sheet gives Annexure I. File the fourth quarter's 24Q with Protean's RPU, or bring the payroll in from Tally."};
     const rows = got.rows;
     const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; });
     const used = {};
@@ -423,6 +542,23 @@ function payDetailSet(guid, k, v){
   const e = Payroll.employees().find(x => x.guid === guid);
   if (!Payroll.setDetail(e, k, v)) return;
   saveBooks(); render();
+}
+// round 92 (A): "This pay head is TDS" / "Not TDS": the person's choice, kept in the ledger map as a confirmed choice (payTds),
+// so the books read the head as TDS under 192 too; saved with the books
+function payTdsHead(name, yes){
+  const b = S.books; if (!b || !name) return;
+  b.map = Object.assign({}, b.map || {});
+  const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
+  m.payTds = !!yes; m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = typeof whoAmI === "function" ? whoAmI() : "";
+  if (yes && !(m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")))){ m.what = "tds_payable"; m.kind = "tds_payable"; m.section = "192"; }
+  b.mapV = (b.mapV || 0) + 1;
+  if (typeof toast === "function") toast(yes ? "“" + name + "” is the TDS pay head: each employee's TDS is read from it." : "“" + name + "” is not taken as TDS.");
+  saveBooks(); render();
+}
+// F: pay heads read before Bridge 2.4.4 (no type): the ledgers read from Tally again, the existing ledgers-only wake
+async function payAskLedgers(){
+  try { const r = await Ledgers.askTally(S.coId); toast(r && r.via ? "Tally was asked for the ledgers; the pay heads' types come with them." : "FinCom Bridge or FinCom's cloud is not reaching the Tally computer now."); }
+  catch (e){ toast("Could not ask Tally: " + (e && e.message || e)); }
 }
 function payFvuDownload(fy, q){
   const r = TDS24Q_FILE.build(fy, q, TDS26Q.firmDetails());

@@ -437,7 +437,8 @@ function ledgersReady(which){
 /* ---------- TDS, the way TDS software is laid out: year, then quarter, then the return, then its tabs ---------- */
 function tdsYears(b, rows){
   return Array.from(new Set(rows.map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))).concat(TDS.challans().map(c => TDS.fyOf(c.date)))
-    .concat(typeof Payroll === "object" ? Payroll.data().allocs.map(a => TDS.fyOf(a.day)) : [])))     // bridge 2.4.4: Tally's payroll
+    .concat(typeof Payroll === "object" ? Payroll.data().allocs.map(a => TDS.fyOf(a.day)) : [])     // bridge 2.4.4: Tally's payroll
+    .concat(TDS.salaryRows().map(r => r.fy))))     // round 92: salary TDS in the books (192) alone is TDS here too
     .filter(f => /^\d{4}-\d{2}$/.test(f)).sort().reverse();
 }
 // a TDS return's pages are React (app/src/screens/TdsReturn.jsx); these work out what they show

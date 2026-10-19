@@ -93,6 +93,8 @@ const LedMaster = {
         if (hit){ p.section = hit[1]; why.push("named under the new Act; " + hit[1] + " from the words in the name"); }
       }
       else if (info.tdsNature){ p.section = (String(info.tdsNature).match(/19[2-9][A-Z]{0,2}|206C[A-Z]{0,2}/) || [""])[0]; if (p.section) why.push("Tally: nature " + info.tdsNature); }
+      // round 92 (C): "TDS on Salary", "Salary TDS": section 192 from the word salary
+      if (!p.section && p.what === "tds_payable" && /SALAR/.test(up)){ p.section = "192"; why.push("salary in the name: section 192"); }
       const rn = up.match(/(\d+(?:\.\d+)?)\s*%/);
       if (rn){ p.rate = num(rn[1]); why.push("rate " + rn[1] + "%"); }
       // its group decides over its name (review of 02-Oct-2026: "TDS Magic Seva" and "TDS Pentagon" are kept under Loans &
@@ -101,6 +103,9 @@ const LedMaster = {
       if (/payable/.test(p.what) && under(/^(loans\s*&\s*advances\s*\(asset\)|current assets|deposits\s*\(asset\)|sundry debtors)$/i)){ p.what = tcs ? "tcs_receivable" : "tds_receivable"; p.section = ""; why.push("kept under " + (grp || "an asset group") + ": tax deducted from the client"); }
       else if (/payable/.test(p.what) && under(/^(indirect expenses|direct expenses|purchase accounts|financial expenses|indirect incomes|direct incomes|sales accounts)$/i)){ p.what = /INTEREST|INTREST|LATE\s*FEE|PENALTY|PANELTY/.test(up) ? "tds_interest" : "none"; p.section = ""; why.push("an expense or income ledger (" + (grp || "its group") + "), not a tax account"); }
       if (p.what === "tds_payable" && !p.section) why.push("no section: choose one, or mark it a general TDS account");
+    } else if (/SALAR/.test(up) && /INCOME[\s-]*TAX/.test(up) && !/RECEIVABLE|EXPENSE|INTEREST|ADVANCE|REFUND/.test(up)){
+      // round 92 (C): "Income Tax (Salary)": the tax deducted from salary, section 192
+      p.what = "tds_payable"; p.section = "192"; why.push("income tax on salary in the name: section 192");
     } else if (/\bROUND\s*(ED)?\s*OFF\b/.test(up)){ p.what = "roundoff"; why.push("name"); }
     else if (!/GST|\bTDS\b|\bTCS\b/.test(up) && /\bRCM\b|REVERSE\s*CHARGE/.test(up) && /PAYABLE|LIABILITY|OUTPUT/.test(up)){
       // "07 RCM PAYABLE": the tax owed on reverse charge, credited beside the input tax on the bill

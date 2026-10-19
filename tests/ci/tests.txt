@@ -331,6 +331,8 @@ run_tds_allchallans_ui.py             300  TDSDESK_SITE=../app/dist-test
 # round 89 (19-Oct-2026, "only one challan showing"): an empty browser never hides the challans; one count on every TDS table
 run_book_items_challans.py            120  TDSDESK_SITE=../app/dist-test
 run_tds_accurate.py                   180  TDSDESK_SITE=../app/dist-test
+# round 92 (19-Oct-2026): salary TDS from Tally's payroll with the TDS head's statutory type blank, and from salary journals
+run_salary_tds.py                     240  TDSDESK_SITE=../app/dist-test
 run_tds_challan_match_server.py       120
 # ledger-confirm (14-Oct-2026): TDS and GST ledgers confirmed (and unconfirmed) on the TDS and GST pages, the Tally ledgers
 # listed and picked, the AI guess (a fake AI; the server's batch with Claude and Supabase faked), Settings' pointer

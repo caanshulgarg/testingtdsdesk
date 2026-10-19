@@ -188,13 +188,17 @@ const TDS = {
   salaryRows(){ return typeof perRender === "function" ? perRender(this, "salaryRows", () => this.salaryRowsNow()) : this.salaryRowsNow(); },
   salaryRowsNow(){
     const pay = typeof Payroll === "object" ? Payroll.tdsRows() : [], sheet = typeof TDS24Q === "object" && TDS24Q.dedRows ? TDS24Q.dedRows() : [];
-    const books = this.allRows().filter(r => /^192/.test(String(r.section || "")));
+    // round 92 (C): the books' salary entries (journals, payments) one row per employee where the entry names the employee's
+    // own ledger ("Salary <name>"; Payroll.booksRows, src/js/73)
+    const b192 = this.allRows().filter(r => /^(192|392)/.test(String(r.section || ""))), books = typeof Payroll === "object" && Payroll.booksRows ? Payroll.booksRows(b192) : b192;
     if (!pay.length && !sheet.length) return books;
     const payFy = new Set(pay.map(r => r.fy)), sheetFy = new Set(sheet.map(r => r.fy).filter(fy => !payFy.has(fy)));
     const covered = new Set(pay.map(r => r.id.slice(4, r.id.indexOf("|"))));
     return books.filter(r => !sheetFy.has(r.fy) && !covered.has(String(r.id).split("|")[0])).concat(pay, sheet.filter(r => sheetFy.has(r.fy)))
       .sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
+  // round 92: a TDS ledger for salary by its name: "TDS on Salary", "Salary TDS", "Income Tax (Salary)", "TDS 192"
+  salaryLedger(l){ const u = String(l || "").toUpperCase(); return /SALAR/.test(u) && /\bTDS\b|INCOME[\s-]*TAX|\bI\.?\s?T\.?\b/.test(u); },
   // the source of a year's Form 138 rows: "payroll", "sheet" or "books"
   salarySource(fy){
     if (typeof Payroll === "object" && Payroll.tdsRows().some(x => x.fy === fy)) return "payroll";
@@ -227,6 +231,8 @@ const TDS = {
       // Payable Alok Swarup Gupta Cr · TDS on Rent Cr"): the deductee is the one party ledger credited (TDS.billParty)
       const bp = !sp0 && !v.party ? this.billParty(v) : "";
       L.tds.forEach(t => {
+        // round 92 (C): a TDS ledger with no section whose name says salary ("TDS on Salary", "Salary TDS") is 192
+        if (!t.section && this.salaryLedger(t.ledger)) t = Object.assign({}, t, {section: "192"});
         const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || v.party || bp;
         let B = this.baseFor(t, L, v);
         if (sp && B.how !== "section") B = {paid: 0, rate: null, how: "books"};

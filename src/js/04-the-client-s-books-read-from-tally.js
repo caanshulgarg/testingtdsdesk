@@ -307,6 +307,8 @@ const Books = {
       const rate = (u.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1];
       return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec, rate: rate ? num(rate) : null};
     }
+    // round 92 (C): a TDS ledger for salary with no section in its name ("TDS on Salary", "Salary TDS", "Income Tax (Salary)")
+    if (/SALAR/.test(u) && /\bTDS\b|INCOME[\s-]*TAX/.test(u) && !/RECEIVABLE|EXPENSE|INTEREST|ADVANCE/.test(u)) return {kind: "tds_payable", section: "192", rate: null};
     const gst = u.match(/\b(\d{2})?\s*(CGST|SGST|UTGST|IGST|CESS)\s*(INPUT|OUTPUT)?\b/);
     if (gst && /INPUT|OUTPUT/.test(u)) return {kind: "gst", reg: gst[1] || "", tax: gst[2] === "UTGST" ? "SGST" : gst[2], side: gst[3] === "INPUT" ? "input" : "output"};
     if (/\bROUND\s*(ED)?\s*OFF\b/.test(u)) return {kind: "roundoff"};
