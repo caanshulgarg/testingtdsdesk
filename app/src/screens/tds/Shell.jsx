@@ -101,7 +101,7 @@ export function SideDrawer({ open, onClose, title, description, kind, wide, chil
 
 // the frame. steps: [{id, label, count, done, sub: {text, bad}, off, why}]; strip: [{label, value, sub, bad}]
 // val: the Validate panel's {errors, warnings} (the one problem count); primary: [label, onClick] or null
-export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children }) {
+export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children, progress }) {
   const cur = S.tdsTab, n = val ? val.errors.length + val.warnings.length : 0, filedOn = TDSFiled.get(fy, q, form);
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
@@ -113,6 +113,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <span className="rt-due" title={TDS.FORM_ABOUT[form] || ""}>due {TDS.dueWords(fy, q, form)}</span>
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
+      {progress && <span className="rt-progress" data-ret-progress={progress.done + "/" + progress.of} title="On a challan, with a valid PAN and no rate question">Done: {progress.done} of {progress.of} ready</span>}
       <span className="rt-sp" />
       <More label="⋯" ariaLabel="More" items={more} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
@@ -122,7 +123,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
     <div className="rt-body">
       <nav className="rt-rail" aria-label="Return" data-return-tabs="">
         {steps.map((s, i) => <button key={s.id} type="button" className={"rt-step" + (cur === s.id ? " on" : "")} data-ret-tab={s.id} aria-selected={cur === s.id} aria-current={cur === s.id ? "step" : undefined}
-          disabled={s.off} aria-description={s.off ? s.why : undefined} onClick={() => go(s.id)}>
+          disabled={s.off} aria-description={s.off ? s.why : undefined} title={s.off ? undefined : s.label} onClick={() => go(s.id)}>
           <span className="rt-i" aria-hidden="true">{i + 1}</span><span className="rt-l">{s.label}</span>
           <span className={"rt-c" + (s.id === "file" && n ? (val.errors.length ? " bad" : " warn") : "")} data-rail-count={s.id} {...(s.id === "file" ? { "data-rail-problems": n } : {})}>{s.id === "file" ? (n ? n : "✓") : s.done ? "✓" : s.count != null ? s.count : ""}</span>
           {s.off && !s.sub ? <span className="rt-sub" data-rail-sub={s.id}>once filed</span> : null}{s.sub && s.sub.text ? <span className={"rt-sub" + (s.sub.bad ? " bad" : " warn")} data-rail-sub={s.id}>{s.sub.text}</span> : null}

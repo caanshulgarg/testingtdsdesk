@@ -43,7 +43,7 @@ const TDSAdd = {
     const b = S.books; b.tdsAdded = Object.assign({}, b.tdsAdded || {});
     const k = key || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), was = b.tdsAdded[k], who = typeof TDSReg === "object" ? TDSReg.who() : "", at = new Date().toISOString();
     const rec = {party: String(x.party).trim(), section: x.section, date: d, credit: x.credit ? TDS.ymd(x.credit) : "", paid: r2(num(x.paid)), tds: r2(num(x.tds)),
-      rate: x.rate === "" || x.rate == null ? "" : num(x.rate), rateWhy: x.rateWhy || "", cert: x.cert || "", basis: x.basis || "",
+      rate: x.rate === "" || x.rate == null ? "" : num(x.rate), rateWhy: x.rateWhy || "", cert: x.cert || "", basis: x.basis || "", fromVoucher: x.fromVoucher || "",
       by: was ? was.by : who, at: was ? was.at : at, log: (was ? was.log || [] : []).concat([{act: was ? "edit" : "add", by: who, at}])};
     b.tdsAdded[k] = rec;
     if (x.challan) (b.alloc = Object.assign({}, b.alloc || {}))["fc:" + k] = x.challan;

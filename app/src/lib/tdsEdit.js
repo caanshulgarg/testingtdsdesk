@@ -13,8 +13,8 @@
 // the rate question (Certs.issues), not against a challan, the payment code to confirm (TDS26Q.payCodeRows), and a
 // section FinCom does not know. No new tax rule here.
 const TDSEdit = {
-  FIELDS: ["pan", "section", "rate", "paid", "tds", "dcode", "cert", "remarks"],
-  WORDS: {pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan"},
+  FIELDS: ["pan", "section", "rate", "paid", "tds", "dcode", "cert", "remarks", "date", "credit"],
+  WORDS: {pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan", date: "Date of deduction", credit: "Date paid or credited"},
   all(){ return (S.books && S.books.tdsEdits) || {}; },
   // the deductee code as the return file has carried it: 01 a company (the PAN's fourth letter C), else 02
   codeOf(pan){ return Certs.validPan(pan) && /^[A-Z]{3}C/.test(String(pan).toUpperCase()) ? "01" : "02"; },
@@ -22,7 +22,7 @@ const TDSEdit = {
   apply(r){
     const e = this.all()[r.id], f = e && e.f;
     if (!f || !Object.keys(f).length) return r;
-    r.books = {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: ""};
+    r.books = {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date};
     if (f.pan != null) r.pan = f.pan;
     if (f.section != null) r.section = f.section;
     if (f.paid != null) r.paid = r2(f.paid);
@@ -31,11 +31,14 @@ const TDSEdit = {
     if (f.dcode != null) r.dcode = f.dcode;
     if (f.cert != null) r.cert = f.cert;
     if (f.remarks != null) r.remarks = f.remarks;
+    // next-tds-clear: the dates corrected on the Deductions step (the date of deduction decides the quarter)
+    if (f.date != null && TDS.ymd(f.date).length === 8){ r.date = TDS.ymd(f.date); r.q = TDS.qOf(r.date); r.fy = TDS.fyOf(r.date); }
+    if (f.credit != null && TDS.ymd(f.credit).length === 8) r.credit = TDS.ymd(f.credit) === r.date ? undefined : TDS.ymd(f.credit);
     r.edited = Object.keys(f);
     return r;
   },
   // what the books say for a field of a deduction (to put back, an edit equal to it is dropped)
-  booksOf(r, k){ const b = r.books || {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: ""}; return b[k]; },
+  booksOf(r, k){ const b = r.books || {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date}; return b[k]; },
   same(k, a, b){ return ["rate", "paid", "tds"].includes(k) ? Math.abs(num(a) - num(b)) < 0.005 : String(a == null ? "" : a) === String(b == null ? "" : b); },
   set(r, k, v){
     const b = S.books; b.tdsEdits = b.tdsEdits || {};

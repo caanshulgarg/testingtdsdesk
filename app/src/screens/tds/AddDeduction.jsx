@@ -18,6 +18,17 @@ const iso = (d) => { const t = TDS.ymd(d); return t.length === 8 ? t.slice(0, 4)
 
 export const openAdd = (o) => { S.tdsAdd = o || {}; render(); };
 
+// the party's bills in the books (a purchase or expense entry of the party with no TDS in it, of this return's quarter or
+// the one before), not yet made a deduction here: "Add from a bill" (only when the person chooses it)
+export function billsOf(party, fy, q) {
+  if (!party) return [];
+  const used = new Set(Object.values(TDSAdd.all()).filter((x) => !x.deleted && x.fromVoucher).map((x) => x.fromVoucher));
+  const qs = ["Q1", "Q2", "Q3", "Q4"], i = qs.indexOf(q), want = new Set([fy + q].concat(i > 0 ? [fy + qs[i - 1]] : []));
+  return ((S.books || {}).vouchers || []).filter((v) => !v.opt && !v.cancel && normName(v.party || "") === normName(party) && want.has(TDS.fyOf(v.date) + TDS.qOf(v.date)) && !used.has(v.id))
+    .map((v) => { const L = Books.lines(v); return L.tds.length || !(L.taxable > 0) ? null : { v, amount: r2(L.taxable) }; }).filter(Boolean)
+    .sort((a, b) => TDS.ymd(b.v.date).localeCompare(TDS.ymd(a.v.date))).slice(0, 12);
+}
+
 function parties() {
   const b = S.books || {}, set = new Set();
   TDS.allRows().forEach((r) => { if (r.party) set.add(r.party); });
@@ -49,6 +60,8 @@ export default function AddDeduction({ form, fy, q }) {
   const rate = v.rate !== "" ? num(v.rate) : exp && exp.rate != null ? exp.rate : null;
   const tdsAuto = rate != null && num(v.paid) > 0 ? r2(num(v.paid) * rate / 100) : 0;
   const tds = v.tds !== "" && v.tdsTyped ? num(v.tds) : tdsAuto;
+  const hist = v.party ? TDS.allRows().filter((r) => normName(r.party) === normName(v.party) && r.paid > 0).slice(-6) : [];
+  const usual = hist.length ? r2(hist.reduce((a, r) => a + r.paid, 0) / hist.length) : 0, bills = !correct && !key ? billsOf(v.party, fy, q) : [];
   const certs = Certs.all().filter((c) => (pan && String(c.pan || "").toUpperCase() === pan) || normName(c.party || "") === normName(v.party || ""));
   const chs = TDS.challans().filter((c) => TDSReg.balance(c).tax > 0.005 || c.id === v.challan);
   const plist = parties(), slist = sections(form, fy);
@@ -64,7 +77,7 @@ export default function AddDeduction({ form, fy, q }) {
       TDSReg.forget(); TDSReg.done(); saveBooks(); toast("Corrected in FinCom: " + ch.map(([k]) => (TDSEdit.WORDS[k] || k).toLowerCase()).join(", ") + ". Tally is not changed."); close(); return;
     }
     if (form === "27Q" && v.party && v.basis) tdsNrSet(v.party, "dtaa", v.basis === "DTAA");
-    const r = TDSAdd.save({ party: v.party, section: v.section, credit: v.credit, date: v.date || v.credit, paid: v.paid, rate: rate == null ? "" : rate, tds, cert: v.cert, basis: v.basis, challan: v.challan, rateWhy: v.rateWhy }, key || undefined);
+    const r = TDSAdd.save({ party: v.party, section: v.section, credit: v.credit, date: v.date || v.credit, paid: v.paid, rate: rate == null ? "" : rate, tds, cert: v.cert, basis: v.basis, challan: v.challan, rateWhy: v.rateWhy, fromVoucher: v.fromVoucher || (rec && rec.fromVoucher) || "" }, key || undefined);
     if (!r.ok) { toast(r.why); return; }
     toast((key ? "Changed: " : "Added in FinCom: ") + v.party + " · " + money(tds) + ". Tally is not changed."); close();
   };
@@ -79,7 +92,7 @@ export default function AddDeduction({ form, fy, q }) {
         <label className="ach-f">Section<select aria-label="Section" value={v.section} onChange={(ev) => set("section", ev.target.value)}><option value="">Choose the section…</option>
           {slist.map(([s, l]) => <option key={s} value={s}>{l}</option>)}{v.section && !slist.some(([s]) => s === v.section) ? <option value={v.section}>{v.section}</option> : null}</select></label>
         <label className="ach-f">Paid or credited on<input type="date" aria-label="Paid or credited on" value={v.credit} disabled={correct} onChange={(ev) => setX(Object.assign({}, v, { credit: ev.target.value, date: v.date === v.credit || !v.date ? ev.target.value : v.date }))} /></label>
-        <label className="ach-f">Amount paid or credited<input type="text" inputMode="decimal" aria-label="Amount paid or credited" value={v.paid} onChange={(ev) => set("paid", ev.target.value)} /></label>
+        <label className="ach-f">Amount paid or credited<input type="text" inputMode="decimal" aria-label="Amount paid or credited" value={v.paid} placeholder={usual ? "usually " + INR.format(usual) : ""} onChange={(ev) => set("paid", ev.target.value)} /></label>
         <label className="ach-f">Rate %<input type="text" inputMode="decimal" aria-label="Rate" value={v.rate !== "" ? v.rate : rate != null ? String(rate) : ""} placeholder={exp && exp.rate != null ? String(exp.rate) : ""} onChange={(ev) => setX(Object.assign({}, v, { rate: ev.target.value, tdsTyped: false }))} />
           {exp && exp.why ? <small className="note" data-add-rate-why="">{exp.rate}% applies: {exp.why}</small> : null}</label>
         {rateChanged && <label className="ach-f">Why a different rate<input type="text" aria-label="Why a different rate" value={v.rateWhy} onChange={(ev) => set("rateWhy", ev.target.value)} placeholder="e.g. as agreed under the certificate" /></label>}
@@ -92,6 +105,10 @@ export default function AddDeduction({ form, fy, q }) {
         {!correct && <label className="ach-f">Challan (optional)<select aria-label="Challan" value={v.challan} onChange={(ev) => set("challan", ev.target.value)}><option value="">None yet</option>
           {chs.map((c) => <option key={c.id} value={c.id}>{TDSCH.label(c)} · {money(TDSReg.balance(c).tax)} left</option>)}</select></label>}
       </div>
+      {bills.length > 0 && <div className="add-bills" data-add-bills="">
+        <b>Add from a bill</b> <span className="note">{v.party}'s entries in the books with no TDS in them</span>
+        <ul>{bills.map(({ v: bv, amount }) => <li key={bv.id}><span>{fmtDate(tallyDate(bv.date))} · {bv.type || "entry"} {bv.no || ""} · {money(amount)}</span>
+          <button type="button" className="linkbtn" data-add-bill={bv.id} onClick={() => setX(Object.assign({}, v, { paid: String(amount), credit: iso(bv.date), date: iso(bv.date), section: v.section || TDSAdd.lastSection(v.party), fromVoucher: bv.id, tdsTyped: false }))}>Use this bill</button></li>)}</ul></div>}
       <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
         <button type="button" className="btn small primary" data-add-save="" onClick={save}>{correct ? "Save the correction" : key ? "Save" : "Add deduction"}</button>
         <button type="button" className="btn small" onClick={close}>Cancel</button>

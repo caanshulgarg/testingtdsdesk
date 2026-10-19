@@ -31,6 +31,8 @@ import { ChallanCell, MatchDialogs, PlainDeductions, ChallanSelect, ChallanTicke
 import DeducteesPan, { secShort, secTitle, SecShort } from "./tds/Deductees.jsx";
 import { PanBox } from "./tds/PanBook.jsx";
 import AddDeduction, { openAdd } from "./tds/AddDeduction.jsx";
+import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter } from "./tds/DedSide.jsx";
+import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes, readyCount } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
@@ -178,34 +180,39 @@ const Edited = ({ r, k }) => (r.books && Math.abs(num(r.books[k]) - num(r[k])) >
 // rate · TDS · challan); the voucher, the source and the rate's reason in the row's drawer (Match.jsx RowDetails). A
 // challan chosen at the top: the challan-first two-panel view (ChallanTicker), as on Challans. "By section" swaps the
 // table for the section summary
-function Deductions({ fy, q, rows, issueOf, pass, probs = {}, unitW, edN = 0, fo, form }) {
-  const f = (S.tdsFl || {}).deductions || {};
-  const shown = tdsSorted("deductions", rows.filter((r) => pass(r, f)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
+function Deductions({ fy, q, rows, issueOf, pass, probs = {}, unitW, edN = 0, fo, form, m }) {
+  const f = (S.tdsFl || {}).deductions || {}, locked = TDSReg.locked(fy, q, form);
+  const shown = tdsSorted("deductions", sideFilter(rows.filter((r) => pass(r, f)), m), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
   const LIMIT = 500, sel = S.tdsSel || {};
-  const chSel = S.tdsDedCh ? TDS.challans().find((c) => c.id === S.tdsDedCh) : null;
-  if (chSel) return <ChallanTicker c={chSel} form={form} fy={fy} q={q} locked={TDSReg.locked(fy, q, form)} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" />;
-  if (S.tdsDedView === "sections") return <BySection fy={fy} q={q} form={form} />;
-  return <>
+  return <div className="dd-two">
+    <div className="dd-main">{S.tdsDedView === "sections" ? <BySection fy={fy} q={q} form={form} /> : <DedTable {...{ fy, rows, shown, issueOf, probs, unitW, edN, fo, form, m, locked, sel, LIMIT }} />}</div>
+    <ChallanSide form={form} fy={fy} q={q} rows={rows} m={m} />
+  </div>;
+}
+function DedTable({ fy, rows, shown, issueOf, probs, unitW, edN, fo, form, m, locked, sel, LIMIT }) {
+  const ids = shown.slice(0, LIMIT).map((r) => r.id), C = (r, k, el) => <Cell r={r} k={k} form={form} locked={locked}>{el}</Cell>;
+  return <div onKeyDown={(ev) => onTableKey(ev, ids)} data-ded-keys="">
     <ImportPreview rows={rows} />
     <ListTable name="tdsDeductions" id="tdsDnTable" className="bk-table tg-fit rt-rows gf-off" rows={shown}
       footNote={<span className="note tg-dcount" data-ded-count="">{shown.length + " of " + rows.length + " " + (unitW || "deductions") + " · " + (unitW === "collections" ? "TCS " : "TDS ") + money(shown.reduce((a, r) => a + r.tds, 0)) + (edN ? " · " + edN + " edited in FinCom" : "")}<ClearLink tab="deductions" /></span>} rowKey={(r) => r.id} unit={["deduction", "deductions"]} of={rows.length} sortVia={via("deductions")} limit={LIMIT}
       more={<p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
       empty={rows.length ? "No deduction matches these filters. Use Clear filters to see all." : "Deductions come from the client's books in Tally automatically; add one here (Add deduction) or import Excel (⋯)."} keepHead={rows.length ? <p className="note" style={{ textAlign: "center" }}><ClearLink tab="deductions" bare /></p> : null}
-      rowProps={(r) => ({ "data-ded-row": r.id, className: probs[r.id] ? "rt-fix" : undefined })}
+      rowProps={(r) => ({ "data-ded-row": r.id, tabIndex: 0, className: probs[r.id] ? "rt-fix" : undefined })}
       cols={[
-        { k: "pick", role: "pick", cls: "ck", sort: false, head: <input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((r) => sel[r.id])} onChange={(ev) => selSet(shown.map((r) => r.id), ev.target.checked)} />,
+        { k: "pick", role: "pick", cls: "ck dd-pick", sort: false, head: <input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((r) => sel[r.id])} onChange={(ev) => selSet(shown.map((r) => r.id), ev.target.checked)} />,
           cell: (r) => <input type="checkbox" aria-label={"Select " + r.party} checked={!!sel[r.id]} onChange={(ev) => selSet([r.id], ev.target.checked)} /> },
-        { k: "date", role: "date", label: "Date", cls: "dt", thCls: hfOn("deductions", "month"), filter: <HeadFilter tab="deductions" k="month" label="Month" options={fo.month} />, v: (r) => TDS.ymd(r.date), td: (r) => ({ title: day(r.date) }), cell: (r) => day(r.date).slice(0, 6) },
-        { k: "party", role: "party", label: unitW === "collections" ? "Buyer" : "Deductee", cls: "pty", v: (r) => r.party, cell: (r) => <><button type="button" className="linkbtn rt-name" data-row-detail={r.id} title={(r.voucher ? "Voucher " + r.voucher + " · " : "") + "Details"} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party}</button>{r.added ? <small className="tg-sub-i" data-added="" title={"Added in FinCom" + (r.addedBy ? " by " + r.addedBy : "")}> · added in FinCom</small> : null}</> },
+        { k: "date", role: "date", label: "Date", cls: "dt", thCls: hfOn("deductions", "month"), filter: <HeadFilter tab="deductions" k="month" label="Month" options={fo.month} />, v: (r) => TDS.ymd(r.date), td: (r) => ({ title: "Deducted on " + day(r.date) + (r.credit ? ", paid or credited on " + day(r.credit) : "") }), cell: (r) => C(r, "date", day(r.date).slice(0, 6)) },
+        { k: "party", role: "party", label: unitW === "collections" ? "Buyer" : "Deductee", cls: "pty", v: (r) => r.party, cell: (r) => <><button type="button" className="linkbtn rt-name" data-row-detail={r.id} title={(r.voucher ? "Voucher " + r.voucher + " · " : "") + "Details"} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party}</button>{r.added ? <small className="tg-sub-i" data-added="" title={"Added in FinCom" + (r.addedBy ? " by " + r.addedBy : "")}> · added in FinCom</small> : null}<Fixes r={r} issue={issueOf[r.id]} m={m} locked={locked} /></> },
         { k: "pan", label: "PAN", thCls: hfOn("deductions", "pan"), filter: <HeadFilter tab="deductions" k="pan" label="PAN" options={fo.pan} />, v: (r) => r.pan || "", cell: (r) => <span data-pan="">{Certs.validPan(r.pan) ? r.pan : <PanBox party={r.party} compact />}</span> },
-        { k: "section", label: "Section", thCls: hfOn("deductions", "section"), filter: <HeadFilter tab="deductions" k="section" label="Section" options={fo.section} />, v: (r) => r.section || "", td: (r) => ({ title: secTitle(r.section, fy) || undefined }), cell: (r) => <span data-sec={TDS.sec(r.section)}><SecShort s={r.section} fy={fy} /></span> },
-        { k: "paid", label: "Paid", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => <>{money(r.paid)}<Edited r={r} k="paid" /></> },
-        { k: "rate", label: "Rate", cls: "n", thCls: hfOn("deductions", "rate"), filter: <HeadFilter tab="deductions" k="rate" label="Rate" options={fo.rate} />, v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} /> },
-        { k: "tds", label: unitW === "collections" ? "TCS" : "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => <>{money(r.tds)}<Edited r={r} k="tds" /></> },
-        { k: "challan", label: "Challan", thCls: hfOn("deductions", "challan"), filter: <HeadFilter tab="deductions" k="challan" label="Challan" options={fo.challan} />, v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanCell r={r} /> },
+        { k: "section", label: "Section", thCls: hfOn("deductions", "section"), filter: <HeadFilter tab="deductions" k="section" label="Section" options={fo.section} />, v: (r) => r.section || "", td: (r) => ({ title: secTitle(r.section, fy) || undefined }), cell: (r) => C(r, "section", <span data-sec={TDS.sec(r.section)}><SecShort s={r.section} fy={fy} /></span>) },
+        { k: "paid", label: "Paid", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => C(r, "paid", <>{money(r.paid)}<Edited r={r} k="paid" /></>) },
+        { k: "rate", label: "Rate", cls: "n", thCls: hfOn("deductions", "rate"), filter: <HeadFilter tab="deductions" k="rate" label="Rate" options={fo.rate} />, v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => C(r, "rate", <Rate r={r} issue={issueOf[r.id]} />) },
+        { k: "tds", label: unitW === "collections" ? "TCS" : "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => C(r, "tds", <>{money(r.tds)}<Edited r={r} k="tds" /></>) },
+        { k: "challan", label: "Challan (suggested)", thCls: hfOn("deductions", "challan"), filter: <HeadFilter tab="deductions" k="challan" label="Challan" options={fo.challan} />, v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanOrSugg r={r} m={m} locked={locked} /> },
       ]} />
-    <TagBar rows={rows} />
-  </>;
+    <BulkBar rows={rows} issueOf={issueOf} form={form} />
+    <KeysHelp />
+  </div>;
 }
 
 // the rate questions table, shared by the return's checks and the certificates page
@@ -357,7 +364,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
   };
   const fD = (S.tdsFl || {}).deductions || {};
   const shownD = tdsSorted("deductions", rows.filter((r) => pass(r, fD)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
-  const fixN = rows.filter((r) => probs[r.id]).length, file = useRef(null);
+  const fixN = rows.filter((r) => probs[r.id]).length, file = useRef(null), dm = S.tdsTab === "deductions" ? dedMatch(form, fy, q) : null;
+  const sfx = dm ? safeFixes(rows, issueOf, dm) : [], ready = readyCount(rows, issueOf);
   const unit = form === "27EQ" ? "collections" : "deductions";
   const notCh = r2(un.reduce((a, r) => a + r.tds, 0));
   const key = TDSReg.key(form, fy, q), usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length;
@@ -374,7 +382,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
     { id: "after", label: "After filing", off: !TDSReg.filed(fy, q, form), why: "Once the return is marked filed (Validate & file › Mark filed)" },
   ];
   const confirmable = (() => { try { return TDSMatch.suggest(form, fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
-  const primary = S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, form) ? null : undefined;
+  const primary = (S.tdsTab === "challans" || S.tdsTab === "deductions") && confirmable && !TDSReg.locked(fy, q, form) ? null : undefined;
   const more = retMore({ fy, q, form, extra: [["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")],
     ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
     ["Import corrected Excel…", () => { S.tdsTab = "deductions"; render(); setTimeout(() => { const el = document.querySelector("[data-ded-import]"); if (el) el.click(); }, 50); }]] });
@@ -417,8 +425,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
     <MarkFiled fy={fy} q={q} form={form} />
   </div>;
   const tools = <div className="rt-tool" data-step-tool="">
-    <ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} />
-    {!S.tdsDedCh && <><Search value={fD.q} placeholder="Find deductee, PAN, voucher" label="Find a deductee, PAN, voucher or ledger" data-fk="tdsf-deductions" onChange={(v) => tdsFilter("deductions", "q", v, true)} />
+    {<><Search value={fD.q} placeholder="Find deductee, PAN, voucher" label="Find a deductee, PAN, voucher or ledger" data-fk="tdsf-deductions" onChange={(v) => tdsFilter("deductions", "q", v, true)} />
       <Pills cur={S.tdsDedView === "sections" ? "sections" : fD.challan === "no" ? "no" : fD.fix ? "fix" : ""} on={(k) => {
         S.tdsDedView = k === "sections" ? "sections" : "";
         const nf = Object.assign({}, fD, { challan: k === "no" ? "no" : fD.challan === "no" ? "" : fD.challan, fix: k === "fix" ? "1" : "" });
@@ -426,20 +433,22 @@ export function Return26({ b, allRows, form = "26Q" }) {
         S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: nf }); render(); }}
         items={[["", "All"], ["no", "No challan", un.length], ["fix", "Needs fixing", fixN], ["sections", "By section"]]} /></>}
     <span className="rt-sp" />
-    {form !== "27EQ" && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-add-open="" onClick={() => openAdd({ chId: S.tdsDedCh || "" })}>Add deduction</button>}
+    {sfx.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-fix-all="" title={sfx.map((f) => f.label).join("; ")} onClick={() => { let n = 0; sfx.forEach((f) => { const x = f.apply(); if (x && x.ok) n++; }); TDSReg.forget(); TDSReg.done(); saveBooks(); toast(n + " safe fix" + (n === 1 ? "" : "es") + " applied."); render(); }}>Apply all safe fixes ({sfx.length})</button>}
+    {dm && dm.accept.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small primary" data-dd-accept-all="" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Accept all {dm.accept.reduce((a, s) => a + s.ids.length, 0)} suggestions</button>}
+    {form !== "27EQ" && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-add-open="" onClick={() => openAdd({ chId: S.tdsDedChF && S.tdsDedChF !== "__none" ? S.tdsDedChF : "" })}>Add deduction</button>}
     <More label="⋯" ariaLabel="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Excel to correct and bring back (these " + shownD.length + ")", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
       ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
     <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} />
   </div>;
   return <>
     <ReturnShell fy={fy} q={q} form={form} status={status} statusTitle={drift && drift.rows.length ? "Filed, and changed in Tally since: a correction is needed" : TDSReg.corrOpen(fy, q, form) ? "A correction is open: this return’s challans may change" : undefined}
-      draft={draft && !filed} val={val} primary={primary} more={more} strip={strip} steps={steps}>
+      draft={draft && !filed} val={val} primary={primary} more={more} strip={strip} steps={steps} progress={rows.length ? { done: ready, of: rows.length } : null}>
       {S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form={form} tallyPays={tallyPaysOf(fy, q)} />
         : S.tdsTab === "deductor" ? <DeductorDetails />
         : S.tdsTab === "deductees" ? <><DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
           {/* 27Q's non-resident details and 27EQ's collection codes, filled where the deductees are */}
           {(form === "27Q" || form === "27EQ") && <div style={{ marginTop: 14 }}><ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} /></div>}</>
-        : S.tdsTab === "deductions" ? <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} /></>
+        : S.tdsTab === "deductions" ? <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} m={dm} /></>
         : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
         : <ValidatePanel fy={fy} q={q} form={form} val={val} reviews={reviews} year={yearChecks(fy)} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}
     </ReturnShell>

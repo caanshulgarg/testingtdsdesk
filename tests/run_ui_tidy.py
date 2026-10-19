@@ -80,7 +80,9 @@ PAGES = [("TDS", "#/c/{cid}/books/tds/2026-27", ""), ("TDS return", "#/c/{cid}/b
          ("26AS", "#/c/{cid}/books/tds/2026-27/26as", ""), ("GST", "#/c/{cid}/books/gst/07/202603/year", ""), ("GSTR-3B", "#/c/{cid}/books/gst/07/202603/r3b/summary", ""),
          ("GST checks", "#/c/{cid}/books/gst/07/202603/filedcmp", ""), ("MIS", "#/c/{cid}/books/mis", RUN_MIS), ("Reports", "#/c/{cid}/books/reports", ""),
          ("Compliance", "#/compliance", ""), ("Clients", "#/clients", "")]
-BAR_PAGES = ["TDS", "TDS return", "Challans", "GST", "MIS", "Reports", "Compliance", "Clients"]
+# next-tds-clear (19-Oct-2026; the owner: TDS "like ClearTax, not cluttered"): the TDS home has a header line with the year
+# (the grid is the filter) and a return its step's own toolbar (tests/run_tds_clear.py), not the filter bar
+BAR_PAGES = ["Challans", "GST", "MIS", "Reports", "Compliance", "Clients"]
 BAR = """(sel) => { const bars = [...document.querySelectorAll('#app [data-filter-bar]')].filter((b) => b.offsetParent);
   const order = ['period', 'type', 'client', 'search', 'clear'];
   return bars.map((b) => { const slots = [...b.querySelectorAll('[data-fb-slot]')].map((s) => s.dataset.fbSlot);
