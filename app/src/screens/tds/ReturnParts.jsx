@@ -8,6 +8,7 @@ import { Upload as TracesUpload, TracesDefaults, Conso } from "./Files.jsx";
 import { UseBalance, SrcBadge, TracesCheck, Said } from "./Register.jsx";
 import { ChallanMatch } from "./Match.jsx";
 import { STEPS, stepNow, SideDrawer } from "./Shell.jsx";
+import { ChallanGrid } from "./Winman.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
@@ -47,10 +48,14 @@ export async function openCorrection(fy, q, form) {
 // next-challan-match (the owner, 17-Oct-2026): the one screen of tds/Match.jsx: the challans as cards, the deductions on
 // each, the suggestions to confirm, what is not matched yet with its next step, the checks before the file. It replaced
 // "This return's challans" with its "Auto-allocate N" and "Add from register" (and the "Suggested tagging" card)
+// round 88 (as Winman): the step opens on the plain grid of challans (tds/Winman.jsx ChallanGrid); the two-panel matcher
+// (S.tdsChView "match", or a challan opened from All challans or Validate & file: S.tdsChSel) is one click away
 export function ReturnChallans({ fy, q, form, tallyPays }) {
+  const match = S.tdsChView === "match" || !!S.tdsChSel;
   return <div data-ret-challans={TDSReg.key(form, fy, q)}>
     <Said />
-    <ChallanMatch fy={fy} q={q} form={form} tallyPays={tallyPays} />
+    {match ? <ChallanMatch fy={fy} q={q} form={form} tallyPays={tallyPays} back={<button type="button" className="linkbtn wd-back" data-chg-back="" onClick={() => { S.tdsChView = ""; S.tdsChSel = ""; render(); }}>← The challans table</button>} />
+      : <ChallanGrid fy={fy} q={q} form={form} tallyPays={tallyPays} />}
   </div>;
 }
 

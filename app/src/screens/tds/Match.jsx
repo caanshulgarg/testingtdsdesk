@@ -31,7 +31,7 @@ const sel = () => S.tdsSel || {};
 const tick = (ids, on) => { const s = { ...sel() }; ids.forEach((id) => { if (on) s[id] = true; else delete s[id]; }); S.tdsSel = s; render(); };
 
 // the challans the screen shows: those this return uses, those suggested for it, and the quarter's own with tax left
-function challansOf(form, fy, q, cx, sugg) {
+export function challansOf(form, fy, q, cx, sugg) {
   const k = TDSReg.key(form, fy, q), want = new Set();
   sugg.forEach((s) => { want.add(s.chId); (s.parts || []).forEach((p) => want.add(p.chId)); });
   const mon = tdsMonths(fy, q), last = mon[mon.length - 1], next = String(+last.slice(4, 6) === 12 ? +last.slice(0, 4) + 1 + "01" : last.slice(0, 4) + String(+last.slice(4, 6) + 1).padStart(2, "0"));
@@ -179,7 +179,7 @@ export function ChallanSelect({ form, fy, q, value, onChange }) {
 // "Confirm N suggestions" while there are any, "Add challan ▾"); the challans as a list on the left (one line each:
 // serial · date · section · ₹ left · a badge), "Not matched (N)" its last item; the one chosen on the right in the
 // two-panel view (ChallanTicker), or what is not matched with its reason and next step
-export function ChallanMatch({ fy, q, form, tallyPays }) {
+export function ChallanMatch({ fy, q, form, tallyPays, back }) {
   const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), locked = TDSReg.locked(fy, q, form), [adding, setAdding] = useState(false), [reg, setReg] = useState(false), [pays, setPays] = useState(false);
   const up = useRef(null);
   const all = TDS.formRows(form).filter((r) => r.fy === fy && r.q === q), byId = {};
@@ -201,7 +201,7 @@ export function ChallanMatch({ fy, q, form, tallyPays }) {
   const nPays = tallyPays ? tallyPays.n : 0;
   const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added; what " + (r.placed === 1 ? "it pays is" : "they pay is") + " suggested here, to confirm."); render(); };
   return <div className="cm" data-challan-match={k}>
-    <div className="cm-tool" data-cm-tool="">
+    <div className="cm-tool" data-cm-tool="">{back}
       <span className="cm-metric" data-cm-metric={m.n + "/" + m.m}><b>{m.n} of {m.m}</b> {unit} matched · <span className={m.k ? "bad" : ""}>{m.k} need{m.k === 1 ? "s" : ""} you</span>
         {m.on ? <span className="note"> ({m.on} on a challan, {m.sugg} waiting for your Confirm)</span> : null}</span>
       {ai && (ai.say || ai.busy) ? <details className="cm-aib" data-cm-ai={ai.busy ? "busy" : ai.state || ""}><summary title="What the AI did">{ai.busy ? "AI is looking…" : "AI ⓘ"}</summary>

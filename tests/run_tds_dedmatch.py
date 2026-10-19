@@ -13,6 +13,12 @@ within this window, just by clicks"). On the made-up books and challans of run_t
      section-month, Add challan and Paid in Tally? Add BSR) · Fix the row · Done (folded); each row in exactly one group,
      the line's counts the groups'; one primary action a to-do row; Confirm and Confirm all move rows out of Confirm at
      once; the headings, reasons and flags are not grey (contrast at least 4.5:1, light and dark); phone: no sideways scroll
+  4. Deductions by challan, as Winman (round 88): the step opens on "Select challan" (no · date · total, "Not on any
+     challan (N)" last; the first with a balance left); the table is that challan's deductions with Winman's columns;
+     the footer (amount · utilised · balance, red below nil · number) equals the challan and stays in view; "+ Add
+     deduction to this challan" lists the deductions not on a challan, the best fit first, one click puts one on and the
+     footer follows; "Not on any challan" is the to-do list; the four tabs at the foot and F8 / F10 / F11 / F12; the
+     Challans grid in the same order, a row opening its deductions; phone: no sideways scroll, nothing under the app's bar
 TDS_DEDMATCH_SHOTS=dir: screenshots (default tests/out/tds-dedmatch)."""
 import os, sys, re, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -32,7 +38,8 @@ m = open(os.path.join(HERE, "run_tds_match_ui.py")).read()
 _k = m.index('CHALLANS = """') + len('CHALLANS = """')
 CHALLANS = m[_k:m.index('"""', _k)]
 GO = "() => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'deductions'; S.tdsDedView = 'table'; S.tdsFl = {}; S.tdsDedChF = ''; S.tdsSel = {}; render(); }"
-TODO = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''")
+TODO = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = '__none'")
+WIN = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = ''")
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -144,7 +151,7 @@ try:
         J("""() => { const ps = Array.from(new Set(TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.party))); let i = 0;
           ps.forEach(p => { if (p === 'ZZ Contractor 1') return; i++; const c = /Contractor/.test(p) ? 'C' : 'P'; tdsDeducteeSet(p, {pan: 'AAA' + c + 'Z' + String(1000 + i) + 'K', name: ''}); }); render(); }""")
         J(TODO); pg.wait_for_timeout(900)
-        ok(pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#tdsDnTable").count() == 0, "the step opens on its to-do list, not the table")
+        ok(pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#tdsDnTable").count() == 0, "Not on any challan: the to-do list, not the table")
         def state():
             return J("""() => { const g = {}; document.querySelectorAll('#app [data-dt-group]').forEach(d => { g[d.dataset.dtGroup] = {n: +d.dataset.dtN, rows: [...d.querySelectorAll('tr[data-dt-row]')].map(t => t.dataset.dtRow), open: d.open}; });
               const line = (document.querySelector('#app [data-dt-line]') || {dataset: {}}).dataset.dtLine || ''; return {g, line}; }""")
@@ -207,6 +214,117 @@ try:
         pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-pay-390.png"), full_page=True)
         J(CHALLANS); pg.wait_for_timeout(600)
         pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-390.png"), full_page=True)
+        print("4. Deductions by challan, as Winman (round 88)")
+        pg.set_viewport_size({"width": 1440, "height": 900}); J(CHALLANS); J("() => tdsMatchConfirmAll()"); pg.wait_for_timeout(500)
+        J(WIN); pg.wait_for_timeout(900)
+        ok(pg.locator("#app [data-wd]").count() == 1 and pg.locator("#app [data-ded-todo]").count() == 0 and pg.locator("#tdsDnTable").count() == 0 and pg.locator("#app [data-dd-side]").count() == 0,
+           "the step opens on a challan: one selector, one table, no to-do list, no side panel")
+        opts = J("[...document.querySelectorAll('#app select[data-wd-sel] option')].map(o => [o.value, o.textContent])")
+        chs = J("() => { const n = TDS.challans().length; return [...document.querySelectorAll('#app select[data-wd-sel] option')].filter(o => o.value !== '__none').map(o => o.value); }")
+        un = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).length")
+        ok(len(chs) >= 3 and all(re.match(r"^%d · \d\d-\w{3}-\d{4} · ₹[\d,.]+$" % (i + 1), o[1]) for i, o in enumerate(opts[:len(chs)])), "the dropdown: one line a challan, “no · date · total” (%s)" % [o[1] for o in opts[:3]])
+        ok(un > 0 and opts[-1] == ["__none", "Not on any challan (%d)" % un], "the dropdown's last line: Not on any challan (%d) (%s)" % (un, opts[-1]))
+        totals = J("(ids) => ids.map(id => { const c = TDS.challans().find(x => x.id === id); return Math.round((num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100; })", chs)
+        said = [float(o[1].split("₹")[-1].replace(",", "")) for o in opts[:len(chs)]]
+        ok(all(abs(a - b) < 0.01 for a, b in zip(said, totals)), "each line's total: tax + interest + fee + others (%s = %s)" % (said[:3], totals[:3]))
+        first = J("(ids) => { const cx = TDSReg.ctx(); return ids.find(id => TDSReg.balance(TDS.challans().find(c => c.id === id), cx).tax > 0.005) || ids[0]; }", chs)
+        cur = pg.input_value("#app select[data-wd-sel]")
+        ok(cur == first, "chosen at first: the first challan with a balance left (%s = %s)" % (cur, first))
+        def table(cid):
+            shown = J("[...document.querySelectorAll('#app [data-wd-table] tbody tr[data-wd-row]')].map(t => t.dataset.wdRow)")
+            want = J("(c) => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === c).map(r => r.id)", cid)
+            return shown, want
+        shown, want = table(cur)
+        ok(sorted(shown) == sorted(want) and shown, "the table: the deductions on that challan only (%d)" % len(shown))
+        heads = J("[...document.querySelectorAll('#app [data-wd-table] thead th')].map(h => h.innerText.trim()).filter(Boolean)")
+        ok(heads[:10] == ["Name", "PAN", "Amount paid", "Paid date", "Deduction date", "TDS", "Rate", "Reason lower/higher", "Section", "Shortfall/Excess"], "Winman's columns (%s)" % heads)
+        def foot():
+            return J("() => { const f = document.querySelector('#app [data-wd-foot]'); return f ? {amt: +f.dataset.amt, used: +f.dataset.used, bal: +f.dataset.bal, n: +f.dataset.n, text: f.innerText, red: !!f.querySelector('[data-wd-bal].bad')} : null; }")
+        def want_foot(cid):
+            return J("(id) => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === id); return {amt: num(c.tax), used: TDSReg.usedTax(c, cx), bal: TDSReg.balance(c, cx).tax, n: TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === id).length}; }", cid)
+        f0, w0 = foot(), want_foot(cur)
+        ok(f0 and all(abs(f0[k] - w0[k]) < 0.01 for k in ("amt", "used", "bal", "n")) and all(x in f0["text"] for x in ["Challan amount", "Amount utilised", "Balance", "Number of deductions"]),
+           "the footer: Challan amount · Amount utilised · Balance · Number of deductions equal the challan (%s / %s)" % (f0, w0))
+        vis = J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top >= 0; }")
+        ok(vis, "the footer is in view without scrolling")
+        last = J("() => { const t = [...document.querySelectorAll('#app [data-wd-table] tbody tr')]; return t.length ? t[t.length - 1].innerText.trim() : ''; }")
+        ok(last.startswith("+ Add deduction to this challan"), "the table's last row: + Add deduction to this challan (%s)" % last)
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-challan-1440.png"), full_page=True)
+        # a row on another challan with balance to take it? use the chosen challan; the best fit offered first
+        pg.click("#app [data-wd-add-open]"); pg.wait_for_timeout(500)
+        cands = J("[...document.querySelectorAll('[data-wd-addlist] [data-wd-cand]')].map(t => t.dataset.wdCand)")
+        bestw = J("""(c) => { const s = TDSMatch.suggest('26Q', '2026-27', 'Q1'), cx = TDSReg.ctx(), ch = TDS.challans().find(x => x.id === c), left = TDSReg.balance(ch, cx).tax;
+          return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).filter(r => r.tds <= left + 0.005 && TDSCH.secOk(TDSCH.secNorm(ch.section), r.section)).map(r => r.id); }""", cur)
+        ok(cands and len(cands) == un and (not bestw or cands[0] in bestw), "+ Add deduction: the deductions not on a challan (%d), the best fit first (%s)" % (len(cands), cands[:2]))
+        tick = cands[0] if cands else ""
+        tds = J("(id) => TDS.rows().find(r => r.id === id).tds", tick) if tick else 0
+        if pg.locator('[data-wd-addlist] [data-wd-put="%s"]' % tick).count():
+            pg.click('[data-wd-addlist] [data-wd-put="%s"]' % tick); pg.wait_for_timeout(500)
+        else:
+            J("(c) => { const t = S.books.challans.find(x => x.id === c); t.tax = num(t.tax) + 100000; TDSReg.forget(); render(); }", cur); pg.wait_for_timeout(400)
+            f0, w0 = foot(), want_foot(cur)
+            pg.click('[data-wd-addlist] [data-wd-put="%s"]' % tick); pg.wait_for_timeout(500)
+        f1 = foot()
+        ok(J("(id) => S.books.alloc[id]", tick) == cur and f1["n"] == f0["n"] + 1 and abs(f1["used"] - (f0["used"] + tds)) < 0.01 and abs(f1["bal"] - (f0["bal"] - tds)) < 0.01,
+           "one click: on the challan, the footer updates (%s → %s)" % ({k: f0[k] for k in ("n", "used", "bal")}, {k: f1[k] for k in ("n", "used", "bal")}))
+        ok(pg.locator('#app [data-wd-table] tr[data-wd-row="%s"]' % tick).count() == 1 and pg.locator('[data-wd-addlist] [data-wd-cand="%s"]' % tick).count() == 0, "the row is in the table, out of the list")
+        ok(pg.locator("[data-wd-addlist] [data-wd-new]").count() == 1, "or type a new one (Add deduction)")
+        J("() => { S.tdsWinAdd = ''; render(); }"); pg.wait_for_timeout(400)
+        # a challan used beyond its tax: the balance in red
+        J("(c) => { const t = S.books.challans.find(x => x.id === c); t._tax = t.tax; t.tax = 1; TDSReg.forget(); render(); }", cur); pg.wait_for_timeout(400)
+        fn = foot(); ok(fn["red"] and fn["bal"] < 0, "a negative balance is red (%s)" % fn)
+        J("(c) => { const t = S.books.challans.find(x => x.id === c); t.tax = t._tax; delete t._tax; TDSReg.forget(); render(); }", cur); pg.wait_for_timeout(400)
+        # another challan chosen
+        other = [c for c in chs if c != cur][0]
+        pg.select_option("#app select[data-wd-sel]", other); pg.wait_for_timeout(500)
+        shown, want = table(other); f2, w2 = foot(), want_foot(other)
+        ok(sorted(shown) == sorted(want) and all(abs(f2[k] - w2[k]) < 0.01 for k in ("amt", "used", "bal", "n")), "another challan chosen: its deductions and its footer (%d)" % len(shown))
+        un = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).length")
+        lk = pg.locator("#app [data-wd-unplaced]")
+        ok(lk.count() == 1 and re.search(r"^%d deductions? not on a challan · Show$" % un, lk.inner_text().strip()), "under the dropdown: “%d deductions not on a challan · Show” (%s)" % (un, lk.inner_text() if lk.count() else ""))
+        help_lines = J("[...document.querySelectorAll('#app [data-wd] p.note, #app [data-wd] .wd-help')].filter(e => e.offsetParent).length")
+        ok(help_lines <= 1, "at most one line of help (%d)" % help_lines)
+        pg.click("#app [data-wd-unplaced] button"); pg.wait_for_timeout(600)
+        ok(pg.input_value("#app select[data-wd-sel]") == "__none" and pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#app [data-dt-group]").count() >= 1, "Show / Not on any challan: the to-do groups")
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-none-1440.png"), full_page=True)
+        # the bottom tabs and F8 / F10 / F11 / F12
+        tabs = J("[...document.querySelectorAll('#app [data-ret-foot] [data-foot-tab]')].map(b => b.dataset.footTab)")
+        ok(tabs == ["deductor", "deductees", "challans", "deductions"], "the tabs at the foot: Deductor · Deductees · Challans · Deductions (%s)" % tabs)
+        fv = J("() => { const f = document.querySelector('#app [data-ret-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top > innerHeight - 90; }")
+        ok(fv, "the tabs stay at the foot of the window")
+        unc = J("""() => ['[data-ret-foot] [data-foot-tab="challans"]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
+        ok(all(unc), "1440: the tabs not under the testing strip (%s)" % unc)
+        seen = []
+        for key, step in [("F10", "challans"), ("F11", "deductees"), ("F8", "deductor"), ("F12", "deductions")]:
+            pg.keyboard.press(key); pg.wait_for_timeout(400); seen.append(J("S.tdsTab"))
+        ok(seen == ["challans", "deductees", "deductor", "deductions"], "F10 Challans, F11 Deductees, F8 Deductor, F12 Deductions (%s)" % seen)
+        pg.focus("#app select[data-wd-sel]"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
+        ok(J("S.tdsTab") == "challans", "the keys work with the focus in a field too")
+        pg.click('#app [data-foot-tab="deductions"]'); pg.wait_for_timeout(400)
+        ok(J("S.tdsTab") == "deductions", "a tab clicked opens its step")
+        # the Challans step: the grid; a row opens its deductions
+        J("() => { S.tdsChView = ''; S.tdsChSel = ''; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(600)
+        pg.screenshot(path=os.path.join(SHOTS, "winman-challans-1440.png"), full_page=True)
+        rows_g = J("[...document.querySelectorAll('#app [data-chg] tbody tr[data-chg-row]')].map(t => t.dataset.chgRow)")
+        ok(rows_g == chs, "Challans: the same challans, in the same order, as the Deductions dropdown (%d)" % len(rows_g))
+        pg.click('#app [data-chg] tr[data-chg-row="%s"]' % other); pg.wait_for_timeout(500)
+        ok(J("S.tdsTab") == "deductions" and pg.input_value("#app select[data-wd-sel]") == other, "a challan clicked: Deductions with it chosen")
+        J("() => { S.tdsQ = 'Q2'; render(); }"); pg.wait_for_timeout(400); J("() => { S.tdsQ = 'Q1'; render(); }"); pg.wait_for_timeout(500)
+        dflt = J("(ids) => { const cx = TDSReg.ctx(); return ids.find(id => TDSReg.balance(TDS.challans().find(c => c.id === id), cx).tax > 0.005) || ids[0]; }", chs)
+        ok(pg.input_value("#app select[data-wd-sel]") == dflt, "another quarter opened and back: the return's own default, not the last return's choice (%s)" % dflt)
+        # phone
+        pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
+        J("(c) => { S.tdsWinCh = c; render(); }", cur); pg.wait_for_timeout(500)
+        ok(J("document.documentElement.scrollWidth") <= 391 and J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1; }"), "phone, a challan chosen: no sideways scroll, the footer in view")
+        unc = J("""() => ['[data-wd-foot]', '[data-ret-foot] [data-foot-tab="challans"]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
+        ok(all(unc), "phone: the footer and the tabs are not under the app's bottom bar (%s)" % unc)
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-challan-390.png"), full_page=True)
+        J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(500)
+        ok(J("document.documentElement.scrollWidth") <= 391, "phone, Not on any challan: no sideways scroll")
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-none-390.png"), full_page=True)
+        J("() => { S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
+        ok(J("document.documentElement.scrollWidth") <= 391, "phone, Challans: no sideways scroll (the table scrolls in its box)")
+        pg.screenshot(path=os.path.join(SHOTS, "winman-challans-390.png"), full_page=True)
         br.close()
 finally:
     srv.shutdown()

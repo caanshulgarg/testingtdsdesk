@@ -35,6 +35,7 @@ import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter, groupRows, GroupHead 
 import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes, readyCount } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
 import DedTodo from "./tds/DedTodo.jsx";
+import { DedByChallan } from "./tds/Winman.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -439,7 +440,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
         const nf = Object.assign({}, fD, { challan: k === "no" ? "no" : fD.challan === "no" ? "" : fD.challan, fix: k === "fix" ? "1" : "" });
         if (!k) { nf.challan = fD.challan === "no" ? "" : fD.challan; nf.fix = ""; }
         S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: nf }); render(); }}
-        items={[["todo", "To do"], ["", "All rows"], ["no", "No challan", un.length], ["fix", "Needs fixing", fixN], ["sections", "By section"]]} /></>}
+        items={[["todo", "By challan"], ["", "All rows"], ["no", "No challan", un.length], ["fix", "Needs fixing", fixN], ["sections", "By section"]]} /></>}
     <span className="rt-sp" />
     {sfx.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-fix-all="" title={sfx.map((f) => f.label).join("; ")} onClick={() => { let n = 0; sfx.forEach((f) => { const x = f.apply(); if (x && x.ok) n++; }); TDSReg.forget(); TDSReg.done(); saveBooks(); toast(n + " safe fix" + (n === 1 ? "" : "es") + " applied."); render(); }}>Apply all safe fixes ({sfx.length})</button>}
     {!todo && dm && dm.accept.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small primary" data-dd-accept-all="" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Accept all {dm.accept.reduce((a, s) => a + s.ids.length, 0)} suggestions</button>}
@@ -448,6 +449,13 @@ export function Return26({ b, allRows, form = "26Q" }) {
       ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
     <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} />
   </div>;
+  // round 88 (as Winman): the step opens on a challan (tds/Winman.jsx DedByChallan); "Not on any challan" is the to-do
+  // list; the table with every filter and By section are under ⋯
+  const winTools = <span className="wd-tools"><More label="⋯" ariaLabel="More" data-wd-more="" items={[["All " + unit + " in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }],
+      ["By section", () => { S.tdsDedView = "sections"; render(); }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")],
+      ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
+      ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
+    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} /></span>;
   return <>
     <ReturnShell fy={fy} q={q} form={form} status={status} statusTitle={drift && drift.rows.length ? "Filed, and changed in Tally since: a correction is needed" : TDSReg.corrOpen(fy, q, form) ? "A correction is open: this return’s challans may change" : undefined}
       draft={draft && !filed} val={val} primary={primary} more={more} strip={strip} steps={steps} progress={rows.length ? { done: ready, of: rows.length } : null}>
@@ -456,7 +464,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
         : S.tdsTab === "deductees" ? <><DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
           {/* 27Q's non-resident details and 27EQ's collection codes, filled where the deductees are */}
           {(form === "27Q" || form === "27EQ") && <div style={{ marginTop: 14 }}><ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} /></div>}</>
-        : S.tdsTab === "deductions" ? todo ? <>{tools}<DedTodo form={form} fy={fy} q={q} rows={rows.filter((r) => pass(r, fD))} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} /></>
+        : S.tdsTab === "deductions" ? todo ? <><DedByChallan form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} tools={winTools}
+            todo={<DedTodo form={form} fy={fy} q={q} rows={rows.filter((r) => pass(r, fD))} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} />} /><ImportPreview rows={rows} /></>
           : <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} m={dm} /></>
         : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
         : <ValidatePanel fy={fy} q={q} form={form} val={val} reviews={reviews} year={yearChecks(fy)} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}

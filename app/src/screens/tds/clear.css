@@ -341,3 +341,57 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 /* a to-do row's one action: outlined in the brand colour, bold (the page's one filled button is Confirm all / Next) */
 .dt .btn.dt-do { border: 1.5px solid var(--brand); color: var(--brand); background: var(--sheet); font-weight: 600; }
 .dt .btn.dt-do:hover { background: var(--brand-tint); }
+
+/* round 88 (as Winman TDS): Deductions by challan, the Challans grid, the four tabs at a return's foot (tds/Winman.jsx) */
+.rt { --rt-foot-h: 44px; --rt-foot-off: var(--bottom-banner-h, 0px); }
+/* on a phone the app's own bar is along the bottom (64 px, src/css/app.css): the tabs sit just over it */
+@media (max-width: 600px) { body:has(.side:not(.hidden)) .rt { --rt-foot-off: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom, 0px)); } }
+.rt-foot { position: sticky; bottom: var(--rt-foot-off); z-index: 6; display: flex; gap: 0; margin: 14px 0 0; border: 1px solid var(--rule-strong, var(--border)); border-radius: 10px 10px 0 0; background: var(--sheet, var(--surface-raised)); box-shadow: 0 -2px 8px rgb(0 0 0 / .06); overflow: hidden; height: var(--rt-foot-h); }
+.rt-ft { flex: 1 1 0; min-width: 0; border: 0; border-left: 1px solid var(--rule, var(--border)); background: transparent; color: var(--ink, var(--foreground)); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; white-space: nowrap; }
+.rt-ft:first-child { border-left: 0; }
+.rt-ft:hover { background: var(--sheet-2, rgb(0 0 0 / .04)); }
+.rt-ft.on { background: color-mix(in oklab, var(--brand) 12%, var(--sheet)); color: var(--brand); font-weight: 700; box-shadow: inset 0 -3px 0 var(--brand); }
+.rt-fk { font-size: 11px; color: var(--ink); opacity: .75; font-weight: 500; }
+.wd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 4px; }
+.wd-sel { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--ink); }
+.wd-sel select { min-width: 260px; max-width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+.wd-chw { font-size: 13px; color: var(--ink); }
+.wd-tools { display: inline-flex; align-items: center; }
+.wd-un { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
+.wd-help { font-size: 13px; color: var(--ink); }
+.wd-back { white-space: nowrap; }
+.wd-table td, .wd-table th, .chg-table td, .chg-table th { white-space: nowrap; }
+.wd-table td.wd-name { white-space: normal; min-width: 150px; }
+.wd-table td.bad, .chg-table td.bad { color: var(--bad); font-weight: 600; }
+.wd-table .icon { border: 0; background: transparent; cursor: pointer; color: var(--ink); opacity: .7; }
+.wd-table .icon:hover { opacity: 1; color: var(--bad); }
+.wd-addrow > td { background: var(--sheet-2, transparent); }
+.wd-addrow .linkbtn { font-weight: 600; }
+.wd-foot { position: sticky; bottom: calc(var(--rt-foot-off) + var(--rt-foot-h) + 2px); z-index: 5; display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; padding: 9px 14px; margin: 10px 0 0; border: 1px solid var(--rule-strong, var(--border)); border-radius: 10px; background: var(--sheet, var(--surface-raised)); font-size: 13.5px; color: var(--ink); box-shadow: 0 -2px 8px rgb(0 0 0 / .05); }
+.wd-foot b { font-size: 15px; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.wd-foot b.bad { color: var(--bad); }
+.wd-cands td, .wd-cands th { white-space: nowrap; }
+.wd-cands tr.wd-over > td { color: var(--ink); opacity: .8; }
+.wd-dim { font-size: 12px; color: var(--ink); opacity: .8; }
+.wd-addnew { margin: 0 0 8px; }
+.chg-table tr.chg-click { cursor: pointer; }
+.chg-table tr.chg-click:hover > td, .chg-table tr.chg-click:focus > td { background: var(--sheet-2); }
+.chg-table tfoot td { border-top: 2px solid var(--rule-strong); font-weight: 600; white-space: nowrap; }
+@media (max-width: 760px) {
+  .rt-fk { display: none; }
+  .rt-ft { font-size: 13px; }
+  .wd-sel { flex-wrap: wrap; }
+  .wd-sel select { min-width: 0; width: 100%; }
+  .wd-foot { gap: 4px 14px; font-size: 12.5px; padding: 7px 10px; }
+  .wd-foot b { font-size: 13.5px; }
+}
+.wd-sel > span { white-space: nowrap; }
+.wd-table, .chg-table { font-size: 13.5px; }
+.wd-table th, .wd-table td, .chg-table th, .chg-table td { padding-left: 8px; padding-right: 8px; }
+#app .wd-wrap table.wd-table.bk-table:not(.cards) td, #app .chg-wrap table.chg-table.bk-table:not(.cards) td { width: auto; padding: 8px 6px; }
+#app table.wd-table thead th, #app table.chg-table thead th { white-space: normal; vertical-align: bottom; line-height: 1.2; }
+#app table.chg-table { font-size: 12.5px; }
+#app table.chg-table .wd-dim, #app table.chg-table .ac-chip { font-size: 11.5px; }
+#app .chg-wrap table.chg-table.bk-table:not(.cards) td { padding: 7px 5px; }
+#app .chg-wrap table.chg-table.bk-table:not(.cards) tr > :first-child { padding-left: 10px; }
+#app .chg-wrap table.chg-table.bk-table:not(.cards) thead th, #app .wd-wrap table.wd-table.bk-table:not(.cards) thead th { padding: 8px 5px; }

@@ -56,7 +56,7 @@ try:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
         J = lambda e, a=None: pg.evaluate(e, a)
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
-        pg.evaluate("() => { S.tdsDedView = 'table'; }")   # next-tds-allchallans: the Deductions checks here are of the table (All rows); the step opens on its to-do list
+        pg.evaluate("() => { S.tdsDedView = 'table'; S.tdsChView = 'match'; }")   # the Deductions checks here are of the table (All rows), the Challans ones of the two-panel matcher (round 88: the steps open on a challan and on the grid)
         J(LOAD, books); pg.wait_for_timeout(1000); J("S.books = window.__bk; render();"); pg.wait_for_timeout(500); J(CHALLANS); pg.wait_for_timeout(300)
         J("() => { S.books.challans = []; S.books.alloc = {}; render(); }"); pg.wait_for_timeout(300)
         go = lambda fy, q, step: (J("([fy, q, s]) => { S.booksTab = 'tds'; tdsGo(fy, q, '26Q'); S.tdsTab = s; S.tdsDedChF = ''; render(); }", [fy, q, step]), pg.wait_for_timeout(700))

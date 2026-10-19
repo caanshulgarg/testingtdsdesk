@@ -8,7 +8,7 @@
 // file · After filing), each step with its count and at most one problem line; on a phone the rail is a select.
 // The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings): the header's badge and the
 // rail's are that one number. The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
@@ -100,6 +100,23 @@ export function SideDrawer({ open, onClose, title, description, kind, wide, chil
   </Drawer>;
 }
 
+// round 88 (as Winman): the four tabs at the foot of a return, and its keys: F8 Deductor, F10 Challans, F11 Deductees, F12 Deductions
+export const FOOT_KEYS = { F8: "deductor", F10: "challans", F11: "deductees", F12: "deductions" };
+export function footKey(ev) {
+  if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
+  const id = FOOT_KEYS[ev.key];
+  if (!id || S.tdsView !== "return") return;
+  ev.preventDefault(); tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ }
+}
+export function FootTabs({ steps }) {
+  const cur = S.tdsTab, keyOf = { deductor: "F8", deductees: "F11", challans: "F10", deductions: "F12" };
+  const tabs = ["deductor", "deductees", "challans", "deductions"].map((id) => steps.find((s) => s.id === id)).filter(Boolean);
+  return <nav className="rt-foot" aria-label="Return parts" data-ret-foot="">
+    {tabs.map((s) => <button key={s.id} type="button" className={"rt-ft" + (cur === s.id ? " on" : "")} data-foot-tab={s.id} aria-current={cur === s.id ? "page" : undefined}
+      title={s.label + " (" + keyOf[s.id] + ")"} onClick={() => { tdsTabGo(s.id); try { window.scrollTo(0, 0); } catch (e) { /* */ } }}>{s.label}<small className="rt-fk">{keyOf[s.id]}</small></button>)}
+  </nav>;
+}
+
 // the frame. steps: [{id, label, count, done, sub: {text, bad}, off, why}]; strip: [{label, value, sub, bad}]
 // val: the Validate panel's {errors, warnings} (the one problem count); primary: [label, onClick] or null
 export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children, progress }) {
@@ -107,6 +124,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
+  useEffect(() => { window.addEventListener("keydown", footKey); return () => window.removeEventListener("keydown", footKey); }, []);
   return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
@@ -136,5 +154,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
           {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id === "file" ? (n ? " · " + n + " to fix" : "") : s.count != null ? " · " + s.count : ""}</option>)}</select></label>
       <div className="rt-main" data-ret-step={cur}>{children}</div>
     </div>
+    <FootTabs steps={steps} />
   </div>;
 }
