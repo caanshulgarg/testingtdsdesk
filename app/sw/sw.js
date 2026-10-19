@@ -29,7 +29,8 @@ let keeping = null;
 function keepRest() {
   return keeping || (keeping = caches.open(SHELL).then(async (c) => {
     for (const f of REST) {
-      try { if (!(await caches.match(f, { ignoreVary: true }))) await c.add(ask(f)); } catch (e) { /* kept when it is first used */ }
+      // round 90: a real script / style / font answer only (keepable, below); a broken kept copy is replaced
+      try { const h = await caches.match(f, { ignoreVary: true }); if (!h || !good(h)) { const q = ask(f), r = await fetch(q); if (keepable(r)) await c.put(q, r); } } catch (e) { /* kept when it is first used */ }
     }
   }).finally(() => { keeping = null; }));
 }
@@ -80,8 +81,25 @@ self.addEventListener("fetch", (e) => {
   if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
   // kept here: only files whose name or address carries their build's hash (assets/…, legacy.js?v=…)
   if (!((rest.startsWith("assets/") && CODE.test(rest)) || (rest === "legacy.js" && u.search))) return;
-  e.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req).then((r) => {
-    if (r.ok && r.type === "basic") { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)); }
-    return r;
-  })));
+  e.respondWith(asset(req));
 });
+
+// 19-Oct-2026 (round 90: Safari's "Importing a module script failed" on the TDS page, the files all there, again after
+// every reload): a kept copy is only ever a real answer of this site with a script, style or font in it.
+//  - kept: an answer that is ok, "basic" (this site's own), not redirected, and a script / style / font by its type;
+//  - a kept copy that is not ok, redirected or opaque (kept by an older worker, or broken) is passed over: the network's;
+//  - the line dropped (a network error): asked once more past the browser's cache (cache: "reload") before giving up.
+const KEEP = /(javascript|ecmascript|text\/css|font\/|application\/(x-)?font|woff|wasm)/i;
+const good = (r) => !!r && r.ok && r.type === "basic" && !r.redirected;
+const keepable = (r) => good(r) && KEEP.test(r.headers.get("Content-Type") || "");
+async function asset(req) {
+  let hit = null;
+  try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }
+  if (hit && hit.ok && !hit.redirected && hit.type !== "opaque" && hit.type !== "opaqueredirect") return hit;
+  let r;
+  try { r = await fetch(req); } catch (e) {
+    try { r = await fetch(new Request(req, { cache: "reload" })); } catch (e2) { return Response.error(); }
+  }
+  if (keepable(r)) { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)).catch(() => {}); }
+  return r;
+}

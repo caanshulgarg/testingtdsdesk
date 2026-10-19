@@ -6,12 +6,35 @@
 // way shows the page's shape (Main.jsx: <Suspense fallback={<PageSkeleton/>}>) and the page is drawn again when it comes.
 import { createElement } from "react";
 import { FinComNav } from "../nav.js";
-import { staleReload } from "../staleChunk.js";
+import { staleReload, isStaleChunk, failedFile, tellChunk, cleanReload } from "../staleChunk.js";
+
+// 19-Oct-2026 (round 90: Safari's "Importing a module script failed" on the TDS page, the files all there): a file that did
+// not come is asked for once more in the page before FinCom refreshes. The browser keeps a failed file's failure for the
+// page (the same import fails again at once, without asking the line), so the second ask goes to the same file with
+// "?retry=…" (a new address: past that failure and past any broken copy the service worker holds). The file's address
+// is read from the loader (Vite's `import("./Books-….js")`, next to this file); a loader that does more than import a
+// file (`.then(...)`) is simply called again.
+export function loaderFile(load) {
+  try {
+    const t = String(load), m = t.match(/import\(\s*["'`]([^"'`]+)["'`]\s*\)(\s*\.)?/);
+    return m ? { url: new URL(m[1], import.meta.url).href, plain: !m[2] } : null;
+  } catch (e) { return null; }
+}
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+function again(load, at, e) {
+  const file = failedFile(e, at && at.url);
+  // a code error in the file (not a file that did not come), or a style that did not come: not asked again here
+  if (!isStaleChunk(e) || /unable to preload css/i.test(String((e && e.message) || ""))) return Promise.reject(e);
+  tellChunk("retry", file);
+  const next = at && at.plain ? () => import(/* @vite-ignore */ at.url + (at.url.indexOf("?") < 0 ? "?" : "&") + "retry=" + Date.now()) : load;
+  return pause(300).then(next).then((m) => { tellChunk("healed", file); return m; }, () => { throw e; });
+}
 
 const loaders = [];
 export function lazyModule(load) {
   let mod = null, failed = null, p = null;
-  const get = () => p || (p = load().then((m) => {
+  const at = loaderFile(load);
+  const get = () => p || (p = load().catch((e) => again(load, at, e)).then((m) => {
     mod = m; failed = null;
     // drawn again in full (the old screens' finishing touches too: the tables' funnels, the guide), as any change is
     try { if (window.S && S.firm && typeof window.render === "function") window.render(); } catch (e) { /* the next drawing shows it */ }
@@ -22,7 +45,7 @@ export function lazyModule(load) {
     // once per BUILD (src/staleChunk.js), not once per tab: the guard of "fincom:lazy-reloaded" stopped the reload after
     // the second publish of a day, and the owner's tab was left asking for files that were gone
     try { console.error("FinCom: a page's program file could not be loaded:", e); } catch (x) { /* */ }
-    if (staleReload(e, true)) return;
+    if (staleReload(e, true, at && at.url)) return;
     setTimeout(() => { throw (e instanceof Error ? e : new Error("FinCom page file not loaded: " + String(e))); }, 0);
     try { if (typeof window.render === "function") window.render(); } catch (x) { /* */ }
   }));
@@ -30,9 +53,11 @@ export function lazyModule(load) {
   return (name = "default") => {
     function Lazy(props) {
       if (mod) return createElement(mod[name], props);
-      // the file could not be fetched (no internet, or FinCom was updated meanwhile): say so, with a way out
+      // the file could not be fetched (no internet, or FinCom was updated meanwhile): say so, with two ways out (round 90:
+      // "Open without saved files" clears FinCom's own copies of its files first: src/staleChunk.js)
       if (failed) return createElement("p", { className: "note", "data-lazy-failed": "" }, "This page could not be loaded" + (failed && failed.message ? " (" + String(failed.message).slice(0, 160) + ")" : "") + ". ",
-        createElement("button", { className: "linkbtn", onClick: () => { failed = null; location.reload(); } }, "Reload FinCom"));
+        createElement("button", { className: "linkbtn", onClick: () => { failed = null; location.reload(); } }, "Reload FinCom"), " · ",
+        createElement("button", { className: "linkbtn", "data-clean-reload": "", onClick: () => { cleanReload(failedFile(failed, at && at.url)); } }, "Open without saved files"));
       // the thin bar under the top bar while it comes (stability batch 3)
       const p = get(); if (!p.tracked) { p.tracked = true; FinComNav.track(p); }
       throw p;

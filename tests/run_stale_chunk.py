@@ -1,6 +1,6 @@
 """python3 run_stale_chunk.py - a tab opened before a publish, asking for a screen's file (a lazy chunk) the publish
 replaced (18-Oct-2026: Sentry FINCOM-APP-STAGING-1 "Importing a module script failed" x3 from the owner's browser right
-after a publish; his Day Book upload then did nothing). FinCom reloads ONCE, saying "FinCom was updated; reloading…", and
+after a publish; his Day Book upload then did nothing). FinCom reloads ONCE, saying "FinCom is refreshing its files…" (round 90), and
 the screen opens on the new build; a build whose screen files are gone for good reloads once and then says so, never a loop
 (src/staleChunk.js: the guard is the build's id in sessionStorage).
 How: the React test build (app/dist-test, or TDSDESK_SITE) served as it was ("old"); the screens' files the page has not
@@ -87,7 +87,7 @@ with sync_playwright() as p:
     said = ""
     try: said = pg.wait_for_selector("[data-stale-reload]", timeout=5000).inner_text()
     except Exception as e: said = "(not shown: %s)" % str(e)[:80]
-    ok(said == "FinCom was updated; reloading…", "said: %s" % said)
+    ok(said == "FinCom is refreshing its files…", "said: %s" % said)
     for _ in range(80):
         if len(loads) > n0: break
         pg.wait_for_timeout(100)

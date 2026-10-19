@@ -70,6 +70,9 @@ function start() {
     // 18-Oct-2026: the steps of Books › From Tally as breadcrumbs (tallyCrumb, src/js/23), kept until Sentry starts
     const crumbs = window.__fincomCrumbsEarly = [];
     window.__fincomCrumb = (category, step, data) => { if (crumbs.length < 30) crumbs.push({ category, step, data, timestamp: Date.now() / 1000 }); };
+    // 19-Oct-2026 (round 90): the tag of a screen's file that did not come (src/staleChunk.js), kept the same way
+    const tags = window.__fincomTagsEarly = [];
+    window.__fincomTag = (k, v) => { if (tags.length < 10) tags.push([k, v]); };
     const keep = (e) => { if (early.length < 10) early.push(e && (e.reason || e.error) ? (e.reason || e.error) : e); };
     window.addEventListener("error", keep); window.addEventListener("unhandledrejection", keep);
     afterFirstPage(() => import("./sentry.js").then((m) => { window.removeEventListener("error", keep); window.removeEventListener("unhandledrejection", keep); m.start(); }).catch(() => {}), 3000);
