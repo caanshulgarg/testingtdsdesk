@@ -287,6 +287,8 @@ try:
                 sx, bn = ph.evaluate(SCROLLX), ph.evaluate(BANNERS)
                 ok(sx <= 0 and len(bn) <= 1, "phone %s, %s: no sideways scroll (%d), at most one banner (%d)" % (scheme, name, sx, len(bn)))
             go(ph, pcid, "#/c/{cid}/books/tds/2026-27/Q1/26Q")
+            # Deductions opens by challan (round 88); the full table with every column is one click away (S.tdsDedView "table")
+            ph.evaluate("() => { S.tdsDedView = 'table'; render(); }"); ph.wait_for_timeout(600)
             wrap = ph.evaluate("() => { const w = document.querySelector('#app table[data-list=\"tdsDeductions\"]'); const b = w && w.closest('.lt-wrap, .bk-tablewrap'); return b ? [b.scrollWidth > b.clientWidth, getComputedStyle(b).overflowX] : null; }")
             ok(wrap and wrap[0] and wrap[1] in ("auto", "scroll"), "phone %s: a wide table scrolls sideways inside its own box (%s)" % (scheme, wrap))
             ph.screenshot(path=os.path.join(OUT, "phone-%s-tds-return.png" % scheme), full_page=True)
