@@ -113,12 +113,12 @@ try:
         ledw = re.sub(r"\s+", " ", led.inner_text()).strip() if led.count() else ""
         ok(led.count() == 1 and re.fullmatch(r"\d+ ledgers? to confirm → Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
         link = pg.locator('[data-tds-grid] ~ [data-ch-register], [data-ch-register]')
-        ok(link.count() == 1 and "See all challans of" in link.inner_text() and "Challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register (%r)" % (link.inner_text() if link.count() else ""))
+        ok(link.count() == 1 and "See all challans of" not in link.inner_text() and "Challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register; All challans only the header's button (round 94) (%r)" % (link.inner_text() if link.count() else ""))
         ok(not any("not deducted" in t.lower() for t in [pg.inner_text('[data-tds-page]')]), "1. nothing about TDS not deducted on the TDS home")
         if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "after-tds-page.png"), full_page=True)
         link.locator('button', has_text="Challan register").click(); pg.wait_for_timeout(400)
         ok(pg.locator('[data-register]').count() == 1 and "/challan-register" in pg.evaluate("location.hash"), "1. the line opens the challan register (%s)" % pg.evaluate("location.hash"))
-        # 2. a return: one header line, one strip, the step rail
+        # 2. a return: one header line, the steps' tabs, one strip (round 94)
         J("(fy) => tdsGo(fy)", fy); pg.wait_for_timeout(300)
         pg.locator('[data-cell="26Q|Q1"]').click(); pg.wait_for_timeout(500)
         ids = pg.evaluate("[...document.querySelectorAll('[data-return-tabs] button[data-ret-tab]')].map(b => b.dataset.retTab)")
@@ -131,10 +131,10 @@ try:
             n = pg.evaluate("[...document.querySelectorAll('#app .btn.primary')].filter(e => e.offsetParent).length")
             ok(n <= 1, "2. 26Q › %s: one primary button at most (%d)" % (k, n))
         pg.click('[data-ret-tab="file"]'); pg.wait_for_timeout(300)
-        vals = pg.evaluate("(() => { const v = document.querySelector('[data-val-counts]'); return [+v.querySelector('[data-val-errors]').dataset.valErrors, +v.querySelector('[data-val-warnings]').dataset.valWarnings]; })()")
+        vals = pg.evaluate("(() => { const v = document.querySelector('[data-val-counts]'); return [+v.dataset.valErrors, +v.dataset.valWarnings]; })()")
         hdr = pg.evaluate("(() => { const b = document.querySelector('[data-return-card] [data-problem-count]'); return b ? +b.dataset.problemCount : 0; })()")
-        rail = pg.evaluate("+document.querySelector('[data-rail-problems]').dataset.railProblems")
-        ok(sum(vals) == hdr == rail, "2. one problem count: the panel's errors + warnings %s = the header's %d = the rail's %d" % (vals, hdr, rail))
+        said = pg.evaluate("document.querySelectorAll('[data-rail-problems], [data-val-counts] .bad, [data-val-counts] .warn').length")
+        ok(sum(vals) == hdr and said == 0, "2. one problem count: the panel's errors + warnings %s = the header's %d, said only there (%d elsewhere)" % (vals, hdr, said))
         ok(pg.locator('[data-online="pan"] [data-online-run]').is_disabled() and "not connected yet" in pg.inner_text('[data-online="pan"]'), "2. TRACES · verify PANs: not connected yet, Run off")
         ok(all(pg.locator('[data-online="%s"]' % k).count() == 1 for k in ["pan", "challans", "csi", "ai"]), "2. the online checks: TRACES PANs, challan balances, CSI, AI match")
         if pg.locator('[data-val-review="nopan"]').count():

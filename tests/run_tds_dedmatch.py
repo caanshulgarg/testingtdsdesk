@@ -7,7 +7,7 @@ within this window, just by clicks"). On the made-up books and challans of run_t
      suggestions"; a challan clicked in the panel filters the table to it, clicked again shows all; the filters work
   2. by clicks alone: a cell edited in place (Enter saves as a FinCom correction, Tab goes to the next cell, Tally not
      changed); one-click fixes with the exact change (the rate that applies); ticked rows given a section at once;
-     the keyboard (↑ ↓, Space, ?); "Done: N of M ready" in the header; Add deduction filled from the party's history
+     the keyboard (↑ ↓, Space, ?); no "Done: N of M ready" in the header (round 94); Add deduction filled from the party's history
   3. the to-do list (next-tds-allchallans; the owner's layout, 19-Oct-2026: "still very confusing"): the step opens on
      "N deductions · D done · K need you" and the groups Confirm · Choose a challan · Pay a challan (one block per
      section-month, Add challan and Paid in Tally? Add BSR) · Fix the row · Done (folded); each row in exactly one group,
@@ -15,9 +15,10 @@ within this window, just by clicks"). On the made-up books and challans of run_t
      once; the headings, reasons and flags are not grey (contrast at least 4.5:1, light and dark); phone: no sideways scroll
   4. Deductions by challan, as Winman (round 88): the step opens on "Select challan" (no · date · total, "Not on any
      challan (N)" last; the first with a balance left); the table is that challan's deductions with Winman's columns;
-     the footer (amount · utilised · balance, red below nil · number) equals the challan and stays in view; "+ Add
-     deduction to this challan" lists the deductions not on a challan, the best fit first, one click puts one on and the
-     footer follows; "Not on any challan" is the to-do list; the four tabs at the foot and F8 / F10 / F11 / F12; the
+     the footer (used here · balance, red below nil · number; the challan's amount is the dropdown's, round 94) equals the
+     challan and stays in view; "+ Add deduction to this challan" lists the deductions not on a challan, the best fit
+     first, one click puts one on and the footer follows; "Not on any challan" is the to-do list; the steps' tabs across
+     the top (round 94: no tabs at the foot, no F8 / F10 / F11 / F12); the
      Challans grid in the same order, a row opening its deductions; phone: no sideways scroll, nothing under the app's bar
 TDS_DEDMATCH_SHOTS=dir: screenshots (default tests/out/tds-dedmatch)."""
 import os, sys, re, json, threading, functools, http.server
@@ -130,9 +131,8 @@ try:
         pg.keyboard.press("?"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-keys-help]").count() == 1, "? shows the keys")
         J("() => { S.tdsKeys = false; S.tdsSel = {}; render(); }"); pg.wait_for_timeout(300)
-        prog = pg.get_attribute("#app [data-ret-progress]", "data-ret-progress")
-        want = J("() => { const rs = TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1'), iss = new Set(Certs.issues('2026-27', 'Q1').map(x => x.row.id)); return rs.filter(r => r.challan && Certs.validPan(r.pan) && !iss.has(r.id)).length + '/' + rs.length; }")
-        ok(prog == want, "the header: Done: N of M ready (%s = %s)" % (prog, want))
+        # round 94: the deduction count is on its tab only; no "Done: N of M ready" in the header
+        ok(pg.locator("#app [data-ret-progress]").count() == 0 and "Done:" not in pg.inner_text("#app [data-return-card]"), "the header: no Done: N of M ready (the count is on the Deductions tab)")
         party = J("() => TDS.rows().find(r => r.fy === '2026-27' && r.paid > 0).party")
         pg.click("#app [data-add-open]"); pg.wait_for_timeout(400)
         pg.fill('#app [data-add-deduction="new"] input[aria-label="Deductee"]', party); pg.locator('#app [data-add-deduction="new"] input[aria-label="Deductee"]').blur(); pg.wait_for_timeout(400)
@@ -243,8 +243,8 @@ try:
         def want_foot(cid):
             return J("(id) => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === id); return {amt: num(c.tax), used: TDSReg.usedTax(c, cx), bal: TDSReg.balance(c, cx).tax, n: TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === id).length}; }", cid)
         f0, w0 = foot(), want_foot(cur)
-        ok(f0 and all(abs(f0[k] - w0[k]) < 0.01 for k in ("amt", "used", "bal", "n")) and all(x in f0["text"] for x in ["Challan amount", "Used here", "Balance", "Number of deductions"]),
-           "the footer: Challan amount · Used here (round 89; Amount utilised (all returns) only when other returns use it too) · Balance · Number of deductions equal the challan (%s / %s)" % (f0, w0))
+        ok(f0 and all(abs(f0[k] - w0[k]) < 0.01 for k in ("amt", "used", "bal", "n")) and all(x in f0["text"] for x in ["Used here", "Balance", "Number of deductions"]) and "Challan amount" not in f0["text"],
+           "the footer: Used here (round 89; Amount utilised (all returns) only when other returns use it too) · Balance · Number of deductions equal the challan; no Challan amount, the dropdown has it (%s / %s)" % (f0, w0))
         vis = J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top >= 0; }")
         ok(vis, "the footer is in view without scrolling")
         last = J("() => { const t = [...document.querySelectorAll('#app [data-wd-table] tbody tr')]; return t.length ? t[t.length - 1].innerText.trim() : ''; }")
@@ -280,28 +280,24 @@ try:
         shown, want = table(other); f2, w2 = foot(), want_foot(other)
         ok(sorted(shown) == sorted(want) and all(abs(f2[k] - w2[k]) < 0.01 for k in ("amt", "used", "bal", "n")), "another challan chosen: its deductions and its footer (%d)" % len(shown))
         un = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).length")
-        lk = pg.locator("#app [data-wd-unplaced]")
-        ok(lk.count() == 1 and re.search(r"^%d deductions? not on a challan · Show$" % un, lk.inner_text().strip()), "under the dropdown: “%d deductions not on a challan · Show” (%s)" % (un, lk.inner_text() if lk.count() else ""))
+        # round 94: the count is the dropdown's last choice only, no "N not on a challan · Show" line under it
+        last_opt = J("() => { const o = [...document.querySelectorAll('#app select[data-wd-sel] option')]; return o.length ? o[o.length - 1].textContent : ''; }")
+        ok(pg.locator("#app [data-wd-unplaced]").count() == 0 and last_opt == "Not on any challan (%d)" % un, "the dropdown's last choice: Not on any challan (%d), no line under it (%s)" % (un, last_opt))
         help_lines = J("[...document.querySelectorAll('#app [data-wd] p.note, #app [data-wd] .wd-help')].filter(e => e.offsetParent).length")
         ok(help_lines <= 1, "at most one line of help (%d)" % help_lines)
-        pg.click("#app [data-wd-unplaced] button"); pg.wait_for_timeout(600)
+        pg.select_option("#app select[data-wd-sel]", "__none"); pg.wait_for_timeout(600)
         ok(pg.input_value("#app select[data-wd-sel]") == "__none" and pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#app [data-dt-group]").count() >= 1, "Show / Not on any challan: the to-do groups")
         pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-none-1440.png"), full_page=True)
-        # the bottom tabs and F8 / F10 / F11 / F12
-        tabs = J("[...document.querySelectorAll('#app [data-ret-foot] [data-foot-tab]')].map(b => b.dataset.footTab)")
-        ok(tabs == ["deductor", "deductees", "challans", "deductions"], "the tabs at the foot: Deductor · Deductees · Challans · Deductions (%s)" % tabs)
-        fv = J("() => { const f = document.querySelector('#app [data-ret-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top > innerHeight - 90; }")
-        ok(fv, "the tabs stay at the foot of the window")
-        unc = J("""() => ['[data-ret-foot] [data-foot-tab="challans"]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
-        ok(all(unc), "1440: the tabs not under the testing strip (%s)" % unc)
+        # round 94: the steps' tabs across the top; no tabs at the foot and no F8 / F10 / F11 / F12
+        tabs = J("[...document.querySelectorAll('#app [data-return-tabs] [data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(tabs[:4] == ["deductor", "deductees", "challans", "deductions"] and pg.locator("#app [data-ret-foot], #app .rt-foot").count() == 0, "the tabs across the top: Deductor · Deductees · Challans · Deductions …, none at the foot (%s)" % tabs)
         seen = []
-        for key, step in [("F10", "challans"), ("F11", "deductees"), ("F8", "deductor"), ("F12", "deductions")]:
-            pg.keyboard.press(key); pg.wait_for_timeout(400); seen.append(J("S.tdsTab"))
-        ok(seen == ["challans", "deductees", "deductor", "deductions"], "F10 Challans, F11 Deductees, F8 Deductor, F12 Deductions (%s)" % seen)
-        pg.focus("#app select[data-wd-sel]"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
-        ok(J("S.tdsTab") == "challans", "the keys work with the focus in a field too")
-        pg.click('#app [data-foot-tab="deductions"]'); pg.wait_for_timeout(400)
-        ok(J("S.tdsTab") == "deductions", "a tab clicked opens its step")
+        for key in ("F10", "F11", "F8", "F12"):
+            pg.keyboard.press(key); pg.wait_for_timeout(300); seen.append(J("S.tdsTab"))
+        ok(seen == ["deductions"] * 4, "F10 / F11 / F8 / F12 do nothing (%s)" % seen)
+        pg.click('#app [data-return-tabs] [data-ret-tab="challans"]'); pg.wait_for_timeout(400)
+        ok(J("S.tdsTab") == "challans", "a tab clicked opens its step")
+        pg.click('#app [data-return-tabs] [data-ret-tab="deductions"]'); pg.wait_for_timeout(400)
         # the Challans step: the grid; a row opens its deductions
         J("() => { S.tdsChView = ''; S.tdsChSel = ''; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(600)
         pg.screenshot(path=os.path.join(SHOTS, "winman-challans-1440.png"), full_page=True)
@@ -316,8 +312,8 @@ try:
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
         J("(c) => { S.tdsWinCh = c; render(); }", cur); pg.wait_for_timeout(500)
         ok(J("document.documentElement.scrollWidth") <= 391 and J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1; }"), "phone, a challan chosen: no sideways scroll, the footer in view")
-        unc = J("""() => ['[data-wd-foot]', '[data-ret-foot] [data-foot-tab="challans"]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
-        ok(all(unc), "phone: the footer and the tabs are not under the app's bottom bar (%s)" % unc)
+        unc = J("""() => ['[data-wd-foot]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
+        ok(all(unc), "phone: the footer is not under the app's bottom bar (%s)" % unc)
         pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-challan-390.png"), full_page=True)
         J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(500)
         ok(J("document.documentElement.scrollWidth") <= 391, "phone, Not on any challan: no sideways scroll")

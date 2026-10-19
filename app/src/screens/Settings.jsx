@@ -304,7 +304,7 @@ export function DeductorDetails() {
   const catPan = TDSF25.categoryOf(co.pan), cat = TDSF25.categoryFor(firm), govt = TDSF25.GOVT.test(cat);
   const states = Object.entries(TDSF25.STATES).map(([n, c]) => [c, c + " · " + n]);
   const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px 14px" };
-  return <Card title="Deductor details for the TDS statements" note="Used in every TDS / TCS statement file (Forms 138, 140, 143, 144, and the old 24Q, 26Q, 27Q, 27EQ). Fields marked * are required; each is checked as Protean's file format asks.">
+  return <Card title="Deductor details for the TDS statements" note="Used in every TDS / TCS statement file. Fields marked * are required.">
     <div data-deductor="">
       <div style={grid}>
         <DedSel p={probs} k="deductorType" label="Deductor category" req opts={Object.entries(TDSF25.CATEGORY)} first={catPan ? "From the PAN: " + TDSF25.CATEGORY[catPan] : "From the PAN (none yet)"} />

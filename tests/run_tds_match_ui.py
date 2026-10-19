@@ -65,15 +65,15 @@ try:
         pick = lambda cid: (pg.click('#app [data-cm-ch="%s"]' % cid), pg.wait_for_timeout(350))
         panel = lambda cid: '#app [data-cm-panel="%s"]' % cid
 
-        # ---- next-tds-clear (19-Oct-2026): the step rail (Deductor · Deductees · Challans · Deductions · Validate & file ·
-        # After filing) in place of the four tabs and the actions beside them
+        # ---- next-tds-clear (19-Oct-2026): the steps (Deductor · Deductees · Challans · Deductions · Validate & file ·
+        # After filing) in place of the four tabs and the actions beside them; round 94: one row of tabs across the top
         STEPS = lambda: J("[...document.querySelectorAll('#app nav[aria-label=Return] button[data-ret-tab]')].map(b => b.dataset.retTab)")
         ok(STEPS() == ["deductor", "deductees", "challans", "deductions", "file", "after"], "the steps: %s" % STEPS())
         none = lambda: (pg.click('#app [data-cm-ch="__none"]'), pg.wait_for_timeout(350))
 
         # ---- the Challans tab: the challans listed, the one chosen with its balance, the suggestions for it
         ok(pg.locator("#app [data-challan-match]").count() == 1, "the Challans tab is the matching screen")
-        ok(pg.locator("#app [data-cm-steps]").count() == 0 and pg.locator("#app [data-cm-tips]").count() == 0, "no ①②③ stepper and no Tips box (the rail; ⋯ › How this works)")
+        ok(pg.locator("#app [data-cm-steps]").count() == 0 and pg.locator("#app [data-cm-tips]").count() == 0, "no ①②③ stepper and no Tips box (the steps' tabs; ⋯ › How this works)")
         ok(pg.locator("#app [data-auto-alloc], #app [data-challan-suggest]").count() == 0, "no Auto-allocate button, no Suggested tagging card")
         ok(pg.locator('#app [data-cm-ch="chA"] [data-cm-status="left"]').inner_text().startswith("₹8,640"), "the challan list: chA, ₹8,640 available")
         pick("chA")
@@ -234,8 +234,9 @@ try:
         # ---- Deductees (PAN): a deductee with no PAN on top in red; fixed once, every deduction follows
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductees"]'); pg.wait_for_timeout(500)
         first = pg.locator("#tdsDeTable tbody tr").first
-        ok(first.get_attribute("data-dee-bad") == "1" and first.locator("[data-pan-box]").count() == 1 and "No PAN" in first.inner_text(), "no PAN: on top, its PAN box in the row (%s)" % first.inner_text().replace("\t", " | ")[:120])
-        ok("Not checked yet" in pg.locator("#tdsDeTable").inner_text() or pg.locator("#tdsDeTable [data-pan-state]").count() > 0, "the PAN status column")
+        ok(first.get_attribute("data-dee-bad") == "1" and first.locator("[data-pan-box]").count() == 1 and first.locator(".tag[data-pan-state]").count() == 0, "no PAN: on top, its PAN box in the row, the one PAN indicator (round 94) (%s)" % first.inner_text().replace("\t", " | ")[:120])
+        ind = J("() => [...document.querySelectorAll('#tdsDeTable tbody tr')].map(tr => tr.querySelectorAll('[data-pan-box]').length + tr.querySelectorAll('.tag[data-pan-state]').length)")
+        ok(ind and all(x == 1 for x in ind), "each row: one PAN indicator, a valid PAN's state beside it or the box to type it (%s)" % ind)
         party = J("TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && TDS.sec(r.section) === '194J').party")
         key = J("(p) => normName(p)", party)
         pg.click('#app [data-dee-open="%s"]' % key); pg.wait_for_timeout(500)

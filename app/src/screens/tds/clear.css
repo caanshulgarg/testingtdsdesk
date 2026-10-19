@@ -1,5 +1,5 @@
 /* next-tds-clear (19-Oct-2026; the owner: TDS "like ClearTax, not cluttered"): the TDS home, a return's frame (one header
-   line, one summary strip, the step rail), Validate & file, the one-line rows and the drawers. At most three bands above
+   line, one row of step tabs, one summary strip; round 94), Validate & file, the one-line rows and the drawers. At most three bands above
    any table; one primary button a screen; red only for errors, amber for warnings, green for Filed / Processed / passed. */
 .rt-sp { flex: 1 1 auto; }
 .rt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; }
@@ -9,29 +9,30 @@
 .rt-prob { border: 0; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--warn-soft); color: var(--warn); }
 .rt-prob.bad { background: var(--bad-soft); color: var(--bad); }
 .rt-head .more-btn { min-width: 32px; justify-content: center; }
-.rt-strip { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: baseline; padding: 8px 12px; margin: 0 0 14px; border: 1px solid var(--border, var(--rule)); border-radius: var(--radius-card, 10px); background: var(--surface-raised, var(--sheet)); font-size: 13px; }
+.rt-strip { display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; padding: 0 2px; margin: 0 0 14px; font-size: 13px; }
 .rt-fig .rt-fl { color: var(--text-secondary, var(--muted)); }
 .rt-fig b { font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .rt-fig small { color: var(--text-secondary, var(--muted)); font-size: 12px; }
 .rt-fig.bad b { color: var(--bad); }
-.rt-body { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 18px; align-items: start; }
+/* round 94: the steps as one row of underlined tabs (Arc's tab look, arc-clean.css §1, the same as other pages' tab rows),
+   kept in view under the header as the page scrolls; the count muted after the label; a dot for a step with an error
+   (red) or a warning (amber) */
+#app .rt > nav.rt-tabs { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: nowrap; align-items: stretch; gap: 2px; margin: 0 0 12px; padding: 0;
+  border-bottom: 1px solid var(--border, var(--rule)); background: var(--background, var(--paper)); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+#app .rt > nav.rt-tabs::-webkit-scrollbar { display: none; }
+#app .rt > nav.rt-tabs > .rt-tab { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 40px; margin: 0 0 -1px; padding: 0 14px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-secondary, var(--muted));
+  font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: color var(--duration-fast, .12s) var(--ease-standard, ease), border-color var(--duration-fast, .12s) var(--ease-standard, ease); }
+#app .rt > nav.rt-tabs > .rt-tab:hover { color: var(--foreground, var(--ink)); }
+#app .rt > nav.rt-tabs > .rt-tab[aria-selected="true"] { color: var(--accent, var(--brand)); border-bottom-color: var(--accent, var(--brand)); font-weight: 600; }
+#app .rt > nav.rt-tabs > .rt-tab:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -2px; }
+#app .rt > nav.rt-tabs > .rt-tab:disabled { color: var(--text-muted, var(--muted)); cursor: default; opacity: .7; }
+@media (prefers-reduced-motion: reduce) { #app .rt > nav.rt-tabs > .rt-tab { transition: none; } }
+.rt-tc { font-size: 13px; line-height: 1; font-weight: 500; color: var(--text-secondary, var(--muted)); font-variant-numeric: tabular-nums; }
+.rt-dot2 { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: 0 0 auto; }
+.rt-dot2.bad { background: var(--bad); }
 .rt-main { min-width: 0; }
-.rt-rail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
-.rt-step { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; grid-template-areas: "i l c" ". s s"; column-gap: 7px; align-items: center; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--radius-control, 6px); background: transparent; color: var(--foreground, var(--ink)); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
-.rt-step:hover { background: var(--surface-hover, rgb(0 0 0 / .04)); }
-.rt-step.on { background: color-mix(in oklab, var(--brand) 11%, transparent); font-weight: 650; }
-.rt-step:disabled { color: var(--text-muted, var(--muted)); cursor: default; background: transparent; }
-.rt-i { grid-area: i; display: inline-grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--border-strong, var(--rule-strong)); font-size: 11px; font-weight: 600; color: var(--text-secondary, var(--muted)); }
-.rt-step.on .rt-i { border-color: var(--brand); color: var(--brand); }
-.rt-l { grid-area: l; min-width: 0; }
-.rt-c { grid-area: c; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary, var(--muted)); font-weight: 600; }
-.rt-c.bad { color: var(--bad); }
-.rt-c.warn { color: var(--warn); }
-.rt-sub { grid-area: s; font-size: 11.5px; font-weight: 500; }
-.rt-sub.bad { color: var(--bad); }
-.rt-sub.warn { color: var(--warn); }
-.rt-railfoot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rule, var(--border)); }
-.rt-railfoot .btn { border: 0; background: transparent; box-shadow: none; padding-left: 8px; color: var(--text-secondary, var(--muted)); font-weight: 500; }
 .rt-railsel { display: none; }
 .rt-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; }
 .rt-tool .fb-search input { width: 220px; max-width: 100%; }
@@ -51,9 +52,10 @@ table.rt-rows .rt-name { text-align: left; }
 .rt-dot { color: var(--warn); font-weight: 800; margin-left: 4px; cursor: help; }
 .tg-edited { color: var(--text-secondary, var(--muted)); cursor: help; font-size: 11.5px; }
 .tg-sub-i { color: var(--text-secondary, var(--muted)); }
-.dee-count { margin: 6px 0 0; }
 #tdsDeTable tr.dee-row.bad td { color: inherit; background: color-mix(in oklab, var(--warn-soft) 55%, transparent); }
 #tdsDeTable tr.dee-row.bad td.pty .linkbtn { color: inherit; }
+/* round 94: with the steps across the top the table is wider; the deductee keeps ~32 characters, the rest goes to the others */
+#app #tdsDeTable > thead > tr > th:first-child { width: 300px; }
 .cm-cell { white-space: nowrap; font-size: 12.5px; }
 /* the Challans step: the list on the left, the one chosen on the right */
 .cm-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
@@ -124,15 +126,11 @@ table.rt-rows .rt-name { text-align: left; }
 .hc-foot { margin: 12px 0 0; font-size: 13.5px; }
 .rt-drawer .bk-tablewrap { max-width: 100%; overflow-x: auto; }
 @media (max-width: 1180px) {
-  .rt-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .rt-rail { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; }
-  .rt-step { width: auto; grid-template-areas: "i l c"; }
-  .rt-sub, .rt-railfoot { display: none; }
   .cm .cm-two { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  .rt-rail { display: none; }
-  .rt-railsel { display: block; }
+  #app .rt > nav.rt-tabs { display: none; }
+  .rt-railsel { display: block; margin: 0 0 10px; }
   .rt-railsel select { width: 100%; }
   .vf-orow { grid-template-columns: minmax(0, 1fr) auto; }
   .vf-orow .note { grid-column: 1 / -1; grid-row: 2; }
@@ -153,8 +151,6 @@ table.rt-rows .rt-name { text-align: left; }
 table.rt-rows { font-size: 13px; }
 table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left: 7px; padding-right: 7px; }
 @media (min-width: 1181px) and (max-width: 1439px) {
-  .rt-body { grid-template-columns: 140px minmax(0, 1fr); gap: 10px; }
-  .rt-step { font-size: 13px; padding: 6px 6px; column-gap: 5px; }
   table.rt-rows { font-size: 12.5px; }
   table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left: 4px; padding-right: 4px; }
   .panbox.compact input { width: 86px; }
@@ -193,17 +189,10 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #tdsDnTable td:last-child { white-space: normal; }
 @media (max-width: 1439px) { .dd-two { grid-template-columns: minmax(0, 1fr) 196px; gap: 10px; } #tdsDnTable .dd-pick { display: none; } .dd-chf { flex-direction: column; } }
 @media (max-width: 1180px) { .dd-two { grid-template-columns: minmax(0, 1fr); } .dd-side { position: static; max-height: none; order: -1; } .dd-chs { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
-/* 1181–1439 px (a 1366 laptop): the rail as its numbers (the words on a hover and in the phone's select), so the
-   deductions, the suggested challan and the challans panel fit side by side */
 @media (min-width: 1181px) and (max-width: 1439px) {
-  .rt-body { grid-template-columns: 46px minmax(0, 1fr); }
-  .rt-step { grid-template-columns: 22px; grid-template-areas: "i" "c"; justify-items: center; padding: 6px 2px; row-gap: 2px; }
-  .rt-step .rt-l, .rt-step .rt-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .rt-step .rt-c { font-size: 11px; }
   #tdsDnTable td.pty { max-width: 130px; }
   .dd-two { grid-template-columns: minmax(0, 1fr) 190px; }
 }
-.rt-progress { font-size: 12.5px; color: var(--text-secondary, var(--muted)); white-space: nowrap; }
 .dd-cell { cursor: text; border-bottom: 1px dashed transparent; }
 .dd-cell:hover { border-bottom-color: var(--border-strong, var(--rule-strong)); }
 .dd-in { width: 100%; min-width: 70px; max-width: 130px; padding: 2px 4px; font: inherit; font-size: 12.5px; }
@@ -226,11 +215,6 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #tdsDnTable .panbox.compact input { width: 78px; }
 #tdsDnTable thead .hf-sel { width: 16px; min-width: 16px; padding: 0; }
 .dd-two { grid-template-columns: minmax(0, 1fr) 240px; }
-@media (max-width: 1599px) {
-  .rt.rt-compact .rt-body { grid-template-columns: 46px minmax(0, 1fr); gap: 10px; }
-  .rt.rt-compact .rt-step { grid-template-columns: 22px; grid-template-areas: "i" "c"; justify-items: center; padding: 6px 2px; row-gap: 2px; }
-  .rt.rt-compact .rt-step .rt-l, .rt.rt-compact .rt-step .rt-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 @media (max-width: 1439px) { .dd-two { grid-template-columns: minmax(0, 1fr) 222px; gap: 10px; } #tdsDnTable .dd-pick { display: table-cell; } }
 @media (max-width: 1180px) { .dd-two { grid-template-columns: minmax(0, 1fr); } }
 #app #tdsDnTable > thead > tr > th { padding-left: 4px; padding-right: 4px; }
@@ -342,23 +326,16 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .dt .btn.dt-do { border: 1.5px solid var(--brand); color: var(--brand); background: var(--sheet); font-weight: 600; }
 .dt .btn.dt-do:hover { background: var(--brand-tint); }
 
-/* round 88 (as Winman TDS): Deductions by challan, the Challans grid, the four tabs at a return's foot (tds/Winman.jsx) */
-.rt { --rt-foot-h: 44px; --rt-foot-off: var(--bottom-banner-h, 0px); }
-/* on a phone the app's own bar is along the bottom (64 px, src/css/app.css): the tabs sit just over it */
-@media (max-width: 600px) { body:has(.side:not(.hidden)) .rt { --rt-foot-off: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom, 0px)); } }
-.rt-foot { position: sticky; bottom: var(--rt-foot-off); z-index: 6; display: flex; gap: 0; margin: 14px 0 0; border: 1px solid var(--rule-strong, var(--border)); border-radius: 10px 10px 0 0; background: var(--sheet, var(--surface-raised)); box-shadow: 0 -2px 8px rgb(0 0 0 / .06); overflow: hidden; height: var(--rt-foot-h); }
-.rt-ft { flex: 1 1 0; min-width: 0; border: 0; border-left: 1px solid var(--rule, var(--border)); background: transparent; color: var(--ink, var(--foreground)); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; white-space: nowrap; }
-.rt-ft:first-child { border-left: 0; }
-.rt-ft:hover { background: var(--sheet-2, rgb(0 0 0 / .04)); }
-.rt-ft.on { background: color-mix(in oklab, var(--brand) 12%, var(--sheet)); color: var(--brand); font-weight: 700; box-shadow: inset 0 -3px 0 var(--brand); }
-.rt-fk { font-size: 11px; color: var(--ink); opacity: .75; font-weight: 500; }
+/* round 88 (as Winman TDS): Deductions by challan, the Challans grid (tds/Winman.jsx) */
+/* what is taken at the window's foot: the test banner, and on a phone the app's own bar (64 px, src/css/app.css) */
+.rt { --rt-bottom: var(--bottom-banner-h, 0px); }
+@media (max-width: 600px) { body:has(.side:not(.hidden)) .rt { --rt-bottom: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom, 0px)); } }
 .wd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 4px; }
 .wd-sel { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--ink); }
 .wd-sel select { min-width: 260px; max-width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
 .wd-chw { font-size: 13px; color: var(--ink); }
 .wd-tools { display: inline-flex; align-items: center; }
 .wd-un { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
-.wd-help { font-size: 13px; color: var(--ink); }
 .wd-back { white-space: nowrap; }
 .wd-table td, .wd-table th, .chg-table td, .chg-table th { white-space: nowrap; }
 .wd-table td.wd-name { white-space: normal; min-width: 150px; }
@@ -367,7 +344,7 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .wd-table .icon:hover { opacity: 1; color: var(--bad); }
 .wd-addrow > td { background: var(--sheet-2, transparent); }
 .wd-addrow .linkbtn { font-weight: 600; }
-.wd-foot { position: sticky; bottom: calc(var(--rt-foot-off) + var(--rt-foot-h) + 2px); z-index: 5; display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; padding: 9px 14px; margin: 10px 0 0; border: 1px solid var(--rule-strong, var(--border)); border-radius: 10px; background: var(--sheet, var(--surface-raised)); font-size: 13.5px; color: var(--ink); box-shadow: 0 -2px 8px rgb(0 0 0 / .05); }
+.wd-foot { position: sticky; bottom: calc(var(--rt-bottom, 0px) + 2px); z-index: 5; display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; padding: 9px 14px; margin: 10px 0 0; border: 1px solid var(--rule-strong, var(--border)); border-radius: 10px; background: var(--sheet, var(--surface-raised)); font-size: 13.5px; color: var(--ink); box-shadow: 0 -2px 8px rgb(0 0 0 / .05); }
 .wd-foot b { font-size: 15px; font-variant-numeric: tabular-nums; margin-left: 4px; }
 .wd-foot b.bad { color: var(--bad); }
 .wd-cands td, .wd-cands th { white-space: nowrap; }
@@ -380,8 +357,6 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .chg-table tr.chg-click:hover > td, .chg-table tr.chg-click:focus > td { background: var(--sheet-2); }
 .chg-table tfoot td { border-top: 2px solid var(--rule-strong); font-weight: 600; white-space: nowrap; }
 @media (max-width: 760px) {
-  .rt-fk { display: none; }
-  .rt-ft { font-size: 13px; }
   .wd-sel { flex-wrap: wrap; }
   .wd-sel select { min-width: 0; width: 100%; }
   .wd-foot { gap: 4px 14px; font-size: 12.5px; padding: 7px 10px; }
@@ -403,10 +378,9 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #app .wd-filters select, .wd-filters select { width: auto; flex: 0 1 auto; min-width: 0; max-width: 100%; font-size: 13px; padding-top: 5px; padding-bottom: 5px; }
 .wd-fprob, .wd-tickall { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); white-space: nowrap; }
 .wd-tickall { margin: 0 0 4px; }
-.wd-bulk { position: sticky; bottom: calc(var(--rt-foot-off, 0px) + 2px); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 14px; margin: 10px 0 0; border: 1.5px solid var(--brand); border-radius: 10px; background: var(--sheet, var(--surface-raised)); color: var(--ink); font-size: 13.5px; box-shadow: 0 -2px 10px rgb(0 0 0 / .08); }
+.wd-bulk { position: sticky; bottom: calc(var(--rt-bottom, 0px) + 2px); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 14px; margin: 10px 0 0; border: 1.5px solid var(--brand); border-radius: 10px; background: var(--sheet, var(--surface-raised)); color: var(--ink); font-size: 13.5px; box-shadow: 0 -2px 10px rgb(0 0 0 / .08); }
 .wd-bulk b { font-variant-numeric: tabular-nums; }
 .wd-bulk .bad, .wd-bad { color: var(--bad); font-weight: 600; }
-.wd .wd-table + .wd-bulk, .wd-wrap + .wd-bulk { bottom: calc(var(--rt-foot-off) + var(--rt-foot-h) + 2px); }
 .wd-chip { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .wd-chip.bad { color: var(--bad); background: var(--bad-soft, transparent); border: 1px solid var(--bad); }
 .wd-noname { color: var(--bad); font-weight: 600; }

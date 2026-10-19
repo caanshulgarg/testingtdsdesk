@@ -1,14 +1,13 @@
-// A TDS return's frame in the ClearTax-like layout (next-tds-clear, 19-Oct-2026; the owner: TDS "like ClearTax, not
-// cluttered"; design: scratchpad tds-cleartax-design.md §3.2). Above the step's own content there are at most three bands:
-//   1. one header line: ← back · the return's name · due · its status chip (and Draft for a 2025-Act form) · the one
-//      problem count · ⋯ · ONE primary button naming the next step ("Next: Challans →")
-//   2. one summary strip: TDS · on challans · left to match
-//   3. the step's own toolbar (inside the step)
-// and a step rail on the left (Deductor · Deductees · [Employees & declarations] · Challans · Deductions · Validate &
-// file · After filing), each step with its count and at most one problem line; on a phone the rail is a select.
-// The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings): the header's badge and the
-// rail's are that one number. The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
-import { useRef, useEffect } from "react";
+// A TDS return's frame (next-tds-clear, 19-Oct-2026: "like ClearTax, not cluttered"; round 94, next-tds-clean: tabs
+// across the top, no F-keys, every figure once). Above the step's own content:
+//   1. one header line: ← back · the return's name · due · its status chip · the one problem count ("N to fix") · ⋯
+//      (All challans of the year first) · ONE primary button naming the next step ("Next: Challans →")
+//   2. one row of tabs (Deductor · Deductees N · [Employees & declarations] · Challans N · Deductions N · Validate &
+//      file · After filing): a count only, a dot for a step with a problem; on a phone a select
+//   3. one summary strip, amounts only: TDS · On challans · Left
+// The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings), shown once, in the header.
+// The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
+import { useRef } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
@@ -100,35 +99,22 @@ export function SideDrawer({ open, onClose, title, description, kind, wide, chil
   </Drawer>;
 }
 
-// round 88 (as Winman): the four tabs at the foot of a return, and its keys: F8 Deductor, F10 Challans, F11 Deductees, F12 Deductions
-export const FOOT_KEYS = { F8: "deductor", F10: "challans", F11: "deductees", F12: "deductions" };
-// round 89: not while typing in Ask FinCom, in a dialog, or in a box to type in outside the return's tables (a select stays)
-const TYPING = 'input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable="false"])';
-export function footKey(ev) {
-  if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
-  const id = FOOT_KEYS[ev.key];
-  if (!id || S.tdsView !== "return") return;
-  const t = ev.target && ev.target.closest ? ev.target : null;
-  if (t && (t.closest('[data-asst-panel], [role="dialog"], [aria-modal="true"]') || (t.matches(TYPING) && !t.closest(".rt-main table")))) return;
-  ev.preventDefault(); tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ }
-}
-export function FootTabs({ steps }) {
-  const cur = S.tdsTab, keyOf = { deductor: "F8", deductees: "F11", challans: "F10", deductions: "F12" };
-  const tabs = ["deductor", "deductees", "challans", "deductions"].map((id) => steps.find((s) => s.id === id)).filter(Boolean);
-  return <nav className="rt-foot" aria-label="Return parts" data-ret-foot="">
-    {tabs.map((s) => <button key={s.id} type="button" className={"rt-ft" + (cur === s.id ? " on" : "")} data-foot-tab={s.id} aria-current={cur === s.id ? "page" : undefined}
-      title={s.label + " (" + keyOf[s.id] + ")"} onClick={() => { tdsTabGo(s.id); try { window.scrollTo(0, 0); } catch (e) { /* */ } }}>{s.label}<small className="rt-fk">{keyOf[s.id]}</small></button>)}
-  </nav>;
-}
-
-// the frame. steps: [{id, label, count, done, sub: {text, bad}, off, why}]; strip: [{label, value, sub, bad}]
-// val: the Validate panel's {errors, warnings} (the one problem count); primary: [label, onClick] or null
-export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children, progress }) {
+// the frame (round 94, 19-Oct-2026; the owner: "Deductor, Deductee, Challan, Deduction can come horizontally; remove
+// double info anywhere"). steps: [{id, label, count, off, why}]; strip: [{label, value, bad}] (amounts only);
+// val: the Validate panel's {errors, warnings}: the header's "N to fix" is the one problem count; a step's tab carries a
+// dot (red: an error of that step, amber: a warning), never a number of problems. primary: [label, onClick] or null.
+// No keys of its own (round 88's F8 / F10 / F11 / F12 and the tabs at the foot are gone).
+const dotOf = (id, val) => {
+  if (!val) return "";
+  const of = (l) => l.some((x) => x.n > 0 && (id === "file" ? true : x.step === id));
+  return of(val.errors) ? "bad" : of(val.warnings) ? "warn" : "";
+};
+export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children }) {
   const cur = S.tdsTab, n = val ? val.errors.length + val.warnings.length : 0, filedOn = TDSFiled.get(fy, q, form);
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  useEffect(() => { window.addEventListener("keydown", footKey); return () => window.removeEventListener("keydown", footKey); }, []);
+  const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(more);
   return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
@@ -136,28 +122,22 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <span className="rt-due" title={TDS.FORM_ABOUT[form] || ""}>due {TDS.dueWords(fy, q, form)}</span>
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
-      {progress && <span className="rt-progress" data-ret-progress={progress.done + "/" + progress.of} title="On a challan, with a valid PAN and no rate question">Done: {progress.done} of {progress.of} ready</span>}
       <span className="rt-sp" />
-      <button type="button" className="btn small" data-ret-allch="" onClick={() => openAllChallans(fy, { fy, q, form })}>All challans of {fy}</button>
-      <More label="⋯" ariaLabel="More" items={more} />
+      <More label="⋯" ariaLabel="More" items={moreAll} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
     </header>
+    <nav className="rt-tabs" role="tablist" aria-label="Return" data-return-tabs="" data-no-why="">
+      {steps.map((s) => { const dot = dotOf(s.id, val); return <button key={s.id} type="button" role="tab" className="rt-tab" data-ret-tab={s.id} aria-selected={cur === s.id} aria-current={cur === s.id ? "step" : undefined}
+        disabled={s.off} title={s.off ? s.why : undefined} onClick={() => go(s.id)}>
+        <span className="rt-tl">{s.label}</span>{s.count != null && s.id !== "file" ? <span className="rt-tc" data-tab-count={s.id}>{s.count}</span> : null}
+        {dot ? <span className={"rt-dot2 " + dot} data-tab-dot={dot} role="img" aria-label={dot === "bad" ? "has errors" : "has warnings"} /> : null}
+      </button>; })}
+    </nav>
+    <label className="rt-railsel"><span className="sr-only">Step</span>
+      <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
+        {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id !== "file" && s.count != null ? " · " + s.count : ""}</option>)}</select></label>
     {strip.length > 0 && <div className="rt-strip" data-ret-strip="">{strip.map((f) => <span key={f.label} className={"rt-fig" + (f.bad ? " bad" : "")} data-fig={f.label}>
-      <span className="rt-fl">{f.label}</span> <b>{f.value}</b>{f.sub ? <small> · {f.sub}</small> : null}</span>)}</div>}
-    <div className="rt-body">
-      <nav className="rt-rail" aria-label="Return" data-return-tabs="">
-        {steps.map((s, i) => <button key={s.id} type="button" className={"rt-step" + (cur === s.id ? " on" : "")} data-ret-tab={s.id} aria-selected={cur === s.id} aria-current={cur === s.id ? "step" : undefined}
-          disabled={s.off} aria-description={s.off ? s.why : undefined} title={s.off ? undefined : s.label} onClick={() => go(s.id)}>
-          <span className="rt-i" aria-hidden="true">{i + 1}</span><span className="rt-l">{s.label}</span>
-          <span className={"rt-c" + (s.id === "file" && n ? (val.errors.length ? " bad" : " warn") : "")} data-rail-count={s.id} {...(s.id === "file" ? { "data-rail-problems": n } : {})}>{s.id === "file" ? (n ? n : "✓") : s.done ? "✓" : s.count != null ? s.count : ""}</span>
-          {s.off && !s.sub ? <span className="rt-sub" data-rail-sub={s.id}>once filed</span> : null}{s.sub && s.sub.text ? <span className={"rt-sub" + (s.sub.bad ? " bad" : " warn")} data-rail-sub={s.id}>{s.sub.text}</span> : null}
-        </button>)}
-      </nav>
-      <label className="rt-railsel"><span className="sr-only">Step</span>
-        <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
-          {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id === "file" ? (n ? " · " + n + " to fix" : "") : s.count != null ? " · " + s.count : ""}</option>)}</select></label>
-      <div className="rt-main" data-ret-step={cur}>{children}</div>
-    </div>
-    <FootTabs steps={steps} />
+      <span className="rt-fl">{f.label}</span> <b>{f.value}</b></span>)}</div>}
+    <div className="rt-main" data-ret-step={cur}>{children}</div>
   </div>;
 }

@@ -2,12 +2,12 @@
 The owner's 26Q Q1: the header said "Challans 7", the Challans grid showed one challan, Deductions said "every deduction is
 on a challan" with only Rs 31,105 used: 39 deductions pointed at challans this browser did not have. Now, on the made-up
 books of run_tds_challans.py (Q1 2026-27) with two 194C deductions pointing at a challan that is not here:
-  1. the header's Challans count = the grid's rows = the strip's "N challans";
+  1. the Challans tab's count = the grid's rows (round 94: said there only, not again in the strip);
   2. the grid: "Used here" (this return's TDS on the challan) and "Used in all returns", Balance overall; the sum of Used
      here (and its footer total, and the strip's On challans) = the TDS of the deductions placed on challans here;
   3. a deduction whose challan is missing is NOT on a challan: counted in "Not on any challan (N)", listed there with
      "Its challan 00777 is missing — choose again", offered by "+ Add deduction", and one click puts it on a challan;
-  4. the step keys (F8 / F10 / F11 / F12) are not taken while typing in a box outside the grid, or in a dialog.
+  4. (round 94) no step keys: F8 / F10 / F11 / F12 switch nothing, anywhere; no count line under Deductees.
   5. (the owner) "+ Add deduction" with every deduction on some challan: "Not on any challan (0)" saying "All deductions
      are on a challan. To move one here, pick it below.", then "On other challans (M)" (name, section, date, TDS, "on
      <serial · date>") with Move here: off beyond this challan's balance, a confirm only when the other challan is fully
@@ -25,7 +25,7 @@ books of run_tds_challans.py (Q1 2026-27) with two 194C deductions pointing at a
      challans' balances follow) with one Undo; refused beyond the balance (the reason said); Remove from challan in bulk;
      the list sorted by best fit (the section and the month before the challan first, one dated after it last).
 TDS_ACC_SHOTS=dir: screenshots (default tests/out/tds-accurate)."""
-import os, sys, threading, functools, http.server
+import os, sys, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,10 +64,10 @@ with sync_playwright() as p:
     gone = J("window.__gone")
     print("1. one count")
     grid = J("[...document.querySelectorAll('#app [data-chg] tbody tr[data-chg-row]')].map(t => t.dataset.chgRow)")
-    rail = J("() => (document.querySelector('#app [data-rail-count=\"challans\"]') || {}).textContent")
+    rail = J("() => (document.querySelector('#app [data-tab-count=\"challans\"]') || {}).textContent")
     strip = J("() => (document.querySelector('#app [data-fig=\"On challans\"]') || {}).textContent || ''")
-    ok(grid and rail == str(len(grid)), "the header's Challans count = the grid's rows (%s = %d: %s)" % (rail, len(grid), grid))
-    ok(("%d challan" % len(grid)) in strip, "the strip says the same number (%s)" % strip.strip())
+    ok(grid and rail == str(len(grid)), "the Challans tab's count = the grid's rows (%s = %d: %s)" % (rail, len(grid), grid))
+    ok(not re.search(r"\d+ challans?\b", strip), "the strip does not say the number again (%s)" % strip.strip())
     ok("chGONE" not in grid and "chA" in grid and "chJ" in grid, "the grid: the challans here this return uses, never the missing one")
     print("2. Used here and Used in all returns")
     heads = J("[...document.querySelectorAll('#app [data-chg] thead th')].map(h => h.innerText.trim())")
@@ -88,7 +88,7 @@ with sync_playwright() as p:
     un = J("() => { const ids = new Set(TDS.challans().map(c => c.id)); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005 && !(r.challan && ids.has(r.challan))).length; }")
     last = J("() => { const o = [...document.querySelectorAll('#app select[data-wd-sel] option')]; return o.length ? [o[o.length - 1].value, o[o.length - 1].textContent] : null; }")
     ok(last == ["__none", "Not on any challan (%d)" % un] and un >= len(gone) + 1, "the selector: Not on any challan (%d), the missing challan's two included (%s)" % (un, last))
-    ok(J("() => !!document.querySelector('#app [data-wd-unplaced]')") or J("S.tdsWinCh") == "__none", "the challan's view says some are not on a challan")
+    ok(J("() => !document.querySelector('#app [data-wd-unplaced]')"), "round 94: no second 'N not on a challan' line under the selector (its last choice says it)")
     # + Add deduction offers them
     J("() => { S.tdsWinCh = 'chM'; S.tdsWinAdd = 'chM'; render(); }"); pg.wait_for_timeout(600)
     cands = J("[...document.querySelectorAll('[data-wd-addlist] [data-wd-cand]')].map(t => t.dataset.wdCand)")
@@ -139,10 +139,9 @@ with sync_playwright() as p:
         pg.click('[data-wd-addlist] [data-wd-move="%s"]' % nxt); pg.wait_for_timeout(500)
         ok(J("(id) => S.books.alloc[id]", nxt) == "chM" and pg.locator("#confirmBox [role=dialog]").count() == 0, "from a challan not fully used: moved at once, no confirm")
     J("() => { S.tdsWinAdd = ''; render(); }"); pg.wait_for_timeout(300)
-    print("4. the step keys while typing")
+    print("4. no step keys")
     J(GO, "deductees"); pg.wait_for_timeout(600)
-    dc = J("() => { const e = document.querySelector('#app [data-dee-count]'); return e ? [e.className, getComputedStyle(e).position] : null; }")
-    ok(dc and "rt-foot" not in dc[0] and dc[1] == "static", "the deductees' count line is not a second footer bar (%s)" % dc)
+    ok(pg.locator("#app [data-dee-count], #app .rt-foot").count() == 0, "no count line under Deductees and no footer bar of tabs")
     box = J("() => { const i = [...document.querySelectorAll('#app input[type=search], #app input[type=text]')].find(e => !e.closest('table') && e.offsetWidth); if (!i) return ''; i.setAttribute('data-zz-box', ''); return 'ok'; }")
     if box:
         pg.focus("#app [data-zz-box]"); pg.keyboard.press("F12"); pg.wait_for_timeout(400)
@@ -151,8 +150,8 @@ with sync_playwright() as p:
     pg.focus("#zzDlgBtn"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
     ok(J("S.tdsTab") == "deductees", "F10 inside a dialog does not switch the step (%s)" % J("S.tdsTab"))
     J("() => document.getElementById('zzDlg').remove()")
-    pg.focus("#app [data-ret-foot] [data-foot-tab=\"deductees\"]"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
-    ok(J("S.tdsTab") == "challans", "with the focus elsewhere F10 still opens Challans")
+    pg.focus("#app [data-return-tabs] [data-ret-tab=\"deductees\"]"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
+    ok(J("S.tdsTab") == "deductees", "with the focus on a tab F10 does nothing either (%s)" % J("S.tdsTab"))
     print("6. names: never blank")
     J(BOOKS_JS); pg.wait_for_timeout(600); J("() => { TDSMatch.online = () => false; }"); J(CHALLANS)
     J("""() => { const V = S.books.vouchers;

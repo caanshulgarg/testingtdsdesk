@@ -169,12 +169,11 @@ export function ValidatePanel({ fy, q, form, val, reviews = {}, year = [], file,
   const lines = (list, level) => list.map((it) => <Line key={it.k} it={it} level={level} form={form} open={isOpen(it.k)} onOpen={() => pick(it.k)} review={it.review ? reviews[it.k] || null : null} />);
   const ySel = year.find(([k]) => k === sel);
   return <section className="vf" data-validate={form} data-to-fix={sel || "all"}>
-    <div className="vf-counts" data-val-counts="">
-      <span className={val.errors.length ? "bad" : ""} data-val-errors={val.errors.length}>✕ {s_(val.errors.length, "error", "errors")} <small>(block the file)</small></span>
-      <span className={val.warnings.length ? "warn" : ""} data-val-warnings={val.warnings.length}>! {s_(val.warnings.length, "warning", "warnings")}</span>
+    {/* round 94: the number to fix is the header's ("N to fix"), not said again here; the lists say what each is */}
+    <div className="vf-counts" data-val-counts="" data-val-errors={val.errors.length} data-val-warnings={val.warnings.length}>
       <span className="ok" data-val-passed={val.passed}>✓ {s_(val.passed, "check passed", "checks passed")}</span>
     </div>
-    {val.errors.length > 0 && <><h4 className="vf-h">Errors</h4><ul className="vf-list" data-val-list="errors">{lines(val.errors, "error")}</ul></>}
+    {val.errors.length > 0 && <><h4 className="vf-h">Errors · block the file</h4><ul className="vf-list" data-val-list="errors">{lines(val.errors, "error")}</ul></>}
     {val.warnings.length > 0 && <><h4 className="vf-h">Warnings (potential notices)</h4><ul className="vf-list" data-val-list="warnings">{lines(val.warnings, "warn")}</ul></>}
     {!val.errors.length && !val.warnings.length && <p className="ok-line" data-fix-none="" data-cm-checks="ok">Nothing to fix in this return.</p>}
     {val.info.length > 0 && <ul className="vf-list" data-val-list="info">{lines(val.info, "info")}</ul>}

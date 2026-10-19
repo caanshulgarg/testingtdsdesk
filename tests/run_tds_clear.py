@@ -3,7 +3,8 @@ cluttered", and "no PAN is asked twice, whether it came from Tally or was typed 
 (tdsgst_snapshot.py: 2025-26 and the same a year on), in the React build (app/dist-test, or TDSDESK_SITE):
   1. clutter: on the TDS home and on every step of a return, at most three bands above the first table (the header, the
      summary strip, the step's toolbar), at most one primary button, at most two chips in the header and one a row; one
-     problem count, the same in the header's badge, the rail's and the Validate & file panel (errors + warnings), for
+     problem count, the same in the header's badge and the Validate & file panel (errors + warnings; round 94: said only
+     in the header, the steps' tabs carry a dot), for
      Forms 140, 138, 144 and 143; nothing about "TDS not deducted"; no sideways scroll at 1366 or on a phone
   3. a deduction added in FinCom (Add deduction, on Deductions and on a challan's panel): kept with the books, never in
      Tally, on its challan, counted by Validate & file, in both file builders (Form 140 and 26Q); edited, deleted with a
@@ -41,8 +42,8 @@ BANDS = """() => { const main = document.querySelector('#app .rt-main'), t = mai
     const r = p.getBoundingClientRect(); if (p.offsetParent && r.height > 4 && r.bottom <= top + 1 && getComputedStyle(p).position !== 'absolute') out.push(p.className || p.tagName); }
   return {n: out.length, what: out, top: Math.round(top - document.querySelector('#app').getBoundingClientRect().top)}; }"""
 PRIMARY = "[...document.querySelectorAll('#app .btn.primary')].filter(e => e.offsetParent).map(e => e.textContent.trim())"
-COUNTS = """() => { const v = document.querySelector('#app [data-val-counts]'), h = document.querySelector('#app [data-return-card] [data-problem-count]'), r = document.querySelector('#app [data-rail-problems]');
-  return {panel: v ? +v.querySelector('[data-val-errors]').dataset.valErrors + +v.querySelector('[data-val-warnings]').dataset.valWarnings : null, header: h ? +h.dataset.problemCount : 0, rail: r ? +r.dataset.railProblems : null,
+COUNTS = """() => { const v = document.querySelector('#app [data-val-counts]'), h = document.querySelector('#app [data-return-card] [data-problem-count]'), r = document.querySelector('#app [data-validate]');
+  return {panel: v ? +v.dataset.valErrors + +v.dataset.valWarnings : null, header: h ? +h.dataset.problemCount : 0, rail: r ? (document.querySelectorAll('#app [data-rail-problems]').length ? -1 : 0) : null,
     chips: document.querySelectorAll('#app [data-return-card] .tag').length, rowChips: Math.max(0, ...[...document.querySelectorAll('#app .rt-main table.rt-rows > tbody > tr')].map(tr => tr.querySelectorAll('.tag').length))}; }"""
 
 try:
@@ -73,13 +74,13 @@ try:
                     ok(len(prim) <= 1, "%s: one primary button at most (%s)" % (at, prim))
                     ok(c["chips"] <= 2 and c["rowChips"] <= 1, "%s: at most two chips in the header (%d) and one a row (%d)" % (at, c["chips"], c["rowChips"]))
                     if step == "file":
-                        ok(c["panel"] is not None and c["panel"] == c["header"] == c["rail"], "%s: one problem count, panel %s = header %s = rail %s" % (at, c["panel"], c["header"], c["rail"]))
+                        ok(c["panel"] is not None and c["panel"] == c["header"] and c["rail"] == 0, "%s: one problem count, panel %s = header %s, no second count beside the steps (%s)" % (at, c["panel"], c["header"], c["rail"]))
                     ok(J("document.documentElement.scrollWidth") <= w + 1, "%s: no sideways scroll" % at)
                     ok("not deducted" not in J("document.getElementById('app').innerText").lower(), "%s: nothing about TDS not deducted" % at)
         pg.set_viewport_size({"width": 390, "height": 844})
         for step in ["deductees", "challans", "deductions", "file"]:
             J("(s) => { tdsGo('2026-27', 'Q1', '26Q'); S.tdsTab = s; render(); }", step); pg.wait_for_timeout(450)
-            ok(J("document.documentElement.scrollWidth") <= 391 and pg.locator('#app [data-ret-select]').is_visible() and not pg.locator('#app nav[data-return-tabs]').is_visible(), "phone %s: the rail is a select, no sideways scroll" % step)
+            ok(J("document.documentElement.scrollWidth") <= 391 and pg.locator('#app [data-ret-select]').is_visible() and not pg.locator('#app nav[data-return-tabs]').is_visible(), "phone %s: the steps are a select, no sideways scroll" % step)
         pg.set_viewport_size({"width": 1440, "height": 900})
 
         print("2. the PAN book")

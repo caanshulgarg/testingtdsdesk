@@ -306,6 +306,7 @@ run_integrations_ui.py                300  TDSDESK_SITE=../app/dist-test
 # register per TAN (the owner's rules, manual entry, the simplified register); migration 80 (its audit trail) twice
 run_tds_newlayout.py                  300  TDSDESK_SITE=../app/dist-test
 run_tds_clear.py                      300  TDSDESK_SITE=../app/dist-test
+run_tds_clean.py                      300  TDSDESK_SITE=../app/dist-test
 run_tds_dedmatch.py                   300  TDSDESK_SITE=../app/dist-test
 run_tds_register.py                   300  TDSDESK_SITE=../app/dist-test
 run_migration80.py                    120

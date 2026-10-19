@@ -227,10 +227,10 @@ export function Return24Tally({ fy, q }) {
   // next-tds-clear (19-Oct-2026): the steps of the ClearTax-like layout (tds/Shell.jsx): Deductor · Employees (PAN) ·
   // Employees & declarations (with Annexure II in Q4) · Challans · Deductions (Annexure I) · Validate & file · After filing
   S.tdsTab = tabNow(S.tdsTab, "24Q");
-  const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0)), key = TDSReg.key("24Q", fy, q);
+  const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), key = TDSReg.key("24Q", fy, q);
   const rc = retChallans("24Q", fy, q), usedN = rc.n, val = checkReturn(fy, q, "24Q");
   const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length, problems: val.n });
-  const sal = val.warnings.find((x) => x.k === "salary"), un = val.errors.find((x) => x.k === "unmatched"), np = val.warnings.find((x) => x.k === "nopan");
+  const sal = val.warnings.find((x) => x.k === "salary");
   const emps = new Set(a1.filter((r) => !r.unsplit && !r.unsplitBooks).map((r) => r.employee)).size;
   // round 92 (B, D): TDS not split by employee, and employees with TDS without a PAN (after Tally, the PAN book and the
   // "Salary <name>" ledger), each with Add PAN
@@ -240,16 +240,17 @@ export function Return24Tally({ fy, q }) {
   const panNote = noPan.length > 0 ? <div className="note warn" data-pay-nopan="" style={{ marginBottom: 8 }}>PAN missing for {noPan.length} employee{noPan.length === 1 ? "" : "s"} with TDS (not in Tally, the PAN book or the “Salary &lt;name&gt;” ledger). Add PAN:
     {noPan.map((n) => <span key={n} style={{ display: "inline-block", marginLeft: 12 }}>{n} <PanBox party={n} compact /></span>)}</div> : null;
   const steps = [
-    { id: "deductor", label: "Deductor", done: !val.warnings.some((x) => x.k === "deductor") },
-    { id: "deductees", label: stepName("deductees", "24Q"), count: emps, sub: np ? { text: np.n + " PAN" } : null },
-    { id: "people", label: "Employees & declarations", sub: sal ? { text: sal.n + " to check" } : null },
-    { id: "challans", label: "Challans", count: usedN, sub: un ? { text: un.n + " not matched", bad: true } : null },
+    { id: "deductor", label: "Deductor" },
+    { id: "deductees", label: stepName("deductees", "24Q"), count: emps },
+    { id: "people", label: "Employees & declarations" },
+    { id: "challans", label: "Challans", count: usedN },
     { id: "deductions", label: "Deductions", count: a1.length },
     { id: "file", label: "Validate & file" },
     { id: "after", label: "After filing", off: !TDSReg.filed(fy, q, "24Q"), why: "Once the return is marked filed (Validate & file › Mark filed)" },
   ];
   const confirmable = (() => { try { return TDSMatch.suggest("24Q", fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
-  const unRows = unplacedOf(TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q));
+  // round 94: the strip's amounts only (the counts are on the tabs); Left: the TDS on no challan
+  const unRows = unplacedOf(TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q)), left = r2(unRows.reduce((a, r) => a + num(r.tds), 0));
   const reviews = {
     unmatched: <FixRows title={unRows.length + " salary payments without a challan"} rows={unRows} unit="salary payments" />,
     salary: <div data-pay-checks=""><SalaryChecks list={sal ? sal.list : []} /></div>,
@@ -269,7 +270,7 @@ export function Return24Tally({ fy, q }) {
     <MatchDialogs form="24Q" fy={fy} q={q} />
     <ReturnShell fy={fy} q={q} form="24Q" status={status} draft={TDS.isNew(fy) && !filed} val={val} primary={S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined}
       more={[["The challan register", () => tdsNav("register")]]}
-      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: unTds > 0.005 ? "deducted · " + money(r2(tds - unTds)) + " split by employee" : "from Tally's payroll" }, { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
+      strip={[{ label: "TDS", value: money(tds) }, { label: "On challans", value: money(rc.here) }, { label: "Left", value: money(left), bad: left > 0.005 }]} steps={steps}>
     {S.tdsTab === "deductor" ? <DeductorDetails />
       : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
       : S.tdsTab === "deductions" ? <>{splitNote}{panNote}<ListTable name="q24Annex1" id="q24A1Table" className="bk-table rt-rows" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""

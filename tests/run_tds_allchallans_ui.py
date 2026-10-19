@@ -2,9 +2,8 @@
 "if I want to see all the challans .. don't know how to see that.. no option to see all challans"). On the made-up books
 and challans of run_tds_match_ui.py (tax year 2026-27), with one more challan in Q3 and a TDS payment in Tally (August)
 that has no BSR code yet, in the React build (app/dist-test, or TDSDESK_SITE):
-  1. reachable: a button "All challans" on the TDS home and a "See all challans of 2026-27" line under its grid; from a
-     return: its header ("All challans of 2026-27") and its Challans step ("See all challans of 2026-27 →"); its own
-     address (…/2026-27/all-challans)
+  1. reachable: one button "All challans" on the TDS home; from a return: its header's ⋯ ("All challans of 2026-27";
+     round 94: no second link under the home's grid or on the Challans step); its own address (…/2026-27/all-challans)
   2. the whole year: every challan of 2026-27 (Q1, Q2 and Q3), the columns Date · BSR · Serial / CIN · Section · Form /
      quarter · Tax · Interest · Others · Total · Used on deductions · Left · Status; Used and Left agree with the
      deductions on each challan after the suggestions are confirmed; Status Matched fully / Part used / Not used; the
@@ -54,15 +53,15 @@ try:
         print("1. reachable")
         J(HOME); pg.wait_for_timeout(800)
         ok(pg.locator("#app [data-tds-allch]").count() == 1 and pg.locator("#app [data-tds-allch]").is_visible(), "the TDS home: a visible All challans button beside the year")
-        ok("See all challans of 2026-27" in (pg.locator("#app [data-home-allch]").inner_text() if pg.locator("#app [data-home-allch]").count() else ""), "the home's challans line: See all challans of 2026-27")
+        ok(pg.locator("#app [data-home-allch]").count() == 0, "the home's challans line: no second All challans (round 94: one entry, the button)")
         pg.click("#app [data-tds-allch]"); pg.wait_for_timeout(700)
         ok(pg.locator("#app [data-all-challans='2026-27']").count() == 1 and "All challans of 2026-27" in pg.inner_text("#app [data-allch-title]"), "the button opens All challans of 2026-27")
         ok(J("location.hash").endswith("/2026-27/all-challans"), "its own address (%s)" % J("location.hash"))
         J(RET, "deductions"); pg.wait_for_timeout(800)
-        ok(pg.locator("#app [data-ret-allch]").count() == 1 and "All challans of 2026-27" in pg.inner_text("#app [data-ret-allch]"), "a return's header: All challans of 2026-27")
+        ok(pg.locator("#app [data-return-card] .more-pop [data-ret-allch]").count() == 1 and "All challans of 2026-27" in pg.locator("#app [data-ret-allch]").text_content(), "a return's header: All challans of 2026-27, under ⋯ (round 94)")
         J(RET, "challans"); pg.wait_for_timeout(800)
-        ok(pg.locator("#app [data-cm-allch]").count() == 1 and "See all challans of 2026-27" in pg.inner_text("#app [data-cm-allch]"), "the Challans step: See all challans of 2026-27")
-        pg.click("#app [data-cm-allch]"); pg.wait_for_timeout(700)
+        ok(pg.locator("#app [data-cm-allch]").count() == 0, "the Challans step: no second link to all challans (round 94)")
+        pg.click("#app [data-return-card] details.more > summary"); pg.wait_for_timeout(200); pg.click("#app [data-ret-allch]"); pg.wait_for_timeout(700)
         ok(pg.locator("#app [data-all-challans]").count() == 1 and pg.locator("#app [data-allch-back]").inner_text().strip().endswith("Q1"), "opened from the return: the way back is to it (%s)" % pg.locator("#app [data-allch-back]").inner_text())
 
         print("2. the whole year")

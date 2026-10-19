@@ -6,7 +6,7 @@
 //                 Amount paid · Paid date · Deduction date · TDS · Rate · Reason lower/higher · Section · Shortfall/Excess),
 //                 edited in place as the table's cells are (DedSmart Cell); the last row "+ Add deduction to this challan"
 //                 opens the deductions not on a challan, the best fit first, one click puts one on; and the footer, always
-//                 in view: Challan amount · Amount utilised · Balance · Number of deductions. "Not on any challan" is the
+//                 in view: Used here · Balance · Number of deductions (the amount is the dropdown's; round 94). "Not on any challan" is the
 //                 to-do list (DedTodo).
 //   ChallanGrid   the Challans step: one plain table of the quarter's challans (Winman's grid), totals in its footer,
 //                 "+ Add challan" its last row; a row opens Deductions with that challan chosen.
@@ -22,7 +22,6 @@ import { challansOf } from "./Match.jsx";
 import { AddChallan, say } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { openAdd } from "./AddDeduction.jsx";
-import { openAllChallans } from "./AllChallans.jsx";
 import More from "../../parts/More.jsx";
 import { unplacedOf, usedHere, chIds, placeIssues, earlyFor } from "./onChallan.js";
 import { DedName } from "./DedName.jsx";
@@ -241,7 +240,6 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
       {c && <span className="wd-chw" title={c.bsr + " · " + c.serial}>BSR {c.bsr} · serial {c.serial}{chSec(c) ? " · " + chSec(c) : ""}</span>}
       <span className="rt-sp" />{tools}
     </div>
-    {c && un.length > 0 && <p className="wd-un" data-wd-unplaced={un.length}>{un.length} {un.length === 1 ? unit[0] : unit[1]} not on a challan · <button type="button" className="linkbtn" onClick={() => pick("__none")}>Show</button></p>}
     {early.length > 0 && <p className="wd-un wd-bad" data-wd-early-n={early.length}>{early.length} {early.length === 1 ? unit[0] + " is" : unit[1] + " are"} on a challan dated before the deduction: a challan cannot pay tax deducted after it was deposited · <button type="button" className="linkbtn" data-wd-early-show="" onClick={() => pick("__none")}>Fix</button></p>}
     {!c ? todo
       : <>{onAll.length > 0 && <Filters F={TF} set={setter("tdsWinTF")} rows={onAll} kind="table" />}
@@ -267,7 +265,7 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
           <span className="rt-sp" /><button type="button" className="linkbtn" onClick={() => { S.tdsWinRSel = {}; render(); }}>Clear</button>
           <button type="button" className="btn small" data-wd-bulk-off="" disabled={locked} onClick={removeSel}>Remove from challan</button></div>}
         <div className="wd-foot" data-wd-foot={c.id} data-amt={r2(num(c.tax))} data-here={here} data-used={used} data-bal={bal} data-n={onAll.length}>
-          <span>Challan amount <b>{money(c.tax)}</b></span><span>Used here <b>{money(here)}</b></span>{Math.abs(used - here) > 0.005 && <span title="This return's and the other returns' TDS on the challan">Amount utilised (all returns) <b>{money(used)}</b></span>}
+          <span>Used here <b>{money(here)}</b></span>{Math.abs(used - here) > 0.005 && <span title="This return's and the other returns' TDS on the challan">Amount utilised (all returns) <b>{money(used)}</b></span>}
           <span>Balance <b className={bal < -0.005 ? "bad" : ""} data-wd-bal={bal}>{money(bal)}</b></span><span>Number of {unit[1]} <b>{onAll.length}</b></span></div>
         {S.tdsWinAdd === c.id && <AddList c={c} rows={rows} m={m} form={form} locked={locked} probs={probs} />}</>}
   </div>;
@@ -281,10 +279,10 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
   const rows = list.map((c, i) => { const p = TDSReg.portionFor(c, form, fy, q, cx), b = TDSReg.balance(c, cx).tax;
     return { c, no: i + 1, int: num(p.interest), oth: num(p.fee), here: usedHere(c, key, cx), used: TDSReg.usedTax(c, cx), bal: b, ok: TDSReg.srcOf(c) === "upload" || !!c.cin }; });
   const sum = (f) => r2(rows.reduce((a, x) => a + f(x), 0));
+  // round 94: "Used in all returns" only where some challan is used by another return too (else it repeats Used here)
+  const allCol = rows.some((x) => Math.abs(x.used - x.here) > 0.005), cols = allCol ? 17 : 16;
   return <div className="chg" data-chg={TDSReg.key(form, fy, q)}>
     <div className="rt-tool" data-step-tool="">
-      <span className="wd-help">Click a challan to see and add its deductions.</span>
-      <button type="button" className="linkbtn cm-allch" data-cm-allch="" onClick={() => openAllChallans(fy, { fy, q, form })}>See all challans of {fy} →</button>
       <span className="rt-sp" />
       <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
         ["By hand", () => setAdding(true), { "data-cm-add": "hand" }],
@@ -298,16 +296,16 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
     {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
     <div className="bk-tablewrap chg-wrap"><table className="bk-table chg-table gf-off">
       <thead><tr><th className="n">No</th><th className="dt">Date</th><th>Section</th><th className="n">Tax</th><th className="n">Interest</th><th className="n">Fee</th><th className="n">Others</th><th className="n">Total</th>
-        <th>Serial</th><th>BSR</th><th>Type</th><th>Verified</th><th className="n">Interest allocated</th><th className="n">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th><th className="n" title="Every return's TDS on the challan">Used in all returns</th><th className="n">Balance</th></tr></thead>
+        <th>Serial</th><th>BSR</th><th>Type</th><th>Verified</th><th className="n">Interest allocated</th><th className="n">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<th className="n">Balance</th></tr></thead>
       <tbody>{rows.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
           onClick={() => openChallanDeductions(x.c.id)} onKeyDown={(ev) => { if (ev.key === "Enter") openChallanDeductions(x.c.id); }}>
         <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{chSec(x.c) || "—"}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
         <td>{x.c.serial}</td><td>{x.c.bsr}</td><td title={TYPE[String(x.c.minorHead || "200")] || ""}>{String(x.c.minorHead || "200")}</td><td>{x.ok ? <span className="ac-chip ok" title="From the income-tax portal (its CIN)">Matched</span> : <span className="wd-dim" title="Typed or from Tally: not checked against the portal">Not checked</span>}</td>
-        <td className="n">{amt0(x.int)}</td><td className="n">{amt0(x.oth)}</td><td className="n" data-chg-here={x.here}>{amt(x.here)}</td><td className="n">{amt(x.used)}</td><td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td></tr>)}
-        {!locked && <tr className="wd-addrow"><td colSpan={17}><button type="button" className="linkbtn" data-chg-add="" onClick={() => setAdding(!adding)}>+ Add challan</button></td></tr>}</tbody>
-      <tfoot><tr><td colSpan={3}>Number of challans {rows.length}</td><td className="n" data-chg-tax={sum((x) => num(x.c.tax))}>{amt(sum((x) => num(x.c.tax)))}</td><td className="n">{amt(sum((x) => num(x.c.interest)))}</td><td className="n">{amt(sum((x) => num(x.c.fee)))}</td>
+        <td className="n">{amt0(x.int)}</td><td className="n">{amt0(x.oth)}</td><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td></tr>)}
+        {!locked && <tr className="wd-addrow"><td colSpan={cols}><button type="button" className="linkbtn" data-chg-add="" onClick={() => setAdding(!adding)}>+ Add challan</button></td></tr>}</tbody>
+      <tfoot><tr><td colSpan={3}>Total</td><td className="n" data-chg-tax={sum((x) => num(x.c.tax))}>{amt(sum((x) => num(x.c.tax)))}</td><td className="n">{amt(sum((x) => num(x.c.interest)))}</td><td className="n">{amt(sum((x) => num(x.c.fee)))}</td>
         <td className="n">{amt(sum((x) => num(x.c.others)))}</td><td className="n">{amt(sum((x) => totalOf(x.c)))}</td><td colSpan={4}></td><td className="n">{amt(sum((x) => x.int))}</td><td className="n">{amt(sum((x) => x.oth))}</td>
-        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td><td className="n">{amt(sum((x) => x.used))}</td><td className="n">{amt(sum((x) => x.bal))}</td></tr></tfoot></table></div>
+        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td></tr></tfoot></table></div>
     {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
   </div>;
 }

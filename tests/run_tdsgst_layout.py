@@ -103,13 +103,14 @@ try:
         card = "#app [data-return-card='26Q|Q1']"
         ok(pg.locator(card).count() == 1 and "Form 140 (earlier 26Q) · Q1" in text(card + " [data-return-title]"), "the summary card, named Form 140 (earlier 26Q) · Q1")
         # next-tds-clear (19-Oct-2026): one header line (the status one word of the one vocabulary, its date on a hover), one
-        # summary strip, the step rail
+        # summary strip (amounts only, round 94), the steps' tabs across the top
         st = pg.locator(card + " [data-status-tag]")
         ok(st.inner_text().strip() == "Filed" and "Filed 05-Aug-2026" in (st.get_attribute("title") or ""), "the header's status: Filed (05-Aug-2026 on a hover)")
         ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said in the header")
-        ok(all(x in text("#app [data-ret-strip]") for x in ["TDS", "On challans", "Left"]) and "To look at" not in text("#app"), "the summary strip: TDS · On challans · Left; no To look at")
-        steps = E("[...document.querySelectorAll('#app nav[aria-label=Return] button[data-ret-tab]')].map(b => b.dataset.retTab)")
-        ok(steps == ["deductor", "deductees", "challans", "deductions", "file", "after"], "the step rail: %s" % steps)
+        figs = E("[...document.querySelectorAll('#app [data-ret-strip] [data-fig]')].map(e => e.dataset.fig)")
+        ok(figs == ["TDS", "On challans", "Left"] and pg.locator("#app [data-ret-strip] small").count() == 0 and "To look at" not in text("#app"), "the summary strip: TDS · On challans · Left, amounts only; no To look at (%s)" % figs)
+        steps = E("[...document.querySelectorAll('#app nav[data-return-tabs] button[data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(steps == ["deductor", "deductees", "challans", "deductions", "file", "after"] and pg.locator("#app .rt-rail").count() == 0, "the steps' tabs, no rail: %s" % steps)
         hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
         prim = pg.locator(card.replace("Q1", "Q2") + " [data-card-primary]")
         ok(vis("#app .btn.primary") == 1 and prim.count() == 1 and prim.inner_text().startswith("Next: "), "a return not filed: one main button, in the header, naming the next step (%d; %s)" % (vis("#app .btn.primary"), prim.inner_text() if prim.count() else ""))

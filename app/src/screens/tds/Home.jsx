@@ -109,7 +109,7 @@ export default function Home({ fys, b }) {
         <tfoot><tr><th scope="row">All forms</th>{QS.map((q) => <td key={q} className="n" data-q-total={q}>{money(byQ[q] || 0)}</td>)}<td className="n" data-year-total=""><b>{yearAll}</b></td></tr></tfoot>
       </table></div>
     </section>
-    <p className="hc-foot" data-ch-register="">{chs.length ? <>Challans: {chs.length} · {left.length ? money(unc) + " unconsumed across " + left.length + " challan" + (left.length === 1 ? "" : "s") : "every challan used"} · <button className="linkbtn" data-home-allch="" onClick={() => openAllChallans(fy, null)}>See all challans of {fy} →</button> · <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register</button></>
+    <p className="hc-foot" data-ch-register="">{chs.length ? <>Challans: {chs.length} · {left.length ? money(unc) + " unconsumed across " + left.length + " challan" + (left.length === 1 ? "" : "s") : "every challan used"} · <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register</button></>
       : <>No challans · <button className="linkbtn" data-ch-add="" onClick={() => { S.regAdding = true; tdsNav("register"); }}>Add challan</button></>}</p>
   </div>;
 }

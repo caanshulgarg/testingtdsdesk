@@ -1,6 +1,6 @@
 // The Deductees step of every TDS return (next-challan-match, the owner's direction of 18-Oct-2026, as Winman lays a
-// return out; next-tds-clear, design §3.4: one line per deductee, one status chip per row). Columns: deductee · PAN ·
-// PAN status · section (short code, its words on a hover) · deductions · paid · TDS. Those with no PAN, or an invalid or
+// return out; next-tds-clear, design §3.4: one line per deductee, one status chip per row). Columns: deductee · PAN (a
+// valid one with its state; else the box to type it: one indicator, round 94) · section (short code, its words on a hover) · deductions · paid · TDS. Those with no PAN, or an invalid or
 // inoperative one, first and in red. Show: All · PAN problems · Not checked · Rate questions; Find. A row opens the
 // deductee's drawer: the PAN (and the name written in the file) typed or corrected, checked at once (its form, its 4th
 // letter against the name, the same PAN on another deductee), its status from TRACES through PANCheck (src/js/87) once
@@ -26,9 +26,8 @@ export function PanState({ st }) {
   const cls = st.state === "valid" ? "ok" : st.state === "unknown" ? "" : "bad";
   return <span className={"tag " + cls} data-pan-state={st.state}>{st.words}</span>;
 }
-// one chip per row: the PAN's state (no PAN said here too)
-const RowChip = ({ p }) => (!p.pan ? <span className="tag warn" data-pan-state="none">No PAN</span> : !Certs.validPan(p.pan) ? <span className="tag warn" data-pan-state="form">Not a PAN</span>
-  : <span className={"tag " + (p.status.state === "valid" ? "ok" : p.status.state === "unknown" ? "" : "warn")} data-pan-state={p.status.state} title={p.status.words}>{p.status.state === "unknown" ? "Not checked" : p.status.state === "valid" ? "Operative" : p.status.state === "inoperative" ? "Inoperative" : "Invalid"}</span>);
+// one PAN indicator per row (round 94): a valid PAN's state as a chip beside it; no PAN or not a PAN is the box to type it
+const RowChip = ({ p }) => (<span className={"tag " + (p.status.state === "valid" ? "ok" : p.status.state === "unknown" ? "" : "warn")} data-pan-state={p.status.state} title={p.status.words}>{p.status.state === "unknown" ? "Not checked" : p.status.state === "valid" ? "Operative" : p.status.state === "inoperative" ? "Inoperative" : "Invalid"}</span>);
 
 export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
   const list = TDSPanFix.list(form, fy, q), locked = TDSReg.locked(fy, q, form), [find, setFind] = useState("");
@@ -45,21 +44,20 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
     <div className="rt-tool" data-step-tool="">
       <Search value={find} placeholder="Find deductee or PAN" label="Find a deductee or PAN" data-fk="tdsf-deductees" onChange={setFind} />
       <span className="segs" role="group" aria-label="Show">{pill("", "All")}{pill("bad", "PAN problems", nBad)}{pill("unknown", "Not checked", unknown.length)}{form === "26Q" ? pill("rate", "Rate questions", nRate) : null}</span>
+      {(f || qq) ? <button type="button" className="linkbtn" data-ded-clear="" data-dee-shown={shown.length + "|" + list.length} onClick={() => { setFind(""); setF(""); }}>Clear filters</button> : null}
       <span className="rt-sp" />
       <button className="btn small" data-pan-check-all="" disabled={!unknown.length || typeof PANCheck.provider !== "function"} onClick={() => tdsPanCheck(unknown)}>Check PANs on TRACES{typeof PANCheck.provider !== "function" ? " · not connected yet" : ""}</button>
       <More label="⋯" ariaLabel="Export" items={[["Paste PANs / import Excel (name, PAN)", () => { S.tdsPanPaste = true; render(); }, { "data-pan-paste-open": "" }], ["PAN book", () => { S.tdsPanBook = true; render(); }, { "data-pan-book-open": "" }], ["Print or save as PDF", () => printTable("tdsDeTable", (title || "") + " deductees")], ["Excel (the return’s working)", () => doAct(form === "24Q" ? "q24Excel" : "tdsExcel")]]} />
     </div>
     <div className="bk-tablewrap"><table className="bk-table rt-rows" id="tdsDeTable" data-statement="">
-      <thead><tr><th>{form === "24Q" ? "Employee" : form === "27EQ" ? "Buyer" : "Deductee"}</th><th>PAN</th><th>PAN status</th><th>Section</th><th className="n">Deductions</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
+      <thead><tr><th>{form === "24Q" ? "Employee" : form === "27EQ" ? "Buyer" : "Deductee"}</th><th>PAN</th><th>Section</th><th className="n">Deductions</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
       <tbody>{shown.map((p) => <tr key={p.key} className={"dee-row" + (p.bad ? " bad" : "")} data-dee={p.key} data-dee-bad={p.bad ? "1" : undefined} tabIndex={0} onClick={() => tdsDeducteeOpen(p.key)} onKeyDown={(ev) => { if (ev.key === "Enter") tdsDeducteeOpen(p.key); }}>
         <td className="pty"><button className="linkbtn" data-dee-open={p.key} onClick={(ev) => { ev.stopPropagation(); tdsDeducteeOpen(p.key); }}>{p.name}</button>
           {p.fixed ? <small className="tg-sub-i" data-dee-fixed="" title="Corrected in FinCom"> ✎</small> : null}{rateN(p) ? <span className="rt-dot" title={rateN(p) + " rate question" + (rateN(p) === 1 ? "" : "s")} aria-label="rate question" data-dee-rate={rateN(p)}>•</span> : null}</td>
-        <td>{p.pan && Certs.validPan(p.pan) ? <>{p.pan}{p.source === "fincom" ? <small className="tg-sub-i" title="Saved in FinCom’s PAN book" data-pan-from="fincom"> ·F</small> : null}</> : <PanBox party={p.party} compact />}</td>
-        <td><RowChip p={p} />{p.conflict ? <PanConflict party={p.party} c={p.conflict} /> : null}</td>
+        <td className="dee-pan">{p.pan && Certs.validPan(p.pan) ? <>{p.pan}{p.source === "fincom" ? <small className="tg-sub-i" title="Saved in FinCom’s PAN book" data-pan-from="fincom"> ·F</small> : null} <RowChip p={p} /></> : <PanBox party={p.party} compact />}
+          {p.conflict ? <PanConflict party={p.party} c={p.conflict} /> : null}</td>
         <td title={p.secs.map((s) => secTitle(s, fy)).filter(Boolean).join("; ")}>{p.secs.map((s) => secShort(s, fy)).join(", ")}</td><td className="n">{p.n}</td><td className="n">{money(p.paid)}</td><td className="n">{money(p.tds)}</td></tr>)}</tbody>
     </table></div>
-    <p className="note dee-count" data-dee-count="">{shown.length === list.length ? list.length : shown.length + " of " + list.length} {list.length === 1 ? unit[0] : unit[1]} · {money(shown.reduce((a, p) => a + p.paid, 0))} paid · {money(shown.reduce((a, p) => a + p.tds, 0))} TDS
-      {(f || qq) ? <> · <button type="button" className="linkbtn" data-ded-clear="" onClick={() => { setFind(""); setF(""); }}>Clear filters</button></> : null}</p>
     {!list.length && <p className="note">No {unit[1]} in this return.</p>}
     <DeducteeDetails list={list} form={form} fy={fy} q={q} locked={locked} issueOf={issueOf} />
   </div>;
