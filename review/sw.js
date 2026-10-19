@@ -8,11 +8,11 @@
 //  - only FinCom's own code, styles and fonts are kept: nothing from Supabase (the firm's data), the bridge, Sentry or
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
-const VERSION = "mvf4wlh1-63edcb";
+const VERSION = "mvf7eu22-047975";
 // round 73 B: FILES, kept at install, are what the first page needs; REST, the other files of this build, are kept once
 // the first page is up and the computer is idle (the page sends "fincom:keep-rest", main.jsx)
-const FILES = ["./","./legacy.js?v=5058e835b02a","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-BYv4jO6t.css","./assets/index-B6ATpHi3.js"];
-const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/Books-BODhdOhz.css","./assets/returns-C85MxT0v.css","./assets/Integrations-C1RPLvE9.css","./assets/registers-CzgUIo79.js","./assets/sentry-EtuPU_Bp.js","./assets/Assistant-B3Xw__U-.js","./assets/Books-C0x-fP6V.js","./assets/chevron-down-AfH3b8Wi.js","./assets/Gst-B7ZeX93R.js","./assets/Settings-Zex4bS_U.js","./assets/84-gst-browser-zqNXJo9L.js","./assets/Tally-pouVX2aC.js","./assets/NeedAction-DokKZcP3.js","./assets/Bank-FU911VyE.js","./assets/BankSettings-_BWFNiN_.js","./assets/Sales-DEKPDx3W.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-BITwpNPI.js","./assets/Post-Dhlovg0I.js","./assets/BankChecks-DdlKDmAi.js","./assets/Help-DEJPKMFc.js","./assets/Txn-CQdu2jtz.js","./assets/Parties-CDyNqiEF.js","./assets/VendorRecon-C-cAoown.js","./assets/Compliance-CSq5Eg2v.js","./assets/Integrations-CiVocXSk.js","./assets/GstApiCard-kNidQCez.js","./assets/GstApiAll-XPDPXmaa.js","./assets/FiledCompare-CYxClOut.js","./assets/FileApi-ChCSAuYB.js","./assets/SheetPanel-DQdUbWOr.js","./assets/LedgerBox-CMv07Om2.js","./assets/AssistantUploads-BALdTKqT.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DhXo2pjA.js"];
+const FILES = ["./","./legacy.js?v=5058e835b02a","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-BYv4jO6t.css","./assets/index-BXUTr1G5.js"];
+const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/Books-BODhdOhz.css","./assets/returns-C85MxT0v.css","./assets/Integrations-C1RPLvE9.css","./assets/registers-CzgUIo79.js","./assets/sentry-Btf4o6K3.js","./assets/Assistant-C9voyV2B.js","./assets/Books-BkxinmUJ.js","./assets/chevron-down-CC0xRgik.js","./assets/Gst-C_Jloj2j.js","./assets/Settings-DWXy9vpf.js","./assets/84-gst-browser-DmBCN09H.js","./assets/Tally-DD2_Upzu.js","./assets/NeedAction-ow6FViqO.js","./assets/Bank-DQP4iBmL.js","./assets/BankSettings-BRHHRnw7.js","./assets/Sales-98M17YV9.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-fl7kcTrb.js","./assets/Post-Cj59PdnJ.js","./assets/BankChecks-6Tctj1En.js","./assets/Help-BiM5jkiI.js","./assets/Txn-D0dTsc9a.js","./assets/Parties-BqHNyvbN.js","./assets/VendorRecon-CvRxDOIE.js","./assets/Compliance-0X_UpBtg.js","./assets/Integrations-B11A71Ag.js","./assets/GstApiCard-BTTAjUoK.js","./assets/GstApiAll-DYVULPS1.js","./assets/FiledCompare-DvJOAmrB.js","./assets/FileApi-D2mdttS_.js","./assets/SheetPanel-DPHpxhtG.js","./assets/LedgerBox-B-ZpTOEE.js","./assets/AssistantUploads-Djx71sT8.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DhXo2pjA.js"];
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = "fincom-shell:" + SCOPE + ":" + VERSION, RUNTIME = "fincom-files:" + SCOPE;
 const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
@@ -29,7 +29,8 @@ let keeping = null;
 function keepRest() {
   return keeping || (keeping = caches.open(SHELL).then(async (c) => {
     for (const f of REST) {
-      try { if (!(await caches.match(f, { ignoreVary: true }))) await c.add(ask(f)); } catch (e) { /* kept when it is first used */ }
+      // round 90: a real script / style / font answer only (keepable, below); a broken kept copy is replaced
+      try { const h = await caches.match(f, { ignoreVary: true }); if (!h || !good(h)) { const q = ask(f), r = await fetch(q); if (keepable(r)) await c.put(q, r); } } catch (e) { /* kept when it is first used */ }
     }
   }).finally(() => { keeping = null; }));
 }
@@ -80,8 +81,25 @@ self.addEventListener("fetch", (e) => {
   if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
   // kept here: only files whose name or address carries their build's hash (assets/…, legacy.js?v=…)
   if (!((rest.startsWith("assets/") && CODE.test(rest)) || (rest === "legacy.js" && u.search))) return;
-  e.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req).then((r) => {
-    if (r.ok && r.type === "basic") { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)); }
-    return r;
-  })));
+  e.respondWith(asset(req));
 });
+
+// 19-Oct-2026 (round 90: Safari's "Importing a module script failed" on the TDS page, the files all there, again after
+// every reload): a kept copy is only ever a real answer of this site with a script, style or font in it.
+//  - kept: an answer that is ok, "basic" (this site's own), not redirected, and a script / style / font by its type;
+//  - a kept copy that is not ok, redirected or opaque (kept by an older worker, or broken) is passed over: the network's;
+//  - the line dropped (a network error): asked once more past the browser's cache (cache: "reload") before giving up.
+const KEEP = /(javascript|ecmascript|text\/css|font\/|application\/(x-)?font|woff|wasm)/i;
+const good = (r) => !!r && r.ok && r.type === "basic" && !r.redirected;
+const keepable = (r) => good(r) && KEEP.test(r.headers.get("Content-Type") || "");
+async function asset(req) {
+  let hit = null;
+  try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }
+  if (hit && hit.ok && !hit.redirected && hit.type !== "opaque" && hit.type !== "opaqueredirect") return hit;
+  let r;
+  try { r = await fetch(req); } catch (e) {
+    try { r = await fetch(new Request(req, { cache: "reload" })); } catch (e2) { return Response.error(); }
+  }
+  if (keepable(r)) { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)).catch(() => {}); }
+  return r;
+}
