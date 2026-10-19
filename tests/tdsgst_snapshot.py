@@ -49,6 +49,12 @@ CHALLANS = """() => {
   render();
 }"""
 
+# next-tds-addlist (19-Oct-2026): the snapshot's challans dated on each quarter's LAST deduction (CHALLANS dates them on the
+# first: a challan dated before the deductions it pays is now an error in Validate & file, "a challan cannot pay TDS
+# deducted after its deposit date", and the file is not made). tdsgst-before.json was taken again with these on the build
+# before the change (origin/staging-next 006adb4da) and compared with the build after
+CHALLANS_SNAP = CHALLANS.replace("if (!by[k]) by[k] = r;", "if (!by[k] || TDS.ymd(r.date) >= TDS.ymd(by[k].date)) by[k] = r;")
+assert CHALLANS_SNAP != CHALLANS
 
 # the day tests/fixtures/tdsgst-before.json was made (14-Oct-2026). The pages show figures worked out to today (the 234E
 # late fee is 200 a day to the date), so the browser's clock is fixed at that day; a real clock made the comparison fail a
@@ -69,7 +75,7 @@ def snapshot(site, port=8290, shots=None):
         pg.clock.set_fixed_time(SNAPSHOT_DAY)
         pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-        pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
+        pg.evaluate(CHALLANS_SNAP); pg.wait_for_timeout(300)
         # the files the buttons make: saveFile kept; the ledgers counted as confirmed (the fixture's are not, which sends a
         # download to the ledgers page instead)
         pg.evaluate("""() => { window.__files = []; window.ledgersReady = () => true;

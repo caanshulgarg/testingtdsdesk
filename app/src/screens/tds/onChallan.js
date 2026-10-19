@@ -22,3 +22,7 @@ export function missingName(id) {
 }
 // this return's TDS on a challan ("Used here"); all returns' is TDSReg.usedTax
 export const usedHere = (c, key, cx) => r2(num(((cx.uses[c.id] || {})[key] || {}).tax));
+// next-tds-addlist: what is wrong with a deduction on a challan (TDSEdit.placeIssues: dated before the deduction, another
+// section), and whether a challan is dated before a deduction (it can never pay it: never offered, never ticked)
+export const placeIssues = (r, c) => TDSEdit.placeIssues(r, c);
+export const earlyFor = (r, c) => TDSEdit.early(r, c);

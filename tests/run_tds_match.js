@@ -54,7 +54,9 @@ ok(by("CB")[0].words === "Same section, same month, exact amount", "R.b the rule
 ok(J(by("CJ").map(s => [s.rule, s.ids])) === J([["c", ["j1", "j2", "j3"]]]) && by("CJ")[0].words === "Same section, whole quarter, exact amount", "R.c 194J's quarter ₹1,500 = challan CJ");
 ok(J(by("CH").map(s => [s.rule, s.ids])) === J([["d", ["h1", "h2"]]]) && by("CH")[0].words === "Same section, same month", "R.d CH fills with h1, h2 (oldest first, whole rows, up to ₹1,000); h3 left");
 ok(J(by("CN").map(s => [s.rule, s.ids])) === J([["e", ["a1", "i1"]]]) && /194A, 194I/.test(by("CN")[0].reason) && /one challan per section/.test(by("CN")[0].info), "R.e the no-section challan CN takes 194A and 194I of May (info: one challan per section per month)");
-ok(J(by("CE").map(s => [s.rule, s.ids])) === J([["f", ["q1"]]]) && /before these deductions/.test(by("CE")[0].warn), "R.f an earlier challan's balance, with a warning");
+// next-tds-addlist (the owner, 19-Oct-2026: "a challan cannot pay TDS deducted after its deposit date"): rule f (an earlier
+// challan's balance left over) suggests nothing now; q1 (15-Jun) is never put on CE (paid 05-Apr)
+ok(by("CE").length === 0 && !S1.some(s => s.ids.includes("q1")), "R.f a challan paid before the deduction is never suggested (CE 05-Apr, q1 15-Jun: left)");
 const sp = S1.find(s => s.rule === "split");
 ok(sp && J(sp.ids) === J(["d1"]) && J(sp.parts) === J([{chId: "CD1", paise: 100000}, {chId: "CD2", paise: 50000}]) && sp.words === "Split across challans", "R.split 194D ₹1,500: no challan holds it, offered as ₹1,000 on CD1 and ₹500 on CD2");
 ok(!S1.some(s => s.chId === "C400"), "R. a minor head 400 challan is never suggested");
@@ -98,7 +100,22 @@ ok(yr.sugg.length === 0, "A. a challan of another tax year: refused");
 const bad = x.tmAiCheck({pairs: [], splits: [{rowId: "z1", parts: [{chId: "CZ", paise: 50000}, {chId: "CY", paise: 30000}], reason: "s", confidence: "high"}]}, rr, cc, {fy: "2026-27", q: "Q1"});
 ok(bad.sugg.length === 0 && /add up/.test(bad.why[0]), "A. a split whose parts do not add up to the paisa: refused");
 const early = x.tmAiCheck({pairs: [{chId: "CE2", ids: ["z1"], reason: "left over", confidence: "medium"}], splits: []}, rr, [C("CE2", "194C", "20260402", 900)], {fy: "2026-27", q: "Q1"});
-ok(early.sugg.length === 1 && /before/.test(early.sugg[0].warn), "A. a challan paid before the deduction: allowed, with a warning");
+ok(early.sugg.length === 0 && early.dropped === 1 && /dated before/.test(early.why[0]), "A. a challan paid before the deduction: refused (" + early.why[0] + ")");
+const earlySp = x.tmAiCheck({pairs: [], splits: [{rowId: "z1", parts: [{chId: "CZ", paise: 50000}, {chId: "CE3", paise: 40000}], reason: "s", confidence: "high"}]}, rr, [C("CZ", "194C", "20260507", 950), C("CE3", "194C", "20260405", 900)], {fy: "2026-27", q: "Q1"});
+ok(earlySp.sugg.length === 0 && /dated before/.test(earlySp.why[0]), "A. a split with a part on a challan paid before the deduction: refused");
+ok(!/can pay it only from a balance left over/.test(x.TM_SYSTEM) && /never/i.test(x.TM_SYSTEM.match(/deposited before[^.]*\./)[0]), "A. the AI is told a challan deposited before a deduction never pays it");
+
+// ---------------------------------------------------------------- E. a challan dated before the deduction: never suggested
+const dOk = (list, rs, cs) => list.every(s => (s.parts || [{chId: s.chId}]).every(p => s.ids.every(id => { const c = cs.find(z => z.id === p.chId), r = rs.find(z => z.id === id); return !c || !r || c.date >= r.date; })));
+ok(dOk(S1, rows, chs), "E. rules a to f and the splits: no suggestion pairs a deduction with a challan dated before it");
+const eA = x.tmRules([R("t9", "194C", "20260610", 100), R("t8", "194C", "20260601", 50)], [C("CT9", "194C", "20260605", 150)], {fy: "2026-27", q: "Q1", links: {CT9: ["t9", "t8"]}});
+ok(eA.length === 1 && J(eA[0].ids) === J(["t8"]), "E.a Tally's link to a challan of 05-Jun: t8 (01-Jun) taken, t9 (10-Jun) never (" + J(eA.map(s => s.ids)) + ")");
+const eF = x.tmRules([R("w1", "194C", "20260520", 100)], [C("CW", "194C", "20260505", 500)], {fy: "2026-27", q: "Q1"});
+ok(eF.length === 0, "E.f 194C of 20-May and a 194C challan of 05-May with ₹500 left: nothing suggested");
+const eR = x.tmReasons([R("w1", "194C", "20260520", 100)], [C("CW", "194C", "20260505", 500), C("CW2", "194J", "20260510", 500)], [], {fy: "2026-27", q: "Q1"});
+ok(eR.length === 1 && !eR[0].chId && eR[0].step === "pay", "E. what is left: never \"use Move to challan\" to a challan dated before it (" + (eR[0] || {}).words + ")");
+const eR2 = x.tmReasons([R("w1", "194C", "20260520", 100)], [C("CW3", "194J", "20260601", 500)], [], {fy: "2026-27", q: "Q1"});
+ok(eR2.length === 1 && eR2[0].chId === "CW3" && eR2[0].step === "move", "E. another section's challan dated after it is still named (" + (eR2[0] || {}).words + ")");
 
 // ---------------------------------------------------------------- B. on books
 const V = (id, date, party, exp, tds, led) => ({id, date, type: "Journal", no: id, party, ent: [{l: party, a: exp - tds}, {l: led, a: tds}, {l: "Exp", a: -exp}]});
@@ -304,6 +321,22 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   ok(x.PANCheck.status("AAACN1234Q").state === "unknown" && /Not checked yet/.test(x.PANCheck.status("AAACN1234Q").words), "P. its status: Not checked yet, until TRACES' check is connected");
   ok(x.PANCheck.set("AAACN1234Q", {state: "inoperative", name: "NOPAN TRADERS PRIVATE LIMITED"}) && x.PANCheck.status("AAACN1234Q").state === "inoperative" && x.Certs.inoperative("AAACN1234Q"), "P. a result kept per firm: inoperative, and Certs.inoperative reads it directly");
   ok(rows.every(r => x.TDS26Q.remark(x.TDS.rows().find(z => z.id === r.id), "26Q").remark === "C"), "P. an inoperative PAN: remark C again, the higher rate expected");
+}
+
+// ---------------------------------------------------------------- N. the deductee's name: never blank (next-tds-addlist)
+// The owner's 26Q Q1 (Leads Insurance): Tally journals with no party (PARTYLEDGERNAME empty): "Rent Dr 79,840 · Rent
+// Payable Alok Swarup Gupta Cr 71,856 · TDS on Rent 94I Cr 7,984" showed a blank name. The deductee is the one party
+// ledger credited in the entry (no tax, bank or expense ledger); with none (Misc. Expenses Dr · TDS 94J Cr), the name
+// stays empty and the screens say "Name missing — add".
+{
+  books([{id: "vr1", date: "20260401", type: "Journal", no: "ASG/26-27/001", party: "", ent: [{l: "Rent", a: -79840}, {l: "Rent Payable Alok Swarup Gupta", a: 71856}, {l: "TDS 194I", a: 7984}]},
+    {id: "vm1", date: "20260430", type: "Journal", no: "", party: "", ent: [{l: "Miscellaneous Expenses", a: -3000.1}, {l: "TDS 194J", a: 3000.1}]},
+    {id: "vp1", date: "20260502", type: "Journal", no: "J9", party: "Beta", ent: [{l: "Exp", a: -1000}, {l: "Beta", a: 900}, {l: "TDS 194J", a: 100}]}], [],
+    {map: {"TDS 194I": {kind: "tds_payable", section: "194I"}, "TDS 194J": {kind: "tds_payable", section: "194J"}}, pans: {"Rent Payable Alok Swarup Gupta": "AOLPG9817N", "Beta": "ABCPB1234B"}});
+  const all = x.TDS.allRowsNow(), rent = all.find(r => r.id === "vr1|TDS 194I"), misc = all.find(r => r.id === "vm1|TDS 194J"), beta = all.find(r => r.id === "vp1|TDS 194J");
+  ok(rent && rent.party === "Rent Payable Alok Swarup Gupta" && rent.pan === "AOLPG9817N" && rent.partyFrom === "ledger", "N. no party in Tally: the party ledger credited in the entry is the deductee, with its PAN (" + (rent && [rent.party, rent.pan, rent.partyFrom]) + ")");
+  ok(misc && misc.party === "" && !misc.pan, "N. no party ledger at all (Misc. Expenses Dr · TDS Cr): left empty for the screens to ask (" + J(misc && misc.party) + ")");
+  ok(beta && beta.party === "Beta" && !beta.partyFrom, "N. Tally's party, where it has one, as before");
 }
 
 console.log(fails.length ? "\nFAILED: " + fails.length : "\nall passed");

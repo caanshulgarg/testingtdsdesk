@@ -201,6 +201,14 @@ const TDS = {
     if (typeof TDS24Q === "object" && TDS24Q.dedRows && TDS24Q.dedRows().some(x => x.fy === fy)) return "sheet";
     return "books";
   },
+  // the deductee of an entry with no party in Tally: the one ledger credited that is no tax, bank or cash, expense, income
+  // or sales ledger (the party of a bill booked as a journal), else ""
+  billParty(v){
+    const masters = typeof Audit === "object" && Audit.mastersIn();
+    const cr = (v.ent || []).filter(e => e.a > 0 && Math.abs(e.a) >= 0.005 && !Books.ledgerOf(e.l).kind && !(masters && (Audit.isBankL(e.l) || Audit.isCash(e.l) ||
+      Audit.under(e.l, /^(sales accounts|direct incomes|indirect incomes|duties & taxes|indirect expenses|direct expenses|purchase accounts)$/i))));
+    return cr.length === 1 ? cr[0].l : "";
+  },
   // every voucher that carries a TDS ledger becomes one deduction row
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
@@ -215,14 +223,17 @@ const TDS = {
       // deducted on is the bill it is matched to below, not the entry's own lines (the party's debit read as the amount
       // paid made such a journal "₹1,000 paid, TDS ₹1,000 at 100%" with no deductee)
       const sp0 = typeof TDSSep === "object" ? TDSSep.partyOf(v) : "";
+      // next-tds-addlist (the owner's 26Q, 19-Oct-2026: blank names): a journal with no party in Tally ("Rent Dr · Rent
+      // Payable Alok Swarup Gupta Cr · TDS on Rent Cr"): the deductee is the one party ledger credited (TDS.billParty)
+      const bp = !sp0 && !v.party ? this.billParty(v) : "";
       L.tds.forEach(t => {
-        const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || v.party;
+        const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || v.party || bp;
         let B = this.baseFor(t, L, v);
         if (sp && B.how !== "section") B = {paid: 0, rate: null, how: "books"};
         const paid = B.paid;
         out.push({
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
-          party, pan: TDS.panOf(party), section: t.section, ledger: t.ledger, ...(sp ? {sep: true} : {}),
+          party, pan: TDS.panOf(party), section: t.section, ledger: t.ledger, ...(sp ? {sep: true} : {}), ...(party && party === bp ? {partyFrom: "ledger"} : {}),
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
           voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a

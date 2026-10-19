@@ -14,7 +14,7 @@
 // section FinCom does not know. No new tax rule here.
 const TDSEdit = {
   FIELDS: ["pan", "section", "rate", "paid", "tds", "dcode", "cert", "remarks", "date", "credit"],
-  WORDS: {pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan", date: "Date of deduction", credit: "Date paid or credited"},
+  WORDS: {party: "Deductee name", pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan", date: "Date of deduction", credit: "Date paid or credited"},
   all(){ return (S.books && S.books.tdsEdits) || {}; },
   // the deductee code as the return file has carried it: 01 a company (the PAN's fourth letter C), else 02
   codeOf(pan){ return Certs.validPan(pan) && /^[A-Z]{3}C/.test(String(pan).toUpperCase()) ? "01" : "02"; },
@@ -22,7 +22,9 @@ const TDSEdit = {
   apply(r){
     const e = this.all()[r.id], f = e && e.f;
     if (!f || !Object.keys(f).length) return r;
-    r.books = {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date};
+    r.books = {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date};
+    // next-tds-addlist: the deductee's name given in FinCom where Tally has none (its PAN from the PAN book, unless given)
+    if (f.party != null && String(f.party).trim()){ r.party = String(f.party).trim(); if (f.pan == null) r.pan = TDS.panOf(r.party); r.partyFrom = "fincom"; }
     if (f.pan != null) r.pan = f.pan;
     if (f.section != null) r.section = f.section;
     if (f.paid != null) r.paid = r2(f.paid);
@@ -38,7 +40,7 @@ const TDSEdit = {
     return r;
   },
   // what the books say for a field of a deduction (to put back, an edit equal to it is dropped)
-  booksOf(r, k){ const b = r.books || {pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date}; return b[k]; },
+  booksOf(r, k){ const b = r.books || {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date}; return b[k]; },
   same(k, a, b){ return ["rate", "paid", "tds"].includes(k) ? Math.abs(num(a) - num(b)) < 0.005 : String(a == null ? "" : a) === String(b == null ? "" : b); },
   set(r, k, v){
     const b = S.books; b.tdsEdits = b.tdsEdits || {};
@@ -55,15 +57,31 @@ const TDSEdit = {
     if (TDS.STD[k]) return true;
     return typeof RULE_DEFAULTS === "object" && RULE_DEFAULTS.some(x => x.old && TDS.sec(x.old) === k);
   },
+  // next-tds-addlist (the owner, 19-Oct-2026): a deduction on a challan that cannot pay it: the challan deposited before
+  // the deduction (k "early": TDS cannot be paid before it is deducted), or naming another section (k "sec"). [{k, words}]
+  P_NAME: "deductee name missing",
+  P_EARLY: "challan dated before the deduction",
+  early(r, c){ return !!c && TDS.ymd(c.date).length === 8 && TDS.ymd(c.date) < TDS.ymd(r.date); },
+  placeIssues(r, c){
+    const out = [];
+    if (!c) return out;
+    if (this.early(r, c)) out.push({k: "early", words: "Challan dated before the deduction"});
+    const cs = TDSCH.secNorm(c.section);
+    if (cs && r.section && !TDSCH.secOk(cs, r.section)) out.push({k: "sec", words: "Challan is for " + cs + "; this is " + (TDS.sec(r.section) || r.section)});
+    return out;
+  },
   // the problems the return already finds, by deduction: {rowId: ["no valid PAN", …]}
   problems(rows, fy, q, form){
     const out = {}, add = (id, w) => { (out[id] = out[id] || []).push(w); };
+    const chById = {}; TDS.challans().forEach(c => { chById[c.id] = c; });
     const issues = form === "26Q" ? Certs.issues(fy, q) : [], pay = typeof TDS26Q === "object" && TDS26Q.payCodeRows ? TDS26Q.payCodeRows(fy, q, form) : [];
     rows.forEach(r => {
       if (!Certs.validPan(r.pan)) add(r.id, "no valid PAN");
       else if (Certs.inoperative(r.pan)) add(r.id, "PAN inoperative");
       if (form !== "27EQ" && !this.knownSec(r.section)) add(r.id, "section not known: " + (r.section || "none"));
       if (!r.challan) add(r.id, "not against a challan");
+      if (!(r.party || r.employee)) add(r.id, this.P_NAME);
+      this.placeIssues(r, r.challan && chById[r.challan]).forEach(x => add(r.id, x.k === "early" ? this.P_EARLY : x.words.toLowerCase()));
     });
     issues.forEach(x => add(x.row.id, "rate " + x.row.rate + "% should be " + x.expected + "%" + (x.why ? ": " + x.why : "")));
     pay.forEach(x => add(x.row.id, x.why));

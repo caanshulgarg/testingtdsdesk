@@ -397,3 +397,20 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #app .chg-wrap table.chg-table.bk-table:not(.cards) td { padding: 7px 5px; }
 #app .chg-wrap table.chg-table.bk-table:not(.cards) tr > :first-child { padding-left: 10px; }
 #app .chg-wrap table.chg-table.bk-table:not(.cards) thead th, #app .wd-wrap table.wd-table.bk-table:not(.cards) thead th { padding: 8px 5px; }
+/* next-tds-addlist: filters, ticks and the bulk bar of Deductions by challan and + Add deduction; a name missing; a chip */
+.wd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; font-size: 13px; }
+#app .wd-filters input[type=search], .wd-filters input[type=search] { width: auto; min-width: 170px; flex: 1 1 170px; max-width: 260px; padding: 6px 10px; font: inherit; font-size: 13px; border: 1px solid var(--rule-strong, var(--border)); border-radius: 8px; background: var(--sheet, var(--surface-raised)); color: var(--ink); }
+#app .wd-filters select, .wd-filters select { width: auto; flex: 0 1 auto; min-width: 0; max-width: 100%; font-size: 13px; padding-top: 5px; padding-bottom: 5px; }
+.wd-fprob, .wd-tickall { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); white-space: nowrap; }
+.wd-tickall { margin: 0 0 4px; }
+.wd-bulk { position: sticky; bottom: calc(var(--rt-foot-off, 0px) + 2px); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 14px; margin: 10px 0 0; border: 1.5px solid var(--brand); border-radius: 10px; background: var(--sheet, var(--surface-raised)); color: var(--ink); font-size: 13.5px; box-shadow: 0 -2px 10px rgb(0 0 0 / .08); }
+.wd-bulk b { font-variant-numeric: tabular-nums; }
+.wd-bulk .bad, .wd-bad { color: var(--bad); font-weight: 600; }
+.wd .wd-table + .wd-bulk, .wd-wrap + .wd-bulk { bottom: calc(var(--rt-foot-off) + var(--rt-foot-h) + 2px); }
+.wd-chip { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.wd-chip.bad { color: var(--bad); background: var(--bad-soft, transparent); border: 1px solid var(--bad); }
+.wd-noname { color: var(--bad); font-weight: 600; }
+.wd-namefix { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wd-namefix input { min-width: 160px; }
+.wd-cands td[data-wd-name] { white-space: normal; min-width: 140px; }
+@media (max-width: 760px) { #app .wd-filters input[type=search], .wd-filters input[type=search] { max-width: none; flex-basis: 100%; } #app .wd-filters select, .wd-filters select { flex: 1 1 140px; } .wd-bulk { gap: 4px 10px; padding: 7px 10px; } }

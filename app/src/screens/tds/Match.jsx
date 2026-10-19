@@ -336,8 +336,9 @@ function MoveDialog() {
   const cx = TDSReg.ctx(), rows = mv.ids.map((id) => cx.byRow[id] && cx.byRow[id].r).filter(Boolean), need = r2(rows.filter((r) => !r.challan || true).reduce((a, r) => a + r.tds, 0));
   const list = TDS.challans().filter((c) => (!sec || chSec(c) === sec || !chSec(c)) && (!mon || TDS.ymd(c.date).slice(0, 6) === mon)).map((c) => {
     const add = r2(rows.filter((r) => r.challan !== c.id).reduce((a, r) => a + r.tds, 0)), left = TDSReg.balance(c, cx).tax;
-    return { c, left, after: r2(left - add) };
-  }).sort((a, b) => (b.after >= -0.005) - (a.after >= -0.005) || TDS.ymd(a.c.date).localeCompare(TDS.ymd(b.c.date)));
+    // next-tds-addlist: a challan deposited before any of these deductions cannot pay it: shown, never offered
+    return { c, left, after: r2(left - add), early: rows.filter((r) => TDSEdit.early(r, c)).length };
+  }).sort((a, b) => (a.early ? 1 : 0) - (b.early ? 1 : 0) || (b.after >= -0.005) - (a.after >= -0.005) || TDS.ymd(a.c.date).localeCompare(TDS.ymd(b.c.date)));
   const secs = Array.from(new Set(TDS.challans().map(chSec).filter(Boolean))).sort(), months = Array.from(new Set(TDS.challans().map((c) => TDS.ymd(c.date).slice(0, 6)))).sort();
   const close = () => { S.tdsMove = null; render(); };
   return <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
@@ -345,10 +346,11 @@ function MoveDialog() {
       <div className="row cm-filters">
         <select aria-label="Challan section" value={sec} onChange={(ev) => setSec(ev.target.value)}><option value="">Every section</option>{secs.map((x) => <option key={x} value={x}>{x}</option>)}</select>
         <select aria-label="Challan month" value={mon} onChange={(ev) => setMon(ev.target.value)}><option value="">Every month</option>{months.map((x) => <option key={x} value={x}>{monthOf(x)}</option>)}</select></div>
-      <ul className="cm-pick">{list.map(({ c, left, after }) => <li key={c.id} data-cm-pick={c.id}>
+      <ul className="cm-pick">{list.map(({ c, left, after, early }) => <li key={c.id} data-cm-pick={c.id}>
         <span><b>{c.bsr} · {day(c.date)} · {c.serial}</b> <span className="tag">{chSec(c) || "no section"}</span><span className="note"> {monthOf(TDS.ymd(c.date).slice(0, 6))} · {money(left)} left</span>
-          {after < -0.005 ? <small className="bad"> needs {money(-after)} more than it has</small> : <small className="note"> → {money(after)} left after</small>}</span>
-        <button className="btn small" disabled={after < -0.005} data-cm-pick-go={c.id} onClick={() => tdsMoveTo(mv.ids, c.id)}>Move here</button></li>)}
+          {early ? <small className="bad" data-cm-early={c.id}> dated before {rows.length === 1 ? "the deduction" : early + " of these deductions"}: it cannot pay {rows.length === 1 ? "it" : "them"}</small> : null}
+          {after < -0.005 ? <small className="bad"> needs {money(-after)} more than it has</small> : early ? null : <small className="note"> → {money(after)} left after</small>}</span>
+        <button className="btn small" disabled={after < -0.005 || early > 0} data-cm-pick-go={c.id} onClick={() => tdsMoveTo(mv.ids, c.id)}>Move here</button></li>)}
         {!list.length && <li className="note">No challan of that section or month.</li>}</ul>
       {rows.some((r) => r.challan) && <div className="row"><button className="btn small" data-cm-takeoff-dlg="" onClick={() => { tdsTakeOff(rows.filter((r) => r.challan).map((r) => r.id)); close(); }}>Take off challan</button></div>}
     </DialogContent></Dialog>;

@@ -34,6 +34,12 @@ export function checkReturn(fy, q, form) {
   put(out.errors, { k: "unmatched", n: un ? un.n : 0, words: s_(un ? un.n : 0, unitW[0] + " on no challan", unitW[1] + " on no challan") + " · " + money(unRows.reduce((a, r) => a + r.tds, 0)), step: "challans", review: true });
   const ov = blk("over");
   put(out.errors, { k: "over", n: ov ? ov.n : 0, words: ov ? ov.words : "", step: "challans", review: true });
+  // next-tds-addlist (the owner, 19-Oct-2026): a deduction on a challan deposited before it: no challan can pay tax
+  // deducted after its deposit date (an error); on a challan naming another section (a warning, below)
+  const chBy = {}; TDS.challans().forEach((c) => { chBy[c.id] = c; });
+  const placed = rowsOf(fy, q, form).filter((r) => r.challan && chBy[r.challan]), pis = placed.map((r) => [r, TDSEdit.placeIssues(r, chBy[r.challan])]);
+  const early = pis.filter(([, p]) => p.some((x) => x.k === "early")).map(([r]) => r), wrongSec = pis.filter(([, p]) => p.some((x) => x.k === "sec")).map(([r]) => r);
+  put(out.errors, { k: "early", n: early.length, words: s_(early.length, unitW[0] + " on a challan dated before the deduction", unitW[1] + " on a challan dated before the deduction") + " · " + money(early.reduce((a, r) => a + r.tds, 0)) + ": a challan cannot pay tax deducted after it was deposited", step: "deductions" });
   const st = blk("stale");
   put(out.errors, { k: "stale", n: st ? st.n : 0, words: st ? st.words : "", step: "challans" });
   // the salary return without the salary sheet or Tally's payroll: no file can be made
@@ -80,6 +86,7 @@ export function checkReturn(fy, q, form) {
     let td = 0; try { td = TDSTally.disagreements().length + TDSTally.conflicts("challan").length + TDSTally.bad().length; } catch (e) { /* */ }
     put(out.warnings, { k: "tally", n: td, words: s_(td, "challan differs between Tally and FinCom", "challans differ between Tally and FinCom"), review: true });
   }
+  put(out.warnings, { k: "chsec", n: wrongSec.length, words: s_(wrongSec.length, unitW[0] + " on a challan of another section", unitW[1] + " on a challan of another section"), step: "deductions" });
   const unk = TDSReg.unknownType(fy, q).length;
   put(out.warnings, { k: "chtype", n: unk, words: s_(unk, "challan of unknown type: which return?", "challans of unknown type: which return?"), review: true });
   const drift = filed && form !== "24Q" ? TDSDrift.check(fy, q, form) : null, dn = drift ? drift.rows.length : 0;
@@ -100,6 +107,7 @@ function Line({ it, level, open, onOpen, form, review }) {
   const go = () => {
     if (it.step === "deductees") S.tdsDeeF = "bad";
     if (it.step === "challans" && it.k === "unmatched") S.tdsChSel = "__none";
+    if (it.step === "deductions" && (it.k === "early" || it.k === "chsec")) { S.tdsDedView = ""; S.tdsWinCh = "__none"; S.tdsWinAdd = ""; }
     if (it.step === "deductions" && it.k === "rate") { S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: Object.assign({}, (S.tdsFl || {}).deductions || {}, { rate: "q" }) }); S.tdsDedView = "table"; S.tdsDedCh = ""; }
     tdsTabGo(it.step); try { window.scrollTo(0, 0); } catch (e) { /* */ }
   };

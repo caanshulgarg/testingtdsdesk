@@ -254,8 +254,8 @@ try:
         pg.click("#app [data-wd-add-open]"); pg.wait_for_timeout(500)
         cands = J("[...document.querySelectorAll('[data-wd-addlist] [data-wd-cand]')].map(t => t.dataset.wdCand)")
         bestw = J("""(c) => { const s = TDSMatch.suggest('26Q', '2026-27', 'Q1'), cx = TDSReg.ctx(), ch = TDS.challans().find(x => x.id === c), left = TDSReg.balance(ch, cx).tax;
-          return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).filter(r => r.tds <= left + 0.005 && TDSCH.secOk(TDSCH.secNorm(ch.section), r.section)).map(r => r.id); }""", cur)
-        ok(cands and len(cands) == un and (not bestw or cands[0] in bestw), "+ Add deduction: the deductions not on a challan (%d), the best fit first (%s)" % (len(cands), cands[:2]))
+          return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).filter(r => r.tds <= left + 0.005 && TDSCH.secOk(TDSCH.secNorm(ch.section), r.section) && TDS.ymd(r.date) <= TDS.ymd(ch.date)).map(r => r.id); }""", cur)
+        ok(cands and len(cands) == un and (not bestw or cands[0] in bestw), "+ Add deduction: the deductions not on a challan (%d), the best fit first (never one deducted after the challan) (%s)" % (len(cands), cands[:2]))
         tick = cands[0] if cands else ""
         tds = J("(id) => TDS.rows().find(r => r.id === id).tds", tick) if tick else 0
         if pg.locator('[data-wd-addlist] [data-wd-put="%s"]' % tick).count():

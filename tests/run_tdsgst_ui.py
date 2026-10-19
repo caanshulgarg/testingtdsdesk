@@ -19,6 +19,11 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
     every return of its quarter.
     Taken again the same day for H4: the 2026-27 Form 140 files of Q3 and Q4 now carry 194J(b)'s payment code 1027 where
     the field was empty (docs/tds-codes.md); no other file or figure changed.
+    next-tds-addlist (19-Oct-2026): taken again on the build before (006adb4da) with each quarter's challan dated on its
+    last deduction (tdsgst_snapshot.CHALLANS_SNAP; dated on the first, every later deduction sat on a challan dated before
+    it, now an error that stops the file). Against it, the build after: every file byte for byte; the 24Q pages of Q2 to
+    Q4 no longer list the earlier quarters' challans (₹18,00,000.00 and their balances), which the build before offered
+    for later salary TDS by rule f (a challan paid before a deduction never pays it now): those amounts taken out.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")

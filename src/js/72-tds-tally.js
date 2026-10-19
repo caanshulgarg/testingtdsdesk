@@ -295,6 +295,8 @@ const TDSTally = {
       const ch = chs[0], cur = b.alloc[l.row];
       if (!cur && b.allocFrom[l.row] === "off"){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: "", tally: ch.id, why: "taken off Tally's challan " + TDSCH.label(ch) + " by hand: left off"}); return; }
       if (cur === ch.id){ if (!b.allocFrom[l.row]) b.allocFrom[l.row] = "tally"; return; }
+      // next-tds-addlist: never tagged to a challan deposited before the deduction (it cannot pay it): listed instead
+      if (!cur && TDS.ymd(ch.date) < TDS.ymd(rows[l.row].date)){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: "", tally: ch.id, why: "Tally links it to challan " + TDSCH.label(ch) + ", dated before the deduction: a challan cannot pay TDS deducted after it was deposited"}); return; }
       if (cur){
         const was = b.challans.find(c => c.id === cur);
         res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, tds: rows[l.row].tds, fincom: cur, fincomLabel: was ? TDSCH.label(was) : cur, tally: ch.id, tallyLabel: TDSCH.label(ch)});
