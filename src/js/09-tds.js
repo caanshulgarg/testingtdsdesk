@@ -208,11 +208,19 @@ const TDS = {
     b.vouchers.forEach(v => {
       const L = Books.lines(v);
       if (!L.tds.length) return;
+      // the owner, 19-Oct-2026: a TDS entry of its own (the party debited, a TDS ledger credited, no expense in it; a journal
+      // often names no party in Tally): its deductee is the party debited (TDSSep.partyOf, src/js/66), and what it was
+      // deducted on is the bill it is matched to below, not the entry's own lines (the party's debit read as the amount
+      // paid made such a journal "₹1,000 paid, TDS ₹1,000 at 100%" with no deductee)
+      const sp0 = typeof TDSSep === "object" ? TDSSep.partyOf(v) : "";
       L.tds.forEach(t => {
-        const B = this.baseFor(t, L, v), paid = B.paid;
+        const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || v.party;
+        let B = this.baseFor(t, L, v);
+        if (sp && B.how !== "section") B = {paid: 0, rate: null, how: "books"};
+        const paid = B.paid;
         out.push({
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
-          party: v.party, pan: TDS.panOf(v.party), section: t.section, ledger: t.ledger,
+          party, pan: TDS.panOf(party), section: t.section, ledger: t.ledger, ...(sp ? {sep: true} : {}),
           paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
           voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
@@ -224,8 +232,11 @@ const TDS = {
     // the TDS review of 14-Oct-2026, M2: a TDS entry of its own after the bill (nothing paid or credited in it): the bill it
     // was deducted for (TDSInt.lateDeduct: the party's latest bill before it whose amount fits the section's rate) gives the
     // amount paid or credited and its date (credit); the date of deduction stays the TDS entry's
+    // the owner, 19-Oct-2026: a TDS entry of its own is matched to the bills it was deducted on (TDSSep.link: the bill named,
+    // else the TDS fitting a bill, else a month's bills together); the others as before
+    if (typeof TDSSep === "object") TDSSep.link(out);
     if (typeof TDSInt === "object") out.forEach(r => {
-      if (r.paid > 0 || !(r.tds > 0)) return;
+      if (r.paid > 0 || !(r.tds > 0) || r.sep) return;
       const hit = TDSInt.lateDeduct(r);
       if (hit && hit.amount > 0){ r.paid = r2(hit.amount); r.credit = hit.date; r.bill = hit.voucher; r.rate = r2(r.tds / r.paid * 100); r.rateFrom = "bill"; }
     });

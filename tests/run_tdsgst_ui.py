@@ -156,7 +156,9 @@ try:
                 ok(len(lb) == 4 and all(re.search(r"^Q[1-4] · [A-Z][a-z]{2}–[A-Z][a-z]{2}, due \d{1,2} [A-Z][a-z]{2}(, ₹[\d,]+(\.\d+)?)?$", x) for x in lb)
                    and pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0, "phone, the TDS grid: each quarter's label and its due date apart, the page not wider than the phone (%s)" % lb)
         ph.close()
-    # every figure and file, as before the redesign
+    # every figure and file, as before the redesign (the owner, 19-Oct-2026: the year page's "Should have deducted" list is
+    # gone, the TDS not deducted being the Audit's alone; its amounts, not covered / TDS due / interest / 40(a)(ia), were
+    # taken out of tdsgst-before.json for tds/2025-26/year and tds/2026-27/year)
     before = json.load(open(os.path.join(HERE, "fixtures", "tdsgst-before.json")))
     after = snapshot(SITE, PORT + 1)
     d = compare(before, after)

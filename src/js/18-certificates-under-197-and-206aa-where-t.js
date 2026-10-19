@@ -69,6 +69,8 @@ const Certs = {
   issues(fy, q){
     const out = [];
     TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+      // a TDS entry of its own short of its bill (TDSSep, src/js/66) is the audit's "short deducted" (TDSWatch), said once
+      if (r.sepShort) return;
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
       const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);

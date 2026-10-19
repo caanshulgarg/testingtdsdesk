@@ -7,7 +7,8 @@
   T-A4  the TDS payable ledgers in Tally against TDS deducted less challans, per quarter: the fixture agrees (opening
         1,200; deducted 20,000; paid 11,200, EXPECTED.md); a journal adjusting a TDS ledger and a missing challan named.
   T-S1  each party's running total against the TDS limit; Ashvattha's freight of 40,000 (over 30,000 a bill, no TDS)
-        on the "should have deducted" list with the TDS due, interest to today and the 40(a)(ia) amount at risk.
+        on TDSWatch.missed (the Audit's "TDS not deducted", 19-Oct-2026: not on the TDS page) with the TDS due, interest
+        to today and the 40(a)(ia) amount at risk.
   T-S2  a filed return whose entries change in Tally: added, changed, PAN-only (C5) and deleted rows; the grid shows the
         correction; "Correction filed" asks first and takes the copy again. The copy is kept with the books (BOOKS_KEYS,
         the client_books row): no new table or migration.
@@ -111,7 +112,10 @@ try:
            "with an individual's PAN: ₹400 due at 1%%, interest 1%% x %d months = ₹%s, ₹12,000 at risk under 40(a)(ia) (%s)" % (months, ash["interest"], [ash["due"], ash["interest"], ash["disallow"]]))
         ok(not pg.evaluate("TDSWatch.missed('2025-26').some(x => x.party === 'Juniper Legal Associates' || x.party === 'Nightjar Sound & Light Co')"), "parties whose TDS covers their payments are not on the list")
         go(pg, "2025-26", view="checks", check="limits"); t = pg.inner_text('#app [data-limits="2025-26"]')
-        ok("Ashvattha Transport Co" in t and "Should have deducted" in t and "₹12,000.00" in t, "the year's page: the limits and 'Should have deducted' with the 40(a)(ia) amount")
+        # the owner, 19-Oct-2026: no "Should have deducted" on the TDS pages (a bill's TDS is often booked in a journal of its
+        # own); the TDS not deducted is the Audit's finding alone (run_audit_tds.js, run_tds_separate.js)
+        ok("Ashvattha Transport Co" in t and "Should have deducted" not in t and "TDS short" not in t and "40(a)(ia)" not in t and "Over the limit" in t,
+           "the year's page: the limits (Ashvattha over the limit), no 'Should have deducted', no 'TDS short' (%s)" % t[:300].replace("\n", " "))
 
         # ---------------- T-S2: a filed quarter changed in Tally ----------------
         go(pg, "2025-26", "Q3", "26Q", "file")

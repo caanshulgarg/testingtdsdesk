@@ -402,7 +402,7 @@ try:
         t = ask(pg, "check my Q4 26Q")
         pg.wait_for_timeout(500)
         res = pg.evaluate("() => { const t = ASST.turns().slice(-1)[0]; return t.prefileRes ? t.prefileRes.lines.map(l => [l.id, l.status, l.count || 0]) : (t.prefileErr || null); }")
-        ok(isinstance(res, list) and ["missed", "fix", 1] in res and any(x[0] == "late" and x[1] == "fix" for x in res), "check my Q4 26Q: FinCom's checklist (missed 1, late payments) %s" % res)
+        ok(isinstance(res, list) and not any(x[0] == "missed" for x in res) and any(x[0] == "late" and x[1] == "fix" for x in res), "check my Q4 26Q: FinCom's checklist (late payments; no 'Deductions missed', 19-Oct: Audit only) %s" % res)
         ok(pg.locator("[data-asst-prefile] [data-prefile-line]").count() >= 5, "the checklist in the chat")
         shot(pg, "07-prefile")
         # ---------- no books in the cloud (FINCOM-CLOUD-STAGING-1): the neutral label, never the green tick, and the Tally
