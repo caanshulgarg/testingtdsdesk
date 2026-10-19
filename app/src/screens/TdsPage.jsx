@@ -19,6 +19,7 @@ import { Return26, Return24 } from "./TdsReturn.jsx";
 import Home, { HomeHead as HomeHeadOnly } from "./tds/Home.jsx";
 import { PanPaste, PanBookView } from "./tds/PanBook.jsx";
 import Register from "./tds/Register.jsx";
+import AllChallans from "./tds/AllChallans.jsx";
 import TaxLedgers from "./books/TaxLedgers.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import NotRead from "../parts/NotRead.jsx";
@@ -105,7 +106,7 @@ export default function Tds({ b }) {
     S.tdsFy = had[0]; S.tdsQ = ""; S.tdsPickForm = ""; S.tdsAutoFy = (S.coId || "") + "|" + had[0];
   }
   if (!S.tdsView) S.tdsView = had.length > 1 ? "years" : "year";
-  if (["year", "return", "register"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
+  if (["year", "return", "register", "allch"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = had[0] || fys[0] || "";
   if (!S.tdsFy && !["years", "notices", "register", "ledgers"].includes(S.tdsView)) S.tdsView = "years";
   const v = S.tdsView;
   // a return's tab is settled before the way back is drawn: the guide beside it is for that tab. A return opens on its
@@ -119,7 +120,7 @@ export default function Tds({ b }) {
     show={prevFy !== S.tdsFy ? prevFy : ""} onShow={() => tdsPick(prevFy, "", "")} /> : null;
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
   const booksIn = (b.vouchers || []).some((x) => !x.opt && !x.cancel);
-  const none = !had.length && v !== "notices" && v !== "register" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
+  const none = !had.length && v !== "notices" && v !== "register" && v !== "allch" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
   return <div data-phone-scroll="" data-tds-page="">
     {v === "ledgers" ? <TaxLedgers b={b} kind="tds" />
       // round 65: the books are in but hold no TDS: said plainly, with the TDS ledgers that have no entries (tds/NoTds.jsx);
@@ -131,6 +132,7 @@ export default function Tds({ b }) {
       : v === "notices" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← Returns</button></p><Notices b={b} kind="tds" /></>
       : v === "years" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p><Years rows={rows} fys={had} /></>
       : v === "register" ? <Register />
+      : v === "allch" ? <AllChallans fys={fys} />
       : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
       : notRead ? <>{fys.length > 0 && <HomeHeadOnly fys={fys} b={b} />}{notRead}</>
       : <Home fys={fys} b={b} />}

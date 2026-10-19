@@ -53,6 +53,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.evaluate("() => { S.tdsDedView = 'table'; }")   # next-tds-allchallans: the Deductions checks here are of the table (All rows); the step opens on its to-do list
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
         pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
         # the coordinator's screenshot review (14-Oct-2026): working on this computer only is a line at the sidebar's foot, not
@@ -112,10 +113,10 @@ try:
         ledw = re.sub(r"\s+", " ", led.inner_text()).strip() if led.count() else ""
         ok(led.count() == 1 and re.fullmatch(r"\d+ ledgers? to confirm → Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
         link = pg.locator('[data-tds-grid] ~ [data-ch-register], [data-ch-register]')
-        ok(link.count() == 1 and "Open challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register (%r)" % (link.inner_text() if link.count() else ""))
+        ok(link.count() == 1 and "See all challans of" in link.inner_text() and "Challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register (%r)" % (link.inner_text() if link.count() else ""))
         ok(not any("not deducted" in t.lower() for t in [pg.inner_text('[data-tds-page]')]), "1. nothing about TDS not deducted on the TDS home")
         if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "after-tds-page.png"), full_page=True)
-        link.locator('button').click(); pg.wait_for_timeout(400)
+        link.locator('button', has_text="Challan register").click(); pg.wait_for_timeout(400)
         ok(pg.locator('[data-register]').count() == 1 and "/challan-register" in pg.evaluate("location.hash"), "1. the line opens the challan register (%s)" % pg.evaluate("location.hash"))
         # 2. a return: one header line, one strip, the step rail
         J("(fy) => tdsGo(fy)", fy); pg.wait_for_timeout(300)

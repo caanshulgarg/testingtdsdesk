@@ -13,6 +13,7 @@ import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
+import { openAllChallans } from "./AllChallans.jsx";
 
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 export const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -106,7 +107,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  return <div className={"rt" + (cur === "deductions" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
+  return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
       <h2 className="rt-title" data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
@@ -115,6 +116,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
       {progress && <span className="rt-progress" data-ret-progress={progress.done + "/" + progress.of} title="On a challan, with a valid PAN and no rate question">Done: {progress.done} of {progress.of} ready</span>}
       <span className="rt-sp" />
+      <button type="button" className="btn small" data-ret-allch="" onClick={() => openAllChallans(fy, { fy, q, form })}>All challans of {fy}</button>
       <More label="⋯" ariaLabel="More" items={more} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
     </header>

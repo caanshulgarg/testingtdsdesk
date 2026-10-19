@@ -55,6 +55,7 @@ const Route = {
       // tds-layout (14-Oct-2026): the challan register has its own address; the old TDS tabs (Challans, Checks, 26AS, TRACES
       // files, Salary) have none now: their addresses are read below and lead to the new places
       if (v === "register") return "/" + e(S.tdsFy) + "/challan-register";
+      if (v === "allch") return "/" + e(S.tdsFy) + "/all-challans";
       return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
     }
     if (t === "gst"){
@@ -76,6 +77,7 @@ const Route = {
       // a return's To fix (the year's checks under it), After filing, Employees & declarations; the client's Reconciliations
       // (TdsPage.jsx tdsRedirect moves the views; the address is then written anew)
       if (p[1] === "challan-register" || p[1] === "challans"){ S.tdsView = "register"; this.replaceNext = true; return; }
+      if (p[1] === "all-challans"){ S.tdsView = "allch"; return; }
       if (p[1] === "certs"){ S.tdsView = "certs"; S.tdsQ = ""; this.replaceNext = true; return; }
       if (p[1] === "checks"){ S.tdsView = "checks"; S.tdsQ = ""; S.tdsCheck = ["rates", "limits", "tieout", "corr"].includes(p[2]) ? p[2] : "rates"; this.replaceNext = true; return; }
       if (p[1] === "26as"){ S.booksTab = "recon"; S.recFy = p[0]; this.replaceNext = true; return; }

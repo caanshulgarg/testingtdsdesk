@@ -255,3 +255,89 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .dd-grp .dd-grp-pay { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dd-grp .dd-grp-add { flex-basis: 100%; }
 .vf-tally summary { cursor: pointer; }
+
+/* next-tds-allchallans (19-Oct-2026): All challans of a year (tds/AllChallans.jsx) */
+.ac-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 4px; }
+.ac-head h2 { margin: 0; }
+.ac-back { margin: 0 0 6px; }
+.ac-sum { margin: 0 0 10px; color: var(--ink); font-size: 14px; }
+.ac-red { color: var(--bad); }
+.ac-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 0 0 10px; }
+.ac-f { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ink); font-weight: 500; }
+.ac-f select, .ac-f input { min-width: 120px; }
+.ac-find input { min-width: 180px; }
+.ac-table td, .ac-table th { white-space: nowrap; }
+.ac-table tr.ac-click { cursor: pointer; }
+.ac-table tr.ac-click:hover > td { background: var(--sheet-2); }
+.ac-table tr.ac-pay > td { background: color-mix(in oklab, var(--bad-soft) 45%, var(--sheet)); }
+.ac-table tfoot td { border-top: 2px solid var(--rule-strong); }
+.ac-empty { text-align: center; color: var(--ink); padding: 14px; }
+.ac-chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 9px; white-space: nowrap; }
+.ac-chip.ok { background: var(--ok-soft); color: var(--ok); }
+.ac-chip.info { background: var(--info-soft); color: var(--info); }
+.ac-chip.warn { background: var(--warn-soft); color: var(--warn); }
+.ac-chip.bad { background: var(--bad-soft); color: var(--bad); }
+.ac-bsr { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ac-bsr input { width: 150px; }
+.ac-bsr input[aria-label="Challan serial"] { width: 76px; }
+.ac-hint { margin-top: 8px; color: var(--ink); }
+.cm-allch { white-space: nowrap; }
+
+/* next-tds-allchallans: the Deductions step as a to-do list (tds/DedTodo.jsx; the owner's layout) */
+.dt { max-width: 1180px; }
+.dt-title { margin: 4px 0 2px; font-size: 18px; color: var(--ink); }
+.dt-line { margin: 0 0 12px; font-size: 15px; color: var(--ink); }
+.dt-okw { color: var(--ok); font-weight: 600; }
+.dt-needw { color: var(--bad); }
+.dt-alldone { color: var(--ok); font-weight: 600; }
+.dt-g { border: 1px solid var(--rule-strong); border-radius: 10px; margin: 0 0 12px; background: var(--sheet); overflow: hidden; }
+.dt-gh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 12px; cursor: pointer; list-style-position: inside; font-weight: 700; font-size: 14px; letter-spacing: .02em; text-transform: uppercase; }
+.dt-gt { flex: 1 1 auto; }
+.dt-gx { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.dt-blue > .dt-gh { background: var(--info-soft); color: var(--info); }
+.dt-amber > .dt-gh { background: var(--warn-soft); color: var(--warn); }
+.dt-red > .dt-gh { background: var(--bad-soft); color: var(--bad); }
+.dt-green > .dt-gh { background: var(--ok-soft); color: var(--ok); }
+.dt-donew { color: var(--ink); font-size: 13px; }
+.dt-gn { margin: 8px 12px 4px; font-size: 13px; color: var(--ink); }
+.dt-wrap { overflow-x: auto; }
+.dt-table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--ink); table-layout: fixed; }
+.dt-table td { padding: 7px 10px; border-top: 1px solid var(--rule); vertical-align: top; }
+.dt-table td.n { text-align: right; white-space: nowrap; }
+.dt-p { width: 24%; overflow-wrap: anywhere; }
+.dt-s { width: 64px; white-space: nowrap; }
+.dt-d { width: 66px; white-space: nowrap; }
+.dt-a { width: 112px; }
+.dt-t { width: 124px; font-weight: 600; }
+.dt-name { font-weight: 600; text-align: left; }
+.dt-flag { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+.dt-act { width: auto; }
+.dt-flag { white-space: normal !important; }
+.dt-to { color: var(--ink); margin-right: 8px; }
+.dt-why { color: var(--ink); font-size: 13px; }
+.dt-btns { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 4px; vertical-align: middle; }
+.dt-pick { font-variant-numeric: tabular-nums; }
+.dt-fixw { font-weight: 600; color: var(--warn); }
+.dt-on { color: var(--ok); font-weight: 600; }
+.dt-pay { border-top: 1px solid var(--rule-strong); }
+.dt-payh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 12px; background: color-mix(in oklab, var(--bad-soft) 55%, var(--sheet)); color: var(--ink); }
+.dt-payh b { color: var(--bad); }
+.dt-payw { font-size: 13px; color: var(--ink); }
+.dt-paybox { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; }
+.dt-paybox input { width: 160px; }
+.dt-pay .ach { margin: 8px 12px; }
+@media (max-width: 760px) {
+  .dt-table, .dt-table tbody, .dt-table tr { display: block; width: 100%; }
+  .dt-table tr { border-top: 1px solid var(--rule); padding: 6px 10px; }
+  .dt-table td { display: inline-block; border: 0; padding: 2px 8px 2px 0; width: auto; min-width: 0; }
+  .dt-table td.dt-p { display: block; }
+  .dt-table { table-layout: auto; }
+  .dt-table td.dt-act { display: block; min-width: 0; }
+  .dt-btns { margin: 4px 0 0; }
+  .ac-bar .ac-f { flex: 1 1 140px; }
+  .ac-bar .ac-f select, .ac-bar .ac-f input { min-width: 0; width: 100%; }
+}
+
+/* a to-do row's one action: outlined in the brand colour, bold (the page's one filled button is Confirm all / Next) */
+.dt .btn.dt-do { border: 1.5px solid var(--brand); color: var(--brand); background: var(--sheet); font-weight: 600; }
+.dt .btn.dt-do:hover { background: var(--brand-tint); }

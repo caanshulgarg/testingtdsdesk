@@ -8,6 +8,11 @@ within this window, just by clicks"). On the made-up books and challans of run_t
   2. by clicks alone: a cell edited in place (Enter saves as a FinCom correction, Tab goes to the next cell, Tally not
      changed); one-click fixes with the exact change (the rate that applies); ticked rows given a section at once;
      the keyboard (↑ ↓, Space, ?); "Done: N of M ready" in the header; Add deduction filled from the party's history
+  3. the to-do list (next-tds-allchallans; the owner's layout, 19-Oct-2026: "still very confusing"): the step opens on
+     "N deductions · D done · K need you" and the groups Confirm · Choose a challan · Pay a challan (one block per
+     section-month, Add challan and Paid in Tally? Add BSR) · Fix the row · Done (folded); each row in exactly one group,
+     the line's counts the groups'; one primary action a to-do row; Confirm and Confirm all move rows out of Confirm at
+     once; the headings, reasons and flags are not grey (contrast at least 4.5:1, light and dark); phone: no sideways scroll
 TDS_DEDMATCH_SHOTS=dir: screenshots (default tests/out/tds-dedmatch)."""
 import os, sys, re, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -26,7 +31,8 @@ BOOKS_JS = src[_k:src.index('"""', _k)]
 m = open(os.path.join(HERE, "run_tds_match_ui.py")).read()
 _k = m.index('CHALLANS = """') + len('CHALLANS = """')
 CHALLANS = m[_k:m.index('"""', _k)]
-GO = "() => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'deductions'; S.tdsFl = {}; S.tdsDedChF = ''; S.tdsSel = {}; render(); }"
+GO = "() => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'deductions'; S.tdsDedView = 'table'; S.tdsFl = {}; S.tdsDedChF = ''; S.tdsSel = {}; render(); }"
+TODO = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''")
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -131,6 +137,76 @@ try:
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
         ok(J("document.documentElement.scrollWidth") <= 391 and pg.locator("#app [data-dd-side] details").count() == 1, "phone: the panel is a section on top that folds; no sideways scroll")
         pg.screenshot(path=os.path.join(SHOTS, "deductions-suggestions-390.png"), full_page=True)
+        print("3. the to-do list")
+        pg.set_viewport_size({"width": 1440, "height": 900})
+        J(CHALLANS)
+        # PANs for all but ZZ Contractor 1 (companies for 194C at 2%, persons for 194J)
+        J("""() => { const ps = Array.from(new Set(TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.party))); let i = 0;
+          ps.forEach(p => { if (p === 'ZZ Contractor 1') return; i++; const c = /Contractor/.test(p) ? 'C' : 'P'; tdsDeducteeSet(p, {pan: 'AAA' + c + 'Z' + String(1000 + i) + 'K', name: ''}); }); render(); }""")
+        J(TODO); pg.wait_for_timeout(900)
+        ok(pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#tdsDnTable").count() == 0, "the step opens on its to-do list, not the table")
+        def state():
+            return J("""() => { const g = {}; document.querySelectorAll('#app [data-dt-group]').forEach(d => { g[d.dataset.dtGroup] = {n: +d.dataset.dtN, rows: [...d.querySelectorAll('tr[data-dt-row]')].map(t => t.dataset.dtRow), open: d.open}; });
+              const line = (document.querySelector('#app [data-dt-line]') || {dataset: {}}).dataset.dtLine || ''; return {g, line}; }""")
+        st = state(); qrows = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.id).sort()")
+        seen = [r for v in st["g"].values() for r in v["rows"]]
+        ok(sorted(seen) == qrows and len(seen) == len(set(seen)), "each deduction in exactly one group (%d of %d)" % (len(set(seen)), len(qrows)))
+        ok(all(v["n"] == len(v["rows"]) for v in st["g"].values()), "each group's count is its rows (%s)" % {k: v["n"] for k, v in st["g"].items()})
+        done = len(st["g"].get("done", {"rows": []})["rows"]); need = len(seen) - done
+        ok(st["line"] == "%d|%d|%d" % (len(qrows), done, need), "the line: %d deductions · %d done · %d need you (%s)" % (len(qrows), done, need, st["line"]))
+        order = list(st["g"].keys()); want_order = [k for k in ["confirm", "choose", "pay", "fix", "done"] if k in st["g"]]
+        ok(order == want_order and "confirm" in order and "choose" in order, "the groups in the owner's order, empty ones not shown (%s)" % order)
+        ok(all(v["open"] for k, v in st["g"].items() if k != "done") and ("done" not in st["g"] or not st["g"]["done"]["open"]), "the to-do groups open, Done folded")
+        one = J("""() => [...document.querySelectorAll('#app [data-dt-group] tr[data-dt-row]')].filter(t => ['confirm', 'choose', 'fix'].includes(t.dataset.dtIn)).map(t => [t.dataset.dtRow, t.dataset.dtIn, t.querySelectorAll('.dt-do:not(.dt-pick)').length, t.querySelectorAll('.dt-pick').length])""")
+        ok(one and all(x[2] == 1 or (x[1] == "choose" and x[2] == 0 and 1 <= x[3] <= 3) for x in one), "each to-do row has one action (choose: the best 1 to 3 challans, one click each) (%s)" % [x for x in one if not (x[2] == 1 or (x[1] == "choose" and 1 <= x[3] <= 3))][:3])
+        prim = J("[...document.querySelectorAll('#app .btn.primary')].filter(b => b.offsetParent).map(b => b.innerText.trim())")
+        ok(len(prim) == 1 and prim[0].startswith("Confirm all"), "the page's one filled button: Confirm all (%s)" % prim)
+        def contrast(theme):
+            return J("""(theme) => { document.documentElement.dataset.theme = theme;
+              const L = (c) => { const m = c.match(/[\\d.]+/g).map(Number); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return [0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]), m[3] == null ? 1 : m[3]]; };
+              const bgOf = (e) => { for (let x = e; x; x = x.parentElement) { const b = getComputedStyle(x).backgroundColor; const m = b.match(/[\\d.]+/g); if (m && (m[3] == null || +m[3] > 0.5)) return b; } return getComputedStyle(document.body).backgroundColor; };
+              const out = []; document.querySelectorAll('#app .dt-gt, #app .dt-why, #app .dt-to, #app .dt-flag, #app .dt-fixw, #app .dt-payw, #app .dt-gn, #app .dt-line, #app [data-dt-pay-head], #app .dt-on, #app .dt-donew').forEach(e => {
+                if (!e.getClientRects().length) return; const s = getComputedStyle(e), a = L(s.color)[0], b = L(bgOf(e))[0], r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+                out.push([e.className || e.tagName, Math.round(r * 100) / 100, +s.opacity]); });
+              return out; }""", theme)
+        for theme in ("light", "dark"):
+            cs = contrast(theme); low = [c for c in cs if c[1] < 4.5 or c[2] < 1]
+            ok(cs and not low, "%s: headings, reasons and flags at least 4.5:1, none faded (%d checked; low: %s)" % (theme, len(cs), low[:4]))
+            if theme == "dark": pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-dark-1440.png"), full_page=True)
+        J("() => { document.documentElement.dataset.theme = 'light'; }")
+        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-1440.png"), full_page=True)
+        cut = J("() => [...document.querySelectorAll('#app .dt-act')].filter(e => e.getBoundingClientRect().right > e.closest('.dt-g').getBoundingClientRect().right + 1).length")
+        ok(cut == 0, "1440: every row's action inside its group, nothing cut off (%d cut)" % cut)
+        rid = st["g"]["confirm"]["rows"][0]; pan_ok = J("(id) => Certs.validPan(TDS.rows().find(r => r.id === id).pan)", rid)
+        pg.click('#app [data-dt-confirm="%s"]' % rid); pg.wait_for_timeout(500)
+        st2 = state(); where = [k for k, v in st2["g"].items() if rid in v["rows"]]
+        ok(J("(id) => !!S.books.alloc[id]", rid) and where == (["done"] if pan_ok else ["fix"]), "Confirm: on its challan at once, the row now in %s" % where)
+        nconf = len(st2["g"]["confirm"]["rows"]); before = {k: len(v["rows"]) for k, v in st2["g"].items()}
+        pg.click("#app [data-dt-confirm-all]"); pg.wait_for_timeout(700)
+        st3 = state(); after = {k: len(v["rows"]) for k, v in st3["g"].items()}
+        ok("confirm" not in st3["g"] and after.get("done", 0) + after.get("fix", 0) - before.get("done", 0) - before.get("fix", 0) == nconf, "Confirm all %d: Confirm gone, the %d rows in Done or Fix the row (%s → %s)" % (nconf, nconf, before, after))
+        seen3 = [r for v in st3["g"].values() for r in v["rows"]]
+        ok(st3["line"] == "%d|%d|%d" % (len(qrows), after.get("done", 0), len(seen3) - after.get("done", 0)), "the line still equals the groups (%s)" % st3["line"])
+        fx = pg.locator('#app [data-dt-group="fix"] tr[data-dt-row]').first
+        ok(fx.count() == 1 and "no PAN" in fx.inner_text() and fx.locator("[data-dt-addpan]").count() == 1, "Fix the row: ZZ Contractor 1, no PAN, Add PAN")
+        # no challan at all: one block per section and month, Add challan and Paid in Tally? Add BSR
+        J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); render(); }"); pg.wait_for_timeout(800)
+        heads = J("[...document.querySelectorAll('#app [data-dt-pay]')].map(b => b.dataset.dtPay)")
+        sm = J("() => Array.from(new Set(TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005).map(r => TDS.sec(r.section) + '|' + TDS.ymd(r.date).slice(0, 6)))).length")
+        ok(len(heads) == sm and len(set(heads)) == len(heads), "Pay a challan: one block per section and month (%d = %d)" % (len(heads), sm))
+        blk = pg.locator("#app [data-dt-pay]").first
+        ok(blk.locator("[data-dt-add]").count() == 1 and blk.locator("[data-dt-bsr]").count() == 1 and re.search(r"· ₹[\d,.]+ due", blk.locator("[data-dt-pay-head]").inner_text()), "a block: '<section> · <month> · ₹X due', Add challan, Paid in Tally? Add BSR (%s)" % blk.locator("[data-dt-pay-head]").inner_text())
+        due = J("""() => { const b = document.querySelector('#app [data-dt-pay]'), ids = [...b.querySelectorAll('tr[data-dt-row]')].map(t => t.dataset.dtRow);
+          return [+b.querySelector('[data-dt-pay-head]').innerText.match(/₹([\d,.]+) due/)[1].replace(/,/g, ''), TDS.rows().filter(r => ids.includes(r.id)).reduce((a, r) => a + r.tds, 0)]; }""")
+        ok(due[0] >= due[1] - 0.01 and due[0] <= due[1] * 1.25 + 1, "the block's ₹ due is its rows' TDS (with any interest) (%s)" % due)
+        w = J("() => [...document.querySelectorAll('#app .dt-table')].map(t => t.getBoundingClientRect().right - t.closest('.dt-g').getBoundingClientRect().right)")
+        ok(all(x <= 1 for x in w), "1440: every group's rows inside the page, nothing cut off (%s)" % w[:4])
+        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-pay-1440.png"), full_page=True)
+        pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
+        ok(J("document.documentElement.scrollWidth") <= 391, "phone: the groups stack, no sideways scroll (%s)" % J("document.documentElement.scrollWidth"))
+        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-pay-390.png"), full_page=True)
+        J(CHALLANS); pg.wait_for_timeout(600)
+        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-390.png"), full_page=True)
         br.close()
 finally:
     srv.shutdown()

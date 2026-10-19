@@ -89,6 +89,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.evaluate("() => { S.tdsDedView = 'table'; }")   # next-tds-allchallans: the Deductions checks here are of the table (All rows); the step opens on its to-do list
         nv = pg.evaluate(BOOKS_JS); pg.wait_for_timeout(1000); pg.evaluate(GO); pg.wait_for_timeout(600)
         nd = pg.evaluate("TDS.allRows().filter(r => r.fy === '2026-27' && r.q === 'Q1').length")
         ok(nd == 42, "the fixture books: 42 deductions under 194C, 194J and 192 (%d)" % nd)

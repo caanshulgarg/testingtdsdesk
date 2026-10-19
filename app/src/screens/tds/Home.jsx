@@ -9,6 +9,7 @@ import More from "../../parts/More.jsx";
 import HelpButton from "../../parts/HelpButton.jsx";
 import { STATUS, StatusChip, statusOf, Q_MON } from "./Shell.jsx";
 import { checkReturn } from "./Validate.jsx";
+import { openAllChallans } from "./AllChallans.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const QS = ["Q1", "Q2", "Q3", "Q4"], FORMS = ["26Q", "24Q", "27Q", "27EQ"];
@@ -58,6 +59,7 @@ export function HomeHead({ fys, b, onYear }) {
     <label className="hc-fy"><span>{TDS.yearWord(fy)}</span>
       <select aria-label="Year" value={fy} onChange={(ev) => (onYear ? onYear(ev.target.value) : tdsPick(ev.target.value, "", ""))}>
         {fys.map((f) => <option key={f} value={f}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></label>
+    <button type="button" className="btn small" data-tds-allch="" onClick={() => openAllChallans(fy, null)}>All challans</button>
     <More label="⋯" ariaLabel="More" items={[
       ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
       ["The challan register", () => tdsNav("register"), { "data-tds-more": "register" }],
@@ -107,7 +109,7 @@ export default function Home({ fys, b }) {
         <tfoot><tr><th scope="row">All forms</th>{QS.map((q) => <td key={q} className="n" data-q-total={q}>{money(byQ[q] || 0)}</td>)}<td className="n" data-year-total=""><b>{yearAll}</b></td></tr></tfoot>
       </table></div>
     </section>
-    <p className="hc-foot" data-ch-register="">{chs.length ? <>Challans: {chs.length} · {left.length ? money(unc) + " unconsumed across " + left.length + " challan" + (left.length === 1 ? "" : "s") : "every challan used"} · <button className="linkbtn" onClick={() => tdsNav("register")}>Open challan register →</button></>
+    <p className="hc-foot" data-ch-register="">{chs.length ? <>Challans: {chs.length} · {left.length ? money(unc) + " unconsumed across " + left.length + " challan" + (left.length === 1 ? "" : "s") : "every challan used"} · <button className="linkbtn" data-home-allch="" onClick={() => openAllChallans(fy, null)}>See all challans of {fy} →</button> · <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register</button></>
       : <>No challans · <button className="linkbtn" data-ch-add="" onClick={() => { S.regAdding = true; tdsNav("register"); }}>Add challan</button></>}</p>
   </div>;
 }

@@ -34,6 +34,7 @@ import AddDeduction, { openAdd } from "./tds/AddDeduction.jsx";
 import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter, groupRows, GroupHead } from "./tds/DedSide.jsx";
 import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes, readyCount } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
+import DedTodo from "./tds/DedTodo.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -427,17 +428,21 @@ export function Return26({ b, allRows, form = "26Q" }) {
     {val.errors.length > 0 && <p className="note bad" data-make-why="">Fix the {val.errors.length === 1 ? "error" : val.errors.length + " errors"} above first: the file is not made while {val.errors.length === 1 ? "it is" : "any is"} left.</p>}
     <MarkFiled fy={fy} q={q} form={form} />
   </div>;
+  // next-tds-allchallans (the owner's layout): the Deductions step opens on its to-do list (tds/DedTodo.jsx); "All rows"
+  // is the table with every filter, the challans panel and editing in place (S.tdsDedView "table")
+  const todo = !S.tdsDedView;
   const tools = <div className="rt-tool" data-step-tool="">
     {<><Search value={fD.q} placeholder="Find deductee, PAN, voucher" label="Find a deductee, PAN, voucher or ledger" data-fk="tdsf-deductions" onChange={(v) => tdsFilter("deductions", "q", v, true)} />
-      <Pills cur={S.tdsDedView === "sections" ? "sections" : fD.challan === "no" ? "no" : fD.fix ? "fix" : ""} on={(k) => {
-        S.tdsDedView = k === "sections" ? "sections" : "";
+      <Pills cur={todo ? "todo" : S.tdsDedView === "sections" ? "sections" : fD.challan === "no" ? "no" : fD.fix ? "fix" : ""} on={(k) => {
+        if (k === "todo") { S.tdsDedView = ""; render(); return; }
+        S.tdsDedView = k === "sections" ? "sections" : "table";
         const nf = Object.assign({}, fD, { challan: k === "no" ? "no" : fD.challan === "no" ? "" : fD.challan, fix: k === "fix" ? "1" : "" });
         if (!k) { nf.challan = fD.challan === "no" ? "" : fD.challan; nf.fix = ""; }
         S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: nf }); render(); }}
-        items={[["", "All"], ["no", "No challan", un.length], ["fix", "Needs fixing", fixN], ["sections", "By section"]]} /></>}
+        items={[["todo", "To do"], ["", "All rows"], ["no", "No challan", un.length], ["fix", "Needs fixing", fixN], ["sections", "By section"]]} /></>}
     <span className="rt-sp" />
     {sfx.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-fix-all="" title={sfx.map((f) => f.label).join("; ")} onClick={() => { let n = 0; sfx.forEach((f) => { const x = f.apply(); if (x && x.ok) n++; }); TDSReg.forget(); TDSReg.done(); saveBooks(); toast(n + " safe fix" + (n === 1 ? "" : "es") + " applied."); render(); }}>Apply all safe fixes ({sfx.length})</button>}
-    {dm && dm.accept.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small primary" data-dd-accept-all="" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Accept all {dm.accept.reduce((a, s) => a + s.ids.length, 0)} suggestions</button>}
+    {!todo && dm && dm.accept.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small primary" data-dd-accept-all="" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Accept all {dm.accept.reduce((a, s) => a + s.ids.length, 0)} suggestions</button>}
     {form !== "27EQ" && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-add-open="" onClick={() => openAdd({ chId: S.tdsDedChF && S.tdsDedChF !== "__none" ? S.tdsDedChF : "" })}>Add deduction</button>}
     <More label="⋯" ariaLabel="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Excel to correct and bring back (these " + shownD.length + ")", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
       ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
@@ -451,7 +456,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
         : S.tdsTab === "deductees" ? <><DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
           {/* 27Q's non-resident details and 27EQ's collection codes, filled where the deductees are */}
           {(form === "27Q" || form === "27EQ") && <div style={{ marginTop: 14 }}><ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} /></div>}</>
-        : S.tdsTab === "deductions" ? <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} m={dm} /></>
+        : S.tdsTab === "deductions" ? todo ? <>{tools}<DedTodo form={form} fy={fy} q={q} rows={rows.filter((r) => pass(r, fD))} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} /></>
+          : <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} m={dm} /></>
         : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
         : <ValidatePanel fy={fy} q={q} form={form} val={val} reviews={reviews} year={yearChecks(fy)} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}
     </ReturnShell>

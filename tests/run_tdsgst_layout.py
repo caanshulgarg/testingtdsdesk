@@ -36,6 +36,7 @@ try:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
         E, W = pg.evaluate, pg.wait_for_timeout
         pg.goto("http://localhost:%d/" % PORT); W(2500); pg.click('button[data-act="useOffline"]'); W(2000)
+        pg.evaluate("() => { S.tdsDedView = 'table'; }")   # next-tds-allchallans: the Deductions checks here are of the table (All rows); the step opens on its to-do list
         E("window.__dueToday = '2026-10-11'")
         E(LOAD, books); W(1000); E("S.books = window.__bk; render();"); W(500); E(CHALLANS); W(300)
         cid = E("S.coId")
@@ -232,7 +233,7 @@ try:
             pg.set_viewport_size({"width": vw, "height": vh})
             for name, h, click, main in views:
                 hash_go("#/c/%s%s" % (cid, h), 1300)
-                E("() => { S.tdsDedView = ''; S.r1Open = ''; S.r1View = ''; S.tdsSel = {}; render(); }"); W(300)
+                E("() => { S.tdsDedView = 'table'; S.r1Open = ''; S.r1View = ''; S.tdsSel = {}; render(); }"); W(300)
                 for c in ([click] if isinstance(click, str) else click or []): pg.click(c); W(500)
                 E("window.scrollTo(0, 0)"); W(100)
                 m, amts = E(LAYOUT, main), E(AMOUNTS)
@@ -276,7 +277,7 @@ try:
                     ok(not miss and before.get(name), "%s: every figure shown before is still shown (%d; missing %s)" % (at, len(before.get(name, [])), miss[:5]))
                 pg.screenshot(path=os.path.join(HERE, "out", "t70-%s-%dx%d.png" % (name, vw, vh)))
         pg.set_viewport_size({"width": 1440, "height": 900})
-        hash_go("#/c/%s/books/tds/2026-27/Q1/26Q/deductions" % cid, 1300); E("() => { S.tdsDedView = ''; S.tdsFl = {}; render(); }"); W(300)
+        hash_go("#/c/%s/books/tds/2026-27/Q1/26Q/deductions" % cid, 1300); E("() => { S.tdsDedView = 'table'; S.tdsFl = {}; render(); }"); W(300)
         pg.select_option("#tdsDnTable thead select[aria-label=PAN]", "no"); W(400)
         th = E("(() => { const s = document.querySelector('#tdsDnTable thead select[aria-label=PAN]'); return s ? [s.closest('th').className, s.className] : null; })()")
         ok(th and "th-filtered" in th[0] and " on" in " " + th[1], "a header's filter set: its header tinted, its ▾ filled (%s)" % th)

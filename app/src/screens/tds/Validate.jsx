@@ -100,7 +100,7 @@ function Line({ it, level, open, onOpen, form, review }) {
   const go = () => {
     if (it.step === "deductees") S.tdsDeeF = "bad";
     if (it.step === "challans" && it.k === "unmatched") S.tdsChSel = "__none";
-    if (it.step === "deductions" && it.k === "rate") { S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: Object.assign({}, (S.tdsFl || {}).deductions || {}, { rate: "q" }) }); S.tdsDedView = ""; S.tdsDedCh = ""; }
+    if (it.step === "deductions" && it.k === "rate") { S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: Object.assign({}, (S.tdsFl || {}).deductions || {}, { rate: "q" }) }); S.tdsDedView = "table"; S.tdsDedCh = ""; }
     tdsTabGo(it.step); try { window.scrollTo(0, 0); } catch (e) { /* */ }
   };
   return <li className={"vf-line " + level} data-val-item={it.k} data-val-level={level}>

@@ -61,7 +61,7 @@ try:
         cid = E("S.coId")
         def go(h, wait=1300):
             E("(h) => { location.hash = h; }", "#/c/%s/books/tds/%s" % (cid, h)); W(wait)
-        go("2026-27/Q1/26Q/deductions"); E("() => { S.tdsDedView = ''; S.tdsFl = {}; render(); }"); W(400)
+        go("2026-27/Q1/26Q/deductions"); E("() => { S.tdsDedView = 'table'; S.tdsFl = {}; render(); }"); W(400)
         rows = E("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => ({id: r.id, pan: r.pan, section: r.section, paid: r.paid, tds: r.tds, challan: r.challan}))")
         print("1. Needs fixing")
         chip = pg.locator("#app [data-step-tool] [data-ded-show=fix]")   # next-tds-clear: a Show pill of the step's toolbar

@@ -46,6 +46,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.evaluate("() => { S.tdsDedView = 'table'; }")   # next-tds-allchallans: the Deductions checks here are of the table (All rows); the step opens on its to-do list
         pg.evaluate(BOOKS_JS); pg.wait_for_timeout(800)
         # the AI step answered by a stand-in for the tds-challan-match function (never the real API): it pairs the late-May
         # 194J deductions with the challan marked 194C

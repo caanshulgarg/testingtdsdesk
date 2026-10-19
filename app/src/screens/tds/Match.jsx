@@ -14,6 +14,7 @@ import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { AddChallan, SrcBadge, say } from "./Register.jsx";
 import More from "../../parts/More.jsx";
 import { SideDrawer } from "./Shell.jsx";
+import { openAllChallans } from "./AllChallans.jsx";
 import { PanBox } from "./PanBook.jsx";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
@@ -189,6 +190,8 @@ export function ChallanMatch({ fy, q, form, tallyPays }) {
   const ai = TDSMatch.view(form, fy, q);
   let chs = challansOf(form, fy, q, cx, sugg);
   if (reg) chs = chs.concat(TDS.challans().filter((c) => !chs.includes(c) && TDSReg.balance(c, cx).tax > 0.005));
+  // a challan opened from All challans that this quarter's list does not hold is shown too
+  if (S.tdsChSel && S.tdsChSel !== "__none" && !chs.some((c) => c.id === S.tdsChSel)) chs = chs.concat(TDS.challans().filter((c) => c.id === S.tdsChSel));
   chs = chs.sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
   const inSugg = new Set([].concat(...sugg.map((s) => s.ids))), notYet = all.filter((r) => !r.challan && r.tds > 0.005 && !inSugg.has(r.id));
   const confirmable = sugg.filter((s) => s.rule !== "split");
@@ -204,6 +207,7 @@ export function ChallanMatch({ fy, q, form, tallyPays }) {
       {ai && (ai.say || ai.busy) ? <details className="cm-aib" data-cm-ai={ai.busy ? "busy" : ai.state || ""}><summary title="What the AI did">{ai.busy ? "AI is looking…" : "AI ⓘ"}</summary>
         <div className="cm-aipop"><p className="note">{ai.busy ? "AI is looking at what the rules left…" : ai.say}</p>
           {!locked && !ai.busy && <button className="btn small" data-cm-ai-again="" onClick={() => TDSMatch.askAi(form, fy, q, true)}>Ask AI again</button>}</div></details> : null}
+      <button type="button" className="linkbtn cm-allch" data-cm-allch="" onClick={() => openAllChallans(fy, { fy, q, form })}>See all challans of {fy} →</button>
       <span className="rt-sp" />
       {!locked && confirmable.length > 0 && <button className="btn small primary" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Confirm {confirmable.length} suggestion{confirmable.length === 1 ? "" : "s"}</button>}
       <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
