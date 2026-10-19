@@ -81,6 +81,9 @@ export function start() {
   // started / piece n / done / failed and why; the scrubber keeps only those fields (scrubBreadcrumb, category fromtally)
   window.__fincomCrumb = (category, step, data) => { try { addBreadcrumb({ category, message: step, data }); } catch { /* never in the way */ } };
   try { (window.__fincomCrumbsEarly || []).splice(0).forEach((c) => addBreadcrumb({ category: c.category, message: c.step, data: c.data, timestamp: c.timestamp })); } catch { /* never in the way */ }
+  // 19-Oct-2026 (round 90): a screen's file that did not come: its name as the tag "chunk" (src/staleChunk.js)
+  window.__fincomTag = (k, v) => { try { setTag(k, v); } catch { /* never in the way */ } };
+  try { (window.__fincomTagsEarly || []).splice(0).forEach((t) => setTag(t[0], t[1])); } catch { /* never in the way */ }
   // a part of the page that failed to draw (Guard.jsx): reported with the part's name
   window.__fincomReport = (error, guard) => { try { captureException(error, { tags: { guard: String(guard || "") } }); } catch { /* never in the way */ } };
   return true;

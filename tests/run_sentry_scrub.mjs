@@ -16,8 +16,8 @@ const leaks = (x) => { const s = typeof x === "string" ? x : JSON.stringify(x); 
 const ALLOWED = {
   top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk", "fingerprint", "extra"],
   exception: ["type", "value", "mechanism", "stacktrace"], mechanism: ["type", "handled"], frame: ["filename", "function", "module", "lineno", "colno", "in_app"],
-  breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to", "size_mb", "kind", "ready", "pieces", "piece", "of", "state", "reason"],
-  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
+  breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to", "size_mb", "kind", "ready", "pieces", "piece", "of", "state", "reason", "file"],
+  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code", "chunk"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
   contexts: ["os", "runtime", "browser"], context: ["name", "version"], sdk: ["name", "version", "settings"], settings: ["infer_ip"],
 };
 function shape(e) {
@@ -94,6 +94,20 @@ ok(kept[1].message.startsWith("[FinCom] the page could not be drawn:") && !("dat
   ok(ft[2].data.piece === 2 && ft[2].data.of === 4 && ft[2].data.state === "piece" && ft[1].data.ready === false, "From Tally's piece n of m and books ready kept");
   ok(!leaks(ft).length && !/ALPHA|09AANFG/.test(JSON.stringify(ft)), "no business data in From Tally's breadcrumbs" + (leaks(ft).length ? ": " + leaks(ft) : ""));
   ok(ft.every((b) => Object.keys(b.data).every((k) => ALLOWED.crumbData.includes(k))), "From Tally's breadcrumbs carry the allowed fields only");
+}
+
+// 19-Oct-2026 (round 90): a screen's file that did not come (app/src/staleChunk.js): the step and the build file's name
+// kept; anything else in its data, or a "file" that is not a build file's name, dropped
+{
+  const ch = [
+    { category: "chunk", timestamp: T, message: "retry", data: { file: "Books-CE9NmnME.js", url: "https://fincom.live/review/assets/Books-CE9NmnME.js?x=ALPHA" } },
+    { category: "chunk", timestamp: T, message: "refresh", data: { file: "ALPHA TRADERS 09AANFG3202D1ZR.xml" } },
+    { category: "chunk", timestamp: T, message: "Kappa Labs", data: { file: "Books-CE9NmnME.js" } },
+  ].map((b) => S.scrubBreadcrumb(JSON.parse(JSON.stringify(b)))).filter(Boolean);
+  ok(ch.length === 2 && ch[0].message === "retry" && ch[0].data.file === "Books-CE9NmnME.js" && !("url" in ch[0].data) && ch[1].data.file === "unknown",
+    "a screen's file breadcrumb: the step and the build file's name only (" + JSON.stringify(ch) + ")");
+  const ev = S.scrubEvent({ type: "error", level: "error", tags: { chunk: "Books-CE9NmnME.js" } }), ev2 = S.scrubEvent({ type: "error", level: "error", tags: { chunk: "ALPHA TRADERS.js" } });
+  ok(ev.tags && ev.tags.chunk === "Books-CE9NmnME.js" && !(ev2.tags && ev2.tags.chunk), "the tag chunk: a build file's name kept, anything else dropped");
 }
 
 // ---- 3. a whole event as the browser SDK makes it, with everything the SDK or a scope could add

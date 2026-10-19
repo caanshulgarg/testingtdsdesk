@@ -181,12 +181,23 @@ export function scrubBreadcrumb(b) {
     if (typeof d.reason === "string" && d.reason) data.reason = scrubText(d.reason, 160);
     return { type: "default", category: "fromtally", timestamp: ts, message: step, data };
   }
+  // 19-Oct-2026 (round 90): a screen's file that did not come (app/src/staleChunk.js): the step and the file's NAME only
+  // (Books-CE9NmnME.js: a build's file, never a client's), nothing else
+  if (b.category === "chunk") {
+    const step = typeof b.message === "string" && /^[a-z][a-z_]{0,30}$/.test(b.message) ? b.message : null;
+    const f = b.data && b.data.file;
+    if (!step) return null;
+    return { type: "default", category: "chunk", timestamp: ts, message: step, data: { file: CHUNK_FILE(f) || "unknown" } };
+  }
   if (b.category === "console" && b.level === "error") return { type: "default", category: "console", level: "error", timestamp: ts, message: scrubText(b.message, 200) };
   return null;
 }
 
+// a file of the app's build by its name only: letters, digits, - _ . and .js/.mjs/.css (app/src/staleChunk.js)
+const CHUNK_FILE = (v) => (typeof v === "string" && /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,79}\.(?:m?js|css)$/.test(v) && !/[A-Z]{5}\d{4}[A-Z]/.test(v) ? v : undefined);
 // ---- tags: these keys only, each with its own shape
 const TAGS = {
+  chunk: (v) => CHUNK_FILE(v) || (v === "unknown" ? v : undefined),           // round 90: a screen's file that did not come
   route: (v) => (scrubRoute(v) === v ? v : undefined),
   install: (v) => (/^[0-9a-f]{32}$/.test(v) ? v : undefined),       // the random per-install id
   firm: (v) => (/^[0-9a-f]{12}$/.test(v) ? v : undefined),          // a hash of the firm's id, never the id
