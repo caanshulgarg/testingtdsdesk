@@ -6,7 +6,8 @@ could not be loaded (Importing a module script failed.). Reload FinCom", again a
         answers, and retries a file once when the line drops;
   (ii)  the Books file fails every time -> FinCom tries again in the page, refreshes its files ONCE ("FinCom is refreshing
         its files…"), then says so with "Reload FinCom" and "Open without saved files"; never a loop;
-  (iii) the Books file fails once (a passing failure) -> healed in the page, no reload;
+  (iii) the Books file fails at its own address, a fresh ask comes (a passing failure, or the browser keeping the failure)
+        -> healed in the page by the loader's "?retry=" ask, no reload;
   (iv)  each failure leaves a Sentry breadcrumb (category chunk) and the tag chunk = the file's name (Sentry stubbed).
 How: the React test build (app/dist-test, or TDSDESK_SITE) served with Cache-Control: no-store; the Books file's answers
 are set per scene (503, the line dropped, or served); the service worker is turned on for localhost (fincom.sw = on).
@@ -27,7 +28,8 @@ BOOKS = [f for f in os.listdir(ASSETS) if re.match(r"^Books-[\w-]+\.js$", f)][0]
 GST = [f for f in os.listdir(ASSETS) if re.match(r"^Gst-[\w-]+\.js$", f)][0]
 ok(bool(BOOKS and GST), "the build: the Books file is %s" % BOOKS)
 
-# per file: "fail" (503 every time), "once" (503 the first time), "drop" (the line dropped the first time), None (served)
+# per file: "fail" (503 every time), "once" (503 the first time), "plain" (503 at its own address, served when asked with
+# "?retry="), "drop" (the line dropped the first time), None (served)
 ST = {"mode": {}, "hits": {}, "served": []}
 FAKE = "fake-Abc123.js"                                     # answered 200 text/html (as a site's "not found" page would be)
 DROPS = int(os.environ.get("HEAL_DROPS") or 1)                 # the line dropped this many times in a row
@@ -44,7 +46,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         if name == FAKE:
             b = b"<!doctype html><title>Not here</title>"; self.send_response(200); self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b); return
-        if m == "fail" or (m == "once" and n == 1):
+        if m == "fail" or (m == "once" and n == 1) or (m == "plain" and "retry=" not in self.path):
             ST["served"].append((self.path, 503)); return self.send_error(503)
         if m == "drop" and n <= DROPS:
             ST["served"].append((self.path, 0)); self.close_connection = True; return
@@ -59,8 +61,11 @@ SW_ON = """(() => { try { localStorage.setItem("fincom.sw", "on"); } catch (e) {
 # Sentry stubbed: the breadcrumbs and tags FinCom hands to Sentry reach the test (and survive a reload)
 NOTE = """(() => { const look = () => { const n = document.querySelector('[data-stale-reload]'); if (n && n.textContent) { try { sessionStorage.setItem('heal:note', n.textContent); } catch (e) {} } };
   new MutationObserver(look).observe(document, {childList: true, subtree: true, characterData: true}); })()"""
+# 19-Oct-2026: each call is also kept in the page (window.__healLog), read straight by the test: in CI the binding's calls
+# (the page -> the test, delivered later) could still be on their way when (iii) looked, and the list read empty
 STUB = """(() => {
-  const sink = (x) => { try { if (typeof window.__healSink === "function") window.__healSink(JSON.stringify(x)); } catch (e) {} };
+  const log = window.__healLog = [];
+  const sink = (x) => { try { log.push(x); } catch (e) {} try { if (typeof window.__healSink === "function") window.__healSink(JSON.stringify(x)); } catch (e) {} };
   const crumb = (category, step, data) => sink({crumb: category, step, data});
   const tag = (k, v) => sink({tag: k, value: v});
   Object.defineProperty(window, "__fincomCrumb", {configurable: true, get: () => crumb, set: () => {}});
@@ -195,15 +200,31 @@ with sync_playwright() as p:
     ctx.close()
 
     # ---- (iii) the Books file fails once: healed in the page, no reload
-    print("(iii) the Books file fails once")
-    ST.update({"mode": {BOOKS: "once"}, "hits": {}, "served": []})
+    # 19-Oct-2026: "plain", not "once": with "once", which of the page's asks for the file (Vite's modulepreload of it, or
+    # the import) took the one failure was a race; in CI the list of breadcrumbs read empty though the file was asked
+    # twice (the failure not the import's, or the crumbs still on their way). Now the import fails whatever the order,
+    # only the retry comes, and the breadcrumb is waited for (the page's own log, up to 15 s)
+    print("(iii) the Books file fails at its address; the retry comes")
+    ST.update({"mode": {BOOKS: "plain"}, "hits": {}, "served": []})
     ctx, pg, loads, sink = scene(br)
     open_app(pg)
     opened = books(pg); settle(pg, loads, 4000)
     ok(opened, "the books page opens")
     ok(len(loads) == 1, "healed in the page: no reload (%d loads)" % len(loads))
-    ok(ST["hits"].get(BOOKS, 0) == 2, "the Books file: failed once, asked again once (%d asks)" % ST["hits"].get(BOOKS, 0))
-    crumbs = [x for x in sink if x.get("crumb") == "chunk"]
+    asks = [(s, c) for s, c in ST["served"] if s.split("?")[0].endswith("/" + BOOKS)]
+    plain = [c for s, c in asks if "retry=" not in s]; retry = [c for s, c in asks if "retry=" in s]
+    ok(plain and all(c == 503 for c in plain) and retry == [200], "the Books file: failed at its address (%s), asked again once in the page (%s)" % (plain, retry))
+    # waited for (up to 15 s), not read once: from the page's own log, else what the binding has delivered
+    def healed_crumbs():
+        try: got = pg.evaluate("JSON.stringify(window.__healLog || [])")
+        except Exception: got = "[]"
+        cs = [x for x in json.loads(got) if x.get("crumb") == "chunk"]
+        cs = cs if len(cs) >= len([x for x in sink if x.get("crumb") == "chunk"]) else [x for x in sink if x.get("crumb") == "chunk"]
+        return cs
+    crumbs = healed_crumbs()
+    for _ in range(60):
+        if any(c["step"] == "healed" and (c.get("data") or {}).get("file") == BOOKS for c in crumbs): break
+        pg.wait_for_timeout(250); crumbs = healed_crumbs()
     ok(any(c["step"] == "healed" and (c.get("data") or {}).get("file") == BOOKS for c in crumbs), "breadcrumb: healed %s (%s)" % (BOOKS, [c["step"] for c in crumbs]))
     ctx.close()
 

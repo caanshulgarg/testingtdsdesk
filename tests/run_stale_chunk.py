@@ -65,6 +65,14 @@ srv.handle_error = lambda *a: None
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = "http://localhost:%d/" % PORT
 INIT = """(() => { try { if (!localStorage.getItem("tdsdesk-test:cloud")) localStorage.setItem("tdsdesk-test:cloud", JSON.stringify({gate: false})); } catch (e) {} })()"""
+# 19-Oct-2026 (round 90): the note comes later now (the loader asks once more in the page, then FinCom clears its own
+# copies of its files before the reload), and goes with the reload: kept in sessionStorage the moment it shows, and the
+# test waits for it (up to 20 s) instead of a fixed 5 s for the element
+NOTE = """(() => { const look = () => { const n = document.querySelector('[data-stale-reload]'); if (n && n.textContent) { try { sessionStorage.setItem('stale:note', n.textContent); } catch (e) {} } };
+  new MutationObserver(look).observe(document, {childList: true, subtree: true, characterData: true}); })()"""
+def ev(pg, expr, dflt=None):
+    try: return pg.evaluate(expr)
+    except Exception: return dflt                          # the page is reloading
 
 def open_app(pg):
     pg.goto(URL); pg.wait_for_timeout(2500)
@@ -76,7 +84,7 @@ def open_app(pg):
 with sync_playwright() as p:
     br = p.chromium.launch()
     # ---- 1. the publish while the tab is open: one reload, then the screen opens on the new build
-    ctx = br.new_context(viewport={"width": 1366, "height": 860}); ctx.add_init_script(INIT)
+    ctx = br.new_context(viewport={"width": 1366, "height": 860}); ctx.add_init_script(INIT); ctx.add_init_script(NOTE)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     loads = []; pg.on("load", lambda: loads.append(time.time()))
     open_app(pg)
@@ -85,14 +93,16 @@ with sync_playwright() as p:
     n0 = len(loads)
     ST["phase"] = "new"; FLIP.set()                        # the publish: the old lazy files are gone
     said = ""
-    try: said = pg.wait_for_selector("[data-stale-reload]", timeout=5000).inner_text()
-    except Exception as e: said = "(not shown: %s)" % str(e)[:80]
-    ok(said == "FinCom is refreshing its files…", "said: %s" % said)
-    for _ in range(80):
+    for _ in range(200):
+        said = ev(pg, "sessionStorage.getItem('stale:note') || ''", "")
+        if said: break
+        pg.wait_for_timeout(100)
+    ok(said == "FinCom is refreshing its files…", "said: %s" % (said or "(not shown in 20 s)"))
+    for _ in range(200):
         if len(loads) > n0: break
         pg.wait_for_timeout(100)
-    for _ in range(60):
-        if pg.evaluate("typeof S === 'object' && !!S.firm && !!document.querySelector('#app .react-host')"): break
+    for _ in range(80):
+        if ev(pg, "typeof S === 'object' && !!S.firm && !!document.querySelector('#app .react-host')"): break
         pg.wait_for_timeout(250)
     if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     pg.evaluate("() => { if (!(S.view === 'home' && S.homeTab === 'rules')) navHome('rules'); }")
