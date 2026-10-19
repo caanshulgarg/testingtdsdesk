@@ -125,6 +125,8 @@ try:
         ok(pg.evaluate("TDSMatch.suggestNow('26Q', '2026-27', 'Q1').length") > 0 and pg.evaluate("TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length") > 0, "what they pay is suggested on 26Q's and 24Q's Challans tabs")
         ok(pg.evaluate("(S.books.challans.find(c => c.serial === '00125') || {}).autoPlace") == "unknown", "the minor head 400 challan: no return of its own, asked in To fix")
         pg.evaluate("() => { S.tdsView = 'return'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(400)
+        # next-tds-clear: Tally's TDS payments are under Add challan ▾ › From a Tally TDS payment
+        pg.click('#app [data-ret-add-challan] > summary'); pg.wait_for_timeout(200); pg.click('#app [data-cm-add="tally"]'); pg.wait_for_timeout(400)
         row = pg.locator('#app tr', has_text="P-2")
         ok(row.count() == 1 and "bill-wise" in row.inner_text().lower(), "the Tally payment P-2 is offered as a challan, with its bill-wise deductions said (%s)" % (row.inner_text()[:120] if row.count() else ""))
         row.locator('input[aria-label="BSR code or CIN"]').fill("05103080606202600222"); row.locator('button:has-text("Make it a challan")').click(); pg.wait_for_timeout(600)
@@ -192,7 +194,7 @@ try:
         pg.select_option('#app select[aria-label="Section"]', "194J"); pg.select_option('#app select[aria-label="Month"]', "202605"); pg.select_option('#app select[aria-label="Challan"]', "no"); pg.wait_for_timeout(400)
         pg.click('#tdsDnTable thead input[type="checkbox"][aria-label="Select all shown"]'); pg.wait_for_timeout(300)
         bar = pg.locator("#app [data-tag-bar]")
-        ok(bar.count() == 1 and "2 selected" in bar.inner_text() and "₹1,200.00" in bar.inner_text(), "select all shown (194J, May, not against a challan): 2 selected, ₹1,200.00 (%s)" % (bar.inner_text()[:160] if bar.count() else ""))
+        ok(bar.count() == 1 and "2 ticked" in bar.inner_text() and "₹1,200.00" in bar.inner_text(), "select all shown (194J, May, not against a challan): 2 ticked, ₹1,200.00 (%s)" % (bar.inner_text()[:160] if bar.count() else ""))
         pg.click('#app [data-tag-bar] [data-tag-move]'); pg.wait_for_timeout(400)
         pick = pg.locator('[data-cm-pick="chPart"]')
         ok(pick.count() == 1 and "₹300.00 left after" in pick.inner_text(), "the Move dialog: against challan 00302, ₹300.00 left after (%s)" % (pick.inner_text()[:160] if pick.count() else ""))

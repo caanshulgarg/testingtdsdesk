@@ -142,9 +142,8 @@ const Payroll = {
       const e = this.empByName(r.employee), pay = d.pays.filter(p => normName(p.employee) === normName(r.employee) && p.paidOn >= r.credit && TDS.monthsBetween(r.credit, p.paidOn) <= 2)
         .sort((x, y) => x.paidOn.localeCompare(y.paidOn))[0];
       const date = r.credit, id = "pay:" + r.guid + "|" + r.employee;
-      // next-challan-match: a PAN corrected in FinCom (Deductees (PAN), b.panFix) over the one in Tally's payroll
-      const fix = ((b.panFix || {})[r.employee] || {}).pan;
-      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: fix || (e ? e.pan : ""), guid: e ? e.guid : "",
+      // next-tds-clear: Tally's payroll PAN, else the one in FinCom's PAN book (b.panFix; TDS.panPick, the order of truth)
+      return {id, date, credit: r.credit, paidOn: pay ? pay.paidOn : "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: r.employee, employee: r.employee, pan: TDS.panPick(r.employee, e ? e.pan : ""), tallyPan: e ? e.pan : "", guid: e ? e.guid : "",
         section: "192", ledger: "", paid: r.paid, tds: r.tds, rate: r.paid ? r2(r.tds / r.paid * 100) : null, voucher: (d.vouchers[r.guid] || {}).no || "", type: (d.vouchers[r.guid] || {}).type || "",
         src: "payroll", challan: (b.alloc || {})[id] || ""};
     }).sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));

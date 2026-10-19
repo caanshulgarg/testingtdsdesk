@@ -104,9 +104,15 @@ def snapshot(site, port=8290, shots=None):
                     for tab in ["summary", "challans", "deductees", "deductions", "employees", "annex2", "checks", "file"]:
                         pg.evaluate("([fy, q, form, tab]) => { S.tdsFy = fy; S.tdsQ = q; S.tdsForm = form; S.tdsView = 'return'; S.tdsTab = tab; S.tdsOpen = ''; S.chOpen = ''; S.tdsFix = ''; render(); }", [fy, q, form, tab])
                         take(key)
+                    # next-tds-clear (19-Oct-2026): what a return showed on its tabs is now a click away on its steps: By
+                    # section and By employee are toggles of Deductions, and Validate & file's lines open their lists
+                    # ("Review ▸"); each is shown as a person would open it
+                    for extra in ["S.tdsTab = 'deductions'; S.tdsDedView = 'sections';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.q24View = 'emp';", "S.tdsTab = 'file'; S.q24View = ''; S.tdsValOpen = '*';"]:
+                        pg.evaluate("() => { " + extra + " render(); }"); take(key)
+                    pg.evaluate("() => { S.tdsDedView = ''; S.q24View = ''; S.tdsValOpen = ''; render(); }")
                     if form != "24Q":
                         pg.evaluate("() => { window.__files = []; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(60)
-                        if press(r"^Download the .* text file"):
+                        if press(r"^(Download the .* text file|Make FVU file)"):
                             pg.wait_for_timeout(150)
                             for f in pg.evaluate("window.__files"):
                                 t = re.sub(r"^(\d+\^FH\^NS1\^R\^)\d{8}\^", r"\1DDMMYYYY^", f["text"], flags=re.M)

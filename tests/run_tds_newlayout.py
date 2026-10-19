@@ -78,69 +78,75 @@ try:
         # the owner, 14-Oct-2026: "Where is the TDS return?": the grid titled as the returns, a line above it, each return a
         # clear button with its name, its status in words and colour, "Open →" on hover or focus; a cell with nothing in it
         # says "No entries" and is no button
-        ok(pg.locator('[data-tds-grid] .rp-title h3').inner_text().strip() == "TDS returns · FY " + fy, "1. the grid's title: TDS returns · FY %s (%r)" % (fy, pg.locator('[data-tds-grid] .rp-title h3').inner_text()))
-        hint = pg.locator('[data-tds-grid] [data-grid-hint]')
-        ok(hint.count() == 1 and hint.inner_text().strip() == "Click a return to open it." and hint.bounding_box()["y"] < pg.locator('[data-tds-grid] table').bounding_box()["y"], "1. a line above the grid: Click a return to open it.")
-        cl = pg.evaluate("""() => [...document.querySelectorAll('[data-tds-grid] [data-cell]')].map(c => ({k: c.dataset.cell, st: c.dataset.status, tag: c.tagName, name: (c.querySelector('[data-cell-name]') || {}).textContent || '',
-          word: (c.querySelector('.rp-s') || {}).textContent || '', open: !!c.querySelector('.rp-open'), cur: getComputedStyle(c).cursor, color: getComputedStyle(c.querySelector('.rp-s') || c).color}))""")
+        # next-tds-clear (19-Oct-2026; the owner: TDS "like ClearTax, not cluttered"): the TDS home is a header (TDS ·
+        # client · TAN, the year, ⋯), the ledgers' line, ONE "Due now" line with the page's one primary (Continue), the
+        # grid of returns (each cell its status in one vocabulary and its TDS) and one line for the challans
+        VOCAB = ["Not started", "In progress", "Ready", "FVU made", "Filed", "Processed"]
+        head = pg.locator('[data-tds-bar]')
+        ok(head.count() == 1 and "TDS" in head.inner_text() and pg.locator('[data-tds-bar] select[aria-label="Year"]').count() == 1, "1. the home's header: TDS, the year, ⋯")
+        due = pg.locator('[data-due-now]')
+        ok(due.count() == 1 and ("Due now" in due.inner_text() or "Nothing due now" in due.inner_text()), "1. one Due now line (%r)" % (due.inner_text()[:80] if due.count() else ""))
+        prim = pg.evaluate("[...document.querySelectorAll('#app .btn.primary')].filter(e => e.offsetParent).map(e => e.textContent.trim())")
+        ok(len(prim) <= 1 and (not prim or prim[0] == "Continue →"), "1. at most one primary button, Continue (%s)" % prim)
+        cl = pg.evaluate("""() => [...document.querySelectorAll('[data-tds-grid] [data-cell]')].map(c => ({k: c.dataset.cell, st: c.dataset.status, tag: c.tagName, word: (c.querySelector('.tag') || {}).textContent || '',
+          open: !!c.querySelector('.rp-open'), cur: getComputedStyle(c).cursor}))""")
+        ok(len(cl) == 16 and all(c["word"] in VOCAB for c in cl), "1. 16 cells, each its status in the one vocabulary (%s)" % sorted(set(c["word"] for c in cl)))
         btns = [c for c in cl if c["tag"] == "BUTTON"]
-        ok(btns and all(re.fullmatch(r"(\d{2}Q|\d{2}EQ|Form \d{3}) · Q[1-4]", c["name"]) and c["name"].endswith(c["k"].split("|")[1]) and c["open"] for c in btns), "1. each return a button with its name (%s) and Open →" % [c["name"] for c in btns][:4])
-        ok(all(re.fullmatch(r"To fix \d+|Ready|Filed|Correction \d+", c["word"]) for c in btns), "1. the status in words: To fix N, Ready, Filed (%s)" % sorted(set(c["word"] for c in btns)))
-        cols = {}
-        for c in btns: cols.setdefault(c["st"], set()).add(c["color"])
-        ok(all(len(v) == 1 for v in cols.values()) and len(set(next(iter(v)) for v in cols.values())) == len(cols), "1. one colour a status, each its own (%s)" % cols)
-        empty = [c for c in cl if c["st"] == "none" and c["tag"] != "BUTTON"]
-        ok(empty and all(c["word"] == "No entries" and c["cur"] != "pointer" and not c["open"] for c in empty) and not any(c["word"] == "Not started" for c in cl), "1. an empty return: No entries, not a button (%d)" % len(empty))
+        ok(btns and all(c["open"] for c in btns), "1. a return with entries is a button with Open →")
+        empty = [c for c in cl if c["tag"] != "BUTTON"]
+        ok(all(c["word"] == "Not started" and c["cur"] != "pointer" for c in empty), "1. a return with no entries: Not started, not a button (%d)" % len(empty))
+        qt = [INR(pg.locator('[data-q-total="%s"]' % q).inner_text()) for q in ["Q1", "Q2", "Q3", "Q4"]]
+        yt = INR(pg.locator('[data-year-total]').inner_text())
+        ok(yt > 0 and abs(sum(qt) - yt) < 1, "1. the totals line: the quarters %s add up to the year %s" % (qt, yt))
+        rowsum = sum(INR(t) for t in pg.locator('[data-tds-grid] tbody td.n b').all_inner_texts())
+        ok(abs(rowsum - yt) < 1, "1. and agree with the forms' Year column (%s)" % rowsum)
         b0 = pg.locator('[data-tds-grid] button[data-cell]').first
         b0.hover(); pg.wait_for_timeout(250)
         ok(pg.evaluate("(e) => getComputedStyle(e.querySelector('.rp-open')).opacity", b0.element_handle()) == "1", "1. Open → shows on hover")
-        pg.mouse.move(5, 5); b0.focus(); pg.wait_for_timeout(250)
-        ok(pg.evaluate("(e) => getComputedStyle(e.querySelector('.rp-open')).opacity", b0.element_handle()) == "1", "1. … and on focus")
-        ok("No entries" in pg.locator('[data-tds-page] .rp-key').inner_text(), "1. the legend says No entries")
-        cells = pg.locator('[data-tds-grid] [data-cell]').all_inner_texts()
-        ok(not any("Errors" in c for c in cells) and any(re.search(r"To fix \d", c) for c in cells) and "To fix" in pg.locator('[data-tds-page] .rp-key').inner_text(), "1. a cell with something to fix says \"To fix N\", as the legend (%s)" % [c.split("\n")[0] for c in cells][:5])
-        rowsum = sum(INR(t) for t in pg.locator('[data-tds-grid] tbody td.n b').all_inner_texts())
-        ok(abs(rowsum - yt) < 1, "1. and agree with the forms' Year column (%s)" % rowsum)
+        ok(pg.locator('[data-tds-page] .rp-key').count() == 0 and pg.locator('[data-grid-hint]').count() == 0 and pg.locator('[data-tds-bar] select[aria-label="Quarter"]').count() == 0,
+           "1. no colour key, no hint line, no quarter or form filter (the grid is the filter)")
+        bands = pg.evaluate("""() => { const t = document.querySelector('[data-tds-grid] table'), top = t.getBoundingClientRect().top, page = document.querySelector('[data-tds-page]');
+          return [...page.querySelectorAll(':scope > .hc > *')].filter(e => e.offsetParent && e.getBoundingClientRect().bottom <= top + 1).length; }""")
+        ok(bands <= 3, "1. at most three bands above the grid (%d)" % bands)
         led = pg.locator('[data-ledger-banner]')
         ledw = re.sub(r"\s+", " ", led.inner_text()).strip() if led.count() else ""
-        ok(led.count() == 1 and re.fullmatch(r"\d+ ledgers? to confirm → Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
-        link = pg.locator('[data-tds-grid] [data-ch-register]')
-        ok(link.count() == 1 and "Challan register" in link.inner_text(), "1. beside the grid's title, one way to the challan register (%r)" % (link.inner_text() if link.count() else ""))
+        ok(led.count() == 1 and re.fullmatch(r"\d+ TDS ledgers? to confirm · Confirm", ledw) is not None and led.bounding_box()["height"] < 30, "1. the ledgers in one line: %r" % ledw)
+        link = pg.locator('[data-tds-grid] ~ [data-ch-register], [data-ch-register]')
+        ok(link.count() == 1 and "Open challan register" in link.inner_text() and ("unconsumed" in link.inner_text() or "every challan used" in link.inner_text()), "1. one line for the challans and the way to the register (%r)" % (link.inner_text() if link.count() else ""))
+        ok(not any("not deducted" in t.lower() for t in [pg.inner_text('[data-tds-page]')]), "1. nothing about TDS not deducted on the TDS home")
         if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "after-tds-page.png"), full_page=True)
         link.locator('button').click(); pg.wait_for_timeout(400)
-        ok(pg.locator('[data-register]').count() == 1 and "/challan-register" in pg.evaluate("location.hash"), "1. the panel opens the challan register (%s)" % pg.evaluate("location.hash"))
-        # 2. a return
+        ok(pg.locator('[data-register]').count() == 1 and "/challan-register" in pg.evaluate("location.hash"), "1. the line opens the challan register (%s)" % pg.evaluate("location.hash"))
+        # 2. a return: one header line, one strip, the step rail
         J("(fy) => tdsGo(fy)", fy); pg.wait_for_timeout(300)
         pg.locator('[data-cell="26Q|Q1"]').click(); pg.wait_for_timeout(500)
-        tabs = pg.locator('[data-return-tabs] button').all_inner_texts()
-        # next-challan-match (the owner, 18-Oct-2026, as Winman): four tabs; To fix, Make the file and After filing are actions
-        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "2. 26Q's tabs: %s" % tabs)
-        acts = [re.sub(r"\s*\d+$", "", t).strip() for t in pg.locator('[data-return-acts] button').all_inner_texts()]
-        ok(acts == ["To fix", "Make the file", "After filing"], "2. 26Q's actions beside the tabs: %s" % acts)
-        marks = {"deductor": "[data-deductor]", "deductees": "#tdsDeTable", "deductions": "#tdsDnTable", "challans": "[data-ret-challans]", "checks": "[data-to-fix]", "file": "[data-file]", "after": "[data-after-filing]"}
+        ids = pg.evaluate("[...document.querySelectorAll('[data-return-tabs] button[data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(ids == ["deductor", "deductees", "challans", "deductions", "file", "after"], "2. 26Q's steps: %s" % ids)
+        ok(pg.locator('[data-cm-steps]').count() == 0 and pg.locator('[data-return-acts]').count() == 0, "2. no ①②③ stepper, no row of actions beside tabs")
+        marks = {"deductor": "[data-deductor]", "deductees": "#tdsDeTable", "deductions": "#tdsDnTable", "challans": "[data-ret-challans]", "file": "[data-validate]"}
         for k, sel in marks.items():
             pg.click('[data-ret-tab="%s"]' % k); pg.wait_for_timeout(300)
             ok(pg.locator(sel).count() >= 1, "2. 26Q › %s reachable, shows its part" % k)
-        pg.click('[data-ret-tab="deductees"]'); pg.wait_for_timeout(300)
-        ok(pg.locator('#tdsDeTable').count() == 1, "2. Deductees (PAN), a tab of its own")
-        pg.click('[data-ret-tab="checks"]'); pg.wait_for_timeout(300)
-        fx = pg.locator('[data-fix]').all()
-        words = pg.locator('[data-fix-line]').inner_text()
-        ok(re.search(r"\d+ (without PAN|rate questions?|challans? not matched|late fee|interest)", words) is not None, "2. To fix says what is wrong: %r" % words)
-        if pg.locator('[data-fix="nopan"]').count():
-            pg.click('[data-fix="nopan"]'); pg.wait_for_timeout(300)
-            ok(pg.locator('[data-fix-part]').count() == 1 and pg.locator('[data-fix-part="nopan"]').count() == 1, "2. \"without PAN\" opens that list alone")
-            pg.click('[data-fix-all]'); pg.wait_for_timeout(200)
-        pg.click('[data-fix="limits"]'); pg.wait_for_timeout(300)
-        ok(pg.locator('[data-fix-part="limits"]').count() == 1, "2. the year's TDS limits open from To fix")
+            n = pg.evaluate("[...document.querySelectorAll('#app .btn.primary')].filter(e => e.offsetParent).length")
+            ok(n <= 1, "2. 26Q › %s: one primary button at most (%d)" % (k, n))
         pg.click('[data-ret-tab="file"]'); pg.wait_for_timeout(300)
-        ok(pg.locator('[data-prefile-slot]').count() == 1, "2. the Return file tab keeps a slot for \"Check before filing\"")
-        if SHOTS: pg.click('[data-ret-tab="checks"]'); pg.wait_for_timeout(300); pg.screenshot(path=os.path.join(SHOTS, "after-return-26q.png"), full_page=True)
+        vals = pg.evaluate("(() => { const v = document.querySelector('[data-val-counts]'); return [+v.querySelector('[data-val-errors]').dataset.valErrors, +v.querySelector('[data-val-warnings]').dataset.valWarnings]; })()")
+        hdr = pg.evaluate("(() => { const b = document.querySelector('[data-return-card] [data-problem-count]'); return b ? +b.dataset.problemCount : 0; })()")
+        rail = pg.evaluate("+document.querySelector('[data-rail-problems]').dataset.railProblems")
+        ok(sum(vals) == hdr == rail, "2. one problem count: the panel's errors + warnings %s = the header's %d = the rail's %d" % (vals, hdr, rail))
+        ok(pg.locator('[data-online="pan"] [data-online-run]').is_disabled() and "not connected yet" in pg.inner_text('[data-online="pan"]'), "2. TRACES · verify PANs: not connected yet, Run off")
+        ok(all(pg.locator('[data-online="%s"]' % k).count() == 1 for k in ["pan", "challans", "csi", "ai"]), "2. the online checks: TRACES PANs, challan balances, CSI, AI match")
+        if pg.locator('[data-val-review="nopan"]').count():
+            pg.click('[data-val-review="nopan"]'); pg.wait_for_timeout(300)
+            ok(pg.locator('[data-fix-part="nopan"]').count() == 1, "2. Review ▸ opens the list under its line")
+        pg.click('[data-year-checks] > summary'); pg.wait_for_timeout(200)
+        pg.click('[data-fix="limits"]'); pg.wait_for_timeout(300)
+        ok(pg.locator('[data-fix-part="limits"]').count() == 1, "2. the year's TDS limits open from Year checks")
+        ok(pg.locator('[data-prefile-slot]').count() == 1 and pg.locator('[data-make-fvu]').count() == 1, "2. the File row: Make FVU file, beside the previous PRN")
+        if SHOTS: pg.screenshot(path=os.path.join(SHOTS, "after-return-26q.png"), full_page=True)
         J("(fy) => tdsGo(fy, 'Q1', '24Q')", fy); pg.wait_for_timeout(500)
-        tabs = pg.locator('[data-return-tabs] button').all_inner_texts()
-        ok([re.sub(r"\s*\d+$", "", t).strip() for t in tabs] == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "2. 24Q's tabs: %s" % tabs)
-        acts = [re.sub(r"\s*\d+$", "", t).strip() for t in pg.locator('[data-return-acts] button').all_inner_texts()]
-        ok(acts == ["Employees & declarations", "To fix", "Make the file", "After filing"], "2. 24Q's actions: %s" % acts)
+        ids = pg.evaluate("[...document.querySelectorAll('[data-return-tabs] button[data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(ids == ["deductor", "deductees", "people", "challans", "deductions", "file", "after"], "2. 24Q's steps: %s" % ids)
         pg.click('[data-ret-tab="people"]'); pg.wait_for_timeout(300)
         ok(pg.locator('[data-salary-empty], [data-salary-tiles]').count() >= 1, "2. Employees & declarations has the old Salary tab's content")
         # 3. the old addresses
@@ -153,11 +159,11 @@ try:
         ok(pg.locator('#side [data-side="Reconciliations"], #side :text("Reconciliations")').count() >= 1, "3. Reconciliations is in the client's menu")
         go(fy + "/traces"); ok(J("[S.tdsView, S.tdsTab]") == ["return", "after"] and pg.locator('[data-after-filing]').count() == 1, "3. …/traces -> a return's After filing")
         J("() => { S.tdsView = 'year'; S.books.challans = []; render(); }"); pg.wait_for_timeout(300)
-        ok("No challans" in pg.locator('[data-tds-grid] [data-ch-register]').inner_text() and pg.locator('[data-ch-add]').count() == 1, "1. with no challans: \"No challans · Add challan\"")
+        ok("No challans" in pg.locator('[data-ch-register]').inner_text() and pg.locator('[data-ch-add]').count() == 1, "1. with no challans: \"No challans · Add challan\"")
         pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
         go(fy + "/salary/form16"); ok(J("[S.tdsView, S.tdsForm, S.tdsTab, S.paySub]") == ["return", "24Q", "people", "form16"], "3. …/salary/form16 -> 24Q › Employees & declarations, Form 16 (%s)" % J("[S.tdsView, S.tdsForm, S.tdsTab, S.paySub]"))
-        go(fy + "/checks/limits"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "limits"], "3. …/checks/limits -> a return's To fix, TDS limits")
-        go(fy + "/certs"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "checks", "rates"], "3. …/certs -> To fix, section 197 certificates")
+        go(fy + "/checks/limits"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "file", "limits"] and pg.locator('[data-fix-part="limits"]').count() == 1, "3. …/checks/limits -> a return's Validate & file, TDS limits open")
+        go(fy + "/certs"); ok(J("[S.tdsView, S.tdsTab, S.tdsFix]") == ["return", "file", "rates"] and pg.locator('[data-certs]').count() == 1, "3. …/certs -> Validate & file, section 197 certificates open")
         go(fy + "/Q1/26Q/deductees"); ok(J("S.tdsTab") == "deductees" and pg.locator('#tdsDeTable').count() == 1, "3. a return's …/deductees -> Deductees (PAN)")
         go(fy + "/Q1/26Q/summary"); ok(J("S.tdsTab") == "deductions", "3. …/summary -> Deductions")
         go(fy + "/Q4/24Q/annex2"); ok(J("S.tdsTab") == "people", "3. 24Q's …/annex2 -> Employees & declarations")

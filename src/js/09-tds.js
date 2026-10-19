@@ -95,17 +95,42 @@ const TDS = {
     const paid = L.tds.length === 1 ? L.taxable : 0;
     return {paid, rate: paid ? r2(t.amount / paid * 100) : null, how: "books"};
   },
-  panOf(party){
+  // a deductee's PAN, in the order of truth (next-tds-clear, the owner, 19-Oct-2026: "keep the PAN and use it next time; no
+  // PAN is asked twice, whether it came from Tally or was typed in FinCom"): Tally's ledger PAN when it is a PAN; else the
+  // one saved in FinCom's PAN book for the client (b.panFix, shared with the books through client_books); else none (the
+  // Deductees step asks). Where Tally later has a different PAN than FinCom's, Tally's is used and the Deductees step asks
+  // which to keep (TDS.panConflict), unless the person already chose FinCom's for that very Tally PAN (rec.keep)
+  panOf(party){ return party ? this.panPick(party, this.panTally(party)) : ""; },
+  panTally(party){
     const b = S.books || {}, pans = b.pans || {};
     if (!party) return "";
-    // next-challan-match: a PAN corrected in FinCom for this deductee (Deductees (PAN) tab, b.panFix) first
-    if (b.panFix && b.panFix[party] && b.panFix[party].pan) return b.panFix[party].pan;
     if (pans[party]) return pans[party];
     if (!b.panIndex || b.panIndexFor !== Object.keys(pans).length){
       b.panIndex = {}; b.panIndexFor = Object.keys(pans).length;
       Object.keys(pans).forEach(k => { b.panIndex[String(k).toUpperCase().replace(/[^A-Z0-9]/g, "")] = pans[k]; });
     }
     return b.panIndex[String(party).toUpperCase().replace(/[^A-Z0-9]/g, "")] || "";
+  },
+  // the PAN book's record of a party: by its name as in Tally, else the same name written differently, else a name it had
+  // before (aliases, kept when a ledger is renamed)
+  panRec(party){
+    const fx = (S.books || {}).panFix || {};
+    if (!party) return null;
+    if (fx[party]) return fx[party];
+    const k = String(party).toUpperCase().replace(/[^A-Z0-9]/g, ""), keys = Object.keys(fx);
+    const hit = keys.find(x => String(x).toUpperCase().replace(/[^A-Z0-9]/g, "") === k) || keys.find(x => (fx[x].aliases || []).some(a => String(a).toUpperCase().replace(/[^A-Z0-9]/g, "") === k));
+    return hit ? fx[hit] : null;
+  },
+  panPick(party, tally){
+    const t = String(tally || "").toUpperCase().trim(), f = this.panRec(party), ok = /^[A-Z]{5}\d{4}[A-Z]$/.test(t);
+    if (f && f.pan && (!ok || t === f.pan || f.keep === t || (f.keep == null && f.was === t))) return f.pan;
+    return t;
+  },
+  // Tally and FinCom's PAN book disagree on a party, and no one has chosen: {tally, fincom}, else null
+  panConflict(party, tally){
+    const t = String(tally == null ? this.panTally(party) : tally).toUpperCase().trim(), f = this.panRec(party);
+    if (!f || !f.pan || !/^[A-Z]{5}\d{4}[A-Z]$/.test(t) || t === f.pan || f.keep === t || (f.keep == null && f.was === t)) return null;
+    return {tally: t, fincom: f.pan};
   },
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },

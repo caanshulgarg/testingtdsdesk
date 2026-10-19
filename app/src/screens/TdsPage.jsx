@@ -15,24 +15,21 @@
 //
 // State: S.tdsView (years | year | return | notices | register), S.tdsFy, S.tdsQ, S.tdsForm (the return open),
 // S.tdsPickForm (the form chosen in the bar while no quarter is), all kept in the address (Route.booksMore, src/js/52).
-import { Return26, Return24, CardCtx } from "./TdsReturn.jsx";
+import { Return26, Return24 } from "./TdsReturn.jsx";
+import Home, { HomeHead as HomeHeadOnly } from "./tds/Home.jsx";
+import { PanPaste, PanBookView } from "./tds/PanBook.jsx";
 import Register from "./tds/Register.jsx";
 import TaxLedgers from "./books/TaxLedgers.jsx";
-import HelpButton from "../parts/HelpButton.jsx";
-import More from "../parts/More.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import NoTds from "./tds/NoTds.jsx";
 import "../parts/returns.css";
-import Filters, { Field } from "../parts/Filters.jsx";
 import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 export const Q_MONTHS = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
 // the due dates as the late fee works them out (TDS.dueWords; the TDS review's H2: Form 143 from 2026-27 is due with the TDS returns)
 export const qDue = (fy, q, form) => TDS.dueWords(fy, q, form || "26Q");
-const FORMS = ["24Q", "26Q", "27Q", "27EQ"];
-const day = (d) => fmtDate(tallyDate(d));
 
 // the tax year today, in India
 function yearNow() {
@@ -65,50 +62,6 @@ export function tdsRedirect() {
   return true;
 }
 
-// one line for the ledgers still to confirm (the owner: "19 ledgers to confirm → Confirm")
-// (ledger-confirm, 14-Oct-2026: Confirm opens the ledgers here, the TDS page's own Ledgers, TaxLedgers.jsx)
-function LedgerLine({ b }) {
-  const p = TaxLed.pending(b, "tds");
-  if (!p.length) return null;
-  return <p className="tg-ledline" data-ledger-banner="" title={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")}>
-    <span className="dot" aria-hidden="true" />{p.length} ledger{p.length === 1 ? "" : "s"} to confirm → <button className="linkbtn" data-ledger-confirm="" onClick={() => TaxLed.go("tds")}>Confirm</button></p>;
-}
-
-// the bar under the tabs: the year, and on Returns the quarter and form (year → quarter → form opens a return), on
-// Challans the quarter
-function Bar({ fys, inCard }) {
-  const fy = S.tdsFy, v = S.tdsView;
-  const q = v === "return" || v === "year" ? S.tdsQ || "" : "", form = v === "return" ? S.tdsForm || "26Q" : v === "year" ? S.tdsPickForm || "" : "";
-  const setFy = (x) => tdsPick(x, q, form);
-  // ui-tidy (13-Oct-2026): the one filter bar (parts/Filters.jsx): the year and quarter, then the form; More at its end
-  return <Filters className="tg-bar" label="Choose the return" data-tds-bar=""
-    period={<>
-      <Field label={TDS.yearWord(fy)}>
-        <select aria-label="Year" value={fy} onChange={(ev) => setFy(ev.target.value)}>
-          {/* t70: the chosen one shows short in the closed box (the year, the form number), the full words in the list */}
-          {fys.map((f) => <option key={f} value={f} label={inCard && f === fy ? f : undefined}>{f}{TDS.isNew(f) ? " (Act of 2025)" : ""}</option>)}</select></Field>
-      <Field label="Quarter">
-        <select aria-label="Quarter" value={q} onChange={(ev) => tdsPick(fy, ev.target.value, form)}>
-          <option value="">Every quarter</option>
-          {["Q1", "Q2", "Q3", "Q4"].map((x) => <option key={x} value={x}>{x} · {Q_MONTHS[x]}</option>)}</select></Field>
-    </>}
-    type={<Field label="Form">
-      <select aria-label="Form" value={form} onChange={(ev) => tdsPick(fy, q, ev.target.value)}>
-        <option value="">Every form</option>
-        {FORMS.map((k) => <option key={k} value={k} label={inCard && k === form ? (TDS.isNew(fy) ? "Form " + TDS.formNo(k, fy) + " (" + k + ")" : k) : undefined}>{TDS.formLabel(k, fy)}</option>)}</select></Field>}
-    onClear={v !== "return" ? () => tdsPick(fy, "", "") : null} active={!!(q || form)}
-    tools={v !== "return" ? <More items={[
-          ["Every year", () => tdsNav("years"), { "data-tds-more": "years" }],
-          ["The challan register", () => tdsNav("register"), { "data-tds-more": "register" }],
-          ["TDS ledgers (confirm, unconfirm)", () => TaxLed.go("tds"), { "data-tds-more": "ledgers" }],
-          ["TDS receivable vs 26AS (Reconciliations)", () => { S.recFy = fy; booksTabGo("recon"); }, { "data-tds-more": "recon" }],
-          AIH.enabled("notices") && ["Notices", () => tdsNav("notices"), { "data-tds-more": "notices" }],
-          ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
-          ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24")],
-          ["Download the whole year", () => doAct("yearExcelAll")],
-        ]} /> : inCard ? null : <HelpButton />} />;
-}
-
 // every year with TDS in the books, a salary sheet or a challan
 function Years({ rows, fys }) {
   return (
@@ -129,106 +82,6 @@ function Years({ rows, fys }) {
       </table></div>
     </section>
   );
-}
-
-// one cell of the grid: a return (the owner, 14-Oct-2026: "Where is the TDS return?"): a button with its name ("26Q · Q2"),
-// its status in words and colour (To fix N red, Ready blue, Filed green), the amount and the counts, and "Open →" on hover
-// or focus. A return with nothing in it says "No entries" and is no button (nothing useful would open)
-function Cell({ fy, q, form, st, n, lines, amount, corr }) {
-  const name = (TDS.isNew(fy) && TDS.NEW_FORM[form] ? "Form " + TDS.NEW_FORM[form] : form) + " · " + q;
-  const label = st === "none" ? "No entries" : st === "bad" ? (corr ? "Correction " + corr : "To fix " + n) : st === "filed" ? "Filed" : "Ready";
-  const body = <>
-    <span className="rp-name" data-cell-name="">{name}</span>
-    <span className="rp-s">{label}</span>
-    {st === "filed" && n ? <span className="nr">on {n}</span> : null}
-    {amount != null && <span className="rp-a">{amount}</span>}
-    {lines.map((w, i) => <span key={i} className={"nr" + (w.bad ? " bad" : "")}>{w.t}</span>)}
-  </>;
-  // nothing to open: an empty return (a 24Q with salary TDS in the books still opens, to bring in the salary sheet)
-  if (st === "none" && amount == null && !lines.length) return <td><div className="rp-cell st-none rp-empty" data-cell={form + "|" + q} data-status={st} aria-label={name + ": no entries"}>{body}</div></td>;
-  return <td><button className={"rp-cell st-" + st} data-cell={form + "|" + q} data-status={st}
-    aria-label={TDS.formShort(form, fy) + " " + q + ": " + label + ". Open the return"} onClick={() => tdsGo(fy, q, form)}>
-    {body}<span className="rp-open" aria-hidden="true">Open →</span>
-  </button></td>;
-}
-
-// the status of each form in a quarter, from what the year's table showed: the quarter's figures (TDSYear.quarters) and
-// the counts of the rows with something to fix. Filed (T-E1, 10-Oct-2026): the return marked filed on its File tab, or the
-// quarter's date under Settings › Closed periods (TDSFiled, src/js/66), for every form
-function cells(b, fy, x) {
-  const fd = (form) => { const f = TDSFiled.get(fy, x.q, form); return f ? TDS.ymd(f.on) : ""; }, filed = fd("26Q"), out = {};
-  const q = x.q, rowsQ = TDS.rows().filter((r) => r.fy === fy && r.q === q);
-  // 26Q (Form 140): deductions from residents other than salary
-  if (!x.deductions && !x.challans) out["26Q"] = { st: "none", lines: [] };
-  else {
-    const un = rowsQ.filter((r) => !r.challan).length, n = un + x.noPan + x.issues;
-    const lines = [{ t: x.deductions + " deductions · " + x.challans + " challan" + (x.challans === 1 ? "" : "s") }]
-      .concat([x.unallocated ? { t: money(x.unallocated) + " not against a challan", bad: 1 } : null, x.noPan ? { t: x.noPan + " without PAN", bad: 1 } : null,
-        x.issues ? { t: x.issues + " rate question" + (x.issues === 1 ? "" : "s"), bad: 1 } : null].filter(Boolean));
-    out["26Q"] = { st: filed ? "filed" : n ? "bad" : "ready", n: filed ? day(filed) : n, amount: money(x.tds), lines };
-  }
-  // 27Q (Form 144) and 27EQ (Form 143)
-  [["27Q", x.nr, TDS.nrRows()], ["27EQ", x.tcs, TDS.tcsRows()]].forEach(([form, o, all]) => {
-    if (!o.n) { out[form] = { st: "none", lines: [] }; return; }
-    const un = all.filter((r) => r.fy === fy && r.q === q && !r.challan).length, n = un + o.noPan, on = fd(form);
-    out[form] = { st: on ? "filed" : n ? "bad" : "ready", n: on ? day(on) : n, amount: money(o.tds), lines: [{ t: o.n + (form === "27EQ" ? " collections" : " deductions") }]
-      .concat([o.unallocated ? { t: money(o.unallocated) + " not against a challan", bad: 1 } : null, o.noPan ? { t: o.noPan + " without PAN", bad: 1 } : null].filter(Boolean)) };
-  });
-  // 24Q (Form 138): from the salary sheet, or what the books carry under 192
-  if (x.salaryEmployees) {
-    const n = TDS24Q.checks(fy, q).length, on = fd("24Q");
-    out["24Q"] = { st: on ? "filed" : n ? "bad" : "ready", n: on ? day(on) : n, amount: money(x.salaryTds), lines: [{ t: x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") }] };
-  } else {
-    const booksTds = r2(TDS.salaryRows().filter((r) => r.fy === fy && r.q === q).reduce((a, r) => a + r.tds, 0));
-    out["24Q"] = { st: "none", amount: booksTds > 0 ? money(booksTds) : null, lines: booksTds > 0 ? [{ t: "in the books under 192" }, { t: "bring in the salary sheet" }] : (b.salary || []).length ? [] : [{ t: "bring in the salary sheet" }] };
-  }
-  // T-S2: a filed return whose entries changed in Tally since it was filed: "Correction N", red, with its filed date
-  ["26Q", "27Q", "27EQ"].forEach((form) => {
-    const c = out[form]; if (!c || c.st !== "filed") return;
-    const d = TDSDrift.check(fy, q, form);
-    if (d && d.rows.length) Object.assign(c, { st: "bad", corr: d.rows.length, lines: [{ t: "filed " + c.n }, { t: "changed in Tally since", bad: 1 }] });
-  });
-  return out;
-}
-
-function Year() {
-  const fy = S.tdsFy, qs = TDSYear.quarters(fy), b = S.books;
-  // back from a return: the bar shows the quarter, and every form
-  if (S.tdsQ && S.tdsPickForm) S.tdsPickForm = "";
-  const all = qs.map((x) => cells(b, fy, x));
-  const yearTotal = { "26Q": money(qs.reduce((a, x) => a + x.tds, 0)), "24Q": money(qs.reduce((a, x) => a + x.salaryTds, 0)),
-    "27Q": money(qs.reduce((a, x) => a + x.nr.tds, 0)), "27EQ": money(qs.reduce((a, x) => a + x.tcs.tds, 0)) };
-  const forms = S.tdsPickForm ? [S.tdsPickForm] : FORMS, quarters = S.tdsQ ? [S.tdsQ] : ["Q1", "Q2", "Q3", "Q4"];
-  // each form's returns by status, under its name (tds-layout: the four summary cards above the grid are gone)
-  const says = (k) => { const n = { filed: 0, bad: 0, ready: 0 }; quarters.forEach((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; if (c && n[c.st] != null) n[c.st]++; });
-    return [n.bad && n.bad + " to fix", n.ready && n.ready + " ready", n.filed && n.filed + " filed"].filter(Boolean).join(" · ") || "nothing yet"; };
-  // the year's totals in the grid's header row: each quarter's TDS and TCS of every form, and the year's (tds-layout)
-  const qTotal = (x) => r2(x.tds + x.salaryTds + x.nr.tds + x.tcs.tds), byQ = {};
-  qs.forEach((x) => { byQ[x.q] = qTotal(x); });
-  const yearAll = money(qs.reduce((a, x) => a + qTotal(x), 0));
-  const nCh = TDS.challans().length;
-  return <>
-  <section className="dash-card" data-tds-grid={fy}>
-    <div className="rp-title"><h3>TDS returns · FY {fy}</h3>
-      <span className="note">{TDS.isNew(fy) ? "Forms of the Income-tax Act, 2025, the old form in brackets." : "Forms of the Income-tax Act, 1961."}</span>
-      {/* the one way to the challan register (the review: no panel beside the grid) */}
-      <span className="tg-reglink" data-ch-register="">{nCh ? <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register →</button>
-        : <>No challans · <button className="linkbtn" data-ch-add="" onClick={() => { S.regAdding = true; tdsNav("register"); }}>Add challan</button></>}</span></div>
-    <p className="tg-hint" data-grid-hint="">Click a return to open it.</p>
-    <div className="bk-tablewrap"><table className="rp-grid gf-off">
-      {/* aria-label: the heading's name read out, and on a phone each card's label (src/js/53-phone.js), with the due date
-          apart from the months ("Q1 · Apr–Jun, due 31 Jul"; it read "Apr–Jundue 31 Jul" at 390px) */}
-      <thead><tr><th>Form</th>{quarters.map((q) => <th key={q} aria-label={q + " · " + Q_MONTHS[q] + ", due " + qDue(fy, q) + ", " + money(byQ[q] || 0)}>{q} · {Q_MONTHS[q]}<small>due {qDue(fy, q)}</small><small className="tg-qtot" data-q-total={q}>{money(byQ[q] || 0)}</small></th>)}
-        <th className="n" aria-label={"Year, " + yearAll}>Year<small className="tg-qtot" data-year-total="">{yearAll}</small></th></tr></thead>
-      <tbody>{forms.map((k) => <tr key={k} data-form={k}>
-        <th scope="row">{TDS.formShort(k, fy)}<small>{TDS.FORM_ABOUT[k]}</small>{qDue(fy, "Q1", k) !== qDue(fy, "Q1") && <small data-form-due={k}>due the 15th: {["Q1", "Q2", "Q3", "Q4"].map((q) => qDue(fy, q, k)).join(", ")}</small>}<small className="tg-says" data-form-says={k}>{says(k)}</small></th>
-        {quarters.map((q) => { const c = all[["Q1", "Q2", "Q3", "Q4"].indexOf(q)][k]; return <Cell key={q} fy={fy} q={q} form={k} {...c} />; })}
-        <td className="n"><b>{yearTotal[k]}</b>{k === "26Q" && <div className="nr">{qs.reduce((a, x) => a + x.deductions, 0)} deductions</div>}</td>
-      </tr>)}</tbody>
-    </table></div>
-    <div className="rp-key" aria-label="Colours"><span style={{ "--k": "var(--rule-strong)" }}>No entries</span><span style={{ "--k": "var(--info)" }}>Ready</span>
-      <span style={{ "--k": "var(--bad)" }}>To fix</span><span style={{ "--k": "var(--ok)" }}>Filed</span></div>
-  </section></>;
 }
 
 // the first day of a quarter of a year ("2026-27", "Q2" → 20260701), and of the year when no quarter is chosen
@@ -267,19 +120,10 @@ export default function Tds({ b }) {
   // no TDS here at all: 26AS and AIS and the TRACES files work without the books; the rest says what brings them
   const booksIn = (b.vouchers || []).some((x) => !x.opt && !x.cancel);
   const none = !had.length && v !== "notices" && v !== "register" && v !== "ledgers" && !Payroll.has("") && !TDS.challans().length;
-  // t70 (the owner: "too much information above.. it should look more professional"): a return open, the year, quarter
-  // and form and the ledgers' line go into the return's card, its first row (ReturnCard draws CardCtx.node)
-  const inCard = v === "return" && !none;
-  CardCtx.node = inCard && fys.length > 0 ? <Bar fys={fys} inCard /> : null;
-  CardCtx.ledger = inCard ? <LedgerLine b={b} /> : null;
-  CardCtx.help = inCard ? <HelpButton /> : null;
   return <div data-phone-scroll="" data-tds-page="">
-    {/* the ledgers still to confirm: one line (tds-layout), on the year's page and a return's */}
-    {!inCard && v !== "register" && v !== "ledgers" && <LedgerLine b={b} />}
-    {!inCard && !none && fys.length > 0 && v !== "years" && v !== "notices" && v !== "register" && v !== "ledgers" && <Bar fys={fys} />}
     {v === "ledgers" ? <TaxLedgers b={b} kind="tds" />
-      // round 65: the books are in but hold no TDS: said plainly, with the TDS ledgers that have no entries and what should
-      // have been deducted (tds/NoTds.jsx); "Bring in from Tally" only when there are no entries at all
+      // round 65: the books are in but hold no TDS: said plainly, with the TDS ledgers that have no entries (tds/NoTds.jsx);
+      // "Bring in from Tally" only when there are no entries at all
       : none && booksIn ? <NoTds b={b} />
       : none && notRead ? notRead : none ? <Calm>TDS is worked out from the day book. Salary for {TDS.formShort("24Q", S.tdsFy || fys[0] || "")} can also come from a salary sheet. The returns appear here once either is in.
       <div className="row" style={{ gap: 8, justifyContent: "center" }}><button className="btn small primary" onClick={() => goClient("books:import")}>Bring in from Tally</button>
@@ -288,7 +132,8 @@ export default function Tds({ b }) {
       : v === "years" ? <><p className="note"><button className="linkbtn" onClick={() => tdsNav("year")}>← {TDS.yearWord(S.tdsFy)} {S.tdsFy}</button></p><Years rows={rows} fys={had} /></>
       : v === "register" ? <Register />
       : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
-      : notRead ? notRead
-      : <Year />}
+      : notRead ? <>{fys.length > 0 && <HomeHeadOnly fys={fys} b={b} />}{notRead}</>
+      : <Home fys={fys} b={b} />}
+    <PanPaste /><PanBookView />
   </div>;
 }

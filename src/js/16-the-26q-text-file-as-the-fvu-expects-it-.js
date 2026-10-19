@@ -89,7 +89,7 @@ const TDS26Q = {
       untagged: un.map(r => r.id)};
   },
   // the deductee's name as the file writes it: the name corrected in FinCom (Deductees (PAN), b.panFix), else the books'
-  fileName(r){ const f = ((S.books || {}).panFix || {})[r.party || r.employee] || {}; return f.name || r.party || r.employee || ""; },
+  fileName(r){ const f = (TDS.panRec ? TDS.panRec(r.party || r.employee) : ((S.books || {}).panFix || {})[r.party || r.employee]) || {}; return f.name || r.party || r.employee || ""; },
   nilOut(rows){ return (rows || []).filter(r => !r.challan && !(num(r.tds) > 0.005)).length; },
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){

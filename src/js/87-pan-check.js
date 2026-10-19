@@ -69,8 +69,13 @@ const PANCheck = {
 };
 
 // a deductee's PAN and file name, as corrected in FinCom (S.books.panFix): null when not corrected
+// next-tds-clear (the owner, 19-Oct-2026: "keep the PAN and use it next time; no PAN is asked twice"): b.panFix is the
+// client's PAN book, one record a deductee party: {pan, name, source: "fincom", by, at, was, keep, aliases}. It is one of
+// BOOKS_KEYS (src/js/18), so it is saved with the client's books and shared through client_books (src/js/41) with every
+// login, every quarter and every year. The order of truth is TDS.panPick (src/js/09): Tally's PAN, else this, else ask.
 const TDSPanFix = {
-  of(party){ const f = ((S.books || {}).panFix || {})[party]; return f || null; },
+  of(party){ return (typeof TDS === "object" && TDS.panRec ? TDS.panRec(party) : ((S.books || {}).panFix || {})[party]) || null; },
+  keyOf(party){ const fx = (S.books || {}).panFix || {}; if (fx[party]) return party; const k = normName(party); return Object.keys(fx).find(x => normName(x) === k) || party; },
   pan(party){ const f = this.of(party); return f && f.pan ? f.pan : ""; },
   name(party){ const f = this.of(party); return f && f.name ? f.name : ""; },
   // the deductees of a return: [{key, party, name, pan, status, problems, secs, n, paid, tds, rows, bad}]
@@ -84,7 +89,9 @@ const TDSPanFix = {
     const all = Object.values(by);
     return all.map(p => {
       const st = PANCheck.status(p.pan), probs = PANCheck.offline(p.pan, p.party, all);
-      return Object.assign(p, {secs: Array.from(p.secs).filter(Boolean).sort(), status: st, problems: probs, name: this.name(p.party) || p.party, fixed: !!this.of(p.party),
+      const rec = this.of(p.party), tp = TDS.panTally(p.party) || String((p.rows.find(r => r.src === "payroll" || r.src === "sheet") || {}).tallyPan || "");
+      return Object.assign(p, {secs: Array.from(p.secs).filter(Boolean).sort(), status: st, problems: probs, name: this.name(p.party) || p.party, fixed: !!(rec && rec.pan),
+        source: rec && rec.pan && p.pan === rec.pan ? "fincom" : p.pan ? "tally" : "", conflict: TDS.panConflict(p.party, tp || undefined),
         bad: !p.pan || st.state === "invalid" || st.state === "inoperative"});
     }).sort((a, b) => (b.bad - a.bad) || b.tds - a.tds || a.party.localeCompare(b.party));
   },
@@ -95,16 +102,56 @@ const TDSPanFix = {
     const pan = String((x && x.pan) || "").toUpperCase().replace(/\s/g, ""), name = String((x && x.name) || "").trim();
     if (pan && !Certs.validPan(pan)) return {ok: false, why: "“" + pan + "” is not a PAN: five letters, four digits, a letter."};
     const mine = TDSReg.FORMS.map(f => TDS.formRows(f).filter(r => normName(r.party || r.employee || "") === normName(party)).map(r => ({r, f}))).reduce((a, l) => a.concat(l), []);
-    const lock = mine.find(({r, f}) => TDSReg.locked(r.fy, r.q, f));
-    if (lock) return {ok: false, why: TDSReg.lockWords(lock.r.fy, lock.r.q, lock.f)};
     const was = this.of(party) || {}, wasPan = was.pan || (mine[0] ? String(mine[0].r.pan || "") : "");
+    // a PAN given where there was none may reach a filed return (its "changes since filing" then say a correction is due);
+    // a PAN changed on a deduction of a filed return waits for a correction to be opened
+    const lock = Certs.validPan(wasPan) && wasPan !== pan && mine.find(({r, f}) => TDSReg.locked(r.fy, r.q, f));
+    if (lock) return {ok: false, why: TDSReg.lockWords(lock.r.fy, lock.r.q, lock.f)};
+    const key = this.keyOf(party);
     b.panFix = Object.assign({}, b.panFix || {});
-    if (!pan && !name) delete b.panFix[party];
-    else b.panFix[party] = {pan, name: name && name !== party ? name.slice(0, 75) : "", by: TDSReg.who(), at: new Date().toISOString(), was: wasPan};
+    if (!pan && !name) delete b.panFix[key];
+    else b.panFix[key] = {pan, name: name && name !== party ? name.slice(0, 75) : "", source: "fincom", by: TDSReg.who(), at: new Date().toISOString(), was: wasPan,
+      keep: TDS.panTally(party) || (mine[0] && mine[0].r.tallyPan) || "", aliases: Array.from(new Set((was.aliases || []).concat(key !== party ? [party] : [])))};
     TDSReg.log({act: "pan", form: form || "", fy: fy || "", q: q || "", note: party + ": PAN " + (wasPan || "none") + " → " + (pan || "none") + (name && name !== party ? "; name in the file " + name : "")});
     if (b.panIndex) b.panIndex = null;
     TDSReg.forget(); TDSReg.done(); saveBooks();
     return {ok: true, n: mine.length};
+  },
+  // Tally and FinCom disagree: keep one. "tally" drops FinCom's PAN (the name kept); "fincom" keeps it for this Tally PAN
+  choose(party, which){
+    const b = S.books, key = this.keyOf(party), rec = (b && b.panFix || {})[key];
+    if (!rec) return {ok: false, why: "No PAN of FinCom's for " + party + "."};
+    b.panFix = Object.assign({}, b.panFix);
+    if (which === "tally") { if (rec.name) b.panFix[key] = Object.assign({}, rec, {pan: "", keep: ""}); else delete b.panFix[key]; }
+    else b.panFix[key] = Object.assign({}, rec, {keep: TDS.panTally(party), at: new Date().toISOString(), by: TDSReg.who()});
+    TDSReg.log({act: "pan", note: party + ": " + (which === "tally" ? "Tally's PAN " + TDS.panTally(party) + " kept" : "FinCom's PAN " + rec.pan + " kept over Tally's " + TDS.panTally(party))});
+    TDSReg.forget(); TDSReg.done(); saveBooks();
+    return {ok: true};
+  },
+  // the PAN book: every deductee party of the client (any form, any year) with its PAN and where it came from
+  book(){
+    const fx = (S.books || {}).panFix || {}, by = {};
+    TDSReg.FORMS.forEach(f => TDS.formRows(f).forEach(r => { const p = r.party || r.employee || ""; if (!p) return; const k = normName(p); if (!by[k]) by[k] = {party: p, n: 0, forms: new Set()}; by[k].n++; by[k].forms.add(f); }));
+    Object.keys(fx).forEach(p => { const k = normName(p); if (!by[k]) by[k] = {party: p, n: 0, forms: new Set()}; });
+    return Object.values(by).map(x => {
+      const rec = this.of(x.party), tally = TDS.panTally(x.party), pan = TDS.panPick(x.party, tally);
+      return {party: x.party, n: x.n, forms: Array.from(x.forms), pan, tally, rec, source: rec && rec.pan && pan === rec.pan ? "fincom" : pan ? "tally" : "", conflict: TDS.panConflict(x.party, tally)};
+    }).sort((a, c) => (!!a.pan - !!c.pan) || a.party.localeCompare(c.party));
+  },
+  // many at once: lines of "name, PAN" (a comma, a tab or two spaces between; pasted from Excel). Each name is matched to a
+  // deductee of the client (the same name written differently matches too). {ok, n, why: [...]}
+  bulk(text){
+    const known = {}; this.book().forEach(x => { known[normName(x.party)] = x.party; });
+    let n = 0; const why = [];
+    String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach((l, i) => {
+      const m = l.match(/^(.*?)[\t,;]\s*([A-Za-z]{5}\d{4}[A-Za-z])\s*$/) || l.match(/^(.*?)\s{2,}([A-Za-z]{5}\d{4}[A-Za-z])\s*$/);
+      if (!m) { if (i > 0 || !/pan/i.test(l)) why.push("line " + (i + 1) + ": no name and PAN"); return; }
+      const party = known[normName(m[1].replace(/^"|"$/g, ""))];
+      if (!party) { why.push("line " + (i + 1) + ": no deductee named “" + m[1].trim() + "”"); return; }
+      const r = this.set(party, {pan: m[2], name: (this.of(party) || {}).name || ""}, S.tdsForm, S.tdsFy, S.tdsQ);
+      if (r.ok) n++; else why.push("line " + (i + 1) + ": " + r.why);
+    });
+    return {ok: n > 0, n, why};
   }
 };
 
@@ -116,6 +163,7 @@ function tdsDeducteeSet(party, x){
   toast("Saved for " + party + ": " + r.n + " deduction" + (r.n === 1 ? "" : "s") + " now carry " + (x.pan ? "PAN " + String(x.pan).toUpperCase() : "no PAN") + "; the rate and the remark are checked again.");
   render(); return r;
 }
+function tdsPanChoose(party, which){ const r = TDSPanFix.choose(party, which); toast(r.ok ? (which === "tally" ? "Tally's PAN kept for " : "FinCom's PAN kept for ") + party + "." : r.why); render(); return r; }
 async function tdsPanCheck(pans){ const r = await PANCheck.request(pans); toast(r.ok ? r.n + " PAN" + (r.n === 1 ? "" : "s") + " checked on TRACES." : r.why); render(); return r; }
-if (typeof globalThis === "object") Object.assign(globalThis, {PANCheck, TDSPanFix, tdsDeducteeOpen, tdsDeducteeSet, tdsPanCheck});
+if (typeof globalThis === "object") Object.assign(globalThis, {PANCheck, TDSPanFix, tdsDeducteeOpen, tdsDeducteeSet, tdsPanCheck, tdsPanChoose});
 /* @react-lazy: end */

@@ -13,10 +13,13 @@
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";
-import { ChallanCell, MatchDialogs, FileChecks } from "./Match.jsx";
+import { ChallanCell, MatchDialogs } from "./Match.jsx";
 import DeducteesPan from "./Deductees.jsx";
 import { DeductorDetails } from "../Settings.jsx";
-import { tabNow, checksToFix, ReturnChallans, ToFix, PreFileSlot, AfterFiling, unknownItem, UnknownChallans } from "./ReturnParts.jsx";
+import { tabNow, ReturnChallans, AfterFiling, UnknownChallans, SalaryChecks, FixRows } from "./ReturnParts.jsx";
+import { ReturnShell, statusOf, stepName, FvuMade } from "./Shell.jsx";
+import { checkReturn, ValidatePanel, PrnBox } from "./Validate.jsx";
+import { TracesDefaults } from "./Files.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: Form 138's text file, TDS24Q_FILE.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/83-tds-forms-2025.js";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -203,25 +206,50 @@ function Form16({ fy }) {
 }
 
 /* ---------------------------------------------------------------- the 24Q return from Tally's payroll */
-export function Return24Tally({ fy, q, ReturnCard, Tabs }) {
-  const a1 = Payroll.annexI(fy, q), checks = Payroll.checks(fy, q), filed = TDSFiled.get(fy, q, "24Q");
-  // tds-layout (14-Oct-2026): the owner's tabs: Deductions (Annexure I), Employees & declarations (the old Salary tab, with
-  // Annexure II in Q4), Challans (from the register), To fix, Return file, After filing (ReturnParts.jsx)
+export function Return24Tally({ fy, q }) {
+  const a1 = Payroll.annexI(fy, q), filed = TDSFiled.get(fy, q, "24Q");
+  // next-tds-clear (19-Oct-2026): the steps of the ClearTax-like layout (tds/Shell.jsx): Deductor · Employees (PAN) ·
+  // Employees & declarations (with Annexure II in Q4) · Challans · Deductions (Annexure I) · Validate & file · After filing
   S.tdsTab = tabNow(S.tdsTab, "24Q");
-  const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0));
+  const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0)), key = TDSReg.key("24Q", fy, q);
+  const usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length, val = checkReturn(fy, q, "24Q");
+  const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length });
+  const sal = val.warnings.find((x) => x.k === "salary"), un = val.errors.find((x) => x.k === "unmatched"), np = val.warnings.find((x) => x.k === "nopan");
+  const emps = new Set(a1.map((r) => r.employee)).size;
+  const steps = [
+    { id: "deductor", label: "Deductor", done: !val.warnings.some((x) => x.k === "deductor") },
+    { id: "deductees", label: stepName("deductees", "24Q"), count: emps, sub: np ? { text: np.n + " PAN" } : null },
+    { id: "people", label: "Employees & declarations", sub: sal ? { text: sal.n + " to check" } : null },
+    { id: "challans", label: "Challans", count: usedN, sub: un ? { text: un.n + " not matched", bad: true } : null },
+    { id: "deductions", label: "Deductions", count: a1.length },
+    { id: "file", label: "Validate & file" },
+    { id: "after", label: "After filing", off: !TDSReg.filed(fy, q, "24Q"), why: "Once the return is marked filed (Validate & file › Mark filed)" },
+  ];
+  const confirmable = (() => { try { return TDSMatch.suggest("24Q", fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
+  const unRows = TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !r.challan && r.tds > 0.005);
+  const reviews = {
+    unmatched: <FixRows title={unRows.length + " salary payments without a challan"} rows={unRows} unit="salary payments" />,
+    salary: <div data-pay-checks=""><SalaryChecks list={sal ? sal.list : []} /></div>,
+    chtype: <UnknownChallans fy={fy} q={q} form="24Q" />,
+    traces: <TracesDefaults jr={TRF.jrFor(fy, q, "24Q")} />,
+  };
+  const fileBox = <div className="vf-file" data-file="24Q-tally">
+    <p className="vf-amber" data-fvu-check="">{TDS.isNew(fy) ? <>The text file is built to Protean's file format 1.1 for Form 138 (Annexure I, Q1 to Q3) and checked with its FVU 1.2; it stays a draft (named _DRAFT) until a statement with the challan file (CSI) from the portal passes FVU 1.2.{q === "Q4" ? " Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has." : ""}</> : <>The text file is built to Protean's 24Q file format as its FVU 8.7 checks it (Annexure I{q === "Q4" ? " and II" : ""}). Run it through the FVU before filing.</>}</p>
+    <div className="vf-frow" data-prefile-slot="">
+      <PrnBox fy={fy} q={q} form="24Q" />
+      <button className="btn small primary" data-pay-fvu="" disabled={(TDS.isNew(fy) && q === "Q4") || val.errors.length > 0} onClick={() => { payFvuDownload(fy, q); try { if (!TDS24Q_FILE.build(fy, q, TDS26Q.firmDetails()).error) FvuMade.mark(fy, q, "24Q"); } catch (e) { /* */ } render(); }}>Make FVU file</button>
+      <button className="btn small" onClick={() => printTable("q24A1Table", "24Q Annexure I, " + q + " " + fy)}>Print Annexure I</button>
+    </div>
+    <MarkFiled fy={fy} q={q} form="24Q" />
+  </div>;
   return <>
     <MatchDialogs form="24Q" fy={fy} q={q} />
-    <ReturnCard fy={fy} q={q} form="24Q" filed={filed} errN={checks.length} driftN={0} draft={TDS.isNew(fy)}
-      primary={filed || S.tdsTab === "file" ? null : ["The text file", () => tdsTabGo("file")]}
-      figs={[
-        { label: "Employees this quarter", value: new Set(a1.map((r) => r.employee)).size, sub: money(paid) + " paid or credited" },
-        { label: "TDS deducted", value: money(tds), sub: q + " " + fy + " · from Tally's payroll" },
-        { label: "Before filing", value: checks.length, sub: checks.length ? checks[0].what : "nothing to fix", warn: checks.length > 0 },
-      ]} />
-    <Tabs counts={{ deductees: new Set(a1.map((r) => r.employee)).size, deductions: a1.length, challans: Object.values(TDSReg.uses()).filter((m) => m[TDSReg.key("24Q", fy, q)]).length || null, checks: checks.length || null }} />
+    <ReturnShell fy={fy} q={q} form="24Q" status={status} draft={TDS.isNew(fy) && !filed} val={val} primary={S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined}
+      more={[["The challan register", () => tdsNav("register")]]}
+      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: "from Tally's payroll" }, { label: "On challans", value: money(TDSReg.usedBy(fy, q, "24Q")), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
     {S.tdsTab === "deductor" ? <DeductorDetails />
       : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
-      : S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
+      : S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" className="bk-table rt-rows" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""
         empty="No salary paid or credited in this quarter."
         cols={[
           { k: "emp", role: "party", label: "Employee", v: (r) => r.employee, cell: (r) => r.employee },
@@ -250,15 +278,7 @@ export function Return24Tally({ fy, q, ReturnCard, Tabs }) {
             { k: "tds", label: "TDS", cls: "n", v: (x) => x.tdsTotal, fmt: money, sum: true, cell: (x) => money(x.tdsTotal) },
             { k: "bal", label: "Short (+) / excess (−)", cls: "n", v: (x) => x.balance, fmt: money, sum: true, cell: (x) => money(x.balance) },
           ]} /></section>}</>
-      : S.tdsTab === "checks" ? <div data-pay-checks=""><ToFix items={checksToFix(checks).items.concat([unknownItem(fy, q)])}
-          parts={[["chtype", <UnknownChallans fy={fy} q={q} form="24Q" />]].concat(checksToFix(checks).parts)} /></div>
-      : <><section className="dash-card" data-file="24Q-tally"><h3>{TDS.formName("24Q", fy)}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
-          {/* next-challan-match: the note was stale (it said the new form's layout could not be checked) */}
-          <p className="note"><b>Check before filing.</b> {TDS.isNew(fy) ? <>The text file is built to Protean's file format 1.1 for Form 138 (Annexure I, Q1 to Q3) and checked with its FVU 1.2; it stays a draft (named _DRAFT) until a statement with the challan file (CSI) from the portal passes FVU 1.2.{q === "Q4" ? " Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has." : ""}</> : <>The text file is built to Protean's 24Q file format as its FVU 8.7 checks it (Annexure I{q === "Q4" ? " and II" : ""}). Run it through the FVU before filing.</>}</p>
-          <FileChecks form="24Q" fy={fy} q={q} />
-          <PreFileSlot />
-          <div className="revfilter"><button className="btn small primary" data-pay-fvu="" disabled={TDS.isNew(fy) && q === "Q4"} onClick={() => payFvuDownload(fy, q)}>Download the {TDS.formName("24Q", fy)} text file</button>
-            <button className="btn small" onClick={() => printTable("q24A1Table", "24Q Annexure I, " + q + " " + fy)}>Print Annexure I</button></div></section>
-        <MarkFiled fy={fy} q={q} form="24Q" /></>}
+      : <ValidatePanel fy={fy} q={q} form="24Q" val={val} reviews={reviews} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}
+    </ReturnShell>
   </>;
 }

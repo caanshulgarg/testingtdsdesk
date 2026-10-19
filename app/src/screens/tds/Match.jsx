@@ -9,9 +9,12 @@
 //   what blocks the file; tips.
 // The figures and the decisions are TDSMatch's (src/js/86) and the register's (TDSReg, src/js/79); nothing here works
 // out a match.
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
-import { AddChallan, SrcBadge } from "./Register.jsx";
+import { AddChallan, SrcBadge, say } from "./Register.jsx";
+import More from "../../parts/More.jsx";
+import { SideDrawer } from "./Shell.jsx";
+import { PanBox } from "./PanBook.jsx";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -34,15 +37,6 @@ function challansOf(form, fy, q, cx, sugg) {
   return TDS.challans().filter((c) => (cx.uses[c.id] || {})[k] || want.has(c.id) || (TDSReg.balance(c, cx).tax > 0.005 && TDS.fyOf(c.date) === fy && [...mon, next].includes(TDS.ymd(c.date).slice(0, 6))));
 }
 
-function Steps({ n1, n2, n3 }) {
-  const st = (done, now) => (done ? "done" : now ? "now" : "next");
-  return <ol className="cm-steps" data-cm-steps="">
-    <li data-st={st(n1, !n1)}><b>①</b> Challans of this quarter</li>
-    <li data-st={st(n2, n1 && !n2)}><b>②</b> Match deductions</li>
-    <li data-st={st(n3, n1 && n2)}><b>③</b> Check and make the file</li>
-  </ol>;
-}
-
 // interest and fee allocated to this return (the register's portion); the default offered (TDSMatch.defaultPortion)
 function Portion({ c, cx, form, fy, q, locked }) {
   const cur = TDSReg.portionFor(c, form, fy, q, cx), d = TDSMatch.defaultPortion(c, form, fy, q), [open, setOpen] = useState(false);
@@ -53,7 +47,7 @@ function Portion({ c, cx, form, fy, q, locked }) {
     {open && <div className="reg-use">
       <label className="ach-f">Interest<input type="text" inputMode="decimal" value={i} onChange={(ev) => setI(ev.target.value)} aria-label="Interest allocated here" /></label>
       {TDSReg.feeOf(c) ? <label className="ach-f">Fee and others<input type="text" inputMode="decimal" value={f} onChange={(ev) => setF(ev.target.value)} aria-label="Fee allocated here" /></label> : null}
-      <button className="btn small primary" data-cm-portion-save="" onClick={() => { const r = tdsPortionSet(c.id, i, f); if (r.ok) setOpen(false); }}>Save</button>
+      <button className="btn small" data-cm-portion-save="" onClick={() => { const r = tdsPortionSet(c.id, i, f); if (r.ok) setOpen(false); }}>Save</button>
       <button className="linkbtn" onClick={() => setOpen(false)}>Cancel</button>
       {d.due > 0 && <span className="note">Interest due on this return's late deductions on this challan: {money(d.due)}</span>}</div>}
   </div>;
@@ -69,23 +63,6 @@ function RowLine({ r, locked, by, children }) {
     <span className="cm-row-a">{money(r.tds)}</span>
     {children}
   </li>;
-}
-
-// a suggestion, in yellow: the rule in words, the reason, Confirm / Not this (a split: Split the row)
-function Sugg({ s, byId, chs, locked }) {
-  const rows = s.ids.map((id) => byId[id]).filter(Boolean);
-  return <div className={"cm-sugg" + (s.confidence === "low" ? " low" : "")} data-cm-sugg={s.key} data-rule={s.rule}>
-    <div className="cm-sugg-h"><span className="tag warn">{s.rule === "g" || s.ai ? "AI" : "Suggested"}</span> {s.rule === "g" ? null : <b>{s.words}</b>}{s.rule === "split" ? null : rows.length ? <span className="note"> · {rows.length} deduction{rows.length === 1 ? "" : "s"} · {paise(s.total)}</span> : null}</div>
-    <div className="cm-sugg-why">{s.reason}</div>
-    {s.warn ? <div className="cm-sugg-warn">{s.warn}</div> : null}
-    {s.info ? <div className="note">{s.info}</div> : null}
-    {s.parts ? <ul className="cm-parts">{s.parts.map((p) => { const c = chs.find((x) => x.id === p.chId); return <li key={p.chId}>{paise(p.paise)} on {c ? TDSCH.label(c) : p.chId}</li>; })}</ul> : null}
-    {rows.length > 0 && s.rule !== "split" && <ul className="cm-rows">{rows.map((r) => <RowLine key={r.id} r={r} locked />)}</ul>}
-    {!locked && <div className="cm-sugg-act">
-      {s.rule === "split" ? <button className="btn small primary" data-cm-split={s.key} onClick={() => tdsSplitOpen(s.key)}>Split the row…</button>
-        : <button className="btn small primary" data-cm-confirm={s.key} onClick={() => tdsMatchConfirm(s.key)}>Confirm</button>}
-      <button className="btn small" data-cm-no={s.key} onClick={() => tdsMatchNo(s.key)}>Not this</button></div>}
-  </div>;
 }
 
 // the challan's balance as this return sees it: its tax less what OTHER returns use of it (the opening), then each of this
@@ -107,7 +84,7 @@ const panChip = (pan) => { const st = PANCheck.status(pan); return <span classNa
 const HEAD = (form, first, last) => <tr>{first}<th>{form === "24Q" ? "Employee" : form === "27EQ" ? "Buyer" : "Deductee"}</th><th>PAN</th><th className="n">Amount paid</th><th className="n">TDS</th><th>Section</th><th>Certificate</th><th className="dt">Date of deduction</th><th>Rate basis</th>{last}</tr>;
 const CELLS = (r, form) => <>
   <td className="pty"><button type="button" className="linkbtn" data-row-detail={r.id} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party || r.employee}</button>{r.splitOf ? <span className="tag">part {r.part} of {r.parts}</span> : null}</td>
-  <td>{r.pan ? <>{r.pan} {panChip(r.pan)}</> : <span className="tag bad">no PAN</span>}</td>
+  <td>{r.pan && Certs.validPan(r.pan) ? <>{r.pan} {panChip(r.pan)}</> : <PanBox party={r.party || r.employee} compact />}</td>
   <td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td><td>{TDS.sec(r.section)}</td><td>{certOf(r, form)}</td><td>{day(r.date)}</td><td>{basisOf(r, form)}</td></>;
 
 // the challan chosen, its AVAILABLE BALANCE big, and two panels (the owner's design of 18-Oct-2026, as Winman):
@@ -123,7 +100,7 @@ export function ChallanTicker({ c, form, fy, q, locked, sugg, mode }) {
   const sec = chSec(c), [only, setOnly] = useState(false), [mon, setMon] = useState(""), [other, setOther] = useState(false);
   const chs = TDS.challans(), byCh = {}; chs.forEach((x) => { byCh[x.id] = x; });
   const byId = {}; all.forEach((r) => { byId[r.id] = r; });
-  const sg = (sugg || []).filter((s) => s.rule !== "int" && (s.chId === c.id || (s.parts || []).some((p) => p.chId === c.id)));
+  const sg = (sugg || []).filter((s) => s.rule !== "int" && (s.chId === c.id || (s.parts || []).some((p) => p.chId === c.id))).sort((a, b) => (b.confidence === "low") - (a.confidence === "low"));
   const inSg = new Set([].concat(...sg.map((s) => s.ids)));
   const fits = (r) => (!only || !sec || TDSCH.secOk(sec, r.section) || form === "24Q") && (!mon || TDS.ymd(r.date).slice(0, 6) === mon);
   const free = all.filter((r) => !r.challan && !inSg.has(r.id) && fits(r)).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
@@ -159,16 +136,16 @@ export function ChallanTicker({ c, form, fy, q, locked, sugg, mode }) {
       <div className="cm-right" data-cm-right={c.id}><h4>Deductions to add</h4>
         {sg.length > 0 && <div className="cm-sg-group" data-cm-sg-group={c.id}>
           <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>Suggested for this challan</b>
-            {!locked && sg.some((s) => s.rule !== "split") && <button className="btn small primary" data-cm-add-all={c.id} onClick={addAll}>Add all suggested</button>}</div>
+            {!locked && sg.some((s) => s.rule !== "split") && <button className="btn small" data-cm-add-all={c.id} onClick={addAll}>Add all suggested</button>}</div>
           {sg.map((s) => <div key={s.key} className={"cm-sugg" + (s.confidence === "low" ? " low" : "")} data-cm-sugg={s.key} data-rule={s.rule}>
-            <div className="cm-sugg-h"><span className="tag warn">{s.rule === "g" || s.ai ? "AI" : "Suggested"}</span> {s.rule === "g" ? null : <b>{s.words}</b>}</div>
+            <div className="cm-sugg-h"><span className="tag warn">{s.confidence === "low" ? "AI not sure" : s.rule === "g" || s.ai ? "AI" : "Suggested"}</span> {s.rule === "g" ? null : <b>{s.words}</b>}</div>
             <div className="cm-sugg-why">{s.reason}</div>
             {s.warn ? <div className="cm-sugg-warn">{s.warn}</div> : null}{s.info ? <div className="note">{s.info}</div> : null}
             {s.parts ? <ul className="cm-parts">{s.parts.map((p) => { const x = byCh[p.chId]; return <li key={p.chId}>{paise(p.paise)} on {x ? TDSCH.label(x) : p.chId}</li>; })}</ul> : null}
             <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement=""><thead>{HEAD(form, null, null)}</thead><tbody>{s.ids.map((id) => byId[id]).filter(Boolean).map((r) => <tr key={r.id} data-cm-sugg-row={r.id}>{CELLS(r, form)}</tr>)}</tbody></table></div>
             {!locked && <div className="cm-sugg-act">
-              {s.rule === "split" ? <button className="btn small primary" data-cm-split={s.key} onClick={() => tdsSplitOpen(s.key)}>Split the row…</button>
-                : <button className="btn small primary" data-cm-confirm={s.key} onClick={() => tdsMatchConfirm(s.key)}>Confirm</button>}
+              {s.rule === "split" ? <button className="btn small" data-cm-split={s.key} onClick={() => tdsSplitOpen(s.key)}>Split the row…</button>
+                : <button className="btn small" data-cm-confirm={s.key} onClick={() => tdsMatchConfirm(s.key)}>Confirm</button>}
               <button className="btn small" data-cm-no={s.key} onClick={() => tdsMatchNo(s.key)}>Not this</button></div>}
           </div>)}</div>}
         {!locked && <div className="cm-pick-h">
@@ -196,8 +173,13 @@ export function ChallanSelect({ form, fy, q, value, onChange }) {
     {list.map((c) => <option key={c.id} value={c.id}>{[c.bsr, day(c.date), c.serial, chSec(c) || "no section", "balance " + money(TDSReg.balance(c, cx).tax)].join(" · ")}</option>)}</select></label>;
 }
 
-export function ChallanMatch({ fy, q, form, children }) {
-  const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), locked = TDSReg.locked(fy, q, form), [adding, setAdding] = useState(false), [reg, setReg] = useState(false);
+// the Challans step (next-tds-clear, design §3.5): one toolbar line (how many are matched, the AI's badge, ONE primary
+// "Confirm N suggestions" while there are any, "Add challan ▾"); the challans as a list on the left (one line each:
+// serial · date · section · ₹ left · a badge), "Not matched (N)" its last item; the one chosen on the right in the
+// two-panel view (ChallanTicker), or what is not matched with its reason and next step
+export function ChallanMatch({ fy, q, form, tallyPays }) {
+  const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), locked = TDSReg.locked(fy, q, form), [adding, setAdding] = useState(false), [reg, setReg] = useState(false), [pays, setPays] = useState(false);
+  const up = useRef(null);
   const all = TDS.formRows(form).filter((r) => r.fy === fy && r.q === q), byId = {};
   all.forEach((r) => { byId[r.id] = r; });
   const sugg = TDSMatch.suggest(form, fy, q), reasons = TDSMatch.reasons(form, fy, q), why = {}, m = TDSMatch.metric(form, fy, q);
@@ -208,55 +190,52 @@ export function ChallanMatch({ fy, q, form, children }) {
   if (reg) chs = chs.concat(TDS.challans().filter((c) => !chs.includes(c) && TDSReg.balance(c, cx).tax > 0.005));
   chs = chs.sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
   const inSugg = new Set([].concat(...sugg.map((s) => s.ids))), notYet = all.filter((r) => !r.challan && r.tds > 0.005 && !inSugg.has(r.id));
-  const un = all.filter((r) => !r.challan && r.tds > 0.005), confirmable = sugg.filter((s) => s.rule !== "split");
-  const low = sugg.filter((s) => s.confidence === "low");
-  const sel = chs.find((c) => c.id === S.tdsChSel) || chs.find((c) => sugg.some((s) => s.chId === c.id)) || chs.find((c) => (cx.uses[c.id] || {})[k]) || chs[0] || null;
+  const confirmable = sugg.filter((s) => s.rule !== "split");
+  const none = S.tdsChSel === "__none";
+  const sel = none ? null : chs.find((c) => c.id === S.tdsChSel) || chs.find((c) => sugg.some((s) => s.chId === c.id)) || chs.find((c) => (cx.uses[c.id] || {})[k]) || chs[0] || null;
   const unit = form === "27EQ" ? "collections" : "deductions";
+  const nPays = tallyPays ? tallyPays.n : 0;
+  const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added; what " + (r.placed === 1 ? "it pays is" : "they pay is") + " suggested here, to confirm."); render(); };
   return <div className="cm" data-challan-match={k}>
-    <Steps n1={chs.length > 0} n2={!un.length} n3={false} />
-    <section className="dash-card cm-top">
-      <div className="cm-metric" data-cm-metric={m.n + "/" + m.m}><b>{m.n} of {m.m}</b> {unit} matched automatically · <b className={m.k ? "bad" : ""}>{m.k} need you</b>
-        {m.on ? <span className="note"> ({m.on} on a challan already, {m.sugg} waiting for your Confirm)</span> : null}</div>
-      {ai && (ai.say || ai.busy) ? <p className="note cm-ai" data-cm-ai={ai.busy ? "busy" : ai.state || ""}>{ai.busy ? "AI is looking at what the rules left…" : ai.say}</p> : null}
-      <div className="row cm-acts">
-        {!locked && confirmable.length > 0 && <button className="btn small primary" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Confirm all {confirmable.length} suggestion{confirmable.length === 1 ? "" : "s"}</button>}
-        <button className="btn small" data-ret-add-challan="" onClick={() => setAdding(!adding)}>Add challan</button>
-        <button className="btn small" data-cm-from-register="" aria-pressed={reg} onClick={() => setReg(!reg)}>{reg ? "Only this quarter's challans" : "Add from register"}</button>
-        {!locked && ai && !ai.busy && <button className="btn small" data-cm-ai-again="" onClick={() => TDSMatch.askAi(form, fy, q, true)}>Ask AI again</button>}
-        <button className="linkbtn" onClick={() => tdsNav("register")}>Challan register →</button>
-      </div>
-    </section>
-    {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
-    {low.length > 0 && <section className="dash-card cm-low" data-cm-low=""><h3>Check these first: AI is not sure</h3>
-      {low.map((s) => <Sugg key={s.key} s={s} byId={byId} chs={TDS.challans()} locked={locked} />)}</section>}
-    <div className="cm-two">
-      <ul className="cm-chlist" data-cm-chlist="">{chs.map((c) => { const bal = TDSReg.balance(c, cx).tax, n = sugg.filter((s) => s.chId === c.id).length, used = ((cx.uses[c.id] || {})[k] || {}).n || 0;
-        return <li key={c.id}><button type="button" className={"cm-chbtn" + (sel && sel.id === c.id ? " on" : "")} data-cm-ch={c.id} aria-pressed={!!sel && sel.id === c.id} onClick={() => { S.tdsChSel = c.id; render(); }}>
-          <b>{c.bsr} · {day(c.date)} · {c.serial}</b><span className="note">{chSec(c) || "no section"} · {used} here</span>
-          <span className={bal < -0.005 ? "bad" : ""} data-cm-status={bal < -0.005 ? "over" : bal < 0.005 && TDSReg.usedTax(c, cx) > 0 ? "full" : "left"}>{bal < -0.005 ? "Over by " + money(-bal) : bal < 0.005 && TDSReg.usedTax(c, cx) > 0 ? "Fully used" : money(bal) + " available"}</span>
-          {n ? <span className="tag warn" data-cm-nsugg={n}>{n} to confirm</span> : null}</button></li>; })}
-        {!chs.length && <li className="note cm-empty">No challan for this quarter yet. Add one (Add challan), bring one from the register, or make one from a Tally TDS payment below.</li>}</ul>
-      <div className="cm-side">{sel ? <ChallanTicker c={sel} form={form} fy={fy} q={q} locked={locked} sugg={sugg.filter((s) => s.confidence !== "low")} byId={byId} /> : null}</div>
+    <div className="cm-tool" data-cm-tool="">
+      <span className="cm-metric" data-cm-metric={m.n + "/" + m.m}><b>{m.n} of {m.m}</b> {unit} matched · <span className={m.k ? "bad" : ""}>{m.k} need{m.k === 1 ? "s" : ""} you</span>
+        {m.on ? <span className="note"> ({m.on} on a challan, {m.sugg} waiting for your Confirm)</span> : null}</span>
+      {ai && (ai.say || ai.busy) ? <details className="cm-aib" data-cm-ai={ai.busy ? "busy" : ai.state || ""}><summary title="What the AI did">{ai.busy ? "AI is looking…" : "AI ⓘ"}</summary>
+        <div className="cm-aipop"><p className="note">{ai.busy ? "AI is looking at what the rules left…" : ai.say}</p>
+          {!locked && !ai.busy && <button className="btn small" data-cm-ai-again="" onClick={() => TDSMatch.askAi(form, fy, q, true)}>Ask AI again</button>}</div></details> : null}
+      <span className="rt-sp" />
+      {!locked && confirmable.length > 0 && <button className="btn small primary" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Confirm {confirmable.length} suggestion{confirmable.length === 1 ? "" : "s"}</button>}
+      <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
+        ["By hand", () => setAdding(true), { "data-cm-add": "hand" }],
+        [reg ? "Only this quarter’s challans" : "From the register (unused balances)", () => setReg(!reg), { "data-cm-from-register": "", "aria-pressed": reg }],
+        ["From a Tally TDS payment" + (nPays ? " (" + nPays + ")" : ""), () => setPays(true), { "data-cm-add": "tally" }],
+        ["Upload challans…", () => up.current && up.current.click(), { "data-cm-add": "upload" }],
+        ["Open the challan register", () => tdsNav("register"), { "data-cm-add": "register" }],
+      ]} />
+      <input ref={up} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf" onChange={(ev) => { const fs = Array.from(ev.target.files || []); ev.target.value = ""; upload(fs); }} />
     </div>
-    <article className="cm-ch cm-none" data-cm-none={notYet.length}>
-      <div className="cm-card"><div className="cm-card-h bad"><b>Not matched yet ({notYet.length} · {money(notYet.reduce((a, r) => a + r.tds, 0))})</b></div>
-        <p className="note">Each has its reason and the next step.</p></div>
-      <div className="cm-side">{notYet.length ? <ul className="cm-rows">{notYet.map((r) => { const w = why[r.id];
-        return <RowLine key={r.id} r={r} locked={locked}>
-          <div className="cm-why" data-cm-why={w ? w.step : "none"}>{w ? w.words : "Not matched."}
-            {!locked && w && (w.step === "pay" ? <button className="linkbtn" onClick={() => setAdding(true)}>Add challan</button> : w.step === "move" ? <button className="linkbtn" onClick={() => tdsMoveOpen([r.id])}>Move to challan…</button> : null)}</div></RowLine>; })}</ul>
-        : <p className="note">Every {unit.replace(/s$/, "")} is on a challan or in a suggestion.</p>}</div>
-    </article>
+    {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
+    {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
+    <div className="cm-two">
+      <ul className="cm-chlist" data-cm-chlist="">{chs.map((c) => { const bal = TDSReg.balance(c, cx).tax, n = sugg.filter((s) => s.chId === c.id).length;
+        const stt = bal < -0.005 ? "over" : bal < 0.005 && TDSReg.usedTax(c, cx) > 0 ? "full" : "left";
+        return <li key={c.id}><button type="button" className={"cm-chbtn" + (sel && sel.id === c.id ? " on" : "")} data-cm-ch={c.id} aria-pressed={!!sel && sel.id === c.id} title={c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + (chSec(c) || "no section")} onClick={() => { S.tdsChSel = c.id; render(); }}>
+          <span className="cm-chl">{c.serial} · {day(c.date).slice(0, 6)} · {chSec(c) || "—"}</span>
+          <span className={"cm-chbal" + (stt === "over" ? " bad" : "")} data-cm-status={stt}>{stt === "over" ? "Over by " + money(-bal) : stt === "full" ? "Fully used" : money(bal) + " left"}</span>
+          {n ? <span className="tag warn" data-cm-nsugg={n}>{n}</span> : null}</button></li>; })}
+        {!chs.length && <li className="note cm-empty">No challan for this quarter yet: Add challan ▾.</li>}
+        <li className="cm-noneli"><button type="button" className={"cm-chbtn cm-nonebtn" + (none ? " on" : "")} data-cm-ch="__none" aria-pressed={none} onClick={() => { S.tdsChSel = "__none"; render(); }}>
+          <span className={"cm-chl" + (notYet.length ? " bad" : "")}>Not matched ({notYet.length})</span><span className="cm-chbal">{money(notYet.reduce((a, r) => a + r.tds, 0))}</span></button></li></ul>
+      <div className="cm-side">{none ? <section className="dash-card cm-none" data-cm-none={notYet.length}>
+          <div className={"cm-card-h" + (notYet.length ? " bad" : "")}><b>Not matched yet ({notYet.length} · {money(notYet.reduce((a, r) => a + r.tds, 0))})</b><span className="note"> · each with its reason and the next step</span></div>
+          {notYet.length ? <ul className="cm-rows">{notYet.map((r) => { const w = why[r.id];
+            return <RowLine key={r.id} r={r} locked={locked}>
+              <div className="cm-why" data-cm-why={w ? w.step : "none"}>{w ? w.words : "Not matched."}
+                {!locked && w && (w.step === "pay" ? <button className="linkbtn" onClick={() => setAdding(true)}>Add challan</button> : w.step === "move" ? <button className="linkbtn" onClick={() => tdsMoveOpen([r.id])}>Move to challan…</button> : null)}</div></RowLine>; })}</ul>
+            : <p className="note">Every {unit.replace(/s$/, "")} is on a challan or in a suggestion.</p>}</section>
+        : sel ? <ChallanTicker c={sel} form={form} fy={fy} q={q} locked={locked} sugg={sugg} byId={byId} /> : null}</div>
+    </div>
     <SelBar all={all} locked={locked} />
-    <section className="dash-card cm-checks"><h3>③ Check and make the file</h3><FileChecks form={form} fy={fy} q={q} />
-      <button className="btn small primary" data-cm-make="" disabled={TDSMatch.checks(form, fy, q).block.length > 0} onClick={() => tdsTabGo("file")}>Make the file →</button></section>
-    <details className="cm-tips" data-cm-tips=""><summary>Tips</summary><ul>
-      <li>Pay one challan per section per month: each challan then matches its month’s deductions exactly, and nothing needs choosing.</li>
-      <li>Before making the file, download the challan file (CSI) from the income-tax portal for this TAN: the FVU checks each challan against it.</li>
-      <li>Use a balance left on an earlier challan of the same tax year before paying a fresh one.</li>
-      <li>One deduction is paid by one challan. If no challan has enough left, split the row: two rows, the same dates, each on its challan.</li>
-    </ul></details>
-    {children}
   </div>;
 }
 
@@ -265,7 +244,7 @@ function SelBar({ all, locked }) {
   if (locked || !ticked.length) return null;
   return <div className="cm-bar-sel" data-cm-selbar="">
     <span><b>{ticked.length} ticked</b> · {money(sum)}</span>
-    <button className="btn small primary" data-cm-move="" onClick={() => tdsMoveOpen(ticked.map((r) => r.id))}>Move to challan…</button>
+    <button className="btn small" data-cm-move="" onClick={() => tdsMoveOpen(ticked.map((r) => r.id))}>Move to challan…</button>
     {ticked.some((r) => r.challan) && <button className="btn small" data-cm-takeoff="" onClick={() => tdsTakeOff(ticked.filter((r) => r.challan).map((r) => r.id))}>Take off challan</button>}
     <button className="linkbtn" onClick={() => { S.tdsSel = {}; render(); }}>Clear</button></div>;
 }
@@ -308,8 +287,8 @@ export function PlainDeductions({ form, fy, q }) {
 // a click opens the Move dialog (never a silent re-tag)
 export function ChallanCell({ r }) {
   const c = r.challan ? TDS.challans().find((x) => x.id === r.challan) : null;
-  return <button type="button" className={"linkbtn cm-cell" + (c ? "" : " bad")} data-ch-cell={r.id} aria-label={"Challan for " + (r.party || "")} title={c ? TDSMatch.matchedBy(r.id).words : "On no challan: choose one"} onClick={() => tdsMoveOpen([r.id])}>
-    {c ? <>{c.bsr + " · " + day(c.date)}<small className="cm-cell-s">{c.serial + " · " + (chSec(c) || "no section")}{r.splitOf ? " (part " + r.part + ")" : ""}</small></> : "Not matched"}</button>;
+  return <button type="button" className={"linkbtn cm-cell" + (c ? "" : " bad")} data-ch-cell={r.id} aria-label={"Challan for " + (r.party || "")} title={c ? c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + (chSec(c) || "no section") + " · " + TDSMatch.matchedBy(r.id).words : "On no challan: choose one"} onClick={() => tdsMoveOpen([r.id])}>
+    {c ? <>{c.serial + " · " + day(c.date).slice(0, 6) + " · " + (chSec(c) || "—")}{r.splitOf ? " (part " + r.part + ")" : ""}</> : "Not matched ▸"}</button>;
 }
 
 // the Move dialog and the Split dialog, once per return page
@@ -318,17 +297,20 @@ export function MatchDialogs({ form, fy, q }) { return <><MoveDialog /><SplitDia
 // a deduction's details (the panels show eight columns; the rest is here)
 function RowDetails({ form }) {
   const id = S.tdsRowDet, cx = TDSReg.ctx(), x = id ? cx.byRow[id] : null;
-  if (!x) return <Dialog open={false} onOpenChange={() => {}} />;
-  const r = x.r, c = r.challan ? TDS.challans().find((z) => z.id === r.challan) : null, close = () => { S.tdsRowDet = ""; render(); };
-  const rows = [["Deductee", r.party || r.employee], ["PAN", (r.pan || "none") + " · " + PANCheck.status(r.pan).words], ["Section", TDS.sec(r.section)], ["Amount paid or credited", money(r.paid)],
-    ["Date paid or credited", day(r.credit || r.date)], ["TDS", money(r.tds)], ["Date of deduction", day(r.date)], ["Rate", r.rate != null ? r.rate + "%" : ""], ["Voucher", r.voucher || ""],
+  const close = () => { S.tdsRowDet = ""; render(); };
+  if (!x) return <SideDrawer open={false} onClose={close} kind="deduction" />;
+  const r = x.r, c = r.challan ? TDS.challans().find((z) => z.id === r.challan) : null;
+  const sn = TDS.secNew(r.section, r.fy || S.tdsFy), iss = form === "26Q" ? Certs.issues(r.fy || S.tdsFy, r.q || S.tdsQ).find((z) => z.row.id === r.id) : null;
+  const rows = [["Deductee", r.party || r.employee], ["PAN", (r.pan || "none") + " · " + PANCheck.status(r.pan).words], ["Section", sn.ref ? sn.ref + " [old " + sn.old + "] · " + sn.label : TDS.sec(r.section) + (TDS.secName(r.section) ? " · " + TDS.secName(r.section) : "")], ["Amount paid or credited", money(r.paid) + (r.books && Math.abs(num(r.books.paid) - num(r.paid)) >= 0.005 ? " (edited in FinCom: books " + money(r.books.paid) + ")" : "")],
+    ["Date paid or credited", day(r.credit || r.date)], ["TDS", money(r.tds) + (r.books && Math.abs(num(r.books.tds) - num(r.tds)) >= 0.005 ? " (edited in FinCom: books " + money(r.books.tds) + ")" : "")], ["Date of deduction", day(r.date)], ["Rate", (r.rate != null ? r.rate + "%" : "") + (iss ? " · should be " + iss.expected + "% (" + iss.why + ")" : "")], ["Voucher", r.voucher || ""],
     ["Ledger", r.ledger || ""], ["Certificate", certOf(r, form)], ["Rate basis", basisOf(r, form)], ["Challan", c ? TDSCH.label(c) : "Not matched"], ["Matched by", TDSMatch.matchedBy(r.id).words.replace(/^Matched by: /, "") || "—"],
     ["From", r.src === "bridge" ? "Tally (bridge)" : r.src === "daybook" ? "Day Book uploaded" : r.src === "payroll" ? "Tally's payroll" : r.src === "sheet" ? "the salary sheet" : r.src || ""]];
-  return <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-    <DialogContent title="Deduction details" description={(r.party || r.employee || "") + " · " + money(r.tds)} data-row-dialog="">
+  return <SideDrawer open onClose={close} kind="deduction" title="Deduction details" description={(r.party || r.employee || "") + " · " + money(r.tds)}>
+    <div data-row-dialog="">
+      {!Certs.validPan(r.pan) && <p className="note" data-row-pan="">No PAN: <PanBox party={r.party || r.employee} /> saved for every deduction of {r.party || r.employee}, in every return.</p>}
       <dl className="ch-dl">{rows.flatMap(([k, v]) => [<dt key={k + "t"}>{k}</dt>, <dd key={k + "d"}>{v}</dd>])}</dl>
       <div className="row" style={{ gap: 8 }}><button className="btn small" onClick={() => { close(); tdsMoveOpen([r.id]); }}>Move to challan…</button></div>
-    </DialogContent></Dialog>;
+    </div></SideDrawer>;
 }
 
 function MoveDialog() {

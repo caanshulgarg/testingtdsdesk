@@ -64,16 +64,15 @@ try:
         pick = lambda cid: (pg.click('#app [data-cm-ch="%s"]' % cid), pg.wait_for_timeout(350))
         panel = lambda cid: '#app [data-cm-panel="%s"]' % cid
 
-        # ---- the four tabs (the owner, 18-Oct-2026: "like Winman") and the return's actions beside them
-        tabs = [t.strip() for t in pg.locator('#app nav[aria-label="Return"] button').all_inner_texts()]
-        ok([re.sub(r"\s*\d+$", "", t) for t in tabs] == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "exactly four tabs: %s" % tabs)
-        acts = [re.sub(r"\s*\d+$", "", t.strip()) for t in pg.locator('#app nav[aria-label="Return actions"] button').all_inner_texts()]
-        ok(acts == ["To fix", "Make the file", "After filing"], "To fix, Make the file and After filing are actions, not tabs: %s" % acts)
+        # ---- next-tds-clear (19-Oct-2026): the step rail (Deductor · Deductees · Challans · Deductions · Validate & file ·
+        # After filing) in place of the four tabs and the actions beside them
+        STEPS = lambda: J("[...document.querySelectorAll('#app nav[aria-label=Return] button[data-ret-tab]')].map(b => b.dataset.retTab)")
+        ok(STEPS() == ["deductor", "deductees", "challans", "deductions", "file", "after"], "the steps: %s" % STEPS())
+        none = lambda: (pg.click('#app [data-cm-ch="__none"]'), pg.wait_for_timeout(350))
 
         # ---- the Challans tab: the challans listed, the one chosen with its balance, the suggestions for it
         ok(pg.locator("#app [data-challan-match]").count() == 1, "the Challans tab is the matching screen")
-        steps = pg.locator("#app [data-cm-steps] li").all_inner_texts()
-        ok(steps == ["① Challans of this quarter", "② Match deductions", "③ Check and make the file"], "three steps: %s" % steps)
+        ok(pg.locator("#app [data-cm-steps]").count() == 0 and pg.locator("#app [data-cm-tips]").count() == 0, "no ①②③ stepper and no Tips box (the rail; ⋯ › How this works)")
         ok(pg.locator("#app [data-auto-alloc], #app [data-challan-suggest]").count() == 0, "no Auto-allocate button, no Suggested tagging card")
         ok(pg.locator('#app [data-cm-ch="chA"] [data-cm-status="left"]').inner_text().startswith("₹8,640"), "the challan list: chA, ₹8,640 available")
         pick("chA")
@@ -87,18 +86,23 @@ try:
         metric = pg.locator("#app [data-cm-metric]").inner_text()
         ok(re.search(r"\d+ of \d+ deductions matched automatically · \d+ need you", metric), "the measure: %s" % metric)
         ai = pg.locator("#app [data-cm-ai]")
-        ok(len(ai_calls) == 1 and ai.count() == 1 and "AI looked at" in ai.inner_text(), "the AI asked once for what the rules left, its line shown (%s)" % (ai.inner_text() if ai.count() else ""))
+        aiw = J("(document.querySelector('#app [data-cm-ai]') || {}).textContent || ''")
+        ok(len(ai_calls) == 1 and ai.count() == 1 and "AI looked at" in aiw, "the AI asked once for what the rules left, a badge with its words (%s)" % aiw)
         sent = json.dumps(ai_calls[0]) if ai_calls else ""
         ok(ai_calls and all(set(r.keys()) == {"id", "sec", "date", "tds", "party", "pan", "fy", "q"} for r in ai_calls[0]["rows"]) and not re.search(r'"pan": "[A-Z]{5}\d{4}[A-Z]"', sent), "only the agreed fields go to the function, the PAN masked")
         pick("chX")
         aiS = pg.locator(panel("chX") + ' [data-cm-sugg][data-rule="g"]')
         ok(aiS.count() == 1 and "AI: the challan says 194H" in aiS.inner_text(), "the AI's pairing shown like the rules', labelled \"AI: <reason>\"")
+        ok(pg.locator('#app [data-cm-chlist] li:last-child [data-cm-ch="__none"]').count() == 1, "Not matched is the last item of the challan list")
+        none()
         nm = pg.locator("#app [data-cm-none]")
         ok(nm.count() == 1 and "Not matched yet" in nm.inner_text(), "Not matched yet, in red")
         whys = pg.locator("#app [data-cm-none] [data-cm-why]").all_inner_texts()
         ok(whys and all(re.search(r"pay|Move to challan|split|check", w, re.I) for w in whys), "each row not matched has its reason and next step (%s)" % (whys[:2],))
         ok(J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').error || ''").find("on no challan") > 0, "the file refuses while deductions are on no challan")
-        ok(pg.locator('#app [data-cm-block="untagged"]').count() >= 1 and pg.locator("#app [data-cm-make]").is_disabled(), "the checks block the file, Make the file is off")
+        pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(400)
+        ok(pg.locator('#app [data-val-item="unmatched"][data-val-level="error"]').count() == 1 and pg.locator("#app [data-make-fvu]").is_disabled(), "Validate & file: an error blocks the file, Make FVU file is off")
+        pg.click('#app [data-ret-tab="challans"]'); pg.wait_for_timeout(400)
         pick("chA")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-desktop-1-suggestions.png"), full_page=True)
         # ---- Add all suggested (194J April on chJ)
@@ -137,6 +141,7 @@ try:
         ok(not J("(id) => S.books.alloc[id]", may[0]) and float(pg.locator(panel("chM") + " [data-cm-avail]").get_attribute("data-cm-avail")) == 7000, "unticked: taken off, the balance back to ₹7,000")
         pg.evaluate("() => { S.books.matchNo = {}; render(); }"); pg.wait_for_timeout(300)
         # ---- Move to challan (tick a row not matched → the dialog)
+        none()
         mv = [pg.locator("#app [data-cm-none] [data-cm-row]").first.get_attribute("data-cm-row")]
         pg.locator('#app [data-cm-none] [data-cm-row="%s"] input[type=checkbox]' % mv[0]).check(); pg.wait_for_timeout(300)
         ok(pg.locator("[data-cm-selbar]").count() == 1, "ticking shows the bar: Move to challan…")
@@ -171,10 +176,13 @@ try:
         pg.fill('#app [data-cm-portion="chA"] input[aria-label="Interest allocated here"]', "100"); pg.click('#app [data-cm-portion="chA"] [data-cm-portion-save]'); pg.wait_for_timeout(400)
         ok(J("TDSReg.portionFor(TDS.challans().find(c => c.id === 'chA'), '26Q', '2026-27', 'Q1').interest") == 100, "interest allocated on the challan: ₹100 here")
         left = J("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0).length")
+        none()
         ok(left == 1 and "pay" in pg.locator("#app [data-cm-none] [data-cm-why]").first.inner_text().lower(), "one deduction left (chM is short): its next step is to pay (%s)" % pg.locator("#app [data-cm-none] [data-cm-why]").first.inner_text()[:160])
         pg.evaluate("""() => { S.books.challans.push({id: "chM2", bsr: "0510308", serial: "00501", date: "20260707", tax: 1000, interest: 0, section: "194C", minorHead: "200"}); render(); }"""); pg.wait_for_timeout(600)
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
-        ok(pg.locator('#app .cm-checks [data-cm-checks="ok"]').count() == 1 and not pg.locator("#app [data-cm-make]").is_disabled(), "everything matched: Make the file is on")
+        pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(400)
+        ok(pg.locator('#app [data-val-errors="0"]').count() == 1 and not pg.locator("#app [data-make-fvu]").is_disabled(), "everything matched: no error, Make FVU file is on")
+        pg.click('#app [data-ret-tab="challans"]'); pg.wait_for_timeout(400)
         f = J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
         recs = lambda t, k: [l.split("^") for l in t.split("\r\n") if l.split("^")[1:2] == [k]]
         cd, dd = recs(f.get("text", ""), "CD"), recs(f.get("text", ""), "DD")
@@ -185,12 +193,12 @@ try:
         ok(ca[8] == "150.00" and ca[23] == "100.00", "the file: chA as deposited (interest 150) and the interest allocated here (100), field 24")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-desktop-3-done.png"), full_page=True)
         # ---- Make the file: an action, the checks said first
-        pg.click('#app nav[aria-label="Return actions"] [data-ret-tab="file"]'); pg.wait_for_timeout(500)
-        ok(pg.locator('#app [data-file] [data-cm-checks="ok"]').count() == 1, "Make the file: the checks before the file, all clear")
+        pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(500)
+        ok(pg.locator('#app [data-validate] [data-val-errors="0"]').count() == 1 and pg.locator('#app [data-validate] [data-file]').count() == 1, "Validate & file: the checks and the File row, no error")
         # ---- the Deductions tab: the Challan column, and challan first
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductions"]'); pg.wait_for_timeout(600)
         cell = pg.locator("#app [data-ch-cell]").first
-        ok(cell.count() == 1 and re.search(r"0510308 · \d\d-\w{3}-2026.*\d{5} · 194[CJ]", cell.inner_text(), re.S), "the Challan column: BSR · date, serial · section (%s)" % cell.inner_text().replace("\n", " "))
+        ok(cell.count() == 1 and re.search(r"^\d{5} · \d\d-\w{3} · 194[CJ]", cell.inner_text()) and "0510308" in (cell.get_attribute("title") or ""), "the Challan column, one line: serial · date · section, the BSR on a hover (%s)" % cell.inner_text().replace("\n", " "))
         ok(pg.locator("#app select[aria-label^='Challan for']").count() == 0, "no dropdown that re-tags silently")
         cell.click(); pg.wait_for_timeout(400)
         ok(pg.locator("[data-cm-move-dialog]").count() == 1, "a click opens the Move dialog")
@@ -213,7 +221,7 @@ try:
         # ---- Deductees (PAN): a deductee with no PAN on top in red; fixed once, every deduction follows
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductees"]'); pg.wait_for_timeout(500)
         first = pg.locator("#tdsDeTable tbody tr").first
-        ok(first.get_attribute("data-dee-bad") == "1" and "no PAN" in first.inner_text(), "no PAN: on top, in red (%s)" % first.inner_text().replace("\t", " | ")[:120])
+        ok(first.get_attribute("data-dee-bad") == "1" and first.locator("[data-pan-box]").count() == 1 and "No PAN" in first.inner_text(), "no PAN: on top, its PAN box in the row (%s)" % first.inner_text().replace("\t", " | ")[:120])
         ok("Not checked yet" in pg.locator("#tdsDeTable").inner_text() or pg.locator("#tdsDeTable [data-pan-state]").count() > 0, "the PAN status column")
         party = J("TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && TDS.sec(r.section) === '194J').party")
         key = J("(p) => normName(p)", party)
@@ -258,11 +266,10 @@ try:
         f = J("TDS24Q_FILE.build('2026-27', 'Q1', TDS26Q.firmDetails())")
         ok(not f.get("error") and len(recs(f["text"], "CD")) == 2 and len(recs(f["text"], "DD")) == 3, "Form 138 from the salary sheet: CD and DD records (%s)" % (f.get("error") or ""))
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(500)
-        ok(pg.locator('#app [data-sheet-fvu]:has-text("Download the Form 138 text file")').count() == 1, "the Return file tab: Download the Form 138 text file")
+        ok(pg.locator('#app [data-sheet-fvu]:has-text("Make FVU file")').count() == 1, "Validate & file: Make FVU file (Form 138 from the salary sheet)")
         pg.evaluate("() => { S.tdsTab = 'deductions'; S.q24Open = 'ABCPM1234R'; render(); }"); pg.wait_for_timeout(500)
         ok(pg.locator("#app [data-plain-table] [data-ch-cell]").count() == 3, "Form 138's Deductions: each salary payment with its challan")
-        tabs = [re.sub(r"\s*\d+$", "", t.strip()) for t in pg.locator('#app nav[aria-label="Return"] button').all_inner_texts()]
-        ok(tabs == ["Deductor", "Deductees (PAN)", "Challans", "Deductions"], "Form 138: the same four tabs (%s)" % tabs)
+        ok(STEPS() == ["deductor", "deductees", "people", "challans", "deductions", "file", "after"], "Form 138: the same steps and Employees & declarations (%s)" % STEPS())
         pg.evaluate("() => { S.tdsQ = 'Q4'; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-q4-wait]").count() == 1, "Q4: still waits on Protean's layout, said plainly")
         br.close()
