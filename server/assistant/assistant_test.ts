@@ -258,6 +258,30 @@ Deno.test("general guidance: web search links shown, blue label", async () => {
   eq(r.done.links, [{ url: "https://incometaxindia.gov.in/Pages/tds-rates.aspx", title: "TDS rates" }], "the link used");
 });
 
+// the owner, 19-Oct-2026: "Hindi, English and Hinglish must; other regional languages would be an advantage"
+Deno.test("the reply's language: the system prompt's rule; the voice language as a hint; Hindi or Hinglish never gets FinCom's fixed English lines; a Hindi question has its own cache key", async () => {
+  const c = new MockClaude([[text("किराये पर TDS धारा 194-I के तहत 10% है।")], [text("Haan, Ashvattha Transport Co ne 194C ki limit cross ki hai: ₹40,000.00, TDS nahi kata.")],
+    [text("वेतन पर TDS धारा 192 के तहत कटता है।")], [text("Rent par TDS 10% hai.")]]);
+  const r = await ask(c, { question: "किराये पर टीडीएस कितना काटना है?", client_id: CLIENT, lang: "hi-IN" });
+  const p = c.calls[0] as any;
+  assert(/Language: reply in the language and script of the user's question/.test(p.system[0].text) && /Hinglish/.test(p.system[0].text) && /Tamil/.test(p.system[0].text), "the system prompt has the language rule");
+  assert(/figures in 0-9 digits, ₹ amounts/.test(p.system[0].text) && /ledger and party names/.test(p.system[0].text), "figures, ₹ amounts and ledger names kept as they are");
+  assert(!/plain English/.test(p.system[0].text), "no 'plain English' left in the prompt");
+  const last = JSON.stringify(p.messages[p.messages.length - 1]);
+  assert(last.includes("Voice language chosen: Hindi."), "the hint reaches the model with the question: " + last.slice(0, 400));
+  eq([c.routerCalls.length, r.done.text], [0, "किराये पर TDS धारा 194-I के तहत 10% है।"], "Hindi: no routing step; the model's Hindi reply");
+  // a Hinglish question the keyword router would answer with its English line: the model answers instead, in Hinglish
+  const h = await ask(c, { question: "Which suppliers crossed 30,000 under 194C without TDS this year? batao", client_id: CLIENT, lang: "hinglish" });
+  eq([c.calls.length, h.done.route], [2, "model"], "Hinglish: not the keyword router's English line");
+  assert(JSON.stringify((c.calls[1] as any).messages.slice(-1)).includes("Voice language chosen: Hinglish"), "the Hinglish hint");
+  // another Hindi question: not the first one's cached answer (the cache key keeps the Devanagari letters)
+  const r2 = await ask(c, { question: "वेतन पर टीडीएस कितना काटना है?", client_id: CLIENT, lang: "hi-IN" });
+  eq([c.calls.length, !!r2.done.cached, r2.done.text], [3, false, "वेतन पर TDS धारा 192 के तहत कटता है।"], "a second Hindi question is answered afresh");
+  // English chosen (or a made-up code): no hint line at all
+  await ask(c, { question: "TDS rate on rent for an individual? " + crypto.randomUUID().slice(0, 6), client_id: null, lang: "xx-YY" });
+  assert(!JSON.stringify((c.calls[3] as any).messages).includes("Voice language chosen"), "an unknown lang: no hint");
+});
+
 Deno.test("a request to post or delete: refused, with the screen that does it; no tool changes anything", async () => {
   const c = new MockClaude([[tool("point_to_screen", { screen: "post_to_tally", why: "Posting is done there, after you check each bill." })], [text("I can't post anything to Tally. Use Post to Tally on the client's Purchase page.")]]);
   const r = await ask(c, { question: "Post these bills to Tally now", client_id: CLIENT });

@@ -17,6 +17,7 @@ import "./assistant.css";
 import "./asst-upload.js";   // AUpload: the panel's Upload (window.AUpload, ASST.upload)
 import { useDismiss } from "./dismiss.js";
 import { AssistantLauncher } from "./AssistantLauncher.jsx";
+import { VoiceInput, SpeakButton, stopVoice } from "./AssistantVoice.jsx";
 
 // what an answer rests on, said once in a small grey "Source:" line at the end of the reply (the owner, 14-Oct-2026: a plain
 // chat, no coloured labels); the line opens the detail (the entries the AI used, the web pages, the figures recomputed)
@@ -187,7 +188,7 @@ function Turn({ t, latest }) {
     {t.cached && <p className="note asst-cached" data-asst-cached="">Answered from earlier today on the same books: no AI cost.</p>}
     {t.warn && <p className="asst-error warn80" data-asst-warn="">{t.warn.message}</p>}
     {(t.live || t.text) && <Words t={t} />}
-    {working && <p className="asst-status" role="status" data-asst-busy=""><span className="asst-spin" aria-hidden="true" />{step ? String(step.label || "Working").replace(/[.…]+$/, "") + "…" : "Thinking…"}</p>}
+    {working && <Thinking label={step ? String(step.label || "Working").replace(/[.…]+$/, "") : "Thinking"} />}
     {(t.cases || []).length > 0 && <Cases t={t} />}
     {t.error && <p className={"asst-error" + (t.error.kind === "cap" ? " cap" : "")} data-asst-error={t.error.kind}>{t.error.message}</p>}
     {verdicts.length > 0 && <div className="asst-fixes" data-asst-fixes="">{verdicts.map((x) => <p key={x.id}>AI said <s>{x.text || "₹" + money(x.ai)}</s>, FinCom's books say <b>₹{money(x.fincom)}</b> ({x.name}). FinCom's figure is used.</p>)}</div>}
@@ -223,6 +224,7 @@ function Turn({ t, latest }) {
     </div>}
     {!t.error && <footer className="asst-actions">
       <button type="button" className="asst-act" onClick={() => ASST.copy(t)} title="Copy the answer and its tables"><Copy size={13} aria-hidden="true" /> Copy</button>
+      {String(t.text || "").trim() && <SpeakButton text={t.text} />}
       {(t.results || []).some((r) => (r.rows || []).length) && <button type="button" className="asst-act" onClick={() => ASST.excel(t)} title="Export the tables to Excel"><FileSpreadsheet size={13} aria-hidden="true" /> Export</button>}
       {t.reported ? <span className="note">Reported. Thank you.</span> : rep == null ? <button type="button" className="asst-act" data-asst-wrong="" onClick={() => setRep("")} title="Tell the firm's owner and FinCom's developers"><ThumbsDown size={13} aria-hidden="true" /> Wrong answer?</button>
         : <span className="asst-rep"><input value={rep} maxLength={300} aria-label="What is wrong with this answer" placeholder="What is wrong? (optional, one line)" autoFocus onChange={(e) => setRep(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ASST.report(t, rep); }} /><Button className="btn small" onClick={() => ASST.report(t, rep)}>Send</Button></span>}
@@ -230,6 +232,17 @@ function Turn({ t, latest }) {
     </div>}
     </div>
   </article>;
+}
+
+// The thinking loader (the owner, 19-Oct-2026: "loader while thinking should be there like Samsung or Claude"): FinCom's
+// spark turning and breathing, the step under way in plain words ("Reading the TDS ledgers", from the stream) and three
+// dots in a wave; until the first word, then gone. With reduced motion the spark and the dots stand still (assistant.css).
+const SPARK = "M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z";
+function Thinking({ label }) {
+  return <p className="asst-status" role="status" data-asst-busy="">
+    <span className="asst-think" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d={SPARK} /></svg></span>
+    <span className="asst-think-txt">{label}</span><span className="asst-think-dots" aria-hidden="true"><i /><i /><i /></span>
+  </p>;
 }
 
 // a draft as a Word document or a PDF (the browser's print), marked DRAFT and AI-drafted
@@ -281,10 +294,10 @@ export default function Assistant() {
     place();
     return () => { cancelAnimationFrame(raf); if (ro) ro.disconnect(); };
   }, [where, a.open]);
-  // the question box keeps the cursor: after Ask (Enter, the button, a suggestion, "Which one?") it stays in the box, so the
-  // next question can be typed straight away (it was greyed out while FinCom answered, which threw the cursor out of it)
-  const ask = (q) => { ASST.ask(q); const b = box.current; if (b && document.activeElement !== b) b.focus({ preventScroll: true }); };
-  const suggest = cid ? ASST.SUGGEST.client : ASST.SUGGEST.firm;
+  // the question box keeps the cursor: after Ask (Enter, the button, "Which one?") it stays in the box, so the next
+  // question can be typed straight away (it was greyed out while FinCom answered, which threw the cursor out of it).
+  // Voice typing stops first: a word heard after Ask never lands in the next question (AssistantVoice.jsx).
+  const ask = (q) => { stopVoice(); ASST.ask(q); const b = box.current; if (b && document.activeElement !== b) b.focus({ preventScroll: true }); };
   return <>
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
       <DrawerContent className="asst-panel" data-overlay="asst" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
@@ -312,9 +325,8 @@ export default function Assistant() {
           <div className={"asst-thread" + (ups ? " has-ups" : "")} data-asst-thread="" ref={thread}>
             {!turns.length && <div className="asst-empty">
               <span className="asst-mark big" aria-hidden="true"><Sparkles size={18} strokeWidth={2.2} /></span>
-              <p className="asst-empty-t">{co && cid ? "Ask about " + co.name : "Ask FinCom"}</p>
-              <p className="note">Figures come from the books FinCom holds; tax questions are answered with their sources. Try one of these:</p>
-              <div className="asst-suggest" data-asst-suggest="">{suggest.map((s) => <button key={s} type="button" className="chip" onClick={() => ask(s)}>{s}</button>)}</div>
+              <p className="asst-empty-t">{co && cid ? co.name : "Ask FinCom"}</p>
+              <p className="note" data-asst-empty-line="">{cid ? "Ask about this client's books, TDS or GST" : "Ask a tax or accounting question, or about any client's books"}: type or speak, in English, Hindi, Hinglish or your own language.</p>
             </div>}
             {turns.map((t, i) => <Turn key={t.id} t={t} latest={i === turns.length - 1} />)}
             {AUpload.list().length > 0 && <Suspense fallback={null}><Uploads /></Suspense>}
@@ -329,6 +341,7 @@ export default function Assistant() {
               {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
                 <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading} aria-label="Upload files"><Paperclip size={15} aria-hidden="true" /> {a.uploading ? "Reading…" : "Upload"}</button>
                 {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
+              <VoiceInput a={a} onText={(s) => { a.q = s; ASST.draw(); }} />
               <span className="asst-hint" id="asstHint">{a.busy ? "FinCom is answering… you can type the next question" : <><kbd>Enter</kbd> to ask · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</>}</span>
               <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || !String(a.q || "").trim()} title={a.busy ? "FinCom is answering the last question" : !String(a.q || "").trim() ? "Type a question first" : "Ask (Enter)"}>
                 {a.busy ? <span className="asst-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />} Ask</Button>

@@ -30,14 +30,11 @@
 .iconbtn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); border-radius: var(--radius-control); padding: 4px 8px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .iconbtn:hover { color: var(--foreground); border-color: var(--border-strong); }
 
-/* the empty conversation: what it is, and questions to start with */
+/* the empty conversation: what it is, in one line (the owner, 19-Oct-2026: no suggested questions) */
 .asst-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 2px 8px; }
 .asst-empty-t { margin: 4px 0 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: var(--tracking-display); color: var(--foreground); }
 .asst-empty .note { margin: 0 0 6px; font-size: 13px; max-width: 52ch; }
-.asst-suggest { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
-.asst .chip, .asst-suggest .chip, .asst-cites .chip { border: 1px solid var(--border); background: var(--surface-muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; color: var(--foreground); cursor: pointer; text-align: left; }
-.asst-suggest .chip { border-radius: var(--radius-control); background: var(--surface); padding: 8px 12px; font-size: 13px; line-height: 1.4; transition: border-color var(--duration-fast, 160ms) ease, background-color var(--duration-fast, 160ms) ease; }
-.asst-suggest .chip:hover { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); background: var(--accent-subtle); }
+.asst .chip, .asst-cites .chip { border: 1px solid var(--border); background: var(--surface-muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; color: var(--foreground); cursor: pointer; text-align: left; }
 
 /* one exchange: the question as its header, the answer under FinCom's mark; a rule between exchanges */
 .asst-turn { display: flex; flex-direction: column; gap: 12px; padding: 18px 0 20px; }
@@ -70,9 +67,24 @@
 .asst-caret i:nth-child(3) { animation-delay: .3s; }
 @keyframes asst-spin { to { transform: rotate(360deg); } }
 @keyframes asst-dot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: .9; } }
+/* the thinking loader (Assistant.jsx, Thinking): FinCom's spark turning and breathing in a soft halo, the step in words, and
+   three dots in a wave (the owner, 19-Oct-2026: "like Samsung or Claude"); the accent follows the theme, light or dark */
+.asst-think { position: relative; display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; color: var(--accent); }
+.asst-think::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 30%, transparent) 0%, transparent 70%); animation: asst-halo 1.8s ease-in-out infinite; }
+.asst-think svg { position: relative; fill: currentColor; animation: asst-spark 2.4s cubic-bezier(.45, 0, .55, 1) infinite; transform-origin: 50% 50%; }
+.asst-think-txt { color: var(--foreground); font-weight: 500; }
+.asst-think-dots { display: inline-flex; gap: 3px; align-items: flex-end; height: 10px; margin-left: -3px; }
+.asst-think-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); opacity: .35; animation: asst-wave 1.2s ease-in-out infinite; }
+.asst-think-dots i:nth-child(2) { animation-delay: .15s; }
+.asst-think-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes asst-spark { 0% { transform: rotate(0) scale(.82); } 50% { transform: rotate(180deg) scale(1.08); } 100% { transform: rotate(360deg) scale(.82); } }
+@keyframes asst-halo { 0%, 100% { transform: scale(.7); opacity: .5; } 50% { transform: scale(1.15); opacity: 1; } }
+@keyframes asst-wave { 0%, 60%, 100% { transform: translateY(0); opacity: .3; } 30% { transform: translateY(-4px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .asst-spin { animation-duration: 2.4s; }
   .asst-caret i { animation: none; opacity: .55; }
+  .asst-think::before, .asst-think svg, .asst-think-dots i { animation: none; }
+  .asst-think-dots i { opacity: .6; }
 }
 
 /* the composer: rounded, the box growing with what is typed (up to a few lines), Upload and Ask on one line under it */
@@ -266,3 +278,24 @@
 /* the room the launcher takes at the foot (set on :root while it is shown): the page can always be scrolled clear of it */
 main, #app.wrap { padding-bottom: max(calc(140px + var(--bottom-banner-h, 0px)), var(--ask-fab-space, 0px)); }
 html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var(--ask-fab-space, 0px)); }
+
+/* voice typing (AssistantVoice.jsx): the mic and the language in the box's bar; while it listens the mic is red with a soft
+   ring; one plain line under the bar for the browser's note or what went wrong */
+.asst-voice { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.asst-panel .asst-mic { position: relative; width: 32px; height: 32px; padding: 0; justify-content: center; }
+.asst-panel .asst-mic.on { color: var(--danger); background: color-mix(in oklab, var(--danger) 10%, transparent); }
+.asst-mic-pulse { position: absolute; inset: 2px; border-radius: 50%; border: 2px solid color-mix(in oklab, var(--danger) 55%, transparent); animation: asst-ring 1.4s ease-out infinite; }
+@keyframes asst-ring { 0% { transform: scale(.75); opacity: 1; } 100% { transform: scale(1.25); opacity: 0; } }
+.asst-panel select.asst-lang { field-sizing: content; width: auto; height: 28px; max-width: 110px; min-width: 0; padding: 0 22px 0 6px; background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; border: 1px solid transparent; border-radius: var(--radius-control); background-color: transparent;
+  color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; text-overflow: ellipsis; }
+.asst-panel select.asst-lang:hover, .asst-panel select.asst-lang:focus-visible { border-color: var(--border); background-color: var(--surface-muted); color: var(--foreground); }
+.asst-voice-msg { order: 9; flex: 1 0 100%; display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+.asst-voice-msg .linkbtn { margin-left: auto; text-decoration: none; }
+.asst-askbar:has(.asst-voice-msg) { flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .asst-mic-pulse { animation: none; opacity: .6; } }
+@media (max-width: 600px) {
+  .asst-askbar { gap: 4px; }
+  .asst-askbar .asst-hint { display: none; }
+  .asst-askbar .asst-voice { margin-left: auto; }
+  .asst-panel select.asst-lang { max-width: 84px; }
+}

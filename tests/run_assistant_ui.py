@@ -4,7 +4,7 @@
   made-up books of tests/fixtures/books (assistant_stand.py). The figures shown come from the book tools on the database.
 Checked, with a screenshot of each in tests/out/assistant/:
   on by default (the owner's decision of 14-Oct-2026); the owner switches it off and on in Settings › AI help;
-  the launcher and Ctrl+J; the panel's suggestions and privacy note; a green answer (194C, Ashvattha 40,000, amounts right
+  the launcher and Ctrl+J; the panel's privacy note (no suggested questions, 19-Oct-2026); a green answer (194C, Ashvattha 40,000, amounts right
   aligned, a date that opens the entry); an amber answer with a made-up voucher removed and a wrong figure corrected
   (AI 4,000 struck out, FinCom 3,600) and its row on the owner's Mismatches list; a blue answer with its web source; a
   notice (PDF) read with the DRAFT reply and "Add to due list" (only on the click); an Excel file made by the function;
@@ -141,7 +141,8 @@ try:
         ok(pg.locator("[data-asst-panel]").count() == 1, "Ctrl+J opens the panel")
         ok(pg.locator("[data-asst-first-notice]").count() == 1, "first use: the notice (questions may be processed by an AI provider; identifiers are masked)")
         pg.locator("[data-asst-first-notice] button").click(); pg.wait_for_timeout(300)
-        ok(pg.locator("[data-asst-suggest] button").count() >= 5, "suggested questions")
+        # the owner, 19-Oct-2026: "Ask FinCom should not have suggestive questions" (tests/run_assistant_voice.py)
+        ok(pg.locator("[data-asst-suggest], .asst-empty button").count() == 0, "no suggested questions in the empty panel")
         # the owner, 14-Oct-2026 (a plain chat): no standing disclaimer under the box (it is in Settings › AI), one uploader
         ok(pg.locator("[data-asst-panel] [data-asst-privacy]").count() == 0 and "never posts, files or changes" not in pg.inner_text("[data-asst-panel]"), "chat: no disclaimer line in the panel")
         ok(pg.locator("[data-asst-panel] input[type=file]").count() == 1 and pg.locator("[data-asst-panel] [data-asst-upload]").count() == 1
@@ -214,14 +215,14 @@ try:
         GEO = """() => { const s = document.querySelector('[data-asst-scroll]'), qs = [...document.querySelectorAll('[data-asst-thread] [data-asst-qhead]')];
           const l = document.querySelector('.asst-turn.latest'), w = l.querySelector('[data-asst-words]');
           return {tops: qs.map(q => Math.round(q.getBoundingClientRect().top * 10) / 10), scroll: s.scrollTop, focus: document.activeElement && document.activeElement.id,
-            status: (l.querySelector('[data-asst-busy]') || {}).innerText || '', spin: !!l.querySelector('[data-asst-busy] .asst-spin'), caret: l.querySelectorAll('[data-asst-caret]').length,
+            status: (l.querySelector('[data-asst-busy]') || {}).innerText || '', spin: !!l.querySelector('[data-asst-busy] .asst-think'), caret: l.querySelectorAll('[data-asst-caret]').length,
             words: w ? w.innerText : '', rawBold: w ? /[*]{2}/.test(w.innerText) : false, scrollerTop: s.getBoundingClientRect().top, qLatest: l.querySelector('[data-asst-q]').textContent}; }"""
         g0 = pg.evaluate(GEO)
         ok(g0["focus"] == "asstQ", "Ask with Enter: the question box keeps the cursor (%s)" % g0["focus"])
         ok(g0["qLatest"] == sq and g0["tops"][-1] >= g0["scrollerTop"] and g0["tops"][-1] - g0["scrollerTop"] < 40, "the question just asked goes to the top of the panel at once (%s, %s)" % (g0["tops"][-1], g0["scrollerTop"]))
         pg.evaluate("__push({t: 'tool', name: 'make_file', label: 'Making the file'})"); pg.wait_for_timeout(250)
         g1 = pg.evaluate(GEO)
-        ok(g1["status"].strip() == "Making the file…" and g1["spin"] and g1["caret"] == 0, "working: a quiet line with a small spinner, 'Making the file…' (%s)" % g1["status"])
+        ok(g1["status"].strip() == "Making the file" and g1["spin"] and g1["caret"] == 0, "working: the thinking mark and the step, 'Making the file' (%s)" % g1["status"])
         seen = [g1]
         for piece in ["Under the Income-tax Act, 1961, rent of plant and machinery is **2", "%** under section 194-I(a).\n\n- On a payment above ", "₹50,000 a month\n- Under the Income-tax Act, 2025, section 393 keeps it at ", "**2%**.", "\n\nCheck the PAN before deducting."]:
             pg.evaluate("(d) => __push({t: 'text', d})", piece); pg.wait_for_timeout(180)
