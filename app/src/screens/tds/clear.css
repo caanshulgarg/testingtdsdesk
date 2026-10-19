@@ -248,3 +248,10 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #app #tdsDnTable thead .hf-sel { width: 14px; min-width: 14px; max-width: 14px; }
 #app #tdsDnTable > tbody > tr > td.dt, #app #tdsDnTable > thead > tr > th.dt { padding-left: 5px !important; padding-right: 4px !important; }
 @media (max-width: 1439px) { .dd-chf { flex-direction: row; flex-wrap: wrap; column-gap: 8px; } }
+
+/* round 86 (19-Oct-2026): the deductions with no challan of one section and month under one header line (DedSide GroupHead) */
+#tdsDnTable tr.lt-grp > td { background: color-mix(in oklab, var(--bad-soft, #fdecec) 55%, var(--paper, #fff)); border-top: 1px solid var(--line, #e3e3e3); padding: 6px 10px; text-align: left; white-space: normal; }
+.dd-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; line-height: 1.35; }
+.dd-grp .dd-grp-pay { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dd-grp .dd-grp-add { flex-basis: 100%; }
+.vf-tally summary { cursor: pointer; }

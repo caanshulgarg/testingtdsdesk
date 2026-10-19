@@ -48,6 +48,7 @@ function tmInr(paise){ return "₹" + new Intl.NumberFormat("en-IN", {minimumFra
 function tmYmd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 8 ? t.slice(0, 8) : t; }
 function tmMonth(ym){ const s = String(ym || ""); return s.length >= 6 ? TM_MON[+s.slice(4, 6) - 1] + " " + s.slice(0, 4) : ""; }
 function tmDmy(d){ const s = tmYmd(d); return s.length === 8 ? s.slice(6, 8) + "-" + s.slice(4, 6) + "-" + s.slice(0, 4) : ""; }
+function tmDMon(d){ const s = tmYmd(d); return s.length === 8 ? s.slice(6, 8) + "-" + TM_MON[+s.slice(4, 6) - 1].slice(0, 3) + "-" + s.slice(0, 4) : ""; }     // round 86: 07-Feb-2026, as the app writes dates
 function tmFyOf(d){ const t = tmYmd(d), y = +t.slice(0, 4), m = +t.slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); }
 function tmNextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); }
 // the section of a challan and of a deduction agree: the same, or 194J and its parts (194JA, 194JB), 206C and its codes
@@ -245,14 +246,37 @@ function tmReasons(rows, chs, sugg, opt){
     const k = r.sec + "|" + tmYmd(r.date).slice(0, 6);
     (groups[k] = groups[k] || {sec: r.sec, ym: tmYmd(r.date).slice(0, 6), rows: [], used: !!after.length}).rows.push(r);
   });
-  Object.values(groups).forEach(g => {
+  // round 86 (19-Oct-2026, the owner: one sentence repeated on 38 rows): the reason is the group's, said once: each row of
+  // a section and month carries the same group object {key, sec, ym, n, tds, intr, pay, used, head, state, words, step,
+  // paid}; head the line a group starts with ("194C · July 2026 · 12 deductions · TDS ₹14,142.27"), state what is wrong.
+  // A TDS payment in Tally with no BSR code yet (opt.tally: [{vid, date, tax, sections}], the app's payments not yet
+  // challans of this quarter and the next) of the section, deposited on or after the group's first deduction, is named in place of "No
+  // challan paid yet": its BSR code and serial make it the challan (step "bsr"); each payment named by one group, the
+  // earliest month first, one deposited in the month or the next preferred
+  const tally = (opt.tally || []).filter(p => p && tmYmd(p.date).length === 8 && tmP(p.tax) > 0).slice().sort((a, c) => tmYmd(a.date).localeCompare(tmYmd(c.date)) || (String(a.vid) < String(c.vid) ? -1 : 1));
+  const named = new Set();
+  Object.values(groups).sort((a, c) => a.ym.localeCompare(c.ym) || (a.sec < c.sec ? -1 : a.sec > c.sec ? 1 : 0)).forEach(g => {
     const tds = g.rows.reduce((a, r) => a + tmP(r.tds), 0), intr = g.rows.reduce((a, r) => a + tmLateInterest(r, today, pct), 0);
-    const words = (g.used ? "The challans of " + g.sec + " for " + tmMonth(g.ym) + " are used up" : "No challan paid yet for " + g.sec + ", " + tmMonth(g.ym)) + ": pay " + tmInr(tds + intr) +
+    const first = g.rows.reduce((a, r) => (!a || tmYmd(r.date) < a ? tmYmd(r.date) : a), "");
+    const fits = tally.filter(p => !named.has(p) && tmYmd(p.date) >= first && (!(p.sections || []).length || (p.sections || []).some(x => tmSecOk(x, g.sec))));
+    const paid = fits.find(p => [g.ym, tmNextYm(g.ym)].includes(tmYmd(p.date).slice(0, 6))) || fits[0] || null;
+    if (paid) named.add(paid);
+    const head = g.sec + " · " + tmMonth(g.ym) + " · " + g.rows.length + (g.rows.length === 1 ? " deduction" : " deductions") + " · TDS " + tmInr(tds);
+    const words = paid ? "Paid in Tally on " + tmDMon(paid.date) + " " + tmInr(tmP(paid.tax)) + " for " + g.sec + ", " + tmMonth(g.ym) + " — add its BSR code and serial (Make it a challan)" + (g.rows.length > 1 ? " for these " + g.rows.length + " deductions" : "") + "."
+      : (g.used ? "The challans of " + g.sec + " for " + tmMonth(g.ym) + " are used up" : "No challan paid yet for " + g.sec + ", " + tmMonth(g.ym)) + ": pay " + tmInr(tds + intr) +
       " (TDS " + tmInr(tds) + (intr ? " + interest " + tmInr(intr) + " to " + tmDmy(today) : "") + ")" + (g.rows.length > 1 ? " for these " + g.rows.length + " deductions" : "") + ", then add the challan's details (Add challan).";
-    g.rows.forEach(r => out.push({rowId: r.id, step: "pay", words, pay: tds + intr, sec: g.sec, ym: g.ym}));
+    const state = paid ? "Paid in Tally on " + tmDMon(paid.date) + " " + tmInr(tmP(paid.tax)) + " — add its BSR code and serial"
+      : (g.used ? "its challans are used up" : "no challan yet") + (intr ? ": pay " + tmInr(tds + intr) + " with interest " + tmInr(intr) + " to " + tmDMon(today) : "");
+    const step = paid ? "bsr" : "pay";
+    const grp = {key: g.sec + "|" + g.ym, sec: g.sec, ym: g.ym, n: g.rows.length, tds, intr, pay: paid ? 0 : tds + intr, used: g.used, head, state, words, step,
+      paid: paid ? {vid: paid.vid, date: tmYmd(paid.date), tax: tmP(paid.tax)} : null, ids: g.rows.map(r => r.id)};
+    g.rows.forEach(r => out.push({rowId: r.id, step, words, pay: grp.pay, sec: g.sec, ym: g.ym, group: grp}));
   });
   return out;
 }
+
+// the groups of tmReasons' answer, once each, in its order (by month, then section)
+function tmReasonGroups(reasons){ const seen = new Set(), out = []; (reasons || []).forEach(z => { if (z && z.group && !seen.has(z.group.key)){ seen.add(z.group.key); out.push(z.group); } }); return out; }
 
 // ---------------------------------------------------------------- g. the AI, for what the rules left
 const TM_CONF = ["high", "medium", "low"];
@@ -364,4 +388,4 @@ function tmAiCheck(ai, rows, chs, opt){
   return {sugg: out, dropped, why};
 }
 
-export { tmReasons, tmLateInterest, tmMonths, TM_VERSION, TM_RULES, TM_SCHEMA, TM_SYSTEM, TM_AI_ROWS, TM_AI_CHS, tmNum, tmP, tmInr, tmYmd, tmMonth, tmDmy, tmFyOf, tmSecOk, tmYearOk, tmDue, tmRules, tmMask, tmAiInput, tmAiPrompt, tmAiParse, tmAiCheck };
+export { tmReasons, tmReasonGroups, tmLateInterest, tmMonths, TM_VERSION, TM_RULES, TM_SCHEMA, TM_SYSTEM, TM_AI_ROWS, TM_AI_CHS, tmNum, tmP, tmInr, tmYmd, tmMonth, tmDmy, tmFyOf, tmSecOk, tmYearOk, tmDue, tmRules, tmMask, tmAiInput, tmAiPrompt, tmAiParse, tmAiCheck };

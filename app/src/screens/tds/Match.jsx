@@ -229,10 +229,21 @@ export function ChallanMatch({ fy, q, form, tallyPays }) {
           <span className={"cm-chl" + (notYet.length ? " bad" : "")}>Not matched ({notYet.length})</span><span className="cm-chbal">{money(notYet.reduce((a, r) => a + r.tds, 0))}</span></button></li></ul>
       <div className="cm-side">{none ? <section className="dash-card cm-none" data-cm-none={notYet.length}>
           <div className={"cm-card-h" + (notYet.length ? " bad" : "")}><b>Not matched yet ({notYet.length} · {money(notYet.reduce((a, r) => a + r.tds, 0))})</b><span className="note"> · each with its reason and the next step</span></div>
-          {notYet.length ? <ul className="cm-rows">{notYet.map((r) => { const w = why[r.id];
-            return <RowLine key={r.id} r={r} locked={locked}>
+          {notYet.length ? <ul className="cm-rows">{(() => {
+            // round 86: the deductions of one section and month with no challan, under one line saying why (once)
+            const seen = new Set(), out = [];
+            notYet.forEach((r) => { const w = why[r.id], g = w && w.group;
+              if (g) {
+                if (seen.has(g.key)) return; seen.add(g.key);
+                out.push(<li key={"g:" + g.key} className="cm-grp" data-cm-group={g.key}><div className="cm-why" data-cm-why={g.step}><b>{g.head}</b> — {g.words}
+                  {!locked && (g.step === "bsr" ? <> <button className="linkbtn" onClick={() => setPays(true)}>Make it a challan…</button></> : <> <button className="linkbtn" onClick={() => setAdding(true)}>Add challan</button></>)}</div></li>);
+                notYet.filter((x) => why[x.id] && why[x.id].group && why[x.id].group.key === g.key).forEach((x) => out.push(<RowLine key={x.id} r={x} locked={locked} />));
+                return;
+              }
+              out.push(<RowLine key={r.id} r={r} locked={locked}>
               <div className="cm-why" data-cm-why={w ? w.step : "none"}>{w ? w.words : "Not matched."}
-                {!locked && w && (w.step === "pay" ? <button className="linkbtn" onClick={() => setAdding(true)}>Add challan</button> : w.step === "move" ? <button className="linkbtn" onClick={() => tdsMoveOpen([r.id])}>Move to challan…</button> : null)}</div></RowLine>; })}</ul>
+                {!locked && w && (w.step === "pay" ? <button className="linkbtn" onClick={() => setAdding(true)}>Add challan</button> : w.step === "move" ? <button className="linkbtn" onClick={() => tdsMoveOpen([r.id])}>Move to challan…</button> : null)}</div></RowLine>); });
+            return out; })()}</ul>
             : <p className="note">Every {unit.replace(/s$/, "")} is on a challan or in a suggestion.</p>}</section>
         : sel ? <ChallanTicker c={sel} form={form} fy={fy} q={q} locked={locked} sugg={sugg} byId={byId} /> : null}</div>
     </div>

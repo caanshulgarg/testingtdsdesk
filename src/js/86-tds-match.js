@@ -103,9 +103,19 @@ const TDSMatch = {
       if (!S.books) return [];
       const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx).concat(TDS.formRows(form).filter(r => r.fy === fy && r.q === q && !r.challan && !(r.tds > 0.005)).map(r => { const m = form === "24Q" ? {} : TDS26Q.remark(r, form) || {}; return {id: r.id, sec: this.sec(r), date: TDS.ymd(r.date), tds: 0, party: r.party, remark: m.remark === "A" ? "A" : "", cert: m.certFull || m.certNo || ""}; }));
       let today = ""; try { today = istToday(); } catch (e){}
-      return tmReasons(rows, this.chs(cx, "any"), this.suggestNow(form, fy, q).filter(s => s.ids.length), {fy, q, today, pct: form === "27EQ" ? 1 : 1.5});
+      return tmReasons(rows, this.chs(cx, "any"), this.suggestNow(form, fy, q).filter(s => s.ids.length), {fy, q, today, pct: form === "27EQ" ? 1 : 1.5, tally: this.tallyPays(fy, q)});
     };
     return typeof perRender === "function" ? perRender(this, k, f) : f();
+  },
+  // round 86 (19-Oct-2026): the TDS payments in Tally not yet challans (no BSR code given), of this quarter and the next:
+  // tmReasons names one for a section and month in place of "No challan paid yet"
+  tallyPays(fy, q){
+    try {
+      const qs = ["Q1", "Q2", "Q3", "Q4"], i = qs.indexOf(q), nfy = i === 3 ? (+String(fy).slice(0, 4) + 1) + "-" + String((+String(fy).slice(0, 4) + 2) % 100).padStart(2, "0") : fy, nq = qs[(i + 1) % 4];
+      const allCh = TDS.challans();
+      return TDS.paymentsFromBooks().filter(p => num(p.tax) > 0.005 && [fy + q, nfy + nq].includes(TDS.fyOf(p.date) + TDS.qOf(p.date)) && TDSTally.notChallan(p, allCh))
+        .map(p => ({vid: p.vid, date: TDS.ymd(p.date), tax: p.tax, sections: (p.sections || []).filter(Boolean).map(x => TDS.sec(x) || x)}));
+    } catch (e){ return []; }
   },
   // "N of M matched automatically · K need you": M the deductions with tax; N those on a challan or in a suggestion the
   // AI is not unsure of; K the rest (a reason and a next step each)
@@ -347,5 +357,71 @@ function tdsPortionSet(chId, interest, fee){
   const t = tdsRet(), r = TDSReg.setPortion(chId, t.form, t.fy, t.q, interest, fee);
   toast(r.ok ? "Interest " + money(num(interest)) + " and fee " + money(num(fee)) + " of this challan allocated to " + t.form + " " + t.q + " " + t.fy + "." : r.why); render(); return r;
 }
-if (typeof globalThis === "object") Object.assign(globalThis, {TDSMatch, tdsRet, tdsMatchConfirm, tdsMatchConfirmAll, tdsMatchNo, tdsMoveOpen, tdsMoveTo, tdsTakeOff, tdsSplitOpen, tdsSplitRow, tdsSplitDo, tdsUnsplit, tdsPortionSet});
+// ---------------------------------------------------------------- round 86: the TDS rows of Tally's entries, read right
+// (the owner, 19-Oct-2026: "this is coming again and again": Rent rows with TDS = the whole rent, Contractor rows with
+// assessable 0.00, 10% deducted shown as 7.5% "exempt in Tally", Section blank). The rows the cloud keeps
+// (tally_tds_details_marked, TCloud.tdsLines) as FinCom shows them, the rows stored before the reader was fixed included:
+//   - a row whose TDS is its own ledger line's amount with no assessable amount (the old reader took the line's amount
+//     when Tally gave no tax), or a row of the TDS ledger / party line echoing another row of the same entry, deductee and
+//     nature that has the assessable amount: hidden;
+//   - exempt only when Tally marked it so AND no tax was booked;
+//   - the rate is the one booked (TDS / assessable x 100); where Tally's nature master says another, one note says both;
+//   - the section, where Tally's row has none, from the nature (TDSTally.sectionOf).
+// Validate & file shows, folded under "Checks from Tally", only the rows of the return's year and quarter with a real
+// problem: the rate booked is not the law's for the section (where known), no PAN, the section unknown.
+const TDSTallyRows = {
+  pct: (v) => Math.round(num(v) * 10000) / 10000,
+  // the ledger line's own amount in the books (the entry from the cloud copy: id = Tally's GUID), or null
+  lineAmt(r){
+    const v = ((S.books || {}).vouchers || []).find(x => x.id === r.guid); if (!v || !Array.isArray(v.ent)) return null;
+    const e = v.ent[num(r.line_no)];
+    return e && (!r.ledger || e.l === r.ledger) ? Math.abs(num(e.a)) : null;
+  },
+  // one row as shown: {row, hide, tax, base, exempt, booked, tallyRate, note, section, sectionFrom, day}
+  view(r, all){
+    const tax = r.amount == null || r.amount === "" ? null : num(r.amount), base = num(r.assessable), day = TDS.ymd(r.day);
+    const la = this.lineAmt(r);
+    const echo = !(base > 0) && (all || []).some(x => x !== r && x.guid === r.guid && x.party === r.party && x.nature === r.nature && num(x.assessable) > 0);
+    const own = !(base > 0) && tax != null && la != null && Math.abs(Math.abs(tax) - la) < 0.005;
+    const exempt = !!r.exempt && !(tax != null && Math.abs(tax) > 0.005);
+    const tallyRate = r.rate == null || r.rate === "" ? null : num(r.rate);
+    const booked = base > 0 && tax != null && Math.abs(tax) > 0.005 ? this.pct(Math.abs(tax) / base * 100) : exempt ? 0 : tallyRate;
+    const note = !exempt && tallyRate && booked != null && Math.abs(tallyRate - booked) >= 0.05 ? "Tally\u2019s nature says " + tallyRate + "%; " + booked + "% was deducted" : "";
+    let section = TDS.sec(r.section || ""), sectionFrom = r.section_from || "";
+    if (!section && r.nature){ try { section = TDSTally.sectionOf(r.nature, day) || ""; } catch (e){ section = ""; } if (section) sectionFrom = "Tally's nature of payment"; }
+    return {row: r, hide: echo || own, tax, base, exempt, booked, tallyRate, note, section, sectionFrom, day};
+  },
+  // what is wrong with a row shown: [{k, words}]
+  problems(w){
+    const out = [], r = w.row, pan = (() => { try { return TDS.panOf(r.party); } catch (e){ return ""; } })();
+    if (!w.section) out.push({k: "section", words: "section unknown: Tally's nature \u201c" + (r.nature || "") + "\u201d names none"});
+    if (!Certs.validPan(pan)) out.push({k: "pan", words: "no PAN for " + (r.party || "the deductee") + " (20% under 206AA)"});
+    else if (w.section && !w.exempt && w.booked != null && w.tax != null){
+      let e = null;
+      try { e = Certs.expectedNormal({section: w.section, pan, rate: w.booked, party: r.party, paid: w.base, pay: TDSRate.kindOf((r.nature || "") + " " + (r.ledger || ""))}); } catch (z){ e = null; }
+      const std = TDS.STD[w.section] || [];
+      if (e && e.rate != null && std.length && Math.abs(e.rate - w.booked) >= 0.05) out.push({k: "rate", expected: e.rate, words: w.booked + "% deducted; the law's rate is " + e.rate + "% (" + e.why + ")"});
+    }
+    return out;
+  },
+  // the return's form takes the row's section
+  ofForm(sec, form){
+    const s = TDS.sec(sec || "");
+    if (form === "24Q") return /^192/.test(s);
+    if (form === "27EQ") return /^206C/.test(s);
+    if (form === "27Q") return /^195/.test(s);
+    return !/^(192|195|206C)/.test(s);
+  },
+  // the rows of the return's year and quarter with a problem: {busy, missing, rows: [{...view, problems}], seen}
+  checks(cid, fy, q, form){
+    if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.book(cid)) return {rows: [], off: true};
+    const x = TCloud.tdsLines(cid), all = x.rows;
+    if (!all) return {rows: [], busy: !x.missing && !x.err, missing: !!x.missing, err: x.err || ""};
+    const views = all.map(r => this.view(r, all)).filter(w => !w.hide && w.day && TDS.fyOf(w.day) === fy && TDS.qOf(w.day) === q && this.ofForm(w.section, form));
+    const rows = views.map(w => Object.assign(w, {problems: this.problems(w)})).filter(w => w.problems.length);
+    return {rows, seen: views.length};
+  }
+};
+
+if (typeof globalThis === "object") Object.assign(globalThis, {TDSMatch, TDSTallyRows, tdsRet, tdsMatchConfirm, tdsMatchConfirmAll, tdsMatchNo, tdsMoveOpen, tdsMoveTo, tdsTakeOff, tdsSplitOpen, tdsSplitRow, tdsSplitDo, tdsUnsplit, tdsPortionSet});
 /* @react-lazy: end */

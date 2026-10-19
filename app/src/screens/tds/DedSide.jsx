@@ -6,7 +6,9 @@
 // once (the panel's balance drops), unticking takes it off; "Accept all N suggestions" ticks them all. A deduction no
 // challan can take shows its reason and next step (pay, split, add a challan). A challan clicked in the panel filters the
 // table to it (its deductions and its suggestions); clicked again, all. Nothing here works out a match.
+import { useState } from "react";
 import "../../lib/tdsGlobals.js";
+import { AddChallan } from "./Register.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
@@ -20,7 +22,9 @@ export function dedMatch(form, fy, q) {
   const byRow = {}, why = {};
   sugg.filter((s) => s.rule !== "int").forEach((s) => s.ids.forEach((id) => { if (!byRow[id]) byRow[id] = s; }));
   reasons.forEach((x) => { why[x.rowId] = x; });
-  return { byRow, sugg, why, ai, accept: sugg.filter((s) => s.rule !== "split" && s.rule !== "int") };
+  // round 86: the deductions with no challan by section and month, the reason said once (tmReasons' groups)
+  const groups = typeof tmReasonGroups === "function" ? tmReasonGroups(reasons) : [];
+  return { byRow, sugg, why, ai, groups, accept: sugg.filter((s) => s.rule !== "split" && s.rule !== "int") };
 }
 
 // one row's challan: on a challan (ticked; untick takes it off), a suggestion (a tick puts it on), or the reason
@@ -40,6 +44,8 @@ export function ChallanOrSugg({ r, m, locked }) {
       <span className="dd-sl" title={(c ? TDSCH.label(c) + " · " : "") + s.reason}>{c ? c.serial + " · " + day(c.date).slice(0, 6) : s.chId}</span><small className="dd-why" title={s.reason}>{s.rule === "g" || s.ai ? "AI: " : ""}{s.words}</small></span>;
   }
   const w = m.why[r.id];
+  // round 86: a row of a section-month group shows only "Not matched": the reason and the next step are the group's header
+  if (w && w.group) return <span className="dd-ch none" data-dd-none={r.id} data-dd-in-group={w.group.key}><span className="bad">Not matched</span></span>;
   return <span className="dd-ch none" data-dd-none={r.id}><span className="bad">Not matched</span><small className="dd-why" data-cm-why={w ? w.step : "none"}>{w ? w.words : "No challan fits."}
     {!locked && w && w.step === "move" ? <> <button type="button" className="linkbtn" onClick={() => tdsMoveOpen([r.id])}>Move to challan…</button></> : null}</small></span>;
 }
@@ -77,3 +83,35 @@ export const sideFilter = (rows, m) => {
   if (cur === "__none") return rows.filter((r) => !r.challan);
   return rows.filter((r) => r.challan === cur || (!r.challan && m.byRow[r.id] && m.byRow[r.id].chId === cur));
 };
+
+// round 86 (19-Oct-2026, the owner: one sentence repeated on 38 rows): the deductions with no challan, by section and month,
+// one header line each above its rows ("194C · July 2026 · 12 deductions · TDS ₹14,142.27 — no challan yet · Add
+// challan"); where Tally has a TDS payment for it with no BSR code yet, "Paid in Tally on <date> ₹<amt> — add its BSR
+// code and serial" and Make it a challan (challanFromBooks, as Challans › From a Tally TDS payment)
+// the rows in the table's order, each group's rows together under the first of them; {rows, firstOf: {rowId: group}}
+export function groupRows(shown, m) {
+  const gOf = (r) => (!r.challan && !m.byRow[r.id] && m.why[r.id] && m.why[r.id].group) || null;
+  const members = {};
+  shown.forEach((r) => { const g = gOf(r); if (g) (members[g.key] = members[g.key] || []).push(r); });
+  const out = [], firstOf = {}, done = new Set();
+  shown.forEach((r) => {
+    const g = gOf(r);
+    if (!g) { out.push(r); return; }
+    if (done.has(g.key)) return;
+    done.add(g.key); firstOf[r.id] = g; out.push(...members[g.key]);
+  });
+  return { rows: out, firstOf };
+}
+export function GroupHead({ g, form, locked }) {
+  const [open, setOpen] = useState(false), [bsr, setBsr] = useState(""), [ser, setSer] = useState("");
+  const cin = typeof TDSCH === "object" && TDSCH.cin ? !!TDSCH.cin(bsr) : false;
+  return <div className={"dd-grp" + (g.paid ? " paid" : "")} data-dd-group={g.key} data-dd-group-step={g.step} title={g.words}>
+    <b className="dd-grp-h">{g.head}</b> <span className={g.paid ? "warn" : "bad"} data-dd-group-state="">— {g.state}</span>
+    {!locked && !g.paid && <> · <button type="button" className="linkbtn" data-dd-group-add={g.key} onClick={() => setOpen(!open)}>{open ? "Close" : "Add challan"}</button></>}
+    {!locked && g.paid && <span className="dd-grp-pay" data-dd-group-pay={g.paid.vid}>
+      <input type="text" value={bsr} placeholder="BSR code or the CIN" aria-label="BSR code or CIN" style={{ width: 160 }} onChange={(ev) => setBsr(ev.target.value)} />
+      <input type="text" value={cin ? TDSCH.cin(bsr).serial : ser} disabled={cin} placeholder="Serial" aria-label="Challan serial" style={{ width: 80 }} onChange={(ev) => setSer(ev.target.value)} />
+      <button type="button" className="btn small" data-dd-group-make={g.paid.vid} onClick={() => { if (challanFromBooks(g.paid.vid, bsr, ser) !== false) render(); }}>Make it a challan</button></span>}
+    {open && !g.paid && <div className="dd-grp-add"><AddChallan form={form} onDone={() => setOpen(false)} /></div>}
+  </div>;
+}

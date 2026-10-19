@@ -140,7 +140,9 @@ const TDS = {
   // 07-Oct-2026, option A), or none worked out where Tally marked the line exempt (review L2). Tally's own rate: the rate alone
   tallyRateWords(l){
     const has = l && l.rate != null && l.rate !== "", pct = (has ? r2(num(l.rate)) : 0) + "%";
-    if (l && l.exempt) return pct + " \u00b7 exempt in Tally: no rate worked out";
+    // round 86: exempt only with no tax booked; with tax, the rate booked (TDS / assessable)
+    if (l && l.exempt && !(Math.abs(num(l.amount)) > 0.005)) return pct + " \u00b7 exempt in Tally: no rate worked out";
+    if (l && l.exempt && num(l.assessable) > 0) return r2(Math.abs(num(l.amount)) / num(l.assessable) * 100) + "%";
     if (l && l.rate_worked_out) return pct + " \u00b7 rate worked out: Tally stored 0 (TDS \u00f7 assessable amount)";
     return has ? pct : "";
   },

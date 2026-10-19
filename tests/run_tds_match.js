@@ -255,6 +255,34 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   const r5 = x.tmReasons([R("o3", "194C", "20260410", 5000)], [C("OS", "194C", "20260507", 3000)], [], {fy: "2026-27", q: "Q1", today: "20261017"});
   ok(r5[0].step === "pay" && /has ₹3,000 left but this needs ₹5,000: pay ₹2,\d{3} \(the TDS short ₹2,000 \+ interest ₹\d+ to 17-10-2026\), then split/.test(r5[0].words), "R. a challan short: " + r5[0].words);
 }
+// round 86 (19-Oct-2026, the owner: one sentence repeated on 38 rows): the reason of the deductions with no challan is said
+// ONCE per section and month: each row carries its group ({key, sec, ym, n, tds, head, state, words}), the same object for
+// every row of it; and a TDS payment in Tally with no BSR code for that section (deposited in the month or after, this
+// quarter or the next) is named instead of "No challan paid yet"
+{
+  const rows = [R("g1", "194C", "20260702", 1000), R("g2", "194C", "20260715", 2000.5), R("g3", "194C", "20260720", 500), R("g4", "194J", "20260710", 700), R("g5", "194C", "20260805", 300)];
+  const opt = {fy: "2026-27", q: "Q2"};
+  const rg = x.tmReasons(rows, [], [], opt);
+  const grp = (id) => (rg.find(z => z.rowId === id) || {}).group;
+  ok(rg.length === 5 && rg.every(z => z.group && z.step === "pay"), "G. each deduction with no challan carries its group (" + rg.map(z => z.rowId + ":" + (z.group || {}).key).join(", ") + ")");
+  ok(grp("g1") === grp("g2") && grp("g2") === grp("g3") && grp("g1") !== grp("g4") && grp("g1") !== grp("g5"), "G. one group per section and month (194C July, 194J July, 194C August)");
+  const g = grp("g1") || {};
+  ok(g.key === "194C|202607" && g.sec === "194C" && g.ym === "202607" && g.n === 3 && g.tds === 350050, "G. the group's figures: 194C, July 2026, 3 deductions, TDS ₹3,500.50 (" + J(g) + ")");
+  ok(g.head === "194C · July 2026 · 3 deductions · TDS ₹3,500.50", "G. the group's header: " + g.head);
+  ok(/^no challan yet/.test(g.state || "") && g.words && /No challan paid yet for 194C, July 2026/.test(g.words), "G. the group says no challan yet (" + g.state + ")");
+  ok(new Set(rg.filter(z => z.group === g).map(z => z.words)).size === 1, "G. the sentence is the group's, not one per row");
+  const groups = x.tmReasonGroups(rg);
+  ok(groups.length === 3 && groups.map(z => z.key).join(",") === "194C|202607,194J|202607,194C|202608", "G. tmReasonGroups: the groups once each, by month then section (" + groups.map(z => z.key).join(",") + ")");
+  // a TDS payment in Tally without a BSR code: 10-Aug-2026, 194C, ₹3,500.50
+  const pays = [{vid: "pv1", date: "20260810", tax: 3500.5, sections: ["194C"]}, {vid: "pv2", date: "20260905", tax: 300, sections: ["194C"]}, {vid: "pv3", date: "20260601", tax: 999, sections: ["194C"]}];
+  const rp = x.tmReasons(rows, [], [], Object.assign({tally: pays}, opt));
+  const gp = (rp.find(z => z.rowId === "g1") || {}).group || {}, ga = (rp.find(z => z.rowId === "g5") || {}).group || {}, gj = (rp.find(z => z.rowId === "g4") || {}).group || {};
+  ok(gp.paid && gp.paid.vid === "pv1" && gp.step === "bsr" && /^Paid in Tally on 10-Aug-2026 ₹3,500\.50 — add its BSR code and serial/.test(gp.state) && !/No challan paid yet/.test(gp.words),
+    "G. a Tally payment without a BSR code is named, not \"no challan\" (" + gp.state + " | " + gp.words + ")");
+  ok(ga.paid && ga.paid.vid === "pv2", "G. August's group: the payment of September (" + J(ga.paid) + ")");
+  ok(!gj.paid && /^no challan yet/.test(gj.state), "G. no 194J payment in Tally: no challan yet (" + gj.state + ")");
+  ok(rp.filter(z => z.group === gp).every(z => z.step === "bsr"), "G. the rows of that group: step bsr");
+}
 
 // ---------------------------------------------------------------- P. Deductees (PAN): a PAN corrected once, for the deductee
 {

@@ -110,7 +110,7 @@ export function ListWrap({ children, className }) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, tail, sortVia, footNote, keepHead }) {
+  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
@@ -136,7 +136,10 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
           })}</tr>;
           // a row opened under its row (a challan's deductions): one cell across the table
           const open = after && after(r, p);
-          return open ? [tr, <tr key={k + ":open"} className="lt-open"><td colSpan={cs.length} style={{ background: "var(--paper)", padding: 0 }}>{open}</td></tr>] : tr;
+          // round 86: a group's header line above its first row (the Deductions step's "Not matched" by section and month)
+          const head = before && before(r, i);
+          const rowsOut = open ? [tr, <tr key={k + ":open"} className="lt-open"><td colSpan={cs.length} style={{ background: "var(--paper)", padding: 0 }}>{open}</td></tr>] : [tr];
+          return head ? [<tr key={k + ":head"} className="lt-grp"><td colSpan={cs.length}>{head}</td></tr>, ...rowsOut] : rowsOut.length === 1 ? tr : rowsOut;
         })}{tail}</tbody>
         {foot && <Foot cols={cs} rows={all} unit={unit} of={of} note={footNote} />}
       </table>

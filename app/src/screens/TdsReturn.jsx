@@ -31,7 +31,7 @@ import { ChallanCell, MatchDialogs, PlainDeductions, ChallanSelect, ChallanTicke
 import DeducteesPan, { secShort, secTitle, SecShort } from "./tds/Deductees.jsx";
 import { PanBox } from "./tds/PanBook.jsx";
 import AddDeduction, { openAdd } from "./tds/AddDeduction.jsx";
-import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter } from "./tds/DedSide.jsx";
+import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter, groupRows, GroupHead } from "./tds/DedSide.jsx";
 import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes, readyCount } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
@@ -189,7 +189,9 @@ function Deductions({ fy, q, rows, issueOf, pass, probs = {}, unitW, edN = 0, fo
     <ChallanSide form={form} fy={fy} q={q} rows={rows} m={m} />
   </div>;
 }
-function DedTable({ fy, rows, shown, issueOf, probs, unitW, edN, fo, form, m, locked, sel, LIMIT }) {
+function DedTable({ fy, rows, shown: shown0, issueOf, probs, unitW, edN, fo, form, m, locked, sel, LIMIT }) {
+  // round 86: the deductions with no challan of one section and month together, under one header line saying why
+  const gr = groupRows(shown0, m), shown = gr.rows;
   const ids = shown.slice(0, LIMIT).map((r) => r.id), C = (r, k, el) => <Cell r={r} k={k} form={form} locked={locked}>{el}</Cell>;
   return <div onKeyDown={(ev) => onTableKey(ev, ids)} data-ded-keys="">
     <ImportPreview rows={rows} />
@@ -198,6 +200,7 @@ function DedTable({ fy, rows, shown, issueOf, probs, unitW, edN, fo, form, m, lo
       more={<p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
       empty={rows.length ? "No deduction matches these filters. Use Clear filters to see all." : "Deductions come from the client's books in Tally automatically; add one here (Add deduction) or import Excel (⋯)."} keepHead={rows.length ? <p className="note" style={{ textAlign: "center" }}><ClearLink tab="deductions" bare /></p> : null}
       rowProps={(r) => ({ "data-ded-row": r.id, tabIndex: 0, className: probs[r.id] ? "rt-fix" : undefined })}
+      before={(r) => (gr.firstOf[r.id] ? <GroupHead g={gr.firstOf[r.id]} form={form} locked={locked} /> : null)}
       cols={[
         { k: "pick", role: "pick", cls: "ck dd-pick", sort: false, head: <input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((r) => sel[r.id])} onChange={(ev) => selSet(shown.map((r) => r.id), ev.target.checked)} />,
           cell: (r) => <input type="checkbox" aria-label={"Select " + r.party} checked={!!sel[r.id]} onChange={(ev) => selSet([r.id], ev.target.checked)} /> },

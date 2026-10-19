@@ -7,6 +7,9 @@ entries" and says, in words, where each rate came from:
   - Tally marked exempt: "0% · exempt in Tally: no rate worked out" (review L2: never worked out on such a line)
   - Tally's own rate:    "2%" and nothing more
 The rows the stand-in cloud answers are the function's own columns (tests/run_migration62.py checks the function).
+Round 86 (19-Oct-2026): EXEMPTED Yes is exempt only when no tax was booked (real TallyPrime 7.1 writes it on a line that
+deducted): such a line's words are the rate booked (TDS / assessable); and "TDS on Tally's entries" left the TDS tab (the
+rows with a problem are under each return's Validate & file, "Checks from Tally": tests/run_tds_tallyrows_ui.py).
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 RED: before the app reads tally_tds_details_marked, no line and no words show."""
 import os, sys, json, threading, functools, http.server
@@ -24,7 +27,8 @@ ROW = lambda guid, n, party, nature, rate, base, tax, worked, exempt: {"book_id"
     "section": "", "section_from": "", "rate": rate, "assessable": base, "amount": tax, "party": party, "deductee_type": "Company - Resident", "rate_worked_out": worked, "exempt": exempt}
 ROWS = [ROW("g-worked", 2, "ZZ Worked Contractor", "S231 Contract Work", 2, 100000, 2000, True, False),
         ROW("g-exempt", 2, "ZZ Exempt Contractor", "S231 Contract Work", 0, 100000, 2000, False, True),
-        ROW("g-own", 2, "ZZ Own Contractor", "Payment to Contractors", 2, 50000, 1000, False, False)]
+        ROW("g-own", 2, "ZZ Own Contractor", "Payment to Contractors", 2, 50000, 1000, False, False),
+        ROW("g-nil", 2, "ZZ Nil Contractor", "S231 Contract Work", 0, 100000, None, False, True)]
 STAGE = "https://qbocskaiewaxqcvaunzc.supabase.co"
 from playwright.sync_api import sync_playwright
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -45,24 +49,12 @@ try:
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(600)
         # the words alone, as the TDS details give them
         w = pg.evaluate("(rows) => typeof TDS.tallyRateWords === 'function' ? rows.map((r) => TDS.tallyRateWords(r)) : null", ROWS)
-        ok(w == ["2% · rate worked out: Tally stored 0 (TDS ÷ assessable amount)", "0% · exempt in Tally: no rate worked out", "2%"], "TDS.tallyRateWords: worked out, exempt, Tally's own (%s)" % w)
+        ok(w == ["2% · rate worked out: Tally stored 0 (TDS ÷ assessable amount)", "2%", "2%", "0% · exempt in Tally: no rate worked out"], "TDS.tallyRateWords: worked out; marked exempt but 2,000 deducted: the rate booked; Tally's own; exempt with no tax (%s)" % w)
         pg.evaluate("""() => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: "u1"}); Cloud.st.firm = "f1"; Cloud.st.state = "ok";
           const c = newCompany({name: "ZZ TDS CO", gstin: "09AANFG3202D1ZR"}); c.id = "zztdsclient"; S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true};
           S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "tds"; S.books = null; render(); }""")
-        seen = False
-        for _ in range(60):
-            if pg.locator("[data-tds-lines]").count() and "ZZ Exempt Contractor" in pg.inner_text("[data-tds-lines]"): seen = True; break
-            pg.wait_for_timeout(250)
-        ok(seen, "the TDS tab lists TDS on Tally's entries (from tally_tds_details_marked)")
-        ok(asked and asked[0].get("p_book") == BOOK, "the app asks tally_tds_details_marked for the client's book (%s)" % asked[:1])
-        if seen:
-            row = lambda name: pg.locator("[data-tds-lines] tr", has_text=name).inner_text()
-            rw, rx, ro = row("ZZ Worked Contractor"), row("ZZ Exempt Contractor"), row("ZZ Own Contractor")
-            ok("rate worked out: Tally stored 0" in rw, "the worked-out rate says so: %r" % rw)
-            ok("exempt in Tally" in rx and "worked out:" not in rx, "the exempt line says Tally marked it exempt, no rate worked out: %r" % rx)
-            ok("worked out" not in ro and "exempt" not in ro and "2%" in ro, "Tally's own rate carries no mark: %r" % ro)
-            note = pg.inner_text("[data-tds-lines]")
-            ok("1 rate worked out by FinCom where Tally stored 0" in note and "1 marked exempt in Tally" in note, "the card says how many rates FinCom worked out and how many Tally marked exempt")
+        pg.wait_for_timeout(3000)
+        ok(pg.locator("[data-tds-lines]").count() == 0 and "TDS on Tally" not in pg.inner_text("#app"), "round 86: the TDS tab no longer lists TDS on Tally's entries")
         br.close()
 finally:
     srv.shutdown()

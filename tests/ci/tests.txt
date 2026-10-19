@@ -211,6 +211,7 @@ run_parse_fast234_kinds.mjs           120
 run_migration57.py                    120
 run_parta_server.py                   120
 run_parse_tds.mjs                     120
+run_parse_tds_rows.mjs                120
 run_migration62.py                    120
 # next release, item e: the nightly self-check (migration 65, tally-ingest's kind selfcheck, the Tally page's line)
 run_migration65.py                    120
@@ -324,6 +325,7 @@ run_tds_deductor_ui.py                240  TDSDESK_SITE=../app/dist-test
 # Form 138 from the salary sheet, the PAN corrected once; the return as Winman lays it out (four tabs, a challan's two panels)
 run_tds_match.js                      120
 run_tds_match_ui.py                   300  TDSDESK_SITE=../app/dist-test
+run_tds_tallyrows_ui.py               300  TDSDESK_SITE=../app/dist-test
 run_tds_challan_match_server.py       120
 # ledger-confirm (14-Oct-2026): TDS and GST ledgers confirmed (and unconfirmed) on the TDS and GST pages, the Tally ledgers
 # listed and picked, the AI guess (a fake AI; the server's batch with Claude and Supabase faked), Settings' pointer

@@ -9,7 +9,9 @@ staging's order (and 61, privileges, when that file is in the tree: it is on bra
   2. the real S5 capture (run 37492981527, bridge-go/testdata/real-tally-7.1/231/s5-tds-on-screen.daybook.xml, Tally's own
      Day Book export) read by parse.js and stored through tally_ingest_day: the Contractor line's TDS row has nature
      S231 Contract Work, assessable 100000, amount 2000; Tally marked it exempt (EXEMPTED Yes), so (review L2) rate 0 as
-     stored, rate_worked_out false, exempt true; with EXEMPTED set to No (made up) rate 2, rate_worked_out true.
+     stored, rate_worked_out false, exempt true; with EXEMPTED set to No (made up) rate 2, rate_worked_out true. Round 86
+     (19-Oct-2026): EXEMPTED Yes is exempt only when no tax was booked, so the real line (2000 deducted) is now rate 2,
+     rate_worked_out true, exempt false, as its EXEMPTED No copy.
   3. a stored rate (the part A payment fixture, Tally's rate 2): rate_worked_out false.
   4. review M1 (2.4.0 part 2): the TDS details as the firm's members read them carry the mark: tally_tds_details_marked
      (book), 57's tally_tds_details with two columns more (rate_worked_out, exempt), lines marked "62"; members and the
@@ -66,8 +68,9 @@ pr = subprocess.run(["node", "--input-type=module", "-e", NODE, os.path.join(SQL
 if pr.returncode: print(pr.stderr); raise SystemExit("parse.js could not read the fixtures")
 FX = json.loads(pr.stdout)
 s5, pay = FX["s5-tds-on-screen.daybook.xml"], FX["partA-payment-tds.xml"]
-ok(len(s5["vouchers"]) == 1 and s5["vouchers"][0]["tds"][0].get("exempt") is True and "rateWorkedOut" not in s5["vouchers"][0]["tds"][0],
-   "parse.js: S5's line is exempt in Tally (EXEMPTED Yes): marked exempt, the rate not worked out (%s)" % s5["vouchers"][0]["tds"])
+# round 86 (19-Oct-2026): EXEMPTED Yes is exempt only when no tax was booked: S5's line deducted 2000, so it is not exempt
+ok(len(s5["vouchers"]) == 1 and "exempt" not in s5["vouchers"][0]["tds"][0] and s5["vouchers"][0]["tds"][0].get("rateWorkedOut") is True and s5["vouchers"][0]["tds"][0].get("rate") == 2,
+   "parse.js: S5's line (EXEMPTED Yes, 2000 deducted): not exempt (round 86), the rate worked out (%s)" % s5["vouchers"][0]["tds"])
 # made up from the real capture: EXEMPTED set to No and the entry given its own guid (so both are stored side by side)
 G0 = s5["vouchers"][0]["guid"]; GNX = G0 + "-not-exempt"
 pr2 = subprocess.run(["node", "--input-type=module", "-e", NODE, os.path.join(SQLDIR, "parse.js"), "/dev/stdin"], capture_output=True, text=True,
@@ -165,12 +168,12 @@ try:
     v = s5["vouchers"][0]
     ok(day(B, "2027-01-01", s5["vouchers"] + s5nx["vouchers"], s5["lines"] + s5nx["lines"]).get("ok") is True, "the Day Book of 01-Jan-2027 (S5, and its made-up EXEMPTED No copy) stored")
     got = tds(v["guid"])
-    ok(got == [("S231 Contractor", "S231 Contract Work", "0", "100000", "2000", "S231 Contractor", "false", "true")], "S5 (real): the Contractor line exempt in Tally, rate 0 as stored, not worked out (%s)" % got)
+    ok(got == [("S231 Contractor", "S231 Contract Work", "2", "100000", "2000", "S231 Contractor", "true", "false")], "S5 (real): EXEMPTED Yes with 2000 deducted is not exempt (round 86), rate 2 worked out (%s)" % got)
     got = tds(GNX)
     ok(got == [("S231 Contractor", "S231 Contract Work", "2", "100000", "2000", "S231 Contractor", "true", "false")], "S5 with EXEMPTED No (made up): rate 2 worked out (%s)" % got)
     print("== 4. what the firm's members read: the mark with each line")
     ok(marked(GNX) == [("S231 Contractor", "S231 Contract Work", "2", "100000", "2000", "S231 Contractor", "true", "false")], "4. tally_tds_details_marked: the worked-out rate carries its mark (%s)" % marked(GNX))
-    ok(marked(G0) == [("S231 Contractor", "S231 Contract Work", "0", "100000", "2000", "S231 Contractor", "false", "true")], "4. tally_tds_details_marked: the exempt line carries Tally's mark (%s)" % marked(G0))
+    ok(marked(G0) == [("S231 Contractor", "S231 Contract Work", "2", "100000", "2000", "S231 Contractor", "true", "false")], "4. tally_tds_details_marked: the real line's marks (round 86: not exempt, the rate worked out) (%s)" % marked(G0))
     ok(marked(G0, OTHER) == [] and marked(GNX, OTHER) == [], "4. another firm's member reads none")
     old = db.rows("set role authenticated; select * from tally_tds_details(%s) where guid = %s" % (q(B), q(GNX)), OWNER)
     ok(len(old) == 1 and "rate_worked_out" not in old[0], "4. 57's tally_tds_details is left as it was (its columns unchanged)")

@@ -289,14 +289,17 @@ function takeVoucher(s){
       subs.forEach((x) => { const tx = one(x, "TAX"); if (tx) tax = r2((tax || 0) + amt(tx)); });
       const itTax = it && one(it, "TAX") ? amt(one(it, "TAX")) : 0;
       // review L2 (2.4.0 part 2): a line Tally marked exempt (EXEMPTED Yes) keeps the rate as Tally stored it, never worked
-      // out, and carries exempt: true (the real S5 capture of run 37492981527 is such a line)
-      const exempt = /^yes$/i.test(one(q, "EXEMPTED").trim());
-      if (!rate && base && itTax && !exempt){ rate = Math.round(Math.abs(itTax / base) * 100 * 10000) / 10000; worked = true; }
+      // out, and carries exempt: true. Round 86 (19-Oct-2026): only when no tax was booked on it: real TallyPrime 7.1 writes
+      // EXEMPTED Yes on a line that deducted 2,000 on 1,00,000 (the S5 capture of run 37492981527), which is not exempt
+      const exempt = /^yes$/i.test(one(q, "EXEMPTED").trim()) && !(tax && Math.abs(tax) > 0.005);
+      const tw = itTax || tax || 0;
+      if (!rate && base && tw && !exempt){ rate = Math.round(Math.abs(tw / base) * 100 * 10000) / 10000; worked = true; }
       // the section (the owner, 06-Oct-2026): Tally's own on the line's bill-wise detail (TDSDEDUCTEESECTIONNUMBER), else
       // on another bill-wise detail of the entry (filled in below); else the section written in the nature of payment's
       // name (192 .. 196x, 206C.., the 2025 Act's 393); else blank, never guessed
       const own = blocks(e, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
-      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {}), ...(exempt ? {exempt: true} : {})});
+      // round 86: the TDS is the sum of Tally's <TAX> only (null when Tally gave none), never the line's own amount
+      tds.push({n, ledger, nature, party, rate, base, tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {}), ...(exempt ? {exempt: true} : {})});
     });
     // bridge 2.4.3: what the line pays (tax, interest, late fee) and its nature; each nature's period and challan; each TDS
     // reference
@@ -469,6 +472,31 @@ function takeVoucher(s){
       cgst: gr == null || inter ? 0 : r2(tx * cg / 100), sgst: gr == null || inter ? 0 : r2(tx * sg / 100), igst: gr == null || !inter ? 0 : r2(tx * gr / 100),
       cess: rh.cess == null ? 0 : r2(tx * rh.cess / 100)};
   });
+  // round 86 (19-Oct-2026): one TDS row per entry + deductee + nature. Tally repeats the TDS block on the TDS ledger's and
+  // the party's lines (the tax only, no assessable amount): when a line of the same deductee and nature carries the
+  // assessable amount those echoes are dropped; rows with the same figures are kept once; the rest of a group (several
+  // expense lines of one deductee and nature) is one row, its assessable amount and tax added up
+  if (tds.length > 1){
+    const groups = new Map();
+    tds.forEach((t) => { const k = namesKey(t.party) + "\u0001" + namesKey(t.nature); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+    const keep = new Set();
+    groups.forEach((g) => {
+      if (g.length === 1) { keep.add(g[0]); return; }
+      const withBase = g.filter((t) => t.base);
+      let pool = withBase.length ? withBase : g.filter((t) => t.tax != null);
+      if (!pool.length) pool = g;
+      const seen = new Set(), uniq = [];
+      pool.forEach((t) => { const sig = (withBase.length ? t.base : "") + "|" + t.tax; if (seen.has(sig)) return; seen.add(sig); uniq.push(t); });
+      if (!withBase.length || uniq.length === 1) { keep.add(uniq[0]); return; }
+      const first = uniq[0];
+      first.base = r2(uniq.reduce((a, t) => a + (t.base || 0), 0));
+      if (uniq.some((t) => t.tax != null)) first.tax = r2(uniq.reduce((a, t) => a + (t.tax || 0), 0));
+      if (first.rateWorkedOut && first.tax) first.rate = Math.round(Math.abs(first.tax / first.base) * 100 * 10000) / 10000;
+      keep.add(first);
+    });
+    const kept = tds.filter((t) => keep.has(t));
+    tds.length = 0; kept.forEach((t) => tds.push(t));
+  }
   if (tds.length){
     const anySec = blocks(s, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
     tds.forEach((t) => {

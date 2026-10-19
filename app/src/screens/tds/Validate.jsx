@@ -12,6 +12,7 @@ import { useState } from "react";
 import { TracesCheck } from "./Register.jsx";
 import { stepName, PrevPrn } from "./Shell.jsx";
 import { PreFileButton } from "../../parts/PreFile.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const s_ = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -171,6 +172,7 @@ export function ValidatePanel({ fy, q, form, val, reviews = {}, year = [], file,
     {val.info.length > 0 && <ul className="vf-list" data-val-list="info">{lines(val.info, "info")}</ul>}
     <h4 className="vf-h">Online checks</h4>
     <Online fy={fy} q={q} form={form} chIds={chIds} />
+    <TallyChecks fy={fy} q={q} form={form} />
     {year.length > 0 && <details className="vf-year" data-year-checks="" open={!!ySel || all}>
       <summary>Year checks · {year.map(([, l]) => l).join(" · ")}</summary>
       <p className="vf-ylinks">{year.map(([k, l], i) => <span key={k}>{i > 0 && " · "}<button type="button" className={"linkbtn" + (sel === k ? " on" : "")} data-fix={k} aria-pressed={sel === k} onClick={() => pick(k)}>{l}</button></span>)}</p>
@@ -179,6 +181,32 @@ export function ValidatePanel({ fy, q, form, val, reviews = {}, year = [], file,
     <h4 className="vf-h">File</h4>
     {file}
   </section>;
+}
+
+// round 86 (19-Oct-2026): "Checks from Tally", folded: Tally's TDS rows of this return's year and quarter with a real
+// problem (the rate deducted is not the law's for the section, no PAN, the section unknown), each once, read right
+// (TDSTallyRows, src/js/86: the rate is the one booked; Tally's nature master's rate said beside it where it differs).
+// The whole list of Tally's TDS rows is no longer on the TDS pages
+export function TallyChecks({ fy, q, form }) {
+  let c = null;
+  try { c = TDSTallyRows.checks(S.coId, fy, q, form); } catch (e) { return null; }
+  if (!c || c.off || c.missing || c.err) return null;
+  const n = c.rows.length, day = (d) => (d ? fmtDate(tallyDate(d)) : "");
+  return <details className="vf-year vf-tally" data-tally-checks={c.busy ? "busy" : n}>
+    <summary>Checks from Tally · {c.busy ? "reading Tally’s TDS rows…" : n ? s_(n, "row to look at", "rows to look at") + (c.seen > n ? " of " + c.seen : "") : "nothing to look at"}</summary>
+    {c.busy ? <p className="note">Loading…</p> : n ? <ListTable name="tdsTallyChecks" rows={c.rows} rowKey={(w) => w.row.guid + ":" + w.row.line_no} unit={["row", "rows"]} empty={null}
+      rowProps={(w) => ({ "data-tally-check": w.problems.map((x) => x.k).join(" ") })}
+      cols={[
+        { k: "date", role: "date", label: "Date", cls: "dt", v: (w) => w.day, cell: (w) => day(w.day) },
+        { k: "party", role: "party", label: "Deductee", v: (w) => w.row.party, cell: (w) => w.row.party },
+        { k: "base", role: "amount", label: "Assessable", cls: "n", v: (w) => w.base, sum: true, fmt: money, cell: (w) => money(w.base) },
+        { k: "nature", label: "Nature of payment", v: (w) => w.row.nature, cell: (w) => w.row.nature },
+        { k: "sec", label: "Section", v: (w) => w.section, cell: (w) => w.section || "—" },
+        { k: "rate", label: "Rate", cls: "n", v: (w) => (w.booked == null ? "" : w.booked), cell: (w) => <>{w.booked == null ? "" : w.booked + "%"}{w.note ? <small className="note" data-tally-rate-note="" style={{ display: "block" }}>{w.note}</small> : null}</> },
+        { k: "tds", label: "TDS", cls: "n", v: (w) => w.tax || 0, sum: true, fmt: money, cell: (w) => (w.tax == null ? "—" : money(w.tax)) },
+        { k: "why", label: "What to look at", cell: (w) => w.problems.map((x) => x.words).join("; ") },
+      ]} /> : <p className="note" data-tally-checks-none="">{c.seen ? "Tally’s TDS rows of this quarter have a section and a PAN, at the law’s rates." : "No TDS row in Tally for this quarter."}</p>}
+  </details>;
 }
 
 // the File row's previous PRN box
