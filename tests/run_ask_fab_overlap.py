@@ -9,6 +9,9 @@ bar), a confirm box, a toast with buttons, the "A new version of FinCom is ready
 Fails if the launcher's box meets any visible button, link or box to type in, or if what is at the centre of a primary
 action (or a bar's button) is the launcher. Also: the launcher is still there on a plain page, and Ctrl+J still opens the
 panel while it is put away (a drawer open). Screenshots in tests/out/ask-fab/.
+Round 89 (19-Oct-2026): a TDS return's Deductions (the challan's footer of figures over the step tabs), Challans and
+Deductees: the launcher sits above both footers, never over a figure; F12 typed in the Ask FinCom box does not switch the
+return's step.
 Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_ask_fab_overlap.py"""
 import os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -66,6 +69,10 @@ GEOM = r"""() => {
   const hits = [], covered = [];
   document.querySelectorAll(SEL).forEach((el) => { if (L && L.contains(el)) return; const r = seen(el); if (!r || !shown) return;
     if (r.left < lr.right && r.right > lr.left && r.top < lr.bottom && r.bottom > lr.top) hits.push(name(el)); });
+  // round 89: the TDS return's footers (the challan's figures: Challan amount, Used here, Balance, Number of deductions;
+  // the step tabs) are taken as a whole: the launcher stands above them, never over the bar
+  document.querySelectorAll('.wd-foot, .rt-foot').forEach((el) => { const r = seen(el); if (!r || !shown) return;
+    if (r.left < lr.right && r.right > lr.left && r.top < lr.bottom && r.bottom > lr.top) hits.push('footer: ' + (el.className + '').split(' ')[0]); });
   const PRIM = '.btn.primary, .actionbar button, .cfm-foot button, [data-new-version-go], .toast-act, #confirmBox [data-cbx], .drawer button';
   document.querySelectorAll(PRIM).forEach((el) => { const r = seen(el); if (!r) return;
     const x = (Math.max(r.left, 0) + Math.min(r.right, innerWidth)) / 2, y = (Math.max(r.top, 0) + Math.min(r.bottom, innerHeight)) / 2, at = document.elementFromPoint(x, y);
@@ -206,6 +213,30 @@ with sync_playwright() as p:
     pg.add_style_tag(content='body.is-test::after{content:"REVIEW BUILD – Ask FinCom never covers a button · staging database · not for real client work · a long review banner that wraps onto a second line on a narrower window";background:#6B3FA0;white-space:normal}')
     each_size(pg, "Long review banner, review table", review)
     each_size(pg, "Long review banner, bill open", drawer, bottom=False)
+
+    # ---- round 89: a TDS return (the books and challans of run_tds_challans.py / run_tds_match_ui.py): Deductions with a
+    # challan chosen (its footer of figures above the step tabs), Challans, Deductees
+    _s = open(os.path.join(HERE, "run_tds_challans.py")).read(); _k = _s.index('BOOKS_JS = r"""') + len('BOOKS_JS = r"""')
+    _m = open(os.path.join(HERE, "run_tds_match_ui.py")).read(); _j = _m.index('CHALLANS = """') + len('CHALLANS = """')
+    E(_s[_k:_s.index('"""', _k)]); pg.wait_for_timeout(600); E("() => { TDSMatch.online = () => false; }"); E(_m[_j:_m.index('"""', _j)])
+    E("() => { TDS.allRows().filter(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date).slice(0, 6) === '202604').forEach(r => S.books.alloc[r.id] = 'chA'); window.__bk = S.books; TDSReg.forget(); }")
+    def tds_step(tab):
+        def f():
+            E("(t) => { try { doAct('drawerClose'); } catch (e) {} S.view = 'company'; S.coId = window.__bk.cid; S.books = window.__bk; S.tab = 'books'; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = t; S.tdsDedView = ''; S.tdsChView = ''; S.tdsChSel = ''; S.tdsWinCh = 'chA'; S.tdsWinAdd = ''; render(); }", tab)
+            pg.wait_for_timeout(500)
+        return f
+    for tab, lab in [("deductions", "TDS Deductions (a challan's footer)"), ("challans", "TDS Challans"), ("deductees", "TDS Deductees")]:
+        each_size(pg, lab, tds_step(tab), shots=(tab == "deductions"))
+    tds_step("deductions")(); pg.wait_for_timeout(300)
+    ok(pg.locator("#app [data-wd-foot]").count() == 1 and pg.locator("#app [data-ret-foot]").count() == 1, "TDS Deductions: the challan's footer and the step tabs are on the page")
+    # F12 typed in the Ask FinCom box: the step stays
+    E("() => ASST.open()"); pg.wait_for_timeout(900)
+    if pg.locator("#asstQ").count():
+        pg.focus("#asstQ"); pg.keyboard.type("what is F12"); pg.keyboard.press("F12"); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
+    ok(pg.locator("#asstQ").count() == 1 and E("S.tdsTab") == "deductions", "F12 / F10 typed in the Ask FinCom box do not switch the return's step (%s)" % E("S.tdsTab"))
+    E("() => ASST.close()"); pg.wait_for_timeout(400)
+    pg.locator("#app [data-ret-foot] [data-foot-tab]").first.focus(); pg.keyboard.press("F10"); pg.wait_for_timeout(400)
+    ok(E("S.tdsTab") == "challans", "with the panel closed F10 opens Challans")
 
     # ---- the launcher is still there to press on a page with room for it, and it opens the panel
     E("() => { try { doAct('drawerClose'); } catch (e) {} S.view = 'home'; S.homeTab = 'today'; render(); }"); pg.wait_for_timeout(900)

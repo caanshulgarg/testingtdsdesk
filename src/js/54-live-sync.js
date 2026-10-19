@@ -27,14 +27,15 @@ const BookItems = {
   missing(e){ return /client_book_items|save_book_items|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
   // ---------- the work as items, and back
   // an object: an item for each of its keys (".name"); a list of things with ids: an item for each ("#id", in order);
-  // anything else is one item. The item "" says which (the shape), so an empty object or list comes back as it was
+  // anything else is one item. The item "" says which (the shape), so an empty object or list comes back as it was.
+  // Round 89 (19-Oct-2026): an EMPTY list is the list marker too (it was a plain [], which hid the rows the guard kept)
   split(work){
     const out = new Map(), M = this.MAXI;
     Object.keys(work || {}).forEach(k => {
       const v = work[k];
       if (v === undefined) return;
       const isObj = v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).every(s => s.length < M);
-      const ids = Array.isArray(v) && v.length && v.every(x => x && typeof x === "object" && typeof x.id === "string" && x.id && x.id.length < M) && new Set(v.map(x => x.id)).size === v.length;
+      const ids = Array.isArray(v) && v.every(x => x && typeof x === "object" && typeof x.id === "string" && x.id && x.id.length < M) && new Set(v.map(x => x.id)).size === v.length;
       if (isObj){
         out.set(this.ik(k, ""), {k, i: "", d: {$t: "obj"}});
         Object.keys(v).forEach(s => { if (v[s] !== undefined) out.set(this.ik(k, "." + s), {k, i: "." + s, d: v[s]}); });
@@ -50,7 +51,7 @@ const BookItems = {
     if (!m) return undefined;
     const t = m.d && typeof m.d === "object" && !Array.isArray(m.d) && Object.keys(m.d).length === 1 ? m.d.$t : null;
     if (t === "obj"){ const o = {}; items.forEach(x => { if (x.i[0] === ".") o[x.i.slice(1)] = x.d; }); return o; }
-    if (t === "arr") return items.filter(x => x.i[0] === "#").sort((a, c) => (a.o || 0) - (c.o || 0)).map(x => x.d);
+    if (t === "arr" || (Array.isArray(m.d) && !m.d.length && items.some(x => x.i[0] === "#"))) return items.filter(x => x.i[0] === "#").sort((a, c) => (a.o || 0) - (c.o || 0)).map(x => x.d);
     return m.d;
   },
   // rows from the server into a books object: only the keys they touch are rebuilt
@@ -78,10 +79,10 @@ const BookItems = {
   // one thing at a time for a client: fetching, sending and live changes are not interleaved
   queue(cid, fn){ const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()}); const p = s.chain.then(fn, fn); s.chain = p.catch(() => {}); return p; },
   // ---------- from the server
-  async fetch(cid, after){
+  async fetch(cid, after, key){
     let out = [];
     for (;;){
-      const rows = await Cloud.api("client_book_items?select=key,item,ord,data,deleted,seq,updated_at,updated_by&client_id=eq." + encodeURIComponent(cid) + "&seq=gt." + after + "&order=seq.asc&limit=1000") || [];
+      const rows = await Cloud.api("client_book_items?select=key,item,ord,data,deleted,seq,updated_at,updated_by&client_id=eq." + encodeURIComponent(cid) + (key ? "&key=eq." + key : "") + "&seq=gt." + after + "&order=seq.asc&limit=1000") || [];
       out = out.concat(rows);
       if (rows.length < 1000) return out;
       after = rows[rows.length - 1].seq;
@@ -98,8 +99,21 @@ const BookItems = {
     if (!s.seq && !rows.length && !Object.keys(s.base).length) await this.fromBlob(cid);
     const first = !s.seq;
     await this.take(cid, rows, {first, cursor: true});
+    try { await this.heal(cid, s); } catch (e){}
     await this.pushNow(cid);
     return "ok";
+  },
+  // round 89: deductions on challans not here (rows marked synced, hidden by a plain [] marker): the challans fetched
+  // again in full, once a session, and those missing here added; s.chMiss: how many are still missing
+  async heal(cid, s){
+    const w = (await BookSync.localWork(cid)) || {}, have = new Set((w.challans || []).map(c => c && c.id));
+    const miss = () => [...new Set(Object.values(w.alloc || {}))].filter(id => id && !have.has(id)).length;
+    if (!miss() || s.healed) return;
+    s.healed = 1;
+    const rows = (await this.fetch(cid, 0, "challans")).filter(r => r.item[0] === "#" && !r.deleted && r.data && !have.has(r.data.id));
+    rows.forEach(r => { have.add(r.data.id); s.base[this.ik(r.key, r.item)] = this.h(r.data, r.ord); });
+    if (rows.length) await this.into(cid, rows.map(r => ({k: r.key, i: r.item, o: r.ord, d: r.data})));
+    s.chMiss = miss();
   },
   // rows from the server (fetched, or live): applied unless this computer changed the same item later
   async take(cid, rows, o){

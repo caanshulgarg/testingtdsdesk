@@ -8,6 +8,7 @@
 // table to it (its deductions and its suggestions); clicked again, all. Nothing here works out a match.
 import { useState } from "react";
 import "../../lib/tdsGlobals.js";
+import { unplacedOf } from "./onChallan.js";
 import { AddChallan } from "./Register.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -55,7 +56,7 @@ export function ChallanSide({ form, fy, q, rows, m }) {
   const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), want = new Set(Object.values(m.byRow).map((s) => s.chId));
   const mine = TDS.challans().filter((c) => (cx.uses[c.id] || {})[k] || want.has(c.id)).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)));
   const cur = S.tdsDedChF || "", pick = (id) => { S.tdsDedChF = cur === id ? "" : id; render(); };
-  const un = rows.filter((r) => !r.challan && r.tds > 0.005), unS = un.filter((r) => m.byRow[r.id]);
+  const un = unplacedOf(rows), unS = un.filter((r) => m.byRow[r.id]);
   return <aside className="dd-side" data-dd-side="">
     <details className="dd-sidedet" open>
       <summary><b>Challans</b> <span className="note">{mine.length} · tap one to see its deductions</span></summary>

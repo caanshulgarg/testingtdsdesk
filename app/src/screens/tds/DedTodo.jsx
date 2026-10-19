@@ -18,6 +18,7 @@ import { AddChallan } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { fixesOf } from "./DedSmart.jsx";
 import { openAllChallans } from "./AllChallans.jsx";
+import { chIds, chMissing, missingName } from "./onChallan.js";
 import "./clear.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -46,8 +47,10 @@ export function bestChallans(r, cx) {
 }
 
 // which group a row is in: {g: "confirm" | "choose" | "pay" | "fix" | "done", s, w, grp, prob}
-export function groupOf(r, m, issue, probs, form) {
+// round 89: a row pointing at a challan that is not here is to choose again (ids: the challans here, onChallan.js)
+export function groupOf(r, m, issue, probs, form, ids) {
   const prob = rowProblem(r, issue, probs, form);
+  if (r.tds > 0.005 && chMissing(r, ids)) return { g: "choose", miss: r.challan, prob };
   if (r.challan || !(r.tds > 0.005)) return { g: prob ? "fix" : "done", prob };
   const s = m.byRow[r.id], w = m.why[r.id];
   if (s && s.rule !== "split" && s.rule !== "int") return { g: "confirm", s, prob };
@@ -86,7 +89,8 @@ function ChooseRow({ r, x, locked, cx }) {
   const pick = (id) => { const y = TDSMatch.move([r.id], id); if (!y.ok) toast(y.why); render(); };
   const split = () => (x.s ? tdsSplitOpen(x.s.key) : tdsSplitRow(r.id, best[0] ? best[0].c.id : ""));
   return <tr data-dt-row={r.id} data-dt-in="choose"><Cells r={r} prob={x.prob} />
-    <td className="dt-act">{fit.length ? <span className="dt-why">Pick the challan that paid it:</span>
+    <td className="dt-act">{x.miss ? <span className="dt-why bad" data-dt-miss={x.miss}>Its challan {missingName(x.miss)} is missing — choose again</span>
+      : fit.length ? <span className="dt-why">Pick the challan that paid it:</span>
         : <span className="dt-why">{x.s ? x.s.reason : x.w ? x.w.words : "No one challan has enough left."}</span>}
       {!locked && <span className="dt-btns">{fit.map((b) => <button key={b.c.id} type="button" className="btn small dt-pick dt-do" data-dt-pick={b.c.id} onClick={() => pick(b.c.id)}>
           {b.c.serial} · {dm6(b.c.date)}{chSec(b.c) ? " · " + chSec(b.c) : ""} · {money(b.left)} left</button>)}
@@ -128,8 +132,8 @@ function FixRow({ r, x, issue, m, locked }) {
 }
 
 export default function DedTodo({ form, fy, q, rows, m, issueOf, probs, locked }) {
-  const cx = TDSReg.ctx(), G = { confirm: [], choose: [], pay: [], fix: [], done: [] };
-  rows.forEach((r) => { const x = groupOf(r, m, issueOf[r.id], probs[r.id], form); G[x.g].push({ r, x }); });
+  const cx = TDSReg.ctx(), G = { confirm: [], choose: [], pay: [], fix: [], done: [] }, ids = chIds();
+  rows.forEach((r) => { const x = groupOf(r, m, issueOf[r.id], probs[r.id], form, ids); G[x.g].push({ r, x }); });
   // the pay blocks: one per section and month (tmReasons' group, or the row's own)
   const blocks = [], byKey = {};
   G.pay.forEach((it) => { const g = it.x.grp, key = g ? g.key : TDS.sec(it.r.section) + "|" + TDS.ymd(it.r.date).slice(0, 6);

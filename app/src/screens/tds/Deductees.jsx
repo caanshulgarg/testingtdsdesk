@@ -58,7 +58,7 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
         <td><RowChip p={p} />{p.conflict ? <PanConflict party={p.party} c={p.conflict} /> : null}</td>
         <td title={p.secs.map((s) => secTitle(s, fy)).filter(Boolean).join("; ")}>{p.secs.map((s) => secShort(s, fy)).join(", ")}</td><td className="n">{p.n}</td><td className="n">{money(p.paid)}</td><td className="n">{money(p.tds)}</td></tr>)}</tbody>
     </table></div>
-    <p className="note rt-foot" data-dee-count="">{shown.length === list.length ? list.length : shown.length + " of " + list.length} {list.length === 1 ? unit[0] : unit[1]} · {money(shown.reduce((a, p) => a + p.paid, 0))} paid · {money(shown.reduce((a, p) => a + p.tds, 0))} TDS
+    <p className="note dee-count" data-dee-count="">{shown.length === list.length ? list.length : shown.length + " of " + list.length} {list.length === 1 ? unit[0] : unit[1]} · {money(shown.reduce((a, p) => a + p.paid, 0))} paid · {money(shown.reduce((a, p) => a + p.tds, 0))} TDS
       {(f || qq) ? <> · <button type="button" className="linkbtn" data-ded-clear="" onClick={() => { setFind(""); setF(""); }}>Clear filters</button></> : null}</p>
     {!list.length && <p className="note">No {unit[1]} in this return.</p>}
     <DeducteeDetails list={list} form={form} fy={fy} q={q} locked={locked} issueOf={issueOf} />

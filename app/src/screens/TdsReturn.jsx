@@ -35,7 +35,8 @@ import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter, groupRows, GroupHead 
 import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes, readyCount } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
 import DedTodo from "./tds/DedTodo.jsx";
-import { DedByChallan } from "./tds/Winman.jsx";
+import { DedByChallan, retChallans } from "./tds/Winman.jsx";
+import { unplacedOf } from "./tds/onChallan.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -323,7 +324,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
   S.tdsTab = tabNow(S.tdsTab, form);
-  const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan && r.tds > 0.005);
+  const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = unplacedOf(rows);
   // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
   // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
   const filed = TDSFiled.get(fy, q, form), filedOn = filed ? filed.on : "";
@@ -373,7 +374,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const sfx = dm ? safeFixes(rows, issueOf, dm) : [], ready = readyCount(rows, issueOf);
   const unit = form === "27EQ" ? "collections" : "deductions";
   const notCh = r2(un.reduce((a, r) => a + r.tds, 0));
-  const key = TDSReg.key(form, fy, q), usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length;
+  // round 89: the count is the Challans grid's rows, the sum this return's TDS on them (tds/Winman.jsx retChallans)
+  const key = TDSReg.key(form, fy, q), rc = retChallans(form, fy, q), usedN = rc.n;
   // the one problem count: Validate & file's
   const val = checkReturn(fy, q, form);
   const status = statusOf({ fy, q, form, has: rows.length > 0 || usedN > 0, errors: val.errors.length, drift: val.drift, problems: val.n });
@@ -393,7 +395,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
     ["Import corrected Excel…", () => { S.tdsTab = "deductions"; render(); setTimeout(() => { const el = document.querySelector("[data-ded-import]"); if (el) el.click(); }, 50); }]] });
   const strip = [
     { label: form === "27EQ" ? "TCS" : "TDS", value: money(tds), sub: rows.length + " " + unit + " · " + deductees + (form === "27EQ" ? " buyers" : " deductees") },
-    { label: "On challans", value: money(TDSReg.usedBy(fy, q, form)), sub: usedN + " challan" + (usedN === 1 ? "" : "s") },
+    { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") },
     { label: "Left", value: money(notCh), bad: notCh > 0.005, sub: un.length ? un.length + " not matched" : null },
   ];
   const reviews = {
@@ -541,7 +543,7 @@ export function Return24({ b }) {
   // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
   if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} />;
   S.tdsTab = tabNow(S.tdsTab, "24Q");
-  const fname = TDS.formName("24Q", fy), key = TDSReg.key("24Q", fy, q), usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length;
+  const fname = TDS.formName("24Q", fy), key = TDSReg.key("24Q", fy, q), rc = retChallans("24Q", fy, q), usedN = rc.n;
   const inBooks = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q), booksTds = r2(inBooks.reduce((a, r) => a + num(r.tds), 0));
   const val = checkReturn(fy, q, "24Q"), filed = TDSFiled.get(fy, q, "24Q"), filedOn = filed ? filed.on : "";
   const a1 = has ? TDS24Q.annexI(fy, q) : [], sheetTds = r2(a1.reduce((s, e) => s + e.tds, 0));
@@ -558,12 +560,12 @@ export function Return24({ b }) {
     { id: "after", label: "After filing", off: !TDSReg.filed(fy, q, "24Q"), why: "Once the return is marked filed (Validate & file › Mark filed)" },
   ];
   const strip = has ? [{ label: "Employees", value: String(a1.length), sub: money(a1.reduce((s, e) => s + e.paid, 0)) + " paid" }, { label: "TDS", value: money(sheetTds), sub: "from the salary sheet" },
-    { label: "On challans", value: money(TDSReg.usedBy(fy, q, "24Q")), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]
-    : [{ label: "Salary TDS in the books", value: money(booksTds), sub: inBooks.length + " deduction" + (inBooks.length === 1 ? "" : "s") + " under 192" }, { label: "On challans", value: money(TDSReg.usedBy(fy, q, "24Q")), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }];
+    { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]
+    : [{ label: "Salary TDS in the books", value: money(booksTds), sub: inBooks.length + " deduction" + (inBooks.length === 1 ? "" : "s") + " under 192" }, { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }];
   const confirmable = (() => { try { return TDSMatch.suggest("24Q", fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
   const primary = !has && S.tdsTab !== "challans" && S.tdsTab !== "file" ? ["Bring in the salary sheet", () => doAct("salaryPick")] : S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined;
   const more = retMore({ fy, q, form: "24Q", extra: [["Download the 24Q working (Excel)", () => doAct("q24Excel")], ["Bring in a new salary sheet", () => doAct("salaryPick")], has && ["Remove the salary sheet", () => doAct("salaryClear")]] });
-  const un = TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !r.challan && r.tds > 0.005);
+  const un = unplacedOf(TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q));
   const reviews = {
     unmatched: <FixRows title={un.length + " salary payments without a challan"} rows={un} unit="salary payments" />,
     nopan: <FixRows title="Without a valid PAN" rows={TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !Certs.validPan(r.pan))} unit="salary payments" />,

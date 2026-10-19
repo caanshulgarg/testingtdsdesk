@@ -102,10 +102,14 @@ export function SideDrawer({ open, onClose, title, description, kind, wide, chil
 
 // round 88 (as Winman): the four tabs at the foot of a return, and its keys: F8 Deductor, F10 Challans, F11 Deductees, F12 Deductions
 export const FOOT_KEYS = { F8: "deductor", F10: "challans", F11: "deductees", F12: "deductions" };
+// round 89: not while typing in Ask FinCom, in a dialog, or in a box to type in outside the return's tables (a select stays)
+const TYPING = 'input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable="false"])';
 export function footKey(ev) {
   if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
   const id = FOOT_KEYS[ev.key];
   if (!id || S.tdsView !== "return") return;
+  const t = ev.target && ev.target.closest ? ev.target : null;
+  if (t && (t.closest('[data-asst-panel], [role="dialog"], [aria-modal="true"]') || (t.matches(TYPING) && !t.closest(".rt-main table")))) return;
   ev.preventDefault(); tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ }
 }
 export function FootTabs({ steps }) {

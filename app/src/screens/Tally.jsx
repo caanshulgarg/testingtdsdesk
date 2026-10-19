@@ -1205,6 +1205,9 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
     {open && <div data-bridge-more="" style={{ marginTop: 6 }}>
       {cards.length > 0 && <ReadingView cards={cards} />}
       <ClientsTable />
+      {/* round 89: deductions on challans the server does not have, after fetching the challans again (54-live-sync.js heal) */}
+      {typeof BookItems === "object" && Object.entries(BookItems.st || {}).filter(([, x]) => x && x.chMiss > 0).map(([cid, x]) => <p key={cid} className="note bad" data-sync-chmiss={cid}>
+        {((S.companies[cid] || {}).name || cid) + ": deductions point at " + x.chMiss + " challan" + (x.chMiss === 1 ? "" : "s") + " not on the server; they are listed under Not on any challan (TDS › Deductions) to choose again."}</p>)}
       <H id="activity">Activity</H>
       <nav className="row tadv-links" aria-label="Tally, for support" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 4px" }}>
         {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav>

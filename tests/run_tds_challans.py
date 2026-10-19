@@ -179,15 +179,15 @@ try:
         pg.evaluate("() => { S.tdsChView = ''; S.tdsChSel = ''; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(600)
         g = pg.locator("#app [data-chg]")
         heads = pg.evaluate("[...document.querySelectorAll('#app [data-chg] thead th')].map(h => h.innerText.trim())")
-        ok(g.count() == 1 and pg.locator("#app [data-cm-panel]").count() == 0 and heads == ["No", "Date", "Section", "Tax", "Interest", "Fee", "Others", "Total", "Serial", "BSR", "Type", "Verified", "Interest allocated", "Others allocated", "Used", "Balance"],
-           "Challans: one plain table, No · Date · Section · Tax · Interest · Fee · Others · Total · Serial · BSR · Type · Verified · Interest allocated · Others allocated · Used · Balance (%s)" % heads)
+        ok(g.count() == 1 and pg.locator("#app [data-cm-panel]").count() == 0 and heads == ["No", "Date", "Section", "Tax", "Interest", "Fee", "Others", "Total", "Serial", "BSR", "Type", "Verified", "Interest allocated", "Others allocated", "Used here", "Used in all returns", "Balance"],
+           "Challans: one plain table, No · Date · Section · Tax · Interest · Fee · Others · Total · Serial · BSR · Type · Verified · Interest allocated · Others allocated · Used here · Used in all returns · Balance (%s)" % heads)
         rows = pg.evaluate("""[...document.querySelectorAll('#app [data-chg] tbody tr[data-chg-row]')].map(t => ({id: t.dataset.chgRow, cells: [...t.cells].map(c => c.innerText.trim())}))""")
         used26 = pg.evaluate("Array.from(new Set(Object.values(S.books.alloc))).filter(id => TDS.rows().some(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === id))")
         ok(set(used26) <= set(r["id"] for r in rows) and [r["cells"][0] for r in rows] == [str(i + 1) for i in range(len(rows))], "every challan this return uses is a row, numbered 1 to %d" % len(rows))
         a = next((r for r in rows if r["id"] == chA), None)
         wa = pg.evaluate("(id) => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === id); return {used: TDSReg.usedTax(c, cx), bal: TDSReg.balance(c, cx).tax}; }", chA)
-        ok(a and a["cells"][1] == "05-May-2026" and a["cells"][2] == "194C" and a["cells"][3] == "₹8,640.00" and a["cells"][8] == "00123" and a["cells"][9] == "0510308" and a["cells"][14] == "₹" + format(wa["used"], ",.2f") and a["cells"][15] == "₹" + format(wa["bal"], ",.2f"),
-           "challan 00123's row: date, section, tax, serial, BSR, used and balance (%s)" % (a and a["cells"]))
+        ok(a and a["cells"][1] == "05-May-2026" and a["cells"][2] == "194C" and a["cells"][3] == "₹8,640.00" and a["cells"][8] == "00123" and a["cells"][9] == "0510308" and a["cells"][14] == "₹" + format(wa["used"], ",.2f") and a["cells"][15] == "₹" + format(wa["used"], ",.2f") and a["cells"][16] == "₹" + format(wa["bal"], ",.2f"),
+           "challan 00123's row: date, section, tax, serial, BSR, used here (only this return uses it: = used in all returns) and balance (%s)" % (a and a["cells"]))
         ft = pg.locator("#app [data-chg] tfoot").inner_text()
         tax = pg.evaluate("(ids) => ids.reduce((a, id) => a + num(TDS.challans().find(c => c.id === id).tax), 0)", [r["id"] for r in rows])
         ok(("Number of challans %d" % len(rows)) in ft and pg.get_attribute("#app [data-chg] tfoot [data-chg-tax]", "data-chg-tax") and abs(float(pg.get_attribute("#app [data-chg] tfoot [data-chg-tax]", "data-chg-tax")) - tax) < 0.01,

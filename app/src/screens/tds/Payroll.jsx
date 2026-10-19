@@ -17,6 +17,8 @@ import { ChallanCell, MatchDialogs } from "./Match.jsx";
 import DeducteesPan from "./Deductees.jsx";
 import { DeductorDetails } from "../Settings.jsx";
 import { tabNow, ReturnChallans, AfterFiling, UnknownChallans, SalaryChecks, FixRows } from "./ReturnParts.jsx";
+import { retChallans } from "./Winman.jsx";
+import { unplacedOf } from "./onChallan.js";
 import { ReturnShell, statusOf, stepName, FvuMade } from "./Shell.jsx";
 import { checkReturn, ValidatePanel, PrnBox } from "./Validate.jsx";
 import { TracesDefaults } from "./Files.jsx";
@@ -212,7 +214,7 @@ export function Return24Tally({ fy, q }) {
   // Employees & declarations (with Annexure II in Q4) · Challans · Deductions (Annexure I) · Validate & file · After filing
   S.tdsTab = tabNow(S.tdsTab, "24Q");
   const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0)), key = TDSReg.key("24Q", fy, q);
-  const usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length, val = checkReturn(fy, q, "24Q");
+  const rc = retChallans("24Q", fy, q), usedN = rc.n, val = checkReturn(fy, q, "24Q");
   const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length, problems: val.n });
   const sal = val.warnings.find((x) => x.k === "salary"), un = val.errors.find((x) => x.k === "unmatched"), np = val.warnings.find((x) => x.k === "nopan");
   const emps = new Set(a1.map((r) => r.employee)).size;
@@ -226,7 +228,7 @@ export function Return24Tally({ fy, q }) {
     { id: "after", label: "After filing", off: !TDSReg.filed(fy, q, "24Q"), why: "Once the return is marked filed (Validate & file › Mark filed)" },
   ];
   const confirmable = (() => { try { return TDSMatch.suggest("24Q", fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
-  const unRows = TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !r.challan && r.tds > 0.005);
+  const unRows = unplacedOf(TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q));
   const reviews = {
     unmatched: <FixRows title={unRows.length + " salary payments without a challan"} rows={unRows} unit="salary payments" />,
     salary: <div data-pay-checks=""><SalaryChecks list={sal ? sal.list : []} /></div>,
@@ -246,7 +248,7 @@ export function Return24Tally({ fy, q }) {
     <MatchDialogs form="24Q" fy={fy} q={q} />
     <ReturnShell fy={fy} q={q} form="24Q" status={status} draft={TDS.isNew(fy) && !filed} val={val} primary={S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined}
       more={[["The challan register", () => tdsNav("register")]]}
-      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: "from Tally's payroll" }, { label: "On challans", value: money(TDSReg.usedBy(fy, q, "24Q")), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
+      strip={[{ label: "Employees", value: String(emps), sub: money(paid) + " paid or credited" }, { label: "TDS", value: money(tds), sub: "from Tally's payroll" }, { label: "On challans", value: money(rc.here), sub: usedN + " challan" + (usedN === 1 ? "" : "s") }]} steps={steps}>
     {S.tdsTab === "deductor" ? <DeductorDetails />
       : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} />
       : S.tdsTab === "deductions" ? <ListTable name="q24Annex1" id="q24A1Table" className="bk-table rt-rows" rows={a1} rowKey={(r) => r.id} unit={["payment", "payments"]} data-annex1=""

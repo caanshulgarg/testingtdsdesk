@@ -18,6 +18,8 @@ import { Sparkles } from "lucide-react";
 const PRESS = 'button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button], [role=tab], [role=link], [contenteditable=true]';
 const MODAL = '[aria-modal="true"], .drawer, .drawer-scrim, .bk-overlay, .firmsetup-scrim, .side-sheet-wrap, #confirmBox, .menu-scrim, [role="dialog"][data-state="open"]';
 const GAP = 4;
+// round 89: the TDS return's footers (the challan's figures, the step tabs) count as taken though they hold no button
+const FOOT = ".wd-foot, .rt-foot";
 
 function modalOpen(btn) {
   if (getComputedStyle(document.body).pointerEvents === "none") return true;   // a Radix modal (DrawerContent) is open
@@ -38,7 +40,7 @@ function modalOpen(btn) {
 function under(btn, r) {
   const out = [];
   const top = (x, y) => document.elementsFromPoint(x, y).find((el) => !btn.contains(el));
-  for (const el of document.querySelectorAll(PRESS)) {
+  for (const el of document.querySelectorAll(PRESS + ", " + FOOT)) {
     if (btn.contains(el)) continue;
     const b = el.getBoundingClientRect();
     if (b.width < 1 || b.height < 1 || b.left >= r.right + GAP || b.right <= r.left - GAP || b.top >= r.bottom + GAP || b.bottom <= r.top - GAP) continue;
