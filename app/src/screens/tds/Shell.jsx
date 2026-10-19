@@ -106,7 +106,7 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  return <div className="rt" data-return={form + "|" + q + "|" + fy}>
+  return <div className={"rt" + (cur === "deductions" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
       <h2 className="rt-title" data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>

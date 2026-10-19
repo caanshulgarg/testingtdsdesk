@@ -213,3 +213,38 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .add-bills { margin-top: 12px; padding: 8px 10px; border: 1px dashed var(--border, var(--rule)); border-radius: var(--radius-control, 6px); font-size: 13px; }
 .add-bills ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 .add-bills li { display: flex; justify-content: space-between; gap: 10px; }
+/* next-tds-clear, the coordinator's review: every column of Deductions in view at 1366 and 1440 beside the challans panel */
+#tdsDnTable { font-size: 12.5px; }
+#tdsDnTable td.dd-chcol, #tdsDnTable th.dd-chcol { white-space: nowrap; }
+#tdsDnTable .dd-ch { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; max-width: 210px; padding: 0 4px; }
+#tdsDnTable .dd-ch .dd-why { flex: 1 1 auto; flex-basis: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tdsDnTable .dd-ch.none { flex-wrap: wrap; white-space: normal; }
+#tdsDnTable .dd-ch.none .dd-why { white-space: normal; overflow: visible; }
+#tdsDnTable td.pty { max-width: 150px; }
+#tdsDnTable .dd-fixes { display: block; }
+#tdsDnTable .dd-fix { border: 0; background: none; padding: 0; margin-right: 6px; color: var(--info); text-decoration: underline dotted; font-size: 11px; border-radius: 0; }
+#tdsDnTable .panbox.compact input { width: 78px; }
+#tdsDnTable thead .hf-sel { width: 16px; min-width: 16px; padding: 0; }
+.dd-two { grid-template-columns: minmax(0, 1fr) 240px; }
+@media (max-width: 1599px) {
+  .rt.rt-compact .rt-body { grid-template-columns: 46px minmax(0, 1fr); gap: 10px; }
+  .rt.rt-compact .rt-step { grid-template-columns: 22px; grid-template-areas: "i" "c"; justify-items: center; padding: 6px 2px; row-gap: 2px; }
+  .rt.rt-compact .rt-step .rt-l, .rt.rt-compact .rt-step .rt-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 1439px) { .dd-two { grid-template-columns: minmax(0, 1fr) 222px; gap: 10px; } #tdsDnTable .dd-pick { display: table-cell; } }
+@media (max-width: 1180px) { .dd-two { grid-template-columns: minmax(0, 1fr); } }
+#app #tdsDnTable > thead > tr > th { padding-left: 4px; padding-right: 4px; }
+#app #tdsDnTable > thead .lt-sort { padding: 0; min-width: 0; gap: 0; }
+#app #tdsDnTable > thead .colh { display: inline-flex; align-items: center; gap: 1px; white-space: nowrap; }
+#app #tdsDnTable > thead .lt-ar { min-width: 0; margin: 0; }
+#app #tdsDnTable > thead .lt-ar:empty { display: none; }
+#app #tdsDnTable .ck { width: 22px; padding-left: 4px !important; padding-right: 2px !important; }
+#app #tdsDnTable .dd-ch { max-width: 190px; }
+#app #tdsDnTable td.pty { max-width: 140px; }
+#app #tdsDnTable .panbox.compact input { width: 70px; }
+#app #tdsDnTable .dd-ch { max-width: 172px; }
+@media (max-width: 1439px) { .dd-two { grid-template-columns: minmax(0, 1fr) 206px; } .dd-side { padding: 6px; } }
+#app #tdsDnTable th.dt, #app #tdsDnTable td.dt { width: 56px; }
+#app #tdsDnTable thead .hf-sel { width: 14px; min-width: 14px; max-width: 14px; }
+#app #tdsDnTable > tbody > tr > td.dt, #app #tdsDnTable > thead > tr > th.dt { padding-left: 5px !important; padding-right: 4px !important; }
+@media (max-width: 1439px) { .dd-chf { flex-direction: row; flex-wrap: wrap; column-gap: 8px; } }

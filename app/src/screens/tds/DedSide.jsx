@@ -29,7 +29,7 @@ export function ChallanOrSugg({ r, m, locked }) {
   if (r.challan) {
     const c = chs.find((x) => x.id === r.challan);
     return <span className="dd-ch on" data-dd-on={r.id}>{!locked && <input type="checkbox" checked aria-label={"Take " + (r.party || "") + " off its challan"} data-dd-off={r.id} onChange={() => { const x = TDSMatch.takeOff([r.id]); if (!x.ok) toast(x.why); render(); }} />}
-      <button type="button" className="linkbtn cm-cell" data-ch-cell={r.id} title={c ? c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + TDSMatch.matchedBy(r.id).words : ""} onClick={() => tdsMoveOpen([r.id])}>{c ? short(c) : r.challan}</button></span>;
+      <button type="button" className="linkbtn cm-cell" data-ch-cell={r.id} title={c ? c.bsr + " · " + day(c.date) + " · " + c.serial + " · " + TDSMatch.matchedBy(r.id).words : ""} onClick={() => tdsMoveOpen([r.id])}>{c ? c.serial + " · " + day(c.date).slice(0, 6) : r.challan}</button></span>;
   }
   const s = m.byRow[r.id];
   if (s && s.rule === "split") return <span className="dd-ch" data-dd-split={r.id}><button type="button" className="linkbtn" onClick={() => tdsSplitOpen(s.key)}>Split across challans…</button><small className="dd-why">{s.reason}</small></span>;
@@ -37,7 +37,7 @@ export function ChallanOrSugg({ r, m, locked }) {
     const c = chs.find((x) => x.id === s.chId);
     return <span className="dd-ch sugg" data-dd-sugg-cell={r.id}>{!locked && <input type="checkbox" checked={false} aria-label={"Put " + (r.party || "") + " on challan " + (c ? TDSCH.label(c) : "")} data-dd-sugg={r.id}
       onChange={() => { const x = TDSCH.tag([r.id], s.chId, { via: "suggestion", note: "suggestion confirmed: " + s.words + (s.rule === "g" ? " (" + s.reason + ")" : "") }); if (!x.ok) toast(x.why); render(); }} />}
-      <span className="dd-sl" title={s.reason}>{c ? short(c) : s.chId}</span><small className="dd-why" title={s.reason}>{s.rule === "g" || s.ai ? "AI: " : ""}{s.words}</small></span>;
+      <span className="dd-sl" title={(c ? TDSCH.label(c) + " · " : "") + s.reason}>{c ? c.serial + " · " + day(c.date).slice(0, 6) : s.chId}</span><small className="dd-why" title={s.reason}>{s.rule === "g" || s.ai ? "AI: " : ""}{s.words}</small></span>;
   }
   const w = m.why[r.id];
   return <span className="dd-ch none" data-dd-none={r.id}><span className="bad">Not matched</span><small className="dd-why" data-cm-why={w ? w.step : "none"}>{w ? w.words : "No challan fits."}

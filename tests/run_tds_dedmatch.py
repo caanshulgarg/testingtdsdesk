@@ -47,11 +47,24 @@ try:
         ok(pg.locator("#app [data-dd-side]").evaluate("(e) => getComputedStyle(e).position") == "sticky", "the panel stays in view (sticky)")
         sg = J("[...document.querySelectorAll('#app #tdsDnTable [data-dd-sugg]')].map(e => e.dataset.ddSugg)")
         ok(len(sg) > 0 and J("Object.keys(S.books.alloc).length") == 0, "the matcher has run: %d deductions show a suggested challan with a tick, nothing put on yet" % len(sg))
+        # every column in view beside the panel at 1440 and 1366: no sideways scroll in the table, the first row's
+        # suggested-challan tick on screen and not covered (the coordinator's review, 19-Oct-2026)
+        for w in (1440, 1366):
+            pg.set_viewport_size({"width": w, "height": 950}); pg.wait_for_timeout(400)
+            v = J("""() => { const t = document.querySelector('#tdsDnTable'), wrap = t.closest('.lt-wrap, .bk-tablewrap'), cb = t.querySelector('tbody [data-dd-sugg]'); if (!cb) return null;
+              const r = cb.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2), side = document.querySelector('[data-dd-side]').getBoundingClientRect();
+              const heads = [...t.querySelectorAll('thead th')].map(h => h.innerText.trim()).filter(Boolean);
+              return {over: wrap.scrollWidth - wrap.clientWidth, inView: r.right <= innerWidth && r.left >= 0, hit: hit === cb, beforeSide: t.getBoundingClientRect().right <= side.left + 1, heads,
+                rowH: Math.max(...[...t.querySelectorAll('tbody tr[data-ded-row]')].filter(tr => !tr.querySelector('[data-row-fixes]')).map(tr => tr.getBoundingClientRect().height), 0)}; }""")
+            ok(v and v["over"] <= 1 and v["inView"] and v["hit"] and v["beforeSide"], "%d: every column in view, no sideways scroll, the first row's suggested-challan tick visible and not covered (%s)" % (w, v))
+            ok(v and all(any(h.startswith(x) for h in v["heads"]) for x in ["Date", "Deductee", "PAN", "Section", "Paid", "Rate", "TDS", "Challan"]), "%d: Date · Deductee · PAN · Section · Paid · Rate · TDS · Challan (%s)" % (w, v and v["heads"]))
+            ok(v and v["rowH"] <= 40, "%d: a row without a fix at most 40 px (%s)" % (w, v and v["rowH"]))
+            pg.screenshot(path=os.path.join(SHOTS, "deductions-suggestions-%d.png" % w))
+        pg.set_viewport_size({"width": 1440, "height": 950}); pg.wait_for_timeout(300)
         rid = J("() => { const s = TDSMatch.suggest('26Q', '2026-27', 'Q1').find(s => s.chId === 'chA'); return s ? s.ids[0] : ''; }")
         tds = J("(id) => TDS.rows().find(r => r.id === id).tds", rid)
         b0 = bal("chA")
         ok("Same section" in (pg.locator('#app [data-dd-sugg-cell="%s"]' % rid).inner_text() or ""), "the suggestion's reason on the row")
-        pg.screenshot(path=os.path.join(SHOTS, "deductions-suggestions-1440.png"), full_page=True)
         pg.click('#app [data-dd-sugg="%s"]' % rid); pg.wait_for_timeout(450)
         ok(J("(id) => S.books.alloc[id]", rid) == "chA" and abs(bal("chA") - (b0 - tds)) < 0.01 and pg.locator('#app [data-dd-off="%s"]' % rid).count() == 1, "ticked: on chA at once, the panel's balance %s → %s, the row matched" % (b0, bal("chA")))
         pg.click('#app [data-dd-off="%s"]' % rid); pg.wait_for_timeout(450)
