@@ -213,7 +213,7 @@ export function Return24Tally({ fy, q }) {
   S.tdsTab = tabNow(S.tdsTab, "24Q");
   const tds = r2(a1.reduce((a, r) => a + r.tds, 0)), paid = r2(a1.reduce((a, r) => a + r.paid, 0)), key = TDSReg.key("24Q", fy, q);
   const usedN = Object.values(TDSReg.uses()).filter((m) => m[key]).length, val = checkReturn(fy, q, "24Q");
-  const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length });
+  const status = statusOf({ fy, q, form: "24Q", has: a1.length > 0, errors: val.errors.length, problems: val.n });
   const sal = val.warnings.find((x) => x.k === "salary"), un = val.errors.find((x) => x.k === "unmatched"), np = val.warnings.find((x) => x.k === "nopan");
   const emps = new Set(a1.map((r) => r.employee)).size;
   const steps = [

@@ -460,8 +460,8 @@ try:
         shot(pg, "10-ctrlk", "body")
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         # ---------- Check before filing on the TDS return page
-        pg.evaluate("S.step = null; S.tab = 'books'; S.booksTab = 'tds'; S.tdsFy = '2025-26'; S.tdsQ = 'Q4'; S.tdsForm = '26Q'; S.tdsView = 'return'; S.tdsTab = 'deductions'; render()"); pg.wait_for_timeout(800)
-        ok(pg.locator('[data-prefile-btn="tds"]').count() >= 1, "TDS return page: Check before filing")
+        pg.evaluate("S.step = null; S.tab = 'books'; S.booksTab = 'tds'; S.tdsFy = '2025-26'; S.tdsQ = 'Q4'; S.tdsForm = '26Q'; S.tdsView = 'return'; S.tdsTab = 'file'; render()"); pg.wait_for_timeout(800)
+        ok(pg.locator('[data-prefile-btn="tds"]').count() >= 1, "TDS return page: Check before filing (Validate & file › Online checks)")
         if pg.locator('[data-prefile-btn="tds"]').count():
             pg.locator('[data-prefile-btn="tds"]').first.click(); pg.wait_for_timeout(800)
             ok(pg.locator("[data-prefile] [data-prefile-line]").count() >= 5, "it opens the checklist")

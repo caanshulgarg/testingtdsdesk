@@ -11,7 +11,6 @@
 import { useRef } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import More from "../../parts/More.jsx";
-import { PreFileButton } from "../../parts/PreFile.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
 
@@ -49,7 +48,7 @@ export const PrevPrn = {
 // a return's status from what it has and its checks: filed (processed once TRACES' consolidated file or justification
 // report is in), a filed return changed in Tally since or with errors -> In progress, FVU made, Ready (no error) or
 // In progress; nothing in it -> Not started
-export function statusOf({ fy, q, form, has, errors, drift }) {
+export function statusOf({ fy, q, form, has, errors, drift, problems = 0 }) {
   if (!has) return "none";
   const f = TDSFiled.get(fy, q, form);
   if (f) {
@@ -58,7 +57,8 @@ export function statusOf({ fy, q, form, has, errors, drift }) {
     try { done = TRF.consos().some((c) => c.fy === fy && c.q === q && (c.form || "26Q") === form) || !!TRF.jrFor(fy, q, form); } catch (e) { /* */ }
     return done ? "processed" : "filed";
   }
-  if (errors > 0) return "prog";
+  // Ready only with nothing to fix: no error and no warning (the coordinator's review, 19-Oct-2026)
+  if (errors > 0 || problems > 0) return "prog";
   return FvuMade.get(fy, q, form) ? "fvu" : "ready";
 }
 
@@ -112,7 +112,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <h2 className="rt-title" data-return-title="">{TDS.formShort(form, fy)} · {q} ({Q_MON[q]})</h2>
       <span className="rt-due" title={TDS.FORM_ABOUT[form] || ""}>due {TDS.dueWords(fy, q, form)}</span>
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
-      {draft && <span className="tag warn" title="A form of the Income-tax Act, 2025: FinCom's file is not yet matched to Protean's format (see Validate & file)" data-draft-tag="">Draft</span>}
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
       <span className="rt-sp" />
       <More label="⋯" ariaLabel="More" items={more} />
@@ -128,7 +127,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
           <span className={"rt-c" + (s.id === "file" && n ? (val.errors.length ? " bad" : " warn") : "")} data-rail-count={s.id} {...(s.id === "file" ? { "data-rail-problems": n } : {})}>{s.id === "file" ? (n ? n : "✓") : s.done ? "✓" : s.count != null ? s.count : ""}</span>
           {s.off && !s.sub ? <span className="rt-sub" data-rail-sub={s.id}>once filed</span> : null}{s.sub && s.sub.text ? <span className={"rt-sub" + (s.sub.bad ? " bad" : " warn")} data-rail-sub={s.id}>{s.sub.text}</span> : null}
         </button>)}
-        <div className="rt-railfoot"><PreFileButton kind="tds" form={form} fy={fy} q={q} /></div>
       </nav>
       <label className="rt-railsel"><span className="sr-only">Step</span>
         <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>

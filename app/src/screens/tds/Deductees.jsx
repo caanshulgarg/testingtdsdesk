@@ -18,6 +18,8 @@ const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 // a section as a short code: "194C" before 2026-27; "393(1)-6(i) · 194C" from it (the words on a hover)
 export const secShort = (s, fy) => { const x = TDS.secNew(s, fy || S.tdsFy); return x.ref ? x.ref.replace(/ Sl\. /, "-") + " · " + x.old : TDS.sec(s) || s || ""; };
+// the same, with the old section apart (hidden where the table is narrow; the hover keeps it)
+export const SecShort = ({ s, fy }) => { const x = TDS.secNew(s, fy || S.tdsFy); return x.ref ? <>{x.ref.replace(/ Sl\. /, "-")}<span className="sec-old"> · {x.old}</span></> : <>{TDS.sec(s) || s || ""}</>; };
 export const secTitle = (s, fy) => { const x = TDS.secNew(s, fy || S.tdsFy); return x.ref ? x.ref + " [old " + x.old + "] · " + x.label : (TDS.secName(s) ? TDS.sec(s) + " · " + TDS.secName(s) : ""); };
 
 export function PanState({ st }) {

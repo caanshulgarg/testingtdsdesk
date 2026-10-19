@@ -149,6 +149,7 @@ export function ChallanTicker({ c, form, fy, q, locked, sugg, mode }) {
               <button className="btn small" data-cm-no={s.key} onClick={() => tdsMatchNo(s.key)}>Not this</button></div>}
           </div>)}</div>}
         {!locked && <div className="cm-pick-h">
+          {(form === "26Q" || form === "27Q") && <button type="button" className="linkbtn" data-cm-add-ded={c.id} onClick={() => { S.tdsAdd = { chId: c.id }; render(); }}>Add a deduction on this challan…</button>}
           <label className="chk"><input type="checkbox" checked={only} onChange={(ev) => setOnly(ev.target.checked)} /> Only {sec || "its section"}</label>
           <select aria-label="Month of the deductions" value={mon} onChange={(ev) => setMon(ev.target.value)}><option value="">Every month</option>{tdsMonths(fy, q).map((x) => <option key={x} value={x}>{monthOf(x)}</option>)}</select>
           <span className="note">Tick to put it on this challan; the balance drops at once.</span></div>}
@@ -262,19 +263,19 @@ export function FileChecks({ form, fy, q }) {
 
 // a plain list of the return's deductions with their challan (Form 138 from the salary sheet or the books), filtered by
 // section, month, challan, matched or not; the challan-first view when a challan is chosen
-export function PlainDeductions({ form, fy, q }) {
+export function PlainDeductions({ form, fy, q, extra }) {
   const rows = TDS.formRows(form).filter((r) => r.fy === fy && r.q === q && r.tds > 0.005), [f, setF] = useState({}), locked = TDSReg.locked(fy, q, form);
   const c = S.tdsDedCh ? TDS.challans().find((x) => x.id === S.tdsDedCh) : null;
   const chOf = (id) => TDS.challans().find((x) => x.id === id);
   const shown = rows.filter((r) => (!f.sec || TDS.sec(r.section) === f.sec) && (!f.month || TDS.ymd(r.date).slice(0, 6) === f.month) && (!f.st || (f.st === "matched" ? !!r.challan : !r.challan)) && (!f.ch || r.challan === f.ch));
   return <div data-plain-deductions="">
-    <div className="row cm-filters"><ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} /></div>
-    {c ? <ChallanTicker c={c} form={form} fy={fy} q={q} locked={locked} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /> : <>
-      <div className="row cm-filters">
+    <div className="rt-tool" data-step-tool=""><ChallanSelect form={form} fy={fy} q={q} value={S.tdsDedCh} onChange={(v) => { S.tdsDedCh = v; render(); }} />
+      {!c && <>
         <select aria-label="Section" value={f.sec || ""} onChange={(ev) => setF({ ...f, sec: ev.target.value })}><option value="">All sections</option>{Array.from(new Set(rows.map((r) => TDS.sec(r.section)))).sort().map((x) => <option key={x} value={x}>{x}</option>)}</select>
         <select aria-label="Month" value={f.month || ""} onChange={(ev) => setF({ ...f, month: ev.target.value })}><option value="">All months</option>{tdsMonths(fy, q).map((x) => <option key={x} value={x}>{monthOf(x)}</option>)}</select>
-        <select aria-label="Matched or not" value={f.st || ""} onChange={(ev) => setF({ ...f, st: ev.target.value })}><option value="">Matched and not</option><option value="matched">Matched</option><option value="not">Not matched</option></select>
-      </div>
+        <select aria-label="Matched or not" value={f.st || ""} onChange={(ev) => setF({ ...f, st: ev.target.value })}><option value="">Matched and not</option><option value="matched">Matched</option><option value="not">Not matched</option></select></>}
+      {extra}</div>
+    {c ? <ChallanTicker c={c} form={form} fy={fy} q={q} locked={locked} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /> : <>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-plain-table="">
         <thead><tr><th className="dt">Date</th><th>{form === "24Q" ? "Employee" : "Deductee"}</th><th>PAN</th><th>Section</th><th className="n">Paid</th><th className="n">TDS</th><th>Challan</th></tr></thead>
         <tbody>{shown.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party || r.employee}</td><td>{r.pan || <span className="tag bad">no PAN</span>}</td><td>{TDS.sec(r.section)}</td>
@@ -304,12 +305,13 @@ function RowDetails({ form }) {
   const rows = [["Deductee", r.party || r.employee], ["PAN", (r.pan || "none") + " · " + PANCheck.status(r.pan).words], ["Section", sn.ref ? sn.ref + " [old " + sn.old + "] · " + sn.label : TDS.sec(r.section) + (TDS.secName(r.section) ? " · " + TDS.secName(r.section) : "")], ["Amount paid or credited", money(r.paid) + (r.books && Math.abs(num(r.books.paid) - num(r.paid)) >= 0.005 ? " (edited in FinCom: books " + money(r.books.paid) + ")" : "")],
     ["Date paid or credited", day(r.credit || r.date)], ["TDS", money(r.tds) + (r.books && Math.abs(num(r.books.tds) - num(r.tds)) >= 0.005 ? " (edited in FinCom: books " + money(r.books.tds) + ")" : "")], ["Date of deduction", day(r.date)], ["Rate", (r.rate != null ? r.rate + "%" : "") + (iss ? " · should be " + iss.expected + "% (" + iss.why + ")" : "")], ["Voucher", r.voucher || ""],
     ["Ledger", r.ledger || ""], ["Certificate", certOf(r, form)], ["Rate basis", basisOf(r, form)], ["Challan", c ? TDSCH.label(c) : "Not matched"], ["Matched by", TDSMatch.matchedBy(r.id).words.replace(/^Matched by: /, "") || "—"],
-    ["From", r.src === "bridge" ? "Tally (bridge)" : r.src === "daybook" ? "Day Book uploaded" : r.src === "payroll" ? "Tally's payroll" : r.src === "sheet" ? "the salary sheet" : r.src || ""]];
+    ["From", r.added ? "Added in FinCom" + (r.addedBy ? " by " + r.addedBy : "") + (r.addedAt ? " on " + fmtDateTime(r.addedAt) : "") : r.src === "bridge" ? "Tally (bridge)" : r.src === "daybook" ? "Day Book uploaded" : r.src === "payroll" ? "Tally's payroll" : r.src === "sheet" ? "the salary sheet" : r.src || ""]];
   return <SideDrawer open onClose={close} kind="deduction" title="Deduction details" description={(r.party || r.employee || "") + " · " + money(r.tds)}>
     <div data-row-dialog="">
       {!Certs.validPan(r.pan) && <p className="note" data-row-pan="">No PAN: <PanBox party={r.party || r.employee} /> saved for every deduction of {r.party || r.employee}, in every return.</p>}
       <dl className="ch-dl">{rows.flatMap(([k, v]) => [<dt key={k + "t"}>{k}</dt>, <dd key={k + "d"}>{v}</dd>])}</dl>
-      <div className="row" style={{ gap: 8 }}><button className="btn small" onClick={() => { close(); tdsMoveOpen([r.id]); }}>Move to challan…</button></div>
+      <div className="row" style={{ gap: 8 }}><button className="btn small" onClick={() => { close(); tdsMoveOpen([r.id]); }}>Move to challan…</button>
+        {form !== "24Q" && form !== "27EQ" && <button className="btn small" data-row-edit={r.id} onClick={() => { close(); S.tdsAdd = { rowId: r.id }; render(); }}>{r.added ? "Edit or delete…" : "Correct in FinCom…"}</button>}</div>
     </div></SideDrawer>;
 }
 

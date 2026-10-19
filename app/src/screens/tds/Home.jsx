@@ -21,7 +21,7 @@ export function homeCells(fy, x) {
   const cell = (form, has, amount) => {
     if (!has) return { has: false, amount, st: "none", n: 0 };
     const v = checkReturn(fy, q, form);
-    return { has: true, amount, st: statusOf({ fy, q, form, has: true, errors: v.errors.length, drift: v.drift }), n: v.n, errors: v.errors.length };
+    return { has: true, amount, st: statusOf({ fy, q, form, has: true, errors: v.errors.length, drift: v.drift, problems: v.n }), n: v.n, errors: v.errors.length };
   };
   out["26Q"] = cell("26Q", !!(x.deductions || x.challans), money(x.tds));
   out["27Q"] = cell("27Q", !!x.nr.n, money(x.nr.tds));

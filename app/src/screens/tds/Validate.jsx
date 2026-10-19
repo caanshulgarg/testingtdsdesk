@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { TracesCheck } from "./Register.jsx";
 import { stepName, PrevPrn } from "./Shell.jsx";
+import { PreFileButton } from "../../parts/PreFile.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const s_ = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -71,6 +72,8 @@ export function checkReturn(fy, q, form) {
   const filed = TDSFiled.get(fy, q, form), int1A = TDS.interest(fy, q, form), fee = TDS.lateFee(fy, q, filed ? filed.on : "", form), feeErr = !filed && fee && fee.days > 0;
   const intAmt = r2(int1A.reduce((a, x) => a + x.amount, 0));
   put(out.warnings, { k: "interest", n: int1A.length + (feeErr ? 1 : 0), words: (form === "27EQ" ? "Interest 206C(7) " : "Interest 201(1A) ") + money(intAmt) + " · late fee 234E " + money(feeErr ? fee.fee : 0), review: true });
+  // filed late: the fee to the date filed, said (not a warning: it is what was due)
+  if (!int1A.length && !feeErr) out.info.push({ k: "interest", n: 1, words: filed ? "Late fee 234E " + money(fee ? fee.fee : 0) + ", worked out to the date filed" : "No interest or late fee yet, if filed today", review: true });
   mc.warn.forEach((x, i) => put(out.warnings, { k: "m-" + x.k + i, n: 1, words: x.words, step: "challans" }));
   if (form !== "24Q") {
     let td = 0; try { td = TDSTally.disagreements().length + TDSTally.conflicts("challan").length + TDSTally.bad().length; } catch (e) { /* */ }
@@ -137,6 +140,9 @@ function Online({ fy, q, form, chIds }) {
       <label className="f"><span>Where the CSI file is, on the computer with FinCom Bridge (Check with FVU reads it)</span>
         <input type="text" value={path} placeholder="C:\\TDS\\DELZ12345A.csi" aria-label="CSI file on the Tally computer" style={{ width: 320 }} onChange={(ev) => setCsi(ev.target.value)} /></label>
       <button type="button" className="btn small" data-csi-save="" onClick={() => { coCommit("csiFile", String(path || "").trim()); setShow(""); toast("Kept: Check with FVU uses this CSI file."); }}>Save</button></div>}
+    <div className="vf-orow" data-online="prefile"><span className="vf-on">Checks before filing</span>
+      <span className="note">FinCom’s full checklist for this return, with its entries and an Excel</span>
+      <PreFileButton kind="tds" form={form} fy={fy} q={q} /></div>
     <div className="vf-orow" data-online="ai"><span className="vf-on">AI match (challans)</span>
       <span className="note">{ai && ai.busy ? "AI is looking at what the rules left…" : ai && ai.say ? ai.say : aiOn ? "for what the matching rules leave" : "off (AI help, or not signed in)"}</span>
       <button type="button" className="btn small" data-online-run="ai" disabled={!aiOn || (ai && ai.busy) || TDSReg.locked(fy, q, form)} onClick={() => { TDSMatch.askAi(form, fy, q, true); render(); }}>Run</button></div>

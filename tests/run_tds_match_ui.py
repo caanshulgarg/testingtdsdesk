@@ -166,7 +166,7 @@ try:
         # ---- Confirm all
         n = pg.locator("#app [data-cm-confirm-all]").inner_text()
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(700)
-        ok(re.match(r"Confirm all \d+ suggestions?", n) and pg.locator("#app [data-cm-confirm]").count() == 0, "Confirm all: no suggestion left to confirm (%s)" % n)
+        ok(re.match(r"Confirm \d+ suggestions?", n) and pg.locator("#app [data-cm-confirm]").count() == 0, "Confirm all: no suggestion left to confirm (%s)" % n)
         ok(J("(ids) => ids.every(id => S.books.alloc[id] === 'chX')", rows("194J", "202605")[-2:]), "the AI's pairing confirmed with the rest")
         # ---- interest on the challan: allocated, and the file carries it
         ok(J("TDSReg.portionFor(TDS.challans().find(c => c.id === 'chA'), '26Q', '2026-27', 'Q1').interest") == 150, "chA's interest ₹150 offered and confirmed by Confirm all (its only return)")

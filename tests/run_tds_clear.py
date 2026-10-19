@@ -5,6 +5,9 @@ cluttered", and "no PAN is asked twice, whether it came from Tally or was typed 
      summary strip, the step's toolbar), at most one primary button, at most two chips in the header and one a row; one
      problem count, the same in the header's badge, the rail's and the Validate & file panel (errors + warnings), for
      Forms 140, 138, 144 and 143; nothing about "TDS not deducted"; no sideways scroll at 1366 or on a phone
+  3. a deduction added in FinCom (Add deduction, on Deductions and on a challan's panel): kept with the books, never in
+     Tally, on its challan, counted by Validate & file, in both file builders (Form 140 and 26Q); edited, deleted with a
+     reason; a Tally deduction corrected as FinCom's correction; no Challan column when a challan is chosen at the top
   2. the client's PAN book: a deductee without a PAN has a PAN box in its row; typed once (format and 4th letter checked
      at once, Enter saves) it is used by every deduction of that party in another quarter and the next year, without being
      asked again, after the books are opened again, and it travels with the books to the cloud (panFix is a books key
@@ -29,8 +32,9 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 books = json.load(open(CACHE))
 
-# the bands above the step's first table: the header, the strip, and each block before the table inside the step
-BANDS = """() => { const main = document.querySelector('#app .rt-main'), t = main && [...main.querySelectorAll('table')].find(x => x.offsetParent);
+# the bands above the step's first table (on Challans, above the challan list and the chosen challan): the header, the
+# strip, and each block before it inside the step
+BANDS = """() => { const main = document.querySelector('#app .rt-main'), t = main && (main.querySelector('.cm-two') || [...main.querySelectorAll('table')].find(x => x.offsetParent));
   if (!t) return null; const top = t.getBoundingClientRect().top, out = [];
   ['.rt-head', '.rt-strip'].forEach(s => { const e = document.querySelector('#app ' + s); if (e && e.offsetParent && e.getBoundingClientRect().bottom <= top + 1) out.push(s); });
   for (let e = t; e && e !== main; e = e.parentElement) for (let p = e.previousElementSibling; p; p = p.previousElementSibling) {
@@ -146,6 +150,73 @@ try:
             pg.screenshot(path=os.path.join(SHOTS, "pan-box-deduction-drawer-1440.png"))
             J("() => { S.tdsRowDet = ''; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
             ok(pg.locator('#app [data-cm-panel] [data-pan-box]').count() + pg.locator('#app [data-cm-none]').count() >= 0, "the challan panels: a PAN cell left empty is a box")
+
+        print("3. a deduction added, corrected and taken out in FinCom")
+        ch = J("() => (TDS.challans().find(c => TDS.fyOf(c.date) === '2026-27' && TDS.qOf(c.date) === 'Q1') || {}).id")
+        J("() => { tdsGo('2026-27', 'Q1', '26Q'); S.tdsTab = 'deductions'; S.tdsDedCh = ''; S.tdsFl = {}; render(); }"); pg.wait_for_timeout(500)
+        heads = [h.strip() for h in pg.locator('#tdsDnTable thead th').all_inner_texts()]
+        ok(any(h.startswith("Challan") for h in heads), "no challan chosen: the table has its Challan column (%s)" % heads)
+        n0 = J("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').length")
+        pg.click('#app [data-add-open]'); pg.wait_for_timeout(500)
+        dr = '#app [data-add-deduction="new"] '
+        ok(pg.locator(dr).count() == 1, "Add deduction opens its drawer")
+        pg.fill(dr + 'input[aria-label="Deductee"]', "ZZ New Vendor Pvt Ltd"); pg.wait_for_timeout(200)
+        pg.locator(dr + '[data-pan-box] input').fill("AAACZ7777N"); pg.locator(dr + '[data-pan-box] input').press("Enter"); pg.wait_for_timeout(400)
+        ok(J("TDS.panOf('ZZ New Vendor Pvt Ltd')") == "AAACZ7777N", "a new party: its PAN typed in the drawer goes to the PAN book")
+        pg.select_option(dr + 'select[aria-label="Section"]', "194C"); pg.fill(dr + 'input[aria-label="Paid or credited on"]', "2026-05-15"); pg.fill(dr + 'input[aria-label="Amount paid or credited"]', "50000"); pg.wait_for_timeout(300)
+        rate = pg.input_value(dr + 'input[aria-label="Rate"]'); tdsv = pg.input_value(dr + 'input[aria-label="TDS"]')
+        ok(rate == "2" and tdsv == "1000", "the rate from the section and the PAN (a company, 194C: 2%%) and TDS = amount × rate (%s%%, %s)" % (rate, tdsv))
+        if ch: pg.select_option(dr + 'select[aria-label="Challan"]', ch)
+        pg.screenshot(path=os.path.join(SHOTS, "add-deduction-drawer-1440.png"))
+        pg.click(dr + '[data-add-save]'); pg.wait_for_timeout(600)
+        added = J("() => TDS.rows().filter(r => r.added && r.party === 'ZZ New Vendor Pvt Ltd').map(r => ({id: r.id, fy: r.fy, q: r.q, paid: r.paid, tds: r.tds, pan: r.pan, challan: r.challan, src: r.src}))")
+        ok(len(added) == 1 and added[0]["fy"] == "2026-27" and added[0]["q"] == "Q1" and added[0]["tds"] == 1000 and added[0]["pan"] == "AAACZ7777N" and added[0]["challan"] == (ch or "") and added[0]["src"] == "fincom",
+           "kept as a deduction of Form 140 Q1, on its challan (%s)" % added)
+        rid = added[0]["id"] if added else ""
+        ok(J("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').length") == n0 + 1 and pg.locator('#tdsDnTable [data-added]').count() == 1, "the Deductions table shows it, marked added in FinCom")
+        ok(J("(id) => !S.books.vouchers.some(v => JSON.stringify(v).includes('ZZ New Vendor'))", rid), "Tally's books are not touched")
+        f = J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
+        ok("AAACZ7777N" in (f.get("text") or "") and "1000.00" in (f.get("text") or ""), "Form 140's file (the 2025 Act's builder) carries it (%s)" % (f.get("error") or "")[:80])
+        if ch:
+            J("(c) => { S.tdsTab = 'challans'; S.tdsChSel = c; render(); }", ch); pg.wait_for_timeout(500)
+            ok(pg.locator('#app [data-cm-on-row="%s"]' % rid).count() == 1, "the challan's panel lists it, with the balance after it")
+            J("(c) => { S.tdsTab = 'deductions'; S.tdsDedCh = c; render(); }", ch); pg.wait_for_timeout(500)
+            ok(pg.locator('#tdsDnTable').count() == 0 and not any(h.strip().startswith("Challan") for h in pg.locator('#app [data-cm-run-table] thead th').all_inner_texts()), "a challan chosen at the top: no Challan column (the challan's two panels)")
+            J("() => { S.tdsDedCh = ''; render(); }"); pg.wait_for_timeout(300)
+        # one more, on no challan: Validate & file counts it
+        J("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(400)
+        e0 = int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors'))
+        r = J("() => TDSAdd.save({party: 'ZZ New Vendor Pvt Ltd', section: '194C', date: '2026-06-10', paid: 10000, tds: 200})")
+        J("render()"); pg.wait_for_timeout(400)
+        ok(r.get("ok") and pg.locator('#app [data-val-item="unmatched"]').count() == 1 and int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors')) >= max(1, e0), "one on no challan: Validate & file's error (%s)" % r)
+        J("(k) => TDSAdd.remove(k, 'a test')", r.get("key"))
+        # the old forms' builder (26Q, 2025-26) too
+        ch25 = J("() => (TDS.challans().find(c => TDS.fyOf(c.date) === '2025-26' && TDS.qOf(c.date) === 'Q1') || {}).id")
+        r = J("(c) => TDSAdd.save({party: 'ZZ New Vendor Pvt Ltd', section: '194C', date: '2025-05-20', paid: 20000, tds: 400, challan: c})", ch25)
+        f = J("TDS26Q.build('2025-26', 'Q1', TDS26Q.firmDetails(), '26Q')")
+        ok(r.get("ok") and "AAACZ7777N" in (f.get("text") or "") and "400.00" in (f.get("text") or ""), "26Q 2025-26's file (FVU 8.7 layout) carries it too (%s)" % (f.get("error") or "")[:80])
+        J("(k) => TDSAdd.remove(k, 'a test')", r.get("key"))
+        # corrected: edit the one added
+        J("(id) => { S.tdsTab = 'deductions'; S.tdsRowDet = id; render(); }", rid); pg.wait_for_timeout(500)
+        pg.click('#app [data-row-edit]'); pg.wait_for_timeout(500)
+        ed = '#app [data-add-deduction]:not([data-add-deduction="new"]):not([data-add-deduction="correct"]) '
+        pg.fill(ed + 'input[aria-label="Amount paid or credited"]', "60000"); pg.wait_for_timeout(300)
+        pg.click(ed + '[data-add-save]'); pg.wait_for_timeout(500)
+        ok(J("(id) => (TDS.rows().find(r => r.id === id) || {}).tds", rid) == 1200, "edited: ₹60,000 at 2%%, TDS ₹1,200 (%s)" % J("(id) => (TDS.rows().find(r => r.id === id) || {}).tds", rid))
+        # a Tally deduction corrected in FinCom
+        tr = J("() => (TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && !r.added) || {})")
+        J("(id) => { S.tdsRowDet = id; render(); }", tr["id"]); pg.wait_for_timeout(400)
+        pg.click('#app [data-row-edit]'); pg.wait_for_timeout(500)
+        cr = '#app [data-add-deduction="correct"] '
+        pg.fill(cr + 'input[aria-label="TDS"]', str(round(tr["tds"] + 10, 2))); pg.wait_for_timeout(200); pg.click(cr + '[data-add-save]'); pg.wait_for_timeout(500)
+        ok(abs(J("(id) => TDS.rows().find(r => r.id === id).tds", tr["id"]) - (tr["tds"] + 10)) < 0.005 and J("(id) => (S.books.tdsEdits[id] || {f: {}}).f.tds", tr["id"]) is not None,
+           "a deduction from Tally corrected: kept as FinCom's correction (tdsEdits), Tally unchanged")
+        # taken out, with the reason
+        J("(id) => { S.tdsRowDet = id; render(); }", rid); pg.wait_for_timeout(400); pg.click('#app [data-row-edit]'); pg.wait_for_timeout(500)
+        pg.click(ed + '[data-add-delete]'); pg.fill(ed + 'input[aria-label="Why it is taken out"]', "entered twice"); pg.click(ed + '[data-add-delete-go]'); pg.wait_for_timeout(500)
+        ok(J("(id) => !TDS.rows().some(r => r.id === id)", rid) and J("(id) => S.books.tdsAdded[id.slice(3)].deleted.reason", rid) == "entered twice", "deleted: gone from the return, kept with its reason")
+        ok(J("BOOKS_KEYS.includes('tdsAdded') && BookSync.keys().includes('tdsAdded')"), "the deductions added are kept with the books and synced")
+
         pg.set_viewport_size({"width": 390, "height": 844})
         J("() => { tdsGo('2026-27', 'Q1', '26Q'); S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(500)
         pg.screenshot(path=os.path.join(SHOTS, "pan-box-deductees-390.png"), full_page=True)

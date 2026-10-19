@@ -236,6 +236,9 @@ try:
                 for c in ([click] if isinstance(click, str) else click or []): pg.click(c); W(500)
                 E("window.scrollTo(0, 0)"); W(100)
                 m, amts = E(LAYOUT, main), E(AMOUNTS)
+                if name == "tds-deductions":
+                    # next-tds-clear: By section is a Show pill of Deductions (it was a card under the table): its figures count
+                    E("() => { S.tdsDedView = 'sections'; render(); }"); W(300); amts = sorted(set(amts) | set(E(AMOUNTS))); E("() => { S.tdsDedView = ''; render(); }"); W(300)
                 at = "%s at %d×%d" % (name, vw, vh)
                 if vw == 1440: got[name] = amts
                 if (name in ("gst-bills", "gst-details") and vw == 1440) or name in ("tds-deductions", "tds-deductees"):

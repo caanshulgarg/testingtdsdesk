@@ -240,6 +240,8 @@ const TDS = {
       const hit = TDSInt.lateDeduct(r);
       if (hit && hit.amount > 0){ r.paid = r2(hit.amount); r.credit = hit.date; r.bill = hit.voucher; r.rate = r2(r.tds / r.paid * 100); r.rateFrom = "bill"; }
     });
+    // next-tds-clear: the deductions typed in FinCom (TDSAdd, src/js/88), beside the books' own
+    if (typeof TDSAdd === "object" && b.tdsAdded) TDSAdd.addTo(out, b);
     // t70: what was corrected in FinCom (the corrected Excel brought back) over the books' deduction (app/src/lib/tdsEdit.js)
     if (typeof TDSEdit === "object" && b.tdsEdits) out.forEach(r => TDSEdit.apply(r));
     // next-challan-match: a deduction split across challans by a person is its parts, each on its challan (TDS.expandSplits)

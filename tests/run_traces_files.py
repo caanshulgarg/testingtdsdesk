@@ -72,6 +72,7 @@ def make_pdf(br, lines):
     data = p2.pdf(format="A4"); p2.close(); return data
 
 def upload(pg, paths, password=None, wait=1800):
+    shut(pg)
     pg.set_input_files('#app [data-upload="traces"] input[type=file]', paths); pg.wait_for_timeout(900)
     if password is not None:
         pg.wait_for_selector("#confirmBox #trfpw", timeout=5000); pg.fill("#confirmBox #trfpw", password); pg.click("#confirmBox [data-cbx=yes]")

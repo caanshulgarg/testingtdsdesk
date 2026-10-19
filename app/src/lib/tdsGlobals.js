@@ -6,3 +6,4 @@ import * as TM from "../../../server/_shared/tdsmatch.js";
 Object.assign(globalThis, TM);
 import "../../../src/js/86-tds-match.js";
 import "../../../src/js/87-pan-check.js";
+import "../../../src/js/88-tds-added.js";
