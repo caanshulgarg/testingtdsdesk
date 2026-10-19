@@ -45,7 +45,9 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   const L = Object.fromEntries(t.lines.map((l) => [l.id, l]));
   console.log("  26Q Q4: " + t.lines.map((l) => l.id + " " + l.status + (l.count ? " " + l.count : "")).join(" · "));
   ok(t.from === "20260101" && t.to === "20260331", "Q4 2025-26 is 01-Jan-2026 to 31-Mar-2026");
-  ok(L.missed.status === "fix" && L.missed.count === 1 && L.missed.findings.length === 1 && L.missed.findings[0].rows[0].party === "Ashvattha Transport Co" && L.missed.findings[0].rows[0].amount === 40000, "missed: Ashvattha's freight of 40,000 (194C limit 30,000), no TDS");
+  // the owner, 19-Oct-2026: no "Deductions missed" before filing a TDS return (a bill's TDS is often booked in a journal of its
+  // own); Ashvattha's freight is the Audit's "TDS not deducted" alone (run_audit_tds.js, run_tds_separate.js)
+  ok(!L.missed && !t.lines.some((l) => /missed|not deducted/i.test(l.title)), "no 'Deductions missed' item on the TDS return's check (" + t.lines.map((l) => l.id).join(",") + ")");
   const unpaid = L.challan.findings.flatMap((f) => f.rows);
   ok(L.challan.status === "fix" && unpaid.length === 3 && unpaid.map((r) => r.amount).sort((a, c) => a - c).join(",") === "2000,3000,3000", "challans: the quarter's three deductions (3,000 Jan, 3,000 Feb, 2,000 Mar) not against a challan");
   const late = L.late.findings[0].rows;

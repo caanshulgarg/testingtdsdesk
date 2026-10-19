@@ -135,8 +135,8 @@ const TDSInt = {
   lateDeduct(r){
     // the bill already found for the row (TDS.allRowsNow, the review's M2): from its date to the deduction
     if (r && r.credit && r.tds > 0){ const m = TDS.monthsBetween(r.credit, r.date); return m > 0 && TDS.ymd(r.credit) < TDS.ymd(r.date) ? {date: TDS.ymd(r.credit), voucher: r.bill || "", amount: r.paid, months: m} : null; }
-    if (!r || r.paid > 0 || !(r.tds > 0)) return null;
-    const idx = typeof perRender === "function" ? perRender(this, "byParty", () => this.index()) : this.index();
+    if (!r || r.paid > 0 || !(r.tds > 0) || r.sep) return null;   // a TDS entry of its own not matched to a bill (TDSSep): no bill to count from
+    const idx =typeof perRender === "function" ? perRender(this, "byParty", () => this.index()) : this.index();
     const std = TDS.STD[TDS.sec(r.section)] || [];
     const vid = String(r.id).split("|")[0], d = TDS.ymd(r.date);
     let hit = null;
@@ -163,6 +163,127 @@ const TDSInt = {
       if (exp > 0) (out[v.party] = out[v.party] || []).push({id: v.id, date: TDS.ymd(v.date), no: v.no || v.ref || "", amount: r2(exp)});
     });
     return out;
+  }
+};
+
+// The owner, 19-Oct-2026: "in India people sometimes book the bill in one entry without TDS and the TDS in another entry".
+// A TDS entry of its own: a journal (or the payment) that credits a TDS ledger and debits the party, with no expense in
+// it. Its deductee is the party debited (a journal often names no party in Tally), and it is matched to the party's bills
+// booked without TDS, in this order:
+//   (a) the bill named: a bill-wise Agst Ref on the party's line naming the bill's New Ref (or its number), or the bill's
+//       number in the narration (3 characters or more, as a word);
+//   (b) the TDS fits one bill: the rate that applies (else one of the section's usual rates) × the bill, within ₹1 or 1%;
+//       the latest such bill;
+//   (c) the TDS fits a month's bills together (several bills' TDS in one journal), the latest month first, then months
+//       together back from it.
+// For (b) and (c) a bill is of the same section (where its expense ledger says one), dated on or before the TDS entry (the
+// same day, entered before or after, counts) and the entry is within the bill's financial year (a March bill: up to
+// 30 April, the TDS due date). A bill is taken once. The row then carries the bill's date (date of payment or credit,
+// r.credit) and amount (r.paid), and r.covers, what it covers for the limits check (TDSWatch): the bills, or, short of
+// the rate that applies, what its TDS covers at that rate (r.sepShort: the audit's "short deducted", the short amount
+// only). A bill that carries its own TDS is never counted again: an entry naming it adds TDS, not its amount.
+const TDSSep = {
+  // the deductee of a TDS entry of its own, else ""
+  partyOf(v){
+    const ent = v.ent || [];
+    if (!ent.some(e => { const m = Books.ledgerOf(e.l); return m.kind === "tds_payable" && e.a > 0 && !/^192/.test(String(m.section || "")); })) return "";   // salary TDS (192) is 24Q's
+    const masters = Audit.mastersIn(), bankish = l => Books.ledgerOf(l).kind === "bank" || (masters && (Audit.isBankL(l) || Audit.isCash(l)));
+    const rest = ent.filter(e => !Books.ledgerOf(e.l).kind && Math.abs(e.a) >= 0.005);
+    const dr = rest.filter(e => e.a < 0), cr = rest.filter(e => e.a > 0 && !bankish(e.l));
+    if (dr.length !== 1 || cr.length) return "";
+    const l = dr[0].l;
+    if (Audit.isExpense(l) || (masters && Audit.under(l, /^(purchase accounts|fixed assets|duties & taxes|sales accounts|direct incomes|indirect incomes|capital account)$/i))) return "";
+    return l;
+  },
+  // the section a bill's expense ledger points to ("" when nothing says): AI help's choice, the ledger's nature of payment
+  // in Tally, its name (not TDSWatch.ruleOf's last step, which reads the deduction rows being made here)
+  secOfLedger(l){
+    const ai = typeof AIH === "object" && AIH.tdsRule ? AIH.tdsRule(l) : undefined;
+    let rule = ai && ai !== "none" ? ai : "";
+    if (!rule && ai !== "none" && !(Audit.NO_TDS_RE && Audit.NO_TDS_RE.test(l))){
+      rule = TDSRate.kindOf((((S.books || {}).ledInfo || {})[l] || {}).tdsNature);
+      if (!rule){ const k = Audit.TDS_KEY.find(([re]) => re.test(l)); rule = k ? k[1] : ""; }
+    }
+    const R = rule ? RULE_DEFAULTS.find(z => z.id === rule) : null;
+    return R && R.old ? TDS.sec(R.old) : "";
+  },
+  // the party's bills: entries that credit the party with an expense, by party
+  bills(){
+    const out = {}, masters = Audit.mastersIn();
+    ((S.books || {}).vouchers || []).forEach(v => {
+      if (v.opt || v.cancel || Books.isSale(v)) return;
+      let party = v.party, pe = party && (v.ent || []).find(e => e.l === party && e.a > 0);
+      if (!pe && masters){ const c = (v.ent || []).filter(e => e.a > 0 && Audit.isCreditor(e.l)); if (c.length === 1){ pe = c[0]; party = pe.l; } }
+      if (!pe) return;
+      let amount = 0; const leds = [];
+      (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== party && !Books.ledgerOf(e.l).kind){ amount += -e.a; leds.push(e.l); } });
+      if (!(amount > 0)) return;
+      const d = TDS.ymd(v.date), fyEnd = TDS.fyOf(d).slice(0, 4) * 1 + 1 + "0331", due = TDS.dueDate(d);
+      const refs = new Set();
+      (pe.b || []).forEach(z => { if (z[0] && /new/i.test(z[1] || "")) refs.add(String(z[0]).trim().toUpperCase()); });
+      [v.no, v.ref].forEach(z => { const t = String(z || "").trim().toUpperCase(); if (t.length >= 3) refs.add(t); });
+      const secs = leds.map(l => this.secOfLedger(l)).filter(Boolean);
+      (out[party] = out[party] || []).push({vid: v.id, date: d, no: v.ref || v.no || "", amount: r2(amount), left: r2(amount), ledgers: leds, refs,
+        own: Books.lines(v).tds.length > 0, sec: secs[0] || "", end: due > fyEnd ? due : fyEnd});
+    });
+    return out;
+  },
+  // the rate that applies to the row: a certificate's, else as the rate check works it (PAN, what was paid for, 206AA)
+  rateFor(r){
+    try { const c = Certs.forRow(r); if (c && num(c.rate)) return num(c.rate); } catch (e){}
+    let e = null; try { e = Certs.expectedNormal(r); } catch (z){}
+    if (e && e.rate) return e.rate;
+    const std = TDS.STD[TDS.sec(r.section)] || [];
+    return std.length ? Math.max(...std) : 0;
+  },
+  // does the bill's own name appear in the entry: its Agst Ref names, or its number in the narration
+  named(bl, agst, narr){
+    for (const ref of bl.refs){
+      if (agst.has(ref)) return true;
+      if (ref.length >= 3 && narr && new RegExp("(^|[^A-Z0-9])" + ref.replace(/[.*+?^${}()|[\]\\\/-]/g, "\\$&") + "($|[^A-Z0-9])").test(narr)) return true;
+    }
+    return false;
+  },
+  link(rows){
+    const todo = rows.filter(r => r.sep && !(r.paid > 0) && r.tds > 0 && r.party);
+    if (!todo.length) return rows;
+    const byId = {}, idx = this.bills();
+    ((S.books || {}).vouchers || []).forEach(v => { byId[v.id] = v; });
+    todo.sort((a, c) => TDS.ymd(a.date).localeCompare(TDS.ymd(c.date)) || String(a.id).localeCompare(String(c.id))).forEach(r => {
+      const v = byId[String(r.id).split("|")[0]] || {ent: []}, d = TDS.ymd(r.date), sec = TDS.sec(r.section), list = idx[r.party] || [];
+      const pe = (v.ent || []).find(e => e.l === r.party), agst = new Set(((pe && pe.b) || []).filter(z => z[0] && /agst/i.test(z[1] || "")).map(z => String(z[0]).trim().toUpperCase()));
+      const narr = String(v.narr || "").toUpperCase();
+      let exp = this.rateFor(r);
+      const rates = Array.from(new Set([exp].concat(TDS.STD[sec] || []).filter(x => x > 0)));
+      const fits = base => rates.some(rate => Math.abs(base * rate / 100 - r.tds) <= Math.max(1, r.tds * 0.01));
+      const open = bl => !bl.own && bl.left > 0.5 && bl.date <= d && d <= bl.end && (!bl.sec || bl.sec === sec);
+      let hit = list.filter(bl => bl.date <= d && this.named(bl, agst, narr)), how = hit.length ? "ref" : "";
+      if (!hit.length){
+        const one = list.filter(bl => open(bl) && fits(bl.left)).sort((a, c) => c.date.localeCompare(a.date))[0];
+        if (one){ hit = [one]; how = "amount"; }
+      }
+      if (!hit.length){
+        const cand = list.filter(open), months = Array.from(new Set(cand.map(bl => bl.date.slice(0, 6)))).sort().reverse();
+        for (const m of months){ const g = cand.filter(bl => bl.date.slice(0, 6) === m); if (g.length > 1 && fits(g.reduce((s, bl) => s + bl.left, 0))){ hit = g; break; } }
+        for (let k = 2; !hit.length && k <= months.length; k++){ const g = cand.filter(bl => months.slice(0, k).includes(bl.date.slice(0, 6))); if (fits(g.reduce((s, bl) => s + bl.left, 0))) hit = g; }
+        if (hit.length) how = "month";
+      }
+      if (!hit.length){ r.covers = exp ? r2(r.tds * 100 / exp) : 0; return; }   // matched to no bill: what its TDS covers at the rate
+      hit.sort((a, c) => a.date.localeCompare(c.date));
+      const fresh = hit.filter(bl => !bl.own), paid = r2(fresh.reduce((s, bl) => s + bl.left, 0));
+      fresh.forEach(bl => { bl.left = 0; });
+      r.credit = hit[0].date; r.bill = hit.map(bl => bl.no).filter(Boolean).join(", "); r.bills = hit.map(bl => ({vid: bl.vid, date: bl.date, no: bl.no, amount: bl.amount}));
+      r.paid = paid; r.rateFrom = "bill (" + how + ")";
+      // what was paid for: the bill's expense ledger (professional or technical, building or machinery)
+      const kind = hit.map(bl => bl.ledgers.map(l => TDSRate.kindOf((((S.books || {}).ledInfo || {})[l] || {}).tdsNature) || TDSRate.kindOf(l)).find(Boolean)).find(Boolean);
+      if (kind) r.pay = kind;
+      if (!(paid > 0)){ r.rate = null; r.topUp = true; r.covers = 0; return; }   // every bill named carries its own TDS: not counted again
+      r.rate = r2(r.tds / paid * 100);
+      exp = this.rateFor(r) || exp;
+      if (exp && r.tds < r2(paid * exp / 100) - Math.max(1, paid * exp / 100 * 0.01)){ r.sepShort = true; r.covers = r2(r.tds * 100 / exp); }
+      else r.covers = paid;
+    });
+    return rows;
   }
 };
 
@@ -289,7 +410,8 @@ const TDSWatch = {
         x.credits.push({date: d, amount: a, voucher: v.no || v.ref || "", vid: v.id, ledger: e.l}); x.ledgers.add(e.l);
       });
     });
-    const rows = TDS.allRows().filter(r => r.fy === fy), today = TDSFiled.todayIst(), out = [];
+    // a deduction counts for the year of the bill it is for (a TDS entry of its own after the bill: r.credit, TDSSep)
+    const rows = TDS.allRows().filter(r => (r.credit ? TDS.fyOf(r.credit) : r.fy) === fy), today = TDSFiled.todayIst(), out = [];
     Object.values(agg).forEach(x => {
       let R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
       // bridge 2.4.3: the thresholds of the nature of payment Tally keeps on these ledgers (its TDSRate master), as Tally has them
@@ -298,7 +420,9 @@ const TDSWatch = {
       const sec = TDS.sec(R.old), mine = rows.filter(r => r.party === x.party && TDS.sec(r.section) === sec);
       const tds = r2(mine.reduce((a, r) => a + r.tds, 0));
       // the base the deductions cover: their amount paid, or worked back from the TDS at the usual rate when Tally's entry has none
-      const covered = r2(mine.reduce((a, r) => a + (r.paid > 0 ? r.paid : r.rate ? r.tds * 100 / r.rate : r.tds * 100 / ((TDS.STD[sec] || [])[0] || 1)), 0));
+      // (the owner, 19-Oct-2026) a TDS entry of its own matched to its bills says what it covers (r.covers, TDSSep): its bills,
+      // what its TDS covers at the rate when short, nothing again for a bill that carries its own TDS
+      const covered = r2(mine.reduce((a, r) => a + (typeof r.covers === "number" ? r.covers : r.paid > 0 ? r.paid : r.rate ? r.tds * 100 / r.rate : r.tds * 100 / ((TDS.STD[sec] || [])[0] || 1)), 0));
       const monthsOver = Object.entries(x.months).filter(([, a]) => a > R.limit);
       const over = R.basis === "single_or_annual" ? (x.max > R.single || x.credited > R.limit) : R.basis === "single" ? x.max >= R.single : R.basis === "always" ? x.credited > 0
         : R.basis === "monthly" ? monthsOver.length > 0 : x.credited > R.limit;
@@ -320,7 +444,7 @@ const TDSWatch = {
         : R.basis === "always" ? "any amount" : R.basis === "single" ? "₹" + INR.format(R.single) + " a payment" : "₹" + INR.format(R.limit) + " a year";
       const used = R.basis === "monthly" ? Math.max.apply(null, Object.values(x.months)) / R.limit : R.basis === "single_or_annual" ? Math.max(x.credited / R.limit, x.max / R.single) : R.limit ? x.credited / R.limit : 1;
       out.push({party: x.party, rule: x.rule, section: R.old, label: R.label, ledgers: Array.from(x.ledgers), credited: x.credited, limitWords: limitWords + (R.fromTally ? " (Tally: " + R.fromTally + ")" : ""), limitFrom: R.fromTally || "", used: r2(used * 100), over, tds, covered, base, pan, rate,
-        uncovered, due: r2(uncovered * rate / 100), interest: r2(interest), disallow: r2(uncovered * 0.3),
+        uncovered, due: r2(uncovered * rate / 100), short: mine.some(r => r.sepShort), interest: r2(interest), disallow: r2(uncovered * 0.3),
         // each credit marked whether it counts towards the TDS (round 69: the audit's entries behind the finding)
         credits: x.credits.map(c => Object.assign({}, c, {counts: !!over && !!counts(c)}))});
     });

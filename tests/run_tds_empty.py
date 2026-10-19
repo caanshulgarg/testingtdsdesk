@@ -4,9 +4,9 @@ and "Tds Receivable FY 25-26" under Loans & Advances (TDS deducted by its custom
 "TDS is worked out from the day book ... once either is in [Bring in from Tally]", as if the Day Book were missing. Now:
   - books in, no TDS: "No TDS deducted in GB TEXCOAT's books (01-Apr-2025 to 12-Oct-2026)." and "TDS ledgers with no
     entries: TDS194J Professional" (not the receivable); the salary import kept, no "Bring in from Tally";
-  - round 69: the "should have deducted" box is gone; one line "Payments that may have needed TDS: 1 party, ₹… — see
-    Audit" and "Open in Audit", which lands on the client's Audit findings, area TDS, CA Firm's rows there with the TDS due
-    of TDSWatch.missed (a row a year);
+  - the owner, 19-Oct-2026 ("TDS not deducted ... I don't want it there.. it should be in Audit only"): nothing on the TDS
+    page about payments that may have needed TDS (round 69's line and its "Open in Audit" are gone); the client's Audit,
+    Findings, area TDS, has CA Firm's rows with the TDS due of TDSWatch.missed (a row a year);
   - no entries at all: the old wording and "Bring in from Tally".
 A fresh browser, TDS opened directly (goClient("books:tds")), against a stand-in for FinCom's cloud (as run_gb_pages).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tds_empty.py [--shots DIR]"""
@@ -122,18 +122,14 @@ with sync_playwright() as p:
        "books in: 'No TDS deducted in GB TEXCOAT's books (%s to %s).' (%s)" % (d1, d2, box[:160].replace("\n", " ")))
     led = re.search(r"TDS ledgers with no entries: ([^\n]*)", box)
     ok(led and "TDS194J Professional" in led.group(1) and "Receivable" not in led.group(1), "the TDS ledger with no entries named, the customers' TDS receivable not (%s)" % (led.group(0) if led else box[:300]))
-    # round 69 (the owner, 16-Oct-2026: "it should be the audit part.. problem and suggestions and recheck.. in a table"): the
-    # "Should have deducted" box is gone from the TDS page; one line says how many parties and how much, and opens the
-    # client's Audit findings, area TDS, where each is a row of the findings table (the same figures: TDSWatch.missed)
-    ok(pg.locator("#app [data-missed-box]").count() == 0 and pg.locator("#app [data-missed-fy]").count() == 0 and pg.locator("#app [data-tds-missed]").count() == 0,
-       "round 69: no 'Should have deducted' box on the TDS page")
+    # the owner, 19-Oct-2026: no "TDS not deducted / should have deducted / may have needed TDS" on the TDS page at all
+    body = pg.inner_text("#app")
+    ok(pg.locator("#app [data-missed-box], #app [data-missed-fy], #app [data-tds-missed], #app [data-tds-missed-line], #app [data-missed], #app [data-tds-to-audit]").count() == 0,
+       "19-Oct: no missed-TDS box, line or button on the TDS page")
+    bad = [w for w in ["may have needed TDS", "Should have deducted", "should have deducted", "not deducted", "TDS short", "Open in Audit", "40(a)(ia)"] if w in body]
+    ok(not bad, "19-Oct: none of its words on the TDS page (%s)" % bad)
     W = pg.evaluate("""(() => { const l = ['2025-26', '2026-27'].flatMap(fy => TDSWatch.missed(fy).map(e => ({fy, party: e.party, section: e.section, due: e.due})));
-      return {l, n: new Set(l.map(e => e.party)).size, due: Math.round(l.reduce((a, e) => a + e.due, 0) * 100) / 100, words: '₹' + INR.format(Math.round(l.reduce((a, e) => a + e.due, 0) * 100) / 100)}; })()""")
-    line = pg.evaluate("(() => { const x = document.querySelector('#app [data-tds-none] [data-tds-missed-line]'); return x ? x.innerText.replace(/\\s+/g, ' ') : ''; })()")
-    want_n = "%d part%s" % (W["n"], "y" if W["n"] == 1 else "ies")
-    ok(W["l"] and any(e["party"] == "CA Firm" for e in W["l"]) and ("Payments that may have needed TDS: " + want_n + ", " + W["words"] + " — see Audit") in line,
-       "round 69: the one line 'Payments that may have needed TDS: %s, %s — see Audit' (%s)" % (want_n, W["words"], line))
-    ok(pg.locator("#app [data-tds-none] button[data-tds-to-audit]").count() == 1 and pg.inner_text("#app [data-tds-none] button[data-tds-to-audit]").strip() == "Open in Audit", "round 69: its button 'Open in Audit'")
+      return {l}; })()""")
     pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
     ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "round 69: phone width, no sideways scroll")
     if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tds-empty-line-phone.png"), full_page=True)
@@ -141,20 +137,18 @@ with sync_playwright() as p:
     btns = pg.evaluate("[...document.querySelectorAll('#app [data-tds-none] button')].map(b => b.innerText)")
     ok("Import salary for 24Q" in btns and "Bring in from Tally" not in btns, "the salary import kept, no 'Bring in from Tally' (%s)" % btns)
     if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tds-empty-books-in.png"), full_page=True)
-    # Open in Audit: the client's Audit, Findings, area TDS; the audit run for the books' period when no run covers it
-    pg.click("#app [data-tds-none] button[data-tds-to-audit]")
+    # the Audit has them: the client's Audit, Findings, area TDS, over the books' period
+    pg.evaluate("""(async () => { S.auditRange = {from: Audit.iso('20250401'), to: Audit.iso('20261012')}; await auditRunFresh('20250401', '20261012', 'test');
+      S.auditTab = 'find'; S.auditArea = 'tds'; S.auditSt = ''; goClient('books:audit'); })()""")
     wait_for(pg, "document.querySelector('#app table[data-list=auditFindings]')", 30); pg.wait_for_timeout(800)
-    st = pg.evaluate("({tab: S.tab, books: S.booksTab, audit: S.auditTab || 'find', area: S.auditArea, run: S.books.audit && S.books.audit.last && [S.books.audit.last.from, S.books.audit.last.to]})")
-    ok(st["tab"] == "books" and st["books"] == "audit" and st["audit"] == "find" and st["area"] == "tds" and st["run"] and st["run"][0] <= "20250401" and st["run"][1] >= "20261012",
-       "round 69: Open in Audit lands on Audit, Findings, area TDS, with a run over the books' period (%s)" % st)
-    ok(pg.evaluate("document.querySelector('#app [data-audit-areas] button[aria-pressed=true]').innerText").startswith("TDS"), "round 69: the TDS chip is the one chosen")
+    ok(pg.evaluate("document.querySelector('#app [data-audit-areas] button[aria-pressed=true]').innerText").startswith("TDS"), "the Audit, area TDS")
     rows = pg.evaluate("""[...document.querySelectorAll('#app table[data-list=auditFindings] > tbody > tr[data-key]')].map(t => ({key: t.getAttribute('data-key'), text: t.innerText.replace(/\\s+/g, ' ')}))""")
     tm = [r for r in rows if r["key"].startswith("tdsMissed:")]
     same = all(any(r["key"] == "tdsMissed:%s|%s|%s" % (e["party"], e["section"], e["fy"]) and pg.evaluate("'₹' + INR.format(%r)" % e["due"]) in r["text"] for r in tm) for e in W["l"])
-    ok(len(tm) == len(W["l"]) and same and all("CA Firm" in r["text"] for r in tm),
-       "round 69: the Audit table lists CA Firm, a row a year, with the TDS due of TDSWatch.missed (%s)" % [r["text"][:120] for r in tm])
+    ok(W["l"] and any(e["party"] == "CA Firm" for e in W["l"]) and len(tm) == len(W["l"]) and same and all("CA Firm" in r["text"] for r in tm),
+       "the Audit table lists CA Firm, a row a year, with the TDS due of TDSWatch.missed (%s)" % [r["text"][:120] for r in tm])
     areas = pg.evaluate("(keys) => keys.map(k => (S.books.audit.last.findings.find(f => f.id === k) || {}).area)", [r["key"] for r in rows])
-    ok(rows and all(a == "tds" for a in areas), "round 69: only the TDS area's findings shown (%s)" % areas)
+    ok(rows and all(a == "tds" for a in areas), "only the TDS area's findings shown (%s)" % areas)
     if SHOTS: pg.screenshot(path=os.path.join(SHOTS, "tds-empty-to-audit.png"), full_page=True)
     ctx.close()
     # ---- no entries at all: as before

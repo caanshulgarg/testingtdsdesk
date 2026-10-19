@@ -1,7 +1,7 @@
 // Smarter TDS (the owner's list of 10-Oct-2026, group 2), under the TDS year's grid and on a return's To fix:
 //   - T-A4 the TDS payable ledgers in Tally against deducted less challans, quarter by quarter (TDSTie, src/js/65);
-//   - T-S1 each party's running total against the TDS limit, and the parties over it whose payments TDS does not cover:
-//     the TDS due, interest and the 40(a)(ia) amount at risk (TDSWatch);
+//   - T-S1 each party's running total against the TDS limit (TDSWatch); the parties over it whose payments TDS does not
+//     cover are the Audit's finding only (the owner, 19-Oct-2026);
 //   - T-S2 a filed return whose entries changed in Tally since: the correction needed (TDSDrift).
 // Nothing here changes a figure; "Correction filed" asks first and only takes the copy again.
 import ListTable from "../../parts/ListTable.jsx";
@@ -30,9 +30,10 @@ export function TieOut({ fy }) {
 
 // T-S1
 export function Limits({ fy }) {
-  const list = TDSWatch.tracker(fy), missed = TDSWatch.missed(fy);
+  // the owner, 19-Oct-2026: no "Should have deducted" list nor "TDS short" here (a bill's TDS is often booked in a journal of
+  // its own): the TDS not deducted is the Audit's finding alone (Audit.checks.tdsMissed, src/js/06)
+  const list = TDSWatch.tracker(fy);
   if (!list.length) return null;
-  const sum = (k) => r2(missed.reduce((a, x) => a + x[k], 0));
   return <section className="dash-card" style={{ marginTop: 12 }} data-limits={fy}>
     <h3>Parties and the TDS limits, {fy}</h3>
     <p className="note">Each party's payments this year by kind, from the day book, against the limit above which TDS applies. Those at 80% of the limit or over it.</p>
@@ -40,21 +41,10 @@ export function Limits({ fy }) {
       cols={[
         { k: "party", role: "party", label: "Party", v: (x) => x.party, cell: (x) => <>{x.party}<div className="nr">{x.ledgers.slice(0, 2).join(", ")}</div></> },
         { k: "credited", role: "amount", label: "Paid this year", cls: "n", v: (x) => x.credited, fmt: money, cell: (x) => money(x.credited) },
-        { k: "st", role: "status", label: "Limit", v: (x) => x.used, cell: (x) => <span className={"tag " + (x.over ? (x.due >= 1 ? "bad" : "ok") : "warn")}>{x.over ? (x.due >= 1 ? "Over: TDS short" : "Over: TDS deducted") : Math.floor(x.used) + "% of the limit"}</span> },
+        { k: "st", role: "status", label: "Limit", v: (x) => x.used, cell: (x) => <span className={"tag " + (x.over ? "info" : "warn")}>{x.over ? "Over the limit" : Math.floor(x.used) + "% of the limit"}</span> },
         { k: "sec", label: "Kind", v: (x) => x.section, cell: (x) => <>{x.section}<div className="nr">{x.label} · {x.limitWords}</div></> },
         { k: "tds", label: "TDS deducted", cls: "n", v: (x) => x.tds, sum: true, fmt: money, cell: (x) => money(x.tds) },
       ]} />
-    {missed.length > 0 && <>
-      <h3 style={{ marginTop: 14 }} data-missed="">Should have deducted: {missed.length} part{missed.length === 1 ? "y" : "ies"}, TDS {money(sum("due"))}</h3>
-      <p className="note">Over the limit, with payments no TDS entry covers. Deduct it from the next payment and deposit it with the interest; paid before the return's due date, the expense is allowed this year.</p>
-      <ListTable name="tdsMissed" rows={missed} rowKey={(x) => x.party + "|" + x.rule} unit={["party", "parties"]}
-        cols={[
-          { k: "party", role: "party", label: "Party", v: (x) => x.party, cell: (x) => <>{x.party}<div className="nr">{x.pan ? "PAN " + x.pan : "no PAN in Tally: 20% (206AA)"}</div></> },
-          { k: "uncovered", role: "amount", label: "Not covered by TDS", cls: "n", v: (x) => x.uncovered, sum: true, fmt: money, cell: (x) => money(x.uncovered) },
-          { k: "due", role: "amount", label: "TDS due", cls: "n", v: (x) => x.due, sum: true, fmt: money, td: () => ({ className: "bad" }), cell: (x) => <>{money(x.due)}<div className="nr">{x.section} at {x.rate}%</div></> },
-          { k: "interest", label: "Interest to today (1% a month)", cls: "n", v: (x) => x.interest, sum: true, fmt: money, cell: (x) => money(x.interest) },
-          { k: "disallow", label: "At risk, 40(a)(ia) (30%)", cls: "n", v: (x) => x.disallow, sum: true, fmt: money, cell: (x) => money(x.disallow) },
-        ]} /></>}
   </section>;
 }
 

@@ -157,12 +157,15 @@ const Audit = {
           const foreign = /\b(INC|LLC|GMBH|PTE|PTY|IRELAND|SINGAPORE|USA|UK|B\.?V|AG|SARL)\b/i.test(e.party) && !(S.books.gstins || {})[e.party];
           const led = (e.ledgers || []).join(", "), tl = A.tdsLedger(e.section) || "TDS PAYABLE " + e.section;
           out.push({key: e.party + "|" + e.section + "|" + fy, party: e.party, section: e.section, fy, base: e.uncovered, area: "tds", sev: e.due >= 10000 ? "high" : "medium",
-            clause: "3CD 21(b), 34(a); section 40(a)(ia)", title: e.section + " not deducted: " + e.party + ", " + fy,
-            problem: "Paid " + m(e.credited) + " in " + fy + " (" + led + "), past the " + e.limitWords + " limit; not covered by TDS " + m(e.uncovered) + "." + (e.pan ? "" : " No PAN in Tally."),
+            clause: "3CD 21(b), 34(a); section 40(a)(ia)", title: e.section + (e.short ? " short deducted: " : " not deducted: ") + e.party + ", " + fy,
+            // the owner, 19-Oct-2026: TDS booked in an entry of its own for the bill counts (TDSSep, src/js/66); booked short of
+            // the rate, only the short amount is said
+            problem: (e.short ? "TDS booked separately for the bill is short of the " + e.rate + "% that applies: short deducted " + m(e.due) + ". " : "") +
+              "Paid " + m(e.credited) + " in " + fy + " (" + led + "), past the " + e.limitWords + " limit; not covered by TDS " + m(e.uncovered) + "." + (e.pan ? "" : " No PAN in Tally."),
             impact: "30% of " + m(e.uncovered) + " (" + m(e.disallow) + ") is disallowed under section 40(a)(ia) until the TDS is paid; interest under section 201(1A) runs on the TDS (about " + m(e.interest) + " to today).",
             suggestion: (foreign ? "Looks non-resident: check section 195 or the equalisation levy first. " : "") + "Deduct TDS at " + e.rate + "% (" + m(e.due) + ") from the next payment, and deposit it with interest; then file the correction statement." +
               (e.pan ? "" : " Get the PAN: without it the rate is 20%."),
-            amount: e.due, je: foreign ? null : [{date: ctx.to, narr: "TDS under section " + e.section + " not deducted on " + led + " for " + fy, lines: [{l: e.party, dr: e.due}, {l: tl, cr: e.due}]}],
+            amount: e.due, je: foreign ? null : [{date: ctx.to, narr: "TDS under section " + e.section + (e.short ? " short deducted on " : " not deducted on ") + led + " for " + fy, lines: [{l: e.party, dr: e.due}, {l: tl, cr: e.due}]}],
             rows: e.credits.filter(c => c.counts !== false).map(c => ({vid: c.vid || "", date: c.date, no: c.voucher || "", type: e.section, party: e.party, amount: c.amount,
               note: "booked to " + (c.ledger || led) + "; " + e.section + " at " + e.rate + "%" + (e.pan ? "" : " (no PAN)")}))});
         });
