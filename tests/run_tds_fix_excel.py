@@ -123,7 +123,7 @@ try:
         tb = E(TABLE)
         row1 = next((t for t in tb if r1["pan"] in t["text"] or newpan in t["pan"]), None)
         ok(tb and tb[0]["pan"] == newpan, "the table: the new PAN under the deductee (%s)" % (tb and tb[0]["pan"]))
-        ok(len(tb) > 1 and tb[1]["sec"].startswith("393(1)") and "194J" in tb[1]["sec"], "the new section on the second deduction (%s)" % (len(tb) > 1 and tb[1]["sec"]))
+        ok(len(tb) > 1 and tb[1]["sec"].strip() == "194J", "the new section on the second deduction, its code (%s)" % (len(tb) > 1 and tb[1]["sec"]))
         ok(tb and any("edited in FinCom: books ₹" in e for e in tb[0]["edited"]) and E("INR.format(%s)" % newtds) in tb[0]["text"], "the new TDS, and 'edited in FinCom: books ₹…' under it (%s)" % (tb and tb[0]["edited"]))
         total = round(sum(r["tds"] for r in rows) + 500, 2)
         card = pg.inner_text("#app [data-ret-strip]")

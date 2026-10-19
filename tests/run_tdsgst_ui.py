@@ -70,14 +70,16 @@ try:
         pg.click('#app nav[aria-label="Return"] [data-ret-tab="deductions"]'); pg.wait_for_timeout(400)
         t = pg.inner_text("#tdsDnTable")
         tips = pg.evaluate("[...document.querySelectorAll('#tdsDnTable td[title]')].map(e => e.title).join(' | ')")
-        ok("393(1)-6(i) · 194C" in t and "393(1)-6(iii) · 194J" in t and "393(1)-5(iii) · 194A" in t and "393(1) Sl. 6(i) [old 194C]" in tips, "2026-27 entries: each section new with the old beside it (the full provision on a hover)")
+        # next-tds-clear (the coordinator's review): a section as its short code in the table, the Act of 2025's provision
+        # with the old section beside it on a hover (and in the row's drawer)
+        ok("194C" in t and "194J" in t and "393(1) Sl. 6(i) [old 194C]" in tips and "393(1) Sl. 6(iii) [old 194J]" in tips and "393(1) Sl. 5(iii) [old 194A]" in tips, "2026-27 entries: each section's code, the new provision with the old on a hover")
         n0 = pg.locator("#tdsDnTable > tbody > tr").count()
         opts = pg.evaluate("[...document.querySelectorAll('#app select[aria-label=Section] option')].map(o => o.textContent)")
         ok(any(o.startswith("393(1) Sl. 6(i) [old 194C]") for o in opts), "the section filter: new and old (%s)" % opts[1:])
         for q, want in [("194C", "old number"), ("393(1) Sl. 6(i)", "new provision")]:
             pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', q); pg.wait_for_timeout(500)
             rows = pg.locator("#tdsDnTable > tbody > tr").count()
-            ok(0 < rows < n0 and "· 194C" in pg.inner_text("#tdsDnTable > tbody"), "find by the %s “%s”: %d of %d" % (want, q, rows, n0))
+            ok(0 < rows < n0 and "194C" in pg.inner_text("#tdsDnTable > tbody"), "find by the %s “%s”: %d of %d" % (want, q, rows, n0))
         pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
         pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(300)
         ok(pg.locator('#app button:has-text("Make FVU file (draft)")').count() == 1 and pg.locator('#app [data-draft="140"]').count() == 1,
