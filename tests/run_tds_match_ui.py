@@ -274,11 +274,13 @@ try:
         pg.evaluate("""() => { S.books.salary = [{name: "Ravi Menon", pan: "ABCPM1234R", date: "2026-04-30", gross: 200000, tds: 4000}, {name: "Sunita Rao", pan: "ABCPR5678S", date: "2026-04-30", gross: 80000, tds: 5000},
           {name: "Ravi Menon", pan: "ABCPM1234R", date: "2026-05-31", gross: 200000, tds: 5000}];
           S.books.challans = [{id: "chSal", bsr: "0510308", serial: "00601", date: "20260507", tax: 9000, interest: 0, section: "192", minorHead: "200"}, {id: "chSal2", bsr: "0510308", serial: "00602", date: "20260606", tax: 5000, interest: 0, section: "192", minorHead: "200"}];
-          S.books.alloc = {}; S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"""); pg.wait_for_timeout(1500)
-        # next-24q-auto (4d66f268b): the salary sheet's TDS is placed by the sure rules as the 24Q return opens (no Confirm all)
-        placed = J("(() => { const u = {}; Object.values(S.books.alloc).forEach(v => { u[v] = (u[v] || 0) + 1; }); return u; })()")
-        ok(pg.locator('#app [data-challan-match="24Q|2026-27|Q1"]').count() == 1 and placed == {"chSal": 2, "chSal2": 1} and J("TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length") == 0,
-           "Form 138: the same Challans tab; the salary sheet's TDS placed by rule as the return opens (%s)" % placed)
+          S.books.alloc = {}; S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"""); pg.wait_for_timeout(900)
+        # next-24q-auto: opening Form 138 PLACES the salary sheet's exact-amount matches by rule (no suggestion, no Confirm all)
+        sal = J("""() => { const L = S.books.allocLog || [], rs = TDS.formRows('24Q').filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005);
+          return {on: rs.map(r => TDS.ymd(r.date).slice(0, 6) + '>' + (r.challan || '-')).sort(), rule: rs.filter(r => { const l = L.slice().reverse().find(x => x.row === r.id) || {}; return l.act === 'auto' && /^rule: /.test(l.note || ''); }).length,
+            left: TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length}; }""")
+        ok(pg.locator('#app [data-challan-match="24Q|2026-27|Q1"]').count() == 1 and sal["on"] == ["202604>chSal", "202604>chSal", "202605>chSal2"] and sal["rule"] == 3 and sal["left"] == 0 and pg.locator("#app [data-cm-confirm-all]").count() == 0,
+           "Form 138: the same Challans tab; the salary sheet's rows placed on their challans by rule on opening, tagged Rule, nothing left to confirm (%s)" % sal)
         f = J("TDS24Q_FILE.build('2026-27', 'Q1', TDS26Q.firmDetails())")
         ok(not f.get("error") and len(recs(f["text"], "CD")) == 2 and len(recs(f["text"], "DD")) == 3, "Form 138 from the salary sheet: CD and DD records (%s)" % (f.get("error") or ""))
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(500)

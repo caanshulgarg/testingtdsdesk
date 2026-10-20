@@ -175,11 +175,13 @@ try:
         ok(tagged == {"00222": 4, "00123": 8, "00456": 8, "00301": 8, "00302": 2}, "Confirm all: every suggestion of Form 140 confirmed, nothing else (%s)" % tagged)
         used = pg.evaluate("TDS.challanUse().chShort || 0")
         ok(used == 7300 and used <= 7500, "the short challan: the 7 of May that fit and June's ₹300 in advance (₹7,300.00 of ₹7,500.00); one left, with its next step (%s)" % used)
-        # next-24q-auto (4d66f268b): a 24Q return places its salary TDS by the sure rules as it opens (no Confirm all)
-        pg.evaluate("() => { S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(1500)
-        n24 = pg.evaluate("Object.values(S.books.alloc).filter(v => S.books.challans.find(c => c.id === v).serial === '00124').length")
-        auto = pg.evaluate("(S.books.allocLog || []).filter(l => l.act === 'auto' && l.form === '24Q').length")
-        ok(n24 == 5 and auto >= 1, "Form 138: the 192 deductions placed on 00124 by rule as the return opens (%s, %s logged 'auto')" % (n24, auto))
+        # next-24q-auto: opening Form 138 PLACES its sure-rule matches (no suggestion, no Confirm all); 26Q's stay as confirmed
+        a26 = pg.evaluate("Object.assign({}, S.books.alloc)")
+        pg.evaluate("() => { S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(900)
+        on124 = pg.evaluate("Object.keys(S.books.alloc).filter(k => S.books.challans.find(c => c.id === S.books.alloc[k]).serial === '00124')")
+        rule124 = pg.evaluate("(ks) => ks.filter(k => { const l = (S.books.allocLog || []).slice().reverse().find(x => x.row === k) || {}; return l.act === 'auto' && /^rule: Same section, same month, exact amount/.test(l.note || ''); }).length", on124)
+        ok(len(on124) == 5 and rule124 == 5 and pg.locator("#app [data-cm-confirm-all]").count() == 0, "Form 138: the 192 deductions placed on 00124 by rule on opening, tagged Rule, nothing left to confirm (%d, %d)" % (len(on124), rule124))
+        ok(all(pg.evaluate("S.books.alloc")[k] == v for k, v in a26.items()), "Form 138's opening moved nothing already placed (26Q's confirmed suggestions kept)")
         pg.evaluate("() => { S.tdsForm = '26Q'; render(); }"); pg.wait_for_timeout(300)
         # ---- round 88 (as Winman's grid): the Challans step is one plain table; a row opens that challan's deductions
         pg.evaluate("() => { S.tdsChView = ''; S.tdsChSel = ''; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(600)
