@@ -229,8 +229,51 @@ const TDSMatch = {
     const cx = TDSReg.ctx(), bal = TDSReg.balance(c, cx), cur = TDSReg.portionFor(c, form, fy, q, cx), only = Object.keys(cx.uses[c.id] || {}).length <= 1;
     const iLeft = r2(bal.interest + cur.interest), fLeft = r2(bal.fee + cur.fee);
     const due = r2(TDS.interest(fy, q, form).filter(x => (x.kind === "pay" && x.challan && x.challan.id === c.id) || (x.kind === "deduct" && x.row.challan === c.id)).reduce((a, x) => a + x.amount, 0));
-    const interest = due > 0 ? Math.min(Math.ceil(due), iLeft) : only ? iLeft : 0;
+    const interest = due > 0 ? Math.min(Math.ceil(due), TDSMatch.free(c, form, fy, q, cx).interest) : only ? iLeft : 0;
     return {interest: r2(Math.max(0, interest)), fee: only ? fLeft : 0, due};
+  },
+  // ---------------- next-tds-interest (the owner, 20-Oct-2026): the return's interest and late fee in one table, and the
+  // interest due allocated to its challans. {rows: [{id, row, unpaid, challan, months1, months2, rate2, from, interest}],
+  // fee (TDS.lateFee), filed, perChallan: [{c, due, allocated, diff}], totals: {interest, due, allocated, short}}. One row
+  // a deduction: deducted late (1%, from the bill) and paid late (1.5%; TCS 1%) together; one still unpaid, a row of its own
+  interestTable(form, fy, q){
+    form = form || "26Q";
+    const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), L = TDS.interest(fy, q, form), by = {}, rows = [], chs = TDS.challans(), ch = {};
+    chs.forEach(c => { ch[c.id] = c; });
+    L.forEach(x => {
+      const id = x.row.id + (x.kind === "unpaid" ? ":u" : "");
+      const r = by[id] || (by[id] = rows[rows.push({id, row: x.row, unpaid: x.kind === "unpaid", challan: ch[x.row.challan] || null, months1: 0, months2: 0, rate2: 0, from: "", due: "", interest: 0}) - 1]);
+      if (x.kind === "deduct"){ r.months1 = x.months; r.from = x.from; } else { r.months2 = x.months; r.rate2 = x.rate; r.due = x.due; }
+      r.interest = r2(r.interest + x.amount);
+    });
+    rows.sort((a, b) => TDS.ymd(a.row.date).localeCompare(TDS.ymd(b.row.date)) || String(a.row.party || "").localeCompare(String(b.row.party || "")));
+    const perChallan = chs.filter(c => (cx.uses[c.id] || {})[k]).map(c => {
+      const due = r2(L.filter(x => x.kind !== "unpaid" && x.row.challan === c.id).reduce((a, x) => a + x.amount, 0)), allocated = TDSReg.portionFor(c, form, fy, q, cx).interest;
+      return {c, due, allocated, diff: r2(due - allocated)};
+    });
+    const filed = TDSFiled.get(fy, q, form), sum = (f) => r2(perChallan.reduce((a, x) => a + x[f], 0));
+    const due = sum("due"), allocated = sum("allocated");
+    return {rows, perChallan, filed, fee: TDS.lateFee(fy, q, filed ? filed.on : "", form), totals: {interest: r2(L.reduce((a, x) => a + x.amount, 0)), due, allocated, short: r2(Math.max(0, due - allocated))}};
+  },
+  // the most a return may have of a challan's interest and of its fee (TDSReg.setPortion's limit): its own, the head left,
+  // and the challan's tax not used (kept here, out of legacy.js)
+  free(c, form, fy, q, cx){
+    const b = TDSReg.balance(c, cx), cur = TDSReg.portionFor(c, form, fy, q, cx), t = Math.max(0, b.tax);
+    return {interest: r2(cur.interest + b.interest + t), fee: r2(cur.fee + b.fee + t)};
+  },
+  // "Allocate interest due": each challan of the return its interest due (whole rupees, up), within what it has free
+  // (free: its interest, then its tax not used). {ok, n, why}
+  allocateDue(form, fy, q){
+    if (TDSReg.locked(fy, q, form)) return {ok: false, why: TDSReg.lockWords(fy, q, form)};
+    const cx = TDSReg.ctx(); let n = 0;
+    this.interestTable(form, fy, q).perChallan.forEach(x => {
+      if (!(x.due > 0)) return;
+      const cur = TDSReg.portionFor(x.c, form, fy, q, cx), want = Math.min(Math.ceil(x.due - 0.005), TDSMatch.free(x.c, form, fy, q, cx).interest);
+      if (Math.abs(want - cur.interest) < 0.005) return;
+      if (TDSReg.setPortion(x.c.id, form, fy, q, want, cur.fee, {nosave: true}).ok) n++;
+    });
+    if (n){ TDSReg.done(); saveBooks(); }
+    return {ok: true, n};
   },
   // ---------------- before the file: what blocks it, what to look at
   // {block: [{k, words, n, ids}], warn: [...], info: [...]}
@@ -244,9 +287,6 @@ const TDSMatch = {
     const stale = rows.filter(r => r.splitStale);
     if (stale.length) out.block.push({k: "stale", n: stale.length, words: stale.length + " split deduction" + (stale.length === 1 ? "'s" : "s'") + " tax changed in the books: undo the split and split it again."});
     const mine = TDS.challans().filter(c => (cx.uses[c.id] || {})[TDSReg.key(form, fy, q)]);
-    const due = r2(TDS.interest(fy, q, form).filter(x => x.kind !== "unpaid").reduce((a, x) => a + x.amount, 0));
-    const given = r2(mine.reduce((a, c) => a + TDSReg.portionFor(c, form, fy, q, cx).interest, 0));
-    if (due >= 1 && given + 0.5 < due) out.warn.push({k: "interest", words: "Interest of " + money(due) + " is due on late deductions or payments; " + money(given) + " is allocated to this return. Allocate the interest paid on its challan (below each challan)."});
     const notPortioned = mine.filter(c => (num(c.interest) || TDSReg.feeOf(c)) && !TDSReg.explicit(c));
     if (notPortioned.length) out.warn.push({k: "portion", words: notPortioned.map(c => TDSCH.label(c)).join(", ") + ": interest or fee paid on " + (notPortioned.length === 1 ? "this challan is" : "these challans is") + " not allocated to any return; the file writes only what is allocated."});
     mine.forEach(c => {
@@ -353,6 +393,10 @@ function tdsSplitDo(rowId, parts){
   toast("Split in " + r.n + " parts, each on its challan."); S.tdsSplit = null; render(); return r;
 }
 function tdsUnsplit(rowId){ const r = TDSMatch.unsplit(rowId); toast(r.ok ? "Split undone: the deduction is whole again, on no challan." : r.why); render(); return r; }
+function tdsAllocateDue(){
+  const t = tdsRet(), r = TDSMatch.allocateDue(t.form, t.fy, t.q);
+  toast(!r.ok ? r.why : r.n ? "Interest due allocated on " + r.n + " challan" + (r.n === 1 ? "" : "s") + "." : "The interest due is allocated already."); render(); return r;
+}
 function tdsPortionSet(chId, interest, fee){
   const t = tdsRet(), r = TDSReg.setPortion(chId, t.form, t.fy, t.q, interest, fee);
   toast(r.ok ? "Interest " + money(num(interest)) + " and fee " + money(num(fee)) + " of this challan allocated to " + t.form + " " + t.q + " " + t.fy + "." : r.why); render(); return r;
@@ -423,5 +467,5 @@ const TDSTallyRows = {
   }
 };
 
-if (typeof globalThis === "object") Object.assign(globalThis, {TDSMatch, TDSTallyRows, tdsRet, tdsMatchConfirm, tdsMatchConfirmAll, tdsMatchNo, tdsMoveOpen, tdsMoveTo, tdsTakeOff, tdsSplitOpen, tdsSplitRow, tdsSplitDo, tdsUnsplit, tdsPortionSet});
+if (typeof globalThis === "object") Object.assign(globalThis, {TDSMatch, TDSTallyRows, tdsRet, tdsMatchConfirm, tdsMatchConfirmAll, tdsMatchNo, tdsMoveOpen, tdsMoveTo, tdsTakeOff, tdsSplitOpen, tdsSplitRow, tdsSplitDo, tdsUnsplit, tdsPortionSet, tdsAllocateDue});
 /* @react-lazy: end */

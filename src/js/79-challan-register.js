@@ -33,6 +33,7 @@ const TDSReg = {
   books(){ return S.books || {}; },
   memo(k, f){ return typeof perRender === "function" ? perRender(this, k, f) : f(); },
   key(form, fy, q){ return form + "|" + fy + "|" + q; },
+  chOf(id){ return TDS.challans().find(z => z.id === id); },
   // ---------------- one context per action: every deduction with its form, what each return uses of each challan ----------------
   // {byRow: {id: {r, form}}, uses: {chId: {"form|fy|q": {form, fy, q, tax, n, ids}}}, use: {chId: tax used}}; kept up to
   // date by tag/untag within the action (track), so a loop of tags reads it, never works it out again
@@ -96,15 +97,16 @@ const TDSReg = {
   // 0.00. (Before, none set gave the whole to the challan's home return by itself.) The fee portion is the fee and others
   // together, the fee first (the register's split, tds/Register.jsx)
   portions(c){ return ((this.books().chPortions || {})[c && c.id]) || null; },
-  explicit(c){ return !!((this.books().chPortions || {})[c && c.id]); },
-  portionsUsed(c, cx){ const p = this.portions(c, cx) || {}; return {interest: r2(Object.values(p).reduce((a, x) => a + num(x.interest), 0)), fee: r2(Object.values(p).reduce((a, x) => a + num(x.fee), 0))}; },
+  explicit(c){ return !!this.portions(c); },
+  portionsUsed(c, cx){ const v = Object.values(this.portions(c, cx) || {}), s = (f) => r2(v.reduce((a, x) => a + num(x[f]), 0)); return {interest: s("interest"), fee: s("fee")}; },
   // what a return uses of every challan: its own share (the return's Challans figure; the TDS review, M6)
   usedBy(fy, q, form, cx){ const k = this.key(form, fy, q); return r2(Object.values((cx || this.ctx()).uses).reduce((a, m) => a + num((m[k] || {}).tax), 0)); },
-  // what is left of a challan, by head: {tax, interest, fee, total}. Tax: less what the deductions tagged to it use; interest
-  // and fee: less what a person gave to returns (none given: all of it is still the challan's to give)
+  // what is left of a challan, by head: {tax, interest, fee, total}. Tax: less what its deductions use and what was moved
+  // to interest or fee (next-tds-interest, the owner, 20-Oct-2026: interest or fee allocated past the challan's own, from
+  // its free tax, one way only); interest and fee: less what was given to returns
   balance(c, cx){
-    const pu = this.portionsUsed(c, cx), tax = r2(num(c.tax) - ((cx || this.ctx()).use[c.id] || 0));
-    const interest = r2(num(c.interest) - pu.interest), fee = r2(this.feeOf(c) - pu.fee);
+    const pu = this.portionsUsed(c, cx), oi = r2(pu.interest - num(c.interest)), of = r2(pu.fee - this.feeOf(c)), M = (v) => Math.max(0, v);
+    const interest = M(-oi), fee = M(-of), tax = r2(num(c.tax) - this.usedTax(c, cx) - M(oi) - M(of));
     return {tax, interest, fee, total: r2(tax + interest + fee)};
   },
   usedTax(c, cx){ return r2((cx || this.ctx()).use[c.id] || 0); },
@@ -113,18 +115,22 @@ const TDSReg = {
     const x = (this.portions(c, cx) || {})[this.key(form, fy, q)] || {};
     return {interest: num(x.interest), fee: num(x.fee), set: this.explicit(c)};
   },
-  // give a return a part of a challan's interest and fee; refused over the limit of each, and on a locked return
+  // give a return a part of a challan's interest and fee; past the challan's own, from its free tax (balance); refused past
+  // what the challan holds, and on a locked return
   setPortion(chId, form, fy, q, interest, fee, opt){
-    const b = S.books, c = TDS.challans().find(x => x.id === chId);
+    const b = S.books, c = this.chOf(chId);
     if (!b || !c) return {ok: false, why: "No such challan."};
     if (this.locked(fy, q, form)) return {ok: false, why: this.lockWords(fy, q, form)};
     const k = this.key(form, fy, q), cur = JSON.parse(JSON.stringify(this.portions(c) || {}));
     const others = (f) => r2(Object.keys(cur).filter(x => x !== k).reduce((a, x) => a + num(cur[x][f]), 0));
-    const iLeft = r2(num(c.interest) - others("interest")), fLeft = r2(this.feeOf(c) - others("fee"));
     interest = r2(num(interest)); fee = r2(num(fee));
     if (interest < 0 || fee < 0) return {ok: false, why: "An amount cannot be below nil."};
-    if (TDSCH.p(interest) > TDSCH.p(iLeft)) return {ok: false, why: money(iLeft) + " left on this challan for interest: " + money(r2(interest - iLeft)) + " more cannot be given."};
-    if (TDSCH.p(fee) > TDSCH.p(fLeft)) return {ok: false, why: money(fLeft) + " left on this challan for the fee: " + money(r2(fee - fLeft)) + " more cannot be given."};
+    const M = (v) => Math.max(0, v), hi = r2(num(c.interest) - others("interest")), hf = r2(this.feeOf(c) - others("fee"));
+    const over = M(interest - hi) + M(fee - hf), room = r2(num(c.tax) - this.usedTax(c) - M(-hi) - M(-hf));
+    if (over > 0.005 && TDSCH.p(over) > TDSCH.p(room)){
+      const fi = r2(M(hi) + M(room)), i = interest > fi, x = i ? fi : r2(M(hf) + M(room - M(interest - hi)));
+      return {ok: false, why: money(x) + " free on this challan for " + (i ? "interest" : "the fee") + ": " + money(r2((i ? interest : fee) - x)) + " more cannot be given."};
+    }
     const was = cur[k] ? Object.assign({}, cur[k]) : null;
     if (interest || fee) cur[k] = {interest, fee}; else delete cur[k];
     const all = Object.assign({}, b.chPortions || {});
@@ -169,8 +175,7 @@ const TDSReg = {
   },
   // a return marked filed (TDSFiled.mark), or a correction closed: each of its allocations goes to the trail as locked
   lockReturn(fy, q, form, why){
-    const cx = this.ctx(), chs = TDS.challans();
-    Object.entries(cx.uses).forEach(([chId, m]) => { const u = m[this.key(form, fy, q)]; if (u) this.log({act: "lock", ch: chs.find(c => c.id === chId), form, fy, q, tax: u.tax, locked: true, note: why || "return marked filed"}); });
+    Object.entries(this.ctx().uses).forEach(([chId, m]) => { const u = m[this.key(form, fy, q)]; if (u) this.log({act: "lock", ch: this.chOf(chId), form, fy, q, tax: u.tax, locked: true, note: why || "return marked filed"}); });
   },
   // ---------------- the audit trail ----------------
   who(){ try { return (Cloud.st && Cloud.st.email) || ((Cloud.sess && Cloud.sess()) || {}).email || ""; } catch (e){ return ""; } },
@@ -239,11 +244,11 @@ const TDSReg = {
   // ---------------- one rule, one function: a challan's balance used by a return ----------------
   // The register's "Use…" and a return's "Add from register" (and its one-click suggestions) are this one call: the
   // return's open deductions, oldest first, each whole, up to the amount given (never past the challan's tax left);
-  // interest and fee, when given, added to the return's portion within their own balance. Refused, nothing changed, over
+  // interest and fee, when given, added to the return's portion (setPortion's limit). Refused, nothing changed, over
   // any balance or on a return marked filed. only(r): which deductions may be used (a new challan's own placing).
   // {ok, why, n, ids, tax, interest, fee, short, was (the portion before, for Undo)}
   useBalance(chId, form, fy, q, amount, interest, fee, via, only){
-    const c = TDS.challans().find(x => x.id === chId);
+    const c = this.chOf(chId);
     if (!c) return {ok: false, why: "No such challan."};
     form = form || "26Q";
     if (!this.FORMS.includes(form) || !/^Q[1-4]$/.test(q || "") || !/^\d{4}-\d{2}$/.test(fy || "")) return {ok: false, why: "Choose the form, the year and the quarter."};
@@ -252,8 +257,6 @@ const TDSReg = {
     if (want < 0 || wi < 0 || wf < 0) return {ok: false, why: "An amount cannot be below nil."};
     if (!want && !wi && !wf) return {ok: false, why: "Give the amount to use."};
     if (TDSCH.p(want) > TDSCH.p(bal.tax)) return {ok: false, why: money(bal.tax) + " left on this challan: " + money(r2(want - bal.tax)) + " more cannot be used."};
-    if (TDSCH.p(wi) > TDSCH.p(bal.interest)) return {ok: false, why: money(bal.interest) + " of interest left on this challan: " + money(r2(wi - bal.interest)) + " more cannot be used."};
-    if (TDSCH.p(wf) > TDSCH.p(bal.fee)) return {ok: false, why: money(bal.fee) + " of fee left on this challan: " + money(r2(wf - bal.fee)) + " more cannot be used."};
     let room = TDSCH.p(want); const ids = [];
     this.openRows(fy, q, form, cx).filter(r => !only || only(r)).forEach(r => { if (TDSCH.p(r.tds) <= room){ room -= TDSCH.p(r.tds); ids.push(r.id); } });
     if (want && !ids.length) return {ok: false, why: "No open deduction of " + form + " " + q + " " + fy + " fits within " + money(want) + "."};
@@ -284,7 +287,7 @@ const TDSReg = {
   // a return's use of a challan taken off: its deductions untagged and its interest and fee portion cleared; refused when
   // filed. {ok, ids, was} (for Undo: use them again)
   removeUse(chId, form, fy, q){
-    const c = TDS.challans().find(x => x.id === chId);
+    const c = this.chOf(chId);
     if (!c) return {ok: false, why: "No such challan."};
     if (this.locked(fy, q, form)) return {ok: false, why: this.lockWords(fy, q, form)};
     const cx = this.ctx(), u = (cx.uses[chId] || {})[this.key(form, fy, q)], ids = u ? u.ids.slice() : [];
@@ -405,10 +408,10 @@ const TDSReg = {
   // FinCom's own note (Tally is not changed), in the trail, and a challan of unknown type is then placed in its own draft
   // return as a new one is (autoPlace). Not while a filed return uses it.
   setNature(chId, code){
-    const c = TDS.challans().find(z => z.id === chId);
+    const c = this.chOf(chId);
     if (!c) return {ok: false, why: "No such challan."};
-    const f = this.filedUsing(c);
-    if (f.length) return {ok: false, why: "A filed return uses this challan (" + f.map(u => u.form + " " + u.q + " " + u.fy).join(", ") + "): open a correction for it first."};
+    const fw = this.filedWords(c);
+    if (fw) return {ok: false, why: fw};
     const raw = String(code || "").trim().toUpperCase(), section = /^6C[A-Z]{1,2}$/.test(raw) ? "20" + raw : raw;
     if (!TDSCH.secNorm(section)) return {ok: false, why: "Give the nature of payment (section code), e.g. 94C or 194C, 92B for salary."};
     const was = this.natureCode(c) || "none";
@@ -456,13 +459,12 @@ const TDSReg = {
   },
   // anything filed (and not under correction) that uses the challan; its allocations, if any
   filedUsing(c){ return Object.values(this.uses()[c.id] || {}).filter(u => this.locked(u.fy, u.q, u.form)); },
+  filedWords(c){ const f = this.filedUsing(c); return f.length ? "A filed return uses this challan (" + f.map(u => u.form + " " + u.q + " " + u.fy).join(", ") + "): open a correction for it first." : ""; },
   hasAlloc(c){ return Object.keys(this.uses()[c.id] || {}).length > 0 || this.explicit(c); },
   canEdit(c){
     if (!c) return "No such challan.";
     if (this.srcOf(c) === "tally") return "This challan was read from Tally: change it in Tally, and it comes in again with the books.";
-    const f = this.filedUsing(c);
-    if (f.length) return "A filed return uses this challan (" + f.map(u => u.form + " " + u.q + " " + u.fy).join(", ") + "): open a correction for it first.";
-    return "";
+    return this.filedWords(c);
   },
   // why a challan cannot be deleted ("" when it can): one read from Tally, or one anything is allocated to
   canDelete(c){
@@ -494,7 +496,7 @@ const TDSReg = {
   },
   // a hand-typed challan that Tally already has: the person's note and receipt kept on Tally's challan (its figures stay Tally's)
   async linkToTally(chId, x, file){
-    const c = TDS.challans().find(z => z.id === chId);
+    const c = this.chOf(chId);
     if (!c || this.srcOf(c) !== "tally") return {ok: false, why: "That challan is not one read from Tally."};
     const note = String((x && x.note) || "").trim();
     if (note) c.note = note.slice(0, 500);
@@ -505,7 +507,7 @@ const TDSReg = {
     return {ok: true, c};
   },
   async editHand(chId, x, file){
-    const c = TDS.challans().find(z => z.id === chId);
+    const c = this.chOf(chId);
     const no = this.canEdit(c); if (no) return {ok: false, why: no};
     const r = this.check(x, chId);
     if (!r.ok) return {ok: false, errors: r.errors, why: Object.values(r.errors)[0]};
@@ -521,7 +523,7 @@ const TDSReg = {
   },
   // a soft delete, with its reason (canDelete says when it cannot); restore brings it back
   deleteHand(chId, reason){
-    const c = TDS.challans().find(z => z.id === chId), no = this.canDelete(c);
+    const c = this.chOf(chId), no = this.canDelete(c);
     if (no) return {ok: false, why: no};
     const why = String(reason || "").trim();
     if (why.length < 3) return {ok: false, why: "Say why the challan is deleted."};

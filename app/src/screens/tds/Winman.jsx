@@ -293,6 +293,19 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
   </div>;
 }
 
+// next-tds-interest (the owner, 20-Oct-2026): a challan's interest or others (fee) allocated to this return, typed in its row;
+// saved on Enter or leaving the box (tdsPortionSet: past the challan's own, from its tax not used; refused past what it
+// holds, the box back to what it was). The row's click (its deductions) is not set off from the box
+function AllocCell({ x, which, locked }) {
+  const [v, setV] = useState(null), cur = which === "int" ? x.int : x.oth;
+  if (locked) return <td className="n">{amt0(cur)}</td>;
+  const save = () => { if (v == null) return; const n = r2(num(v)); setV(null); if (Math.abs(n - cur) >= 0.005) tdsPortionSet(x.c.id, which === "int" ? n : x.int, which === "int" ? x.oth : n); };
+  const stop = (ev) => ev.stopPropagation();
+  return <td className="n chg-alloc" onClick={stop}><input type="text" inputMode="decimal" className="chg-in" {...{ ["data-chg-" + which]: x.c.id }} value={v == null ? (cur ? String(cur) : "") : v} placeholder="0"
+    aria-label={(which === "int" ? "Interest" : "Others (fee)") + " allocated to this return from challan " + x.c.serial}
+    onChange={(ev) => setV(ev.target.value)} onBlur={save} onKeyDown={(ev) => { stop(ev); if (ev.key === "Enter") ev.currentTarget.blur(); else if (ev.key === "Escape") setV(null); }} /></td>;
+}
+
 export function ChallanGrid({ fy, q, form, tallyPays }) {
   const cx = TDSReg.ctx(), list = winChallans(form, fy, q, cx), locked = TDSReg.locked(fy, q, form), key = TDSReg.key(form, fy, q);
   const [adding, setAdding] = useState(false), [pays, setPays] = useState(false), up = useRef(null);
@@ -313,9 +326,11 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
   const sum = (f) => r2(shown.reduce((a, x) => a + f(x), 0));
   // round 94: "Used in all returns" only where some challan is used by another return too (else it repeats Used here)
   const allCol = rows.some((x) => Math.abs(x.used - x.here) > 0.005), cols = allCol ? 17 : 16;
+  let dueAny = false; try { dueAny = TDSMatch.interestTable(form, fy, q).totals.due > 0; } catch (e) { /* the matcher not loaded */ }
   return <div className="chg" data-chg={TDSReg.key(form, fy, q)}>
     <div className="rt-tool" data-step-tool="">
       <span className="rt-sp" />
+      {!locked && dueAny && <button type="button" className="btn small" data-chg-alloc-due="" title="Each challan's interest due on this return's late deductions, allocated to it" onClick={() => tdsAllocateDue()}>Allocate interest due</button>}
       <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
         ["By hand", () => setAdding(true), { "data-cm-add": "hand" }],
         ["From a Tally TDS payment" + (nPays ? " (" + nPays + ")" : ""), () => setPays(true), { "data-cm-add": "tally" }],
@@ -328,12 +343,12 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
     {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
     <div className="bk-tablewrap chg-wrap"><table className="bk-table chg-table gf-off">
       <thead><tr><th className="n">No</th><Th cf={cf} k="date" cls="dt">Date</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="tax" cls="n">Tax</Th><th className="n">Interest</th><th className="n">Fee</th><th className="n">Others</th><th className="n">Total</th>
-        <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th></tr></thead>
+        <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n" title="The fee and others allocated to this return">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th></tr></thead>
       <tbody>{shown.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
           onClick={() => openChallanDeductions(x.c.id)} onKeyDown={(ev) => { if (ev.key === "Enter") openChallanDeductions(x.c.id); }}>
         <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{chSec(x.c) || "—"}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
         <td>{x.c.serial}</td><td>{x.c.bsr}</td><td title={TYPE[String(x.c.minorHead || "200")] || ""}>{String(x.c.minorHead || "200")}</td><td>{x.ok ? <span className="ac-chip ok" title="From the income-tax portal (its CIN)">Matched</span> : <span className="wd-dim" title="Typed or from Tally: not checked against the portal">Not checked</span>}</td>
-        <td className="n">{amt0(x.int)}</td><td className="n">{amt0(x.oth)}</td><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td></tr>)}
+        <AllocCell x={x} which="int" locked={locked} /><AllocCell x={x} which="oth" locked={locked} /><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td></tr>)}
         {!locked && <tr className="wd-addrow"><td colSpan={cols}><button type="button" className="linkbtn" data-chg-add="" onClick={() => setAdding(!adding)}>+ Add challan</button></td></tr>}</tbody>
       <tfoot><tr><td colSpan={3}>Total</td><td className="n" data-chg-tax={sum((x) => num(x.c.tax))}>{amt(sum((x) => num(x.c.tax)))}</td><td className="n">{amt(sum((x) => num(x.c.interest)))}</td><td className="n">{amt(sum((x) => num(x.c.fee)))}</td>
         <td className="n">{amt(sum((x) => num(x.c.others)))}</td><td className="n">{amt(sum((x) => totalOf(x.c)))}</td><td colSpan={4}></td><td className="n">{amt(sum((x) => x.int))}</td><td className="n">{amt(sum((x) => x.oth))}</td>

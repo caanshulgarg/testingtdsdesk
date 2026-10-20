@@ -261,7 +261,9 @@ const TDSF25 = {
       // to this statement (the register's portion, TDSReg.portionFor), 0.00 when none; the challan as deposited stays in
       // fields 8 to 12. The fee portion is fee and others together, the fee first: the others' part of it goes to 25
       const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: 0, fee: 0};
-      const aI = r2(Math.min(num(part.interest), C)), aE = r2(Math.max(0, Math.min(E, num(part.fee) - D)));
+      // (next-tds-interest: interest or fee allocated past the challan's own comes from its tax not used, TDSReg.setPortion:
+      // written as allocated, not cut to fields 9 and 11)
+      const aI = r2(num(part.interest)), aE = r2(Math.max(0, num(part.fee) - D));
       [[aI, "interest allocated"], [aE, "others allocated"]].forEach(([v, w]) => { if (Math.round(v * 100) % 100) P("Challan " + c.bsr + "/" + c.serial + ": its " + w + " " + this.money(v) + " has paise; the challan record takes whole rupees."); });
       return {c, mine, B, C, D, E, F, dep, no: ci + 1, book, aI, aE};
     });
