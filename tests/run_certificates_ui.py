@@ -107,7 +107,7 @@ try:
         pg.evaluate("ASST.loadSettings(true)"); pg.wait_for_timeout(800)
         pg.evaluate("ASST.open()"); pg.wait_for_timeout(800)
         ok(pg.locator("[data-asst-panel]").count() == 1 and pg.locator("[data-asst-upload]").count() == 1, "the panel, firm-wide, with its Files button")
-        ok(any("certificate" in s.lower() for s in pg.evaluate("ASST.SUGGEST.firm")), "a suggested certificate question for the whole firm")
+        ok(pg.locator("[data-asst-suggest], .asst-empty button").count() == 0, "no suggested questions (the owner, 19-Oct-2026)")
         pg.locator(".asst-askbar input[type=file][multiple]").set_input_files([os.path.join(TMP, f) for f in ("birchwood-signed-2024-25.pdf", "birchwood-signed-2025-26.pdf", "letterhead.png")])
         t0 = time.time()
         while time.time() - t0 < 20 and pg.evaluate("ASST.ups().length") < 3: pg.wait_for_timeout(200)

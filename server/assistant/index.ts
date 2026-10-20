@@ -1,6 +1,7 @@
 // fincom-assistant: FinCom Assistant's function (the owner's approval of AI in the app, 13-Oct-2026; never called by the
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
-//   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines}}
+//   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines},
+//    lang: the voice language chosen ("en-IN", "hi-IN", "hinglish", "mr-IN", …: agent.ts LANGS), a hint for the reply's language}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
 //   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
 //   {action: "ledger_guess", client_id, ledgers: [{name, group, chain, open, taxType, nature, use, samples}], parties}
@@ -16,7 +17,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { corsFor } from "../_shared/cors.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
-import { Ev, runTurn, TurnCtx, TurnTrace } from "./agent.ts";
+import { Ev, langOf, notEnglish, runTurn, TurnCtx, TurnTrace } from "./agent.ts";
 import { classify } from "./failure.ts";
 import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
@@ -254,7 +255,8 @@ export function handler(deps: Deps) {
     const history = (Array.isArray(body.history) ? body.history : []).filter((h: any) => h && (h.role === "user" || h.role === "assistant"));
     let cacheKey = "", cacheVersion = "";
     if (!attachments.length && !uploads.length && !history.length && deps.levers?.answerCache !== false) {
-      const nq = question.toLowerCase().replace(/[^a-z0-9₹%.,]+/g, " ").replace(/\s+/g, " ").trim();
+      // letters of every script (a question in Hindi or Tamil is not all spaces); Hinglish or an Indian script keeps its own key
+      const nq = question.toLowerCase().replace(/[^\p{L}\p{M}\p{N}₹%.,]+/gu, " ").replace(/\s+/g, " ").trim() + (notEnglish(question, langOf(body.lang)) ? "|" + (langOf(body.lang) || "native") : "");
       const rel = /\b(this|last|current|previous|today|yesterday|ytd|so far|to date|recent|latest|now)\b/.test(nq) ? "|" + today : "";
       cacheKey = await sha256(nq + rel + "|" + (clientId ? "client" : "firm"));
       try { cacheVersion = clientId ? String(await rpc("asst_data_version", { p_client: clientId }, jwt) || "") : "general"; } catch { cacheVersion = ""; }
@@ -316,7 +318,7 @@ export function handler(deps: Deps) {
         };
         const ctx: TurnCtx = {
           client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]),
-          question, history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })),
+          question, lang: langOf(body.lang), history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })),
           attachments, sheets, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
           noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),

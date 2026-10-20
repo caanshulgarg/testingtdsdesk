@@ -10,11 +10,6 @@
 /* (S.asst) and does what its buttons do.                              */
 /* ================================================================== */
 const ASST = {
-  SUGGEST: {
-    client: ["Which suppliers crossed 30,000 under 194C without TDS this year?", "Cash payments over 10,000 in September", "Top 10 customers by sales this quarter",
-      "Why is GSTR-3B ITC different from 2B in August?", "TDS paid late this year", "Owed to MSME suppliers for more than 45 days", "Is my client liable for tax audit?"],
-    firm: ["Turnover certificate for the last 3 years and net worth as on 31-Mar-2026 for…", "TDS rate on rent for a company?", "Due date of GSTR-9 for 2025-26?", "How to treat advance received under GST?", "What changes for TDS under the Income-tax Act, 2025?"],
-  },
   st(){
     if (!S.asst) S.asst = {open: false, q: "", busy: false, scope: "client", by: {}, attach: null, uploading: false, saved: null, chatIds: {}};
     return S.asst;
@@ -63,7 +58,7 @@ const ASST = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess();
       const r = await fetch(this.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead()})});
+        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
       if (!r.ok || !String(r.headers.get("content-type") || "").includes("event-stream")){
         const j = await r.json().catch(() => ({}));
         throw Object.assign(new Error(j.error || ("The assistant could not be reached (" + r.status + ").")), {kind: j.kind || "other"});
