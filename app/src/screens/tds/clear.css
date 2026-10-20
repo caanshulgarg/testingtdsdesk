@@ -405,3 +405,15 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 .wd-namewhy { display: block; flex-basis: 100%; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-secondary, var(--muted)); font-weight: 400; }
 .wd-namefix { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .wd-namefix input[data-wd-name-input] { min-width: 180px; }
+/* next-tds-early (the owner: "Name is overriding another column"): a deductee's name at most about 32 characters wide,
+   wrapped between words to two lines (a word longer than the line broken), the rest cut with an ellipsis, the whole name
+   on a hover; a problem's chip in a column of its own; every date cell one width (120px), wide enough for its date */
+.tdn { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 32ch; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.tdn-b { white-space: normal !important; text-align: left; max-width: 100%; }
+#app .rt table.bk-table td.wd-name, .rt-drawer table.bk-table td[data-wd-name], .dt-table td.dt-p { white-space: normal; min-width: 0; max-width: calc(32ch + 20px); }
+#app .rt table.bk-table > * > tr > td.dt, .rt-drawer table.bk-table > * > tr > td.dt, #app .rt table.bk-table > * > tr > th.dt, .rt-drawer table.bk-table > * > tr > th.dt { width: 120px; min-width: 120px; max-width: 120px; }
+@media (max-width: 760px) { #app .rt table.bk-table > * > tr > td.dt, .rt-drawer table.bk-table > * > tr > td.dt, #app .rt table.bk-table > * > tr > th.dt, .rt-drawer table.bk-table > * > tr > th.dt { width: auto; max-width: none; } }
+.wd-flags { white-space: nowrap; }
+.dt-table td.dt-f { width: 150px; white-space: normal; }
+.wd-chip.info, .dt-flag.info { color: var(--info, var(--ink)); background: var(--info-soft, transparent); border: 1px solid color-mix(in oklab, var(--info, var(--ink)) 45%, transparent); }
+.wd-chip.info { margin-left: 0; }

@@ -18,7 +18,7 @@ import { AddChallan } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { fixesOf } from "./DedSmart.jsx";
 import { openAllChallans } from "./AllChallans.jsx";
-import { chIds, chMissing, missingName, chipW } from "./onChallan.js";
+import { chIds, chMissing, missingName, chipW, BAD_K } from "./onChallan.js";
 import { DedName } from "./DedName.jsx";
 import "./clear.css";
 
@@ -31,11 +31,12 @@ const monthWords = (ym) => MON[+String(ym).slice(4, 6) - 1] + " " + String(ym).s
 const chWords = (c) => c.bsr + " · " + day(c.date) + " · " + c.serial;
 
 // a row's own problem (not its challan): {k, words} or null
-// next-tds-addlist: the name missing and a challan dated before the deduction first (nothing else can be fixed before)
+// next-tds-addlist: the name missing and a challan that cannot pay it (next-tds-early: an earlier year's, a future one,
+// not minor head 200; an advance challan is allowed) first (nothing else can be fixed before)
 export function rowProblem(r, issue, probs, form) {
   const ps = probs || [];
   if (ps.includes(TDSEdit.P_NAME)) return { k: "name", words: "Name missing" };
-  if (ps.includes(TDSEdit.P_EARLY)) return { k: "early", words: "Challan dated before the deduction" };
+  if (ps.includes(TDSEdit.P_EARLY)) { const c = TDS.challans().find((z) => z.id === r.challan), b = c && TDSEdit.badOf(r, c); if (b) return b; }
   if (!Certs.validPan(r.pan)) return { k: "pan", words: "no PAN" };
   if (Certs.inoperative && Certs.inoperative(r.pan)) return { k: "pan", words: "PAN inoperative" };
   if (issue && issue.expected != null) return { k: "rate", words: "rate " + r.rate + "%, should be " + issue.expected + "%" };
@@ -45,13 +46,13 @@ export function rowProblem(r, issue, probs, form) {
   return p.length ? { k: "other", words: p[0] } : null;
 }
 
-// the challans that can take a row, best first: [{c, left}] (left: tax left now); never one deposited before the
-// deduction (it cannot pay it)
+// the challans that can take a row, best first: [{c, left}] (left: tax left now); never one that cannot pay it (an
+// earlier year's, dated after today, not minor head 200); an advance or next year's challan after the others
 export function bestChallans(r, cx) {
   const ym = TDS.ymd(r.date).slice(0, 6);
   return TDS.challans().map((c) => ({ c, left: r2(TDSReg.balance(c, cx).tax) })).filter((x) => x.left > 0.005 && !TDSEdit.early(r, x.c))
-    .map((x) => ({ ...x, fits: x.left + 0.005 >= r.tds, sec: chSec(x.c) && TDSCH.secOk(chSec(x.c), r.section) ? 1 : 0, mon: TDS.ymd(x.c.date).slice(0, 6) >= ym ? 1 : 0 }))
-    .sort((a, b) => b.fits - a.fits || b.sec - a.sec || b.mon - a.mon || a.left - b.left || TDS.ymd(a.c.date).localeCompare(TDS.ymd(b.c.date)));
+    .map((x) => ({ ...x, adv: TDSEdit.placeNote(r, x.c) ? 1 : 0, fits: x.left + 0.005 >= r.tds, sec: chSec(x.c) && TDSCH.secOk(chSec(x.c), r.section) ? 1 : 0, mon: TDS.ymd(x.c.date).slice(0, 6) >= ym ? 1 : 0 }))
+    .sort((a, b) => b.fits - a.fits || b.sec - a.sec || a.adv - b.adv || b.mon - a.mon || a.left - b.left || TDS.ymd(a.c.date).localeCompare(TDS.ymd(b.c.date)));
 }
 
 // which group a row is in: {g: "confirm" | "choose" | "pay" | "fix" | "done", s, w, grp, prob}
@@ -70,8 +71,8 @@ export function groupOf(r, m, issue, probs, form, ids) {
 }
 
 const Cells = ({ r, prob }) => <>
-  <td className="dt-p">{r.party || r.employee ? <button type="button" className="linkbtn dt-name" data-row-detail={r.id} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party || r.employee}</button> : <DedName r={r} locked={!!(TDSReg.rowLocked && TDSReg.rowLocked(r.id))} />}
-    {prob && prob.k !== "name" ? <span className="dt-flag" data-dt-flag={prob.k} title={prob.words}>{chipW(prob)}</span> : null}</td>
+  <td className="dt-p">{r.party || r.employee ? <button type="button" className="linkbtn dt-name tdn-b" data-row-detail={r.id} title={r.party || r.employee} onClick={() => { S.tdsRowDet = r.id; render(); }}><span className="tdn">{r.party || r.employee}</span></button> : <DedName r={r} locked={!!(TDSReg.rowLocked && TDSReg.rowLocked(r.id))} />}</td>
+  <td className="dt-f">{prob && prob.k !== "name" ? <span className={"dt-flag" + (prob.info ? " info" : "")} data-dt-flag={prob.k} title={prob.words}>{chipW(prob)}</span> : null}</td>
   <td className="dt-s">{TDS.sec(r.section) || r.section}</td><td className="dt-d">{dm6(r.date)}</td>
   <td className="n dt-a">{money(r.paid)}</td><td className="n dt-t">TDS {money(r.tds)}</td></>;
 
@@ -134,7 +135,7 @@ function FixRow({ r, x, issue, m, locked }) {
   return <tr data-dt-row={r.id} data-dt-in="fix"><Cells r={r} prob={null} />
     <td className="dt-act"><span className="dt-fixw" data-dt-problem={p.k} title={p.words}>{chipW(p)}</span>{c ? <span className="dt-why"> · on {c.serial} · {dm6(c.date)}</span> : null}
       {!locked && <span className="dt-btns">{p.k === "name" ? <span className="dt-why">Give its name: Fix, beside “Name missing”</span>
-        : p.k === "early" || p.k === "sec" ? <button type="button" className="btn small dt-do" data-dt-fix={r.id} data-dt-move={r.id} onClick={() => tdsMoveOpen([r.id])}>Move to another challan…</button>
+        : BAD_K.includes(p.k) || p.k === "sec" ? <button type="button" className="btn small dt-do" data-dt-fix={r.id} data-dt-move={r.id} onClick={() => tdsMoveOpen([r.id])}>Move to another challan…</button>
         : p.k === "pan" ? (pan ? <PanBox party={r.party || r.employee} compact onSaved={() => setPan(false)} />
           : <button type="button" className="btn small dt-do" data-dt-fix={r.id} data-dt-addpan={r.id} onClick={() => setPan(true)}>Add PAN</button>)
         : rate ? <button type="button" className="btn small dt-do" data-dt-fix={r.id} title={rate.why} onClick={() => { const y = rate.apply(); if (y && !y.ok) toast(y.why); else { TDSReg.forget(); TDSReg.done(); saveBooks(); toast("Fixed: " + rate.label + "."); } render(); }}>Fix rate: {rate.label}</button>

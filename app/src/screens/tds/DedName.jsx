@@ -28,7 +28,10 @@ function namesFor(r) {
 
 export function DedName({ r, locked, onOpen, title }) {
   const n = r.party || r.employee;
-  if (n) return onOpen ? <button type="button" className="linkbtn" data-row-detail={r.id} title={title} onClick={onOpen}>{n}</button> : <span title={title}>{n}</span>;
+  // next-tds-early (the owner: "Name is overriding another column"): at most about 32 characters wide, wrapped between
+  // words to two lines, the rest cut with an ellipsis; the whole name on a hover (clear.css .tdn)
+  const full = n + (title ? " · " + title : "");
+  if (n) return onOpen ? <button type="button" className="linkbtn tdn-b" data-row-detail={r.id} title={full} onClick={onOpen}><span className="tdn">{n}</span></button> : <span className="tdn" title={full}>{n}</span>;
   const D = (S.tdsNameDraft || {})[r.id], why = noPartyWhy(r);
   const setD = (x) => { S.tdsNameDraft = Object.assign({}, S.tdsNameDraft || {}, { [r.id]: x }); if (!x) delete S.tdsNameDraft[r.id]; render(); };
   const save = () => {

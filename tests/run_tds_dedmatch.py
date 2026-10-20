@@ -240,7 +240,8 @@ try:
         shown, want = table(cur)
         ok(sorted(shown) == sorted(want) and shown, "the table: the deductions on that challan only (%d)" % len(shown))
         heads = J("[...document.querySelectorAll('#app [data-wd-table] thead th')].map(h => h.innerText.trim()).filter(Boolean)")
-        ok(heads[:10] == ["Name", "PAN", "Amount paid", "Paid date", "Deduction date", "TDS", "Rate", "Reason lower/higher", "Section", "Shortfall/Excess"], "Winman's columns (%s)" % heads)
+        # next-tds-early: a row's chip in a column of its own after the name (its heading for a screen reader: Check)
+        ok(heads[:11] == ["Name", "Check", "PAN", "Amount paid", "Paid date", "Deduction date", "TDS", "Rate", "Reason lower/higher", "Section", "Shortfall/Excess"], "Winman's columns (%s)" % heads)
         def foot():
             return J("() => { const f = document.querySelector('#app [data-wd-foot]'); return f ? {amt: +f.dataset.amt, used: +f.dataset.used, bal: +f.dataset.bal, n: +f.dataset.n, text: f.innerText, red: !!f.querySelector('[data-wd-bal].bad')} : null; }")
         def want_foot(cid):

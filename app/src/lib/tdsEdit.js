@@ -57,15 +57,42 @@ const TDSEdit = {
     if (TDS.STD[k]) return true;
     return typeof RULE_DEFAULTS === "object" && RULE_DEFAULTS.some(x => x.old && TDS.sec(x.old) === k);
   },
-  // next-tds-addlist (the owner, 19-Oct-2026): a deduction on a challan that cannot pay it: the challan deposited before
-  // the deduction (k "early": TDS cannot be paid before it is deducted), or naming another section (k "sec"). [{k, words}]
+  // next-tds-addlist (19-Oct-2026), next-tds-early (20-Oct-2026; the owner: "If there is an early challan then it should
+  // not be an error, if I want to use any early challan within the rule of TRACES"). What Protean's FVU does (run on
+  // FVU 8.7 and 1.2): a challan of the deduction's financial year, dated before or after it, and one of the following
+  // year are taken; one dated in a year before (T-FV-3076) or after today (T-FV-3040) is refused. So:
+  //   errors (placeIssues; the file is not made): k "fy" a challan of an earlier year (or two years on), k "future" dated
+  //   after today, k "minor" not minor head 200; k "sec" another section's challan (a warning)
+  //   notes (placeNote; allowed, an info chip only): k "adv" deposited before the deduction in its year, k "nextfy" a
+  //   challan of the following year (past 31 May: March's TDS is due by 30 April)
   P_NAME: "deductee name missing",
-  P_EARLY: "challan dated before the deduction",
-  early(r, c){ return !!c && TDS.ymd(c.date).length === 8 && TDS.ymd(c.date) < TDS.ymd(r.date); },
+  P_EARLY: "challan TRACES will not accept",
+  FY_WORDS: "Protean's FVU refuses a challan dated before the financial year (T-FV-3076); use this year's challan or file it through a correction",
+  fyGap(r, c){ return +TDS.fyOf(c.date).slice(0, 4) - +TDS.fyOf(r.date).slice(0, 4); },
+  today(){ try { return istToday(); } catch (e){ return ""; } },
+  badOf(r, c){
+    if (!c || TDS.ymd(c.date).length !== 8 || TDS.ymd(r.date).length !== 8) return null;
+    const g = this.fyGap(r, c), t = this.today();
+    if (g < 0) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", before this deduction's FY " + TDS.fyOf(r.date) + ": " + this.FY_WORDS};
+    if (g > 1) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", more than a year after this deduction's FY " + TDS.fyOf(r.date)};
+    if (t && TDS.ymd(c.date) > t) return {k: "future", words: "Challan dated " + fmtDate(tallyDate(TDS.ymd(c.date))) + ", after today: Protean's FVU refuses a future date (T-FV-3040)"};
+    if (c.minorHead && String(c.minorHead) !== "200") return {k: "minor", words: "Challan is minor head " + c.minorHead + ", not 200 (TDS payable by the deductor): it cannot pay a deduction"};
+    return null;
+  },
+  // a challan that cannot pay this deduction (never offered, never ticked)
+  early(r, c){ return !!this.badOf(r, c); },
+  placeNote(r, c){
+    if (!c || this.badOf(r, c)) return null;
+    const cd = TDS.ymd(c.date), rd = TDS.ymd(r.date), g = this.fyGap(r, c);
+    if (g === 1 && cd > String(+TDS.fyOf(r.date).slice(0, 4) + 1) + "0531") return {k: "nextfy", info: true, words: "Challan of the next year (FY " + TDS.fyOf(c.date) + "): allowed"};
+    if (g === 0 && cd < rd) return {k: "adv", info: true, words: "Advance challan: deposited " + fmtDate(tallyDate(cd)) + ", before the deduction, in the same year: allowed"};
+    return null;
+  },
   placeIssues(r, c){
     const out = [];
     if (!c) return out;
-    if (this.early(r, c)) out.push({k: "early", words: "Challan dated before the deduction"});
+    const b = this.badOf(r, c);
+    if (b) out.push(b);
     const cs = TDSCH.secNorm(c.section);
     if (cs && r.section && !TDSCH.secOk(cs, r.section)) out.push({k: "sec", words: "Challan is for " + cs + "; this is " + (TDS.sec(r.section) || r.section)});
     return out;
@@ -81,7 +108,7 @@ const TDSEdit = {
       if (form !== "27EQ" && !this.knownSec(r.section)) add(r.id, "section not known: " + (r.section || "none"));
       if (!r.challan) add(r.id, "not against a challan");
       if (!(r.party || r.employee)) add(r.id, this.P_NAME);
-      this.placeIssues(r, r.challan && chById[r.challan]).forEach(x => add(r.id, x.k === "early" ? this.P_EARLY : x.words.toLowerCase()));
+      this.placeIssues(r, r.challan && chById[r.challan]).forEach(x => add(r.id, x.k === "sec" ? x.words.toLowerCase() : this.P_EARLY));
     });
     issues.forEach(x => add(x.row.id, "rate " + x.row.rate + "% should be " + x.expected + "%" + (x.why ? ": " + x.why : "")));
     pay.forEach(x => add(x.row.id, x.why));

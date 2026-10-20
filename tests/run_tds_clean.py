@@ -141,7 +141,10 @@ try:
         ok(pg.locator('#app [data-dee-count]').count() == 0, "Deductees: no count line under the table")
         go("26Q", "challans")
         heads = [h.strip() for h in pg.locator('#app table.chg-table thead th').all_inner_texts()]
-        ok("Used in all returns" not in heads, "Challans: no Used in all returns while each challan's use is this return's (%s)" % heads)
+        # next-tds-early: rule f may suggest a later challan of the year another quarter uses (its balance left), so the column is
+        # there only while some challan's use differs from this return's
+        diff = J("() => { const hs = [...document.querySelectorAll('#app table.chg-table thead th')].map(h => h.innerText.trim()), a = hs.indexOf('Used here'), b = hs.indexOf('Used in all returns'); return b < 0 ? 0 : [...document.querySelectorAll('#app table.chg-table tbody tr')].filter(tr => tr.children[a] && tr.children[b] && tr.children[a].innerText.trim() !== tr.children[b].innerText.trim()).length; }")
+        ok("Used in all returns" not in heads or diff > 0, "Challans: Used in all returns only where some challan's use differs from this return's (%s, %d differ)" % (heads, diff))
         go("26Q", "deductions")
         ok(pg.locator('#app [data-wd-unplaced]').count() == 0, "Deductions: no 'N not on a challan · Show' line (the picker has it)")
         ft = J("(document.querySelector('#app [data-wd-foot]') || {}).innerText || ''")
@@ -248,9 +251,12 @@ try:
         txt = J(WORDS)
         ok(J("document.querySelectorAll('#app [data-wd-early-n], #app [data-wd-early-show]').length") == 0 and not re.search(r"\d+ (deductions? (are|is)|collections? (are|is)) on a challan dated before", txt),
            "Deductions: no 'N deductions are on a challan dated before the deduction · Fix' line")
-        ok(J("document.querySelectorAll('#app [data-wd-table] [data-wd-chip=early]').length") > 0, "the row's chip stays")
+        # next-tds-early (the owner, 20-Oct-2026; Protean's FVU takes it): a challan of the same year dated before the deduction is
+        # an advance challan: a neutral chip, no error in Validate & file
+        chips = J("[...document.querySelectorAll('#app [data-wd-table] .wd-chip')].map(e => e.className + ':' + e.dataset.wdChip)")
+        ok("wd-chip info:adv" in chips and not [x for x in chips if "bad" in x and not x.endswith((":sec", ":undefined"))], "the row's chip: Advance challan, a neutral chip, no error chip (%s)" % chips[:6])
         go("26Q", "file")
-        ok(J("!!document.querySelector('#app [data-val-item=early][data-val-level=error]')"), "Validate & file's error stays")
+        ok(not J("!!document.querySelector('#app [data-val-item=early][data-val-level=error]')"), "Validate & file: no error for an advance challan")
 
         print("5. the owner's 26Q rows: no party, early challans, short chips")
         go("26Q", "deductions"); J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(400)
@@ -274,25 +280,31 @@ try:
         ok(offer[:1] == ["Ravi Kumar & Associates"], "B. the name is offered first for another entry of the same ledgers (%s)" % offer)
         J("() => { S.tdsNameDraft = {}; S.tdsQ = 'Q1'; render(); }"); pg.wait_for_timeout(300)
 
-        # C. Put N on the right challans
-        early = J("() => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan && ch[r.challan] && TDS.ymd(r.date) > TDS.ymd(ch[r.challan].date)).map(r => r.id); }")
+        # C. Put N on the right challans. next-tds-early: those challans dated in the year before (Protean's FVU refuses them,
+        # T-FV-3076), so the deductions on them are on a challan that cannot pay them
+        J("() => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); window.__was = {}; TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan && ch[r.challan] && TDS.ymd(r.date) > TDS.ymd(ch[r.challan].date)).forEach(r => { const c = S.books.challans.find(x => x.id === r.challan); if (c && !(c.id in window.__was)) { window.__was[c.id] = c.date; c.date = '2026-03-25'; } }); TDSReg.forget(); render(); }")
+        early = J("() => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan && ch[r.challan] && TDS.ymd(ch[r.challan].date) < '20260401').map(r => r.id); }")
         go("26Q", "deductions", ); J(CHOSE); pg.wait_for_timeout(300)
         btn = J("+((document.querySelector('#app [data-wd-fix-early]') || {dataset: {}}).dataset.wdFixEarly || 0)")
         ok(btn == len(early) > 0, "C. 'Put %d on the right challans' in the step's header (%s)" % (len(early), btn))
+        go("26Q", "file")
+        ve = J("(document.querySelector('#app [data-val-item=early][data-val-level=error]') || {}).innerText || ''")
+        ok("T-FV-3076" in ve, "C. Validate & file: an error, Protean's FVU refuses a challan dated before the year (%s)" % ve[:160])
+        go("26Q", "deductions"); J(CHOSE); pg.wait_for_timeout(300)
         # a challan for them: 194C, dated after them, enough left
         J("() => { S.books.challans = S.books.challans.concat([{id: 'chLate', bsr: '0240020', serial: '20999', date: '2026-07-07', section: '194C', tax: 900000}]); TDSReg.forget(); render(); }"); pg.wait_for_timeout(300)
         pg.click('#app [data-wd-fix-early]'); pg.wait_for_timeout(300)
         lis = J("[...document.querySelectorAll('#confirmBox li')].map(l => l.innerText)")
         ok(len(lis) == len(early) and all("→" in x for x in lis), "C. the moves listed to confirm (%s)" % lis[:2])
         pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(500)
-        after = J("() => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan && ch[r.challan] && TDS.ymd(r.date) > TDS.ymd(ch[r.challan].date)).length; }")
+        after = J("() => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan && ch[r.challan] && TDS.ymd(ch[r.challan].date) < '20260401').length; }")
         placed = J("(ids) => ids.map(id => { const r = TDS.rows().find(x => x.id === id), c = TDS.challans().find(x => x.id === r.challan); return c ? [TDS.ymd(c.date) >= TDS.ymd(r.date), !TDSCH.secNorm(c.section) || TDSCH.secOk(TDSCH.secNorm(c.section), r.section)] : ['off', true]; })", early)
-        ok(after == 0 and all(p[0] in (True, "off") and p[1] for p in placed), "C. none left on an earlier challan; each on a challan of its section dated on or after it, or off to Pay a challan (%s)" % placed)
+        ok(after == 0 and all(p[0] in (True, "off") and p[1] for p in placed), "C. none left on a challan of the year before; each on a challan of its section dated on or after it, or off to Pay a challan (%s)" % placed)
         ok(J("document.querySelectorAll('#app [data-wd-fix-early]').length") == 0, "C. the action is gone once none is left")
         pg.click('#toast [data-toast-act="Undo"]'); pg.wait_for_timeout(500)
-        back = J("(ids) => ids.filter(id => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); const r = TDS.rows().find(x => x.id === id); return r.challan && ch[r.challan] && TDS.ymd(r.date) > TDS.ymd(ch[r.challan].date); }).length", early)
+        back = J("(ids) => ids.filter(id => { const ch = {}; TDS.challans().forEach(c => { ch[c.id] = c; }); const r = TDS.rows().find(x => x.id === id); return r.challan && ch[r.challan] && TDS.ymd(ch[r.challan].date) < '20260401'; }).length", early)
         ok(back == len(early), "C. one Undo puts them all back (%d of %d)" % (back, len(early)))
-        J("() => { S.books.challans = S.books.challans.filter(c => c.id !== 'chLate'); TDSReg.forget(); render(); }")
+        J("() => { S.books.challans = S.books.challans.filter(c => c.id !== 'chLate'); S.books.challans.forEach(c => { if (c.id in window.__was) c.date = window.__was[c.id]; }); TDSReg.forget(); render(); }")
 
         # D. short chips
         for v in ("() => { S.tdsWinCh = '__none'; render(); }", CHOSE):

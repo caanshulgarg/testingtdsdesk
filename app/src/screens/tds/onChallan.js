@@ -22,10 +22,15 @@ export function missingName(id) {
 }
 // this return's TDS on a challan ("Used here"); all returns' is TDSReg.usedTax
 export const usedHere = (c, key, cx) => r2(num(((cx.uses[c.id] || {})[key] || {}).tax));
-// next-tds-addlist: what is wrong with a deduction on a challan (TDSEdit.placeIssues: dated before the deduction, another
-// section), and whether a challan is dated before a deduction (it can never pay it: never offered, never ticked)
+// next-tds-addlist / next-tds-early: what is wrong with a deduction on a challan (TDSEdit.placeIssues: a challan of an
+// earlier year, dated after today, not minor head 200, another section), whether a challan cannot pay a deduction (never
+// offered, never ticked), and the note of one allowed (TDSEdit.placeNote: an advance challan, the next year's)
 export const placeIssues = (r, c) => TDSEdit.placeIssues(r, c);
 export const earlyFor = (r, c) => TDSEdit.early(r, c);
+export const placeNote = (r, c) => TDSEdit.placeNote(r, c);
+// the errors of a challan's date or type (not "sec", a warning)
+export const BAD_K = ["fy", "future", "minor"];
 // next-tds-tidy2 (the owner: "no long sentences in rows"): a row's problem as one short chip; the full words on a hover
-const CHIP = { name: "Name missing", early: "Early challan", sec: "Other section", pan: "No PAN", rate: "Rate?", paycode: "Code?", other: "Check" };
+const CHIP = { name: "Name missing", fy: "Earlier year's challan", future: "Future challan", minor: "Not minor head 200", adv: "Advance challan", nextfy: "Next year's challan",
+  sec: "Other section", pan: "No PAN", rate: "Rate?", paycode: "Code?", other: "Check" };
 export const chipW = (p) => (p ? CHIP[p.k] || (String(p.words || "").length <= 14 ? p.words : "Check") : "");

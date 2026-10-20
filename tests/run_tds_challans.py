@@ -148,8 +148,12 @@ try:
             ok(x.get("rule") == "b" and x.get("n") == n, "same section, same month, exact: %d deductions of %s in April to challan %s (%s)" % (n, sec, ser, {k: x.get(k) for k in ("rule", "n")}))
         P24 = pg.evaluate(SG, "24Q"); x = {y["serial"]: y for y in P24}.get("00124", {})
         ok(x.get("rule") == "b" and x.get("n") == 5, "Form 138 (24Q): the five 192 deductions of April to the 92B challan 00124, exact (%s)" % x)
-        sh = bys.get("00301", {})
+        sh = next((x for x in P if x["serial"] == "00301" and x["rule"] == "d"), {})
         ok(sh.get("rule") == "d" and sh.get("n") == 7 and sh.get("total") == 700000, "the short challan (₹7,500): May's 194C filled, oldest first, whole rows: 7 of 8, ₹7,000 (%s)" % {k: sh.get(k) for k in ("rule", "n", "total")})
+        # next-tds-early (the owner, 20-Oct-2026): what is left on it (₹500) takes June's ₹300 194C as an advance challan (06-Jun
+        # for 11-Jun, the same year: Protean's FVU takes it), by rule f, last
+        sf = next((x for x in P if x["serial"] == "00301" and x["rule"] == "f"), {})
+        ok(sf.get("n") == 1 and sf.get("total") == 30000, "the short challan's ₹500 left: June's ₹300 194C as an advance challan, by rule f (%s)" % {k: sf.get(k) for k in ("rule", "n", "total")})
         pt = bys.get("00302", {})
         ok(pt.get("n") == 2 and pt.get("total") == 120000, "the ₹1,500 challan: the two May 194J deductions not paid bill-wise, ₹1,200 (%s)" % {k: pt.get(k) for k in ("n", "total")})
         ok("00125" not in bys and "00124" not in bys, "the minor head 400 challan is never suggested; the 92B challan not for 26Q's deductions")
@@ -168,9 +172,9 @@ try:
         ok(sorted(pg.evaluate("Object.keys(S.books.alloc).filter(k => S.books.alloc[k] === S.books.challans.find(c => c.serial === '00222').id)")) == sorted(want_bw), "confirmed: exactly those four tagged to it")
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
         tagged = pg.evaluate("(() => { const u = {}; Object.entries(S.books.alloc).forEach(([k, v]) => { const s = S.books.challans.find(c => c.id === v).serial; u[s] = (u[s] || 0) + 1; }); return u; })()")
-        ok(tagged == {"00222": 4, "00123": 8, "00456": 8, "00301": 7, "00302": 2}, "Confirm all: every suggestion of Form 140 confirmed, nothing else (%s)" % tagged)
+        ok(tagged == {"00222": 4, "00123": 8, "00456": 8, "00301": 8, "00302": 2}, "Confirm all: every suggestion of Form 140 confirmed, nothing else (%s)" % tagged)
         used = pg.evaluate("TDS.challanUse().chShort || 0")
-        ok(used == 7000 and used <= 7500, "the short challan: the 7 that fit (₹7,000.00 of ₹7,500.00); one left, with its next step (%s)" % used)
+        ok(used == 7300 and used <= 7500, "the short challan: the 7 of May that fit and June's ₹300 in advance (₹7,300.00 of ₹7,500.00); one left, with its next step (%s)" % used)
         pg.evaluate("() => { S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(400)
         ok(pg.evaluate("Object.values(S.books.alloc).filter(v => S.books.challans.find(c => c.id === v).serial === '00124').length") == 5, "Form 138: the 192 deductions confirmed to 00124")
@@ -255,7 +259,7 @@ try:
         ok(all(pg.evaluate("TDS.challans().every(c => (TDS.challanUse()[c.id] || 0) <= num(c.tax) + 0.001)") for _ in [0]), "no challan is used beyond its amount, to the paisa")
         # the file refuses while anything is on no challan (next-challan-match: never left out silently), then a challan for the rest
         fr = pg.evaluate("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
-        ok("on no challan" in (fr.get("error") or "") and len(fr.get("untagged") or []) == 4, "the file refuses: 4 deductions on no challan, listed (%s)" % (fr.get("error") or "")[:120])
+        ok("on no challan" in (fr.get("error") or "") and len(fr.get("untagged") or []) == 3, "the file refuses: 3 deductions on no challan, listed (%s)" % (fr.get("error") or "")[:120])
         pg.evaluate("""(ids) => { S.books.challans.push({id: "chRest", bsr: "0510308", serial: "00303", date: "20260707", tax: 2000, interest: 0, section: "194C", minorHead: "200"});
           TDSCH.tag(ids.r, 'chRest'); TDSCH.tag(ids.j, 'chPart'); render(); }""", {"r": pg.evaluate("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && TDS.sec(r.section) === '194C').map(r => r.id)"), "j": [two[0]]})
 
@@ -272,7 +276,7 @@ try:
         ok(len(cd) == 6 and set(got) == {"00123", "00456", "00222", "00301", "00302", "00303"}, "the file: one CD record per challan with confirmed 26Q deductions, none for 192 or the 400 challan (%s)" % sorted(got))
         ok(got == {k: {"n": v["n"], "tax": v["tax"], "bsr": v["bsr"], "date": v["date"], "total": v["total"]} for k, v in want.items()},
            "each CD: BSR, date, serial, number of deductions, tax as tagged; its total the challan as deposited (%s)" % got.get("00456"))
-        ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 7 + 2 + 3, "DD records: the 32 deductions, every one on its challan (%d)" % len(dd))
+        ok(len(dd) == sum(v["n"] for v in want.values()) == 4 + 8 + 8 + 8 + 2 + 2, "DD records: the 32 deductions, every one on its challan (%d)" % len(dd))
         ok(all(l[22] == "200" for l in cd), "minor head 200 on every CD record")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
         br.close()

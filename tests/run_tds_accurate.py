@@ -15,10 +15,10 @@ books of run_tds_challans.py (Q1 2026-27) with two 194C deductions pointing at a
   6. (next-tds-addlist, the owner: "blank name in particulars") a Tally journal with no party ("Rent Dr · Rent Payable
      Alok Swarup Gupta Cr · TDS on Rent 94I Cr"): its name is the party ledger credited, with its PAN; with no party
      ledger at all (Misc. Expenses Dr · TDS 94J Cr): "Name missing" in red with Fix (next-tds-tidy2: a chip, with the one-line reason), never a blank; Fix keeps the name;
-  7. a deduction on a challan dated before it (June's 194C on 00301 of 06-Jun): the chip "Challan dated before the
-     deduction" on the challan's table, the count above it, Fix the row in the to-do list, an error in Validate & file;
-     a 194C on a 194J challan: "Challan is for 194J" and a warning; never suggested, never ticked, never offered in Choose
-     or in the Move dialog;
+  7. (next-tds-early) a deduction on a challan dated before it in the same year (June's 194C on 00301 of 06-Jun): allowed,
+     the neutral chip "Advance challan", not in Fix the row, no error; on a challan of the year before (Protean's FVU
+     refuses it, T-FV-3076): the red chip, "Put 1 on the right challans", Fix the row, an error in Validate & file, never
+     offered in Choose or in the Move dialog; a 194C on a 194J challan: "Challan is for 194J" and a warning;
   8. filters (next-tds-tidy2: in the column headers) in + Add deduction (name or PAN, section, month, on challan, problems only; the counts "n of N") and on the
      challan's table ("Showing n of N");
   9. ticks: Select all shown, the bar "N selected · TDS ₹X · Balance after", Move to this challan moves them all (both
@@ -101,11 +101,12 @@ with sync_playwright() as p:
        "Not on any challan: each says “Challan 00777 missing” (on a hover: “… choose again”) (%s)" % miss)
     ok(J("(ids) => ids.every(id => document.querySelector('#app [data-dt-row=\"' + id + '\"]').dataset.dtIn === 'choose')", gone), "they are in Choose a challan, not Done")
     pg.screenshot(path=os.path.join(SHOTS, "not-on-any-challan-1440.png"), full_page=True)
-    # next-tds-addlist: only a challan dated on or after the deduction is offered (10-Jun's ₹700 fits none: 11-Jun's ₹300 does)
+    # next-tds-addlist / next-tds-early: never an earlier year's challan; one dated on or after the deduction before an
+    # advance one (dated before it, the same year)
     g1 = gone[1]
     pk = J("(id) => { const b = document.querySelector('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]'); return b ? b.dataset.dtPick : ''; }", g1)
-    ok(J("(id) => { const r = TDS.rows().find(x => x.id === id); return [...document.querySelectorAll('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]')].every(b => TDS.ymd(TDS.challans().find(c => c.id === b.dataset.dtPick).date) >= TDS.ymd(r.date)); }", gone[0]),
-       "Choose: only challans dated on or after the deduction are offered")
+    cp = J("(id) => { const r = TDS.rows().find(x => x.id === id); return [...document.querySelectorAll('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]')].map(b => { const c = TDS.challans().find(c => c.id === b.dataset.dtPick); return [TDS.fyOf(c.date) >= TDS.fyOf(r.date), TDS.ymd(c.date) >= TDS.ymd(r.date)]; }); }", gone[0])
+    ok(all(x[0] for x in cp) and [x[1] for x in cp] == sorted([x[1] for x in cp], reverse=True), "Choose: never an earlier year's challan; one dated on or after the deduction before an advance one (%s)" % cp)
     if pk:
         pg.click('#app [data-dt-row="%s"] [data-dt-pick="%s"]' % (g1, pk)); pg.wait_for_timeout(500)
     ok(pk and J("(id) => S.books.alloc[id]", g1) == pk and J("(id) => !document.querySelector('#app [data-dt-row=\"' + id + '\"] [data-dt-miss]')", g1),
@@ -126,8 +127,8 @@ with sync_playwright() as p:
     big = J("() => { const b = [...document.querySelectorAll('[data-wd-addlist] [data-wd-move]')].find(x => x.disabled); return b ? b.dataset.wdMove : ''; }")
     ok(J("() => { const cx = TDSReg.ctx(), left = TDSReg.balance(TDS.challans().find(c => c.id === 'chM'), cx).tax; return [...document.querySelectorAll('[data-wd-addlist] [data-wd-move]')].every(b => b.disabled === (TDS.rows().find(r => r.id === b.dataset.wdMove).tds > left + 0.005)); }"),
        "Move here is off for a deduction larger than this challan's balance")
-    ok(J("() => [...document.querySelectorAll('[data-wd-addlist] tr[data-wd-other]')].every(t => { const r = TDS.rows().find(x => x.id === t.dataset.wdOther); return (TDS.ymd(r.date) > '20260606') === !t.querySelector('[data-wd-move]'); })"),
-       "… and none for one deducted after this challan's date (06-Jun): “after this challan's date” instead")
+    ok(J("() => [...document.querySelectorAll('[data-wd-addlist] tr[data-wd-other]')].every(t => !!t.querySelector('[data-wd-move]'))"),
+       "… and one deducted after this challan's date (06-Jun, the same year: an advance challan) can be moved here too")
     # 00123 is fully used: moving one off asks first; No keeps it, Move here moves it and the balances follow
     pg.click('[data-wd-addlist] [data-wd-move="%s"]' % row[0]); pg.wait_for_timeout(400)
     ok(pg.locator("#confirmBox [role=dialog]").count() == 1 and "fully used" in pg.locator("#confirmBox").inner_text(), "00123 fully used: a confirm before moving off it")
@@ -185,41 +186,56 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "addlist-names-1440.png"), full_page=True)
     J("() => { S.tdsWinAdd = ''; render(); }")
 
-    print("7. a challan dated before the deduction; another section's challan")
-    # June's 194C of 10-Jun on 00301 (chM, 06-Jun): dated before it; May's 194C of 10-May on 00222 (chT, 194J)
-    pair = J("""() => { const rows = TDS.rows(), j = rows.find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260610'), m = rows.find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260510');
-      S.books.alloc[j.id] = 'chM'; S.books.alloc[m.id] = 'chT'; TDSReg.forget(); render(); return [j.id, m.id]; }""")
+    print("7. an advance challan (allowed), an earlier year's challan (an error); another section's challan")
+    # next-tds-early (the owner: "If there is an early challan then it should not be an error, if I want to use any early
+    # challan within the rule of TRACES"): June's 194C of 10-Jun on 00301 (chM, 06-Jun, the same year): an advance challan,
+    # allowed; May's 194C of 11-May on 00099 (chOLD, 20-Mar-2026, the year before: Protean's FVU refuses it, T-FV-3076): an
+    # error; May's 194C of 10-May on 00222 (chT, 194J): another section
+    pair = J("""() => { const rows = TDS.rows(), j = rows.find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260610'), m = rows.find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260510'),
+      o = rows.find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260511');
+      S.books.challans.push({id: 'chOLD', bsr: '0510308', serial: '00099', date: '20260320', tax: 5000, interest: 0, section: '194C', minorHead: '200'});
+      S.books.alloc[j.id] = 'chM'; S.books.alloc[m.id] = 'chT'; S.books.alloc[o.id] = 'chOLD'; TDSReg.forget(); render(); return [j.id, m.id, o.id]; }""")
     J(GO, "deductions"); J("() => { S.tdsWinCh = 'chM'; render(); }"); pg.wait_for_timeout(700)
-    chip = J("(id) => { const e = document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip=\"early\"]'); return e ? e.innerText.trim() : ''; }", pair[0])
-    # next-tds-tidy2: a short chip (its words on a hover); no banner above the table, "Put 1 on the right challans" instead
-    ok(chip == "Early challan", "the challan's table: the chip “Early challan” (%s)" % chip)
-    ok(J("() => document.querySelectorAll('#app [data-wd-early-n]').length") == 0 and J("() => +((document.querySelector('#app [data-wd-fix-early]') || {dataset: {}}).dataset.wdFixEarly || 0)") == 1, "no banner above the table; “Put 1 on the right challans”")
+    chip = J("(id) => { const e = document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip]'); return e ? [e.dataset.wdChip, e.innerText.trim(), e.className, !!e.closest('td.wd-name')] : null; }", pair[0])
+    ok(chip and chip[:2] == ["adv", "Advance challan"] and "info" in chip[2] and "bad" not in chip[2] and not chip[3], "an advance challan: the neutral chip “Advance challan” in its own column, not red (%s)" % chip)
+    J("() => { S.tdsWinCh = 'chOLD'; render(); }"); pg.wait_for_timeout(500)
+    oc = J("(id) => { const e = document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip]'); return e ? [e.dataset.wdChip, e.innerText.trim(), e.className, e.title] : null; }", pair[2])
+    ok(oc and oc[0] == "fy" and "bad" in oc[2] and "T-FV-3076" in oc[3], "a challan of the year before: the red chip “%s”, the reason on a hover (%s)" % (oc and oc[1], oc and oc[3][:110]))
+    ok(J("() => document.querySelectorAll('#app [data-wd-early-n]').length") == 0 and J("() => +((document.querySelector('#app [data-wd-fix-early]') || {dataset: {}}).dataset.wdFixEarly || 0)") == 1, "“Put 1 on the right challans”: only the earlier year's, not the advance one")
     J("() => { S.tdsWinCh = 'chT'; render(); }"); pg.wait_for_timeout(500)
     sc = J("(id) => { const e = document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip=\"sec\"]'); return e ? e.innerText.trim() : ''; }", pair[1])
     ok(sc == "Other section" and J("(id) => (document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip=\"sec\"]') || {}).title", pair[1]) == "Challan is for 194J; this is 194C", "a 194C deduction on a 194J challan: “%s”, its words on a hover" % sc)
     J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(600)
-    fx = J("(id) => { const t = document.querySelector('#app [data-dt-row=\"' + id + '\"]'); const p = t && t.querySelector('[data-dt-problem]'); return t ? [t.dataset.dtIn, p ? p.dataset.dtProblem : '', !!t.querySelector('[data-dt-move]')] : null; }", pair[0])
-    ok(fx == ["fix", "early", True], "the to-do list: in Fix the row, “Challan dated before the deduction”, Move to another challan (%s)" % fx)
+    rowIn = lambda id: J("(id) => { const t = document.querySelector('#app [data-dt-row=\"' + id + '\"]'); const p = t && t.querySelector('[data-dt-problem]'); return t ? [t.dataset.dtIn, p ? p.dataset.dtProblem : '', !!t.querySelector('[data-dt-move]')] : null; }", id)
+    fx, fa = rowIn(pair[2]), rowIn(pair[0])
+    ok(fx == ["fix", "fy", True], "the to-do list: the earlier year's in Fix the row, Move to another challan (%s)" % fx)
+    ok(fa and fa[0] == "done", "… the advance one is not in Fix the row (%s)" % fa)
     J(GO, "file"); pg.wait_for_timeout(700)
     ve = J("() => { const e = document.querySelector('#app [data-val-item=\"early\"]'); return e ? [e.dataset.valLevel, e.innerText] : null; }")
     vs = J("() => { const e = document.querySelector('#app [data-val-item=\"chsec\"]'); return e ? e.dataset.valLevel : ''; }")
-    ok(ve and ve[0] == "error" and "1 deduction on a challan dated before the deduction" in ve[1], "Validate & file: an error (%s)" % (ve and ve[1][:90]))
+    ok(ve and ve[0] == "error" and "1 deduction on a challan Protean's FVU refuses" in ve[1] and "T-FV-3076" in ve[1], "Validate & file: one error, the earlier year's only, with the FVU's reason (%s)" % (ve and ve[1][:160]))
     ok(vs == "warn", "… and the other section a warning (%s)" % vs)
     ok(J("() => document.querySelector('#app [data-make-fvu]').disabled"), "Make FVU file is off while it is left")
-    sg = J("() => { const ch = Object.fromEntries(TDS.challans().map(c => [c.id, c])), rows = Object.fromEntries(TDS.rows().map(r => [r.id, r])); return TDSMatch.suggest('26Q', '2026-27', 'Q1').filter(s => (s.parts || [{chId: s.chId}]).some(p => s.ids.some(id => rows[id] && ch[p.chId] && TDS.ymd(ch[p.chId].date) < TDS.ymd(rows[id].date)))).length; }")
-    ok(sg == 0, "no suggestion pairs a deduction with a challan dated before it (%d)" % sg)
+    J("(id) => { S.books.alloc[id] = 'chM'; TDSReg.forget(); render(); }", pair[2]); pg.wait_for_timeout(500)
+    ve2 = J("() => { const e = document.querySelector('#app [data-val-item=\"early\"]'); return e ? e.innerText : ''; }")
+    ok(ve2 == "", "with it on this year's challan (an advance one too): no such error (%s)" % ve2[:80])
+    J("(id) => { S.books.alloc[id] = 'chOLD'; TDSReg.forget(); render(); }", pair[2])
+    sg = J("() => { const ch = Object.fromEntries(TDS.challans().map(c => [c.id, c])), rows = Object.fromEntries(TDS.rows().map(r => [r.id, r])); return TDSMatch.suggest('26Q', '2026-27', 'Q1').filter(s => (s.parts || [{chId: s.chId}]).some(p => s.ids.some(id => rows[id] && ch[p.chId] && (TDS.fyOf(ch[p.chId].date) < TDS.fyOf(rows[id].date) || (s.rule !== 'f' && TDS.ymd(ch[p.chId].date) < TDS.ymd(rows[id].date)))))).length; }")
+    ok(sg == 0, "no suggestion pairs a deduction with an earlier year's challan, and only rule f (last) with an advance one (%d)" % sg)
     j11 = J("() => TDS.rows().find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260611').id")
     J(GO, "deductions"); J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(500)
     picks = J("(id) => [...document.querySelectorAll('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]')].map(b => TDS.ymd(TDS.challans().find(c => c.id === b.dataset.dtPick).date))", j11)
-    ok(all(d >= "20260611" for d in picks), "Choose a challan never offers one dated before the deduction (%s)" % picks)
+    ok(all(d >= "20260401" for d in picks), "Choose a challan never offers an earlier year's challan (%s)" % picks)
     J("(id) => tdsMoveOpen([id])", j11); pg.wait_for_timeout(400)
-    mv = J("() => [...document.querySelectorAll('[data-cm-pick]')].map(li => [li.dataset.cmPick, li.querySelector('[data-cm-pick-go]').disabled, !!li.querySelector('[data-cm-early]')])")
-    ok(mv and all(x[1] for x in mv if x[2]) and any(x[2] for x in mv) and [x[0] for x in mv if x[2]] == [x[0] for x in mv][-len([x for x in mv if x[2]]):],
-       "the Move dialog: a challan dated before it is said, its Move here off, listed last (%s)" % mv)
+    mv = J("() => [...document.querySelectorAll('[data-cm-pick]')].map(li => [li.dataset.cmPick, li.querySelector('[data-cm-pick-go]').disabled, !!li.querySelector('[data-cm-early]'), (li.querySelector('[data-cm-note]') || {dataset: {}}).dataset.cmNote || ''])")
+    bad = [x for x in mv if x[2]]
+    ok(mv and [x[0] for x in bad] == ["chOLD"] and all(x[1] for x in bad) and [x[0] for x in mv][-1] == "chOLD", "the Move dialog: only the earlier year's challan is refused, its Move here off, listed last (%s)" % bad)
+    adv = [x for x in mv if x[3] == "adv"]
+    ok(any(x[0] == "chM" for x in adv) and not any(x[1] for x in adv if x[0] == "chM"), "… 00301 of 06-Jun (an advance challan for 11-Jun): said, Move here on (%s)" % adv)
     J("() => { S.tdsMove = null; render(); }")
     J("() => { S.tdsWinCh = 'chM'; S.tdsWinAdd = 'chM'; S.tdsWinF = {}; render(); }"); pg.wait_for_timeout(600)
-    e11 = J("(id) => { const t = document.querySelector('[data-wd-addlist] tr[data-wd-cand=\"' + id + '\"]'); return t ? [t.querySelector('[data-wd-tick]').disabled, !!t.querySelector('[data-wd-early]'), !t.querySelector('[data-wd-put]'), !/suggested/.test(t.innerText)] : null; }", j11)
-    ok(e11 == [True, True, True, True], "+ Add deduction on 00301 (06-Jun): 11-Jun's 194C cannot be ticked or added, “after this challan's date”, never suggested (%s)" % e11)
+    e11 = J("(id) => { const t = document.querySelector('[data-wd-addlist] tr[data-wd-cand=\"' + id + '\"]'); return t ? [t.querySelector('[data-wd-tick]').disabled, (t.querySelector('[data-wd-note]') || {innerText: ''}).innerText.trim(), !!t.querySelector('[data-wd-put]'), !!t.querySelector('[data-wd-early]')] : null; }", j11)
+    ok(e11 == [False, "Advance challan", True, False], "+ Add deduction on 00301 (06-Jun): 11-Jun's 194C can be ticked and added, “Advance challan” (%s)" % e11)
     order = J("[...document.querySelectorAll('[data-wd-addlist] tr[data-wd-cand]')].map(t => t.dataset.wdCand)")
     od = J("(ids) => ids.map(id => { const r = TDS.rows().find(x => x.id === id); return [TDS.sec(r.section), TDS.ymd(r.date)]; })", order)
     ok(od and od[0][0] == "194C" and od[0][1][:6] in ("202605", "202606") and od[0][1] <= "20260606" and od[-1][1] > "20260606",
@@ -260,7 +276,7 @@ with sync_playwright() as p:
     clear(); cf("wd-add:name", "flag", "")
     if tot[1]: cf("wd-other:name", "flag", "")
     pr = J("[...document.querySelectorAll('[data-wd-addlist] tr[data-wd-cand], [data-wd-addlist] tr[data-wd-other]')].map(t => t.dataset.wdCand || t.dataset.wdOther)")
-    ok(pr and pair[1] in pr and j11 in pr and mid in pr and len(pr) < sum(tot), "Problems only: the one on another section's challan, the one after this challan's date, the one with no PAN … (%d of %d)" % (len(pr), sum(tot)))
+    ok(pr and pair[1] in pr and pair[2] in pr and j11 not in pr and mid in pr and len(pr) < sum(tot), "Problems only: the one on another section's challan, the one on an earlier year's, the one with no PAN …; not the advance one (%d of %d)" % (len(pr), sum(tot)))
     pg.click('[data-wd-addlist] [data-cf-clearall="wd-add"]'); pg.wait_for_timeout(300)
     if tot[1]: pg.click('[data-wd-addlist] [data-cf-clearall="wd-other"]'); pg.wait_for_timeout(300)
     ok(J("() => document.querySelectorAll('[data-wd-addlist] [data-wd-cand], [data-wd-addlist] [data-wd-other]').length") == sum(tot), "Clear filters: every row again")

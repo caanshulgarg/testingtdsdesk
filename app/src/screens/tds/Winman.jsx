@@ -23,7 +23,7 @@ import { AddChallan, say } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { openAdd } from "./AddDeduction.jsx";
 import More from "../../parts/More.jsx";
-import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, chipW } from "./onChallan.js";
+import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, placeNote, chipW } from "./onChallan.js";
 import { DedName } from "./DedName.jsx";
 import { useCF, Th } from "./ColF.jsx";
 import "./clear.css";
@@ -97,14 +97,15 @@ export function dedDefs(probs, at = (x) => x, extra) {
   ];
 }
 
-// the deductions not on a challan, best fit for this challan first: never one deducted after the challan was deposited
-// (last, and it cannot be ticked), then its suggestions, those it can hold, of its section, deducted in its month or the
+// the deductions not on a challan, best fit for this challan first: never one it cannot pay (next-tds-early: of a later
+// year than the challan, the challan dated after today or not minor head 200: last, and it cannot be ticked); one it pays
+// in advance (deducted after its date, the same year) or as the next year's challan after the rest; then its suggestions, those it can hold, of its section, deducted in its month or the
 // month before (on or before its date), then by date
 function fitOf(c, r, left) {
-  const cd = TDS.ymd(c.date), sec = chSec(c), rm = TDS.ymd(r.date).slice(0, 6), early = earlyFor(r, c) ? 1 : 0;
-  return { early, fits: r.tds <= left + 0.005 ? 1 : 0, sec: !sec || TDSCH.secOk(sec, r.section) ? 1 : 0, near: !early && (rm === cd.slice(0, 6) || rm === prevYm(cd.slice(0, 6))) ? 1 : 0 };
+  const cd = TDS.ymd(c.date), sec = chSec(c), rm = TDS.ymd(r.date).slice(0, 6), early = earlyFor(r, c) ? 1 : 0, note = early ? null : placeNote(r, c);
+  return { early, note, adv: note ? 1 : 0, fits: r.tds <= left + 0.005 ? 1 : 0, sec: !sec || TDSCH.secOk(sec, r.section) ? 1 : 0, near: !early && (rm === cd.slice(0, 6) || rm === prevYm(cd.slice(0, 6))) ? 1 : 0 };
 }
-const fitSort = (a, b) => a.early - b.early || (b.sg || 0) - (a.sg || 0) || b.fits - a.fits || b.sec - a.sec || b.near - a.near || TDS.ymd(a.r.date).localeCompare(TDS.ymd(b.r.date)) || String(a.r.id).localeCompare(String(b.r.id));
+const fitSort = (a, b) => a.early - b.early || a.adv - b.adv || (b.sg || 0) - (a.sg || 0) || b.fits - a.fits || b.sec - a.sec || b.near - a.near || TDS.ymd(a.r.date).localeCompare(TDS.ymd(b.r.date)) || String(a.r.id).localeCompare(String(b.r.id));
 function candidates(c, rows, m, cx) {
   const left = TDSReg.balance(c, cx).tax;
   return unplaced(rows).map((r) => {
@@ -155,9 +156,11 @@ function AddList({ c, rows, m, form, locked, probs }) {
     render();
   };
   const tk = (x) => <td className="ck"><input type="checkbox" checked={!!sel[x.r.id] && !x.early} disabled={locked || !!x.early} data-wd-tick={x.r.id}
-    aria-label={"Tick " + (x.r.party || x.r.employee || "this deduction")} title={x.early ? "Deducted " + day(x.r.date) + ", after this challan's date " + day(c.date) + ": this challan cannot pay it" : undefined}
+    aria-label={"Tick " + (x.r.party || x.r.employee || "this deduction")} title={x.early ? TDSEdit.badOf(x.r, c).words : undefined}
     onChange={(ev) => tick(x.r.id, ev.target.checked)} /></td>;
-  const why = (x) => (x.early ? <span className="wd-chip bad" data-wd-early={x.r.id} title={"Deducted " + day(x.r.date) + ", after this challan's date " + day(c.date)}>After challan</span> : null);
+  const why = (x) => { const b = x.early ? TDSEdit.badOf(x.r, c) : null;
+    return b ? <span className="wd-chip bad" data-wd-early={x.r.id} title={b.words}>{chipW(b)}</span> : null; };
+  const note = (x) => (x.note ? <span className="wd-chip info" data-wd-note={x.note.k} title={x.note.words}>{chipW(x.note)}</span> : null);
   const nm = (r) => <td data-wd-name={r.id}><DedName r={r} locked={locked} /></td>;
   return <SideDrawer open onClose={close} kind="wd-add" wide title={"Add to challan " + c.serial + " · " + day(c.date)} description={money(left) + " left · " + all.length + " not on a challan"}>
     <div data-wd-addlist={c.id}>
@@ -167,7 +170,7 @@ function AddList({ c, rows, m, form, locked, probs }) {
         <thead><tr>{tkAll(list, "none")}<Th cf={cfA} k="name">Name</Th><Th cf={cfA} k="sec">Section</Th><Th cf={cfA} k="date" cls="dt">Date</Th><Th cf={cfA} k="tds" cls="n">TDS</Th><th></th><th className="ac"></th></tr></thead>
         <tbody>{list.map((x) => <tr key={x.r.id} data-wd-cand={x.r.id} className={x.fits && !x.early ? "" : "wd-over"}>{tk(x)}
           {nm(x.r)}<td>{secOf(x.r)}</td><td className="dt">{day(x.r.date)}</td><td className="n">{money(x.r.tds)}</td>
-          <td>{why(x) || (x.sg ? <span className="tag info" title={x.s.reason}>suggested</span> : !x.sec ? <span className="wd-dim">other section</span> : null)}</td>
+          <td>{why(x) || note(x) || (x.sg ? <span className="tag info" title={x.s.reason}>suggested</span> : !x.sec ? <span className="wd-dim">other section</span> : null)}</td>
           <td>{x.early ? null : x.fits ? <button type="button" className="btn small" disabled={locked} data-wd-put={x.r.id} aria-label={"Put on this challan: " + (x.r.party || "")} onClick={() => put(x)}>Add</button>
             : <button type="button" className="linkbtn" data-wd-split={x.r.id} disabled={locked || left < 0.005} title={"More than the " + money(left) + " left"} onClick={() => { S.tdsWinAdd = ""; tdsSplitRow(x.r.id, c.id); }}>Split…</button>}</td></tr>)}</tbody>
           {cfA.on && <tfoot><tr className="wd-cffoot"><td colSpan={7}>{cfA.foot()}</td></tr></tfoot>}</table></div>
@@ -178,7 +181,7 @@ function AddList({ c, rows, m, form, locked, probs }) {
         <tbody>{others.map((x) => { const r = x.r, o = x.o, ok = x.fits && !x.early;
           return <tr key={r.id} data-wd-other={r.id} className={ok ? "" : "wd-over"}>{tk(x)}
             {nm(r)}<td>{secOf(r)}</td><td className="dt">{day(r.date)}</td><td className="n">{money(r.tds)}</td>
-            <td data-wd-on={o.id}>on {o.serial} · {day(o.date)}{earlyFor(r, o) ? <> <span className="wd-chip bad" data-wd-chip="early" title="Challan dated before the deduction: it cannot pay it">{chipW({ k: "early" })}</span></> : null}</td>
+            <td data-wd-on={o.id}>on {o.serial} · {day(o.date)}{earlyFor(r, o) ? <> <span className="wd-chip bad" data-wd-chip={TDSEdit.badOf(r, o).k} title={TDSEdit.badOf(r, o).words}>{chipW(TDSEdit.badOf(r, o))}</span></> : placeNote(r, o) ? <> {note({ note: placeNote(r, o) })}</> : null}</td>
             <td>{why(x) || <button type="button" className="btn small" data-wd-move={r.id} disabled={locked || !ok} title={ok ? "Take it off " + o.serial + " and put it on this challan" : "More than the " + money(left) + " left"} onClick={() => moveHere(r)}>Move here</button>}</td></tr>; })}</tbody>
           {cfO.on && <tfoot><tr className="wd-cffoot"><td colSpan={7}>{cfO.foot()}</td></tr></tfoot>}</table></div>}
       {picked.length > 0 && <div className="wd-bulk" data-wd-bulk={picked.length} data-tot={tot} data-after={after}>
@@ -198,14 +201,15 @@ function undoMove(was) {
 }
 
 // next-tds-tidy2 (the owner: "Challan dated before the deduction · Move to another challan…" on 6 rows): each deduction on
-// a challan deposited before it, to the earliest challan of its section dated on or after it with enough left (the plan
+// a challan that cannot pay it (next-tds-early: an earlier year's, a future one, not minor head 200; an advance challan of
+// the same year is allowed and left), to the earliest challan of its section it can be on, dated on or after it, with enough left (the plan
 // keeps count of what each challan has left); none such: taken off, so it is in "Pay a challan". [{r, from, to}]
 export function earlyPlan(rows) {
   const cx = TDSReg.ctx(), chs = TDS.challans(), byId = Object.fromEntries(chs.map((x) => [x.id, x])), left = {};
   const bal = (c) => (left[c.id] != null ? left[c.id] : (left[c.id] = TDSReg.balance(c, cx).tax));
   return rows.filter((r) => r.challan && byId[r.challan] && earlyFor(r, byId[r.challan])).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)))
     .map((r) => {
-      const to = chs.filter((c) => c.id !== r.challan && !earlyFor(r, c) && (!chSec(c) || TDSCH.secOk(chSec(c), r.section)) && bal(c) + 0.005 >= r.tds)
+      const to = chs.filter((c) => c.id !== r.challan && !earlyFor(r, c) && TDS.ymd(c.date) >= TDS.ymd(r.date) && (!chSec(c) || TDSCH.secOk(chSec(c), r.section)) && bal(c) + 0.005 >= r.tds)
         .sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)))[0] || null;
       if (to) left[to.id] = r2(bal(to) - r.tds);
       return { r, from: byId[r.challan], to };
@@ -259,7 +263,7 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
           {(un.length > 0 || cur === "__none") && <option value="__none">Not on any challan ({un.length})</option>}</select></label>
       {c && <span className="wd-chw" title={c.bsr + " · " + c.serial}>BSR {c.bsr} · serial {c.serial}{chSec(c) ? " · " + chSec(c) : ""}</span>}
       <span className="rt-sp" />
-      {!locked && earlyN > 0 && <button type="button" className="btn small" data-wd-fix-early={earlyN} title="Each to the earliest challan of its section dated on or after it, with enough left" onClick={() => fixEarly(rows)}>Put {earlyN} on the right challans</button>}
+      {!locked && earlyN > 0 && <button type="button" className="btn small" data-wd-fix-early={earlyN} title="Each on a challan that cannot pay it (an earlier year's, a future one, not minor head 200) to the earliest challan of its section dated on or after it, with enough left" onClick={() => fixEarly(rows)}>Put {earlyN} on the right challans</button>}
       {tools}
     </div>
     {/* next-tds-tidy2 (the owner: "this should not be here"): no banner of deductions on a challan dated before them; the
@@ -267,21 +271,22 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
     {!c ? todo
       : <><div className="bk-tablewrap wd-wrap"><table className="bk-table wd-table gf-off" data-wd-table={c.id}>
         <thead><tr><th className="ck">{!locked && on.length > 0 ? <input type="checkbox" checked={rAll} data-wd-rtickall="" aria-label="Select all shown" onChange={(ev) => rtickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>
-          <Th cf={cf} k="name">Name</Th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="paid" cls="n">Amount paid</Th><Th cf={cf} k="credit" cls="dt">Paid date</Th><Th cf={cf} k="date" cls="dt">Deduction date</Th>
+          <Th cf={cf} k="name">Name</Th><th className="wd-flags"><span className="sr-only">Check</span></th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="paid" cls="n">Amount paid</Th><Th cf={cf} k="credit" cls="dt">Paid date</Th><Th cf={cf} k="date" cls="dt">Deduction date</Th>
           <Th cf={cf} k="tds" cls="n">{form === "27EQ" ? "TCS" : "TDS"}</Th><Th cf={cf} k="rate" cls="n">Rate</Th><th>Reason lower/higher</th><Th cf={cf} k="sec">Section</Th><th className="n">Shortfall/Excess</th><th className="ck"><span className="sr-only">Take off</span></th></tr></thead>
-        <tbody>{on.map((r) => { const iss = issueOf[r.id], short = iss ? r2(num(iss.short)) : 0, pi = placeIssues(r, c);
+        <tbody>{on.map((r) => { const iss = issueOf[r.id], short = iss ? r2(num(iss.short)) : 0, pi = placeIssues(r, c), pn = placeNote(r, c);
           return <tr key={r.id} data-wd-row={r.id} className={probs[r.id] ? "rt-fix" : undefined}>
             <td className="ck">{!locked && <input type="checkbox" checked={!!rsel[r.id]} data-wd-rtick={r.id} aria-label={"Tick " + (r.party || r.employee || "this deduction")} onChange={(ev) => rtick(r.id, ev.target.checked)} />}</td>
-            <td className="wd-name" data-wd-name={r.id}><DedName r={r} locked={locked} title={(r.voucher ? "Voucher " + r.voucher + " · " : "") + "Details"} onOpen={() => { S.tdsRowDet = r.id; render(); }} />
-              {pi.length > 0 && <span className="wd-chip bad" data-wd-chip={pi[0].k} title={pi.map((x) => x.words).join("; ")}>{chipW(pi[0])}</span>}</td>
+            <td className="wd-name" data-wd-name={r.id}><DedName r={r} locked={locked} title={(r.voucher ? "Voucher " + r.voucher + " · " : "") + "Details"} onOpen={() => { S.tdsRowDet = r.id; render(); }} /></td>
+            <td className="wd-flags">{pi.length > 0 ? <span className="wd-chip bad" data-wd-chip={pi[0].k} title={pi.map((x) => x.words).join("; ")}>{chipW(pi[0])}</span>
+              : pn ? <span className="wd-chip info" data-wd-chip={pn.k} title={pn.words}>{chipW(pn)}</span> : null}</td>
             <td className="pan">{Certs.validPan(r.pan) ? r.pan : (r.party || r.employee) ? <PanBox party={r.party || r.employee} compact /> : null}</td>
             <td className="n">{C(r, "paid", money(r.paid))}</td><td className="dt">{C(r, "credit", day(r.credit || r.date))}</td><td className="dt">{C(r, "date", day(r.date))}</td>
             <td className="n">{C(r, "tds", money(r.tds))}</td><td className="n">{C(r, "rate", r.rate != null ? r.rate + "%" : "")}</td><td><Reason r={r} form={form} /></td>
             <td>{C(r, "section", <span data-sec={TDS.sec(r.section)}>{TDS.sec(r.section) || r.section}</span>)}</td>
             <td className={"n" + (short > 0.005 ? " bad" : "")} title={iss ? "should be " + iss.expected + "%" : undefined}>{short ? money(short) : "0"}</td>
             <td className="ck">{!locked && <button type="button" className="icon" data-wd-off={r.id} aria-label={"Take off this challan: " + (r.party || "")} title="Take off this challan" onClick={() => { const y = TDSMatch.takeOff([r.id]); if (!y.ok) toast(y.why); render(); }}>✕</button>}</td></tr>; })}
-          {!locked ? <tr className="wd-addrow"><td colSpan={12}><button type="button" className="linkbtn" data-wd-add-open={c.id} onClick={() => { S.tdsWinAdd = c.id; render(); }}>+ Add {unit[0]} to this challan</button></td></tr>
-            : <tr className="wd-addrow"><td colSpan={12} className="note">The return is marked filed: open a correction to change it.</td></tr>}</tbody></table></div>
+          {!locked ? <tr className="wd-addrow"><td colSpan={13}><button type="button" className="linkbtn" data-wd-add-open={c.id} onClick={() => { S.tdsWinAdd = c.id; render(); }}>+ Add {unit[0]} to this challan</button></td></tr>
+            : <tr className="wd-addrow"><td colSpan={13} className="note">The return is marked filed: open a correction to change it.</td></tr>}</tbody></table></div>
         {rpicked.length > 0 && <div className="wd-bulk" data-wd-rbulk={rpicked.length}>
           <span><b>{rpicked.length} selected</b> · TDS <b>{money(rtot)}</b></span><span>Balance after: <b data-wd-rbulk-after={r2(bal + rtot)}>{money(r2(bal + rtot))}</b></span>
           <span className="rt-sp" /><button type="button" className="linkbtn" onClick={() => { S.tdsWinRSel = {}; render(); }}>Clear</button>

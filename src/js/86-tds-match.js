@@ -62,7 +62,8 @@ const TDSMatch = {
   suggestNow(form, fy, q){
     if (!S.books || TDSReg.locked(fy, q, form)) return [];
     const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chs = this.chs(cx);
-    const opt = {fy, q, links: rows.length ? this.links(rows) : {}, no: this.no()};
+    let today = ""; try { today = istToday(); } catch (e){}
+    const opt = {fy, q, today, links: rows.length ? this.links(rows) : {}, no: this.no()};
     let out = rows.length && chs.length ? tmRules(rows, chs, opt) : [];
     // the AI's pairings (a run kept for these deductions), checked again against what is free now
     const ai = this.aiOf(form, fy, q);
@@ -253,8 +254,7 @@ const TDSMatch = {
       const n = TDSReg.notes(c, form, fy, q);
       if (n.some(w => /^challan of/.test(w))) out.warn.push({k: "earlier", words: "Challan " + TDSCH.label(c) + ": " + n.filter(w => /^challan of/.test(w)).join("; ") + ". Check its balance with TRACES' challan status."});
       if (n.some(w => /nature/.test(w))) out.info.push({k: "nature", words: "Challan " + TDSCH.label(c) + ": " + n.filter(w => /nature/.test(w)).join("; ") + "."});
-      const secs = Array.from(new Set(((cx.uses[c.id] || {})[TDSReg.key(form, fy, q)].ids || []).map(id => this.sec(cx.byRow[id].r))));
-      if (secs.length > 1) out.info.push({k: "mixed", words: "Challan " + TDSCH.label(c) + " pays " + secs.join(", ") + ": several sections on one challan is allowed; one challan per section per month is easier to check."});
+      // next-tds-early (the owner): several sections on one challan is allowed and said nowhere
     });
     return out;
   },
@@ -270,7 +270,8 @@ const TDSMatch = {
   // what the rules leave: the deductions no suggestion covers, the challans with tax still left after them
   leftovers(form, fy, q){
     const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chs = this.chs(cx);
-    const rules = tmRules(rows, chs, {fy, q, links: this.links(rows), no: this.no()}), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
+    let today = ""; try { today = istToday(); } catch (e){}
+    const rules = tmRules(rows, chs, {fy, q, today, links: this.links(rows), no: this.no()}), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
     rules.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
     return {rows: rows.filter(r => !taken.has(r.id)), chs: chs.map(c => Object.assign({}, c, {bal: r2((tmP(c.bal) - (use[c.id] || 0)) / 100)})).filter(c => c.bal > 0.005)};
   },

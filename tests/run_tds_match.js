@@ -53,10 +53,16 @@ ok(by("CB")[0].reason === "194C · April 2026 · total ₹3,000 = challan ₹3,0
 ok(by("CB")[0].words === "Same section, same month, exact amount", "R.b the rule in words");
 ok(J(by("CJ").map(s => [s.rule, s.ids])) === J([["c", ["j1", "j2", "j3"]]]) && by("CJ")[0].words === "Same section, whole quarter, exact amount", "R.c 194J's quarter ₹1,500 = challan CJ");
 ok(J(by("CH").map(s => [s.rule, s.ids])) === J([["d", ["h1", "h2"]]]) && by("CH")[0].words === "Same section, same month", "R.d CH fills with h1, h2 (oldest first, whole rows, up to ₹1,000); h3 left");
-ok(J(by("CN").map(s => [s.rule, s.ids])) === J([["e", ["a1", "i1"]]]) && /194A, 194I/.test(by("CN")[0].reason) && /one challan per section/.test(by("CN")[0].info), "R.e the no-section challan CN takes 194A and 194I of May (info: one challan per section per month)");
-// next-tds-addlist (the owner, 19-Oct-2026: "a challan cannot pay TDS deducted after its deposit date"): rule f (an earlier
-// challan's balance left over) suggests nothing now; q1 (15-Jun) is never put on CE (paid 05-Apr)
-ok(by("CE").length === 0 && !S1.some(s => s.ids.includes("q1")), "R.f a challan paid before the deduction is never suggested (CE 05-Apr, q1 15-Jun: left)");
+ok(J(by("CN").map(s => [s.rule, s.ids])) === J([["e", ["a1", "i1"]]]) && /194A, 194I/.test(by("CN")[0].reason) && !by("CN")[0].info && !/one challan per section/.test(J(S1)), "R.e the no-section challan CN takes 194A and 194I of May (next-tds-early: several sections on one challan not said)");
+// next-tds-early (the owner, 20-Oct-2026: "if I want to use any early challan within the rule of TRACES"): rule f, last, puts
+// what is left on a challan of its year dated before it (an advance challan): q1 (15-Jun) on CE (paid 05-Apr)
+ok(J(by("CE").map(s => [s.rule, s.ids])) === J([["f", ["q1"]]]) && /advance challan: deposited 05-04-2026/.test(by("CE")[0].reason) && by("CE")[0].words === "Advance challan (same year) or next year's challan", "R.f an advance challan of the same year, last: q1 on CE (" + (by("CE")[0] || {}).reason + ")");
+const pref = x.tmRules([R("w2", "194C", "20260520", 100)], [C("CWa", "194C", "20260505", 500), C("CWb", "194C", "20260707", 500)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(pref.length === 1 && pref[0].chId === "CWb" && pref[0].rule === "d", "R.f a challan dated on or after the deduction is preferred to an earlier one (" + J(pref.map(s => s.rule + ":" + s.chId)) + ")");
+const nxt = x.tmRules([R("w3", "194C", "20260520", 100)], [C("CN1", "194C", "20270615", 500), C("CP1", "194C", "20260305", 500)], {fy: "2026-27", q: "Q1", today: "20271020"});
+ok(nxt.length === 1 && nxt[0].chId === "CN1" && nxt[0].rule === "f" && /next year's challan \(FY 2027-28/.test(nxt[0].reason), "R.f the next year's challan, last; never one of the year before (CP1 05-Mar-2026) (" + J(nxt.map(s => s.chId + " " + s.reason)) + ")");
+const fut = x.tmRules([R("w4", "194C", "20260520", 100)], [C("CF2", "194C", "20261105", 500)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(fut.length === 0, "R. a challan dated after today is never suggested (" + J(fut.map(s => s.chId)) + ")");
 const sp = S1.find(s => s.rule === "split");
 ok(sp && J(sp.ids) === J(["d1"]) && J(sp.parts) === J([{chId: "CD1", paise: 100000}, {chId: "CD2", paise: 50000}]) && sp.words === "Split across challans", "R.split 194D ₹1,500: no challan holds it, offered as ₹1,000 on CD1 and ₹500 on CD2");
 ok(!S1.some(s => s.chId === "C400"), "R. a minor head 400 challan is never suggested");
@@ -99,19 +105,28 @@ const yr = x.tmAiCheck({pairs: [{chId: "CO", ids: ["z1"], reason: "old", confide
 ok(yr.sugg.length === 0, "A. a challan of another tax year: refused");
 const bad = x.tmAiCheck({pairs: [], splits: [{rowId: "z1", parts: [{chId: "CZ", paise: 50000}, {chId: "CY", paise: 30000}], reason: "s", confidence: "high"}]}, rr, cc, {fy: "2026-27", q: "Q1"});
 ok(bad.sugg.length === 0 && /add up/.test(bad.why[0]), "A. a split whose parts do not add up to the paisa: refused");
-const early = x.tmAiCheck({pairs: [{chId: "CE2", ids: ["z1"], reason: "left over", confidence: "medium"}], splits: []}, rr, [C("CE2", "194C", "20260402", 900)], {fy: "2026-27", q: "Q1"});
-ok(early.sugg.length === 0 && early.dropped === 1 && /dated before/.test(early.why[0]), "A. a challan paid before the deduction: refused (" + early.why[0] + ")");
-const earlySp = x.tmAiCheck({pairs: [], splits: [{rowId: "z1", parts: [{chId: "CZ", paise: 50000}, {chId: "CE3", paise: 40000}], reason: "s", confidence: "high"}]}, rr, [C("CZ", "194C", "20260507", 950), C("CE3", "194C", "20260405", 900)], {fy: "2026-27", q: "Q1"});
-ok(earlySp.sugg.length === 0 && /dated before/.test(earlySp.why[0]), "A. a split with a part on a challan paid before the deduction: refused");
-ok(!/can pay it only from a balance left over/.test(x.TM_SYSTEM) && /never/i.test(x.TM_SYSTEM.match(/deposited before[^.]*\./)[0]), "A. the AI is told a challan deposited before a deduction never pays it");
+// next-tds-early: an advance challan of the same year, or the next year's, is taken; one of the year before (T-FV-3076),
+// more than a year on, or dated after today (T-FV-3040) is refused
+const early = x.tmAiCheck({pairs: [{chId: "CE2", ids: ["z1"], reason: "left over", confidence: "medium"}], splits: []}, rr, [C("CE2", "194C", "20260402", 900)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(early.sugg.length === 1 && early.dropped === 0, "A. an advance challan of the same year (02-Apr for 10-Apr): taken (" + J(early.why) + ")");
+const earlySp = x.tmAiCheck({pairs: [], splits: [{rowId: "z1", parts: [{chId: "CZ", paise: 50000}, {chId: "CE3", paise: 40000}], reason: "s", confidence: "high"}]}, rr, [C("CZ", "194C", "20260507", 950), C("CE3", "194C", "20260405", 900)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(earlySp.sugg.length === 1, "A. a split with a part on an advance challan of the same year: taken (" + J(earlySp.why) + ")");
+const prevY = x.tmAiCheck({pairs: [{chId: "CP", ids: ["z1"], reason: "old", confidence: "high"}], splits: []}, rr, [C("CP", "194C", "20260325", 5000)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(prevY.sugg.length === 0 && /T-FV-3076/.test(prevY.why[0]), "A. a challan of the year before (25-Mar-2026): refused (" + prevY.why[0] + ")");
+const futY = x.tmAiCheck({pairs: [{chId: "CF", ids: ["z1"], reason: "f", confidence: "high"}], splits: []}, rr, [C("CF", "194C", "20261105", 5000)], {fy: "2026-27", q: "Q1", today: "20261020"});
+ok(futY.sugg.length === 0 && /T-FV-3040/.test(futY.why[0]), "A. a challan dated after today: refused (" + futY.why[0] + ")");
+const nextY = x.tmAiCheck({pairs: [{chId: "CN", ids: ["z1"], reason: "n", confidence: "high"}], splits: []}, rr, [C("CN", "194C", "20270510", 5000)], {fy: "2026-27", q: "Q1", today: "20271020"});
+const farY = x.tmAiCheck({pairs: [{chId: "CN2", ids: ["z1"], reason: "n", confidence: "high"}], splits: []}, rr, [C("CN2", "194C", "20280510", 5000)], {fy: "2026-27", q: "Q1", today: "20281020"});
+ok(nextY.sugg.length === 1 && farY.sugg.length === 0, "A. the next year's challan: taken; two years on: refused (" + J(farY.why) + ")");
+ok(/same financial year deposited before it/.test(x.TM_SYSTEM) && /Never pair a deduction with a challan of an earlier financial year/.test(x.TM_SYSTEM), "A. the AI is told: a later challan first, an advance or next year's only when none fits, never an earlier year's");
 
 // ---------------------------------------------------------------- E. a challan dated before the deduction: never suggested
-const dOk = (list, rs, cs) => list.every(s => (s.parts || [{chId: s.chId}]).every(p => s.ids.every(id => { const c = cs.find(z => z.id === p.chId), r = rs.find(z => z.id === id); return !c || !r || c.date >= r.date; })));
-ok(dOk(S1, rows, chs), "E. rules a to f and the splits: no suggestion pairs a deduction with a challan dated before it");
+const dOk = (list, rs, cs) => list.filter(s => s.rule !== "f").every(s => (s.parts || [{chId: s.chId}]).every(p => s.ids.every(id => { const c = cs.find(z => z.id === p.chId), r = rs.find(z => z.id === id); return !c || !r || c.date >= r.date; })));
+ok(dOk(S1, rows, chs), "E. rules a to e and the splits: no suggestion pairs a deduction with a challan dated before it (only f, last)");
 const eA = x.tmRules([R("t9", "194C", "20260610", 100), R("t8", "194C", "20260601", 50)], [C("CT9", "194C", "20260605", 150)], {fy: "2026-27", q: "Q1", links: {CT9: ["t9", "t8"]}});
-ok(eA.length === 1 && J(eA[0].ids) === J(["t8"]), "E.a Tally's link to a challan of 05-Jun: t8 (01-Jun) taken, t9 (10-Jun) never (" + J(eA.map(s => s.ids)) + ")");
+ok(eA.length === 2 && eA[0].rule === "a" && J(eA[0].ids) === J(["t8"]) && eA[1].rule === "f" && J(eA[1].ids) === J(["t9"]), "E.a Tally's link to a challan of 05-Jun: t8 (01-Jun) taken; t9 (10-Jun) only by f, as an advance (" + J(eA.map(s => [s.rule, s.ids])) + ")");
 const eF = x.tmRules([R("w1", "194C", "20260520", 100)], [C("CW", "194C", "20260505", 500)], {fy: "2026-27", q: "Q1"});
-ok(eF.length === 0, "E.f 194C of 20-May and a 194C challan of 05-May with ₹500 left: nothing suggested");
+ok(eF.length === 1 && eF[0].rule === "f" && /advance challan/.test(eF[0].reason), "E.f 194C of 20-May and a 194C challan of 05-May with ₹500 left: suggested by f, said an advance challan");
 const eR = x.tmReasons([R("w1", "194C", "20260520", 100)], [C("CW", "194C", "20260505", 500), C("CW2", "194J", "20260510", 500)], [], {fy: "2026-27", q: "Q1"});
 ok(eR.length === 1 && !eR[0].chId && eR[0].step === "pay", "E. what is left: never \"use Move to challan\" to a challan dated before it (" + (eR[0] || {}).words + ")");
 const eR2 = x.tmReasons([R("w1", "194C", "20260520", 100)], [C("CW3", "194J", "20260601", 500)], [], {fy: "2026-27", q: "Q1"});

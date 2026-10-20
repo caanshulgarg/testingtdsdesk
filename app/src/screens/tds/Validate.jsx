@@ -34,12 +34,15 @@ export function checkReturn(fy, q, form) {
   put(out.errors, { k: "unmatched", n: un ? un.n : 0, words: s_(un ? un.n : 0, unitW[0] + " on no challan", unitW[1] + " on no challan") + " · " + money(unRows.reduce((a, r) => a + r.tds, 0)), step: "challans", review: true });
   const ov = blk("over");
   put(out.errors, { k: "over", n: ov ? ov.n : 0, words: ov ? ov.words : "", step: "challans", review: true });
-  // next-tds-addlist (the owner, 19-Oct-2026): a deduction on a challan deposited before it: no challan can pay tax
-  // deducted after its deposit date (an error); on a challan naming another section (a warning, below)
+  // next-tds-addlist (19-Oct-2026), next-tds-early (20-Oct-2026): a deduction on a challan Protean's FVU refuses for it (a
+  // challan dated before the financial year, T-FV-3076; after today, T-FV-3040; not minor head 200): an error. An advance
+  // challan (dated before the deduction, the same year) or the next year's is allowed: no error, no warning (its chip
+  // says it). On a challan naming another section: a warning, below
   const chBy = {}; TDS.challans().forEach((c) => { chBy[c.id] = c; });
   const placed = rowsOf(fy, q, form).filter((r) => r.challan && chBy[r.challan]), pis = placed.map((r) => [r, TDSEdit.placeIssues(r, chBy[r.challan])]);
-  const early = pis.filter(([, p]) => p.some((x) => x.k === "early")).map(([r]) => r), wrongSec = pis.filter(([, p]) => p.some((x) => x.k === "sec")).map(([r]) => r);
-  put(out.errors, { k: "early", n: early.length, words: s_(early.length, unitW[0] + " on a challan dated before the deduction", unitW[1] + " on a challan dated before the deduction") + " · " + money(early.reduce((a, r) => a + r.tds, 0)) + ": a challan cannot pay tax deducted after it was deposited", step: "deductions" });
+  const BAD = ["fy", "future", "minor"], early = pis.filter(([, p]) => p.some((x) => BAD.includes(x.k))).map(([r]) => r), wrongSec = pis.filter(([, p]) => p.some((x) => x.k === "sec")).map(([r]) => r);
+  const ek = early.length ? pis.find(([r]) => r === early[0])[1].find((x) => BAD.includes(x.k)) : null;
+  put(out.errors, { k: "early", n: early.length, words: s_(early.length, unitW[0] + " on a challan Protean's FVU refuses for it", unitW[1] + " on a challan Protean's FVU refuses for them") + " · " + money(early.reduce((a, r) => a + r.tds, 0)) + (ek ? ": " + ek.words : ""), step: "deductions" });
   const st = blk("stale");
   put(out.errors, { k: "stale", n: st ? st.n : 0, words: st ? st.words : "", step: "challans" });
   // the salary return without the salary sheet or Tally's payroll: no file can be made
