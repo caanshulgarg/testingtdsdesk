@@ -330,6 +330,51 @@ try:
         ok(pg.locator('#app [data-wd-more]').count() == 1, "Annexure I is under ⋯")
         pg.screenshot(path=os.path.join(OUT, "q1-by-challan.png"), full_page=True)
 
+        print("== 11. next-24q-load (Leads, Form 138 showed 1 entry, no employees): reopened with nothing new in the cloud")
+        # the copy kept in this browser had no payroll (BOOKS_KEYS) and TCloud.load returned before Payroll.into when no day
+        # had changed: Form 138 fell back to the books' one "TDS 192B" row per payroll entry, the only rows with challans
+        load(pg, leads_tables())
+        RE = """async (a) => {
+          const b = S.books, T = a.tables; delete b.payroll; b.allocLog = [];
+          const ch = (id, serial, date, tax) => ({id, bsr: '0510308', serial, date, section: '192', tax, interest: 0, fee: 0, others: 0});
+          b.challans = [ch('c40404', '40404', '2026-05-07', 188296), ch('c10101', '10101', '2026-06-06', 188296), ch('csmall', '77777', '2026-07-06', 1000)];
+          b.alloc = {'li-pay-2026-04-30|TDS 192B': 'c40404', 'li-pay-2026-05-31|TDS 192B': 'c10101', 'li-pay-2026-06-30|TDS 192B': 'csmall'};
+          TDSReg.forget(); S.tdsTab = 'deductions'; render();
+          const rows = () => TDS.salaryRows().filter(r => r.fy === '2026-27' && r.q === 'Q1');
+          const st = () => ({has: Payroll.has('2026-27'), n: rows().length, named: rows().filter(r => r.src === 'payroll' && !r.unsplit && r.employee && r.tds > 0.005).length,
+            unsplit: rows().filter(r => r.unsplit || /not split/i.test(r.party || '')).length, tally: ((document.querySelector('#app [data-tab-count="deductions"]') || {}).textContent || '') + '/' + ((document.querySelector('#app [data-tab-count="deductees"]') || {}).textContent || ''), pans: rows().filter(r => a.pans[r.employee] && r.pan !== a.pans[r.employee]).length,
+            on: Object.fromEntries(['c40404', 'c10101', 'csmall'].map(c => [c, TDS.formRows('24Q').filter(r => r.challan === c).map(r => r.tds)]))});
+          const before = st();
+          // the cloud as on a reopen with nothing new: the same days, the same ledgers, no entry the bridge sent
+          b.meta = Object.assign(b.meta || {}, {cloud: {book: a.book, company: 'LI', ledgersAt: 'L1', days: {'20260430': 'x'}, at: ''}});
+          TCloud.on = () => true;
+          TCloud.status = async () => [{book: a.book, company: 'LI', from: '2026-04-01', entries: 50, ledgersAt: 'L1'}];
+          TCloud.rpcAll = async () => [{day: '20260430', n: 1, at: 'x'}];
+          TCloud.copyHeads = async () => ({changes: 0, seen: ''});
+          TCloud.restPages = async (path) => (T[path.split('?')[0]] || []).map(r => Object.assign({}, r));
+          const res = await TCloud.load(true);
+          await new Promise(ok => setTimeout(ok, 300)); TDSReg.forget(); render();
+          const after = st();
+          await saveBooks({fromCloud: true});
+          const saved = await Books.load(b.cid);
+          return {before, after, res, saved: !!(saved && saved.payroll && saved.payroll.allocs.length), work: 'payroll' in BookSync.work(b),
+            log: (b.allocLog || []).filter(l => /carried from the month's total/.test(l.note)).map(l => [l.ch, l.tax]),
+            months: Object.fromEntries(['202604', '202605', '202606'].map(m => [m, rows().filter(r => String(r.date).startsWith(m) && r.tds > 0.005).length]))};
+        }"""
+        rr = pg.evaluate(RE, {"tables": leads_tables(), "book": BOOK, "pans": PAN}); pg.wait_for_timeout(400)
+        print("     before: %s" % json.dumps(rr["before"]))
+        ok(rr["res"] is True, "TCloud.load(true) with nothing new still returns true (%s)" % rr["res"])
+        ok(rr["after"]["has"] and rr["after"]["tally"] == "34/12", "after the reopen Form 138 is Tally's payroll return again: Deductions 34 (every employee paid), employees 12 (was %s; now %s)" % (rr["before"]["tally"], rr["after"]["tally"]))
+        ok(rr["months"] == {"202604": 7, "202605": 7, "202606": 8} and rr["after"]["named"] == 22 and rr["after"]["unsplit"] == 0 and rr["after"]["pans"] == 0,
+           "one row per employee with TDS a month, by name, each PAN as in Tally (%s; %d named, %d unsplit, %d PAN wrong)" % (rr["months"], rr["after"]["named"], rr["after"]["unsplit"], rr["after"]["pans"]))
+        a40, a10 = rr["after"]["on"]["c40404"], rr["after"]["on"]["c10101"]
+        ok(len(a40) == 7 and round(sum(a40), 2) == 188296 and len(a10) == 7 and round(sum(a10), 2) == 188296,
+           "challans 40404 / 10101 carry their month's employee rows (%d rows %s / %d rows %s)" % (len(a40), round(sum(a40), 2), len(a10), round(sum(a10), 2)))
+        ok(rr["after"]["on"]["csmall"] == [], "a challan smaller than the month's TDS: nothing carried, left for the matcher (%s)" % rr["after"]["on"]["csmall"])
+        ok(len(rr["log"]) == 14 and {c for c, _ in rr["log"]} == {"c40404", "c10101"}, "each carry in the audit trail as \"carried from the month's total\" (%d)" % len(rr["log"]))
+        ok(rr["saved"] and not rr["work"], "the payroll is kept in this browser's copy, never in the work sent to the firm's database")
+        pg.screenshot(path=os.path.join(OUT, "reopen-24q.png"), full_page=True)
+
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):
             ctx = br.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme); p2 = ctx.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))

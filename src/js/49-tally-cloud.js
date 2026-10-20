@@ -308,7 +308,11 @@ const TCloud = {
     let copy = null;
     try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
     if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
-    if (!todo.length && !ledNew && !(copy && (copy.changes || !same))) return true;
+    if (!todo.length && !ledNew && !(copy && (copy.changes || !same))){
+      // next-24q-load: nothing new, but the payroll is not in the books (the copy here keeps none from before): read it
+      if (!b.payroll || b.payroll.book !== bk.book) try { await Payroll.into(b, bk.book); const n = Payroll.carry(b); LK.cache = {}; render(); saveBooks(n ? null : {fromCloud: true}); } catch (e){}
+      return true;
+    }
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
     const say = t => { f.busy = b.busy = t; render(); };
     say(todo.length ? "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…" : "Bringing in the entries the bridge sent…");
@@ -352,7 +356,7 @@ const TCloud = {
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
       try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
-      try { await Payroll.into(b, bk.book); Payroll.autoTag(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
+      try { await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
       meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
       TallyRead.after(b, "after changes came from the cloud copy");
