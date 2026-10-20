@@ -112,7 +112,8 @@ const TDSRegActs = {
     this.done(); saveBooks(); return {ok: true};
   },
 };
-Object.assign(TDSReg, TDSRegActs);
+// (put on TDSReg only where legacy.js has run: a page whose legacy.js failed shows "FinCom did not open", not this error)
+if (typeof TDSReg === "object") Object.assign(TDSReg, TDSRegActs);
 const TDSMatch = {
   books(){ return S.books || {}; },
   sec(r){ return TDS.sec(r.section || "") || ""; },
