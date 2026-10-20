@@ -57,15 +57,14 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.misTab = 'cc'; render(); }"); grab("mis-cc-rows")
     pg.evaluate("() => { S.misCc = 'Sites|Noida'; S.misCat = 'Sites'; render(); }"); grab("mis-cc-open")
     pg.evaluate("() => { S.misTab = 'summary'; S.misRange = {from: '2025-04-01', to: '2025-06-30'}; render(); }"); grab("mis-range")
-    # Accounts: before the balances, before a run, the statements each way, the mapping with a search and a ledger placed by hand
-    pg.evaluate("() => { S.booksTab = 'fs'; S.fsRun = null; S.fsTab = 'st'; S.__tb = S.books.tb; S.books.tb = null; render(); }"); grab("fs-none")
-    pg.evaluate("() => { const y = fsYears()[0], c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); }"); grab("fs-nobal")
-    pg.evaluate("() => { const led = {}; Object.keys(S.books.map).forEach(n => { led[n] = {open: 0, close: 0}; }); S.books.tb = {from: '20250401', to: '20270331', at: '2026-01-01T00:00:00Z', led}; S.fsRun = null; render(); }"); grab("fs-ready")
-    pg.evaluate("() => { const y = fsYears()[0], c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); }"); grab("fs-co", 600)
-    pg.evaluate("() => { S.books.fs = Object.assign({}, FS.cfg(S.books), {kind: 'nc', stock: {open: 1000, close: 2500}, mfg: true}); const y = fsYears()[0]; S.fsRun = {fy: y, kind: 'nc', d: FS.build(y)}; render(); }"); grab("fs-nc", 600)
-    pg.evaluate("() => { S.fsTab = 'map'; render(); }"); grab("fs-map")
-    pg.evaluate("() => { const c = FS.cfg(S.books), l = Object.keys(S.books.map).sort()[0]; c.map = {[l]: 'oca'}; S.books.fs = c; S.fsRun = {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)}; S.fsQ = l.slice(0, 3); render(); }"); grab("fs-map-hand")
-    pg.evaluate("() => { S.fsQ = ''; S.fsTab = 'st'; S.fsFy = fsYears()[1]; render(); }"); grab("fs-otheryear")
+    # Financial statements (ROUND 99; was Accounts): before the balances, each tab, the other format, a code by hand, the other year
+    pg.evaluate("() => { S.booksTab = 'fs'; S.fsTab = ''; S.fin = null; S.__tb = S.books.tb; S.books.tb = null; render(); }"); grab("fs-none")
+    pg.evaluate("() => { const led = {}; Object.keys(S.books.map).forEach(n => { led[n] = {open: 0, close: 0}; }); S.books.tb = {from: '20250401', to: '20270331', at: '2026-01-01T00:00:00Z', led}; render(); }"); grab("fs-co", 600)
+    for k in ["pl", "cf", "notes", "comp", "tb", "checks"]:
+        pg.evaluate("(k) => { S.fin.tab = k; render(); }", k); grab("fs-" + k, 600)
+    pg.evaluate("() => { S.books.fs = Object.assign({}, FS.cfg(S.books), {kind: 'nc', stock: {open: 1000, close: 2500}}); S.fin.tab = 'bs'; render(); }"); grab("fs-nc", 600)
+    pg.evaluate("() => { const l = Object.keys(S.books.map).sort()[0]; FinSt.mapSet(l, '12K'); S.fin = Object.assign(S.fin, {tab: 'tb', q: l.slice(0, 3)}); render(); }"); grab("fs-map-hand")
+    pg.evaluate("() => { S.fin.q = ''; S.fin.tab = 'bs'; S.fsFy = fsYears()[1]; render(); }"); grab("fs-otheryear")
     # Reports: every area with its figures, the other year, a search that finds some and one that finds none, no audit, no books
     pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; S.rptFy = ''; render(); }"); grab("rpt", 800)
     pg.evaluate("() => { S.rptFy = RPT.fys()[1] || ''; render(); }"); grab("rpt-year", 800)

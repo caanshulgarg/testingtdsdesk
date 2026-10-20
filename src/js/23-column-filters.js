@@ -952,16 +952,11 @@ function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
-// Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
-// hand (the statements are worked out again) or given back to the rule
-// a format chosen by hand stays chosen; otherwise it follows the client's entity type (FS.cfg)
+// Financial statements (app/src/screens/books/FinStatements.jsx, its Details): the format (a format chosen by hand stays
+// chosen; otherwise it follows the client's entity type, FS.cfg), the year, the stock typed when Tally does not keep it
 function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
 function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
 function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
-function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
-function fsRedo(c){ S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); }
-function fsMapSet(l, v){ const c = FS.cfg(S.books); c.map = Object.assign({}, c.map, {[l]: v}); fsRedo(c); }
-function fsUnmap(l){ const c = FS.cfg(S.books); delete c.map[l]; fsRedo(c); }
 // MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
 // marked MSME (the run is worked out again), a month of the budget
 // the period chosen is kept for the client in this browser (smart moves round 1)

@@ -145,16 +145,15 @@ with sync_playwright() as p:
     ok(txt("#app [data-books-held-text]").startswith(HELD1) and not INSTEP.search(app()) and "Revenue from operations" in app(), "1. Profit and loss (MIS): the held line, no 'in step'")
     E("() => doAct('misPack')"); pg.wait_for_timeout(200)
     ok(HELD1 in E("window.__printed[window.__printed.length - 1][1]"), "4. the MIS pack (PDF) carries the held line")
-    E("() => { S.booksTab = 'fs'; S.fsTab = 'st'; render(); }"); pg.wait_for_timeout(1500)
-    ok(txt("#app [data-books-held-text]").startswith(HELD1) and not INSTEP.search(app()) and E("!!(S.fsRun && S.fsRun.d && !S.fsRun.d.error)"), "1. Balance sheet (Accounts): the held line, no 'in step', the statements worked out")
-    E("() => doAct('fsPdf')"); pg.wait_for_timeout(200)
-    ok(HELD1 in E("window.__printed[window.__printed.length - 1][1]"), "4. the statements' PDF carries the held line")
-    # the statements' Excel and the MIS Excel: the held line first on the Balance Sheet, Profit and Loss sheets (XLSX stubbed)
+    E("() => { S.booksTab = 'fs'; S.fsTab = ''; render(); }"); pg.wait_for_timeout(2500)
+    ok(txt("#app [data-books-held-text]").startswith(HELD1) and not INSTEP.search(app()) and E("!!document.querySelector('#app table[data-fin-table=\"bs\"]')"), "1. Balance sheet (Financial statements): the held line, no 'in step', the statements worked out")
+    # (the statements' PDF and Excel are FinPdf / FinXlsx now, next-fin-xlsx; their held line is theirs to test)
+    # the MIS Excel: the held line first on its Profit and loss sheet (XLSX stubbed)
     xs = E("""async () => { const got = {}; ensureXlsx = async () => {}; saveFile = () => {};
       window.XLSX = {utils: {book_new: () => ({}), aoa_to_sheet: (rows) => rows, book_append_sheet: (wb, rows, n) => { got[n] = rows; }}, write: () => new Uint8Array(1)};
-      await fsExcel(S.fsRun.d); await misExcel(S.books.mis.last);
-      return [got["Balance Sheet"][0], got["Profit and Loss"][0], got["Profit and loss"][0]]; }""")
-    ok(xs == [[HELD1]] * 3, "4. Excel of the statements (Balance Sheet, Profit and Loss) and of the MIS: the held line first (%s)" % xs)
+      await misExcel(S.books.mis.last);
+      return [got["Profit and loss"][0]]; }""")
+    ok(xs == [[HELD1]], "4. Excel of the MIS: the held line first (%s)" % xs)
     E("() => { S.booksTab = 'reports'; render(); }"); pg.wait_for_timeout(700)
     ok(txt("#app [data-books-held-text]").startswith(HELD1) and not INSTEP.search(app()), "1. Reports: the held line, no 'in step'")
 
@@ -183,7 +182,7 @@ with sync_playwright() as p:
     pr = E("window.__printed[window.__printed.length - 1][1]")
     ok("not yet in these books" not in pr and "data-held-print" not in pr, "no line held: the print has no held line")
     E("() => { S.booksTab = 'fs'; render(); }"); pg.wait_for_timeout(600)
-    ok(pg.locator("#app [data-books-held]").count() == 0, "no line held: Accounts has no held line")
+    ok(pg.locator("#app [data-books-held]").count() == 0, "no line held: Financial statements has no held line")
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

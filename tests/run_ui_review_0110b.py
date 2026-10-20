@@ -69,15 +69,15 @@ with sync_playwright() as p:
     tiles = pg.evaluate("Array.from(document.querySelectorAll('#app .dtile')).map(t => t.innerText.replace(/\\n/g, ' | '))")
     ok(any(t.startswith("You owe") and "-" not in t.split("|")[1] for t in tiles) and any(t.startswith("Advances to suppliers") for t in tiles), "6. the tiles: You owe positive, Advances to suppliers apart")
     # 4. tabs at the top of MIS, Accounts and Audit
-    for bt, label in [("mis", "MIS"), ("fs", "Accounts"), ("audit", "Audit")]:
+    for bt, label in [("mis", "MIS"), ("fs", "Financial statements"), ("audit", "Audit")]:
         go("S.booksTab = '%s'" % bt)
         y = pg.evaluate("(() => { const n = document.querySelector('#app nav.sbar'); return n ? n.getBoundingClientRect().top + scrollY : 9999; })()")
         ok(y < 300, "4. %s: the tabs are at the top (%d px down)" % (label, y))
     go("S.booksTab = 'audit'")
     ok(pg.evaluate("(() => { const a = document.querySelector('#app nav.sbar[aria-label=\"Areas\"]'), h = document.querySelector('[data-audit-head]'); return !a || !h || a.getBoundingClientRect().top < h.getBoundingClientRect().top; })()"), "4. Audit: the area tabs above the period and settings")
-    # 12. Accounts runs by itself for the last full year
-    go("S.booksTab = 'fs'"); pg.wait_for_timeout(1500)
-    ok(pg.evaluate("S.fsRun && S.fsRun.fy") == "2025" and pg.locator("#app .fs-doc").count() == 1, "12. Accounts: the statements for 2025-26 are there without pressing Run now")
+    # 12. the statements (Financial statements, ROUND 99) are drawn at once for the last full year
+    go("S.booksTab = 'fs'"); pg.wait_for_timeout(2500)
+    ok(pg.evaluate("fsYearNow()") == "2025" and pg.locator('#app table[data-fin-table="bs"]').count() == 1, "12. Financial statements: the statements for 2025-26 are there without pressing anything")
     # 16. MIS From / To labelled, with dates
     go("S.booksTab = 'mis'")
     lab = pg.evaluate("Array.from(document.querySelectorAll('[data-mis-head] label.f span')).map(s => s.textContent)")

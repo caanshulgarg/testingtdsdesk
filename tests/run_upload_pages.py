@@ -156,7 +156,7 @@ with sync_playwright() as p:
     t = E(TITLE); ok(t and t[0] == "Sales" and t[1] <= t[2], "1400 px: the title “Sales” in full (%s)" % t)
     ok(E(ARROWS) == 0 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Sales: no filter arrows on the headings (%d), one search" % E(ARROWS))
     E("() => { S.tab = 'books'; S.booksTab = 'fs'; render(); }"); pg.wait_for_timeout(1500)
-    t = E(TITLE); ok(t and t[0] == "Accounts" and t[1] <= t[2], "1400 px: the title “Accounts” in full (%s)" % t)
+    t = E(TITLE); ok(t and t[0] == "Financial statements" and t[1] <= t[2], "1400 px: the title “Financial statements” in full (%s)" % t)
     E("() => { S.tab = 'books'; S.booksTab = 'recon'; render(); }"); pg.wait_for_timeout(1500)
     t = E(TITLE); ok(t and t[1] <= t[2], "1400 px: a long title in full too (%s)" % t)
     br.close()

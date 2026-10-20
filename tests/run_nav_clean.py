@@ -81,13 +81,13 @@ try:
         E("(c) => openCompany(c)", cid); W(800); E("() => { S.books = window.__bk; goClient('dash'); }"); W(1000)
         # ui-tidy (13-Oct-2026): Clients first (was All clients at the foot)
         # t70 (16-Oct-2026; the owner): Inbox is the top bar's tray, From Tally reached from the Tally panel (no "Bring in")
-        want = ["Clients", "Overview", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"]
+        want = ["Clients", "Overview", "Purchase", "Bank", "Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Statements", "Audit", "Look up", "Letters", "Client setup", "Help"]
         ok(side() == want, "client: the tree in order (%s)" % side())
         ok(groups() == ["Work", "Returns", "Books"], "groups: Work · Returns · Books (%s)" % groups())
         ok("TDS & GST" not in side() and "Dashboard" not in side(), "no TDS & GST, no Dashboard")
         pg.screenshot(path=os.path.join(OUT, "desk-client-overview.png"))
         titles = {"Overview": "Overview", "Purchase": "Purchase", "Bank": "Bank", "Sales": "Sales", "Transactions": "Transactions",
-                  "TDS": "TDS", "GST": "GST", "Reconciliations": "Reconciliations", "Reports": "Reports", "MIS": "MIS", "Accounts": "Accounts", "Audit": "Audit", "Look up": "Look up", "Letters": "Letters", "Client setup": "Client setup"}
+                  "TDS": "TDS", "GST": "GST", "Reconciliations": "Reconciliations", "Reports": "Reports", "MIS": "MIS", "Statements": "Financial statements", "Audit": "Audit", "Look up": "Look up", "Letters": "Letters", "Client setup": "Client setup"}
         for label, t in titles.items():
             pg.click('#side .side-link[data-side="%s"]' % label); W(1100)
             ok(title() == t and lit() == [label], "%s: titled %s and lit (%s, %s)" % (label, t, title(), lit()))
@@ -180,7 +180,7 @@ try:
         sheet = E2("[...document.querySelectorAll('[data-side-sheet] .side-link')].map(e => e.dataset.side)")
         # (t70: the Inbox is the top bar's tray on a phone too; From Tally from the Tally panel)
         ok(E2("(() => { const b = document.querySelector('#cobar [data-topbar-inbox]'); return !!b && b.getBoundingClientRect().width > 0; })()"), "a phone: the Inbox in the top bar")
-        ok(sheet == ["Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Accounts", "Audit", "Look up", "Letters", "Client setup", "Help"], "More: the rest, in order (%s)" % sheet)
+        ok(sheet == ["Sales", "Transactions", "TDS", "GST", "Reconciliations", "Reports", "MIS", "Statements", "Audit", "Look up", "Letters", "Client setup", "Help"], "More: the rest, in order (%s)" % sheet)
         ph.screenshot(path=os.path.join(OUT, "phone-more-sheet.png"))
         ph.click('[data-side-sheet] .side-link[data-side="GST"]'); W2(1200)
         ok(E2("booksTab()") == "gst" and ph.locator("[data-side-sheet]").count() == 0, "a page from More opens, and the sheet closes")

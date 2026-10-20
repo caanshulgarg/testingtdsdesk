@@ -135,7 +135,9 @@ try:
             rows = E(TABROWS)
             for r in rows:
                 looks.setdefault(r["look"], []).append(name + ":" + r["name"])
-                ok(r["n"] <= 6, "%s, %s: %d tabs show (at most 6%s)" % (name, r["name"], r["n"], ", the rest under More" if r["more"] else ""))
+                # ROUND 99 (20-Oct-2026, the owner's list): the Financial statements page shows its seven tabs, Checks last
+                most = 7 if r["name"] == "Financial statements" else 6
+                ok(r["n"] <= most, "%s, %s: %d tabs show (at most %d%s)" % (name, r["name"], r["n"], most, ", the rest under More" if r["more"] else ""))
                 ok(r["lines"] == 1, "%s, %s: one line" % (name, r["name"]))
             ok(len(rows) <= 1, "%s: one row of tabs (%s)" % (name, [r["name"] for r in rows]))
             widths[name] = E(WIDTH)
@@ -256,7 +258,7 @@ try:
         ok(pg.locator("#app [data-confirm-foot] [data-cfm=save]").count() == 0, "  … Don't save takes it away again")
 
         print("8. How this page works")
-        for name, js, key in [("Overview", CL("goClient('dash');"), "dash"), ("Transactions", CL("goClient('txn');"), "txn"), ("Accounts", CL("goClient('books:fs');"), "fs"), ("Client setup", CL("S.step = null; S.tab = 'settings'; render();"), "setup")]:
+        for name, js, key in [("Overview", CL("goClient('dash');"), "dash"), ("Transactions", CL("goClient('txn');"), "txn"), ("Financial statements", CL("goClient('books:fs');"), "fs"), ("Client setup", CL("S.step = null; S.tab = 'settings'; render();"), "setup")]:
             go(js)
             h = pg.locator("#app details.howto[data-howto=%s]" % key)
             ok(h.count() == 1 and h.get_attribute("open") is None and pg.inner_text("#app details.howto[data-howto=%s] > summary" % key).strip() == "How this page works", "%s: 'How this page works', folded" % name)

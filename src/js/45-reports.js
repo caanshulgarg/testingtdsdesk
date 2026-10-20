@@ -50,7 +50,7 @@ const RPT = {
     ["au-find", "audit", "Audit findings", "Every voucher checked the way an auditor would", {audit: "find"}],
     ["au-3cd", "audit", "Form 3CD draft", "The tax audit report clauses from the books", {audit: "3cd"}],
     ["au-rel", "audit", "Related parties", "Dealings with related parties", {audit: "rel"}],
-    ["fs", "audit", "Balance sheet and profit and loss", "Schedule III or the ICAI format, with notes", {fs: 1}],
+    ["fs", "audit", "Financial statements", "Balance sheet, P&L, cash flow, notes and computation, linked to the trial balance", {fs: 1}],
     ["lk-tb", "audit", "Trial balance on a date", "Every ledger’s balance, grouped", {lk: {kind: "tb"}}],
     ["lk-group", "audit", "Group summary", "Each ledger under a group, for any dates", {lk: {kind: "group", grp: ""}}],
     ["lk-find", "audit", "Find any entry", "By party, narration, number or amount", {lk: {kind: "find", q: ""}}]

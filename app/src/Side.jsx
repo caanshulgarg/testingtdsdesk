@@ -12,7 +12,7 @@ import { useDismiss } from "./parts/dismiss.js";
 // in the order a CA works (bring in → work → returns → books), each item named as its page's title:
 //   FIRM    Today · Compliance · Clients · Tally · Settings (People and Plan are Settings' sections) · Help
 //   CLIENT  Overview / BRING IN Inbox · From Tally / WORK Purchase · Bank · Sales · Transactions / RETURNS TDS · GST /
-//           BOOKS Reports · MIS · Accounts · Audit · Look up · Letters / then Client setup · All clients · Help
+//           BOOKS Reports · MIS · Statements (the Financial statements page) · Audit · Look up · Letters / then Client setup · All clients · Help
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
 import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
@@ -94,7 +94,7 @@ function tree() {
     ["Books", [
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
-      { icon: "books", label: "Accounts", on: bt === "fs", go: () => goClient("books:fs"), title: "Financial statements" },
+      { icon: "books", label: "Statements", on: bt === "fs", go: () => { S.fsTab = ""; goClient("books:fs"); }, title: "Financial statements: balance sheet, P&L, cash flow, notes and computation, linked to the trial balance" },
       // the tie-out with Tally is a tab of Audit
       { icon: "audit", label: "Audit", on: bt === "audit" || bt === "tieout", go: () => goClient("books:audit"), title: "Checks over the books, and the tie-out with Tally" },
       { icon: "lookup", label: "Look up", on: bt === "lookup", go: () => goClient("books:lookup"), title: "Any ledger, any dates (press /)" },

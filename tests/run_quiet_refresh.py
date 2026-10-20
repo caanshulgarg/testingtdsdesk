@@ -199,7 +199,7 @@ def setup(pg):
 PAGES = [
     ("Clients", """() => { S.view = "home"; S.homeTab = "clients"; S.coId = null; render(); }""", "!document.querySelector('.pg-skel')"),
     ("TDS", """(cid) => { S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "tds"; render(); }""", "S.books && S.books.cid === '%s' && !S.books.loading" % CID),
-    ("Accounts", """(cid) => { S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "fs"; render(); }""", "S.books && S.books.cid === '%s' && !S.books.loading && document.querySelector('[data-legacy]')" % CID),
+    ("Financial statements", """(cid) => { S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "fs"; render(); }""", "S.books && S.books.cid === '%s' && !S.books.loading && document.querySelector('[data-fin]')" % CID),
     ("Bills", """(cid) => { openCompany(cid).then(() => goStep('review', 'bills')); }""", "S.tab === 'invoices' && !S.loadingCo && document.querySelector('#app').innerText.includes('ZZ/3')"),
 ]
 

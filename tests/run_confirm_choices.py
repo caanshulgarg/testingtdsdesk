@@ -220,8 +220,9 @@ with sync_playwright() as p:
     EC("() => { S.tab = 'books'; S.booksTab = 'ledgers'; render(); }"); pc.wait_for_timeout(800)
     # 2.4.1 (the owner's decision, Cause B): the Tally ledgers page has no footer and no drafts; each step is saved at once
     ok(pc.locator('#app [data-ledpage]').count() == 1 and pc.locator('#app [data-confirm-foot="books:ledgers"]').count() == 0, "Tally ledgers: no Save footer (each step saved at once)")
-    EC("() => { S.tab = 'books'; S.booksTab = 'fs'; S.fsTab = 'map'; render(); }"); pc.wait_for_timeout(2500)
-    ok(pc.locator('#app [data-confirm-foot="books:fs-map"]').count() == 1, "Accounts → Mapping: the shared footer")
+    # ROUND 99: Financial statements → Trial balance & mapping: each code is saved as it is chosen (FinSt.mapSet), no footer
+    EC("() => { S.tab = 'books'; S.booksTab = 'fs'; S.fsTab = ''; S.fin = Object.assign(S.fin || {}, {tab: 'tb'}); render(); }"); pc.wait_for_timeout(2500)
+    ok(pc.locator('#app [data-fin-tb]').count() == 1 and pc.locator('#app [data-confirm-foot="books:fs-map"]').count() == 0, "Financial statements → Trial balance & mapping: saved as chosen, no Save footer")
     EC("() => { S.booksTab = 'mis'; render(); }"); pc.wait_for_timeout(1500)
     EC("document.querySelectorAll('#app details').forEach(d => d.open = true)"); pc.wait_for_timeout(200)
     ok(pc.locator('#app [data-confirm-foot="books:mis-settings"]').count() == 1, "MIS settings: the shared footer")

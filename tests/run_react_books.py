@@ -24,9 +24,9 @@ with sync_playwright() as p:
     pg.evaluate("goClient('books:import')"); pg.wait_for_timeout(400)   # (t70: From Tally is reached from the Tally panel, not the sidebar)
     # ledger-confirm (14-Oct-2026): no Tally ledgers tab; the TDS and GST ledgers are on the TDS and GST pages
     ok(pg.locator('#app nav[aria-label="From Tally"] button:has-text("Tally ledgers")').count() == 0, "From Tally: no Tally ledgers tab")
-    for side, say in [["MIS", "MIS is worked out from the day book"], ["Accounts", "The accounts (balance sheet"], ["Audit", "The audit checks run over the day book"]]:
+    for side, say in [["MIS", "MIS is worked out from the day book"], ["Statements", "The financial statements are made"], ["Audit", "The audit checks run over the day book"]]:
         pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(400)
-        ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Accounts": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="From Tally"]').count() == 0,
+        ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Statements": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="From Tally"]').count() == 0,
            "%s: a page of its own in the sidebar, with its own empty message" % side)
     pg.evaluate("booksTabGo('tds')"); pg.wait_for_timeout(400)
     pg.evaluate("goClient('books:import')"); pg.wait_for_timeout(500)
@@ -62,7 +62,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.ledKind = ''; tdsNav('year'); }"); pg.wait_for_timeout(300)
     pg.click('#side button[data-side="GST"]'); pg.wait_for_timeout(500)
     ok(pg.evaluate("booksTab()") == "gst", "GST opens from the sidebar")
-    for side, tab in [["MIS", "mis"], ["Accounts", "fs"], ["Audit", "audit"]]:
+    for side, tab in [["MIS", "mis"], ["Statements", "fs"], ["Audit", "audit"]]:
         pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(500)
         ok(pg.evaluate("booksTab()") == tab, "%s opens from the sidebar" % side)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

@@ -1,0 +1,139 @@
+/* Financial statements (ROUND 99): the page's own look, on Arc's tokens. Calm: one header row, the tabs, then the
+   statement on a white sheet; figures in tabular numerals, right-aligned; nothing said twice. */
+.fin { --fin-gap: 12px; min-width: 0; }
+.fin-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 2px 0 6px; }
+.fin-head .fin-sp { flex: 1 1 auto; }
+.fin-head select { width: auto; }
+
+/* a small segmented control (Unit, Decimals) */
+.fin-seg { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: calc(var(--radius-control, 8px) + 3px);
+  background: var(--surface-muted); }
+.fin-seg > span { padding: 0 6px 0 4px; font-size: 12px; color: var(--text-muted); }
+.fin-seg > button { min-height: 28px; padding: 0 10px; border: 0; border-radius: var(--radius-control, 8px); background: transparent; color: var(--text-secondary);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.fin-seg > button:hover { color: var(--foreground); }
+.fin-seg > button[aria-pressed="true"] { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow-resting); outline: 1px solid var(--border); }
+.fin-seg > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* the Checks tab's chip: red only when a check is not 0 */
+#app nav.sbar.fin-tabs > button[data-fin-tab="checks"] .sbar-n { background: var(--bad-soft, #fde8e8); color: var(--bad, #b42318); }
+
+/* the sheet a statement sits on */
+.fin-sheet { margin-top: 12px; padding: 18px 20px 20px; border: 1px solid var(--border); border-radius: var(--radius-panel, 12px); background: var(--surface); box-shadow: var(--shadow-resting); min-width: 0; }
+.fin-sheet > header { margin: 0 0 10px; }
+.fin-sheet > header h3 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.fin-sheet > header p { margin: 2px 0 0; color: var(--text-muted); font-size: 12.5px; }
+.fin-unit { margin: 0 0 6px; text-align: right; color: var(--text-muted); font-size: 12.5px; font-style: italic; }
+.fin-box { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* a statement's table */
+table.fin-t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.fin-t th { padding: 6px 8px; border-bottom: 1px solid var(--border-strong, var(--border)); text-align: left; font-size: 12.5px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+table.fin-t td { padding: 5px 8px; border-bottom: 1px solid var(--border-subtle, transparent); vertical-align: top; }
+table.fin-t th.n, table.fin-t td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.fin-t th.no, table.fin-t td.no { width: 56px; text-align: center; }
+table.fin-t col.fig { width: 150px; }
+table.fin-t tr.h1 td { padding-top: 12px; font-weight: 700; text-transform: uppercase; font-size: 12.5px; letter-spacing: .02em; }
+table.fin-t tr.h2 td { padding-top: 8px; font-weight: 600; }
+table.fin-t tr.l1 td:first-child { padding-left: 22px; }
+table.fin-t tr.l2 td:first-child { padding-left: 36px; }
+table.fin-t tr.sub td { font-weight: 600; border-top: 1px solid var(--border); }
+table.fin-t tr.tot td { font-weight: 700; border-top: 1px solid var(--border-strong, var(--border)); border-bottom: 3px double var(--border-strong, var(--border)); }
+table.fin-t tr.muted td { color: var(--text-muted); font-size: 12.5px; }
+table.fin-t tr.on td { background: var(--accent-subtle); }
+.fin-fig { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; border-radius: 4px; }
+.fin-fig:hover, .fin-fig:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; outline: none; }
+.fin-neg { color: var(--text-secondary); }
+
+/* notes */
+.fin-note { scroll-margin-top: 80px; padding-top: 6px; }
+.fin-note + .fin-note { margin-top: 18px; border-top: 1px solid var(--border-subtle, var(--border)); padding-top: 14px; }
+.fin-note h4 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.fin-note h4 small { margin-left: 8px; font-weight: 400; color: var(--text-muted); }
+.fin-note.on h4 { color: var(--accent); }
+.fin-notes-jump { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 12px; }
+.fin-notes-jump button { min-height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
+.fin-notes-jump button:hover { color: var(--foreground); border-color: var(--border-strong, var(--border)); }
+
+/* the trial balance */
+.fin-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
+.fin-tools input[type="search"] { width: 240px; max-width: 100%; }
+.fin-unmapped { margin: 0 0 10px; color: var(--bad, #b42318); font-weight: 600; }
+.fin-unmapped .linkbtn { margin-left: 8px; font-weight: 500; }
+.fin-chipf { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); border-radius: 999px;
+  background: var(--accent-subtle); color: var(--accent); font-size: 12.5px; }
+.fin-chipf button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 6px; }
+table.fin-tb { font-size: 13px; }
+table.fin-tb td.led { min-width: 180px; }
+table.fin-tb td.grp { color: var(--text-muted); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+table.fin-tb th select { width: auto; min-height: 26px; padding: 0 22px 0 6px; font-size: 12px; font-weight: 500; }
+table.fin-tb td.code { white-space: nowrap; }
+table.fin-tb tfoot td { font-weight: 700; border-top: 1px solid var(--border-strong, var(--border)); }
+.fin-bulk { position: sticky; bottom: 8px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 0; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-panel, 12px); background: var(--surface-raised, var(--surface)); box-shadow: var(--shadow-raised); }
+
+/* the code pick: a button, and the list it opens (fixed, so a table's scroll box does not cut it) */
+.fin-code { display: inline-flex; align-items: center; gap: 6px; max-width: 230px; min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-control, 8px);
+  background: var(--surface); color: var(--foreground); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+.fin-code:hover { border-color: var(--border-strong, var(--border)); }
+.fin-code b { font-variant-numeric: tabular-nums; }
+.fin-code span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.fin-code.none { color: var(--bad, #b42318); border-style: dashed; }
+.fin-src { margin-left: 6px; }
+.fin-pick { position: fixed; z-index: 80; width: min(380px, calc(100vw - 32px)); max-height: min(380px, 70vh); display: flex; flex-direction: column; border: 1px solid var(--border);
+  border-radius: var(--radius-panel, 12px); background: var(--surface-raised, var(--surface)); box-shadow: var(--shadow-raised); }
+.fin-pick input { margin: 8px; width: auto; }
+.fin-pick ul { list-style: none; margin: 0; padding: 0 0 6px; overflow: auto; }
+.fin-pick li.g { position: sticky; top: 0; padding: 6px 12px 3px; background: var(--surface-raised, var(--surface)); color: var(--text-muted); font-size: 11.5px; font-weight: 600; }
+.fin-pick li button { display: flex; gap: 8px; width: 100%; padding: 5px 12px; border: 0; background: none; color: var(--foreground); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.fin-pick li button:hover, .fin-pick li button:focus-visible { background: var(--accent-subtle); outline: none; }
+.fin-pick li button b { min-width: 34px; font-variant-numeric: tabular-nums; }
+.fin-pick li button.on { color: var(--accent); font-weight: 600; }
+.fin-pick .fin-pick-x { display: flex; gap: 8px; padding: 6px 8px; border-top: 1px solid var(--border-subtle, var(--border)); }
+
+/* adjustments */
+.fin-adj { margin-top: 14px; }
+.fin-adj > summary { cursor: pointer; font-weight: 600; }
+.fin-adj .fin-adj-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.fin-adj .fin-adj-add input { width: 200px; max-width: 100%; }
+.fin-adj .fin-adj-add input[type="number"] { width: 140px; }
+
+/* the computation */
+.fin-comp td .fin-why { display: block; color: var(--text-muted); font-size: 12px; }
+.fin-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.fin-edit input { width: 140px; }
+.fin-edit input.why { width: 220px; }
+.fin-regime { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control, 8px); background: var(--surface-muted); }
+.fin-sheet h5 { margin: 18px 0 6px; font-size: 13.5px; font-weight: 600; }
+.fin-sheet table.fin-t input[type="number"] { width: 130px; text-align: right; }
+
+/* the computation's Change: shown on the line pointed at (or reached by the keyboard), so the column stays quiet */
+.fin-comp tr[data-fin-comp] [data-fin-edit] { opacity: 0; }
+.fin-comp tr[data-fin-comp]:hover [data-fin-edit], .fin-comp [data-fin-edit]:focus-visible { opacity: 1; }
+@media (hover: none) { .fin-comp tr[data-fin-comp] [data-fin-edit] { opacity: 1; } }
+/* checks */
+.fin-ok { color: var(--st-done, var(--ok)); }
+.fin-bad { color: var(--st-failed, var(--bad)); font-weight: 600; }
+
+/* the Details drawer */
+.fin-dl { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.fin-dl label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-muted); }
+.fin-dl label input, .fin-dl label select, .fin-dl label textarea { color: var(--foreground); }
+.fin-dl .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fin-dl h5 { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--foreground); }
+.fin-dl .fin-rowx { display: grid; grid-template-columns: 1fr 110px 110px auto; gap: 6px; align-items: center; }
+
+@media (max-width: 600px) {
+  .fin-head { gap: 6px; }
+  .fin-head .fin-sp { display: none; }
+  .fin-sheet { padding: 12px 10px 14px; }
+  table.fin-t { font-size: 12.5px; }
+  table.fin-t col.fig { width: auto; }
+  /* a statement keeps its columns: wide enough to read, scrolled inside its own box (the page never moves sideways) */
+  table.fin-t { min-width: 520px; }
+  table.fin-t[data-fin-grid], table.fin-tb { min-width: max-content; }
+  table.fin-tb td.led { min-width: 160px; white-space: normal; }
+  table.fin-t th.no, table.fin-t td.no { width: 36px; }
+  .fin-dl .two { grid-template-columns: 1fr; }
+  .fin-dl .fin-rowx { grid-template-columns: 1fr 1fr; }
+}

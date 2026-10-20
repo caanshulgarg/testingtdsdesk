@@ -13,7 +13,7 @@ import Gst from "./Gst.jsx";
 import FromTally, { needDays } from "./books/FromTally.jsx";
 import MisTab from "./books/Mis.jsx";
 import { ServerMis, ServerTds, ServerGst } from "./books/ServerReports.jsx";
-import Accounts from "./books/Accounts.jsx";
+import FinStatements from "./books/FinStatements.jsx";
 import Reports from "./books/Reports.jsx";
 import Lookup from "./books/Lookup.jsx";
 import Letters from "./books/Letters.jsx";
@@ -57,7 +57,7 @@ const BRING = "Bring in from Tally";
 const EMPTY_TAB = {
   // clean-up batch 3: one sentence, one button
   mis: ["MIS is worked out from the day book, which is not in yet.", BRING, () => goClient("books:import")],
-  fs: ["The accounts (balance sheet and profit and loss) are made from the day book, which is not in yet.", BRING, () => goClient("books:import")],
+  fs: ["The financial statements are made from the day book, which is not in yet.", BRING, () => goClient("books:import")],
   audit: ["The audit checks run over the day book, which is not in yet.", BRING, () => goClient("books:import")],
 };
 function EmptyTab({ tab }) {
@@ -99,7 +99,7 @@ function BooksPage() {
   if (tab === "recon") return <>{busy}<Recon b={b} /></>;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
-  // MIS, Accounts and Audit: pages of their own in the sidebar (review item 7); the tie-out is Audit's tab
+  // MIS, Financial statements and Audit: pages of their own in the sidebar (review item 7); the tie-out is Audit's tab
   if (tab === "mis" || tab === "fs" || tab === "audit" || tab === "tieout") {
     // the page's title is in the top bar
     return <>
@@ -107,7 +107,7 @@ function BooksPage() {
       <JobsNote cid={co.id} active />
       {busy}
       {tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
-        : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
+        : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <FinStatements b={b} />}
     </>;
   }
   // clean-up batch 1: TDS and GST are each a page of the sidebar (Returns), with no tab row here. ledger-confirm
@@ -124,7 +124,7 @@ function BooksPage() {
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "audit") body = <AuditTab b={b} />;
   else if (tab === "mis") body = <MisTab b={b} />;
-  else body = <Accounts b={b} />;
+  else body = <FinStatements b={b} />;
   return <>
     {tabs.length > 0 && <nav className="sbar" aria-label="From Tally">{tabs.map(([id, label, c]) =>
       <button key={id} data-books-tab={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>}
