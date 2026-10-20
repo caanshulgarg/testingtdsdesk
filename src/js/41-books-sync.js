@@ -17,7 +17,7 @@ const BookSync = {
   // read from Tally and worked out from it again at any time: not sent
   // (the ledger masters are shared: a colleague sees the same groups, PANs and ledger details; the day book and the
   // balances are shared through the cloud copy of the books)
-  FROM_TALLY: ["vouchers", "meta", "tb", "mis"],
+  FROM_TALLY: ["vouchers", "meta", "tb", "mis", "payroll"],
   st: {},            // cid -> {rev, base, timer, busy, again, error, at, by, readonly}
   off: false,        // the database has no client_books: work only in this browser
   wait: 1500,

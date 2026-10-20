@@ -262,6 +262,22 @@ const Payroll = {
     return TDS.expandSplits(out);
   },
   UNSPLIT: "TDS not split by employee",
+  // next-24q-load: a challan given to a payroll entry's books 192 line (read while the payroll was missing) carried to that
+  // entry's employee rows with TDS and no challan, when their TDS fits what is left of it; else left for the matcher
+  carry(b){
+    const al = b && b === S.books && b.alloc, V = (b && b.payroll || {}).vouchers || {}; let n = 0;
+    if (!al) return 0;
+    const rows = this.tdsRowsNow();
+    Object.keys(al).forEach(k => { const g = k.split("|")[0], c = TDS.challans().find(x => x.id === al[k]);
+      if (/^pay:/.test(k) || !V[g] || !c) return;
+      const rs = rows.filter(r => r.tds > 0.005 && !al[r.id] && (r.id.indexOf("pay:" + g + "|") === 0 || (r.also || []).indexOf(g) >= 0));
+      TDSReg.forget();
+      if (!rs.length || rs.reduce((a, r) => a + r.tds, 0) > TDSReg.balance(c).tax + 0.005) return;
+      rs.forEach(r => { al[r.id] = c.id; n++; TDSReg.log({act: "tag", ch: c, form: "24Q", fy: r.fy, q: r.q, row: r.id, tax: r.tds, note: "carried from the month's total"}); });
+    });
+    if (n){ TDSReg.forget(); TDSReg.done(); }
+    return n;
+  },
   // next-challan-match (the owner, 17-Oct-2026: matches are shown and confirmed, never applied by themselves): the months a
   // Tally payroll TDS payment says it pays are now rule a ("From Tally") of the one matcher (TDSMatch.links, src/js/86),
   // shown on Form 138's Challans tab for a person to confirm. Nothing is tagged here any more; kept so its callers (the
