@@ -63,6 +63,7 @@ SETUP = r"""(a) => {
   S.companies[co.id] = co; S.data = S.data || {}; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; S.coId = co.id; S.firm = a.auditor;
   const b = a.kind === "co" ? books(F, "20240401", [["20250331", F.p, F.plp, F.o], ["20260331", F.c, F.plc, F.p]]) : books(F, "20250401", [["20260331", F.c, F.plc, F.o]]);
   b.cid = co.id; b.fs = a.fs; if (a.kind === "co") b.msme = {"Bluebell Print Works": "Micro"};
+  (a.extra || []).forEach(v => b.vouchers.push(v));
   S.books = b; window.__fx = b;
   return FinSt.build("2025", {unit: 1, dec: 2}).error || "";
 }"""
@@ -115,8 +116,12 @@ def recalc(files):
 
 CO_SHEETS = ["Inputs", "Balance Sheet", "Profit-Loss", "CF", "Notes", "PPE", "Computation of Income", "Trial Balance", "JV", "Accounting Ratios"]
 NC_SHEETS = CO_SHEETS[:-1]
+# depreciation credited straight to the asset (Tally's usual way, no accumulated-depreciation ledger): one in the day book
+# (Trial Balance L's value), one an adjustment (L's JV part); the PPE schedule's charge and the P&L carry both
+CO_EXTRA = [{"id": "dep1", "date": "20260331", "type": "Journal", "narr": "Depreciation on office equipment", "ent": [{"l": "Depreciation", "a": -10000}, {"l": "Office Equipment", "a": 10000}]}]
 CO_FS = {"taxDep": {"2024": {"c40": 220000, "pm15": 140000, "f10": 80000}},
-         "adj": {"2025": [{"dr": "Income Tax - Current Year", "cr": "Provision for Income Tax FY 2025-26", "amt": 683940, "narr": "Provision for income tax"}]},
+         "adj": {"2025": [{"dr": "Income Tax - Current Year", "cr": "Provision for Income Tax FY 2025-26", "amt": 683940, "narr": "Provision for income tax"},
+                          {"dr": "Depreciation", "cr": "Furniture and Fixtures", "amt": 5000, "narr": "Depreciation on furniture, written off the asset"}]},
          "inputs": {"shares": {"number": 10000, "face": 10, "authorised": 100000, "holders": [{"name": "Maple Holdings Inc", "n": 9999}]},
                     "directors": [{"name": "A. Director", "din": "00000001", "desig": "Director"}, {"name": "B. Director", "din": "00000002", "desig": "Director"}],
                     "place": "Bengaluru", "date": "15-09-2026", "udin": "26000001ABCDEF1234"}}
@@ -144,8 +149,10 @@ with sync_playwright() as p:
     sha = hashlib.sha256(open(os.path.join(SITE, "assets", "exceljs.min.js"), "rb").read()).hexdigest()
     ok(os.path.exists(os.path.join(SITE, "assets", "exceljs-LICENSE.txt")), "ExcelJS's licence is served beside it")
 
-    err = pg.evaluate(SETUP, {"fix": C, "co": CO, "auditor": AUDITOR, "kind": "co", "fs": CO_FS})
+    err = pg.evaluate(SETUP, {"fix": C, "co": CO, "auditor": AUDITOR, "kind": "co", "fs": CO_FS, "extra": CO_EXTRA})
     ok(not err, "the company's statements are worked out" + (": " + err if err else ""))
+    dc = pg.evaluate("(() => { const d = FinSt.build('2025', {unit: 1, dec: 2}); const r = c => d.ppe.cy.rows.find(z => z.cls === c) || {}; return [r('oe').dc, r('furn').dc, d.pl.dep.cy, d.checks.filter(c => c.value).map(c => c.key)]; })()")
+    ok(dc[0] == 10000 and dc[1] == 5000 and dc[2] == 165000 and not dc[3], "depreciation credited to the assets (10,000 in the day book, 5,000 by an adjustment) is in the charge: P&L 1,65,000, checks 0 %s" % dc)
     ok(pg.evaluate("window.loadFinExport().then(m => m.FinXlsx.sha256)") == sha, "assets/exceljs.min.js is the file the module names (sha256 %s...)" % sha[:16])
 
     print("\nFinXlsx.download")

@@ -15,7 +15,7 @@ screen and the workbook agree. Amounts in the trial balance are **rupees, a debi
 | `FinSt.NOTES`, `PPE`, `INT`, `BLOCKS`, `UNITS` | the layout: notes and groups, PPE classes `[cls, label, gross, dep, block]`, tax blocks `[key, name, rate]`, units |
 | `FinSt.suggest(ledger, groupPath?, balance, kind?)` | a code by rule: `FS.place` (its line), refined by name/group. `balance` debit positive |
 | `FinSt.codeOf(ledger, balance)` | `{code, codeSrc}`: by hand (`b.fs.map`: a code, an old line name, or `"none"`), else suggested |
-| `FinSt.tb(fy)` | `{fy, from, to, kind, entity, pySrc: "copy"/"typed"/"opening", src, adj, rows: [{ledger, group, py, cy, adj, final, code, codeSrc: "hand"/"suggested"/"none", side: "BS"/"PL"/"", synthetic?}]}` or `{error}` |
+| `FinSt.tb(fy)` | `{fy, from, to, kind, entity, pySrc: "copy"/"typed"/"opening", src, adj, rows: [{ledger, group, py, cy, adj, final, code, codeSrc: "hand"/"suggested"/"none", side: "BS"/"PL"/"", synthetic?, depCr?, depCrBook?}]}` or `{error}` (`depCr` / `depCrBook` on gross-block rows: below) |
 | `FinSt.build(fy, {unit, dec})` | `{fy, kind, entity, inputs, tb, notes, noteOf, bs, pl, cf, ppe, intang, plug, comp, checks}` or `{error}`; unit 1/1e3/1e5/1e7, dec 0/2 (default from inputs) |
 | `FinSt.inputs(co?, firm?)` | `{name, cin, pan, address, holding, shares{number, face, authorised, holders[{name, n}]}, directors[{name, din, desig}], partners[], auditor{firm, frn, partner, mno, place}, place, date, udin, unit, dec, kind, entity, regime, unitLine}` |
 | `FinSt.comp(d)` | (inside build) `{regime, ay, lines[{key, label, sec, v, calc, edited?, why?, codes?, rows?, items?}], itdep, checks}` |
@@ -33,6 +33,14 @@ expense ledgers carried in at the start of the year (last year's profit, Tally n
 row. PY: `b.fs.pyTb[fy]` if typed ("typed"), else the year before in FinCom's copy, with `b.fs.adj[fy-1]` applied
 ("copy"), else the opening balances only, balance sheet only ("opening"). Adj = adjustments (Dr +, Cr -). Final = CY + Adj.
 
+**Depreciation credited straight to an asset** (Tally's usual way: Dr Depreciation / Cr Laptops, no accumulated-
+depreciation ledger). Each gross-block row (`CODES[code].ppe === "gross"`) carries `depCrBook`: the depreciation the day
+book's entries of the year credit to it (an entry debiting an 8E / 34D ledger and crediting the asset; never more than the
+depreciation entered, shared in proportion; a reversal the other way is a minus), and `depCr` = `depCrBook` + the
+adjustments Dr an 8E / 34D ledger, Cr the asset (less the reverse). The PPE schedule adds it back to the gross block and to
+the accumulated depreciation (below), so the charge for the year is the depreciation ledger's, the additions are not net
+of it, and the net block stays the TB's. Such an entry is not read as a sale in the income-tax depreciation (`taxDep`).
+
 ## The workbook
 
 Sheets: Inputs, Balance Sheet, Profit-Loss, CF, Notes, PPE (Note 8 / 34), Computation of Income, Trial Balance, JV.
@@ -40,10 +48,14 @@ Defined names (Inputs): `UNIT` = unit, `DEC` = decimals, `TOL` = `d.inputs.tol` 
 
 **Trial Balance** (one row per `tb.rows`, from row 5): A Ledger, B Group, C PY (value), D CY (value), E Adj
 `=SUMIF(JV!$B:$B,$A5,JV!$D:$D)-SUMIF(JV!$C:$C,$A5,JV!$D:$D)`, F Final `=D5+E5`, G Code, H `=F5/UNIT`, I `=C5/UNIT`,
-J Side (`row.side`, a value). **JV**: A narration, B Dr ledger, C Cr ledger, D amount (`b.fs.adj[fy]`).
+J Side (`row.side`, a value), K the code's meaning (a value), L (gross-block rows) depreciation credited to the asset
+`=<depCrBook>+SUMPRODUCT((JV!$C$5:$C$n=$A5)*(JV!$E$5:$E$n="dep")*JV!$D$5:$D$n)-SUMPRODUCT((JV!$B$5:$B$n=$A5)*(JV!$F$5:$F$n="dep")*JV!$D$5:$D$n)`.
+**JV**: A narration, B Dr ledger, C Cr ledger, D amount (`b.fs.adj[fy]`), E / F `"dep"` when the Dr / Cr ledger's code
+(TB G) is 8E or 34D: `=IF(SUMPRODUCT(('Trial Balance'!$A$5:$A$N=B5)*(('Trial Balance'!$G$5:$G$N="8E")+('Trial Balance'!$G$5:$G$N="34D")))>0,"dep","")`.
 
 Below, `SC(x)` = `SUMIFS('Trial Balance'!$H:$H,'Trial Balance'!$G:$G,"x")`, `SP(x)` the same on `$I:$I`,
-`RS(x)` = `SUMIFS('Trial Balance'!$F:$F,'Trial Balance'!$G:$G,"x")` (rupees).
+`RS(x)` = `SUMIFS('Trial Balance'!$F:$F,'Trial Balance'!$G:$G,"x")` (rupees), `SD(x)` = `SUMIFS('Trial Balance'!$L:$L,'Trial Balance'!$G:$G,"x")/UNIT`
+(depreciation credited straight to the assets of gross code x, in the unit).
 
 ### Notes (`d.notes[]`: `{no, key, title, groups{g: {head, sec, cy, py, lines}}, lines[], total}`)
 - A line with a `code` (sign `s` = `CODES[code].sign`: -1 liabilities and income, +1 assets and expenses):
@@ -68,15 +80,17 @@ Per class row, gross code g, depreciation code a (land has none), `S = ROUND(b.f
 | D gross opening | `=ROUND(SP(g),DEC)` |
 | E additions | `=ROUND(MAX(0,G-D)+S,DEC)` |
 | F (sales) | `=ROUND(-(MAX(0,D-G)+S),DEC)` |
-| G gross closing | `=ROUND(SC(g),DEC)` |
+| G gross closing | `=ROUND(SC(g)+SD(g),DEC)` (the TB's, with the depreciation credited straight to the asset added back) |
 | H dep opening | `=ROUND(-SP(a),DEC)` |
 | I charge | `=ROUND(K-H-J,DEC)` |
 | J (sales) dep | `=-ROUND(ppeAdj.dep/UNIT,DEC)` |
-| K dep closing | `=ROUND(-SC(a),DEC)` |
+| K dep closing | `=ROUND(-SC(a)+SD(g),DEC)` (no a: `=ROUND(SD(g),DEC)`) |
 | L net opening | `=ROUND(D-H,DEC)` |
 | M net closing | `=ROUND(G-K,DEC)` |
 
-Total row `=SUM(...)`. A class with nil D, G, H and K is left out. PY grid (`d.ppe.py`): the year before's CY grid, as
+Total row `=SUM(...)`. A class with nil D, G, H and K is left out. So with the depreciation credited straight to the asset
+(SD), the opening gross block is the TB's opening (the written-down value), the charge I includes SD, and M = the TB's
+net closing; `rows[].dc` is SD rounded (the screen and PDF say so under the grid). PY grid (`d.ppe.py`): the year before's CY grid, as
 values, when FinCom has it; else `partial: true` with only G `=ROUND(SP(g),DEC)`, K `=ROUND(-SP(a),DEC)`, M `=G-K`.
 Balance sheet PPE = M total; intangibles = Note 34 M total.
 

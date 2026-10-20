@@ -133,9 +133,13 @@ export default function Reports({ b }) {
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {!have && <NoBooks what="Reports" />}
   </>;
-  // Step 3: the financial statements and reports (Statements.jsx, FSX in src/js/78-reports.js)
+  // the older "Financial statements (Schedule III)" view is gone: an old link to it opens the Financial statements page,
+  // Reports' one entry for the statements (RPT.LIST "fs")
+  useEffect(() => { if (S.rxView === "fs") { S.rxView = null; goClient("books:fs"); } });
+  if (S.rxView === "fs") return <div data-phone-scroll="">{head}</div>;
+  // Step 3: the cash MIS, 3CD draft and DCF (Statements.jsx, FSX in src/js/78-reports.js)
   if (have && S.rxView) return <div data-phone-scroll="">{head}<Statements b={b} /></div>;
-  const rx = have ? <section className="rpt-group rpt-g-rx" data-rpt-group="rx" style={{ margin: "8px 0 12px" }}><header><h3>Financial statements and reports</h3><span className="note">Schedule III, cash MIS, 3CD, DCF</span></header>
+  const rx = have ? <section className="rpt-group rpt-g-rx" data-rpt-group="rx" style={{ margin: "8px 0 12px" }}><header><h3>MIS, tax audit and valuation</h3><span className="note">Cash MIS, 3CD, DCF</span></header>
     <ul className="rpt-list">{RX_VIEWS.map(([k, l, w]) => <li key={k}><button className="rpt-link rpt-row" data-rx-entry={k} onClick={() => setAndShow("rxView", k)}><b>{l}</b><span>{w}</span></button></li>)}</ul></section> : null;
   if (q) {
     const hits = RPT.LIST.filter((r) => (r[2] + " " + r[3] + " " + RPT.AREAS.find((a) => a.id === r[1]).title).toLowerCase().includes(q));

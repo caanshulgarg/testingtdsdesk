@@ -28,12 +28,11 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("Balance sheet as at" in t and "Shareholders' funds" in t, "Schedule III balance sheet")
     tot = pg.locator('#app tr[data-fin-total] td:nth-child(3)').evaluate_all("xs => xs.map(x => x.innerText.trim())")
-    # the balance sheet tallies, or the Checks tab says why not (on the made-up books the depreciation is credited to the
-    # assets themselves, with no accumulated-depreciation ledger: FinSt's PPE schedule then has no charge for the year,
-    # and the check "Depreciation: schedule - trial balance" reads -60,000; a matter for the model, src/js/88)
-    why = pg.evaluate("(() => { const d = FinSt.build(fsYearNow(), {unit: 1, dec: 2}); return d.checks.filter(c => c.value).map(c => c.key); })()")
+    # the balance sheet tallies and every check reads 0 (on the made-up books the depreciation is credited to the assets
+    # themselves, with no accumulated-depreciation ledger: FinSt still puts the year's 60,000 in the P&L and in Note 8 / 34)
+    why = pg.evaluate("(() => { const d = FinSt.build(fsYearNow(), {unit: 1, dec: 2}); return d.checks.filter(c => c.value).map(c => c.key + ' ' + c.value); })()")
     chip = pg.locator('#app [data-fin-tab="checks"] .sbar-n')
-    ok(len(tot) == 2 and (tot[0] == tot[1] or ("ppeDep" in why and chip.count() == 1)), "the balance sheet tallies, or the Checks tab shows why (%s; %s)" % (tot, why))
+    ok(len(tot) == 2 and tot[0] == tot[1] and not why and chip.count() == 0, "the balance sheet tallies (%s), every check 0 (%s)" % (tot, why))
     pg.screenshot(path=OUT + "/fs.png", full_page=False)
     pg.click('#app nav.fin-tabs [data-fin-tab="tb"]'); pg.wait_for_timeout(1200)
     l = pg.locator('#app table[data-fin-table="tb"] button[data-fin-codebtn]').first.get_attribute("data-fin-codebtn")

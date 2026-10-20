@@ -3,8 +3,8 @@
 // the Accounts page (its Mapping is the Trial balance & mapping tab). Opens from the client's menu (books:fs), from
 // Reports ("Financial statements"), and from old links to books:fs.
 //
-// Header: year · Unit · Decimals · Details (the company's details, a drawer) · Download Excel · Download PDF (built by
-// window.FinXlsx / window.FinPdf). Tabs: Balance sheet · Profit & loss · Cash flow · Notes · Computation of income ·
+// Header: year · Unit · Decimals · Details (the company's details, a drawer) · Download Excel · Download PDF (with trial
+// balance), built by window.FinXlsx.download / window.FinPdf.open in the chosen unit and decimals. Tabs: Balance sheet · Profit & loss · Cash flow · Notes · Computation of income ·
 // Trial balance & mapping · Checks (a red count only when a check is not 0).
 //
 // The figures: FinSt.build (src/js/88-fin-statements.js, docs/fin-statements-api.md). The page's state: S.fin (tab, note,
@@ -30,14 +30,17 @@ function Seg({ label, value, list, onPick }) {
     {list.map(([v, l]) => <button key={v} type="button" aria-pressed={value === v} data-v={v} onClick={() => value !== v && onPick(v)}>{l}</button>)}</div>;
 }
 
-// the downloads: built by the Excel and PDF writers (window.FinXlsx, window.FinPdf); until those are in, a word
+// the downloads: the Excel and the PDF (window.FinXlsx / window.FinPdf, app/src/lib/finExport.js, loaded the first time),
+// in the unit and decimals chosen in the header. Only when that module cannot be loaded (offline, a failed fetch) a word
 function download(kind, fy, o) {
-  const X = kind === "xlsx" ? window.FinXlsx : window.FinPdf;
-  if (!X || typeof (kind === "xlsx" ? X.download : X.open) !== "function") { toast(kind === "xlsx" ? "Excel is being prepared" : "The PDF is being prepared"); return; }
+  const X = kind === "xlsx" ? window.FinXlsx : window.FinPdf, fn = X && (kind === "xlsx" ? X.download : X.open);
+  const notLoaded = () => toast(kind === "xlsx" ? "Excel is being prepared: it could not be loaded just now, try again in a moment" : "The PDF is being prepared: it could not be loaded just now, try again in a moment");
+  const failed = (e) => (e && (e.finLoad || e.code === "lib_missing") ? notLoaded() : toast("Could not build the file: " + ((e && e.message) || e)));
+  if (typeof fn !== "function") { notLoaded(); return; }
   try {
-    const r = kind === "xlsx" ? X.download(fy, o) : X.open(fy, o);
-    if (r && typeof r.then === "function") r.catch((e) => toast("Could not build the file: " + ((e && e.message) || e)));
-  } catch (e) { toast("Could not build the file: " + ((e && e.message) || e)); }
+    const r = fn.call(X, fy, o);
+    if (r && typeof r.then === "function") r.catch(failed);
+  } catch (e) { failed(e); }
 }
 
 // where each check is put right

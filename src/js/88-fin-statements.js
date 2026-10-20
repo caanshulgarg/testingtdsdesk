@@ -211,7 +211,31 @@ const FinSt = (() => {
       out.push(Object.assign(r, k.code && !K[k.code] ? {code: "", codeSrc: "none"} : k)); r.side = r.code ? CODES[r.code].side : "";
     });
     syn(BF, "4A", bfCy, bfPy);
+    depCredited(b, out, adj, from, to, kind, f.map || {});
     return {fy, from, to, kind, entity: FS.entityOf().code, rows: out, pySrc, src: bal.src, adj};
+  }
+  // depreciation credited straight to an asset (Tally's usual way: Dr Depreciation / Cr Laptops, no accumulated-
+  // depreciation ledger): per gross-block row, depCrBook (the day book's entries of the year that debit a depreciation
+  // ledger, 8E / 34D, and credit the asset; a reversal the other way) and depCr (with the adjustments Dr 8E/34D, Cr the
+  // asset). The PPE schedule adds it to the gross block and to the charge, so the net block stays the TB's (docs)
+  const isDep = c => c === "8E" || c === "34D", isGross = c => !!(CODES[c] && CODES[c].ppe === "gross");
+  function depCredited(b, out, adj, from, to, kind, map){
+    const code = {}; out.forEach(r => { code[r.ledger] = r.code; });
+    const cOf = l => code[l] !== undefined ? code[l] : (code[l] = codeOf(l, 1, kind, map).code), book = {};
+    (b.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      const ent = v.ent || [], dep = ent.filter(en => isDep(cOf(en.l))).reduce((s, en) => s - N(en.a), 0);   // a debit positive
+      if (Math.abs(dep) < 0.005) return;
+      // the asset side: credits for a charge, debits for a reversal; never more than the depreciation entered
+      const ast = ent.filter(en => isGross(cOf(en.l)) && (dep > 0 ? N(en.a) > 0 : N(en.a) < 0)), tot = ast.reduce((s, en) => s + N(en.a), 0);
+      if (!tot) return; const k = Math.min(1, dep / tot);
+      ast.forEach(en => { book[en.l] = (book[en.l] || 0) + N(en.a) * k; });
+    });
+    const all = Object.assign({}, book);
+    adj.forEach(a => { if (!N(a.amt) || !a.dr || !a.cr) return;
+      if (isDep(cOf(a.dr)) && isGross(cOf(a.cr))) all[a.cr] = (all[a.cr] || 0) + N(a.amt);
+      else if (isGross(cOf(a.dr)) && isDep(cOf(a.cr))) all[a.dr] = (all[a.dr] || 0) - N(a.amt); });
+    out.forEach(r => { if (isGross(r.code)){ r.depCr = R2(N(all[r.ledger])); r.depCrBook = R2(N(book[r.ledger])); } });
   }
 
   // ---------- inputs ----------
@@ -235,7 +259,8 @@ const FinSt = (() => {
     const inp = inputs(), unit = UNITS[opt.unit] ? N(opt.unit) : inp.unit, dec = opt.dec === 0 || opt.dec === 2 ? opt.dec : inp.dec, kind = T.kind, K = codes(kind);
     const b = S.books, f = b.fs || {}, e = T.entity;
     const SU = {cy: {}, py: {}};
-    T.rows.forEach(r => { if (!r.code) return; SU.cy[r.code] = (SU.cy[r.code] || 0) + r.final / unit; SU.py[r.code] = (SU.py[r.code] || 0) + r.py / unit; });
+    const DC = {};   // depreciation credited straight to the assets, by gross code, in the unit (TB column L / UNIT)
+    T.rows.forEach(r => { if (!r.code) return; SU.cy[r.code] = (SU.cy[r.code] || 0) + r.final / unit; SU.py[r.code] = (SU.py[r.code] || 0) + r.py / unit; if (r.depCr) DC[r.code] = (DC[r.code] || 0) + r.depCr / unit; });
     const S1 = (col, code) => SU[col][code] || 0, LV = (col, code, sign) => RND(sign * S1(col, code), dec), SUM = a => RND(a.reduce((s, v) => s + N(v), 0), dec);
     const nUsed = Object.keys(SU.cy).filter(k => Math.abs(SU.cy[k]) > 1e-9 || Math.abs(SU.py[k]) > 1e-9).length;
     const tol = RND(0.5 * Math.pow(10, -dec) * Math.max(2, nUsed + 2), dec + 1);
@@ -246,11 +271,13 @@ const FinSt = (() => {
       const rows = [];
       list.forEach(([cls, label, g, a]) => {
         if (col === "cy"){
-          const D = LV("py", g, 1), G = LV("cy", g, 1), H = a ? LV("py", a, -1) : 0, Kc = a ? LV("cy", a, -1) : 0, x = (adjs || {})[g] || {};
+          // the depreciation credited straight to the asset (dc) is added back to the gross block and to the
+          // accumulated depreciation: the charge shows, the additions are not net of it, the net block is the TB's
+          const dc = DC[g] || 0, D = LV("py", g, 1), G = RND(S1("cy", g) + dc, dec), H = a ? LV("py", a, -1) : 0, Kc = RND((a ? -S1("cy", a) : 0) + dc, dec), x = (adjs || {})[g] || {};
           const sale = RND(N(x.sale) / unit, dec), J = -RND(N(x.dep) / unit, dec);
           if (!D && !G && !H && !Kc) return;
           const E = RND(Math.max(0, G - D) + sale, dec), F = RND(-(Math.max(0, D - G) + sale), dec), I = RND(Kc - H - J, dec);
-          rows.push({cls, label, g, a, D, E, F, G, H, I, J, K: Kc, L: RND(D - H, dec), M: RND(G - Kc, dec)});
+          rows.push({cls, label, g, a, D, E, F, G, H, I, J, K: Kc, L: RND(D - H, dec), M: RND(G - Kc, dec), dc: dc ? RND(dc, dec) : 0});
         } else {
           const G = LV("py", g, 1), Kc = a ? LV("py", a, -1) : 0; if (!G && !Kc) return;
           rows.push({cls, label, g, a, D: null, E: null, F: null, G, H: null, I: null, J: null, K: Kc, L: null, M: RND(G - Kc, dec)});
@@ -442,8 +469,11 @@ const FinSt = (() => {
     const T = tb(fy), half = fy + "0930", cache = {}; if (!T.error) T.rows.forEach(r => { cache[r.ledger] = r.code; });
     (b.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel || /DEPRECIATION/i.test(v.narr || "")) return;
+      const cOf = l => cache[l] !== undefined ? cache[l] : (cache[l] = codeOf(l, 1, kind, map).code);
+      // the books' depreciation credited to the asset (an entry debiting 8E / 34D) is no sale
+      if ((v.ent || []).some(en => isDep(cOf(en.l)))) return;
       (v.ent || []).forEach(en => {
-        const c = cache[en.l] !== undefined ? cache[en.l] : (cache[en.l] = codeOf(en.l, 1, kind, map).code), x = CODES[c];
+        const c = cOf(en.l), x = CODES[c];
         if (!x || x.ppe !== "gross") return;
         const k = (f.taxBlock || {})[en.l] || x.blk; if (!blk[k]) return;
         if (N(en.a) < 0){ if (v.date <= half) blk[k].addA = R2(blk[k].addA - N(en.a)); else blk[k].addB = R2(blk[k].addB - N(en.a)); }

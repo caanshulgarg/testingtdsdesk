@@ -24,10 +24,11 @@ import "./lib/payLoad.js";
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
 // are asked for. Until then FinXlsx / FinPdf load it and pass the call on; the PDF's window is opened at once (a pop-up
-// opened after a wait is blocked) and filled when the module is in
-window.loadFinExport = () => import("./lib/finExport.js").catch((e) => { staleReload(e, true); throw e; });
+// opened after a wait is blocked) and filled when the module is in. A module that cannot be loaded rejects with
+// e.finLoad (the page then says so; the PDF's empty window is closed)
+window.loadFinExport = () => import("./lib/finExport.js").catch((e) => { staleReload(e, true); const x = e instanceof Error ? e : new Error(String(e)); x.finLoad = true; throw x; });
 if (!window.FinXlsx) window.FinXlsx = { download: (fy, o) => window.loadFinExport().then((m) => m.FinXlsx.download(fy, o)), make: (fy, o) => window.loadFinExport().then((m) => m.FinXlsx.make(fy, o)) };
-if (!window.FinPdf) window.FinPdf = { open: (fy, o) => { const w = window.open("", "_blank"); return window.loadFinExport().then((m) => m.FinPdf.open(fy, o, w)); } };
+if (!window.FinPdf) window.FinPdf = { open: (fy, o) => { const w = window.open("", "_blank"); return window.loadFinExport().then((m) => m.FinPdf.open(fy, o, w), (e) => { try { if (w) w.close(); } catch (x) { /* */ } throw e; }); } };
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path
 import { MotionConfig } from "motion/react";
 

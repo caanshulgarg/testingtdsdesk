@@ -8,16 +8,19 @@ the figures are those of tests/run_fin_statements.js, worked out by hand):
   - the checks all read 0 on the fixture (after the tax provision is booked as an adjustment), and the red count shows
     on the Checks tab when one is broken;
   - a line of the computation changed with a reason is kept after a reload;
-  - Download Excel and Download PDF call FinXlsx / FinPdf with the chosen unit; without them, a word that they are coming;
+  - Download Excel and Download PDF (with trial balance) build the real files in the chosen unit and decimals (saved as
+    FIN_SAMPLES/sample.xlsx and sample.pdf); only when the writers cannot be loaded, a word that they are coming;
   - a phone (390 wide): the tables scroll inside their box, the page never sideways.
 Screenshots of each tab (1440 light, and a phone) go to TDSDESK_SHOTS (default tests/out/fin-shots).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_fin_statements_ui.py"""
 import json, os, subprocess, threading, functools, http.server
+import openpyxl
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = os.environ.get("TDSDESK_SHOTS", os.path.join(HERE, "out", "fin-shots")); os.makedirs(SHOTS, exist_ok=True)
+SAMPLES = os.environ.get("FIN_SAMPLES", SHOTS); os.makedirs(SAMPLES, exist_ok=True)
 PORT = 8267
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -65,7 +68,7 @@ def shot(pg, name):
 
 with sync_playwright() as p:
     br = p.chromium.launch()
-    ctx = br.new_context(viewport={"width": 1440, "height": 900}, color_scheme="light"); pg = ctx.new_page()
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}, color_scheme="light", accept_downloads=True); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
     cid = pg.evaluate(SETUP, BOOKS); pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
@@ -207,13 +210,32 @@ with sync_playwright() as p:
 
     print("Downloads")
     pg.click('#app [data-fin-seg="Unit"] button:text-is("Lakhs")'); pg.wait_for_timeout(800)
-    pg.evaluate("() => { delete window.FinXlsx; delete window.FinPdf; window.__toasts = []; const t = window.toast; window.toast = (m, o) => { window.__toasts.push(String(m)); return t(m, o); }; }")
-    pg.click('#app [data-fin-dl="xlsx"]'); pg.wait_for_timeout(300)
-    ok("Excel is being prepared" in pg.evaluate("window.__toasts.join('|')") or "Excel is being prepared" in pg.inner_text("body"), "without the Excel writer: “Excel is being prepared”")
-    pg.evaluate("() => { window.__calls = []; window.FinXlsx = {download: (fy, o) => window.__calls.push(['xlsx', fy, o])}; window.FinPdf = {open: (fy, o) => window.__calls.push(['pdf', fy, o])}; }")
-    pg.click('#app [data-fin-dl="xlsx"]'); pg.check('#app input[aria-label="PDF with the trial balance"]'); pg.wait_for_timeout(300); pg.click('#app [data-fin-dl="pdf"]'); pg.wait_for_timeout(300)
-    calls = pg.evaluate("window.__calls")
-    ok(calls == [["xlsx", "2025", {"unit": 100000, "dec": 2}], ["pdf", "2025", {"unit": 100000, "dec": 2, "includeTb": True}]], "Download Excel / PDF call FinXlsx.download and FinPdf.open with the year and the unit chosen (%s)" % calls)
+    pg.evaluate("() => { window.__toasts = []; const t = window.toast; window.toast = (m, o) => { window.__toasts.push(String(m)); return t(m, o); }; }")
+    # the real writers (app/src/lib/finExport.js, loaded on the first click): the Excel in the unit and decimals chosen
+    with pg.expect_download(timeout=90000) as dl:
+        pg.click('#app [data-fin-dl="xlsx"]')
+    xl = os.path.join(SAMPLES, "sample.xlsx"); dl.value.save_as(xl)
+    wv = openpyxl.load_workbook(xl, data_only=True)
+    ok(dl.value.suggested_filename.endswith(".xlsx") and wv["Inputs"]["E4"].value == 100000 and wv["Inputs"]["E5"].value == 2 and "Trial Balance" in wv.sheetnames,
+       "Download Excel: %s, in lakhs at 2 decimals (Inputs!E4 %s, E5 %s)" % (dl.value.suggested_filename, wv["Inputs"]["E4"].value, wv["Inputs"]["E5"].value))
+    ok(not pg.evaluate("window.__toasts.join('|')"), "... no word that it is being prepared (%s)" % pg.evaluate("window.__toasts.join('|')"))
+    for tbx in (False, True):
+        if tbx: pg.check('#app input[aria-label="PDF with the trial balance"]'); pg.wait_for_timeout(300)
+        with ctx.expect_page(timeout=60000) as pop:
+            pg.click('#app [data-fin-dl="pdf"]')
+        w = pop.value; w.wait_for_load_state(); w.wait_for_timeout(800)
+        pages = w.eval_on_selector_all("section.fs-page", "xs => xs.map(x => x.dataset.fsPage)")
+        ok(pages == ["bs", "pl", "cf", "notes", "comp"] + (["tb"] if tbx else []) and "(All amounts in Rupees lakhs, unless otherwise stated)" in w.inner_text("body"),
+           "Download PDF%s: the statements in lakhs %s" % (" with trial balance" if tbx else "", pages))
+        if not tbx: w.pdf(path=os.path.join(SAMPLES, "sample.pdf"), format="A4", prefer_css_page_size=True, print_background=True)
+        w.close()
+    # only when the writers cannot be loaded (offline, a failed fetch): a word, no error
+    pg.evaluate("""() => { window.__toasts = []; window.__keepX = [window.FinXlsx, window.FinPdf];
+      const fail = () => Promise.reject(Object.assign(new Error("Failed to fetch dynamically imported module"), {finLoad: true}));
+      window.FinXlsx = {download: () => fail()}; window.FinPdf = {open: () => fail()}; }""")
+    pg.click('#app [data-fin-dl="xlsx"]'); pg.wait_for_timeout(400)
+    ok("Excel is being prepared" in pg.evaluate("window.__toasts.join('|')"), "the Excel writer not loaded: “Excel is being prepared” (%s)" % pg.evaluate("window.__toasts.join('|')"))
+    pg.evaluate("() => { [window.FinXlsx, window.FinPdf] = window.__keepX; }")
     pg.uncheck('#app input[aria-label="PDF with the trial balance"]')
     pg.click('#app [data-fin-seg="Unit"] button:text-is("Thousands")'); pg.wait_for_timeout(800)
 

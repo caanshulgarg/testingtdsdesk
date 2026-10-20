@@ -3,7 +3,7 @@
 // expected figure below is worked out by hand from those books (see the comments); the units and decimals are checked
 // both by hand-worked lines and by the rules every set of statements must keep (the balance sheet tallies, the checks
 // read 0, the cash flow ends at the cash in Note 11).
-const {load, HTML} = require("./harness"), fs = require("fs"), path = require("path");
+const {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness"), fs = require("fs"), path = require("path");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "FS", "FinSt", "INR"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -257,6 +257,49 @@ try {
   ok(d.tb.pySrc === "typed" && ln("13", "13A").py === 2000000 && d.pl.pbt.py === 1550000, "a last-year TB typed or uploaded (b.fs.pyTb) gives the PY profit and loss too");
   eq(d.pl.dep.py, 40000, "... its depreciation from the TB (8E) when there is no schedule for the year before");
   FinSt.regimeSet("normal"); ok(FinSt.build("2025", {unit: 1, dec: 2}).comp.regime === "normal" && b.fs.regime === "normal", "the regime is kept per client");
+
+  console.log("\nDepreciation credited straight to the asset (no accumulated-depreciation ledger), by an adjustment");
+  // the company again, its furniture written down by an audit entry Dr Depreciation / Cr Furniture and Fixtures
+  setCo(CO); b = company(); ctx.S.books = b; b.fs = {taxDep: {"2024": {c40: 220000, pm15: 140000, f10: 80000}}};
+  const d0 = FinSt.build("2025", {unit: 1, dec: 2});
+  FinSt.adjAdd("2025", {dr: "Depreciation", cr: "Furniture and Fixtures", amt: 12500, narr: "Depreciation on furniture, written off the asset"});
+  d = FinSt.build("2025", {unit: 1, dec: 2});
+  const fu = d.ppe.cy.rows.find(r => r.cls === "furn") || {}, fu0 = d0.ppe.cy.rows.find(r => r.cls === "furn") || {};
+  ok(fu.D === fu0.D && fu.E === fu0.E && fu.F === fu0.F && fu.G === fu0.G, "furniture: gross block as before the entry (opening " + fu.D + ", additions " + fu.E + ", closing " + fu.G + ")");
+  ok(fu.I === fu0.I + 12500 && fu.K === fu0.K + 12500 && fu.M === fu0.M - 12500, "... the charge and the accumulated depreciation 12,500 more (beside its accumulated-depreciation ledger), net block = the TB's closing (" + fu.I + " / " + fu.K + " / " + fu.M + ")");
+  eq(d.pl.dep.cy, 162500, "the profit and loss carries the depreciation: 1,50,000 + 12,500");
+  ok(d.checks.every(z => z.value === 0), "every check reads 0: " + d.checks.filter(z => z.value !== 0).map(z => z.label + " " + z.value).join("; "));
+  ok((d.tb.rows.find(r => r.ledger === "Furniture and Fixtures") || {}).depCr === 12500, "the TB row says what depreciation was credited to it (depCr, the Excel's column L)");
 } catch (e){ console.error(e); fails++; }
 function r6(v){ return Math.round(v * 1e6) / 1e6; }
-console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
+
+// the standard test books (tests/fixtures/books, or the client's in tests/data): Tally's usual way, the year's
+// depreciation credited straight to the assets (Dr Depreciation 60,000 / Cr Laptops 40,000, Cr Licence 20,000) with
+// no accumulated-depreciation ledger. The charge must still reach the P&L and the PPE note, and the balance sheet tally
+(async () => {
+  try {
+    console.log("\nThe standard test books: depreciation credited to the asset ledgers");
+    const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
+    const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
+    Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}, msme: {}, fs: {}});
+    b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; setCo({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); x.LedMaster.refresh(b);
+    const led = {}; Object.entries(b.ledInfo).forEach(([nm, i]) => { led[nm] = {open: i.ob || 0, close: 0, parent: i.group}; });
+    b.tb = {from: "20250401", to: "20260331", at: new Date().toISOString(), led};
+    const d = x.FinSt.build("2025", {unit: 1, dec: 2});
+    ok(!d.error, "built" + (d.error ? ": " + d.error : ""));
+    const bad = d.checks.filter(z => z.value !== 0);
+    ok(!bad.length, "every check reads 0" + (bad.length ? ": " + bad.map(z => z.label + " " + z.value).join("; ") : ""));
+    ok(d.bs.total.eqL.cy === d.bs.total.assets.cy, "the balance sheet tallies: " + d.bs.total.eqL.cy + " / " + d.bs.total.assets.cy);
+    if (FIXTURE){
+      const lp = d.ppe.cy.rows.find(r => r.cls === "comp") || {}, li = d.intang.cy.rows[0] || {};
+      ok(lp.D === 150000 && lp.E === 80000 && lp.F === 0 && lp.G === 230000 && lp.H === 0 && lp.I === 40000 && lp.K === 40000 && lp.M === 190000,
+        "laptops: gross 1,50,000 + 80,000 = 2,30,000; depreciation 40,000 (from the Depreciation ledger's entry); net 1,90,000 = the TB (" + ["D", "E", "F", "G", "H", "I", "K", "M"].map(k => k + " " + lp[k]).join(", ") + ")");
+      ok(li.D === 0 && li.E === 120000 && li.G === 120000 && li.I === 20000 && li.M === 100000, "the licence (Note 34): 1,20,000 added, amortised 20,000, net 1,00,000 (" + ["D", "E", "G", "I", "M"].map(k => k + " " + li[k]).join(", ") + ")");
+      eq(d.pl.dep.cy, 60000, "the P&L: depreciation and amortisation 60,000 (EXPECTED.md)");
+      eq(d.pl.pat.cy, 394550, "profit for the year 3,94,550 (EXPECTED.md)");
+      eq(d.bs.total.assets.cy, 1553350, "total 15,53,350 each side (EXPECTED.md)");
+      eq(d.cf.cy.capex, -200000, "cash flow: purchase of assets 2,00,000 (laptops 80,000 + licence 1,20,000), not net of the depreciation");
+    }
+  } catch (e){ console.error(e); fails++; }
+  console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
+})();

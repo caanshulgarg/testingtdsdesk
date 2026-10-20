@@ -104,8 +104,10 @@ function Grid({ g, dec, label }) {
   return <div className="fin-box"><table className="fin-t" data-statement="" data-fin-grid={label}><thead>
     <tr><th rowSpan={2}>{label}</th><th className="n" colSpan={4}>Gross block</th><th className="n" colSpan={4}>Depreciation</th><th className="n" colSpan={2}>Net block</th></tr>
     <tr>{C.map(([k, l]) => <th key={k} className="n">{l}</th>)}</tr></thead>
-    <tbody>{g.rows.map((r) => <tr key={r.cls}><td><button type="button" className="fin-fig" onClick={() => openTb([r.g, r.a].filter(Boolean), r.label)}>{r.label}</button></td>{C.map(([k]) => <td key={k} className="n">{r[k] == null ? "" : fig(r[k], dec)}</td>)}</tr>)}
-      <tr className="sub"><td>Total</td>{C.map(([k]) => <td key={k} className="n">{g.total[k] == null ? "" : fig(g.total[k], dec)}</td>)}</tr></tbody></table></div>;
+    <tbody>{g.rows.map((r) => <tr key={r.cls} data-fin-ppe={r.cls}><td><button type="button" className="fin-fig" onClick={() => openTb([r.g, r.a, r.dc ? (r.g.startsWith("34") ? "34D" : "8E") : ""].filter(Boolean), r.label)}>{r.label}</button></td>{C.map(([k]) => <td key={k} className="n">{r[k] == null ? "" : fig(r[k], dec)}</td>)}</tr>)}
+      <tr className="sub"><td>Total</td>{C.map(([k]) => <td key={k} className="n">{g.total[k] == null ? "" : fig(g.total[k], dec)}</td>)}</tr></tbody></table>
+    {g.rows.some((r) => r.dc) && <p className="note" data-fin-depcr="" style={{ margin: "6px 8px" }}>{"Depreciation of " + fig(g.rows.reduce((s, r) => s + (r.dc || 0), 0), dec) + " was credited straight to the asset ledgers in the books (" + g.rows.filter((r) => r.dc).map((r) => r.label).join(", ") + "; no accumulated-depreciation ledger). It is shown as the charge for the year, from the depreciation ledger's entries, and added back to the gross block, so the net block is the trial balance's."}</p>}
+  </div>;
 }
 
 export function Notes({ d, onRegister }) {

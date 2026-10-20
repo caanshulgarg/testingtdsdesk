@@ -2,11 +2,9 @@
 src/js/78-reports.js), on the React build (app/dist-test, or TDSDESK_SITE), with the made-up company of
 tests/reports_fixtures.js loaded as the client's books (two years of vouchers, the opening balances as FinCom's copy holds
 them). Test data only.
-  1. Reports lists "Financial statements and reports": Schedule III, cash MIS, 3CD, DCF
-  2. the statements: the summary, the preview in the firm's format, Print / Excel / Word / TB downloads
-  3. the mapping: suggested by rule, confirmed (version 1); a ledger moved by hand is "to confirm"; confirmed again (version 2)
-  4. the details for you: typed in, kept with the client for the year (b.fs.rx.det)
-  5. the checks: all 27 listed, failures with what to look at
+  1. Reports lists "MIS, tax audit and valuation": cash MIS, 3CD, DCF; the financial statements once (the Financial
+     statements page, ROUND 99: the older "Financial statements (Schedule III)" view is gone)
+  2. an old link to that view opens the Financial statements page
   6. the cash-basis MIS: receipts and payments, and it agrees with the books
   7. the Form 3CD draft from the audit's checks, with the questions for you
   8. the DCF: refuses without the assumptions; with them, a value per share
@@ -55,55 +53,23 @@ with sync_playwright() as p:
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => { window.__saved.push([n, blob ? blob.size : 0]); }; }")
     # 1
     t = pg.inner_text("#app")
-    ok("Financial statements and reports" in t and pg.locator("[data-rx-entry]").count() == 4, "1. Reports lists Financial statements and reports (4: Schedule III, cash MIS, 3CD, DCF)")
+    ents = pg.eval_on_selector_all("[data-rx-entry]", "xs => xs.map(x => x.dataset.rxEntry)")
+    ok("MIS, tax audit and valuation" in t and ents == ["mis", "3cd", "dcf"], "1. Reports lists the cash MIS, 3CD and DCF (%s); the older Schedule III statements view is gone" % ents)
+    fin = pg.eval_on_selector_all("#app .rpt-link > b", "xs => xs.map(x => x.textContent.trim()).filter(s => /^Financial statements/.test(s))")
+    ok(len(fin) == 1 and "Financial statements (Schedule III)" not in t, "1. the financial statements are listed once, the new page (%s)" % fin)
     # 0. the reports' code is its own file, fetched only when a report is first opened ("Preparing…" meanwhile)
     pg.wait_for_timeout(2500)
     ok(not rx_fetch and pg.evaluate("typeof globalThis.FSX") == "undefined", "0. opening FinCom and the Reports tab does not fetch the reports' code (FSX)")
     pg.route("**/78-reports*", lambda route: (pg.wait_for_timeout(600), route.continue_()))
-    pg.click('[data-rx-entry="fs"]')
+    pg.click('[data-rx-entry="mis"]')
     ok(pg.locator("[data-rx-preparing]").count() == 1 and "Preparing" in pg.inner_text("[data-rx-preparing]"), "0. opening a report shows Preparing… while its code comes")
-    pg.wait_for_selector("[data-rx-summary]", timeout=30000); pg.wait_for_timeout(800)
+    pg.wait_for_selector("[data-rx-mis-summary]", timeout=30000); pg.wait_for_timeout(800)
     ok(len(rx_fetch) == 1 and pg.evaluate("typeof globalThis.FSX") == "object", "0. then fetched once (" + (rx_fetch[0].rsplit("/", 1)[-1] if rx_fetch else "none") + ") and the report is drawn")
-    # 2
-    s = pg.inner_text("[data-rx-summary]")
-    ok("ZZ Kestrel" not in s or "Company" in s, "2. the summary: " + s[:140])
-    fr = pg.frame_locator("[data-rx-preview]")
-    ft = fr.locator("body").inner_text()
-    ok("Balance Sheet as at March 31, 2026" in ft and "Statement of Profit and Loss for the year ended March 31, 2026" in ft and "Notes to the Financial Statements" in ft, "2. the preview: balance sheet, P&L and notes in the firm's format")
-    ok("For and on behalf of Board of Directors" in ft and "UDIN : 26234567ABCDEF1234" in ft and "(All amounts in ₹, unless otherwise stated)" in ft, "2. signatures and the units line")
-    pg.click("[data-rx-excel]"); pg.click("[data-rx-word]"); pg.wait_for_timeout(800)
-    pg.click(".rx details.more summary"); pg.click("[data-rx-tb]"); pg.wait_for_timeout(600)
-    sv = pg.evaluate("window.__saved")
-    ok(any(n.endswith("financial-statements-2025.xlsx") and z > 20000 for n, z in sv) and any(n.endswith(".docx") and z > 10000 for n, z in sv) and any("provisional-TB-2025.xlsx" in n for n, z in sv), "2. downloads: Excel, Word, the provisional TB " + str([n for n, z in sv]))
-    with ctx.expect_page() as pop:
-        pg.click("[data-rx-print]")
-    pw = pop.value; pw.wait_for_timeout(800); ok("Balance Sheet as at March 31, 2026" in pw.inner_text("body"), "2. Print / PDF opens the print view"); pw.pdf(path=os.path.join(OUT, "reports-ui-statements.pdf")); pw.close()
-    pg.screenshot(path=os.path.join(OUT, "reports-ui-statements.png"))
-    # 3 the mapping
-    pg.click('[data-rx-tab="mapping"]'); pg.wait_for_timeout(800)
-    ok("not confirmed" in pg.inner_text("[data-rx-statements]") if pg.locator("[data-rx-statements]").count() else True, "3. (statements say the mapping is not confirmed)")
-    ok("Suggested from the Tally groups" in pg.inner_text("[data-rx-map-version]") and pg.locator("[data-rx-led]").count() > 40, "3. every ledger listed, suggested by rule")
-    pg.click("[data-rx-confirm]"); pg.wait_for_timeout(700)
-    ok("Mapping version 1 confirmed" in pg.inner_text("[data-rx-map-version]"), "3. confirmed: version 1")
-    pg.select_option('select[aria-label="Line for Advertisement"]', "exc"); pg.wait_for_timeout(700)
-    ok("owner, to confirm" in pg.inner_text('[data-rx-led="Advertisement"]'), "3. a ledger moved by hand: to confirm")
-    pg.click("[data-rx-confirm]"); pg.wait_for_timeout(700)
-    ok("Mapping version 2 confirmed" in pg.inner_text("[data-rx-map-version]") and pg.evaluate("FSX.store(S.books).map.versions.length") == 2, "3. confirmed again: version 2 (version 1 kept)")
-    pg.select_option('select[aria-label="Line for Advertisement"]', "exp"); pg.wait_for_timeout(500); pg.click("[data-rx-confirm]"); pg.wait_for_timeout(500)
-    # 4 the details
-    pg.click('[data-rx-tab="details"]'); pg.wait_for_timeout(700)
-    pg.click('.rx-details summary:text-is("Signatures")'); pg.wait_for_timeout(300)
-    f = pg.locator('[data-rx-field="sign.auditor.frn"]'); f.fill("654321E"); f.blur(); pg.wait_for_timeout(500)
-    ok(pg.evaluate("FSX.store(S.books).det['2025'].sign.auditor.frn") == "654321E", "4. a detail typed is kept with the client for the year")
-    f = pg.locator('[data-rx-field="sign.auditor.frn"]'); f.fill("123456W"); f.blur(); pg.wait_for_timeout(400)
-    # 5 the checks
-    pg.click('[data-rx-tab="checks"]'); pg.wait_for_timeout(700)
-    ok(pg.locator("[data-rx-check]").count() == 27, "5. all 27 checks listed")
-    nf = pg.locator("[data-rx-check].bad").count()
-    ok(nf == 0, "5. no check fails on these books (as FinCom holds them, not rolled over, with last year's closing stock given)" + ("" if nf == 0 else ": " + "; ".join(pg.locator("[data-rx-check].bad").all_inner_texts())[:400]))
-    tot = pg.evaluate("(() => { const r = FSX.run(FSX.inputFromBooks('2025', {kind: 'company'})); return [r.model.nm.T_as_CY, r.model.nm.T_pat_CY]; })()")
-    ok(tot == [469886600, 25699900], "5. the same totals as the node test of the same books (assets 46,98,866; profit 2,56,999): " + str(tot))
-    pg.screenshot(path=os.path.join(OUT, "reports-ui-checks.png"))
+    ok(pg.locator("[data-rx-open]").count() == 3 and pg.locator('[data-rx-open="fs"]').count() == 0, "0. the views' tabs: MIS, 3CD, DCF")
+    # 2. an old link to the Schedule III view opens the Financial statements page
+    pg.evaluate("() => { S.rxView = 'fs'; render(); }"); pg.wait_for_timeout(2000)
+    ok(pg.locator("#app [data-fin]").count() == 1 and pg.evaluate("S.rxView") is None, "2. an old link to the Schedule III view (rxView fs) opens the Financial statements page")
+    pg.evaluate("() => { S.booksTab = 'reports'; S.rxView = 'mis'; render(); }"); pg.wait_for_timeout(1200)
     # 6 the cash MIS
     pg.click('[data-rx-open="mis"]'); pg.wait_for_timeout(1200)
     s = pg.inner_text("[data-rx-mis-summary]")

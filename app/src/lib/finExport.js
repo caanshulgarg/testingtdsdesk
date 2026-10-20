@@ -91,6 +91,8 @@ const SC = (code) => "SUMIFS(" + TBc("H") + "," + TBc("G") + "," + qs(code) + ")
 const SP = (code) => "SUMIFS(" + TBc("I") + "," + TBc("G") + "," + qs(code) + ")";
 const RS = (code) => "SUMIFS(" + TBc("F") + "," + TBc("G") + "," + qs(code) + ")";
 const RSp = (code) => "SUMIFS(" + TBc("C") + "," + TBc("G") + "," + qs(code) + ")";
+// depreciation credited straight to the assets of a gross code (Trial Balance L), in the unit
+const SD = (code) => "SUMIFS(" + TBc("L") + "," + TBc("G") + "," + qs(code) + ")/UNIT";
 const LVf = (col, code, sign) => "ROUND(" + (sign < 0 ? "-" : "") + (col === "cy" ? SC(code) : SP(code)) + ",DEC)";
 const plus = (xs) => (xs.filter((x) => x && x !== "0").join("+") || "0");
 
@@ -188,8 +190,10 @@ function workbook(ExcelJS, d) {
   put("tb", "A1", { f: IN.name, v: inp.name }, { b: true, sz: 12 });
   put("tb", "A2", "Trial balance for the year ended " + asAt(d.fy) + ", with the adjustments (JV) and the code of each ledger", { b: true });
   put("tb", "A3", { f: '"Columns C to F in rupees; H and I in the presentation unit ("&' + UWORD + '&")"', v: "Columns C to F in rupees; H and I in the presentation unit (" + (({ 1: "Rs", 1000: "Rs '000", 100000: "Rs lakhs", 10000000: "Rs crores" })[unit] || "Rs / " + unit) + ")" }, { i: true });
-  ["Ledger", "Group", "PY (Rs)", "CY (Rs)", "Adjustments (JV)", "Final (Rs)", "Code", "CY in unit", "PY in unit", "Side", "Code means"].forEach((h, i) => put("tb", "ABCDEFGHIJK"[i] + "4", h, { b: true, box: true, al: i >= 2 && i <= 8 && i !== 6 ? "right" : undefined, wrap: true }));
+  ["Ledger", "Group", "PY (Rs)", "CY (Rs)", "Adjustments (JV)", "Final (Rs)", "Code", "CY in unit", "PY in unit", "Side", "Code means", "Depreciation credited to the asset (Rs)"].forEach((h, i) => put("tb", "ABCDEFGHIJKL"[i] + "4", h, { b: true, box: true, al: i >= 2 && i <= 8 && i !== 6 ? "right" : undefined, wrap: true }));
   const jvList = (d.tb.adj || []), jv0 = 5, jvN = jv0 + Math.max(0, jvList.length - 1);
+  const jvR = (c) => "JV!$" + c + "$" + jv0 + ":$" + c + "$" + jvN;
+  const isGross = (c) => !!(c && fs.CODES[c] && fs.CODES[c].ppe === "gross");
   T.forEach((x, i) => {
     const rr = t0 + i; R.tbRow[x.ledger] = rr;
     put("tb", "A" + rr, x.ledger); put("tb", "B" + rr, x.group || "");
@@ -202,22 +206,30 @@ function workbook(ExcelJS, d) {
     put("tb", "G" + rr, x.code || ""); put("tb", "J" + rr, x.side || "");
     put("tb", "H" + rr, { f: "F" + rr + "/UNIT", v: x.final / unit }, { nf: nf }); put("tb", "I" + rr, { f: "C" + rr + "/UNIT", v: x.py / unit }, { nf: nf });
     put("tb", "K" + rr, x.code && fs.CODES[x.code] ? fs.CODES[x.code].label : x.code ? "" : "(no code)", { i: true, sz: 9, color: x.code ? undefined : "FFC00000" });
+    // L (a gross block): the year's depreciation credited straight to this asset (no accumulated-depreciation ledger):
+    // the day book's entries debiting 8E / 34D (a value) and the JV rows Dr depreciation / Cr this asset (less the reverse)
+    if (isGross(x.code)) put("tb", "L" + rr, { f: N(x.depCrBook) + "+SUMPRODUCT((" + jvR("C") + "=$A" + rr + ")*(" + jvR("E") + '="dep")*' + jvR("D") + ")-SUMPRODUCT((" + jvR("B") + "=$A" + rr + ")*(" + jvR("F") + '="dep")*' + jvR("D") + ")",
+      v: N(x.depCr), src: ["tb", "rows", i, "depCr"] }, { nf: NF2 });
   });
   const tsum = (col, key) => T.reduce((s, x) => s + (key === "h" ? x.final / unit : key === "i" ? x.py / unit : N(x[key])), 0);
   put("tb", "A" + tTot, "Total", { b: true });
   [["C", "py"], ["D", "cy"], ["E", "adj"], ["F", "final"], ["H", "h"], ["I", "i"]].forEach(([c, k]) => put("tb", c + tTot, { f: T.length ? "SUM(" + c + t0 + ":" + c + tN + ")" : "0", v: tsum(c, k) }, { b: true, top: true, nf: c === "H" || c === "I" ? nf : NF2 }));
-  widths("tb", { A: 46, B: 26, C: 16, D: 16, E: 16, F: 16, G: 7, H: 15, I: 15, J: 6, K: 40 });
+  widths("tb", { A: 46, B: 26, C: 16, D: 16, E: 16, F: 16, G: 7, H: 15, I: 15, J: 6, K: 40, L: 18 });
   WS.tb.views = [{ state: "frozen", ySplit: 4, showGridLines: true }];
   page("tb", "A1:J" + tTot, true);
   const TBrng = (c) => Q(SH.tb) + "!$" + c + "$" + t0 + ":$" + c + "$" + Math.max(t0, tN);
 
   put("jv", "A1", { f: IN.name, v: inp.name }, { b: true, sz: 12 });
   put("jv", "A2", "Adjustments for " + fyLabel(d.fy) + " (audit entries kept in FinCom, not posted to Tally): the trial balance's Adjustments column reads them", { b: true });
-  ["Narration", "Dr ledger", "Cr ledger", "Amount (Rs)"].forEach((h, i) => put("jv", "ABCD"[i] + "4", h, { b: true, box: true, al: i === 3 ? "right" : undefined }));
+  ["Narration", "Dr ledger", "Cr ledger", "Amount (Rs)", "Dr is depreciation", "Cr is depreciation"].forEach((h, i) => put("jv", "ABCDEF"[i] + "4", h, { b: true, box: true, al: i === 3 ? "right" : undefined, wrap: i > 3 }));
   if (!jvList.length) put("jv", "A5", "No adjustments", { i: true });
-  jvList.forEach((a, i) => { const rr = jv0 + i; put("jv", "A" + rr, a.narr || ""); put("jv", "B" + rr, a.dr || ""); put("jv", "C" + rr, a.cr || ""); put("jv", "D" + rr, N(a.amt), { nf: NF2 }); });
+  // E / F: "dep" when the Dr / Cr ledger's code (Trial Balance G) is 8E or 34D: the Trial Balance's L reads them
+  const codeOfL = (l) => ((T.find((x) => x.ledger === l) || {}).code || "");
+  const depFlag = (c, rr) => ({ f: "IF(SUMPRODUCT((" + TBrng("A") + "=" + c + rr + ")*((" + TBrng("G") + '="8E")+(' + TBrng("G") + '="34D")))>0,"dep","")', v: "" });
+  jvList.forEach((a, i) => { const rr = jv0 + i; put("jv", "A" + rr, a.narr || ""); put("jv", "B" + rr, a.dr || ""); put("jv", "C" + rr, a.cr || ""); put("jv", "D" + rr, N(a.amt), { nf: NF2 });
+    [["E", "B", a.dr], ["F", "C", a.cr]].forEach(([c, s, l]) => { const z = depFlag(s, rr); z.v = /^(8E|34D)$/.test(codeOfL(l)) ? "dep" : ""; put("jv", c + rr, z, { sz: 9, i: true }); }); });
   if (jvList.length) { put("jv", "A" + (jvN + 2), "Total", { b: true }); put("jv", "D" + (jvN + 2), { f: "SUM(D" + jv0 + ":D" + jvN + ")", v: jvList.reduce((s, a) => s + N(a.amt), 0) }, { b: true, top: true, nf: NF2 }); }
-  widths("jv", { A: 50, B: 40, C: 40, D: 18 });
+  widths("jv", { A: 50, B: 40, C: 40, D: 18, E: 11, F: 11 });
   page("jv", "A1:D" + (jvN + 3));
 
   // the title lines of a statement sheet (rows 2-4) and its column heads (row 6)
@@ -259,9 +271,9 @@ function workbook(ExcelJS, d) {
         if (col === "cy") {
           const adj = adjs[x.g] || {}, S = N(adj.sale) ? "+ROUND(" + N(adj.sale) + "/UNIT,DEC)" : "";
           const f = {
-            D: "ROUND(" + SP(x.g) + ",DEC)", G: "ROUND(" + SC(x.g) + ",DEC)",
+            D: "ROUND(" + SP(x.g) + ",DEC)", G: "ROUND(" + SC(x.g) + "+" + SD(x.g) + ",DEC)",
             E: "ROUND(MAX(0," + sp("G") + "-" + sp("D") + ")" + S + ",DEC)", F: "ROUND(-(MAX(0," + sp("D") + "-" + sp("G") + ")" + S + "),DEC)",
-            H: x.a ? "ROUND(-" + SP(x.a) + ",DEC)" : "0", K: x.a ? "ROUND(-" + SC(x.a) + ",DEC)" : "0",
+            H: x.a ? "ROUND(-" + SP(x.a) + ",DEC)" : "0", K: "ROUND(" + (x.a ? "-" + SC(x.a) + "+" : "") + SD(x.g) + ",DEC)",
             J: N(adj.dep) ? "-ROUND(" + N(adj.dep) + "/UNIT,DEC)" : "0", I: "ROUND(" + sp("K") + "-" + sp("H") + "-" + sp("J") + ",DEC)",
             L: "ROUND(" + sp("D") + "-" + sp("H") + ",DEC)", M: "ROUND(" + sp("G") + "-" + sp("K") + ",DEC)" };
           COLS.forEach((c) => put("ppe", c + rr, { f: f[c], v: x[c], src: path(c) }, { nf }));
@@ -883,6 +895,9 @@ export function pdfHtml(d, opt) {
         if (gr.rows.length) g += '<tr class="grand"><td>Total</td>' + "DEFGHIJKLM".split("").map((c) => '<td class="n">' + (gr.total[c] == null ? "" : M(gr.total[c])) + "</td>").join("") + "</tr>";
         else g += '<tr><td colspan="11"><i>Nil</i></td></tr>';
         g += "</tbody></table>";
+        // depreciation credited straight to the asset ledgers (no accumulated-depreciation ledger): said under the grid
+        const dcs = col === "cy" ? gr.rows.filter((x) => x.dc) : [];
+        if (dcs.length) g += '<p style="font-size:9pt;margin:4px 0" data-fs-depcr=""><i>Depreciation of ' + M(dcs.reduce((s, x) => s + x.dc, 0)) + " (" + H(dcs.map((x) => x.label).join(", ")) + ") was credited directly to the asset in the books; it is shown as the charge for the year and added back to the gross block.</i></p>";
       });
       return g + "</div>";
     };
