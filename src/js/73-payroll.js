@@ -20,7 +20,8 @@
 // marked "check before filing" (TDS24Q_FILE below).
 const Payroll = {
   books(){ return S.books || {}; },
-  data(){ const p = this.books().payroll; return p && typeof p === "object" ? p : {employees: [], heads: {}, allocs: [], pays: [], vouchers: {}}; },
+  // next-24q-ready: a copy kept here of another shape (an older one) is no payroll (PayLoad.ok reads it again)
+  data(){ const p = this.books().payroll; return p && Array.isArray(p.allocs) && Array.isArray(p.employees) ? p : {employees: [], heads: {}, allocs: [], pays: [], vouchers: {}}; },
   has(fy){ const d = this.data(); return (d.allocs || []).some(a => !fy || TDS.fyOf(a.day) === fy); },
   // ---------- the cloud copy (TCloud.load): read whole each time the books come in (a payroll is small)
   async into(b, book){
@@ -28,7 +29,7 @@ const Payroll = {
     const B = "&book_id=eq." + encodeURIComponent(book);
     let emp = [], heads = [], allocs = [], pays = [], vs = [];
     try { emp = await TCloud.restPages("tally_employees?select=guid,name,parent,category,is_group,pan,joined,left_on,designation,gone_at" + B + "&order=name.asc"); }
-    catch (e){ return 0; }      // a cloud without migration 74: nothing of payroll (as before)
+    catch (e){ if (!/42P01|PGRST20|does not exist|schema cache/i.test(String(e && e.message || e))) throw e; return 0; }      // a cloud without migration 74: nothing of payroll (as before); another error is said (PayLoad)
     try { heads = await TCloud.restPages("tally_ledgers?select=name,pay_type,pay_stat_type,it_component,for_payroll&for_payroll=eq.true" + B + "&order=name.asc"); } catch (e){ heads = []; }
     const names = heads.map(h => h.name);
     for (let i = 0; i < names.length; i += 30){

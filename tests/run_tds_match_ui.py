@@ -281,8 +281,16 @@ try:
         ok(not f.get("error") and len(recs(f["text"], "CD")) == 2 and len(recs(f["text"], "DD")) == 3, "Form 138 from the salary sheet: CD and DD records (%s)" % (f.get("error") or ""))
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(500)
         ok(pg.locator('#app [data-sheet-fvu]:has-text("Make FVU file")').count() == 1, "Validate & file: Make FVU file (Form 138 from the salary sheet)")
-        pg.evaluate("() => { S.tdsTab = 'deductions'; S.q24Open = 'ABCPM1234R'; render(); }"); pg.wait_for_timeout(500)
-        ok(pg.locator("#app [data-plain-table] [data-ch-cell]").count() == 3, "Form 138's Deductions: each salary payment with its challan")
+        # next-tds-tidy2 (the owner, 20-Oct-2026: "I am not able to choose challan"): Form 138's Deductions step is 26Q's, by
+        # challan (Select challan, the rows on it, the footer's count); the plain list of every row is gone, Annexure I is under ⋯
+        on = {}
+        for ch in ("chSal", "chSal2"):
+            pg.evaluate("(c) => { S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = c; render(); }", ch); pg.wait_for_timeout(400)
+            on[ch] = J("() => { const f = document.querySelector('#app [data-wd-foot]'); return f ? +f.dataset.n : -1; }")
+        ok(on == {"chSal": 2, "chSal2": 1}, "Form 138's Deductions: each salary payment on its challan, by challan (%s)" % on)
+        pg.evaluate("() => { S.tdsDedView = 'table'; S.q24Open = 'ABCPM1234R'; render(); }"); pg.wait_for_timeout(500)
+        ok(pg.locator("#app [data-statement] [data-ch-cell]").count() == 2, "and Annexure I (⋯): Ravi Menon's two months each with its challan")
+        pg.evaluate("() => { S.tdsDedView = ''; S.tdsWinCh = ''; render(); }")
         ok(STEPS() == ["deductor", "deductees", "people", "challans", "deductions", "file", "after"], "Form 138: the same steps and Employees & declarations (%s)" % STEPS())
         pg.evaluate("() => { S.tdsQ = 'Q4'; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-q4-wait]").count() == 1, "Q4: still waits on Protean's layout, said plainly")

@@ -19,6 +19,7 @@ import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults } from "./tds/Files.jsx";
 import More from "../parts/More.jsx";
 import Salary, { Return24Tally } from "./tds/Payroll.jsx";
+import PayLoad, { payWait } from "../lib/payLoad.js";
 import { Info } from "../parts/Answer.jsx";
 // next-tds-clear (19-Oct-2026): the return's frame (header, step tabs), Validate & file, the drawers
 import { ReturnShell, SideDrawer, statusOf, stepName, FvuMade } from "./tds/Shell.jsx";
@@ -539,6 +540,9 @@ function Employees({ fy, q, a1 }) {
 
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
+  // next-24q-ready: a Tally-linked client's payroll read first (never the salary sheet's screen or the books' rows meanwhile)
+  const wait = payWait(b);
+  if (wait) return <PayLoad.Wait b={b} state={wait} />;
   // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
   if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} />;
   S.tdsTab = tabNow(S.tdsTab, "24Q");

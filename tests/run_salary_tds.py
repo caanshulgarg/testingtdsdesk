@@ -375,6 +375,88 @@ try:
         ok(rr["saved"] and not rr["work"], "the payroll is kept in this browser's copy, never in the work sent to the firm's database")
         pg.screenshot(path=os.path.join(OUT, "reopen-24q.png"), full_page=True)
 
+        # next-24q-ready (Leads, after next-24q-load went live: "in private window it is not showing.. sometimes in normal
+        # window 24Q is not showing", then "now automatically showing"): the page was drawn before the payroll was read and
+        # only came right on a later read. Opening a 24Q page reads the payroll itself (PayLoad.ensure, one read at a time),
+        # says "Reading payroll from FinCom's copy of Tally…" meanwhile, and a payroll kept here is checked before it is used
+        STUB = """(a) => {
+          const T = a.tables, b = S.books, cid = b.cid; let fail = a.fail || 0;
+          window.__pay = {reads: 0, seen: []};
+          TCloud.on = () => true; delete TCloud.st[cid];
+          TCloud.status = async (c) => { await new Promise(ok => setTimeout(ok, a.statusMs || 0)); const bs = [{book: a.book, company: 'LI', from: '2026-04-01', entries: 50, ledgersAt: 'L1'}]; TCloud.st[c] = {books: bs, at: Date.now()}; return bs; };
+          TCloud.rpcAll = async () => [{day: '20260430', n: 1, at: 'x'}];
+          TCloud.copyHeads = async () => ({changes: 0, seen: ''});
+          TCloud.restPages = async (path) => {
+            // the payroll's first read slow (a.delay), the rest at once
+            if (/^tally_employees/.test(path)){ window.__pay.reads++; if (fail > 0){ fail--; throw new Error("FinCom's cloud did not answer (503)."); } await new Promise(ok => setTimeout(ok, a.delay || 0)); }
+            return (T[path.split('?')[0]] || []).map(r => Object.assign({}, r)); };
+          b.meta = Object.assign(b.meta || {}, {cloud: {book: a.book, company: 'LI', ledgersAt: 'L1', days: {'20260430': 'x'}, at: ''}});
+          clearInterval(window.__payT);
+          window.__payT = setInterval(() => { const app = document.querySelector('#app'), t = app ? app.innerText : '';
+            window.__pay.seen.push({sheet: /Bring in the salary sheet|needs the salary sheet/.test(t), loader: !!document.querySelector('#app [data-pay-loading]'),
+              said: /Reading payroll from FinCom.s copy of Tally/.test(t), err: !!document.querySelector('#app [data-pay-load-err]'),
+              tally: ((document.querySelector('#app [data-tab-count="deductions"]') || {}).textContent || '') + '/' + ((document.querySelector('#app [data-tab-count="deductees"]') || {}).textContent || '')}); }, 50);
+        }"""
+        OPEN24 = "() => { window.__pay.seen = []; S.tdsView = 'return'; S.tdsForm = '24Q'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsTab = 'deductees'; TDSReg.forget(); render(); }"
+        SEEN = "() => window.__pay.seen"
+        # the books opened before the cloud is reachable (the stubs below put it on)
+        OFF = lambda: pg.evaluate("() => { TCloud.on = () => false; }")
+        print("== 12. next-24q-ready (a): a cold open, the payroll read slowly (2.5 s)")
+        OFF(); load(pg, leads_tables())
+        pg.evaluate("() => { delete S.books.payroll; render(); }")
+        pg.evaluate(STUB, {"tables": leads_tables(), "book": BOOK, "delay": 2500, "statusMs": 200})
+        pg.evaluate(OPEN24); pg.wait_for_timeout(600)
+        # the copy's own read, with nothing new, at the same time: one read of the payroll between them
+        pg.evaluate("() => { window.__load = TCloud.load(true); }")
+        s0 = pg.evaluate(SEEN)
+        ok(s0 and s0[-1]["loader"] and s0[-1]["said"], "while the payroll is read: \"Reading payroll from FinCom's copy of Tally…\" (%s)" % (s0[-1] if s0 else None))
+        ok(not any(x["sheet"] for x in s0), "never the salary-sheet screen while it is read")
+        pg.screenshot(path=os.path.join(OUT, "24q-reading.png"), full_page=True)
+        pg.wait_for_timeout(3500); pg.evaluate("() => window.__load")
+        s1 = pg.evaluate(SEEN)
+        ok(s1[-1]["tally"] == "34/12" and not s1[-1]["loader"], "then drawn by itself with Tally's payroll: Deductions 34, employees 12 (%s)" % s1[-1])
+        ok(pg.locator('#app [data-list="q24Employees"] tbody tr, #app [data-dee-total]').count() > 0 or pg.evaluate("TDS.salaryRows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.employee && r.src === 'payroll').length") == 22,
+           "the employee rows are there")
+        ok(not any(x["sheet"] for x in s1) and not any(x["tally"] not in ("/", "34/12") for x in s1 if not x["loader"]), "never the salary-sheet screen or the books' rows in between (%s)" % sorted(set(x["tally"] for x in s1)))
+        ok(pg.evaluate("window.__pay.reads") == 1, "the payroll read once, though the page and the copy's read both asked (%d)" % pg.evaluate("window.__pay.reads"))
+        ok(pg.evaluate("PayLoad.ok(S.books, '%s')" % BOOK), "the payroll kept is the right book's, whole")
+
+        print("== 13. next-24q-ready (b): a payroll kept here that is not right is read again")
+        for what, js in (("another book's", "() => { S.books.payroll.book = 'some-other-book'; }"),
+                         ("partial (April only, the books carry May and June's payroll entries)", "() => { const p = S.books.payroll; p.allocs = p.allocs.filter(a => String(a.day).startsWith('202604')); Object.keys(p.vouchers).forEach(g => { if (!String(p.vouchers[g].day).startsWith('202604')) delete p.vouchers[g]; }); }"),
+                         ("another shape (an older copy)", "() => { S.books.payroll = {book: '%s', allocs: {}, employees: null}; }" % BOOK)):
+            OFF(); load(pg, leads_tables())
+            pg.evaluate("() => { S.books.payroll.book = '%s'; }" % BOOK)
+            pg.evaluate(js)
+            pg.evaluate(STUB, {"tables": leads_tables(), "book": BOOK, "delay": 300})
+            ok(not pg.evaluate("PayLoad.ok(S.books, '%s')" % BOOK), "%s: not taken as the payroll" % what)
+            pg.evaluate(OPEN24); pg.wait_for_timeout(3000)
+            sb = pg.evaluate(SEEN)
+            ok(pg.evaluate("window.__pay.reads") == 1 and sb[-1]["tally"] == "34/12", "%s: read again, Form 138 by employee (reads %d, %s)" % (what, pg.evaluate("window.__pay.reads"), sb[-1]["tally"]))
+            ok(not any(x["sheet"] for x in sb), "%s: never the salary-sheet screen" % what)
+        print("== 14. next-24q-ready (c): the normal reopen, and a read that fails")
+        OFF(); load(pg, leads_tables())
+        pg.evaluate("() => { S.books.payroll.book = '%s'; }" % BOOK)
+        pg.evaluate(STUB, {"tables": leads_tables(), "book": BOOK, "delay": 300})
+        ok(pg.evaluate("PayLoad.ok(S.books, '%s')" % BOOK), "a whole payroll of this book kept here is taken")
+        pg.evaluate(OPEN24); pg.wait_for_timeout(800)
+        sc = pg.evaluate(SEEN)
+        ok(sc and sc[-1]["tally"] == "34/12" and not any(x["loader"] or x["sheet"] for x in sc), "opened at once from it, no loader (%s)" % (sc[-1] if sc else None))
+        r = pg.evaluate("async () => { const r = await TCloud.load(true); await new Promise(ok => setTimeout(ok, 500)); return r; }")
+        ok(r is True and pg.evaluate("window.__pay.reads") == 0 and pg.evaluate(SEEN)[-1]["tally"] == "34/12", "the copy's read with nothing new: not read again, still 34/12 (reads %d)" % pg.evaluate("window.__pay.reads"))
+        OFF(); load(pg, leads_tables())
+        pg.evaluate("() => { delete S.books.payroll; render(); }")
+        pg.evaluate(STUB, {"tables": leads_tables(), "book": BOOK, "delay": 200, "fail": 1})
+        pg.evaluate(OPEN24); pg.wait_for_timeout(1200)
+        se = pg.evaluate(SEEN)
+        ok(se[-1]["err"] and pg.locator('#app [data-pay-load-err] [data-pay-retry]').count() == 1 and "Try again" in pg.inner_text('#app [data-pay-load-err]'),
+           "a read that fails: said in a plain line with Try again (%s)" % (pg.locator('#app [data-pay-load-err]').all_inner_texts()[:1]))
+        ok(not any(x["sheet"] for x in se), "and not the salary-sheet screen")
+        pg.screenshot(path=os.path.join(OUT, "24q-read-failed.png"), full_page=True)
+        pg.click('#app [data-pay-retry]'); pg.wait_for_timeout(2000)
+        ok(pg.evaluate(SEEN)[-1]["tally"] == "34/12" and pg.evaluate("window.__pay.reads") == 2, "Try again: read, Form 138 by employee (%s, reads %d)" % (pg.evaluate(SEEN)[-1], pg.evaluate("window.__pay.reads")))
+        pg.evaluate("() => clearInterval(window.__payT)")
+
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):
             ctx = br.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme); p2 = ctx.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))

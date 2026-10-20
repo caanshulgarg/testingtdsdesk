@@ -18,6 +18,8 @@ import { preloadScreens } from "./screens/lazy.js";
 import "./nav.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
+// next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
+import "./lib/payLoad.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path

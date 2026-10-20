@@ -25,6 +25,7 @@ import { TracesDefaults } from "./Files.jsx";
 import { PanBox } from "./PanBook.jsx";
 import Deductions24 from "./Ded24.jsx";
 import { useCF } from "./ColF.jsx";
+import PayLoad, { payWait } from "../../lib/payLoad.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: Form 138's text file, TDS24Q_FILE.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/83-tds-forms-2025.js";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -40,6 +41,8 @@ const SUBS = [["employees", "Employees"], ["register", "Pay register"], ["form16
 export default function Salary() {
   const fy = S.tdsFy, emp = Payroll.employees(), months = Payroll.months(fy);
   if (!SUBS.some((s) => s[0] === S.paySub)) S.paySub = "employees";
+  const wait = payWait(S.books);
+  if (wait) return <PayLoad.Wait b={S.books} state={wait} />;
   if (!emp.length) {
     return <section className="dash-card" style={{ maxWidth: 760 }} data-salary-empty="">
       <h3>No payroll from Tally yet</h3>
