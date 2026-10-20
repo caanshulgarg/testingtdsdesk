@@ -71,11 +71,11 @@ const BookItems = {
     let s = this.st[cid];
     if (s && s.ready) return s;
     s = this.st[cid] = s || {seq: 0, base: {}, chain: Promise.resolve()};
-    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; } } catch (e){}
+    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; if (typeof m.healed === "string") s.healed = m.healed; } } catch (e){}
     s.ready = true;
     return s;
   },
-  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, at: new Date().toISOString()}]]); } catch (e){} },
+  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, healed: typeof s.healed === "string" ? s.healed : undefined, at: new Date().toISOString()}]]); } catch (e){} },
   // one thing at a time for a client: fetching, sending and live changes are not interleaved
   queue(cid, fn){ const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()}); const p = s.chain.then(fn, fn); s.chain = p.catch(() => {}); return p; },
   // ---------- from the server
@@ -89,8 +89,10 @@ const BookItems = {
     }
   },
   // on opening a client (and after being offline): what changed on the server since this computer last looked
-  pull(cid){ return this.queue(cid, () => this.pullNow(cid)); },
-  async pullNow(cid){
+  // o.taken (next-fast-open): called once the server's changes are in the books here, before the challans are healed and
+  // this computer's changes sent, so a client opened again is shown after one read
+  pull(cid, o){ return this.queue(cid, () => this.pullNow(cid, o)); },
+  async pullNow(cid, o){
     const s = await this.state(cid);
     let rows;
     try { rows = await this.fetch(cid, s.seq); Live.ok(); }
@@ -99,21 +101,28 @@ const BookItems = {
     if (!s.seq && !rows.length && !Object.keys(s.base).length) await this.fromBlob(cid);
     const first = !s.seq;
     await this.take(cid, rows, {first, cursor: true});
+    if (o && o.taken) try { o.taken(); } catch (e){}
+    if (o && o.after) await o.after;
     try { await this.heal(cid, s); } catch (e){}
     await this.pushNow(cid);
     return "ok";
   },
   // round 89: deductions on challans not here (rows marked synced, hidden by a plain [] marker): the challans fetched
-  // again in full, once a session, and those missing here added; s.chMiss: how many are still missing
+  // again in full and those missing here added; s.chMiss: how many are still missing.
+  // next-fast-open (Leads, 20-Oct-2026): a deduction kept on a challan removed on the server is missing for good, and the
+  // challans were fetched in full on every opening. Now once per set of missing challans: the set still missing after the
+  // fetch is kept here (s.healed, with the sync marks), so it is not fetched again until another challan goes missing
   async heal(cid, s){
     const w = (await BookSync.localWork(cid)) || {}, have = new Set((w.challans || []).map(c => c && c.id));
-    const miss = () => [...new Set(Object.values(w.alloc || {}))].filter(id => id && !have.has(id)).length;
-    if (!miss() || s.healed) return;
-    s.healed = 1;
+    const missing = () => [...new Set(Object.values(w.alloc || {}))].filter(id => id && typeof id === "string" && !have.has(id)).sort();
+    const ids = missing();
+    if (!ids.length || s.healed === ids.join(",")){ s.chMiss = ids.length; return; }
     const rows = (await this.fetch(cid, 0, "challans")).filter(r => r.item[0] === "#" && !r.deleted && r.data && !have.has(r.data.id));
     rows.forEach(r => { have.add(r.data.id); s.base[this.ik(r.key, r.item)] = this.h(r.data, r.ord); });
     if (rows.length) await this.into(cid, rows.map(r => ({k: r.key, i: r.item, o: r.ord, d: r.data})));
-    s.chMiss = miss();
+    const left = missing();
+    s.chMiss = left.length; s.healed = left.join(",");
+    await this.keep(cid);
   },
   // rows from the server (fetched, or live): applied unless this computer changed the same item later
   async take(cid, rows, o){
@@ -418,7 +427,9 @@ const Live = {
   },
   // ---------- Saving..., Saved, offline (the top bar and the books)
   saving(){ if (this.sv.state !== "saving"){ this.sv.state = "saving"; this.top(); } },
-  saved(){ this.sv = {state: "saved", at: Date.now()}; this.top(); },
+  // next-fast-open: already saved, nothing new to say (the chip shows the minute): the page is not drawn again (each pull
+  // with nothing to send drew the whole page, the TDS rows worked out again, while a client opened)
+  saved(){ const was = this.sv || {}, at = Date.now(); this.sv = {state: "saved", at}; if (was.state !== "saved" || Math.floor((was.at || 0) / 60000) !== Math.floor(at / 60000)) this.top(); },
   ok(){ if (this.sv.state === "offline"){ this.sv.state = "saved"; this.top(); } },
   fail(e){
     const off = (typeof navigator === "object" && navigator.onLine === false) || /Failed to fetch|NetworkError|network|Load failed/i.test(String(e && e.message || e));

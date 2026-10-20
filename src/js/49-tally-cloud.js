@@ -251,9 +251,12 @@ const TCloud = {
     return at ? "in step with " + (/^Zoho Books · /.test(String(bk.company || "")) ? "Zoho Books" : "Tally") + " as of " + fmtDateTime(at) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
-  async day(bk, d, at){
+  // seen (next-fast-open): the days whose file, fetched again for a new time, is the one kept here (a Day Book uploaded
+  // again with the same entries moves every day's time)
+  async day(bk, d, at, seen){
     const k = "tcday:" + bk + ":" + d;
-    try { const c = await IDBStore.get(k); if (c && c.at === at) return c.text; } catch (e){}
+    let kept = null;
+    try { kept = await IDBStore.get(k); if (kept && kept.at === at) return kept.text; } catch (e){}
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
@@ -262,6 +265,7 @@ const TCloud = {
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
+    if (seen && kept && kept.text === text) seen[d] = true;
     try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
     return text;
   },
@@ -314,61 +318,87 @@ const TCloud = {
       if (window.PayLoad) await PayLoad.ensure(b, bk.book);
       return true;
     }
-    // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
-    const say = t => { f.busy = b.busy = t; render(); };
+    // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up.
+    // next-fast-open (Leads, 20-Oct-2026: "then it updates books... this should not happen"): books already here are
+    // brought up to date behind the page (b.catchUp, never a wait on the page); the progress shows only while a client
+    // has no entries here yet
+    const quiet = (b.vouchers || []).length > 0;
+    const say = t => { if (quiet){ b.catchUp = t; return; } f.busy = b.busy = t; render(); };
     say(todo.length ? "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…" : "Bringing in the entries the bridge sent…");
-    let changed = false;
+    let changed = false, kept = false;
     try {
-      if (!same){ b.vouchers = []; b.tb = null; }
-      const fromBridge = BookSrc.stash(b);
-      if (ledNew){
-        // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
-        // the bridge sent; a cloud without them is read as before
-        let led;
-        // bridge 2.4.3 (migration 73): with each ledger's TDS settings (nature of payment, special rate, certificates) first
-        try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin,tds_nature,tds_special_rate,tds_ldc&merged_into=is.null&order=name&book_id=eq." + bk.book); }
-        catch (e0){
-          if (!/tds_|42703|PGRST204|does not exist/i.test(String((e0 && e0.message) || e0))) throw e0;
-          try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
-          catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
-        }
-        TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy";
-        BookSrc.ledgersInto(b, led, bk.ledgersAt);
-        await this.groupsInto(b, bk.book);
-        await this.naturesInto(b, bk.book);
-      }
       // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
       // many at once over one connection)
-      const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {};
+      const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {}, seen = {};
       let got = 0, next = 0;
-      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at); days[x.day] = x.at; got++;
+      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at, seen); days[x.day] = x.at; got++;
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
       await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
-      for (const ym of todo){
-        const parts = byMonth[ym].map(x => text[x.day] || "");
-        const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
-        const bad = notThisClient((res.meta || {}).gstins);
-        if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
-        const m = TallyRead.months(ym + "01", to).find(z => z.ym === ym) || {from: ym + "01", to: ym + "31"};
-        TallyRead.merge(b, res, m.from < from ? from : m.from, m.to);
+      // next-fast-open: a month whose every day is the file read into the books before (a Day Book uploaded again with
+      // the same entries) is not read again; when nothing else changed, only the days' new times are kept
+      const redo = todo.filter(ym => !byMonth[ym].every(x => seen[x.day] && known[x.day]));
+      if (same && !redo.length && !ledNew && !(copy && copy.changes)){
+        meta.cloud = Object.assign({}, meta.cloud, {days: Object.assign({}, known, days)});
+        await saveBooks({fromCloud: true}); kept = true;
+      } else {
+        // next-fast-open: everything is read first (the ledgers, each month's entries, the bridge's lines), then put into
+        // the books in one go, so a page drawn meanwhile (the books are not covered by a wait any more) never shows them
+        // half changed
+        let led = null;
+        if (ledNew){
+          // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
+          // the bridge sent; a cloud without them is read as before
+          // bridge 2.4.3 (migration 73): with each ledger's TDS settings (nature of payment, special rate, certificates) first
+          try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin,tds_nature,tds_special_rate,tds_ldc&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+          catch (e0){
+            if (!/tds_|42703|PGRST204|does not exist/i.test(String((e0 && e0.message) || e0))) throw e0;
+            try { led = await this.restAll("tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+            catch (e){ if (!/pan|gstin|42703/i.test(String((e && e.message) || e))) throw e; led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book); }
+          }
+        }
+        const read = [];
+        for (const ym of redo){
+          const parts = byMonth[ym].map(x => text[x.day] || "");
+          const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
+          const bad = notThisClient((res.meta || {}).gstins);
+          if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
+          read.push([ym, res]);
+        }
+        let rows = null;
+        if (copy){
+          const redoSet = new Set(redo), held = new Map();
+          if (same) (b.vouchers || []).forEach(v => { if (v && v.id && (v.src === "bridge" || !redoSet.has(String(v.date || "").slice(0, 6)))) held.set(v.id, v); });
+          read.forEach(([, res]) => (res.vouchers || []).forEach(v => { if (v && v.id) held.set(v.id, v); }));
+          rows = await this.copyRows(b, bk, copy, held);
+        }
+        if (ledNew){ await this.groupsInto(b, bk.book); await this.naturesInto(b, bk.book); }
+        if (!same){ b.vouchers = []; b.tb = null; }
+        const fromBridge = BookSrc.stash(b);
+        if (led){ TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy"; BookSrc.ledgersInto(b, led, bk.ledgersAt); }
+        read.forEach(([ym, res]) => {
+          const m = TallyRead.months(ym + "01", to).find(z => z.ym === ym) || {from: ym + "01", to: ym + "31"};
+          TallyRead.merge(b, res, m.from < from ? from : m.from, m.to);
+        });
+        BookSrc.restore(b, fromBridge);
+        if (copy) this.copyPut(b, bk, copy, rows);
+        if (b.tb && String(b.tb.to) < to) b.tb.to = to;
+        b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
+        try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
+        try { await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
+        meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
+        meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
+        TallyRead.after(b, "after changes came from the cloud copy");
+        LK.cache = {}; changed = true; await saveBooks();
       }
-      BookSrc.restore(b, fromBridge);
-      if (copy) await this.copyInto(b, bk, copy);
-      if (b.tb && String(b.tb.to) < to) b.tb.to = to;
-      b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
-      try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
-      try { await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
-      meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
-      meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
-      TallyRead.after(b, "after changes came from the cloud copy");
-      LK.cache = {}; changed = true; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
-    f.busy = b.busy = ""; render();
+    b.catchUp = "";
+    if (!quiet || changed){ f.busy = b.busy = ""; render(); }
+    if (kept && window.PayLoad) await PayLoad.ensure(b, bk.book);
     return changed ? "new" : true;
   },
   // ---------- round 44: the entries the bridge sent by itself, from the cloud copy (tally_vouchers / tally_lines / tally_bills,
-  // read as Look up and the ledger checks read them). Every entry's head is read when the client is opened (force) or the
-  // book changed; in between, only the entries the bridge's lines brought since the last look (tally_recorder_lines'
+  // read as Look up and the ledger checks read them). Every entry is checked when the client is opened (force) or the
+  // book changed (next-fast-open: by GUID and AlterID when the books are here, below); in between, only the entries the bridge's lines brought since the last look (tally_recorder_lines'
   // applied_at, the cloud's own clock). Lines and bills are read only for entries new to the books or later than held.
   async copyHeads(b, bk, full){
     const meta = b.meta = b.meta || {}, c = meta.copy && meta.copy.book === bk.book ? meta.copy : null;
@@ -393,17 +423,33 @@ const TCloud = {
     let last = [];
     try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
     const newest = (last[0] || {}).applied_at || seen;
-    if (full || !c) heads = await read("");
-    else {
+    const byGuids = async (g) => { let out = []; for (let i = 0; i < g.length; i += 40) out = out.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")); return out; };
+    // next-fast-open (Leads, 20-Oct-2026: 4,414 entries' full heads, 2.8 MB, on every opening): books already here are
+    // checked with each entry's GUID, AlterID and deletion; only the entries new, later, deleted, or with Tally's TDS
+    // details not here yet are read in full. A cloud without the columns, or a failed read: every head, as before
+    if ((full || !c) && c && (b.vouchers || []).length){
+      try {
+        const thin = await this.restPages("tally_vouchers?select=guid,alter_id,deleted_at,tds_tally_alter_id" + B + "&order=guid.asc");
+        const by = BookSrc.index(b.vouchers), list = b.vouchers, alt = x => BookSrc.alt(x);
+        heads = await byGuids(thin.filter(h => {
+          if (!h || !h.guid) return false;
+          const v = by.has(h.guid) ? list[by.get(h.guid)] : null;
+          if (h.deleted_at) return !!v;
+          if (BookSrc.wins(h.alter_id, v)) return true;
+          return !!v && !v.tdsx && v.alt != null && v.alt !== "" && h.tds_tally_alter_id != null && h.tds_tally_alter_id !== "" && alt(v.alt) === alt(h.alter_id) && alt(h.tds_tally_alter_id) === alt(h.alter_id);
+        }).map(h => String(h.guid)));
+      } catch (e){ heads = null; }
+    }
+    if (!heads && (full || !c)) heads = await read("");
+    else if (!heads){
       if (!newest || newest === seen) return {heads: [], seen, changes: false};
       const ls = await this.restPages("tally_recorder_lines?select=object_guid&state=eq.applied&object_guid=not.is.null" + B + "&applied_at=gt." + encodeURIComponent(seen) + "&order=id.asc");
-      const g = Array.from(new Set(ls.map(x => String(x.object_guid))));
-      heads = [];
-      for (let i = 0; i < g.length; i += 40) heads = heads.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")"));
+      heads = await byGuids(Array.from(new Set(ls.map(x => String(x.object_guid)))));
     }
     // changes: a deleted entry held here, a new entry, a later version (a client opened afresh: all of them)
     const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
-    const changes = heads.some(h => h && h.guid && (h.deleted_at ? by.has(h.guid) : BookSrc.wins(h.alter_id, by.has(h.guid) ? list[by.get(h.guid)] : null)));
+    const changes = heads.some(h => { if (!h || !h.guid) return false; const v = by.has(h.guid) ? list[by.get(h.guid)] : null;
+      return h.deleted_at ? !!v : BookSrc.wins(h.alter_id, v) || !!(v && !v.tdsx && BookSrc.tdsxOf(h) && BookSrc.alt(v.alt) === BookSrc.alt(h.alter_id)); });
     return {heads, seen: newest, changes, daysAt: bk.daysAt || ""};
   },
   // bridge 2.4.3 (migration 73): the natures of payment Tally keeps (their section, rates and thresholds by date); a cloud
@@ -416,15 +462,22 @@ const TCloud = {
     b.tdsNat = o;
     return Object.keys(o).length;
   },
-  async copyInto(b, bk, copy){
-    const B = "&book_id=eq." + encodeURIComponent(bk.book), need = BookSrc.need(b, copy.heads);
+  async copyInto(b, bk, copy){ return this.copyPut(b, bk, copy, await this.copyRows(b, bk, copy)); },
+  // the lines and bills of the entries to take; held (TCloud.load): the entries the books will hold once the months read
+  // are put in (guid -> entry), when they are read before anything is put into the books
+  async copyRows(b, bk, copy, held){
+    const B = "&book_id=eq." + encodeURIComponent(bk.book);
+    const need = held ? (copy.heads || []).filter(h => h && h.guid && !h.deleted_at && BookSrc.wins(h.alter_id, held.get(h.guid) || null)).map(h => h.guid) : BookSrc.need(b, copy.heads);
     let lines = [], bills = [];
     for (let i = 0; i < need.length; i += 40){
       const g = "&guid=in.(" + need.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
       lines = lines.concat(await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc"));
       try { bills = bills.concat(await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc")); } catch (e){}
     }
-    const n = BookSrc.apply(b, copy.heads, lines, bills);
+    return {lines, bills};
+  },
+  copyPut(b, bk, copy, rows){
+    const n = BookSrc.apply(b, copy.heads, rows.lines, rows.bills);
     const meta = b.meta = b.meta || {};
     meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
     return n;
@@ -831,91 +884,8 @@ const TCloud = {
   async readResume(r){
     await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
   },
-  // the owner's rule of 05-Oct-2026 (migration 54): new versions go to every computer by themselves; an owner HOLDS a
-  // version (no bridge takes it; a reason is required, kept with who and when), lets it go again, rolls every bridge back
-  // to an earlier version (until cleared), and clears that rollback
-  async releaseHold(v){
-    const a = await askConfirm({title: "Hold version " + v + "?", ok: "Hold it",
-      body: "<p>No bridge of the firm takes FinCom Bridge " + esc(v) + " until you let it go; the ones running it keep running.</p>" +
-        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="holdWhy" maxlength="500" placeholder="What went wrong"></label></div>',
-      read: () => ({why: ((document.getElementById("holdWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is held."});
-    if (!a || !a.ok) return;
-    await this.control("tally_release_hold", {p_version: v, p_why: a.data.why}, "Version " + v + " is held: no bridge takes it.");
-  },
-  async releaseUnhold(v){
-    const a = await askConfirm({title: "Let version " + v + " go?", ok: "Let it go",
-      body: "<p>Every bridge of the firm takes FinCom Bridge " + esc(v) + " by itself again, within a few hours.</p>" +
-        '<div class="bk-form one"><label><span>Note (kept)</span><input id="unholdWhy" maxlength="500" placeholder="What was put right"></label></div>',
-      read: () => ({why: ((document.getElementById("unholdWhy") || {}).value || "").trim()})});
-    if (!a || !a.ok) return;
-    await this.control("tally_release_unhold", {p_version: v, p_why: (a.data && a.data.why) || ""}, "Version " + v + " goes to every computer again.");
-  },
-  async releaseRollback(){
-    const a = await askConfirm({title: "Roll every bridge back to an earlier version?", ok: "Roll back",
-      body: "<p>Each bridge of the firm that keeps that version from its last update puts it back by itself, and no bridge takes a newer version until you clear the rollback. A bridge that does not keep it stays as it is and says so in its log.</p>" +
-        '<div class="bk-form one"><label><span>Version (like 2.2.4)</span><input id="rollbackVersion" maxlength="20" placeholder="2.2.4"></label>' +
-        '<label><span>Why (kept, shown on this page)</span><input id="rollbackWhy" maxlength="500" placeholder="What went wrong"></label></div>',
-      read: () => ({version: ((document.getElementById("rollbackVersion") || {}).value || "").trim(), why: ((document.getElementById("rollbackWhy") || {}).value || "").trim()}),
-      validate: d => !d || !/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(d.version) ? "Give the version, like 2.2.4." : !d.why ? "Say why." : ""});
-    if (!a || !a.ok) return;
-    await this.control("tally_release_rollback", {p_version: a.data.version, p_why: a.data.why}, "Every bridge goes back to version " + a.data.version + " (where it is kept); no newer version until you clear it.");
-  },
-  async releaseRollbackClear(){
-    const a = await askConfirm({title: "Clear the rollback?", ok: "Clear it", body: "<p>Every bridge takes the newest version by itself again, within a few hours.</p>"});
-    if (!a || !a.ok) return;
-    await this.control("tally_release_rollback_clear", {p_why: ""}, "The rollback is cleared; the bridges update themselves again.");
-  },
-  // round 4, item 23: an owner withdraws a version on trial or approved (a reason is required; the cloud's beat gives it
-  // to no computer any more; a new pilot of it is allowed)
-  async releaseWithdraw(v){
-    const a = await askConfirm({title: "Withdraw version " + v + "?", ok: "Withdraw it",
-      body: "<p>No computer of the firm gets FinCom Bridge " + esc(v) + " from FinCom\u2019s cloud any more; the ones running it keep running. It can be tried on one computer again later.</p>" +
-        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="withdrawWhy" maxlength="500" placeholder="What went wrong"></label></div>',
-      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is withdrawn."});
-    if (!a || !a.ok) return;
-    await this.control("tally_release_withdraw", {p_version: v, p_why: a.data.why}, "Version " + v + " is withdrawn.");
-  },
-  // item 10: an owner clears "needs a fresh baseline" on a book (with a note); the bridge reads the company afresh
-  async baselineClear(book, company){
-    const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
-      body: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
-        '<div class="bk-form one"><label><span>Note (why it is cleared; kept with the book)</span><input id="baselineNote" maxlength="500" placeholder="What happened in Tally"></label></div>',
-      read: () => ({note: ((document.getElementById("baselineNote") || {}).value || "").trim()})});
-    if (!a || !a.ok) return;
-    await this.control("tally_baseline_clear", {p_book: book, p_note: (a.data && a.data.note) || ""}, "The baseline of " + company + " is cleared; the bridge reads it afresh.");
-  },
-  // "Make this the main bridge": an owner, asked first; tally-ingest gives postings only to it from then on, tells the
-  // bridge (its next heartbeat) to switch itself over, which stops bridge 1.15.0 on that computer
-  async makeMain(r){
-    const others = this.bridgesHeard().filter(x => x.device.id === r.device.id && x.id !== r.id);
-    const ok = await askConfirm({title: "Make this the main bridge?", ok: "Make it the main bridge",
-      body: "<p><b>FinCom Bridge " + esc(r.version) + "</b> on <b>" + esc(r.computer) + "</b>" + (r.user ? " (Windows user " + esc(r.user) + ")" : "") + " will read Tally <b>and post</b> to it.</p>" +
-        (others.length ? "<p>" + others.map(x => "Bridge " + esc(x.version || "?") + (x.user ? " of " + esc(x.user) : "")).join(", ") + " on this computer stops posting at once: FinCom gives postings to the main bridge only. " +
-          "Within a minute the new bridge also stops any older bridge for its Windows user and takes over its pairing, settings and copy of the books.</p>" : "") +
-        "<p>Only one bridge may ever post to Tally.</p>"});
-    if (!ok) return;
-    try {
-      await Cloud.rpc("tally_bridge_make_main", {p_device: r.device.id, p_bridge: r.id});
-      toast("Done. FinCom Bridge " + r.version + " on " + r.computer + " is the main bridge; it switches over within a minute.");
-    } catch (e){
-      const m = String((e && e.message) || e);
-      toast(/tally_bridge_make_main|does not exist|schema cache/i.test(m) ? "FinCom's cloud is not ready for this yet (migration-22 is not applied)." : m);
-    }
-    await this.refreshPane();
-  },
-  // an install log dropped on the Tally page (a bridge not connected to FinCom yet cannot send its own), for FinCom support
-  async sendInstallLog(file){
-    const p = this.pane;
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024){ p.logSent = {err: "That file is larger than 2 MB; it is not an install log."}; render(); return; }
-    p.logSent = {busy: true}; render();
-    try {
-      const text = await file.text();
-      const j = await TCloudUp.post({kind: "install_log", name: file.name, text}, {});
-      p.logSent = {ok: true, ref: j.path || "", name: file.name};
-    } catch (e){ p.logSent = {err: (e && e.message) || String(e)}; }
-    render();
-  },
+  // the owner's actions on the release, a book's baseline, the main bridge and an install log: app/src/lib/tallyActs.js
+  // (next-fast-open: moved out of legacy.js, at its size budget; put on TCloud when the Tally page loads)
   // The computer with Tally sends by itself: signed in to the firm, with the bridge running, this computer gets its
   // key (once) and the open client's Tally company is linked to that client. Nobody has to press anything.
   // Tried every minute until done, then every 10 minutes; a failed key hand-over waits 30 minutes (no pile of keys).

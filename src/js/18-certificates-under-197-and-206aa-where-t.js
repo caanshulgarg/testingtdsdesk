@@ -169,26 +169,36 @@ async function openBooksNow(cid){
   render();
   const t0 = Date.now(), saved = await Books.load(cid);
   if (!S.books || S.books.cid !== cid) return;                // another client was opened meanwhile
-  S.books = saved && saved.cid === cid ? Object.assign({loading: true}, saved) : {cid, loading: true, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  const held = !!(saved && saved.cid === cid);
+  S.books = held ? Object.assign({loading: true, cached: true}, saved) : {cid, loading: true, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
   // live sync: the server's latest first (only what changed since this computer last looked); this browser's copy is
-  // a cache and is not shown in place of a newer one. Offline, or the server slow, the copy here is shown and said so
+  // a cache and is not shown in place of a newer one. Offline, or the server slow, the copy here is shown and said so.
+  // next-fast-open (Leads, 20-Oct-2026: "taking long to open"): the books are shown once the server's changes are in
+  // (one read: BookItems' o.taken), not after the challans' heal and this computer's own changes are sent; books kept
+  // here wait 1.5 s at most for it, then show and take the server's changes as they come, quietly. The rest (the heal,
+  // sending, the cloud copy's check, the audit) waits until the page is drawn (painted; 3 s at most)
+  let painted; const drawn = new Promise(ok => { painted = ok; }); setTimeout(() => painted(), 3000);
   if (typeof BookSync === "object" && BookSync.on()){
-    const pull = BookSync.pull(cid).catch(() => {});
-    const late = await Promise.race([pull.then(() => false), new Promise(ok => setTimeout(() => ok(true), 6000))]);
+    let taken; const first = new Promise(ok => { taken = ok; });
+    const pull = BookSync.pull(cid, {taken, after: drawn}).catch(() => {});
+    pull.then(taken);
+    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 1500 : 6000))]);
     if (!S.books || S.books.cid !== cid) return;
-    if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
+    if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid) render(); });
+    else if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
-  S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
+  S.books.loading = false; delete S.books.cached; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
   // names kept with line breaks or entities (a copy from before they were cleaned) cleaned once (TallyRead.cleanNames)
   try { if (TallyRead.cleanNames(S.books)) saveBooks(); } catch (e){}
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
   // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
-  if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
+  if (typeof TCloud === "object" && TCloud.on()) drawn.then(() => { TCloud.openLoad(cid).catch(() => {}); });
   setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);
-  setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
+  drawn.then(() => setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400));
   // the drafts' party and expense ledgers, now that the day book and the ledger masters' GSTINs are here
   try { if (typeof billAutoAll === "function" && S.coId === cid) billAutoAll(cid); } catch (e){}
   render();
+  try { requestAnimationFrame(() => setTimeout(() => painted(), 0)); } catch (e){ painted(); }
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
 const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp", "chPortions", "tdsCorr", "allocLog", "tracesChStatus", "tcsCodesFixed", "fixedAssets", "tdsEdits", "matchNo", "tdsSplits", "panFix", "tdsAdded", "tdsPayKind", "payroll"];

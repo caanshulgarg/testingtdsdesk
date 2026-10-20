@@ -5,6 +5,7 @@
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
 import Msg from "../parts/Msg.jsx";
+import "../lib/tallyActs.js";
 import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
 import SyncActivity from "./TallySync.jsx";

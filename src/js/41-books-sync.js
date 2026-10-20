@@ -91,7 +91,8 @@ const BookSync = {
     }
   },
   async localWork(cid){
-    if (S.books && S.books.cid === cid && !S.books.loading) return this.work(S.books);
+    // next-fast-open: books being opened from this browser's copy (cached) are that copy; not read from the store again
+    if (S.books && S.books.cid === cid && (!S.books.loading || S.books.cached)) return this.work(S.books);
     const saved = await Books.load(cid);
     return saved ? this.work(saved) : null;
   },
@@ -141,9 +142,9 @@ const BookSync = {
     if (s.again){ s.again = false; this.schedule(cid); }
   },
   /* ---------- receiving ---------- */
-  async pull(cid){
+  async pull(cid, o){
     if (!this.on() || !cid) return;
-    if (typeof BookItems === "object" && BookItems.on()){ try { if (await BookItems.pull(cid) !== "off") return; } catch (e){ this.of(cid).error = e.message; return; } }
+    if (typeof BookItems === "object" && BookItems.on()){ try { if (await BookItems.pull(cid, o) !== "off") return; } catch (e){ this.of(cid).error = e.message; return; } }
     const s = this.of(cid);
     if (s.busy) return;
     s.busy = true;
