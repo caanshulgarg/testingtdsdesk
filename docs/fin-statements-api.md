@@ -171,3 +171,30 @@ balance sheet, then the P&L, refer to them, a note without a figure left out (`d
 Not derived from the workbooks (left to the Inputs or a value): the gratuity split current / non-current (the owner's
 actuarial sheet: code 5E or 5A by hand), deferred tax working (the TB's 9A / 31A / 22C, checked), ageing schedules,
 PY cash flow when FinCom has no year before (blank), interest u/s 234B/234C, MAT (115JB), 40(b) limits for a firm.
+
+## Downloads (stage 2B): `FinXlsx`, `FinPdf`
+
+`app/src/lib/finExport.js`, a lazy chunk (nothing in legacy.js). `app/src/main.jsx` puts `window.loadFinExport()` and small
+stand-ins for `window.FinXlsx.download` / `window.FinPdf.open` that load the module and pass the call on (the PDF's window is
+opened at once, so the pop-up is not blocked); once loaded, the module's own objects replace them. A screen may also
+`import "../../lib/finExport.js"`. Test: `tests/run_fin_xlsx.py` (LibreOffice recalculation).
+
+| Call | Does |
+|---|---|
+| `FinXlsx.download(fy, {unit, dec})` | saves "<client> Financial statements FY 2025-26.xlsx" (`saveFile`); returns the name |
+| `FinXlsx.make(fy, {unit, dec})` | `{buffer, name, cells: [{sheet, addr, f, v, src}], sheets}`; `src` is the path of the FinSt.build figure a cell is |
+| `FinPdf.open(fy, {unit, dec, includeTb}, win?)` | the print view (as `printView`, A4 portrait): Balance Sheet, P&L, Cash Flow, Notes (with the PPE schedules), Computation, each from a new page, signature blocks; the trial balance only with `includeTb` |
+| `FinPdf.html(fy, opt)` | the same pages as HTML (`section.fs-page[data-fs-page=bs/pl/cf/notes/comp/tb]`) |
+| `FinSt.ratios(d)` | companies: Schedule III ratios `{comps, list[{key, label, numL, denL, cy, py, variance}]}` on closing balances; 0 when the denominator is nil |
+
+ExcelJS is not bundled: `assets/exceljs.min.js` (ExcelJS 4.4.0 from npm, the package's `dist/exceljs.min.js` unchanged,
+sha256 `7e49da68588e250dbb8bba190d2caa8ab3787cc0284bda1d8b2f805c4df742c9`; MIT, `assets/exceljs-LICENSE.txt`), loaded by
+`ensureExcelJs()` (through `loadScriptOnce`, as `ensureXlsx`) the first time a workbook is made.
+
+The workbook follows "The workbook" above, with: every formula cell carrying its value (a viewer that does not recalculate
+sees the figures); Cambria 11, bold totals with a top rule (statement totals and note totals double-ruled), the owner's
+accounting number format at DEC decimals, A4 fit to width (PPE and Accounting Ratios landscape), print areas without the
+helper columns; Trial Balance K "Code means"; Inputs E8 the unit, short; the year before's PPE schedule and cash flow as
+`=ROUND(value*<the unit they were worked in>/UNIT,DEC)`, so a unit typed on Inputs!E4 carries every figure (the checks stay
+0); the rounding Note 17 absorbs worked out on Profit-Loss J-L (not printed), the raw 17J beside Note 17 (Notes J-K); the
+Computation in rupees with Annexure 1 down the page; Accounting Ratios (companies) linked to the statements.

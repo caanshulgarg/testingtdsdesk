@@ -53,6 +53,7 @@ run_fixture_books.js                  120
 run_fs.js                             120
 run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
 run_fin_statements.js                 120
+run_fin_xlsx.py                       180  # needs LibreOffice: ci.yml installs libreoffice-calc on the share that runs it
 run_gateway_errors.js                 120
 run_group_case.js                     120
 run_gst9.js                           120

@@ -186,6 +186,12 @@ jobs:
           fi
           /usr/lib/postgresql/16/bin/postgres --version
           id postgres
+      - name: LibreOffice Calc, only on the share that runs run_fin_xlsx.py (it recalculates the statements' Excel)
+        run: |
+          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/8 --dry-run | grep -q '^run_fin_xlsx.py '; then
+            command -v soffice || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc; }
+            soffice --version
+          fi
       - name: Tests (share ${{ matrix.shard }} of 8)
         run: |
           # PowerShell 7 comes with GitHub's Ubuntu machines; the bridge tests (run_keep_*.py, run_bridge_fast.py, ...)
