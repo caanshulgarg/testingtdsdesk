@@ -3,7 +3,7 @@
 deduction certificates per deductee with their amount, and the 26Q / 27Q / 27EQ text files (remarks A and C, 195 kept
 out of 26Q, TCS read from the books). Offline, a made-up client; no client data needed.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tds_accuracy.py"""
-import os, threading, functools, http.server
+import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))); H.log_message = lambda *a: None
@@ -155,9 +155,10 @@ with sync_playwright() as p:
     txt = pg.inner_text("#app")
     ok(nr and "Make FVU file (draft)" in txt and "draft – not yet validated" in txt, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
     pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(400)
-    codes = "Collection codes" in pg.inner_text("#app")
-    pg.evaluate("() => { S.tdsTab = 'summary'; render(); }"); pg.wait_for_timeout(300)
-    tcs = "TCS" in pg.inner_text("#app [data-ret-strip]")
+    txt = pg.inner_text("#app")
+    codes = "Collection codes" in txt
+    # round 95 (next-tds-tidy2): no amounts strip on a return; the TCS collected is on the Buyers tab (its TCS column)
+    tcs = "Buyers (PAN)" in txt and "Collections" in txt and re.search(r"Scrap Buyer\s+AABCS1234K.*\s206C\s+1\s+₹1,00,000\.00\s+₹1,000\.00", txt) is not None
     pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(300)
     ok(codes and tcs and "Make FVU file (draft)" in pg.inner_text("#app"), "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
     # screens: Parties shows the certificates and the inoperative mark; the year shows 27Q and 27EQ

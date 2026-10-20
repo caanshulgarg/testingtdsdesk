@@ -8,7 +8,7 @@
   T-A2  the rate that applies decided by the PAN's 4th letter and what was paid for: 194C to a company at 1% and 194J
         professional fees at 2% are rate questions; 194C to an individual at 1% is not; 206AA (no PAN) unchanged.
   T-S3  interest and late fee for 26Q, 27Q, 27EQ and 24Q: 1% a month for deducting late (a TDS entry after the bill),
-        1.5% for paying late (1% for TCS), the 234E fee (27EQ due on the 15th), 271H in words, "pay with the next challan".
+        1.5% for paying late (1% for TCS), the 234E fee (27EQ due on the 15th), 271H, and what is not yet allocated to the return.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -39,6 +39,18 @@ def go(pg, fy, q="", form="", tab=""):
 def app(pg): return pg.inner_text("#app")
 def cell(pg, k): return pg.get_attribute('#app [data-cell="%s"]' % k, "data-status")
 
+# next-tds-interest2 (the owner, 20-Oct-2026): Validate & file's Interest & fee section (tds/Interest.jsx), each figure once:
+# the interest table, one row a deduction, and one summary whose "Late fee 234E" row has the fee and a one-line note (the
+# days past the due date; "(filed <date>)" when the return is filed: then the fee is to that date, else to today, i.e. the fee
+# "if filed today"); 271H in that row's hover; "Late fee 234E ₹x due" an error to fix only while the quarter is not filed
+def fee_row(pg):
+    return pg.evaluate("""() => { const e = document.querySelector('#app [data-int-fee]'); if (!e) return null;
+      const n = e.querySelector('[data-int-feenote]'); return {fee: +e.dataset.intFee, text: e.innerText.replace(/\\s+/g, ' '), note: n ? n.textContent : '', title: e.title || ''}; }""")
+def int_row(pg, party):
+    return pg.evaluate("""(p) => [...document.querySelectorAll('#app [data-int-table] tbody tr[data-int-row]')].map(tr => [...tr.cells].map(td => td.innerText.trim())).filter(c => c[0] === p)""", party)
+def fee_today(pg, fy, q, form):
+    return pg.evaluate("(a) => TDS.lateFee(a[0], a[1], '', a[2])", [fy, q, form])
+
 def type_date(pg, sel, text):
     pg.click(sel); pg.fill(sel, text); pg.keyboard.press("Tab"); pg.wait_for_timeout(200)
 
@@ -52,8 +64,10 @@ try:
         go(pg, "2025-26")
         ok(cell(pg, "26Q|Q1") != "filed", "before: 26Q Q1 2025-26 is not shown filed (%s)" % cell(pg, "26Q|Q1"))
         go(pg, "2025-26", "Q1", "26Q", "checks")
-        t = app(pg)
-        ok("if filed today" in t, "before: Errors to fix shows a late fee 'if filed today'")
+        t = app(pg); fr = fee_row(pg); lf = fee_today(pg, "2025-26", "Q1", "26Q")
+        ok(fr and lf["fee"] > 0 and abs(fr["fee"] - lf["fee"]) < 0.005 and ("%d days past 31-Jul-2025" % lf["days"]) in fr["note"] and "filed" not in fr["note"]
+           and ("Late fee 234E %s due" % ("₹" + format(lf["fee"], ",.2f"))) in t,
+           "before: Errors to fix shows a late fee 'if filed today' (to today: %s; %s)" % (lf, fr))
         go(pg, "2025-26", "Q1", "26Q", "file")
         box = '#app [data-filed="26Q|Q1"]'
         ok(pg.locator(box).count() == 1 and "Mark filed" in pg.inner_text(box), "the File tab has Mark filed with the date and the token number")
@@ -80,8 +94,9 @@ try:
         ok(lf["fee"] == 0 and lf["days"] == 0, "filed by the due date: no late fee (%s)" % lf)
         t = pg.inner_text(box)
         ok("25-Jul-2025" in t and "123456789012345" in t, "the File tab shows the filed date and token")
-        go(pg, "2025-26", "Q1", "26Q", "checks"); t = app(pg)
-        ok("if filed today" not in t and "filed on 25-Jul-2025" in t, "Errors to fix: the fee is worked out to the filed date, not 'if filed today'")
+        go(pg, "2025-26", "Q1", "26Q", "checks"); t = app(pg); fr = fee_row(pg)
+        # filed 25-Jul-2025 by the due date (31-Jul): the fee to that date is nil, so no 234E row and no fee to fix
+        ok(fr is None and fee_today(pg, "2025-26", "Q1", "26Q")["fee"] > 0 and "Late fee 234E" not in t and "if filed today" not in t, "Errors to fix: the fee is worked out to the filed date, not 'if filed today' (%s)" % fr)
         go(pg, "2025-26")
         ok(cell(pg, "26Q|Q1") == "filed" and "Filed" in pg.inner_text('#app [data-cell="26Q|Q1"]'), "the year's grid: 26Q Q1 shows Filed (green)")
 
@@ -90,13 +105,16 @@ try:
         ok(cell(pg, "26Q|Q2") == "filed" and cell(pg, "24Q|Q2") == "filed", "a date typed under Settings > Closed periods: 26Q and 24Q of Q2 show Filed")
         lf = pg.evaluate("TDS.lateFee('2025-26', 'Q2', TDSFiled.get('2025-26', 'Q2', '26Q').on, '26Q')")
         ok(lf["days"] == 5 and lf["fee"] == 1000, "filed 05-Nov-2025, due 31-Oct: 5 days at 200 = 1,000 (%s)" % lf)
-        go(pg, "2025-26", "Q2", "26Q", "checks"); t = app(pg)
-        ok("filed on 05-Nov-2025" in t and "₹1,000.00" in t and "if filed today" not in t, "Errors to fix: the fee to the date typed under Closed periods, ₹1,000.00")
+        go(pg, "2025-26", "Q2", "26Q", "checks"); t = app(pg); fr = fee_row(pg)
+        ok(fr and fr["fee"] == 1000 and "₹1,000.00" in fr["text"] and "(filed 05-Nov-2025)" in fr["note"] and "5 days past 31-Oct-2025" in fr["note"]
+           and "Late fee 234E ₹" not in t and "if filed today" not in t, "Errors to fix: the fee to the date typed under Closed periods, ₹1,000.00 (%s)" % fr)
         go(pg, "2025-26", "Q2", "26Q", "file")
         ok("Settings › Closed periods" in pg.inner_text('#app [data-filed="26Q|Q2"]'), "the File tab says where the date came from")
         # an unfiled quarter of an earlier year still has its fee 'if filed today', counted as an error
-        go(pg, "2025-26", "Q3", "26Q", "checks"); t = app(pg)
-        ok("if filed today" in t, "an unfiled quarter (Q3 2025-26): the fee 'if filed today' is still shown")
+        go(pg, "2025-26", "Q3", "26Q", "checks"); t = app(pg); fr = fee_row(pg); lf = fee_today(pg, "2025-26", "Q3", "26Q")
+        ok(fr and lf["fee"] > 0 and abs(fr["fee"] - lf["fee"]) < 0.005 and ("%d days past 31-Jan-2026" % lf["days"]) in fr["note"] and "filed" not in fr["note"]
+           and ("Late fee 234E %s due" % ("₹" + format(lf["fee"], ",.2f"))) in t,
+           "an unfiled quarter (Q3 2025-26): the fee 'if filed today' is still shown (%s; %s)" % (lf, fr))
         # take the mark off: asked first
         pg.evaluate("() => { TDSFiled.unmark('2025-26', 'Q1', '26Q'); }"); pg.wait_for_timeout(300)
         ok(pg.is_visible("#confirmBox [data-cbx=yes]"), "taking the filed mark off asks first")
@@ -166,17 +184,27 @@ try:
         ok(lf["days"] == 5 and lf["fee"] == 100 and lf["cap"] == 100, "27EQ filed 20-Oct: 5 days late, ₹1,000 capped at the TCS of ₹100 (%s)" % lf)
         lf = pg.evaluate("TDS.lateFee('2025-26', 'Q1', '', '24Q')")
         ok(lf["cap"] == 22968 and lf["fee"] == 22968 and lf["p271h"], "24Q Q1 2025-26 not filed: the fee capped at the salary sheet's TDS ₹22,968, and past a year: 271H (%s)" % lf)
-        go(pg, "2025-26", "Q2", "27Q", "checks"); t = app(pg)
-        ok(pg.locator('#app [data-interest="27Q"]').count() == 1 and "₹936.00" in t and "paid late" in t, "27Q's Errors to fix: interest and late fee, ₹936.00 paid late")
-        ok(pg.locator('#app [data-next-challan]').count() == 1, "it says what to pay with the next challan")
-        go(pg, "2025-26", "Q2", "27EQ", "checks"); t = app(pg)
-        ok(pg.locator('#app [data-interest="27EQ"]').count() == 1 and "206C(7)" in t, "27EQ's Errors to fix: interest under 206C(7)")
-        go(pg, "2025-26", "Q1", "24Q", "checks"); t = app(pg)
-        ok(pg.locator('#app [data-interest="24Q"]').count() == 1 and "271H" in t and "₹22,968.00" in t, "24Q's Errors to fix: the late fee (₹22,968.00) and 271H")
-        go(pg, "2025-26", "Q2", "26Q", "checks"); t = app(pg)
-        ok("deducted late: bill of 10-Jun-2025" in t and "₹30.00" in t, "26Q's Errors to fix: the late deduction, in words")
-        go(pg, "2026-27", "Q2", "26Q", "checks"); t = app(pg)
-        ok("if filed today" in t and "271H" not in t, "the quarter due now (Q2 2026-27, due 31-Oct): no fee yet, no 271H line")
+        go(pg, "2025-26", "Q2", "27Q", "checks"); t = app(pg); ir = int_row(pg, "Oslo Design AS"); fr = fee_row(pg)
+        # the row: section, TDS, deducted 12-Aug, challan of 20-Oct (paid late: due 07-Sep), no months at 1%, 3 at 1.5%, ₹936
+        ok(pg.locator('#app [data-int-sec="27Q"]').count() == 1 and len(ir) == 1 and ir[0][1:] == ["195", "₹20,800.00", "12-Aug-2025", "12-Aug-2025", "20001 · 20-Oct-2025", "", "3", "₹936.00"]
+           and fr and fr["fee"] == 1000, "27Q's Errors to fix: interest and late fee, ₹936.00 paid late (%s; fee %s)" % (ir, fr))
+        # "Pay with the next challan" went on purpose (next-tds-interest2): the summary says the challan's ₹936 is not yet
+        # allocated to the return, and Errors to fix sends the person to the Challans step to allocate it
+        ch = pg.evaluate("() => { const tr = document.querySelector('#app [data-int-ch=\"chNR\"]'); return tr ? [+tr.dataset.due, +tr.dataset.alloc, (tr.querySelector('[data-status]') || {dataset: {}}).dataset.status] : null; }")
+        ok(ch == [936, 0, "short"] and "Interest ₹936.00 not allocated" in t, "it says what to pay with the next challan: ₹936.00 on challan 20001, not allocated (%s)" % ch)
+        go(pg, "2025-26", "Q2", "27EQ", "checks"); t = app(pg); ir = int_row(pg, "Tern Traders")
+        heads = [h.strip() for h in pg.locator('#app [data-int-sec="27EQ"] [data-int-table] thead th').all_inner_texts()]
+        # 206C(7): 1% a month (no 1.5% column for TCS): 3 months on ₹100 = ₹3
+        ok(pg.locator('#app [data-int-sec="27EQ"]').count() == 1 and "Months at 1%" in heads and not any("1.5%" in h for h in heads) and len(ir) == 1 and ir[0][-2:] == ["3", "₹3.00"],
+           "27EQ's Errors to fix: interest under 206C(7) (%s; %s)" % (heads, ir))
+        go(pg, "2025-26", "Q1", "24Q", "checks"); t = app(pg); fr = fee_row(pg)
+        ok(pg.locator('#app [data-int-sec="24Q"]').count() == 1 and fr and fr["fee"] == 22968 and "₹22,968.00" in fr["text"] and "271H" in fr["title"],
+           "24Q's Errors to fix: the late fee (₹22,968.00) and 271H (%s)" % fr)
+        go(pg, "2025-26", "Q2", "26Q", "checks"); t = app(pg); ir = [c for c in int_row(pg, "Kestrel Movers") if c[6] == "3"]
+        # the late deduction's row: paid/credited (the bill) 10-Jun-2025, deducted 05-Aug-2025, 3 months at 1%, ₹30
+        ok(len(ir) == 1 and ir[0][3:5] == ["10-Jun-2025", "05-Aug-2025"] and ir[0][-1] == "₹30.00", "26Q's Errors to fix: the late deduction, in words (%s)" % ir)
+        go(pg, "2026-27", "Q2", "26Q", "checks"); t = app(pg); fr = fee_row(pg); lf = fee_today(pg, "2026-27", "Q2", "26Q")
+        ok(lf["fee"] == 0 and fr is None and "Late fee 234E" not in t and "271H" not in t, "the quarter due now (Q2 2026-27, due 31-Oct): no fee yet, no 271H line (%s; %s)" % (lf, fr))
         br.close()
 finally:
     srv.shutdown()

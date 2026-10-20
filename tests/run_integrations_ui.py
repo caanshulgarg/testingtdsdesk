@@ -194,9 +194,17 @@ def main():
         go("#/c/%s/books/gst/27/202605/r1" % zid); pg.wait_for_timeout(2000)
         t1 = txt("#app")
         ok("4,50,000" in t1 and "2,50,000" in t1 and "1,50,000" in t1, "the GST page: GSTR-1 May 2026 from the Zoho invoices: B2B 4,50,000, exports 2,50,000, B2C large 1,50,000")
-        go("#/c/%s/books/tds/2026-27/Q1/26Q" % zid); pg.wait_for_timeout(2500)
+        # next-tds-retchallans / next-tds-register (20-Oct-2026): a return opens on its Deductions step (its own challans;
+        # with none yet, "N deductions pending" opens the Deductions register); the deductees are on the Deductees tab
+        go("#/c/%s/books/tds/2026-27/Q1/26Q/deductees" % zid); pg.wait_for_timeout(2500)
         tt = txt("#app")
-        ok("Omicron Contractors" in tt and "Pi Consultants" in tt, "the TDS page: Q1 2026-27 26Q has the Zoho bills' deductees")
+        ok("Omicron Contractors" in tt and "Pi Consultants" in tt and "₹2,000.00" in tt and "₹6,000.00" in tt,
+           "the TDS page: Q1 2026-27 26Q has the Zoho bills' deductees (Deductees tab: Omicron Contractors ₹2,000, Pi Consultants ₹6,000)")
+        go("#/c/%s/books/tds/2026-27/Q1/26Q" % zid); pg.wait_for_timeout(2000)
+        pg.click('#app [data-wd-nochallan] button'); pg.wait_for_timeout(800)
+        names = E("() => [...document.querySelectorAll('#app [data-dreg] [data-dreg-row]')].map(tr => tr.innerText.replace(/\\s+/g, ' '))")
+        ok(len(names) == 2 and any("Omicron Contractors" in n for n in names) and any("Pi Consultants" in n for n in names),
+           "the return's \"2 deductions pending\" opens the Deductions register with both bills' deductions (%s)" % names)
         no_secrets("a Zoho client's books")
         br.close()
     # ---------------------------------------------------------------- 7. TaxPro and ASP never reach a user
