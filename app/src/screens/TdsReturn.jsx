@@ -543,6 +543,8 @@ export function Return24({ b }) {
   if (wait) return <PayLoad.Wait b={b} state={wait} />;
   // bridge 2.4.4: Tally's payroll, when there is no salary sheet (tds/Payroll.jsx)
   if (!has && Payroll.has(fy)) return <Return24Tally fy={fy} q={q} />;
+  // next-24q-auto: on opening, the salary TDS placed on its challans by the sure rules (TDSMatch.autoOpen, src/js/86)
+  try { TDSMatch.autoOpen("24Q", fy, q); } catch (e) { /* the matcher not loaded */ }
   S.tdsTab = tabNow(S.tdsTab, "24Q");
   const fname = TDS.formName("24Q", fy), key = TDSReg.key("24Q", fy, q), rc = retChallans("24Q", fy, q), usedN = rc.n;
   const inBooks = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q);
