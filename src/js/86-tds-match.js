@@ -174,6 +174,109 @@ const TDSMatch = {
     return out;
   },
   no(){ return this.books().matchNo || {}; },
+  // ---------------- next-24q-auto (the owner on Leads' Form 138 Q1, 20-Oct-2026: "FinCom has now shown the challans, but the
+  // deductions are being filled by me by adding"). Salary TDS is one figure a month paid on one challan: on opening a 24Q
+  // return its deductions are PLACED by the sure rules (a Tally's link, b/c the exact amount, s below), each tagged "Rule"
+  // in the register (allocLog act "auto", note "rule: <words>"); the other rules stay suggestions. Never moved: a deduction
+  // already on a challan (a person's or Tally's), one a person took off a challan (an "untag" of it in the trail), a filed
+  // return. 26Q, 27Q and 27EQ are as before (suggested, confirmed by a person).
+  SAL: "Salary: the month's TDS on the next month's 192 challan",
+  AUTO: new Set(["a", "b", "c", "s"]),
+  // a challan's 192 part (paise): its tax when it names 192; one naming no section made from a Tally payment, what that
+  // payment paid under 192 (6-Jul ₹2,27,543: TDS 192B ₹1,98,578); else null
+  part192(c){
+    const s = TDSCH.secNorm(c && c.section);
+    if (s) return /^192/.test(s) ? tmP(c.tax) : null;
+    const p = (this.paidSecs(c) || []).filter(x => /^192/.test(x.sec));
+    return p.length ? p.reduce((a, x) => a + tmP(x.amount), 0) : null;
+  },
+  // 24Q's tax on a challan (paise), every quarter
+  used24(c, cx){ return Object.values((cx.uses[c.id] || {})).filter(u => u.form === "24Q").reduce((a, u) => a + tmP(u.tax), 0); },
+  // s: all of a month's 192 deductions to the one challan paying 192 deposited in the next month by its 7th (the due date;
+  // 30 April for March), when its 192 part not yet used is at least the month's TDS; what is over is said once
+  salRule(rows, chs, opt, cx){
+    const out = [], no = opt.no || {}, today = tmYmd(opt.today), by = {}, chBy = {}, left = {};
+    TDS.challans().forEach(c => { chBy[c.id] = c; });
+    chs.forEach(c => { left[c.id] = tmP(c.bal); });
+    rows.filter(r => r.sec === "192" && tmP(r.tds) > 0).forEach(r => { const ym = tmYmd(r.date).slice(0, 6); (by[ym] = by[ym] || []).push(r); });
+    Object.keys(by).sort().forEach(ym => {
+      const list = by[ym].slice().sort((a, c) => tmYmd(a.date).localeCompare(tmYmd(c.date)) || (String(a.id) < String(c.id) ? -1 : 1)), need = list.reduce((a, r) => a + tmP(r.tds), 0), last = tmYmd(list[list.length - 1].date), due = tmDue(ym);
+      const cands = chs.filter(c => { const d = tmYmd(c.date); return String(c.minor || "200") === "200" && d.slice(0, 6) === due.slice(0, 6) && d <= due && d >= last && !(today && d > today) && this.part192(chBy[c.id]) != null; });
+      if (cands.length !== 1) return;
+      const c = cands[0], ch = chBy[c.id], part = this.part192(ch) - this.used24(ch, cx) - (tmP(c.bal0 != null ? c.bal0 : c.bal) - left[c.id]), ids = list.map(r => r.id), key = c.id + ":" + ids.slice().sort().join(",");
+      if (part < need || left[c.id] < need || no[key]) return;
+      left[c.id] -= need;
+      const over = part - need;
+      out.push({key, rule: "s", words: this.SAL, reason: "192 · " + tmMonth(ym) + " · " + list.length + (list.length === 1 ? " deduction " : " deductions ") + tmInr(need) + " · challan of " + tmDmy(c.date) + " paid " + tmInr(this.part192(ch)) + " under 192",
+        warn: "", info: over > 0 ? tmInr(over) + " more paid than deducted — use for interest/next month or check" : "", chId: c.id, ids, total: need, over});
+    });
+    return out;
+  },
+  // the rules of a return: 26Q, 27Q, 27EQ tmRules as they are; 24Q a, b, c first, then s, then the rest on what is left
+  rulesFor(form, rows, chs, opt, cx){
+    if (form !== "24Q") return tmRules(rows, chs, opt);
+    const less = (list, ss) => { const use = {}, taken = new Set(); ss.forEach(s => { s.ids.forEach(id => taken.add(id)); (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
+      return {rows: list.rows.filter(r => !taken.has(r.id)), chs: list.chs.map(c => Object.assign({}, c, {bal0: c.bal0 != null ? c.bal0 : c.bal, bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100})).filter(c => c.bal > 0.005)}; };
+    const first = tmRules(rows, chs, opt).filter(s => ["a", "b", "c"].includes(s.rule)), l1 = less({rows, chs}, first);
+    const sal = l1.rows.length && l1.chs.length ? this.salRule(l1.rows, l1.chs, opt, cx || TDSReg.ctx()) : [], l2 = less(l1, sal);
+    return first.concat(sal, l2.rows.length && l2.chs.length ? tmRules(l2.rows, l2.chs, opt) : []);
+  },
+  // what a person took off a challan stays off (the trail's "untag" of it, not a stale one dropped)
+  offRows(){ return new Set((this.books().allocLog || []).filter(l => l.act === "untag" && l.row && !/^stale/.test(l.note || "")).map(l => l.row)); },
+  // allocations naming a deduction that is no longer in the books: a payroll entry's books 192 line or its "TDS not split by
+  // employee" row (pay:<entry>|~) once Tally's payroll gives each employee's TDS (after Payroll.carry has taken its challan to
+  // the employees). Dropped, each said in the trail. Only a payroll entry's (26Q, 27Q, 27EQ untouched); never a filed return's
+  dropStale(){
+    const b = S.books, V = (b && b.payroll || {}).vouchers || {};
+    if (!b || !b.alloc || !Object.keys(V).length) return 0;
+    try { Payroll.carry(b); } catch (e){}
+    TDSReg.forget();
+    const live = TDSReg.ctx().byRow, L = b.allocLog || [], chs = TDS.challans(); let n = 0;
+    Object.keys(b.alloc).forEach(k => {
+      const g = k.replace(/^pay:/, "").split("|")[0];
+      if (live[k] || live[k.replace(/#\d+$/, "")] || !V[g]) return;
+      const was = L.slice().reverse().find(l => l.row === k) || {};
+      if (was.fy && was.q && TDSReg.locked(was.fy, was.q, "24Q")) return;
+      TDSReg.log({act: "untag", ch: chs.find(c => c.id === b.alloc[k]) || null, form: "24Q", fy: was.fy || "", q: was.q || "", row: k, tax: was.tax || 0,
+        note: "stale: this deduction is no longer in the books (Tally's payroll gives each employee's TDS); its old allocation dropped"});
+      delete b.alloc[k]; n++;
+    });
+    if (n) TDSReg.forget();
+    return n;
+  },
+  // on opening a 24Q return: stale allocations dropped, then the sure rules' matches placed. {placed, dropped}
+  autoRun(form, fy, q){
+    const b = S.books;
+    if (form !== "24Q" || !b || b.loading || TDSReg.locked(fy, q, form)) return {placed: 0, dropped: 0};
+    if (typeof PayLoad === "object" && PayLoad.waiting && PayLoad.waiting(b)) return {placed: 0, dropped: 0};
+    const dropped = this.dropStale(), off = this.offRows(), cx = TDSReg.ctx(); let placed = 0;
+    this.suggestNow(form, fy, q).filter(s => this.AUTO.has(s.rule) && s.ids.length && !s.ids.some(id => off.has(id))).forEach(s => {
+      const r = TDSCH.tag(s.ids, s.chId, {via: "auto", note: "rule: " + s.words + " · " + s.reason + (s.info ? " · " + s.info : ""), cx, nosave: true});
+      if (r.ok) placed += r.n;
+    });
+    if (placed || dropped){ TDSReg.forget(); TDSReg.done(); saveBooks(); }
+    return {placed, dropped};
+  },
+  // called as a 24Q return is drawn: once for these books as they are (a run that changes nothing is not run again)
+  autoOpen(form, fy, q){
+    const b = S.books;
+    if (form !== "24Q" || !b || b.loading) return;
+    const sig = [fy, q, Object.keys(b.alloc || {}).length, TDS.challans().length, (b.vouchers || []).length, (b.allocLog || []).length].join("|");
+    if (this._auto && this._auto.b === b && this._auto.sig === sig) return;
+    this._auto = {b, sig};
+    setTimeout(() => { try { if (S.books !== b) return; const r = this.autoRun(form, fy, q); if (r.placed || r.dropped) render(); } catch (e){} }, 0);
+  },
+  // what a 24Q return's challans hold of 192 beyond its TDS on them: [{c, part, used, over, words}] (said once, Challans)
+  salaryExcess(fy, q){
+    const cx = TDSReg.ctx(), k = TDSReg.key("24Q", fy, q), out = [];
+    TDS.challans().forEach(c => {
+      if (!(cx.uses[c.id] || {})[k]) return;
+      const part = this.part192(c); if (part == null) return;
+      const over = part - this.used24(c, cx);
+      if (over >= 100) out.push({c, part: part / 100, used: this.used24(c, cx) / 100, over: over / 100, words: tmInr(over) + " more paid than deducted — use for interest/next month or check"});
+    });
+    return out;
+  },
   // ---------------- the suggestions: rules a to f, then the AI's (g), each with its rule and reason in words
   suggest(form, fy, q){
     form = form || "26Q";
@@ -188,7 +291,7 @@ const TDSMatch = {
     const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
     const opt = {fy, q, today, links: rows.length ? this.links(rows) : {}, no: this.no()};
-    let out = rows.length && chs.length ? tmRules(rows, chs, opt) : [];
+    let out = rows.length && chs.length ? this.rulesFor(form, rows, chs, opt, cx) : [];
     // the AI's pairings (a run kept for these deductions), checked again against what is free now
     const ai = this.aiOf(form, fy, q);
     if (ai && ai.raw && rows.length){
@@ -343,6 +446,9 @@ const TDSMatch = {
     if (log.act === "suggestion") return {kind: "suggestion", words: "Matched by: suggestion confirmed by " + when(log) + (log.note ? " · " + log.note.replace(/^suggestion confirmed: /, "") : "")};
     if (log.act === "tally") return {kind: "tally", words: "Matched by: Tally"};
     if (log.act === "split") return {kind: "you", words: "Matched by: " + when(log).replace(/, /, " (") + ") · split"};
+    // next-24q-auto: placed by a rule on opening the return, or carried from a payroll month's total (Payroll.carry)
+    if (log.act === "auto" && /^rule: /.test(log.note || "")) return {kind: "rule", words: "Matched by: rule · " + log.note.slice(6).split(" · ")[0] + " (FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) + ")"};
+    if (/^carried from the month's total/.test(log.note || "")) return {kind: "rule", words: "Matched by: rule · carried from the month's total challan (FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) + ")"};
     if (log.act === "auto" || log.act === "balance") return {kind: "auto", words: "Matched by: FinCom's earlier automatic allocation (" + when(log) + ")"};
     return {kind: "you", words: "Matched by: " + when(log).replace(/, /, " (") + ")"};
   },
@@ -456,7 +562,7 @@ const TDSMatch = {
     TDS.challans().forEach(c => { chBy[c.id] = c; });
     const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
-    const rules = tmRules(rows, chs, {fy, q, today, links: this.links(rows), no: this.no()}), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
+    const rules = this.rulesFor(form, rows, chs, {fy, q, today, links: this.links(rows), no: this.no()}, cx), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
     rules.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
     return {rows: rows.filter(r => !taken.has(r.id)), chs: chs.map(c => Object.assign({}, c, {bal: r2((tmP(c.bal) - (use[c.id] || 0)) / 100)})).filter(c => c.bal > 0.005)};
   },

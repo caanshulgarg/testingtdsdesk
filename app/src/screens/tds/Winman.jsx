@@ -363,6 +363,8 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
         <td className="n">{amt(sum((x) => num(x.c.others)))}</td><td className="n">{amt(sum((x) => totalOf(x.c)))}</td><td colSpan={4}></td><td className="n">{amt(sum((x) => x.int))}</td><td className="n">{amt(sum((x) => x.fee))}</td><td className="n">{amt(sum((x) => x.oth))}</td>
         <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td>{rmCol && <td></td>}</tr>
         {cf.on && <tr className="wd-cffoot"><td colSpan={cols}>{cf.foot("challans")}</td></tr>}</tfoot></table></div>
+    {/* next-24q-auto: a 192 challan holding more than the return's TDS on it, said once */}
+    {form === "24Q" && (() => { let ex = []; try { ex = TDSMatch.salaryExcess(fy, q); } catch (e) { /* the matcher not loaded */ } return ex.map((x) => <p key={x.c.id} className="note warn" data-chg-excess={x.c.id}>Challan {x.c.serial} of {day(x.c.date)}: 192 paid {money(x.part)}, TDS on it {money(x.used)} · <b>{x.words}</b></p>); })()}
     {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
     {pick && <PickChallans form={form} fy={fy} q={q} onClose={() => setPick(false)} />}
   </div>;

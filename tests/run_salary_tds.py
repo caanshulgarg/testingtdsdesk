@@ -324,8 +324,11 @@ try:
         # next-tds-register: no "Not on any challan" (the Deductions register's Pending tab is the place)
         ok(opts == ["c24a", "c24b", "c24c"] and pg.locator('#app [data-dreg-open]').count() == 1, "Select challan lists the 192 challans only; Deductions N opens the register (%s)" % opts)
         ok(pg.locator('#app [data-wd-table="c24a"]').count() == 1 and pg.locator('#app [data-wd-add-open="c24a"]').count() == 1, "the chosen challan's table, with + Add deduction to this challan")
-        pg.click('#app [data-wd-add-open="c24a"]'); pg.wait_for_timeout(400)
         apr = pg.evaluate("TDS.formRows('24Q').filter(r => r.fy === '2026-27' && TDS.ymd(r.date).startsWith('202604') && r.tds > 0.005).map(r => r.id)")
+        # next-24q-auto: on opening, April's rows are on 7-May (the exact amount, by rule); taken off here to add them by hand
+        ok(pg.evaluate("TDS.formRows('24Q').filter(r => r.challan === 'c24a').length") == len(apr) > 0, "April's rows placed on 7-May by rule on opening (%d)" % len(apr))
+        pg.evaluate("(ids) => { TDSMatch.takeOff(ids); render(); }", apr); pg.wait_for_timeout(400)
+        pg.click('#app [data-wd-add-open="c24a"]'); pg.wait_for_timeout(400)
         ok(pg.locator('[data-wd-addlist="c24a"] [data-wd-cand]').count() >= len(apr) > 0, "the deductions not on a challan are offered (%d April rows)" % len(apr))
         for rid in apr: pg.check('[data-wd-addlist] [data-wd-tick="%s"]' % rid)
         pg.wait_for_timeout(200)
@@ -513,9 +516,57 @@ try:
         ok("ch15Jul" in g26 and "ch15X1" in g26 and "ch15X2" in g26 and "ch15May" not in g26 and "ch15Jun" not in g26, "26Q Q1 keeps the section-less payments, and the 6-Jul one, never the 192B ones (%s)" % g26)
         pg.evaluate("""() => { S.tdsForm = '24Q'; const rs = TDS.formRows('24Q').filter(r => r.fy === '2026-27' && r.tds > 0.005);
           TDSCH.tag(rs.filter(r => TDS.ymd(r.date).startsWith('202604')).map(r => r.id), 'ch15May'); TDSCH.tag(rs.filter(r => TDS.ymd(r.date).startsWith('202605')).map(r => r.id), 'ch15Jun'); TDSReg.forget(); render(); }""")
-        sg = pg.evaluate("() => TDSMatch.suggest('24Q', '2026-27', 'Q1').filter(s => s.ids.length).map(s => [s.chId, s.ids.length, s.total])")
-        ok(sg == [["ch15Jul", 8, 19087200]], "June's 8 employees (₹1,90,872) are suggested on the 6-Jul challan (%s)" % sg)
+        pg.wait_for_timeout(400)
+        # next-24q-auto: June's 8 employees placed on the 6-Jul challan by the rule as the return opened (no suggestion left)
+        sg = pg.evaluate("() => [TDSMatch.suggest('24Q', '2026-27', 'Q1').filter(s => s.ids.length).length, TDS.formRows('24Q').filter(r => r.challan === 'ch15Jul').map(r => r.tds).reduce((a, x) => a + x, 0)]")
+        ok(sg == [0, 190872], "June's 8 employees (₹1,90,872) are on the 6-Jul challan, nothing left to suggest (%s)" % sg)
         pg.screenshot(path=os.path.join(OUT, "q1-challans-leads.png"), full_page=True)
+
+        print("== 16. next-24q-auto (Leads' Form 138 Q1: \"the deductions are being filled by me by adding\"): placed by rule on opening")
+        # staging, read-only (client_book_items of Leads): 12-May and 6-Jun were filled from the month's old total row
+        # ("carried", logged as a person's tag: shown By hand); June's 8 rows put on 6-Jul by hand; "pay:<May entry>|~" (May's
+        # unsplit row, gone since next-24q-split) still on 6-Jun. The rules only SUGGESTED, a person had to confirm or add each
+        # (the challans and the owner's hand placing in one go: the return, drawn, places by itself at once)
+        load(pg, leads15())
+        pg.evaluate("""() => { (""" + CH15 + """)(); const b = S.books, rs = TDS.formRows('24Q').filter(r => r.fy === '2026-27' && r.tds > 0.005);
+          const nav = rs.find(r => TDS.ymd(r.date).startsWith('202604') && r.employee === 'LI Naveen Rawat');
+          TDSCH.tag([nav.id], 'ch15May', {via: 'tag', note: 'moved by a person'});
+          b.alloc['pay:li-pay-2026-05-31|~'] = 'ch15Jun';
+          b.allocLog.push({id: 'alstale', at: '2026-10-20T07:45:20.878Z', by: 'owner', act: 'tag', ch: 'ch15Jun', form: '24Q', fy: '2026-27', q: 'Q1', row: 'pay:li-pay-2026-05-31|~', tax: 188296, note: "carried from the month's total"});
+          window.__nav = nav.id; TDSReg.forget(); S.tdsTab = 'challans'; S.tdsChView = ''; render(); }""")
+        pg.wait_for_timeout(800)
+        ST16 = """() => { const rs = TDS.formRows('24Q').filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005), on = {}, L = S.books.allocLog || [];
+          rs.forEach(r => { const k = TDS.ymd(r.date).slice(0, 6) + '>' + (r.challan || '-'); on[k] = Math.round(((on[k] || 0) + r.tds) * 100) / 100; });
+          const last = (id) => L.slice().reverse().find(l => l.row === id) || {};
+          return {on, rule: rs.filter(r => r.challan && r.id !== window.__nav && last(r.id).act === 'auto' && /^rule: /.test(last(r.id).note)).length,
+            words: Array.from(new Set(rs.filter(r => r.challan && r.id !== window.__nav).map(r => TDS.ymd(r.date).slice(0, 6) + ':' + String(last(r.id).note || '').slice(6).split(' · ')[0]))).sort(),
+            nav: [last(window.__nav).act, (rs.find(r => r.id === window.__nav) || {}).challan], stale: 'pay:li-pay-2026-05-31|~' in S.books.alloc,
+            staleLog: L.filter(l => l.row === 'pay:li-pay-2026-05-31|~' && l.act === 'untag' && /^stale/.test(l.note)).length,
+            left: TDSMatch.suggest('24Q', '2026-27', 'Q1').filter(s => s.ids.length).length, by: TDSMatch.matchedBy(rs.find(r => TDS.ymd(r.date).startsWith('202606')).id).kind,
+            excess: [...document.querySelectorAll('#app [data-chg-excess]')].map(e => e.textContent)}; }"""
+        st = pg.evaluate(ST16)
+        ok(st["on"] == {"202604>ch15May": 188296, "202605>ch15Jun": 188296, "202606>ch15Jul": 190872},
+           "on opening Form 138 Q1: April's 7 (₹1,88,296) on 12-May, May's 7 (₹1,88,296) on 6-Jun, June's 8 (₹1,90,872) on 6-Jul (%s)" % st["on"])
+        ok(st["rule"] == 21 and st["by"] == "rule", "the 21 placed by FinCom are tagged Rule in the trail, not a person's (%d, %s)" % (st["rule"], st["by"]))
+        ok(st["words"] == ["202604:Same section, same month, exact amount", "202605:Same section, same month, exact amount", "202606:Salary: the month's TDS on the next month's 192 challan"],
+           "April and May by the exact amount, June by the month's-salary rule (%s)" % st["words"])
+        ok(st["nav"] == ["tag", "ch15May"], "the row the owner placed by hand stays where he put it, his (%s)" % st["nav"])
+        ok(not st["stale"] and st["staleLog"] == 1, "the stale allocation of May's old unsplit row (pay:<entry>|~) is dropped, said in the trail (%s, %d)" % (st["stale"], st["staleLog"]))
+        ok(st["left"] == 0, "nothing left to suggest or add by hand (%d)" % st["left"])
+        ok(len(st["excess"]) == 1 and "₹7,706 more paid than deducted — use for interest/next month or check" in st["excess"][0],
+           "6-Jul's 192 part ₹1,98,578 against June's ₹1,90,872: the ₹7,706 over said once (%s)" % st["excess"])
+        pg.screenshot(path=os.path.join(OUT, "q1-auto-challans.png"), full_page=True)
+        pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedReg = 'mapped'; render(); }"); pg.wait_for_timeout(500)
+        hw = pg.evaluate("() => { const by = {}; document.querySelectorAll('[data-dreg-how]').forEach(e => { const k = e.dataset.dregHow + ':' + e.textContent; by[k] = (by[k] || 0) + 1; }); return by; }")
+        ok(hw == {"rule:Same amount": 13, "rule:Month's salary": 8, "hand:By hand": 1}, "the register's How placed: Rule (Same amount 13, Month's salary 8), By hand 1 (%s)" % hw)
+        pg.screenshot(path=os.path.join(OUT, "q1-auto-register.png"), full_page=True)
+        pg.evaluate("() => { S.tdsDedReg = ''; render(); }")
+        # a row a person takes off stays off when the return is opened again; 26Q is not placed by itself
+        jun = pg.evaluate("() => TDS.formRows('24Q').find(r => r.challan === 'ch15Jul').id")
+        pg.evaluate("(id) => { TDSMatch.takeOff([id]); TDSReg.forget(); S.tdsTab = 'challans'; render(); }", jun); pg.wait_for_timeout(600)
+        pg.evaluate("() => { S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("(id) => TDS.formRows('24Q').find(r => r.id === id).challan", jun) == "", "a deduction taken off by a person is not put back on opening again")
+        ok(pg.evaluate("() => TDSMatch.autoRun('26Q', '2026-27', 'Q1').placed") == 0, "26Q: nothing placed by itself (suggested as before)")
 
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):

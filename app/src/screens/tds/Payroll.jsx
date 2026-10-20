@@ -249,6 +249,8 @@ function Annex1({ a1 }) {
     ]} />;
 }
 export function Return24Tally({ fy, q }) {
+  // next-24q-auto: on opening, the salary TDS placed on its challans by the sure rules (TDSMatch.autoOpen, src/js/86)
+  try { TDSMatch.autoOpen("24Q", fy, q); } catch (e) { /* the matcher not loaded */ }
   const a1 = Payroll.annexI(fy, q), filed = TDSFiled.get(fy, q, "24Q");
   // next-tds-clear (19-Oct-2026): the steps of the ClearTax-like layout (tds/Shell.jsx): Deductor · Employees (PAN) ·
   // Employees & declarations (with Annexure II in Q4) · Challans · Deductions (Annexure I) · Validate & file · After filing

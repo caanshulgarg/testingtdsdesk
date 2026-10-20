@@ -95,7 +95,7 @@ export function otherChallans(form, fy, q, cx) {
 // name, the AI with its reason, by hand with who and when. null when it is on no challan.
 const RULE_SHORT = { "From Tally": "Tally link", "Same section, same month, exact amount": "Same amount", "Same section, whole quarter, exact amount": "Quarter amount",
   "Same section, same month": "Month total", "Several sections in one challan": "No-section", "Advance challan (same year) or next year's challan": "Advance challan",
-  "Earlier challan with balance left (same tax year)": "Earlier challan", "Split across challans": "Split" };
+  "Earlier challan with balance left (same tax year)": "Earlier challan", "Split across challans": "Split", "Salary: the month's TDS on the next month's 192 challan": "Month's salary" };
 const PLACING = ["tag", "suggestion", "auto", "tally", "balance", "split"];
 export function howPlaced(r) {
   if (!r || !r.challan) return null;
@@ -111,6 +111,10 @@ export function howPlaced(r) {
     const words = n.split(";")[0].trim();
     return { k: "rule", w: RULE_SHORT[words] || "Rule", why: (words || "A rule") + " · confirmed by " + when };
   }
+  // next-24q-auto: placed by a rule on opening a 24Q return (note "rule: <words> · <reason>"), or carried from a payroll
+  // month's total (Payroll.carry): FinCom's, never "By hand"
+  if (log.act === "auto" && /^rule: /.test(log.note || "")) { const p = String(log.note).slice(6).split(" · "), words = p[0].trim(); return { k: "rule", w: RULE_SHORT[words] || "Rule", why: words + " · " + p.slice(1).join(" · ") + " · placed by FinCom on opening the return, " + fmtDate(String(log.at || "").slice(0, 10)) }; }
+  if (/^carried from the month's total/.test(log.note || "")) return { k: "rule", w: "Month total", why: "Carried from the payroll month's total on this challan by FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) };
   if (log.act === "auto" || log.act === "balance") return { k: "rule", w: "Earlier auto", why: "FinCom's earlier automatic allocation, " + when };
   return { k: "hand", w: "By hand", why: (log.act === "split" ? "Split by " : "By ") + when };
 }
