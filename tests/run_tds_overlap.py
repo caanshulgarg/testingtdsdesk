@@ -1,8 +1,8 @@
 """python3 run_tds_overlap.py - next-tds-early (20-Oct-2026; the owner on the live Deductions page: "Name is overriding
 another column"). On the made-up books of run_tds_challans.py (Q1 2026-27) with long deductee names ("ET INFRA
 DEVELOPERS PRIVATE LIMITED (CIVIL AND STRUCTURAL WORKS DIVISION)", one name of a single 60-letter word), at 1366, 1440 and
-a phone's width, on every TDS deductions table (the challan's table, + Add deduction's two lists, the to-do list's groups,
-24Q's challan table and to-do list):
+a phone's width, on every TDS deductions table (the challan's table, + Add deduction's two lists, the Deductions register's two tabs (next-tds-register),
+24Q's challan table and register):
   1. no cell's content runs out of its cell: scrollWidth <= clientWidth + 1, and the box of what is in it (its text and
      its chips and buttons) stays inside the cell, so nothing lies over the next column;
   2. the name cell is at most about 32 characters wide and wraps between words to at most 2 lines (the rest cut with an
@@ -36,11 +36,11 @@ ALLOC = """() => { const rows = TDS.allRows(), of = (sec, ym) => rows.filter(r =
   const a = {}; of('194C', '202604').forEach(id => a[id] = 'chA'); of('194J', '202604').forEach(id => a[id] = 'chJ'); of('192', '202604').forEach(id => a[id] = 'chS');
   S.books.challans.push({id: 'chS', bsr: '0510308', serial: '00501', date: '20260507', tax: 26520, interest: 0, section: '192', minorHead: '200'});
   a[of('194C', '202606')[0]] = 'chM'; S.books.alloc = a; TDSReg.forget(); render(); }"""
-GO = "([form, ch, add]) => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = form; S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinRet = TDSReg.key(form, '2026-27', 'Q1'); S.tdsWinCh = ch; S.tdsWinAdd = add || ''; S.tdsWinSel = {}; S.tdsCF = {}; render(); }"
+GO = "([form, ch, add]) => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = form; S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinRet = TDSReg.key(form, '2026-27', 'Q1'); S.tdsWinCh = ch.startsWith('reg:') ? '' : ch; S.tdsDedReg = ch.startsWith('reg:') ? ch.slice(4) : ''; S.tdsDregSel = {}; S.tdsWinAdd = add || ''; S.tdsWinSel = {}; S.tdsCF = {}; render(); }"
 # every cell of the deductions tables shown: [table, row, col, text, scrollW, clientW, contentLeft, contentRight, cellLeft, cellRight]
 CELLS = """() => { const out = [];
-  document.querySelectorAll('table[data-wd-table], table[data-wd-none], table[data-wd-others], table.dt-table').forEach(t => {
-    const tk = t.dataset.wdTable ? 'table' : t.hasAttribute('data-wd-none') ? 'add-none' : t.hasAttribute('data-wd-others') ? 'add-other' : 'todo';
+  document.querySelectorAll('table[data-wd-table], table[data-wd-none], table[data-wd-others], table.dt-table, table.dreg-table').forEach(t => {
+    const tk = t.dataset.wdTable ? 'table' : t.hasAttribute('data-wd-none') ? 'add-none' : t.hasAttribute('data-wd-others') ? 'add-other' : t.classList.contains('dreg-table') ? 'register' : 'todo';
     t.querySelectorAll(':scope > tbody > tr').forEach((tr, ri) => [...tr.children].forEach((td, ci) => {
       if (td.colSpan > 1 || !td.offsetWidth) return;
       const c = td.getBoundingClientRect(), rg = document.createRange(); rg.selectNodeContents(td);
@@ -49,7 +49,7 @@ CELLS = """() => { const out = [];
       if (rs.length) { L = Math.min(...rs.map(x => x.left)); R = Math.max(...rs.map(x => x.right)); }
       out.push([tk, ri, ci, (td.innerText || '').trim().slice(0, 40), td.scrollWidth, td.clientWidth, L, R, c.left, c.right]); }));
   }); return out; }"""
-NAME = """(long) => [...document.querySelectorAll('[data-wd-name], td.dt-p')].filter(td => td.offsetWidth && (td.innerText || '').indexOf(long.slice(0, 12)) >= 0).map(td => {
+NAME = """(long) => [...document.querySelectorAll('[data-wd-name], td.dt-p, td.dreg-name')].filter(td => td.offsetWidth && (td.innerText || '').indexOf(long.slice(0, 12)) >= 0).map(td => {
   const el = td.querySelector('[data-row-detail], .dt-name, span[title]') || td, cs = getComputedStyle(el), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.25;
   const ch = (() => { const s = document.createElement('span'); s.textContent = '0'; s.style.font = cs.font; document.body.appendChild(s); const w = s.getBoundingClientRect().width; s.remove(); return w; })();
   return {w: td.getBoundingClientRect().width, ch, lines: Math.round(el.getBoundingClientRect().height / lh), title: el.getAttribute('title') || td.getAttribute('title') || '',
@@ -68,10 +68,11 @@ with sync_playwright() as p:
         J(BOOKS_JS); pg.wait_for_timeout(600); J("() => { TDSMatch.online = () => false; }")
         J(CHALLANS); J(NAMES, [LONG, WORD]); J(ALLOC); pg.wait_for_timeout(500)
         for (form, ch, add, what) in [("26Q", "chA", "", "the challan's table"), ("26Q", "chA", "chA", "+ Add deduction"), ("26Q", "chM", "", "a challan with an advance deduction"),
-                                      ("26Q", "__none", "", "the to-do list"), ("24Q", "chS", "", "24Q's challan table"), ("24Q", "__none", "", "24Q's to-do list")]:
+                                      ("26Q", "reg:pending", "", "the register's Pending tab"), ("26Q", "reg:mapped", "", "the register's Mapped tab"),
+                                      ("24Q", "chS", "", "24Q's challan table"), ("24Q", "reg:pending", "", "24Q's register, Pending")]:
             J(GO, [form, ch, add]); pg.wait_for_timeout(700)
             cells = J(CELLS)
-            pg.screenshot(path=os.path.join(SHOTS, "%s-%s-%s%s.png" % (tag, form, ch.strip("_"), "-add" if add else "")), full_page=True)
+            pg.screenshot(path=os.path.join(SHOTS, "%s-%s-%s%s.png" % (tag, form, ch.strip("_").replace(":", "-"), "-add" if add else "")), full_page=True)
             over = [c for c in cells if c[4] > c[5] + 1]
             spill = [c for c in cells if c[6] < c[8] - 1 or c[7] > c[9] + 1]
             ok(len(cells) > 0 and not over, "%s %s: no cell's content wider than the cell (%d cells%s)" % (tag, what, len(cells), "; " + "; ".join("%s r%d c%d %r %d>%d" % (c[0], c[1], c[2], c[3], c[4], c[5]) for c in over[:4]) if over else ""))

@@ -3,12 +3,11 @@
 // challans of the quarter, numbered as on Challans, and "Not on any challan (N)" last), the deductions on that challan
 // (one row per employee per payroll month), "+ Add deduction to this challan" with the deductions not on a challan and
 // those on other challans (tick boxes, Move to this challan), the footer Used here · Balance · Number, the column filters.
-// The same parts as 26Q's (tds/Winman.jsx DedByChallan, tds/DedTodo.jsx); a salary row is not edited in place (it comes
+// The same parts as 26Q's (tds/Winman.jsx DedByChallan, the Deductions register tds/DedRegister.jsx); a salary row is not edited in place (it comes
 // from Tally's payroll or the salary sheet). Annexure I, every row in one table, is under ⋯ (S.tdsDedView "table").
 import "../../lib/tdsGlobals.js";
 import More from "../../parts/More.jsx";
 import { DedByChallan } from "./Winman.jsx";
-import DedTodo from "./DedTodo.jsx";
 import { dedMatch } from "./DedSide.jsx";
 
 export default function Deductions24({ fy, q, table, notes }) {
@@ -20,6 +19,5 @@ export default function Deductions24({ fy, q, table, notes }) {
   try { probs = TDSEdit.problems(rows, fy, q, form); } catch (e) { /* the editor's checks not loaded */ }
   const dm = dedMatch(form, fy, q);
   const tools = table ? <span className="wd-tools"><More label="⋯" ariaLabel="More" data-wd-more="" items={[["Annexure I: every row in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }]]} /></span> : null;
-  return <>{notes}<DedByChallan form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={{}} probs={probs} locked={locked} tools={tools}
-    todo={<DedTodo form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={{}} probs={probs} locked={locked} />} /></>;
+  return <>{notes}<DedByChallan form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={{}} probs={probs} locked={locked} tools={tools} /></>;
 }

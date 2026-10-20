@@ -88,3 +88,40 @@ export function otherChallans(form, fy, q, cx) {
   return TDS.challans().filter((x) => !on.has(x.id) && TDS.fyOf(x.date) === fy && String(x.minorHead || "200") === "200" && TDSReg.balance(x, c).tax > 0.005)
     .sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
 }
+
+// next-tds-register (20-Oct-2026, the owner): how a deduction came onto its challan, from the allocation trail
+// (S.books.allocLog, TDSReg.log): {k: "rule" | "ai" | "hand", w: the short words, why: the hover}. A rule by its short
+// name, the AI with its reason, by hand with who and when. null when it is on no challan.
+const RULE_SHORT = { "From Tally": "Tally link", "Same section, same month, exact amount": "Same amount", "Same section, whole quarter, exact amount": "Quarter amount",
+  "Same section, same month": "Month total", "Several sections in one challan": "No-section", "Advance challan (same year) or next year's challan": "Advance challan",
+  "Earlier challan with balance left (same tax year)": "Earlier challan", "Split across challans": "Split" };
+const PLACING = ["tag", "suggestion", "auto", "tally", "balance", "split"];
+export function howPlaced(r) {
+  if (!r || !r.challan) return null;
+  const b = S.books || {}, from = (b.allocFrom || {})[r.id];
+  const log = (b.allocLog || []).slice().reverse().find((l) => l.row === r.id && PLACING.includes(l.act));
+  if (from === "tally" || (log && log.act === "tally")) return { k: "rule", w: "Tally link", why: "From Tally: its TDS payment is linked to this deduction" };
+  if (!log) return { k: "hand", w: "By hand", why: "Placed before this record was kept" };
+  const when = (log.by || "you") + ", " + fmtDate(String(log.at || "").slice(0, 10));
+  if (log.act === "suggestion") {
+    const n = String(log.note || "").replace(/^suggestion confirmed: /, "");
+    const ai = n.match(/^AI(?: \(([\s\S]*?)\))?(?:;|$)/);
+    if (ai) return { k: "ai", w: "AI", why: (ai[1] || "Suggested by the AI") + " · confirmed by " + when };
+    const words = n.split(";")[0].trim();
+    return { k: "rule", w: RULE_SHORT[words] || "Rule", why: (words || "A rule") + " · confirmed by " + when };
+  }
+  if (log.act === "auto" || log.act === "balance") return { k: "rule", w: "Earlier auto", why: "FinCom's earlier automatic allocation, " + when };
+  return { k: "hand", w: "By hand", why: (log.act === "split" ? "Split by " : "By ") + when };
+}
+// a person's "Verified" of a deduction's challan, kept with the books in S.books.matchNo as "ok|<row id>" = {at, by, ch}
+// (no new BOOKS_KEYS entry: legacy.js does not grow); it holds only while the deduction stays on that challan
+export const verifiedOf = (r) => { const v = ((S.books || {}).matchNo || {})["ok|" + r.id]; return !!(v && r.challan && v.ch === r.challan); };
+export function setVerified(rows, on) {
+  const b = S.books; if (!b) return;
+  const m = Object.assign({}, b.matchNo || {}), chBy = Object.fromEntries(TDS.challans().map((c) => [c.id, c]));
+  rows.filter((r) => r.challan).forEach((r) => {
+    if (on) m["ok|" + r.id] = { at: new Date().toISOString(), by: TDSReg.who(), ch: r.challan }; else delete m["ok|" + r.id];
+    TDSReg.log({ act: on ? "verify" : "unverify", ch: chBy[r.challan], fy: r.fy, q: r.q, row: r.id, tax: r.tds, note: on ? "verified by a person" : "verified taken off" });
+  });
+  b.matchNo = m; TDSReg.done(); saveBooks(); render();
+}

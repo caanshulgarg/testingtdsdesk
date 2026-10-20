@@ -33,7 +33,6 @@ import AddDeduction, { openAdd } from "./tds/AddDeduction.jsx";
 import { dedMatch, ChallanOrSugg, ChallanSide, sideFilter, groupRows, GroupHead } from "./tds/DedSide.jsx";
 import { Cell, Fixes, BulkBar, KeysHelp, onTableKey, safeFixes } from "./tds/DedSmart.jsx";
 import { DeductorDetails } from "./Settings.jsx";
-import DedTodo from "./tds/DedTodo.jsx";
 import { DedByChallan, retChallans } from "./tds/Winman.jsx";
 import { unplacedOf } from "./tds/onChallan.js";
 import { ColF, useCF } from "./tds/ColF.jsx";
@@ -454,8 +453,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
         : S.tdsTab === "deductees" ? <><DeducteesPan form={form} fy={fy} q={q} issueOf={issueOf} title={title} />
           {/* 27Q's non-resident details and 27EQ's collection codes, filled where the deductees are */}
           {(form === "27Q" || form === "27EQ") && <div style={{ marginTop: 14 }}><ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} /></div>}</>
-        : S.tdsTab === "deductions" ? todo ? <><DedByChallan form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} tools={winTools}
-            todo={<DedTodo form={form} fy={fy} q={q} rows={rows.filter((r) => pass(r, fD))} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} />} /><ImportPreview rows={rows} /></>
+        : S.tdsTab === "deductions" ? todo ? <><DedByChallan form={form} fy={fy} q={q} rows={rows} m={dm} issueOf={issueOf} probs={probs} locked={TDSReg.locked(fy, q, form)} tools={winTools} /><ImportPreview rows={rows} /></>
           : <>{tools}<Deductions fy={fy} q={q} rows={rows} issueOf={issueOf} pass={pass} probs={probs} fo={fo} unitW={unit} edN={edN} form={form} m={dm} /></>
         : S.tdsTab === "after" ? <AfterFiling fy={fy} q={q} form={form} />
         : <ValidatePanel fy={fy} q={q} form={form} val={val} reviews={reviews} year={yearChecks(fy)} file={fileBox} chIds={Object.keys(TDSReg.uses()).filter((id) => TDSReg.uses()[id][key])} />}

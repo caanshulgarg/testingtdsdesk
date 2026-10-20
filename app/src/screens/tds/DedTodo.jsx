@@ -1,3 +1,5 @@
+// next-tds-register (20-Oct-2026): the to-do list below is no longer shown (the Deductions register, DedRegister.jsx,
+// replaces "Not on any challan"); rowProblem and bestChallans are still the ones every TDS screen uses.
 // The Deductions step as a to-do list (next-tds-allchallans, 19-Oct-2026; the owner: the deductions table is "still very
 // confusing … still grey area"; his layout):
 //   Deductions · Form 140 · Q2 2026-27
