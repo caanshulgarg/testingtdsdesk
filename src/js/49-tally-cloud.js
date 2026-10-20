@@ -309,8 +309,9 @@ const TCloud = {
     try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
     if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
     if (!todo.length && !ledNew && !(copy && (copy.changes || !same))){
-      // next-24q-load: nothing new, but the payroll is not in the books (the copy here keeps none from before): read it
-      if (!b.payroll || b.payroll.book !== bk.book) try { await Payroll.into(b, bk.book); const n = Payroll.carry(b); LK.cache = {}; render(); saveBooks(n ? null : {fromCloud: true}); } catch (e){}
+      // next-24q-load: nothing new, but the payroll here is missing or not right: read it (next-24q-ready: PayLoad.ensure,
+      // app/src/lib/payLoad.js, the one read the 24Q pages share; it checks the copy kept here)
+      if (window.PayLoad) await PayLoad.ensure(b, bk.book);
       return true;
     }
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
