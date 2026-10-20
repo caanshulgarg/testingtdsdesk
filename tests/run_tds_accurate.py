@@ -42,7 +42,7 @@ BOOKS_JS = src[_k:src.index('"""', _k)]
 m = open(os.path.join(HERE, "run_tds_match_ui.py")).read()
 _k = m.index('CHALLANS = """') + len('CHALLANS = """')
 CHALLANS = m[_k:m.index('"""', _k)]
-GO = "(tab) => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = tab; S.tdsDedView = ''; S.tdsChView = ''; S.tdsChSel = ''; S.tdsWinCh = ''; S.tdsWinAdd = ''; S.tdsFl = {}; S.tdsSel = {}; render(); }"
+GO = "(tab) => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = tab; S.tdsDedView = ''; S.tdsChView = ''; S.tdsChSel = ''; S.tdsWinCh = ''; S.tdsWinAdd = ''; S.tdsDedReg = ''; S.tdsFl = {}; S.tdsSel = {}; render(); }"
 # April's 194C (8,640) on 00123, April's 194J (12,345) on 00456, one 192 deduction (24Q) on 00456 too, and June's two 194C
 # deductions on "chGONE": a challan this browser does not have (the trail knows its serial, 00777)
 ALLOC = """() => { const rows = TDS.allRows(), of = (sec, ym) => rows.filter(r => TDS.sec(r.section) === sec && TDS.ymd(r.date).slice(0, 6) === ym).map(r => r.id);
@@ -87,29 +87,33 @@ with sync_playwright() as p:
     print("3. a deduction whose challan is missing")
     J(GO, "deductions"); pg.wait_for_timeout(800)
     un = J("() => { const ids = new Set(TDS.challans().map(c => c.id)); return TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005 && !(r.challan && ids.has(r.challan))).length; }")
-    last = J("() => { const o = [...document.querySelectorAll('#app select[data-wd-sel] option')]; return o.length ? [o[o.length - 1].value, o[o.length - 1].textContent] : null; }")
-    ok(last == ["__none", "Not on any challan (%d)" % un] and un >= len(gone) + 1, "the selector: Not on any challan (%d), the missing challan's two included (%s)" % (un, last))
+    # next-tds-register: no "Not on any challan" in the selector; the Deductions register's Pending tab holds them
+    opts = J("() => [...document.querySelectorAll('#app select[data-wd-sel] option')].map(o => o.value)")
+    J("() => { S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(500)
+    pn = J("() => [...document.querySelectorAll('[data-dreg-body=\"pending\"] tr[data-dreg-row]')].filter(tr => TDS.rows().find(r => r.id === tr.dataset.dregRow).tds > 0.005).length")
+    ok("__none" not in opts and pn == un and un >= len(gone) + 1, "the selector has no 'Not on any challan'; the register's Pending lists the %d on no challan, the missing challan's two included (%s)" % (un, pn))
+    J("() => { S.tdsDedReg = ''; render(); }")
     ok(J("() => !document.querySelector('#app [data-wd-unplaced]')"), "round 94: no second 'N not on a challan' line under the selector (its last choice says it)")
     # + Add deduction offers them
     J("() => { S.tdsWinCh = 'chM'; S.tdsWinAdd = 'chM'; render(); }"); pg.wait_for_timeout(600)
     cands = J("[...document.querySelectorAll('[data-wd-addlist] [data-wd-cand]')].map(t => t.dataset.wdCand)")
     ok(set(gone) <= set(cands) and "Every deduction of this return is on a challan" not in (J("() => (document.querySelector('[data-wd-addlist]') || {}).innerText || ''")),
        "+ Add deduction lists them, never “every deduction is on a challan” (%d offered)" % len(cands))
-    J("() => { S.tdsWinAdd = ''; S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(700)
-    miss = J("[...document.querySelectorAll('#app [data-dt-miss]')].map(e => [e.closest('[data-dt-row]').dataset.dtRow, e.innerText.trim()])")
-    ok(sorted(x[0] for x in miss) == sorted(gone) and all(x[1] == "Challan 00777 missing" for x in miss) and J("() => [...document.querySelectorAll('#app [data-dt-miss]')].every(e => e.title === 'Its challan 00777 is missing — choose again')"),
-       "Not on any challan: each says “Challan 00777 missing” (on a hover: “… choose again”) (%s)" % miss)
-    ok(J("(ids) => ids.every(id => document.querySelector('#app [data-dt-row=\"' + id + '\"]').dataset.dtIn === 'choose')", gone), "they are in Choose a challan, not Done")
-    pg.screenshot(path=os.path.join(SHOTS, "not-on-any-challan-1440.png"), full_page=True)
+    J("() => { S.tdsWinAdd = ''; S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(700)
+    miss = J("[...document.querySelectorAll('#app [data-dreg-miss]')].map(e => [e.closest('[data-dreg-row]').dataset.dregRow, e.innerText.trim()])")
+    ok(sorted(x[0] for x in miss) == sorted(gone) and all(x[1] == "Challan 00777 missing" for x in miss) and J("() => [...document.querySelectorAll('#app [data-dreg-miss]')].every(e => e.title === 'Its challan 00777 is missing — choose again')"),
+       "the register's Pending: each says “Challan 00777 missing” (on a hover: “… choose again”) (%s)" % miss)
+    ok(J("(ids) => ids.every(id => !!document.querySelector('#app [data-dreg-body=\"pending\"] [data-dreg-row=\"' + id + '\"]'))", gone), "they are Pending, not Mapped")
+    pg.screenshot(path=os.path.join(SHOTS, "register-pending-1440.png"), full_page=True)
     # next-tds-addlist / next-tds-early: never an earlier year's challan; one dated on or after the deduction before an
     # advance one (dated before it, the same year)
     g1 = gone[1]
-    pk = J("(id) => { const b = document.querySelector('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]'); return b ? b.dataset.dtPick : ''; }", g1)
-    cp = J("(id) => { const r = TDS.rows().find(x => x.id === id); return [...document.querySelectorAll('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]')].map(b => { const c = TDS.challans().find(c => c.id === b.dataset.dtPick); return [TDS.fyOf(c.date) >= TDS.fyOf(r.date), TDS.ymd(c.date) >= TDS.ymd(r.date)]; }); }", gone[0])
+    pk = J("(id) => { const b = document.querySelector('#app [data-dreg-row=\"' + id + '\"] [data-dreg-put]'); return b ? b.dataset.dregPut : ''; }", g1)
+    cp = J("(id) => { const r = TDS.rows().find(x => x.id === id); return [...document.querySelectorAll('#app [data-dreg-row=\"' + id + '\"] [data-dreg-put]')].map(b => { const c = TDS.challans().find(c => c.id === b.dataset.dregPut); return [TDS.fyOf(c.date) >= TDS.fyOf(r.date), TDS.ymd(c.date) >= TDS.ymd(r.date)]; }); }", gone[0])
     ok(all(x[0] for x in cp) and [x[1] for x in cp] == sorted([x[1] for x in cp], reverse=True), "Choose: never an earlier year's challan; one dated on or after the deduction before an advance one (%s)" % cp)
     if pk:
-        pg.click('#app [data-dt-row="%s"] [data-dt-pick="%s"]' % (g1, pk)); pg.wait_for_timeout(500)
-    ok(pk and J("(id) => S.books.alloc[id]", g1) == pk and J("(id) => !document.querySelector('#app [data-dt-row=\"' + id + '\"] [data-dt-miss]')", g1),
+        pg.click('#app [data-dreg-row="%s"] [data-dreg-put="%s"]' % (g1, pk)); pg.wait_for_timeout(500)
+    ok(pk and J("(id) => S.books.alloc[id]", g1) == pk and J("(id) => !document.querySelector('#app [data-dreg-row=\"' + id + '\"] [data-dreg-miss]')", g1),
        "one click puts it on a challan here (%s); it no longer says missing" % pk)
     print("5. + Add deduction when every deduction is on some challan: On other challans, Move here")
     J("""() => { const ids = new Set(TDS.challans().map(c => c.id)); TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005 && !(r.challan && ids.has(r.challan))).forEach(r => S.books.alloc[r.id] = 'chS1'); TDSReg.forget(); }""")
@@ -205,11 +209,13 @@ with sync_playwright() as p:
     J("() => { S.tdsWinCh = 'chT'; render(); }"); pg.wait_for_timeout(500)
     sc = J("(id) => { const e = document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip=\"sec\"]'); return e ? e.innerText.trim() : ''; }", pair[1])
     ok(sc == "Other section" and J("(id) => (document.querySelector('#app tr[data-wd-row=\"' + id + '\"] [data-wd-chip=\"sec\"]') || {}).title", pair[1]) == "Challan is for 194J; this is 194C", "a 194C deduction on a 194J challan: “%s”, its words on a hover" % sc)
-    J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(600)
-    rowIn = lambda id: J("(id) => { const t = document.querySelector('#app [data-dt-row=\"' + id + '\"]'); const p = t && t.querySelector('[data-dt-problem]'); return t ? [t.dataset.dtIn, p ? p.dataset.dtProblem : '', !!t.querySelector('[data-dt-move]')] : null; }", id)
+    # next-tds-register: the register's Mapped tab says it (the to-do list's Fix the row is gone)
+    J("() => { S.tdsDedReg = 'mapped'; render(); }"); pg.wait_for_timeout(600)
+    rowIn = lambda id: J("(id) => { const t = document.querySelector('[data-dreg-body=\"mapped\"] [data-dreg-row=\"' + id + '\"]'); const p = t && t.querySelector('[data-dreg-flag]'); return t ? ['mapped', p ? p.dataset.dregFlag : '', p ? p.className : ''] : null; }", id)
     fx, fa = rowIn(pair[2]), rowIn(pair[0])
-    ok(fx == ["fix", "fy", True], "the to-do list: the earlier year's in Fix the row, Move to another challan (%s)" % fx)
-    ok(fa and fa[0] == "done", "… the advance one is not in Fix the row (%s)" % fa)
+    ok(fx and fx[:2] == ["mapped", "fy"], "the register's Mapped tab: the earlier year's with its chip (%s)" % fx)
+    ok(fa and (fa[1] == "" or "info" in fa[2]), "… the advance one has no error chip (%s)" % fa)
+    J("() => { S.tdsDedReg = ''; render(); }")
     J(GO, "file"); pg.wait_for_timeout(700)
     ve = J("() => { const e = document.querySelector('#app [data-val-item=\"early\"]'); return e ? [e.dataset.valLevel, e.innerText] : null; }")
     vs = J("() => { const e = document.querySelector('#app [data-val-item=\"chsec\"]'); return e ? e.dataset.valLevel : ''; }")
@@ -223,9 +229,10 @@ with sync_playwright() as p:
     sg = J("() => { const ch = Object.fromEntries(TDS.challans().map(c => [c.id, c])), rows = Object.fromEntries(TDS.rows().map(r => [r.id, r])); return TDSMatch.suggest('26Q', '2026-27', 'Q1').filter(s => (s.parts || [{chId: s.chId}]).some(p => s.ids.some(id => rows[id] && ch[p.chId] && (TDS.fyOf(ch[p.chId].date) < TDS.fyOf(rows[id].date) || (s.rule !== 'f' && TDS.ymd(ch[p.chId].date) < TDS.ymd(rows[id].date)))))).length; }")
     ok(sg == 0, "no suggestion pairs a deduction with an earlier year's challan, and only rule f (last) with an advance one (%d)" % sg)
     j11 = J("() => TDS.rows().find(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date) === '20260611').id")
-    J(GO, "deductions"); J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(500)
-    picks = J("(id) => [...document.querySelectorAll('#app [data-dt-row=\"' + id + '\"] [data-dt-pick]')].map(b => TDS.ymd(TDS.challans().find(c => c.id === b.dataset.dtPick).date))", j11)
-    ok(all(d >= "20260401" for d in picks), "Choose a challan never offers an earlier year's challan (%s)" % picks)
+    J(GO, "deductions"); J("() => { S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(500)
+    picks = J("(id) => [...document.querySelectorAll('#app [data-dreg-row=\"' + id + '\"] [data-dreg-put]')].map(b => TDS.ymd(TDS.challans().find(c => c.id === b.dataset.dregPut).date))", j11)
+    ok(all(d >= "20260401" for d in picks), "the register's Pending never offers an earlier year's challan (%s)" % picks)
+    J("() => { S.tdsDedReg = ''; render(); }")
     J("(id) => tdsMoveOpen([id])", j11); pg.wait_for_timeout(400)
     mv = J("() => [...document.querySelectorAll('[data-cm-pick]')].map(li => [li.dataset.cmPick, li.querySelector('[data-cm-pick-go]').disabled, !!li.querySelector('[data-cm-early]'), (li.querySelector('[data-cm-note]') || {dataset: {}}).dataset.cmNote || ''])")
     bad = [x for x in mv if x[2]]

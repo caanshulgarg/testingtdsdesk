@@ -74,7 +74,7 @@ try:
         # one deduction on no challan, so a "not on a challan" count exists to be said (once)
         add = J("() => TDSAdd.save({party: 'ZZ Clean Vendor Ltd', section: '194C', date: '2026-06-10', paid: 10000, tds: 200})"); J("render()")
         ok(add.get("ok"), "a deduction on no challan added for the checks (%s)" % add)
-        go = lambda form, step: (J("([f, s]) => { S.booksTab = 'tds'; tdsGo('2026-27', 'Q1', f); S.tdsTab = s; S.tdsDedView = ''; S.tdsChView = ''; S.tdsWinCh = ''; render(); window.scrollTo(0, 0); }", [form, step]), pg.wait_for_timeout(500))
+        go = lambda form, step: (J("([f, s]) => { S.booksTab = 'tds'; tdsGo('2026-27', 'Q1', f); S.tdsTab = s; S.tdsDedView = ''; S.tdsChView = ''; S.tdsWinCh = ''; S.tdsDedReg = ''; render(); window.scrollTo(0, 0); }", [form, step]), pg.wait_for_timeout(500))
 
         print("1. the frame")
         for w in (1440, 1366):
@@ -259,26 +259,28 @@ try:
         ok(not J("!!document.querySelector('#app [data-val-item=early][data-val-level=error]')"), "Validate & file: no error for an advance challan")
 
         print("5. the owner's 26Q rows: no party, early challans, short chips")
-        go("26Q", "deductions"); J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(400)
-        mid = J("() => (TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && String(r.id).startsWith('zz-misc-0000')) || {}).id || ''")
-        why = J("(id) => (document.querySelector('#app [data-wd-name-why=\"' + CSS.escape(id) + '\"]') || {}).innerText || ''", mid)
+        # next-tds-register: the deductions on no challan are in the Deductions register's Pending tab
+        go("26Q", "deductions"); mid = J("() => (TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && String(r.id).startsWith('zz-misc-0000')) || {}).id || ''")
+        # the tab it is in: Pending on no challan, Mapped on one
+        J("(id) => { S.tdsDedReg = TDS.rows().find(r => r.id === id).challan ? 'mapped' : 'pending'; render(); }", mid); pg.wait_for_timeout(400)
+        why = J("(id) => (document.querySelector('[data-dreg] [data-wd-name-why=\"' + CSS.escape(id) + '\"]') || {}).innerText || ''", mid)
         ok(mid and why == "Tally entry has no party (Miscellaneous Expenses → TDS on Professional 194J). Type who was paid.", "B. the row says why in one line (%s)" % why)
-        pg.click('#app [data-wd-namefix="%s"]' % mid); pg.wait_for_timeout(200)
-        pg.locator('#app [data-wd-name-input="%s"]' % mid).click(); pg.keyboard.type("Ravi Kumar & Associates", delay=10)
+        pg.click('[data-dreg] [data-wd-namefix="%s"]' % mid); pg.wait_for_timeout(200)
+        pg.locator('[data-dreg] [data-wd-name-input="%s"]' % mid).click(); pg.keyboard.type("Ravi Kumar & Associates", delay=10)
         J("() => render()"); pg.wait_for_timeout(300)   # the page draws again (live sync, a toast)
-        kept = J("(id) => (document.querySelector('#app [data-wd-name-input=\"' + CSS.escape(id) + '\"]') || {}).value || ''", mid)
+        kept = J("(id) => (document.querySelector('[data-dreg] [data-wd-name-input=\"' + CSS.escape(id) + '\"]') || {}).value || ''", mid)
         ok(kept == "Ravi Kumar & Associates", "B. what is typed stays while the page draws again (%s)" % kept)
-        pg.fill('#app [data-wd-name-pan="%s"]' % mid, "AAKFR1234Q"); pg.click('#app [data-wd-name-save="%s"]' % mid); pg.wait_for_timeout(500)
+        pg.fill('[data-dreg] [data-wd-name-pan="%s"]' % mid, "AAKFR1234Q"); pg.click('[data-dreg] [data-wd-name-save="%s"]' % mid); pg.wait_for_timeout(500)
         got = J("(id) => { const r = TDS.rows().find(x => x.id === id) || {}; return [r.party, r.pan]; }", mid)
         ok(got == ["Ravi Kumar & Associates", "AAKFR1234Q"], "B. Save: the name and PAN at once (%s)" % got)
-        ok(J("(id) => !document.querySelector('#app [data-wd-noname=\"' + CSS.escape(id) + '\"]')", mid), "B. the row no longer says Name missing")
+        ok(J("(id) => !document.querySelector('[data-dreg] [data-wd-noname=\"' + CSS.escape(id) + '\"]')", mid), "B. the row no longer says Name missing")
         ok(J("(id) => { const w = BookSync.work(S.books); return !!(w.tdsEdits && w.tdsEdits[id] && w.tdsEdits[id].f.party === 'Ravi Kumar & Associates'); }", mid), "B. kept with the books' work (saved and synced)")
         mid2 = J("() => (TDS.rows().find(r => r.fy === '2026-27' && String(r.id).startsWith('zz-misc-0001')) || {}).id || ''")
-        J("(q) => { S.tdsQ = q; S.tdsWinCh = '__none'; render(); }", J("(id) => TDS.rows().find(r => r.id === id).q", mid2)); pg.wait_for_timeout(400)
-        pg.click('#app [data-wd-namefix="%s"]' % mid2); pg.wait_for_timeout(200)
-        offer = J("(id) => { const i = document.querySelector('#app [data-wd-name-input=\"' + CSS.escape(id) + '\"]'); return i && i.list ? [...i.list.options].map(o => o.value).slice(0, 3) : []; }", mid2)
+        J("([q, id]) => { S.tdsQ = q; S.tdsDedReg = TDS.rows().find(r => r.id === id).challan ? 'mapped' : 'pending'; render(); }", [J("(id) => TDS.rows().find(r => r.id === id).q", mid2), mid2]); pg.wait_for_timeout(400)
+        pg.click('[data-dreg] [data-wd-namefix="%s"]' % mid2); pg.wait_for_timeout(200)
+        offer = J("(id) => { const i = document.querySelector('[data-dreg] [data-wd-name-input=\"' + CSS.escape(id) + '\"]'); return i && i.list ? [...i.list.options].map(o => o.value).slice(0, 3) : []; }", mid2)
         ok(offer[:1] == ["Ravi Kumar & Associates"], "B. the name is offered first for another entry of the same ledgers (%s)" % offer)
-        J("() => { S.tdsNameDraft = {}; S.tdsQ = 'Q1'; render(); }"); pg.wait_for_timeout(300)
+        J("() => { S.tdsNameDraft = {}; S.tdsQ = 'Q1'; S.tdsDedReg = ''; render(); }"); pg.wait_for_timeout(300)
 
         # C. Put N on the right challans. next-tds-early: those challans dated in the year before (Protean's FVU refuses them,
         # T-FV-3076), so the deductions on them are on a challan that cannot pay them
@@ -307,9 +309,9 @@ try:
         J("() => { S.books.challans = S.books.challans.filter(c => c.id !== 'chLate'); S.books.challans.forEach(c => { if (c.id in window.__was) c.date = window.__was[c.id]; }); TDSReg.forget(); render(); }")
 
         # D. short chips
-        for v in ("() => { S.tdsWinCh = '__none'; render(); }", CHOSE):
-            go("26Q", "deductions"); J(v); pg.wait_for_timeout(400)
-            chips = J("[...document.querySelectorAll('#app .wd-chip, #app .dt-flag, #app .dt-fixw')].filter(e => e.offsetParent).map(e => [e.innerText.trim(), !!e.title || !!e.closest('[title]')])")
+        for v in ("() => { S.tdsDedReg = 'pending'; render(); }", "() => { S.tdsDedReg = 'mapped'; render(); }", CHOSE):
+            go("26Q", "deductions"); J("() => { S.tdsDedReg = ''; render(); }"); J(v); pg.wait_for_timeout(400)
+            chips = J("[...document.querySelectorAll('#app .wd-chip, #app .dt-flag, #app .dt-fixw, #app .dreg-how')].filter(e => e.offsetParent).map(e => [e.innerText.trim(), !!e.title || !!e.closest('[title]')])")
             ok(chips and all(len(c[0]) <= 16 and c[1] for c in chips), "D. each row's problem a short chip with its words on a hover (%s)" % sorted(set(c[0] for c in chips)))
 
         print("3. a phone")

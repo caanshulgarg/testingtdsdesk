@@ -120,9 +120,10 @@ def snapshot(site, port=8290, shots=None):
                     # next-tds-tidy2: Form 138's Deductions opens on Select challan as 26Q's; its rows are on the challans and
                     # in "Not on any challan" (Done opened), Annexure I in one table under ⋯ (S.tdsDedView "table")
                     for extra in ["S.tdsTab = 'deductions'; S.tdsDedView = 'sections';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.q24View = 'emp';", "S.tdsTab = 'file'; S.q24View = ''; S.tdsValOpen = '*';",
-                                  "S.tdsTab = 'deductions'; S.tdsValOpen = ''; S.tdsDedView = 'table';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = '__none'; S.dtDoneOpen = true;"]:
+                                  "S.tdsTab = 'deductions'; S.tdsValOpen = ''; S.tdsDedView = 'table';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = '__none'; S.dtDoneOpen = true;",
+                                  "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = ''; S.tdsDedReg = 'pending';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsDedReg = 'mapped';"]:
                         pg.evaluate("() => { " + extra + " render(); }"); take(key)
-                    pg.evaluate("() => { S.tdsDedView = ''; S.q24View = ''; S.tdsValOpen = ''; S.tdsWinCh = ''; S.dtDoneOpen = false; render(); }")
+                    pg.evaluate("() => { S.tdsDedView = ''; S.q24View = ''; S.tdsValOpen = ''; S.tdsWinCh = ''; S.dtDoneOpen = false; S.tdsDedReg = ''; render(); }")
                     if form != "24Q":
                         pg.evaluate("() => { window.__files = []; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(60)
                         if press(r"^(Download the .* text file|Make FVU file)"):

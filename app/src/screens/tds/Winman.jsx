@@ -2,12 +2,12 @@
 // ui"). Winman shows fields as rows and records as columns; here rows are records and columns fields (a web table), with
 // the same plainness: one selector, one table, one footer strip.
 //   DedByChallan  the Deductions step: "Select challan [1 · 07-Jul-2026 · ₹4,32,762 ▾]" (the quarter's challans, numbered as
-//                 on Challans, and "Not on any challan (N)" last); below it the deductions on that challan only (Name · PAN ·
+//                 on Challans); below it the deductions on that challan only (Name · PAN ·
 //                 Amount paid · Paid date · Deduction date · TDS · Rate · Reason lower/higher · Section · Shortfall/Excess),
 //                 edited in place as the table's cells are (DedSmart Cell); the last row "+ Add deduction to this challan"
 //                 opens the deductions not on a challan, the best fit first, one click puts one on; and the footer, always
-//                 in view: Used here · Balance · Number of deductions (the amount is the dropdown's; round 94). "Not on any challan" is the
-//                 to-do list (DedTodo).
+//                 in view: Used here · Balance · Number of deductions (the amount is the dropdown's; round 94). The deductions on no
+//                 challan are in the Deductions register ("Deductions N": DedRegister.jsx, next-tds-register).
 //   ChallanGrid   the Challans step: one plain table of the quarter's challans (Winman's grid), totals in its footer,
 //                 "+ Add challan" its last row; a row opens Deductions with that challan chosen.
 //   winChallans   the challans both show, in one order (onChallan.js retChallanList: those this return uses, is offered or
@@ -24,6 +24,7 @@ import { openAdd } from "./AddDeduction.jsx";
 import More from "../../parts/More.jsx";
 import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, placeNote, chipW, winChallans, retChallans, pinnedIds, pinChallans } from "./onChallan.js";
 import { PickChallans } from "./PickChallans.jsx";
+import { DedRegister, DedRegButton, openDedRegister } from "./DedRegister.jsx";
 import { DedName } from "./DedName.jsx";
 import { useCF, Th } from "./ColF.jsx";
 import "./clear.css";
@@ -44,10 +45,11 @@ const unplaced = (rows) => unplacedOf(rows);
 
 // the challan chosen: S.tdsWinCh when it is one of the list (or "__none"); else the first with a balance left, else the
 // first; with no challan, "__none"
+// next-tds-register: no "Not on any challan" any more (the register's Pending tab is the place): "__none" only when the
+// return has no challan
 export function chosenOf(list, rows, cx) {
   const v = S.tdsWinCh || "";
-  if (v === "__none") return "__none";
-  if (v && list.some((c) => c.id === v)) return v;
+  if (v && v !== "__none" && list.some((c) => c.id === v)) return v;
   const left = list.find((c) => TDSReg.balance(c, cx).tax > 0.005);
   return left ? left.id : list.length ? list[0].id : "__none";
 }
@@ -218,7 +220,7 @@ async function fixEarly(rows) {
   render();
 }
 
-export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, todo, tools }) {
+export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tools }) {
   const cx = TDSReg.ctx(), list = winChallans(form, fy, q, cx), key = TDSReg.key(form, fy, q);
   // the challan chosen belongs to its return: another return opened starts on its own default
   if (S.tdsWinRet && S.tdsWinRet !== key) { S.tdsWinCh = ""; S.tdsWinAdd = ""; S.tdsWinSel = {}; S.tdsWinRSel = {}; }
@@ -251,15 +253,17 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
       <label className="wd-sel"><span>Select challan</span>
         <select data-wd-sel="" aria-label="Select challan" value={cur} onChange={(ev) => pick(ev.target.value)}>
           {list.map((x, i) => <option key={x.id} value={x.id}>{(i + 1) + " · " + day(x.date) + " · " + money(totalOf(x))}</option>)}
-          {(un.length > 0 || cur === "__none") && <option value="__none">Not on any challan ({un.length})</option>}</select></label>
+          {!list.length && <option value="__none">No challan yet</option>}</select></label>
       {c && <span className="wd-chw" title={c.bsr + " · " + c.serial}>BSR {c.bsr} · serial {c.serial}{chSec(c) ? " · " + chSec(c) : ""}</span>}
       <span className="rt-sp" />
       {!locked && earlyN > 0 && <button type="button" className="btn small" data-wd-fix-early={earlyN} title="Each on a challan that cannot pay it (an earlier year's, a future one, not minor head 200) to the earliest challan of its section dated on or after it, with enough left" onClick={() => fixEarly(rows)}>Put {earlyN} on the right challans</button>}
+      <DedRegButton rows={rows} />
       {tools}
     </div>
+    <DedRegister form={form} fy={fy} q={q} rows={rows} m={m} issueOf={issueOf} probs={probs} locked={locked} />
     {/* next-tds-tidy2 (the owner: "this should not be here"): no banner of deductions on a challan dated before them; the
         row's chip and Validate & file's error say it */}
-    {!c ? todo
+    {!c ? <p className="note" data-wd-nochallan="">No challan on this return yet: add one on the Challans step. {un.length > 0 && <button type="button" className="linkbtn" onClick={() => openDedRegister("pending")}>{un.length} {un.length === 1 ? unit[0] : unit[1]} pending</button>}</p>
       : <><div className="bk-tablewrap wd-wrap"><table className="bk-table wd-table gf-off" data-wd-table={c.id}>
         <thead><tr><th className="ck">{!locked && on.length > 0 ? <input type="checkbox" checked={rAll} data-wd-rtickall="" aria-label="Select all shown" onChange={(ev) => rtickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>
           <Th cf={cf} k="name">Name</Th><th className="wd-flags"><span className="sr-only">Check</span></th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="paid" cls="n">Amount paid</Th><Th cf={cf} k="credit" cls="dt">Paid date</Th><Th cf={cf} k="date" cls="dt">Deduction date</Th>

@@ -423,3 +423,19 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 .vf-snote { display: block; font-size: 12px; font-weight: 400; }
 .chg-in { width: 92px; max-width: 100%; text-align: right; font: inherit; font-variant-numeric: tabular-nums; padding: 2px 6px; border: 1px solid var(--border, var(--rule)); border-radius: var(--radius-control, 6px); background: var(--surface-raised, var(--sheet)); color: inherit; }
 .chg-in:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -1px; }
+/* next-tds-register: the Deductions register (DedRegister.jsx): two tabs, short chips, the name about 32 characters */
+.dreg-tabs { display: flex; gap: 4px; margin: 0 0 10px; border-bottom: 1px solid var(--rule, var(--border)); }
+.dreg-tab { appearance: none; border: 0; background: none; padding: 8px 12px; font: inherit; font-weight: 600; color: var(--text-secondary, var(--muted)); border-bottom: 2px solid transparent; cursor: pointer; }
+.dreg-tab.on { color: var(--ink); border-bottom-color: var(--brand); }
+.dreg-tab:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -2px; }
+.dreg-table td.dreg-name { white-space: normal; min-width: 14ch; max-width: calc(32ch + 20px); }
+.dreg-table td.dreg-chc, .dreg-table td.dreg-f { white-space: nowrap; }
+.dreg-table td.dreg-next { white-space: nowrap; }
+.dreg-table td.dreg-next .btn + .btn, .dreg-table td.dreg-next .tag + .btn { margin-left: 6px; }
+.dreg-how { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--rule-strong, var(--border)); color: var(--ink); }
+.dreg-how.ai { color: var(--info, var(--ink)); border-color: color-mix(in oklab, var(--info, var(--ink)) 45%, transparent); }
+.dreg-vl { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dreg-chk { color: var(--warn, var(--ink)); font-size: 12.5px; }
+.dreg-to { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dreg-to select { max-width: 260px; }
+.dreg-table .dt-flag, .dreg-table .dreg-how, .dreg-table .dreg-vl, .dreg-table td[data-dreg-ch] { white-space: nowrap !important; margin-left: 0; }

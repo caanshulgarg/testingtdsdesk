@@ -8,16 +8,16 @@ within this window, just by clicks"). On the made-up books and challans of run_t
   2. by clicks alone: a cell edited in place (Enter saves as a FinCom correction, Tab goes to the next cell, Tally not
      changed); one-click fixes with the exact change (the rate that applies); ticked rows given a section at once;
      the keyboard (↑ ↓, Space, ?); no "Done: N of M ready" in the header (round 94); Add deduction filled from the party's history
-  3. the to-do list (next-tds-allchallans; the owner's layout, 19-Oct-2026: "still very confusing"): the step opens on
-     "N deductions · D done · K need you" and the groups Confirm · Choose a challan · Pay a challan (one block per
-     section-month, Add challan and Paid in Tally? Add BSR) · Fix the row · Done (folded); each row in exactly one group,
-     the line's counts the groups'; one primary action a to-do row; Confirm and Confirm all move rows out of Confirm at
-     once; the headings, reasons and flags are not grey (contrast at least 4.5:1, light and dark); phone: no sideways scroll
-  4. Deductions by challan, as Winman (round 88): the step opens on "Select challan" (no · date · total, "Not on any
-     challan (N)" last; the first with a balance left); the table is that challan's deductions with Winman's columns;
+  3. the Deductions register (next-tds-register, 20-Oct-2026; it replaces the to-do list of next-tds-allchallans):
+     "Deductions N" opens it; Pending (on no challan) and Mapped (on a challan), each deduction in exactly one tab, the
+     tabs' counts their rows; one next step a pending row (Confirm, the best 1 to 3 challans, or Needs a challan); Confirm
+     and Confirm all move rows to Mapped at once, said placed by a rule; chips, tabs and cells at least 4.5:1, light and
+     dark; with no challan every deduction Pending; phone: no sideways scroll
+  4. Deductions by challan, as Winman (round 88): the step opens on "Select challan" (no · date · total; no "Not on any
+     challan" since next-tds-register; the first with a balance left); the table is that challan's deductions with Winman's columns;
      the footer (used here · balance, red below nil · number; the challan's amount is the dropdown's, round 94) equals the
      challan and stays in view; "+ Add deduction to this challan" lists the deductions not on a challan, the best fit
-     first, one click puts one on and the footer follows; "Not on any challan" is the to-do list; the steps' tabs across
+     first, one click puts one on and the footer follows; "Deductions N" opens the register; the steps' tabs across
      the top (round 94: no tabs at the foot, no F8 / F10 / F11 / F12); the
      Challans grid in the same order, a row opening its deductions; phone: no sideways scroll, nothing under the app's bar
 TDS_DEDMATCH_SHOTS=dir: screenshots (default tests/out/tds-dedmatch)."""
@@ -39,8 +39,8 @@ m = open(os.path.join(HERE, "run_tds_match_ui.py")).read()
 _k = m.index('CHALLANS = """') + len('CHALLANS = """')
 CHALLANS = m[_k:m.index('"""', _k)]
 GO = "() => { S.books = window.__bk; S.booksTab = 'tds'; S.tdsView = 'return'; S.tdsFy = '2026-27'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'deductions'; S.tdsDedView = 'table'; S.tdsFl = {}; S.tdsDedChF = ''; S.tdsSel = {}; render(); }"
-TODO = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = '__none'")
-WIN = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = ''")
+REG = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = ''; S.tdsDedReg = 'pending'")
+WIN = GO.replace("S.tdsDedView = 'table'", "S.tdsDedView = ''; S.tdsWinCh = ''; S.tdsDedReg = ''")
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -146,77 +146,68 @@ try:
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
         ok(J("document.documentElement.scrollWidth") <= 391 and pg.locator("#app [data-dd-side] details").count() == 1, "phone: the panel is a section on top that folds; no sideways scroll")
         pg.screenshot(path=os.path.join(SHOTS, "deductions-suggestions-390.png"), full_page=True)
-        print("3. the to-do list")
+        print("3. the Deductions register (next-tds-register: it replaces the to-do list of round 'next-tds-allchallans')")
         pg.set_viewport_size({"width": 1440, "height": 900})
         J(CHALLANS)
         # PANs for all but ZZ Contractor 1 (companies for 194C at 2%, persons for 194J)
         J("""() => { const ps = Array.from(new Set(TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.party))); let i = 0;
           ps.forEach(p => { if (p === 'ZZ Contractor 1') return; i++; const c = /Contractor/.test(p) ? 'C' : 'P'; tdsDeducteeSet(p, {pan: 'AAA' + c + 'Z' + String(1000 + i) + 'K', name: ''}); }); render(); }""")
-        J(TODO); pg.wait_for_timeout(900)
-        ok(pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#tdsDnTable").count() == 0, "Not on any challan: the to-do list, not the table")
+        J(REG); pg.wait_for_timeout(900)
+        ok(pg.locator("#app [data-dreg]").count() == 1 and pg.locator("#app [data-ded-todo]").count() == 0, "Deductions N opens the register; no to-do list")
         def state():
-            return J("""() => { const g = {}; document.querySelectorAll('#app [data-dt-group]').forEach(d => { g[d.dataset.dtGroup] = {n: +d.dataset.dtN, rows: [...d.querySelectorAll('tr[data-dt-row]')].map(t => t.dataset.dtRow), open: d.open}; });
-              const line = (document.querySelector('#app [data-dt-line]') || {dataset: {}}).dataset.dtLine || ''; return {g, line}; }""")
-        st = state(); qrows = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.id).sort()")
-        seen = [r for v in st["g"].values() for r in v["rows"]]
-        ok(sorted(seen) == qrows and len(seen) == len(set(seen)), "each deduction in exactly one group (%d of %d)" % (len(set(seen)), len(qrows)))
-        ok(all(v["n"] == len(v["rows"]) for v in st["g"].values()), "each group's count is its rows (%s)" % {k: v["n"] for k, v in st["g"].items()})
-        done = len(st["g"].get("done", {"rows": []})["rows"]); need = len(seen) - done
-        ok(st["line"] == "%d|%d|%d" % (len(qrows), done, need), "the line: %d deductions · %d done · %d need you (%s)" % (len(qrows), done, need, st["line"]))
-        order = list(st["g"].keys()); want_order = [k for k in ["confirm", "choose", "pay", "fix", "done"] if k in st["g"]]
-        ok(order == want_order and "confirm" in order and "choose" in order, "the groups in the owner's order, empty ones not shown (%s)" % order)
-        ok(all(v["open"] for k, v in st["g"].items() if k != "done") and ("done" not in st["g"] or not st["g"]["done"]["open"]), "the to-do groups open, Done folded")
-        one = J("""() => [...document.querySelectorAll('#app [data-dt-group] tr[data-dt-row]')].filter(t => ['confirm', 'choose', 'fix'].includes(t.dataset.dtIn)).map(t => [t.dataset.dtRow, t.dataset.dtIn, t.querySelectorAll('.dt-do:not(.dt-pick)').length, t.querySelectorAll('.dt-pick').length])""")
-        ok(one and all(x[2] == 1 or (x[1] == "choose" and x[2] == 0 and 1 <= x[3] <= 3) for x in one), "each to-do row has one action (choose: the best 1 to 3 challans, one click each) (%s)" % [x for x in one if not (x[2] == 1 or (x[1] == "choose" and 1 <= x[3] <= 3))][:3])
+            return J("""() => { const out = {}; document.querySelectorAll('[data-dreg-tab]').forEach(b => { out[b.dataset.dregTab] = +b.dataset.dregN; }); return out; }""")
+        def rows_of(tab):
+            J("(t) => { S.tdsDedReg = t; render(); }", tab); pg.wait_for_timeout(300)
+            return J("(t) => [...document.querySelectorAll('[data-dreg-body=\"' + t + '\"] tr[data-dreg-row]')].map(tr => tr.dataset.dregRow)", tab)
+        st = state(); qrows = J("() => TDS.formRows('26Q').filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => r.id).sort()")
+        pend, mapd = rows_of("pending"), rows_of("mapped")
+        ok(sorted(pend + mapd) == qrows and not set(pend) & set(mapd), "each deduction in exactly one tab (%d + %d of %d)" % (len(pend), len(mapd), len(qrows)))
+        ok(st == {"pending": len(pend), "mapped": len(mapd)}, "each tab's count is its rows (%s)" % st)
+        J("() => { S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(300)
+        one = J("""() => [...document.querySelectorAll('[data-dreg-body="pending"] tr[data-dreg-row]')].map(t => [t.dataset.dregRow, t.querySelectorAll('[data-dreg-confirm]').length, t.querySelectorAll('[data-dreg-put]').length, /Needs a challan|No TDS to pay/.test(t.querySelector('.dreg-next').innerText)])""")
+        ok(one and all((x[1] == 1 and x[2] == 0) or (x[1] == 0 and 1 <= x[2] <= 3) or (x[1] == 0 and x[2] == 0 and x[3]) for x in one), "each pending row has one next step: Confirm, the best 1 to 3 challans (one click each), or Needs a challan (%s)" % [x for x in one if not ((x[1] == 1 and x[2] == 0) or (x[1] == 0 and 1 <= x[2] <= 3) or x[3])][:3])
         prim = J("[...document.querySelectorAll('#app .btn.primary')].filter(b => b.offsetParent).map(b => b.innerText.trim())")
-        ok(len(prim) == 1 and prim[0].startswith("Confirm all"), "the page's one filled button: Confirm all (%s)" % prim)
+        ok(len(prim) == 1 and prim[0].startswith("Confirm all"), "the register's one filled button: Confirm all (%s)" % prim)
         def contrast(theme):
             return J("""(theme) => { document.documentElement.dataset.theme = theme;
               const L = (c) => { const m = c.match(/[\\d.]+/g).map(Number); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return [0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]), m[3] == null ? 1 : m[3]]; };
               const bgOf = (e) => { for (let x = e; x; x = x.parentElement) { const b = getComputedStyle(x).backgroundColor; const m = b.match(/[\\d.]+/g); if (m && (m[3] == null || +m[3] > 0.5)) return b; } return getComputedStyle(document.body).backgroundColor; };
-              const out = []; document.querySelectorAll('#app .dt-gt, #app .dt-why, #app .dt-to, #app .dt-flag, #app .dt-fixw, #app .dt-payw, #app .dt-gn, #app .dt-line, #app [data-dt-pay-head], #app .dt-on, #app .dt-donew').forEach(e => {
+              const out = []; document.querySelectorAll('[data-dreg] .dreg-tab, [data-dreg] .dt-flag, [data-dreg] .dreg-how, [data-dreg] .dreg-chk, [data-dreg] .dreg-next .tag, [data-dreg] td').forEach(e => {
                 if (!e.getClientRects().length) return; const s = getComputedStyle(e), a = L(s.color)[0], b = L(bgOf(e))[0], r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
                 out.push([e.className || e.tagName, Math.round(r * 100) / 100, +s.opacity]); });
               return out; }""", theme)
-        for theme in ("light", "dark"):
-            cs = contrast(theme); low = [c for c in cs if c[1] < 4.5 or c[2] < 1]
-            ok(cs and not low, "%s: headings, reasons and flags at least 4.5:1, none faded (%d checked; low: %s)" % (theme, len(cs), low[:4]))
-            if theme == "dark": pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-dark-1440.png"), full_page=True)
-        J("() => { document.documentElement.dataset.theme = 'light'; }")
-        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-1440.png"), full_page=True)
-        cut = J("() => [...document.querySelectorAll('#app .dt-act')].filter(e => e.getBoundingClientRect().right > e.closest('.dt-g').getBoundingClientRect().right + 1).length")
-        ok(cut == 0, "1440: every row's action inside its group, nothing cut off (%d cut)" % cut)
-        rid = st["g"]["confirm"]["rows"][0]; pan_ok = J("(id) => Certs.validPan(TDS.rows().find(r => r.id === id).pan)", rid)
-        pg.click('#app [data-dt-confirm="%s"]' % rid); pg.wait_for_timeout(500)
-        st2 = state(); where = [k for k, v in st2["g"].items() if rid in v["rows"]]
-        ok(J("(id) => !!S.books.alloc[id]", rid) and where == (["done"] if pan_ok else ["fix"]), "Confirm: on its challan at once, the row now in %s" % where)
-        nconf = len(st2["g"]["confirm"]["rows"]); before = {k: len(v["rows"]) for k, v in st2["g"].items()}
-        pg.click("#app [data-dt-confirm-all]"); pg.wait_for_timeout(700)
-        st3 = state(); after = {k: len(v["rows"]) for k, v in st3["g"].items()}
-        ok("confirm" not in st3["g"] and after.get("done", 0) + after.get("fix", 0) - before.get("done", 0) - before.get("fix", 0) == nconf, "Confirm all %d: Confirm gone, the %d rows in Done or Fix the row (%s → %s)" % (nconf, nconf, before, after))
-        seen3 = [r for v in st3["g"].values() for r in v["rows"]]
-        ok(st3["line"] == "%d|%d|%d" % (len(qrows), after.get("done", 0), len(seen3) - after.get("done", 0)), "the line still equals the groups (%s)" % st3["line"])
-        fx = pg.locator('#app [data-dt-group="fix"] tr[data-dt-row]').first
-        # next-tds-tidy2: the problem a short chip ("No PAN"), its words on a hover
-        ok(fx.count() == 1 and "No PAN" in fx.inner_text() and fx.locator("[data-dt-problem=pan]").get_attribute("title") == "no PAN" and fx.locator("[data-dt-addpan]").count() == 1, "Fix the row: ZZ Contractor 1, No PAN, Add PAN")
-        # no challan at all: one block per section and month, Add challan and Paid in Tally? Add BSR
-        J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); render(); }"); pg.wait_for_timeout(800)
-        heads = J("[...document.querySelectorAll('#app [data-dt-pay]')].map(b => b.dataset.dtPay)")
-        sm = J("() => Array.from(new Set(TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.tds > 0.005).map(r => TDS.sec(r.section) + '|' + TDS.ymd(r.date).slice(0, 6)))).length")
-        ok(len(heads) == sm and len(set(heads)) == len(heads), "Pay a challan: one block per section and month (%d = %d)" % (len(heads), sm))
-        blk = pg.locator("#app [data-dt-pay]").first
-        ok(blk.locator("[data-dt-add]").count() == 1 and blk.locator("[data-dt-bsr]").count() == 1 and re.search(r"· ₹[\d,.]+ due", blk.locator("[data-dt-pay-head]").inner_text()), "a block: '<section> · <month> · ₹X due', Add challan, Paid in Tally? Add BSR (%s)" % blk.locator("[data-dt-pay-head]").inner_text())
-        due = J("""() => { const b = document.querySelector('#app [data-dt-pay]'), ids = [...b.querySelectorAll('tr[data-dt-row]')].map(t => t.dataset.dtRow);
-          return [+b.querySelector('[data-dt-pay-head]').innerText.match(/₹([\d,.]+) due/)[1].replace(/,/g, ''), TDS.rows().filter(r => ids.includes(r.id)).reduce((a, r) => a + r.tds, 0)]; }""")
-        ok(due[0] >= due[1] - 0.01 and due[0] <= due[1] * 1.25 + 1, "the block's ₹ due is its rows' TDS (with any interest) (%s)" % due)
-        w = J("() => [...document.querySelectorAll('#app .dt-table')].map(t => t.getBoundingClientRect().right - t.closest('.dt-g').getBoundingClientRect().right)")
-        ok(all(x <= 1 for x in w), "1440: every group's rows inside the page, nothing cut off (%s)" % w[:4])
-        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-pay-1440.png"), full_page=True)
+        for tab in ("pending", "mapped"):
+            J("(t) => { S.tdsDedReg = t; render(); }", tab); pg.wait_for_timeout(300)
+            for theme in ("light", "dark"):
+                cs = contrast(theme); low = [c for c in cs if c[1] < 4.5 or c[2] < 1]
+                ok(cs and not low, "%s %s: tabs, chips and cells at least 4.5:1, none faded (%d checked; low: %s)" % (tab, theme, len(cs), low[:4]))
+                pg.screenshot(path=os.path.join(SHOTS, "register-%s-%s-1440.png" % (tab, theme)))
+        J("() => { document.documentElement.dataset.theme = 'light'; S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(300)
+        cut = J("() => [...document.querySelectorAll('[data-dreg] td')].filter(e => e.getBoundingClientRect().right > e.closest('[data-dreg]').getBoundingClientRect().right + 1 && e.closest('.bk-tablewrap').scrollWidth <= e.closest('.bk-tablewrap').clientWidth).length")
+        ok(cut == 0, "1440: every cell inside the register, nothing cut off (%d cut)" % cut)
+        rid = J("() => (document.querySelector('[data-dreg-confirm]') || {dataset: {}}).dataset.dregConfirm || ''")
+        pg.click('[data-dreg-confirm="%s"]' % rid); pg.wait_for_timeout(500)
+        ok(J("(id) => !!S.books.alloc[id]", rid) and rid not in rows_of("pending") and rid in rows_of("mapped"), "Confirm: on its challan at once, the row now Mapped")
+        how = J("(id) => { const e = document.querySelector('[data-dreg-row=\"' + id + '\"] [data-dreg-how]'); return e ? [e.dataset.dregHow, e.innerText.trim()] : null; }", rid)
+        ok(how and how[0] == "rule", "… placed by a rule, by its short name (%s)" % how)
+        J("() => { S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(300)
+        nconf = J("() => document.querySelectorAll('[data-dreg-confirm]').length"); before = state()
+        pg.click("[data-dreg-confirm-all]"); pg.wait_for_timeout(700)
+        after = state()
+        ok(J("() => document.querySelectorAll('[data-dreg-confirm]').length") == 0 and after["mapped"] - before["mapped"] == nconf and before["pending"] - after["pending"] == nconf, "Confirm all %d: off Pending, on Mapped at once (%s → %s)" % (nconf, before, after))
+        J("() => { S.tdsDedReg = 'mapped'; render(); }"); pg.wait_for_timeout(300)
+        fx = J("() => { const t = [...document.querySelectorAll('[data-dreg-body=\"mapped\"] tr[data-dreg-row]')].find(tr => /ZZ Contractor 1\\b/.test(tr.innerText)); const f = t && t.querySelector('[data-dreg-flag=pan]'); return f ? [f.innerText.trim(), f.title] : null; }")
+        ok(fx == ["No PAN", "no PAN"], "Mapped: ZZ Contractor 1's chip “No PAN”, its words on a hover (%s)" % fx)
+        # no challan at all: every deduction Pending, each “Needs a challan”
+        J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(800)
+        nd = J("() => [...document.querySelectorAll('[data-dreg-body=\"pending\"] tr[data-dreg-row] .dreg-next')].map(e => e.innerText.trim())")
+        ok(nd and all(x in ("Needs a challan", "No TDS to pay") for x in nd) and len(nd) == len(qrows), "no challan: every deduction Pending, “Needs a challan” (%d)" % len(nd))
+        ok(J("() => !!document.querySelector('#app [data-wd-nochallan]')"), "the step says there is no challan yet")
+        pg.screenshot(path=os.path.join(SHOTS, "register-nochallan-1440.png"))
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500)
-        ok(J("document.documentElement.scrollWidth") <= 391, "phone: the groups stack, no sideways scroll (%s)" % J("document.documentElement.scrollWidth"))
-        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-pay-390.png"), full_page=True)
-        J(CHALLANS); pg.wait_for_timeout(600)
-        pg.screenshot(path=os.path.join(SHOTS, "deductions-todo-390.png"), full_page=True)
+        ok(J("document.documentElement.scrollWidth") <= 391, "phone: no sideways scroll (%s)" % J("document.documentElement.scrollWidth"))
+        pg.screenshot(path=os.path.join(SHOTS, "register-390.png"))
+        J("() => { S.tdsDedReg = ''; render(); }"); J(CHALLANS); pg.wait_for_timeout(600)
         print("4. Deductions by challan, as Winman (round 88)")
         pg.set_viewport_size({"width": 1440, "height": 900}); J(CHALLANS); J("() => tdsMatchConfirmAll()"); pg.wait_for_timeout(500)
         J(WIN); pg.wait_for_timeout(900)
@@ -226,7 +217,7 @@ try:
         chs = J("() => { const n = TDS.challans().length; return [...document.querySelectorAll('#app select[data-wd-sel] option')].filter(o => o.value !== '__none').map(o => o.value); }")
         un = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).length")
         ok(len(chs) >= 3 and all(re.match(r"^%d · \d\d-\w{3}-\d{4} · ₹[\d,.]+$" % (i + 1), o[1]) for i, o in enumerate(opts[:len(chs)])), "the dropdown: one line a challan, “no · date · total” (%s)" % [o[1] for o in opts[:3]])
-        ok(un > 0 and opts[-1] == ["__none", "Not on any challan (%d)" % un], "the dropdown's last line: Not on any challan (%d) (%s)" % (un, opts[-1]))
+        ok(un > 0 and "__none" not in [o[0] for o in opts] and pg.locator("#app [data-dreg-open]").count() == 1, "the dropdown has no 'Not on any challan': the %d are in the register (Deductions N) (%s)" % (un, opts[-1]))
         totals = J("(ids) => ids.map(id => { const c = TDS.challans().find(x => x.id === id); return Math.round((num(c.tax) + num(c.interest) + num(c.fee) + num(c.others)) * 100) / 100; })", chs)
         said = [float(o[1].split("₹")[-1].replace(",", "")) for o in opts[:len(chs)]]
         ok(all(abs(a - b) < 0.01 for a, b in zip(said, totals)), "each line's total: tax + interest + fee + others (%s = %s)" % (said[:3], totals[:3]))
@@ -285,13 +276,13 @@ try:
         ok(sorted(shown) == sorted(want) and all(abs(f2[k] - w2[k]) < 0.01 for k in ("amt", "used", "bal", "n")), "another challan chosen: its deductions and its footer (%d)" % len(shown))
         un = J("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && r.tds > 0.005).length")
         # round 94: the count is the dropdown's last choice only, no "N not on a challan · Show" line under it
-        last_opt = J("() => { const o = [...document.querySelectorAll('#app select[data-wd-sel] option')]; return o.length ? o[o.length - 1].textContent : ''; }")
-        ok(pg.locator("#app [data-wd-unplaced]").count() == 0 and last_opt == "Not on any challan (%d)" % un, "the dropdown's last choice: Not on any challan (%d), no line under it (%s)" % (un, last_opt))
+        ok(pg.locator("#app [data-wd-unplaced]").count() == 0, "no 'N not on a challan' line under the dropdown")
         help_lines = J("[...document.querySelectorAll('#app [data-wd] p.note, #app [data-wd] .wd-help')].filter(e => e.offsetParent).length")
         ok(help_lines <= 1, "at most one line of help (%d)" % help_lines)
-        pg.select_option("#app select[data-wd-sel]", "__none"); pg.wait_for_timeout(600)
-        ok(pg.input_value("#app select[data-wd-sel]") == "__none" and pg.locator("#app [data-ded-todo]").count() == 1 and pg.locator("#app [data-dt-group]").count() >= 1, "Show / Not on any challan: the to-do groups")
-        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-none-1440.png"), full_page=True)
+        pg.click("#app [data-dreg-open]"); pg.wait_for_timeout(600)
+        ok(pg.locator("#app [data-dreg]").count() == 1 and J("() => +document.querySelector('[data-dreg-tab=\"pending\"]').dataset.dregN") == un, "Deductions N: the register, Pending %d" % un)
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-register-1440.png"))
+        J("() => { S.tdsDedReg = ''; render(); }"); pg.wait_for_timeout(300)
         # round 94: the steps' tabs across the top; no tabs at the foot and no F8 / F10 / F11 / F12
         tabs = J("[...document.querySelectorAll('#app [data-return-tabs] [data-ret-tab]')].map(b => b.dataset.retTab)")
         ok(tabs[:4] == ["deductor", "deductees", "challans", "deductions"] and pg.locator("#app [data-ret-foot], #app .rt-foot").count() == 0, "the tabs across the top: Deductor · Deductees · Challans · Deductions …, none at the foot (%s)" % tabs)
@@ -319,9 +310,10 @@ try:
         unc = J("""() => ['[data-wd-foot]'].map(sel => { const e = document.querySelector('#app ' + sel), r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!h && e.contains(h); })""")
         ok(all(unc), "phone: the footer is not under the app's bottom bar (%s)" % unc)
         pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-challan-390.png"), full_page=True)
-        J("() => { S.tdsWinCh = '__none'; render(); }"); pg.wait_for_timeout(500)
-        ok(J("document.documentElement.scrollWidth") <= 391, "phone, Not on any challan: no sideways scroll")
-        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-none-390.png"), full_page=True)
+        J("() => { S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(500)
+        ok(J("document.documentElement.scrollWidth") <= 391, "phone, the register: no sideways scroll")
+        pg.screenshot(path=os.path.join(SHOTS, "winman-deductions-register-390.png"))
+        J("() => { S.tdsDedReg = ''; render(); }"); pg.wait_for_timeout(300)
         J("() => { S.tdsTab = 'challans'; render(); }"); pg.wait_for_timeout(500)
         ok(J("document.documentElement.scrollWidth") <= 391, "phone, Challans: no sideways scroll (the table scrolls in its box)")
         pg.screenshot(path=os.path.join(SHOTS, "winman-challans-390.png"), full_page=True)
