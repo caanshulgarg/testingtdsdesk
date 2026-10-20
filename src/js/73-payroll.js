@@ -89,13 +89,14 @@ const Payroll = {
   tdsChoice(name){ const m = (this.books().map || {})[name]; return m && typeof m.payTds === "boolean" ? m.payTds : null; },
   tdsName(name){ const u = String(name || "").toUpperCase(); return /\bINCOME[\s-]*TAX\b/.test(u) || /\b(TDS|I\.?\s?T\.?)\b/.test(u) && /SALAR|\b[13]92/.test(u); },
   tdsHow(name){
-    const c = this.tdsChoice(name);
-    if (c !== null) return c ? "chosen" : "";
-    const h = this.head(name);
+    const c = this.tdsChoice(name), h = this.head(name), m = typeof Books === "object" ? Books.ledgerOf(name) : null;
+    const earn = /earning|reimburse|employer|loan|advance|gratuity/i.test(String(h.type || "")), bk = !earn && !!m && m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")) && !m.payTdsSet;
+    // next-24q-split (Leads): the books' own salary TDS ledger (not one made so by "This pay head is TDS") stays TDS over a
+    // "Not TDS": its employee split is that line
+    if (c !== null && (c || !bk)) return c ? "chosen" : "";
     if (/^income\s*tax$/i.test(String(h.stat || "").trim())) return "tally";
-    if (/earning|reimburse|employer|loan|advance|gratuity/i.test(String(h.type || ""))) return "";
-    const m = typeof Books === "object" ? Books.ledgerOf(name) : null;
-    if (m && m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || ""))) return "map";
+    if (earn) return "";
+    if (bk) return "map";
     return this.tdsName(name) ? "name" : "";
   },
   isTds(name){ return !!this.tdsHow(name); },
@@ -256,13 +257,20 @@ const Payroll = {
       const date = ents[v.id], id = "pay:" + v.id + "|~", vv = d.vouchers[v.id];
       out.push({id, date, credit: date, paidOn: "", q: TDS.qOf(date), fy: TDS.fyOf(date), party: this.UNSPLIT, employee: this.UNSPLIT, pan: "", tallyPan: "", guid: "", section: "192", ledger: "",
         paid: 0, tds: gap, rate: null, voucher: vv.no || "", type: vv.type || "", src: "payroll", challan: (b.alloc || {})[id] || "", unsplit: true, booksTds: bk,
-        note: "The books' TDS of this payroll entry is ₹" + INR.format(bk) + "; its employees' TDS adds up to ₹" + INR.format(split[v.id] || 0) + ". Mark the TDS pay head (Employees & declarations) or check the payroll in Tally."});
+        note: this.unsplitWhy(v.id, bk, split[v.id] || 0, gap)});
     });
     out.sort((a, c) => String(a.date).localeCompare(String(c.date)) || a.employee.localeCompare(c.employee));
     // next-challan-match: a month's TDS split across challans by a person is its parts (TDS.expandSplits)
     return TDS.expandSplits(out);
   },
   UNSPLIT: "TDS not split by employee",
+  // next-24q-split: why, in plain words: the employees' TDS on a head marked "Not TDS", else Tally's payroll names no employee
+  unsplitWhy(g, bk, sp, gap){
+    const no = Object.keys(this.data().heads || {}).filter(h => this.tdsChoice(h) === false && this.data().allocs.some(a => a.guid === g && a.head === h));
+    const F = x => "₹" + INR.format(x);
+    return no.length ? "Its employees' TDS is on pay head " + no.map(h => "\"" + h + "\"").join(", ") + ", marked Not TDS: mark it TDS (Employees & declarations)."
+      : "Tally's payroll gives " + F(gap) + " of this entry's TDS (" + F(bk) + ") to no employee; its employees' TDS adds up to " + F(sp) + ". Put it on the employees in this payroll entry in Tally, then read the books again.";
+  },
   // next-24q-load: a challan given to a payroll entry's books 192 line (read while the payroll was missing) carried to that
   // entry's employee rows with TDS and no challan, when their TDS fits what is left of it; else left for the matcher
   carry(b){
@@ -579,7 +587,7 @@ function payTdsHead(name, yes){
   b.map = Object.assign({}, b.map || {});
   const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
   m.payTds = !!yes; m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = typeof whoAmI === "function" ? whoAmI() : "";
-  if (yes && !(m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")))){ m.what = "tds_payable"; m.kind = "tds_payable"; m.section = "192"; }
+  if (yes && !(m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")))){ m.what = "tds_payable"; m.kind = "tds_payable"; m.section = "192"; m.payTdsSet = 1; }
   b.mapV = (b.mapV || 0) + 1;
   if (typeof toast === "function") toast(yes ? "“" + name + "” is the TDS pay head: each employee's TDS is read from it." : "“" + name + "” is not taken as TDS.");
   saveBooks(); render();

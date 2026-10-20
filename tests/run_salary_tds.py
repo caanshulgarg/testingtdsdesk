@@ -157,24 +157,30 @@ try:
         pg.evaluate("() => { S.tdsDedView = ''; render(); }")
         pg.screenshot(path=os.path.join(OUT, "q1-deductions.png"), full_page=True)
 
-        print("== 2. the choice: \"This pay head is TDS\"")
+        print("== 2. the choice: \"This pay head is TDS\" / \"Not TDS\"")
         pg.evaluate("() => { S.tdsTab = 'people'; render(); }"); pg.wait_for_timeout(300)
         ok(pg.locator('[data-pay-tds-heads]').count() == 1 and "TDS 192B" in pg.inner_text('[data-pay-tds-heads]'), "the payroll page says which pay head is TDS (TDS 192B)")
-        pg.click('[data-pay-tds-no="TDS 192B"]'); pg.wait_for_timeout(300)
-        ok(not pg.evaluate("Payroll.isTds('TDS 192B')"), "\"Not TDS\": the head is no longer TDS")
+        # next-24q-split (Leads, 20-Oct-2026: "TDS not split by employee", ₹0.00 paid, 31-May, TDS ₹1,88,296): a "Not TDS" kept
+        # on "TDS 192B", the books' own salary TDS ledger (192), left every month's employee TDS at nil and the books' line unsplit
+        ok(pg.locator('[data-pay-tds-no="TDS 192B"]').count() == 0 and pg.locator('[data-pay-tds-books="TDS 192B"]').count() == 1,
+           "\"Not TDS\" is not offered for the books' own 192 ledger; it is said why (%s)" % pg.inner_text('[data-pay-tds-heads]'))
+        pg.evaluate("() => payTdsHead('TDS 192B', false)")
         nt = pg.evaluate(Q, ["2026-27", "Q1"])
-        ok(nt["tds"] == 567464 and sum(nt["unsplit"]) == 567464, "then the books' 192 line is kept as \"TDS not split by employee\" (never dropped): %s" % nt["unsplit"])
-        ok(pg.locator('[data-pay-tds-yes="TDS 192B"]').count() == 1 and pg.locator('[data-pay-tds-yes="Gmc"]').count() == 1, "the deduction heads are offered: \"This pay head is TDS\"")
-        pg.click('[data-pay-tds-yes="TDS 192B"]'); pg.wait_for_timeout(300)
-        m = pg.evaluate("S.books.map['TDS 192B']")
-        ok(pg.evaluate("Payroll.isTds('TDS 192B')") and m.get("payTds") is True and m.get("ok") and m.get("byHand"), "chosen: kept in the ledger map as a confirmed choice (%s)" % {k: m.get(k) for k in ("payTds", "ok", "byHand", "section")})
-        ok(pg.evaluate(Q, ["2026-27", "Q1"])["by"].get(NAV) == 270000, "and the employees' TDS is back")
+        ok(pg.evaluate("Payroll.isTds('TDS 192B')") and nt["tds"] == 567464 and not nt["unsplit"] and {k: v for k, v in nt["by"].items() if v} == WANT_Q1,
+           "a \"Not TDS\" kept on it (as on Leads' books) does not take the employees' TDS away: Q1 ₹5,67,464 by employee, nothing unsplit (%s)" % nt["unsplit"])
         # the same choice for a head whose name says nothing
         load(pg, payroll_tables(), )
-        pg.evaluate("() => { const h = S.books.payroll.heads; h['Tax Cut'] = h['TDS 192B']; delete h['TDS 192B']; S.books.payroll.allocs.forEach(a => { if (a.head === 'TDS 192B') a.head = 'Tax Cut'; }); render(); }")
+        pg.evaluate("() => { const h = S.books.payroll.heads; h['Tax Cut'] = h['TDS 192B']; delete h['TDS 192B']; S.books.payroll.allocs.forEach(a => { if (a.head === 'TDS 192B') a.head = 'Tax Cut'; }); S.tdsTab = 'people'; render(); }")
         ok(not pg.evaluate("Payroll.isTds('Tax Cut')"), "a head named \"Tax Cut\" is not taken as TDS by itself")
-        pg.evaluate("() => payTdsHead('Tax Cut', true)")
-        ok(pg.evaluate("Payroll.isTds('Tax Cut')") and pg.evaluate("Payroll.register('202604').rows.reduce((s, r) => s + r.tds, 0)") == 188296, "\"This pay head is TDS\" on it: the register's TDS follows")
+        ok(pg.locator('[data-pay-tds-yes="Tax Cut"]').count() == 1 and pg.locator('[data-pay-tds-yes="Gmc"]').count() == 1, "the deduction heads are offered: \"This pay head is TDS\"")
+        pg.click('[data-pay-tds-yes="Tax Cut"]'); pg.wait_for_timeout(300)
+        m = pg.evaluate("S.books.map['Tax Cut']")
+        ok(pg.evaluate("Payroll.isTds('Tax Cut')") and m.get("payTds") is True and m.get("ok") and m.get("byHand"), "chosen: kept in the ledger map as a confirmed choice (%s)" % {k: m.get(k) for k in ("payTds", "ok", "byHand", "section")})
+        ok(pg.evaluate("Payroll.register('202604').rows.reduce((s, r) => s + r.tds, 0)") == 188296 and pg.evaluate(Q, ["2026-27", "Q1"])["by"].get(NAV) == 270000, "\"This pay head is TDS\" on it: the register's and the employees' TDS follow")
+        pg.click('[data-pay-tds-no="Tax Cut"]'); pg.wait_for_timeout(300)
+        nt = pg.evaluate(Q, ["2026-27", "Q1"])
+        ok(not pg.evaluate("Payroll.isTds('Tax Cut')") and nt["tds"] == 567464 and sum(nt["unsplit"]) == 567464, "\"Not TDS\" on it: the books' 192 line is kept as \"TDS not split by employee\" (never dropped): %s" % nt["unsplit"])
+        ok(all("Tax Cut" in r["note"] and "Not TDS" in r["note"] for r in nt["rows"] if r["unsplit"]), "each says why in plain words: the employees' TDS is on \"Tax Cut\", marked Not TDS (%s)" % [r["note"] for r in nt["rows"] if r["unsplit"]][:1])
 
         print("== 3. an employee's TDS missing from the split")
         import copy
@@ -186,6 +192,8 @@ try:
         load(pg, T3)
         q3 = pg.evaluate(Q, ["2026-27", "Q1"])
         ok(q3["tds"] == 567464 and q3["unsplit"] == [2576], "the June entry's 2,576 not split by employee is kept as its own row (%s)" % q3["unsplit"])
+        n3 = [r["note"] for r in q3["rows"] if r["unsplit"]][0]
+        ok("2,576" in n3 and "to no employee" in n3 and "1,90,872" in n3, "it says why: Tally's payroll gives ₹2,576 of the entry's TDS to no employee (%s)" % n3)
         # next-tds-register: the deductions on no challan are in the Deductions register's Pending tab
         pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(400)
         t3 = pg.inner_text("#app")
@@ -461,6 +469,53 @@ try:
         pg.click('#app [data-pay-retry]'); pg.wait_for_timeout(2000)
         ok(pg.evaluate(SEEN)[-1]["tally"] == "34/12" and pg.evaluate("window.__pay.reads") == 2, "Try again: read, Form 138 by employee (%s, reads %d)" % (pg.evaluate(SEEN)[-1], pg.evaluate("window.__pay.reads")))
         pg.evaluate("() => clearInterval(window.__payT)")
+
+        print("== 15. next-24q-split (Leads' Form 138 Q1, 20-Oct-2026): every month by employee; Q1's three salary challans")
+        # staging, read-only: the TDS pay head "TDS 192B" carried a "Not TDS" kept in the ledger map (payTds false): every
+        # month's employee TDS read as nil and the books' line shown "TDS not split by employee" (31-May ₹1,88,296), though
+        # Tally splits each month over its employees (7 / 7 / 8). The deposits: 12-May ₹1,88,296 (192B, April's), 6-Jun
+        # ₹1,88,296 (192B, May's), 6-Jul ₹2,27,543 naming no section (TDS 192B ₹1,98,578 with 194C, 194J, 194I: June's);
+        # beside them section-less payments of 26Q's sections only (12-May ₹17,952, 6-Jun ₹44,533)
+        def leads15():
+            T = payroll_tables()
+            for g, day, lines in (("p15-0512", "2026-05-12", [("TDS 192B", -188296), ("DBS Bank", 188296)]),
+                                  ("p15-0512b", "2026-05-12", [("TDS on Rent 94I", -7984), ("TDS 94J 2%", -8582), ("TDS 94C", -1386), ("DBS Bank", 17952)]),
+                                  ("p15-0606", "2026-06-06", [("TDS 192B", -188296), ("DBS Bank", 188296)]),
+                                  ("p15-0606b", "2026-06-06", [("TDS 94C", -13287), ("TDS 94J 10%", -19425), ("TDS on Rent 94I", -7984), ("TDS 94J 2%", -3837), ("DBS Bank", 44533)]),
+                                  ("p15-0706", "2026-07-06", [("TDS 94C", -16347), ("TDS 94J 10%", -3500), ("TDS on Rent 94I", -7984), ("TDS 94J 2%", -1134), ("TDS 192B", -198578), ("DBS Bank", 227543)]),
+                                  ("p15-0807", "2026-08-07", [("TDS 192B", -197551), ("DBS Bank", 197551)])):
+                v, ls = journal(g, day, lines, "Payment"); T["tally_vouchers"].append(v); T["tally_lines"] += ls
+            return T
+        CH15 = """() => { const b = S.books, M = (l, s) => { b.map[l] = Object.assign({}, b.map[l] || {}, {kind: 'tds_payable', what: 'tds_payable', section: s}); };
+          M('TDS 94C', '194C'); M('TDS 94J 10%', '194J'); M('TDS 94J 2%', '194J'); M('TDS on Rent 94I', '194I'); M('DBS Bank', '') ; b.map['DBS Bank'] = {kind: 'bank'};
+          b.map['TDS 192B'] = Object.assign({}, b.map['TDS 192B'], {payTds: false, byHand: true, ok: true});
+          const C = (id, serial, date, tax, section, fv) => ({id, bsr: '1234567', serial, date, tax, interest: 0, section, minorHead: '200', from: 'books', fromVoucher: fv});
+          b.challans = [C('ch15May', '40404', '20260512', 188296, '192B', 'p15-0512'), C('ch15X1', '50505', '20260512', 17952, '', 'p15-0512b'),
+            C('ch15Jun', '10101', '20260606', 188296, '192B', 'p15-0606'), C('ch15X2', '20202', '20260606', 44533, '', 'p15-0606b'),
+            C('ch15Jul', '00001', '20260706', 227543, '', 'p15-0706'), C('ch15Aug', '00003', '20260807', 197551, '192B', 'p15-0807')];
+          LK.cache = {}; TDSReg.forget(); render(); }"""
+        load(pg, leads15()); pg.evaluate(CH15); pg.wait_for_timeout(300)
+        q15 = pg.evaluate(Q, ["2026-27", "Q1"])
+        ok(not q15["unsplit"] and q15["tds"] == 567464 and {k: v for k, v in q15["by"].items() if v} == WANT_Q1,
+           "with the \"Not TDS\" kept on TDS 192B: Q1 ₹5,67,464 by employee, no \"TDS not split by employee\" row (%s)" % q15["unsplit"])
+        mon15 = {}
+        for r in q15["rows"]:
+            if r["tds"] > 0: mon15.setdefault(r["date"], []).append(r["tds"])
+        ok({d: (len(v), sum(v)) for d, v in mon15.items()} == {"20260430": (7, 188296), "20260531": (7, 188296), "20260630": (8, 190872)},
+           "30-Apr ₹1,88,296 over 7 employees, 31-May ₹1,88,296 over 7, 30-Jun ₹1,90,872 over 8 (%s)" % {d: (len(v), sum(v)) for d, v in mon15.items()})
+        pg.evaluate("() => { S.tdsTab = 'challans'; S.tdsChView = ''; render(); }"); pg.wait_for_timeout(500)
+        g24 = pg.evaluate("() => [...document.querySelectorAll('#app [data-chg-row]')].map(tr => tr.dataset.chgRow)")
+        ok(g24 == ["ch15May", "ch15Jun", "ch15Jul"], "Form 138 Q1's challans: 12-May, 6-Jun and 6-Jul (June's, deposited by 7 July), not the payments of 26Q's sections only, not August's (%s)" % g24)
+        sec = pg.evaluate("() => { const tr = document.querySelector('#app [data-chg-row=\"ch15Jul\"]'); return tr ? tr.children[2].textContent : ''; }")
+        ok("192" in sec and "194C" in sec, "the 6-Jul challan, naming no section, shows the sections its Tally payment paid (%s)" % sec)
+        pg.evaluate("() => { S.tdsForm = '26Q'; render(); }"); pg.wait_for_timeout(500)
+        g26 = pg.evaluate("() => [...document.querySelectorAll('#app [data-chg-row]')].map(tr => tr.dataset.chgRow)")
+        ok("ch15Jul" in g26 and "ch15X1" in g26 and "ch15X2" in g26 and "ch15May" not in g26 and "ch15Jun" not in g26, "26Q Q1 keeps the section-less payments, and the 6-Jul one, never the 192B ones (%s)" % g26)
+        pg.evaluate("""() => { S.tdsForm = '24Q'; const rs = TDS.formRows('24Q').filter(r => r.fy === '2026-27' && r.tds > 0.005);
+          TDSCH.tag(rs.filter(r => TDS.ymd(r.date).startsWith('202604')).map(r => r.id), 'ch15May'); TDSCH.tag(rs.filter(r => TDS.ymd(r.date).startsWith('202605')).map(r => r.id), 'ch15Jun'); TDSReg.forget(); render(); }""")
+        sg = pg.evaluate("() => TDSMatch.suggest('24Q', '2026-27', 'Q1').filter(s => s.ids.length).map(s => [s.chId, s.ids.length, s.total])")
+        ok(sg == [["ch15Jul", 8, 19087200]], "June's 8 employees (₹1,90,872) are suggested on the 6-Jul challan (%s)" % sg)
+        pg.screenshot(path=os.path.join(OUT, "q1-challans-leads.png"), full_page=True)
 
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):

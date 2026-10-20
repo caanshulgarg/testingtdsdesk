@@ -32,6 +32,9 @@ import "./clear.css";
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 const chSec = (c) => TDSCH.secNorm(c.section) || "";
+// next-24q-split: a challan naming no section shows what its Tally payment paid ("192B, 194C, 194I, 194J"), dimmed
+const paidOf = (c) => (typeof TDSMatch === "object" && TDSMatch.paidLabel ? TDSMatch.paidLabel(c) : null);
+const secCell = (c) => { const s = chSec(c), p = s ? null : paidOf(c); return s || (p ? <span className="wd-dim" data-ch-paid={p.w} title={p.t}>{p.w}</span> : "—"); };
 const totalOf = (c) => r2(num(c.tax) + num(c.interest) + num(c.fee) + num(c.others));
 // the grid's amounts: a nil interest, fee or other left blank, as Winman's
 const amt = money;
@@ -320,7 +323,7 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
   // the challans shown, "n of N shown" in the foot while a filter is on
   const cf = useCF("chg", [
     { k: "date", title: "Date", kind: "pick", get: (x) => ymOf(x.c.date), label: monW },
-    { k: "sec", title: "Section", kind: "pick", get: (x) => chSec(x.c) || "—" },
+    { k: "sec", title: "Section", kind: "pick", get: (x) => chSec(x.c) || (paidOf(x.c) || {}).w || "—" },
     { k: "tax", title: "Tax", kind: "num", get: (x) => x.c.tax },
     { k: "type", title: "Type", kind: "pick", get: (x) => String(x.c.minorHead || "200") },
     { k: "ok", title: "Verified", kind: "pick", get: (x) => (x.ok ? "Matched" : "Not checked") },
@@ -351,7 +354,7 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
         <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n" title="The late filing fee under 234E allocated to this return">Fee 234E allocated</th><th className="n" title="Penalty and other amounts allocated to this return">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th>{rmCol && <th className="ac"><span className="sr-only">Remove</span></th>}</tr></thead>
       <tbody>{shown.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
           onClick={() => openChallanDeductions(x.c.id)} onKeyDown={(ev) => { if (ev.key === "Enter") openChallanDeductions(x.c.id); }}>
-        <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{chSec(x.c) || "—"}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
+        <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{secCell(x.c)}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
         <td>{x.c.serial}</td><td>{x.c.bsr}</td><td title={TYPE[String(x.c.minorHead || "200")] || ""}>{String(x.c.minorHead || "200")}</td><td>{x.ok ? <span className="ac-chip ok" title="From the income-tax portal (its CIN)">Matched</span> : <span className="wd-dim" title="Typed or from Tally: not checked against the portal">Not checked</span>}</td>
         <AllocCell x={x} which="int" locked={locked} /><AllocCell x={x} which="fee" locked={locked} /><AllocCell x={x} which="oth" locked={locked} /><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td>
         {rmCol && <td className="ac">{pins.has(x.c.id) && x.here < 0.005 ? <button type="button" className="icon" data-chg-unpin={x.c.id} aria-label={"Remove from this return: challan " + x.c.serial} title="Remove from this return (brought in by hand; nothing of this return is on it)" onClick={(ev) => { ev.stopPropagation(); pinChallans(key, [x.c.id], false); }}>✕</button> : null}</td>}</tr>)}

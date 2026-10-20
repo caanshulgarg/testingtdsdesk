@@ -42,7 +42,7 @@ export const chipW = (p) => (p ? CHIP[p.k] || (String(p.words || "").length <= 1
 //   b. those the matcher pairs with its deductions (rules a to f and the AI's g: TDSMatch.suggest);
 //   c. those brought in by hand ("Add challan › Pick from other challans of this year"), kept with the books;
 //   d. those of its kind (TDSReg.homeForm: 192 for 24Q, 206C for 27EQ, a non-resident's section for 27Q, the others for
-//      26Q; one naming no section could be any) and minor head 200, deposited from the quarter's first day to its last
+//      26Q; one naming no section is of the forms its Tally payment paid (next-24q-split), else could be any) and minor head 200, deposited from the quarter's first day to its last
 //      month's due date (the 7th of the next month; 30 April for March), or earlier in the year with tax left (an advance
 //      challan). Every other challan is not shown on the return (it is on the challan register).
 // A challan brought in by hand is kept in S.books.matchNo (a person's matching decisions, one of BOOKS_KEYS, so it is
@@ -60,7 +60,8 @@ export function dueOfMonth(ym) {
   const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6);
   return m === 3 ? y + "0430" : m === 12 ? (y + 1) + "0107" : y + String(m + 1).padStart(2, "0") + "07";
 }
-export const kindOk = (c, form) => { if (String(c.minorHead || "200") !== "200") return false; const h = TDSReg.homeForm(c); return !h || h === form; };
+// next-24q-split: one naming no section, made from a Tally payment, of the forms that payment paid (TDSMatch.kindOk)
+export const kindOk = (c, form) => { if (typeof TDSMatch === "object" && TDSMatch.kindOk) return TDSMatch.kindOk(c, form); if (String(c.minorHead || "200") !== "200") return false; const h = TDSReg.homeForm(c); return !h || h === form; };
 export function retChallanList(form, fy, q, cx, sugg) {
   const k = TDSReg.key(form, fy, q), want = new Set(pinnedIds(k));
   (sugg || []).forEach((s) => { want.add(s.chId); (s.parts || []).forEach((p) => want.add(p.chId)); });

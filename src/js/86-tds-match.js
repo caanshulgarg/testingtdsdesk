@@ -132,6 +132,30 @@ const TDSMatch = {
     }).filter(c => c.bal > 0.005 || (all && c.interestLeft > 0.005) || all === "any");
   },
   label(c){ return c ? (c.bsr || "") + " / " + (c.serial || "") + " · " + (c.date ? fmtDate(tallyDate(TDS.ymd(c.date))) : "") : ""; },
+  // next-24q-split (the owner on Leads' Form 138 Q1: "24Q has only 2 month TDS challan… why only 2 months?"): a challan
+  // naming no section, made from a Tally TDS payment, pays what that payment debits: 6-Jul ₹2,27,543 is TDS 192B ₹1,98,578
+  // (June's salary TDS, Form 138 Q1's) with 194C, 194J and 194I (26Q's). [{sec, amount}] (sec "" for a TDS ledger of no
+  // section), or null: the challan names its section, or its payment is not in the books
+  paidSecs(c){
+    if (!c || !c.fromVoucher || TDSCH.secNorm(c.section) || typeof Books !== "object") return null;
+    const b = this.books(), vs = b.vouchers || [];
+    if (!this._vx || this._vx.vs !== vs){ const by = {}; vs.forEach(v => { if (v && v.id) by[v.id] = v; }); this._vx = {vs, by}; }
+    const v = this._vx.by[c.fromVoucher];
+    if (!v) return null;
+    const by = {}; (Books.lines(v).tdsPaid || []).forEach(t => { const k = TDSCH.secNorm(t.section) || ""; by[k] = r2((by[k] || 0) + t.amount); });
+    const out = Object.keys(by).sort().map(sec => ({sec, amount: by[sec]}));
+    return out.length ? out : null;
+  },
+  // the returns such a challan can pay (a Set of forms), or null when it cannot be told (then any, as before)
+  formsOf(c){ const p = this.paidSecs(c); return !p || p.some(x => !x.sec) ? null : new Set(p.map(x => TDSReg.homeForm({section: x.sec}))); },
+  // a challan of a return's kind: minor head 200; its section's form, else the forms its Tally payment paid, else any
+  kindOk(c, form){
+    if (String((c && c.minorHead) || "200") !== "200") return false;
+    const h = TDSReg.homeForm(c), f = h ? null : this.formsOf(c);
+    return h ? h === form : !f || f.has(form);
+  },
+  // "192B, 194C, 194I, 194J" for such a challan (the grids' Section), with its amounts for the hover
+  paidLabel(c){ const p = (this.paidSecs(c) || []).filter(x => x.sec); return p.length ? {w: p.map(x => x.sec).join(", "), t: "Its Tally payment paid " + p.map(x => x.sec + " " + money(x.amount)).join(" · ")} : null; },
   // what Tally says a payment paid: its bill-wise links (Agst Ref to the deductions' New Ref), and for salary the months a
   // payroll TDS payment says it is for. {chId: [row ids]}
   links(rows){
@@ -158,7 +182,10 @@ const TDSMatch = {
   },
   suggestNow(form, fy, q){
     if (!S.books || TDSReg.locked(fy, q, form)) return [];
-    const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chs = this.chs(cx);
+    // next-24q-split: a challan whose Tally payment paid none of this return's sections is not offered to it
+    const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chBy = {}, kind = c => { const f = this.formsOf(chBy[c.id]); return !f || f.has(form); };
+    TDS.challans().forEach(c => { chBy[c.id] = c; });
+    const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
     const opt = {fy, q, today, links: rows.length ? this.links(rows) : {}, no: this.no()};
     let out = rows.length && chs.length ? tmRules(rows, chs, opt) : [];
@@ -167,7 +194,7 @@ const TDSMatch = {
     if (ai && ai.raw && rows.length){
       const taken = new Set([].concat(...out.map(s => s.ids))), use = {};
       out.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
-      const chs2 = this.chs(cx, true).map(c => Object.assign({}, c, {bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100}));
+      const chs2 = this.chs(cx, true).filter(kind).map(c => Object.assign({}, c, {bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100}));
       out = out.concat(tmAiCheck(ai.raw, rows.filter(r => !taken.has(r.id)), chs2, opt).sugg.filter(s => s.rule !== "int"));
     }
     return out.concat(this.interestSugg(form, fy, q, cx, ai && ai.raw));
@@ -424,7 +451,10 @@ const TDSMatch = {
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/tds-challan-match"; },
   // what the rules leave: the deductions no suggestion covers, the challans with tax still left after them
   leftovers(form, fy, q){
-    const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chs = this.chs(cx);
+    // next-24q-split: a challan whose Tally payment paid none of this return's sections is not offered to it
+    const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx), chBy = {}, kind = c => { const f = this.formsOf(chBy[c.id]); return !f || f.has(form); };
+    TDS.challans().forEach(c => { chBy[c.id] = c; });
+    const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
     const rules = tmRules(rows, chs, {fy, q, today, links: this.links(rows), no: this.no()}), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
     rules.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
