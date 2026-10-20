@@ -310,6 +310,9 @@ run_tds_clear.py                      300  TDSDESK_SITE=../app/dist-test
 run_tds_clean.py                      300  TDSDESK_SITE=../app/dist-test
 run_tds_dedmatch.py                   300  TDSDESK_SITE=../app/dist-test
 run_tds_register.py                   300  TDSDESK_SITE=../app/dist-test
+# next-tds-interest (20-Oct-2026): interest and late fee in one section of Validate & file; interest and fee allocated on the
+# Challans grid, past the challan's own from its tax not used; "Allocate interest due"
+run_tds_interest.py                   300  TDSDESK_SITE=../app/dist-test
 run_migration80.py                    120
 # the independent TDS review of 14-Oct-2026: each finding a case (H1-H5, M1-M8, L1)
 run_tds_review.js                     120

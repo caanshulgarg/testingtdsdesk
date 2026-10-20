@@ -394,6 +394,12 @@ if (x.TDSMatch){
     "M. the split: one deductee record under each challan, the amount paid in proportion, the same date of deduction");
   ok(cdBy("00041")[8] === "60.00" && cdBy("00041")[23] === "40.00", "M. the shared challan in Q1: interest 60 as deposited (field 9), 40 allocated to Q1 (field 24)");
   fvuCopy("26Q", "S");
+  // next-tds-interest: interest and others allocated past the challan's own (60 interest, no fee), from its tax not used
+  // (TDSReg.setPortion): written as allocated (X140.txt, through FVU 1.2; run_fvu12_forms.py)
+  const px = x.TDSReg.setPortion("sh", "26Q", "2026-27", "Q1", 100, 10), fx = build("2026-27", "Q1", FIRM, "26Q"), cx = of(fx.text, "CD").find(c => c[16] === "00041") || [];
+  ok(px.ok && !fx.error && cx[8] === "60.00" && cx[23] === "100.00" && cx[24] === "10.00", "M. interest 100 and others 10 allocated past the challan's 60 and nil: fields 24 and 25 as allocated (" + (px.why || fx.error || [cx[8], cx[23], cx[24]]) + ")");
+  fvuCopy("26Q", "X");
+  x.TDSReg.setPortion("sh", "26Q", "2026-27", "Q1", 40, 0);
   const q2 = build("2026-27", "Q2", FIRM, "26Q"), c2 = of(q2.text, "CD").find(c => c[16] === "00041") || [];
   ok(!q2.error && c2[8] === "60.00" && c2[23] === "20.00", "M. the shared challan in Q2: 20 allocated to Q2 (field 24); together never more than the 60 paid");
 }

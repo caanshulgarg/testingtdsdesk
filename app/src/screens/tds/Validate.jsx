@@ -7,9 +7,10 @@
 // Download, Check with FVU, Mark filed.
 // checkReturn() is the one source of a return's problem count: the header's badge, the rail's and the TDS home's
 // status all come from it. Nothing here works out a figure: the counts are those of TDSMatch.checks, Certs.issues,
-// TDS.interest / lateFee, TDS26Q / TCS27EQ, TDSReg, TDSTally, TDSDrift, TRF, TDSPanFix and TDSF25 (src/js).
+// TDSMatch.interestTable (TDS.interest / lateFee), TDS26Q / TCS27EQ, TDSReg, TDSTally, TDSDrift, TRF, TDSPanFix and TDSF25 (src/js).
 import { useState } from "react";
 import { TracesCheck } from "./Register.jsx";
+import { InterestFee } from "./Interest.jsx";
 import { stepName, PrevPrn } from "./Shell.jsx";
 import { PreFileButton } from "../../parts/PreFile.jsx";
 import ListTable from "../../parts/ListTable.jsx";
@@ -79,11 +80,13 @@ export function checkReturn(fy, q, form) {
     } else if (tally) ch = Payroll.checks(fy, q);
     put(out.warnings, { k: "salary", n: ch.length, words: ch.length ? s_(ch.length, "salary check before filing", "salary checks before filing") + ": " + ch.map((c) => c.what.toLowerCase()).slice(0, 2).join("; ") : "", step: sheet ? "people" : undefined, review: true, list: ch });
   }
-  const filed = TDSFiled.get(fy, q, form), int1A = TDS.interest(fy, q, form), fee = TDS.lateFee(fy, q, filed ? filed.on : "", form), feeErr = !filed && fee && fee.days > 0;
-  const intAmt = r2(int1A.reduce((a, x) => a + x.amount, 0));
-  put(out.warnings, { k: "interest", n: int1A.length + (feeErr ? 1 : 0), words: (form === "27EQ" ? "Interest 206C(7) " : "Interest 201(1A) ") + money(intAmt) + " · late fee 234E " + money(feeErr ? fee.fee : 0), review: true });
-  // filed late: the fee to the date filed, said (not a warning: it is what was due)
-  if (!int1A.length && !feeErr) out.info.push({ k: "interest", n: 1, words: filed ? "Late fee 234E " + money(fee ? fee.fee : 0) + ", worked out to the date filed" : "No interest or late fee yet, if filed today", review: true });
+  // next-tds-interest (the owner, 20-Oct-2026): the interest due on the return's challans less what is allocated to it, one
+  // line; the 234E fee due, one line; the figures in the Interest & fee section below (tds/Interest.jsx)
+  const filed = TDSFiled.get(fy, q, form);
+  let it = null; try { it = TDSMatch.interestTable(form, fy, q); } catch (e) { /* the matcher not loaded */ }
+  const short = it ? it.totals.short : 0, fee = it && !filed ? it.fee : null;
+  put(out.warnings, { k: "interest", n: short >= 1 ? 1 : 0, words: "Interest " + money(short) + " not allocated", step: "challans" });
+  if (fee && fee.fee > 0) out.warnings.push({ k: "fee", n: 1, words: "Late fee 234E " + money(fee.fee) + " due" });
   mc.warn.forEach((x, i) => put(out.warnings, { k: "m-" + x.k + i, n: 1, words: x.words, step: "challans" }));
   if (form !== "24Q") {
     let td = 0; try { td = TDSTally.disagreements().length + TDSTally.conflicts("challan").length + TDSTally.bad().length; } catch (e) { /* */ }
@@ -180,6 +183,7 @@ export function ValidatePanel({ fy, q, form, val, reviews = {}, year = [], file,
     {val.warnings.length > 0 && <><h4 className="vf-h">Warnings (potential notices)</h4><ul className="vf-list" data-val-list="warnings">{lines(val.warnings, "warn")}</ul></>}
     {!val.errors.length && !val.warnings.length && <p className="ok-line" data-fix-none="" data-cm-checks="ok">Nothing to fix in this return.</p>}
     {val.info.length > 0 && <ul className="vf-list" data-val-list="info">{lines(val.info, "info")}</ul>}
+    <InterestFee fy={fy} q={q} form={form} />
     <h4 className="vf-h">Online checks</h4>
     <Online fy={fy} q={q} form={form} chIds={chIds} />
     <TallyChecks fy={fy} q={q} form={form} />
