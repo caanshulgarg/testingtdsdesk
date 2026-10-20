@@ -16,6 +16,8 @@ import More from "../../parts/More.jsx";
 import { SideDrawer } from "./Shell.jsx";
 import { openAllChallans } from "./AllChallans.jsx";
 import { PanBox } from "./PanBook.jsx";
+import { retChallanList } from "./onChallan.js";
+import { PickChallans } from "./PickChallans.jsx";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -30,13 +32,8 @@ const setFl = (k, v) => { S.tdsMF = { ...fl(), [k]: v }; render(); };
 const sel = () => S.tdsSel || {};
 const tick = (ids, on) => { const s = { ...sel() }; ids.forEach((id) => { if (on) s[id] = true; else delete s[id]; }); S.tdsSel = s; render(); };
 
-// the challans the screen shows: those this return uses, those suggested for it, and the quarter's own with tax left
-export function challansOf(form, fy, q, cx, sugg) {
-  const k = TDSReg.key(form, fy, q), want = new Set();
-  sugg.forEach((s) => { want.add(s.chId); (s.parts || []).forEach((p) => want.add(p.chId)); });
-  const mon = tdsMonths(fy, q), last = mon[mon.length - 1], next = String(+last.slice(4, 6) === 12 ? +last.slice(0, 4) + 1 + "01" : last.slice(0, 4) + String(+last.slice(4, 6) + 1).padStart(2, "0"));
-  return TDS.challans().filter((c) => (cx.uses[c.id] || {})[k] || want.has(c.id) || (TDSReg.balance(c, cx).tax > 0.005 && TDS.fyOf(c.date) === fy && [...mon, next].includes(TDS.ymd(c.date).slice(0, 6))));
-}
+// the challans the screen shows (next-tds-retchallans: onChallan.js retChallanList, the one list of a return)
+export const challansOf = (form, fy, q, cx, sugg) => retChallanList(form, fy, q, cx, sugg);
 
 // interest and fee allocated to this return (the register's portion); the default offered (TDSMatch.defaultPortion)
 function Portion({ c, cx, form, fy, q, locked }) {
@@ -168,8 +165,8 @@ export function ChallanTicker({ c, form, fy, q, locked, sugg, mode }) {
 
 // the challan chosen on the Deductions tab ("Challan: [BSR · date · serial · section · balance ₹X ▾]")
 export function ChallanSelect({ form, fy, q, value, onChange }) {
-  const cx = TDSReg.ctx(), list = challansOf(form, fy, q, cx, TDSMatch.suggest(form, fy, q)).concat(TDS.challans().filter((c) => TDSReg.balance(c, cx).tax > 0.005))
-    .filter((c, i, a) => a.indexOf(c) === i).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)));
+  // next-tds-retchallans: only the return's own challans (others are brought in by Add challan › Pick from other challans)
+  const cx = TDSReg.ctx(), list = challansOf(form, fy, q, cx, TDSMatch.suggest(form, fy, q)).slice().sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)));
   return <label className="cm-chsel">Challan: <select aria-label="Challan to work on" data-cm-chsel="" value={value || ""} onChange={(ev) => onChange(ev.target.value)}>
     <option value="">All deductions (none chosen)</option>
     {list.map((c) => <option key={c.id} value={c.id}>{[c.bsr, day(c.date), c.serial, chSec(c) || "no section", "balance " + money(TDSReg.balance(c, cx).tax)].join(" · ")}</option>)}</select></label>;
@@ -180,7 +177,7 @@ export function ChallanSelect({ form, fy, q, value, onChange }) {
 // serial · date · section · ₹ left · a badge), "Not matched (N)" its last item; the one chosen on the right in the
 // two-panel view (ChallanTicker), or what is not matched with its reason and next step
 export function ChallanMatch({ fy, q, form, tallyPays, back }) {
-  const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), locked = TDSReg.locked(fy, q, form), [adding, setAdding] = useState(false), [reg, setReg] = useState(false), [pays, setPays] = useState(false);
+  const cx = TDSReg.ctx(), k = TDSReg.key(form, fy, q), locked = TDSReg.locked(fy, q, form), [adding, setAdding] = useState(false), [pick, setPick] = useState(false), [pays, setPays] = useState(false);
   const up = useRef(null);
   const all = TDS.formRows(form).filter((r) => r.fy === fy && r.q === q), byId = {};
   all.forEach((r) => { byId[r.id] = r; });
@@ -189,7 +186,6 @@ export function ChallanMatch({ fy, q, form, tallyPays, back }) {
   sugg.forEach((s) => { s.months = Array.from(new Set(s.ids.map((id) => byId[id] && TDS.ymd(byId[id].date).slice(0, 6)).filter(Boolean))); });
   const ai = TDSMatch.view(form, fy, q);
   let chs = challansOf(form, fy, q, cx, sugg);
-  if (reg) chs = chs.concat(TDS.challans().filter((c) => !chs.includes(c) && TDSReg.balance(c, cx).tax > 0.005));
   // a challan opened from All challans that this quarter's list does not hold is shown too
   if (S.tdsChSel && S.tdsChSel !== "__none" && !chs.some((c) => c.id === S.tdsChSel)) chs = chs.concat(TDS.challans().filter((c) => c.id === S.tdsChSel));
   chs = chs.sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
@@ -212,7 +208,7 @@ export function ChallanMatch({ fy, q, form, tallyPays, back }) {
       {!locked && confirmable.length > 0 && <button className="btn small primary" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Confirm {confirmable.length} suggestion{confirmable.length === 1 ? "" : "s"}</button>}
       <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
         ["By hand", () => setAdding(true), { "data-cm-add": "hand" }],
-        [reg ? "Only this quarter’s challans" : "From the register (unused balances)", () => setReg(!reg), { "data-cm-from-register": "", "aria-pressed": reg }],
+        ["Pick from other challans of this year", () => setPick(true), { "data-cm-add": "pick" }],
         ["From a Tally TDS payment" + (nPays ? " (" + nPays + ")" : ""), () => setPays(true), { "data-cm-add": "tally" }],
         ["Upload challans…", () => up.current && up.current.click(), { "data-cm-add": "upload" }],
         ["Open the challan register", () => tdsNav("register"), { "data-cm-add": "register" }],
@@ -220,6 +216,7 @@ export function ChallanMatch({ fy, q, form, tallyPays, back }) {
       <input ref={up} type="file" multiple hidden data-challan-upload="" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf" onChange={(ev) => { const fs = Array.from(ev.target.files || []); ev.target.value = ""; upload(fs); }} />
     </div>
     {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
+    {pick && <PickChallans form={form} fy={fy} q={q} onClose={() => setPick(false)} />}
     {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
     <div className="cm-two">
       <ul className="cm-chlist" data-cm-chlist="">{chs.map((c) => { const bal = TDSReg.balance(c, cx).tax, n = sugg.filter((s) => s.chId === c.id).length;

@@ -10,20 +10,20 @@
 //                 to-do list (DedTodo).
 //   ChallanGrid   the Challans step: one plain table of the quarter's challans (Winman's grid), totals in its footer,
 //                 "+ Add challan" its last row; a row opens Deductions with that challan chosen.
-//   winChallans   the challans both show, in one order (TDSMatch's challansOf: those this return uses or is offered, and
-//                 the quarter's own with tax left), so "3" is the same challan on both steps.
+//   winChallans   the challans both show, in one order (onChallan.js retChallanList: those this return uses, is offered or
+//                 was given by hand, and the quarter's own of its kind), so "3" is the same challan on both steps.
 // Nothing here works out a match or a figure: the register's (TDSReg) balance and use, TDSMatch's suggestions, and the
 // existing tag / move / take-off functions.
 import { useRef, useState } from "react";
 import "../../lib/tdsGlobals.js";
 import { SideDrawer } from "./Shell.jsx";
 import { Cell } from "./DedSmart.jsx";
-import { challansOf } from "./Match.jsx";
 import { AddChallan, say } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { openAdd } from "./AddDeduction.jsx";
 import More from "../../parts/More.jsx";
-import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, placeNote, chipW } from "./onChallan.js";
+import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, placeNote, chipW, winChallans, retChallans, pinnedIds, pinChallans } from "./onChallan.js";
+import { PickChallans } from "./PickChallans.jsx";
 import { DedName } from "./DedName.jsx";
 import { useCF, Th } from "./ColF.jsx";
 import "./clear.css";
@@ -37,19 +37,10 @@ const amt = money;
 const amt0 = (v) => (Math.abs(num(v)) < 0.005 ? "" : amt(v));
 const TYPE = { 200: "TDS payable by the deductor (minor head 200)", 400: "Regular assessment (minor head 400)" };
 
-// the challans of a return, oldest first: [c]
-export function winChallans(form, fy, q, cx) {
-  let sugg = [];
-  try { sugg = TDSMatch.suggest(form, fy, q); } catch (e) { /* the matcher not loaded */ }
-  return challansOf(form, fy, q, cx || TDSReg.ctx(), sugg).slice().sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)));
-}
+// the challans of a return, oldest first: [c] (next-tds-retchallans: onChallan.js, the one list)
+export { winChallans, retChallans };
 // round 89: not on a challan here (none, or one missing: onChallan.js)
 const unplaced = (rows) => unplacedOf(rows);
-// the return's challans (the grid's rows, the header's count) and its TDS on them: one figure everywhere
-export function retChallans(form, fy, q, cx) {
-  const c = cx || TDSReg.ctx(), list = winChallans(form, fy, q, c), key = TDSReg.key(form, fy, q);
-  return { list, n: list.length, here: r2(list.reduce((a, x) => a + usedHere(x, key, c), 0)) };
-}
 
 // the challan chosen: S.tdsWinCh when it is one of the list (or "__none"); else the first with a balance left, else the
 // first; with no challan, "__none"
@@ -313,7 +304,10 @@ function AllocCell({ x, which, locked }) {
 
 export function ChallanGrid({ fy, q, form, tallyPays }) {
   const cx = TDSReg.ctx(), list = winChallans(form, fy, q, cx), locked = TDSReg.locked(fy, q, form), key = TDSReg.key(form, fy, q);
-  const [adding, setAdding] = useState(false), [pays, setPays] = useState(false), up = useRef(null);
+  const [adding, setAdding] = useState(false), [pays, setPays] = useState(false), [pick, setPick] = useState(false), up = useRef(null);
+  // next-tds-retchallans: a challan brought in by hand (Pick from other challans) can be taken out again while nothing of
+  // this return is on it
+  const pins = new Set(pinnedIds(key));
   const upload = async (fs) => { const r = await TDSCH.upload(fs); if (r && r.placed) say(r.placed + " new challan" + (r.placed === 1 ? "" : "s") + " added; what " + (r.placed === 1 ? "it pays is" : "they pay is") + " suggested on Deductions."); render(); };
   const nPays = tallyPays ? tallyPays.n : 0;
   const rows = list.map((c, i) => { const p = TDSReg.portionFor(c, form, fy, q, cx), b = TDSReg.balance(c, cx).tax;
@@ -330,15 +324,16 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
   ], rows), shown = cf.shown;
   const sum = (f) => r2(shown.reduce((a, x) => a + f(x), 0));
   // round 94: "Used in all returns" only where some challan is used by another return too (else it repeats Used here)
-  const allCol = rows.some((x) => Math.abs(x.used - x.here) > 0.005), cols = allCol ? 17 : 16;
+  const allCol = rows.some((x) => Math.abs(x.used - x.here) > 0.005), rmCol = !locked && rows.some((x) => pins.has(x.c.id) && x.here < 0.005), cols = (allCol ? 17 : 16) + (rmCol ? 1 : 0);
   let dueAny = false; try { dueAny = TDSMatch.interestTable(form, fy, q).totals.due > 0; } catch (e) { /* the matcher not loaded */ }
   return <div className="chg" data-chg={TDSReg.key(form, fy, q)}>
     <div className="rt-tool" data-step-tool="">
       <span className="rt-sp" />
       {!locked && dueAny && <button type="button" className="btn small" data-chg-alloc-due="" title="Each challan's interest due on this return's late deductions, allocated to it" onClick={() => tdsAllocateDue()}>Allocate interest due</button>}
       <More label="Add challan" ariaLabel="Add challan" data-ret-add-challan="" items={[
-        ["By hand", () => setAdding(true), { "data-cm-add": "hand" }],
+        ["Pick from other challans of this year", () => setPick(true), { "data-cm-add": "pick" }],
         ["From a Tally TDS payment" + (nPays ? " (" + nPays + ")" : ""), () => setPays(true), { "data-cm-add": "tally" }],
+        ["Type a new challan", () => setAdding(true), { "data-cm-add": "hand" }],
         ["Upload challans…", () => up.current && up.current.click(), { "data-cm-add": "upload" }],
         ["Open the challan register", () => tdsNav("register"), { "data-cm-add": "register" }],
         ["Match on two panels", () => { S.tdsChView = "match"; render(); }, { "data-chg-match": "" }],
@@ -348,17 +343,19 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
     {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
     <div className="bk-tablewrap chg-wrap"><table className="bk-table chg-table gf-off">
       <thead><tr><th className="n">No</th><Th cf={cf} k="date" cls="dt">Date</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="tax" cls="n">Tax</Th><th className="n">Interest</th><th className="n">Fee</th><th className="n">Others</th><th className="n">Total</th>
-        <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n" title="The fee and others allocated to this return">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th></tr></thead>
+        <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n" title="The fee and others allocated to this return">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th>{rmCol && <th className="ac"><span className="sr-only">Remove</span></th>}</tr></thead>
       <tbody>{shown.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
           onClick={() => openChallanDeductions(x.c.id)} onKeyDown={(ev) => { if (ev.key === "Enter") openChallanDeductions(x.c.id); }}>
         <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{chSec(x.c) || "—"}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
         <td>{x.c.serial}</td><td>{x.c.bsr}</td><td title={TYPE[String(x.c.minorHead || "200")] || ""}>{String(x.c.minorHead || "200")}</td><td>{x.ok ? <span className="ac-chip ok" title="From the income-tax portal (its CIN)">Matched</span> : <span className="wd-dim" title="Typed or from Tally: not checked against the portal">Not checked</span>}</td>
-        <AllocCell x={x} which="int" locked={locked} /><AllocCell x={x} which="oth" locked={locked} /><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td></tr>)}
+        <AllocCell x={x} which="int" locked={locked} /><AllocCell x={x} which="oth" locked={locked} /><td className="n" data-chg-here={x.here}>{amt(x.here)}</td>{allCol && <td className="n">{amt(x.used)}</td>}<td className={"n" + (x.bal < -0.005 ? " bad" : "")} data-chg-bal={x.bal}>{amt(x.bal)}</td>
+        {rmCol && <td className="ac">{pins.has(x.c.id) && x.here < 0.005 ? <button type="button" className="icon" data-chg-unpin={x.c.id} aria-label={"Remove from this return: challan " + x.c.serial} title="Remove from this return (brought in by hand; nothing of this return is on it)" onClick={(ev) => { ev.stopPropagation(); pinChallans(key, [x.c.id], false); }}>✕</button> : null}</td>}</tr>)}
         {!locked && <tr className="wd-addrow"><td colSpan={cols}><button type="button" className="linkbtn" data-chg-add="" onClick={() => setAdding(!adding)}>+ Add challan</button></td></tr>}</tbody>
       <tfoot><tr><td colSpan={3}>Total</td><td className="n" data-chg-tax={sum((x) => num(x.c.tax))}>{amt(sum((x) => num(x.c.tax)))}</td><td className="n">{amt(sum((x) => num(x.c.interest)))}</td><td className="n">{amt(sum((x) => num(x.c.fee)))}</td>
         <td className="n">{amt(sum((x) => num(x.c.others)))}</td><td className="n">{amt(sum((x) => totalOf(x.c)))}</td><td colSpan={4}></td><td className="n">{amt(sum((x) => x.int))}</td><td className="n">{amt(sum((x) => x.oth))}</td>
-        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td></tr>
+        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td>{rmCol && <td></td>}</tr>
         {cf.on && <tr className="wd-cffoot"><td colSpan={cols}>{cf.foot("challans")}</td></tr>}</tfoot></table></div>
     {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
+    {pick && <PickChallans form={form} fy={fy} q={q} onClose={() => setPick(false)} />}
   </div>;
 }
