@@ -24,6 +24,12 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
     it, now an error that stops the file). Against it, the build after: every file byte for byte; the 24Q pages of Q2 to
     Q4 no longer list the earlier quarters' challans (₹18,00,000.00 and their balances), which the build before offered
     for later salary TDS by rule f (a challan paid before a deduction never pays it now): those amounts taken out.
+    next-tds-early (20-Oct-2026): taken again on the build before (ca9ca1593) with the clock at 31-May-2027
+    (tdsgst_snapshot.SNAPSHOT_DAY: a challan dated after the day the file is made is refused, T-FV-3040). Against it, the
+    build after: every file byte for byte; the 24Q pages no longer list a month's salary TDS as "due · no challan paid
+    yet" (e.g. 192 · June 2025 · ₹10,414.00 due) where a later challan of the same year can pay it: rule f suggests it now
+    (a challan of the same financial year, on or after the deduction, then an advance one, then the next year's): those
+    amounts taken out.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")

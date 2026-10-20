@@ -59,7 +59,11 @@ assert CHALLANS_SNAP != CHALLANS
 # the day tests/fixtures/tdsgst-before.json was made (14-Oct-2026). The pages show figures worked out to today (the 234E
 # late fee is 200 a day to the date), so the browser's clock is fixed at that day; a real clock made the comparison fail a
 # day later (15-Oct-2026: 24Q Q1 2026-27, 15,000.00 became 15,200.00)
-SNAPSHOT_DAY = "2026-10-14T12:00:00+05:30"
+# next-tds-early (20-Oct-2026): moved to 31-May-2027, after the fixture's last challan (Q4 2026-27's, March 2027): Protean's FVU
+# refuses a challan dated after the day the file is made (T-FV-3040), and the app now does too, so on 14-Oct-2026 the
+# 2026-27 Form 140 files of Q3 and Q4 were not made. tdsgst-before.json was taken again at this day on the build before
+# (origin/staging-next ca9ca1593) and compared with the build after
+SNAPSHOT_DAY = "2027-05-31T12:00:00+05:30"
 
 def snapshot(site, port=8290, shots=None):
     from playwright.sync_api import sync_playwright
