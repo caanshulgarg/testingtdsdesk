@@ -4,6 +4,29 @@ The cloud copy's SQL lives in `server/tally-cloud/migration-*.sql`. Each file is
 revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner before it runs on staging
 (project `qbocskaiewaxqcvaunzc`). From migration 32 on, the files depend on one another, and one pair is order-sensitive.
 
+## Every new table carries its own grants (from 30-Oct-2026; ROUND 101)
+
+From 30-Oct-2026 Supabase no longer gives `anon`, `authenticated` and `service_role` automatic privileges on new tables,
+views and sequences in `public` (existing ones keep theirs). A table made without grants cannot be reached through the
+Data API or by the edge functions, service_role included ("permission denied"). The rule, for every migration:
+
+- every `create table` (and view, and the sequence of a `bigserial` / identity column) in `public` comes with its GRANTs
+  **in the same file**;
+- **service_role always** (`grant select, insert, update, delete on public.x to service_role;` and `usage, select` on its
+  sequence, or what the edge functions need);
+- **authenticated only** if the app reads or writes the table through PostgREST, under its RLS policies, and only the
+  privileges it uses (most tables: `select`);
+- **anon never**, except the sign-in and public tables that need it today;
+- the default privileges are not changed to make up for it.
+
+`server/security/migration-97-explicit-grants.sql` writes out what staging held on 20-Oct-2026 for every existing table,
+view and sequence (`tests/fixtures/staging-grants-20261020.json`; `_bankscrub_baseline_20261013` left out until the owner
+decides), so a database built from these files (live's go-live, a branch, a rehearsal copy) gets staging's access.
+`tests/run_migration_grants.py` (CI) builds such a database on pg_stand with Supabase's new behaviour, runs the migrations
+and then 97, compares every privilege with the snapshot, and fails if any table, view or sequence in `public` is left without
+service_role privileges; a migration file it does not know yet runs after 97 there, so a new table without grants in its
+own file fails CI.
+
 ## What staging really has (read on 03-Oct-2026, evening; project `qbocskaiewaxqcvaunzc`, read-only)
 
 - 32, 33, 35 as in the tree; **34 as FIRST written (commit `2105b2d`)**, not the reviewed one (`0aaaf23`): a 7-argument
@@ -68,6 +91,7 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | 92 | `migration-92-settle-unnamed-deletes.sql` (16-Oct-2026, branch `next-tally-one`; file md5 48247898a2bb16c889a0ebcdf7ec2b90; **run on staging 16-Oct-2026**, prosrc md5 tally_recorder_settle_unnamed d3d9db5c…, tally_days_recorder_settle 580f5c39…; settled 62 held lines of GB TEXCOAT, 29 days) | after 50/60. Adds `tally_recorder_settle_unnamed(uuid, date)` and two statement triggers on `tally_days` (after 50's release triggers): a held GUID-less delete / cancel whose day has a complete Day Book stored after it arrived becomes applied with words; once over the lines already held. Add-only, no existing function replaced. Tested by `run_migration92.py` |
 | 93 | `server/gst-browser/migration-93-gst-portal-login.sql` (17-Oct-2026, the GST browser helper, branch `next-gst-browser`; file md5 7700714e59a4d8a58264d6e475bfd909; **NOT run on staging**) | independent of 80-92 (needs members, my_firm() and Vault as server/gst-taxpro/migration-16 does). Three tables: `gst_portal_logins` (a client's GST portal user id per GSTIN; the password in Vault, `secret_id` only, not readable by signed-in users; `staff_allowed`; marked deleted, never removed), `gst_portal_login_events` (every save, change, delete, read and refused read: who, when, GSTIN; never the password), `gst_helper_runs` (every helper run: who, when, client, GSTIN, period, return, steps, differences, ARN); RLS: the firm's members read, nobody writes directly. Functions (security definer, search_path '', authenticated only): `gst_portal_role`, `gst_portal_login_save` (owner only), `gst_portal_login_list`, `gst_portal_login_read` (owner or allowed staff; logged), `gst_portal_login_delete` (owner only; **the one removal: the deleted login's Vault secret, `delete from vault.secrets` by its id**), `gst_helper_run_add` (owner or staff). Add-only otherwise, one transaction, lock_timeout 10 s, safe twice. Tested by `run_migration93.py` (twice) and `run_gst_helper_app_ui.py`. Deploy order: 93 before the app build that carries the helper's card (without it the card works but logs only with the books and "Log in to GST portal" says no login is saved) |
 | 96 | `server/assistant/migration-96-assistant-monthly-cap.sql` (17-Oct-2026, the owner's decision of 17-Oct-2026: the firm's AI cost limit is MONTHLY; branch `next-ai-monthly`; file md5 9c08b441e7a5518e0b29f9e4ba9dc625; **NOT run on staging**) | after 77 (and 95). Adds `assistant_caps.monthly_inr` (numeric(12,2), default 3000, 0 to 10,000,000; a firm's row from before gets 3000, its daily_inr kept and no longer read) and replaces 77's `asst_cap_take`, `asst_cost_add`, `asst_usage`, `asst_set_cap` (same arguments, results, SECURITY DEFINER, search_path public, pg_temp and grants): the rupee check sums the current calendar month's days (India's date) against monthly_inr; `daily_calls` stays a day's count; the setter sets monthly_inr; the JSON keeps its keys plus 'period': 'month'. Shared by Ask FinCom and the 2B matching. Add-only, one transaction, lock_timeout 10 s, no "delete from", nothing dropped, safe twice. Tested by `run_migration96.py` (twice) and `run_assistant_sql.py`. Deploy order: 96, then the fincom-assistant and gst-2b-match functions (their messages say "this month"); the functions deployed first would call a month's cap a day's in their words only; without 96 the cap stays Rs 150 a day |
+| 97 | `server/security/migration-97-explicit-grants.sql` (20-Oct-2026, ROUND 101, branch `next-grants`; file md5 336ff02ddf0a0330b50398a922acb09b; **NOT run on staging**: the owner runs it) | GRANTs only: for each of the 166 tables, views and sequences staging had on 20-Oct-2026 (`_bankscrub_baseline_20261013` left out), exactly the privileges anon / authenticated / service_role hold there (`tests/fixtures/staging-grants-20261020.json`); MAINTAIN only on PostgreSQL 17+; a relation not on the database is skipped with a notice. Changes nothing on staging. Runs LAST, after every other migration (on live too); default privileges untouched. `tests/run_migration_grants.py` |
 
 Run on staging (corrected 04-Oct-2026, evening):
 - 43 by the owner on 04-Oct-2026 (the seven function bodies checked against this file by md5 of prosrc: identical).

@@ -83,6 +83,9 @@ run_migration35.py                    120
 run_migration36b.py                   120
 run_migration36.py                    240
 run_migration_order.py                180
+# 20-Oct-2026 (ROUND 101): Supabase stops auto-granting new public tables on 30-Oct-2026: the migrations on pg_stand with no
+# automatic grants, then 97; every privilege equals staging's snapshot and no table is left without service_role
+run_migration_grants.py               120
 run_mis.js                            120
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
