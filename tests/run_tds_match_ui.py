@@ -274,9 +274,11 @@ try:
         pg.evaluate("""() => { S.books.salary = [{name: "Ravi Menon", pan: "ABCPM1234R", date: "2026-04-30", gross: 200000, tds: 4000}, {name: "Sunita Rao", pan: "ABCPR5678S", date: "2026-04-30", gross: 80000, tds: 5000},
           {name: "Ravi Menon", pan: "ABCPM1234R", date: "2026-05-31", gross: 200000, tds: 5000}];
           S.books.challans = [{id: "chSal", bsr: "0510308", serial: "00601", date: "20260507", tax: 9000, interest: 0, section: "192", minorHead: "200"}, {id: "chSal2", bsr: "0510308", serial: "00602", date: "20260606", tax: 5000, interest: 0, section: "192", minorHead: "200"}];
-          S.books.alloc = {}; S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"""); pg.wait_for_timeout(900)
-        ok(pg.locator('#app [data-challan-match="24Q|2026-27|Q1"]').count() == 1 and J("TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length") == 2 and pg.locator("#app [data-cm-sugg]").count() >= 1, "Form 138: the same Challans tab, two suggestions from the salary sheet")
-        pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
+          S.books.alloc = {}; S.tdsForm = '24Q'; S.tdsTab = 'challans'; render(); }"""); pg.wait_for_timeout(1500)
+        # next-24q-auto (4d66f268b): the salary sheet's TDS is placed by the sure rules as the 24Q return opens (no Confirm all)
+        placed = J("(() => { const u = {}; Object.values(S.books.alloc).forEach(v => { u[v] = (u[v] || 0) + 1; }); return u; })()")
+        ok(pg.locator('#app [data-challan-match="24Q|2026-27|Q1"]').count() == 1 and placed == {"chSal": 2, "chSal2": 1} and J("TDSMatch.suggestNow('24Q', '2026-27', 'Q1').length") == 0,
+           "Form 138: the same Challans tab; the salary sheet's TDS placed by rule as the return opens (%s)" % placed)
         f = J("TDS24Q_FILE.build('2026-27', 'Q1', TDS26Q.firmDetails())")
         ok(not f.get("error") and len(recs(f["text"], "CD")) == 2 and len(recs(f["text"], "DD")) == 3, "Form 138 from the salary sheet: CD and DD records (%s)" % (f.get("error") or ""))
         pg.evaluate("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(500)
