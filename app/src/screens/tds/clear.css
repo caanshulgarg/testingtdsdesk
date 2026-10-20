@@ -420,7 +420,6 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 /* next-tds-interest: the Interest & fee section (Validate & file) and the grid's allocated boxes */
 .vf-int { margin: 4px 0 0; min-width: 0; max-width: 100%; }
 .vf-int .bk-tablewrap { margin: 6px 0 0; max-width: 100%; overflow-x: auto; }
-.vf-fee { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 8px 0 4px; font-size: 13.5px; }
-.vf-fee > b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.vf-snote { display: block; font-size: 12px; font-weight: 400; }
 .chg-in { width: 92px; max-width: 100%; text-align: right; font: inherit; font-variant-numeric: tabular-nums; padding: 2px 6px; border: 1px solid var(--border, var(--rule)); border-radius: var(--radius-control, 6px); background: var(--surface-raised, var(--sheet)); color: inherit; }
 .chg-in:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -1px; }

@@ -2,6 +2,9 @@
 /* TDS: deductions from the books, challans, and what is paid by what */
 /* ================================================================== */
 const TDS = {
+  // the owner (20-Oct-2026): "warning less than ₹10 should not be there": a money difference under this is no warning on
+  // the TDS pages (Certs.issues, TDSMatch.warnShort, Validate & file; the figures stay in the Interest & fee table)
+  MIN_WARN: 10,
   // the usual rates, tax year 2026-27 (tax-accuracy: 194H 2%, 194D 2% for others than companies, 194-IB 2%, 194-O 0.1%
   // since the Finance (No. 2) Act, 2024; 194T from April 2025); non-resident rates with and without the 4% cess
   STD: {"192B": [], "193": [10], "194": [10], "194A": [10], "194B": [30], "194BB": [30], "194C": [1, 2], "194D": [2, 10], "194DA": [2], "194G": [2], "194H": [2],

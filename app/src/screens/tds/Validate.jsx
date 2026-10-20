@@ -76,7 +76,7 @@ export function checkReturn(fy, q, form) {
     if (sheet) {
       ch = TDS24Q.checks(fy, q);
       const a1 = TDS24Q.annexI(fy, q), inBooks = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q), bt = r2(inBooks.reduce((a, r) => a + r.tds, 0)), stx = r2(a1.reduce((s, e) => s + e.tds, 0));
-      if (inBooks.length && Math.abs(bt - stx) >= 1) ch = ch.concat([{ what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length, how: "Tally has " + money(bt) + " under section 192 this quarter; the sheet has " + money(stx) + ".", who: Array.from(new Set(inBooks.map((r) => r.party))).slice(0, 3) }]);
+      if (inBooks.length && Math.abs(bt - stx) >= TDS.MIN_WARN) ch = ch.concat([{ what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length, how: "Tally has " + money(bt) + " under section 192 this quarter; the sheet has " + money(stx) + ".", who: Array.from(new Set(inBooks.map((r) => r.party))).slice(0, 3) }]);
     } else if (tally) ch = Payroll.checks(fy, q);
     put(out.warnings, { k: "salary", n: ch.length, words: ch.length ? s_(ch.length, "salary check before filing", "salary checks before filing") + ": " + ch.map((c) => c.what.toLowerCase()).slice(0, 2).join("; ") : "", step: sheet ? "people" : undefined, review: true, list: ch });
   }
@@ -84,9 +84,11 @@ export function checkReturn(fy, q, form) {
   // line; the 234E fee due, one line; the figures in the Interest & fee section below (tds/Interest.jsx)
   const filed = TDSFiled.get(fy, q, form);
   let it = null; try { it = TDSMatch.interestTable(form, fy, q); } catch (e) { /* the matcher not loaded */ }
-  const short = it ? it.totals.short : 0, fee = it && !filed ? it.fee : null;
-  put(out.warnings, { k: "interest", n: short >= 1 ? 1 : 0, words: "Interest " + money(short) + " not allocated", step: "challans" });
-  if (fee && fee.fee > 0) out.warnings.push({ k: "fee", n: 1, words: "Late fee 234E " + money(fee.fee) + " due" });
+  // next-tds-interest2 (the owner, 20-Oct-2026): no warning once allocated (more than due is covered), none under ₹10
+  // (TDS.MIN_WARN); the 234E fee as allocated on the Challans grid (Fee 234E allocated)
+  const short = it ? it.totals.short : 0, feeShort = it && !filed ? it.totals.feeShort : 0, big = (v) => TDSMatch.warnShort(v);
+  put(out.warnings, { k: "interest", n: big(short) ? 1 : 0, words: "Interest " + money(short) + " not allocated", step: "challans" });
+  if (big(feeShort)) out.warnings.push({ k: "fee", n: 1, words: "Late fee 234E " + money(feeShort) + " due", step: "challans" });
   mc.warn.forEach((x, i) => put(out.warnings, { k: "m-" + x.k + i, n: 1, words: x.words, step: "challans" }));
   if (form !== "24Q") {
     let td = 0; try { td = TDSTally.disagreements().length + TDSTally.conflicts("challan").length + TDSTally.bad().length; } catch (e) { /* */ }

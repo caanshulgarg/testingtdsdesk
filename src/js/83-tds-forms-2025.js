@@ -259,11 +259,13 @@ const TDSF25 = {
       if (book && /^[AS]$/.test(cat) && !/^\d{7}$/.test(String(firm.ain || ""))) P("A book adjustment by a Central or State Government deductor needs the AIN of the PAO / DTO / CDDO (BH field 68, 7 digits).");
       // next-challan-match (the owner, 17-Oct-2026; GAPS.md Q2): fields 24 and 25 are the interest and the others ALLOCATED
       // to this statement (the register's portion, TDSReg.portionFor), 0.00 when none; the challan as deposited stays in
-      // fields 8 to 12. The fee portion is fee and others together, the fee first: the others' part of it goes to 25
+      // fields 8 to 12
       const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: 0, fee: 0};
       // (next-tds-interest: interest or fee allocated past the challan's own comes from its tax not used, TDSReg.setPortion:
       // written as allocated, not cut to fields 9 and 11)
-      const aI = r2(num(part.interest)), aE = r2(Math.max(0, num(part.fee) - D));
+      // next-tds-interest2: field 25 is the fees allocation (its remark: "Mention fees allocation"): the 234E fee and others
+      // allocated together
+      const aI = r2(num(part.interest)), aE = r2(num(part.fee));
       [[aI, "interest allocated"], [aE, "others allocated"]].forEach(([v, w]) => { if (Math.round(v * 100) % 100) P("Challan " + c.bsr + "/" + c.serial + ": its " + w + " " + this.money(v) + " has paise; the challan record takes whole rupees."); });
       return {c, mine, B, C, D, E, F, dep, no: ci + 1, book, aI, aE};
     });

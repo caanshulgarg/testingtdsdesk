@@ -97,7 +97,7 @@ try:
         cd0 = [l.split("^") for l in J(BUILD).split("\r\n") if "^CD^" in l and "^00101^" in l]
         ok(cd0 and cd0[0][8] == "150.00" and cd0[0][9] == "400.00" and cd0[0][23] == "0.00", "A4. no portion set: the challan as deposited (interest 150, fee 400), nothing allocated (field 24 0.00): next-challan-match, interest is allocated explicitly")
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 200, 0)"); ok(not r["ok"] and re.search(r"₹150(\.00)? free on this challan for interest", r["why"]), "A4. interest over its own limit refused (its tax all used: none to move, next-tds-interest): %s" % r.get("why"))
-        r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 500)"); ok(not r["ok"] and re.search(r"₹400(\.00)? free on this challan for the fee", r["why"]), "A4. fee over its own limit refused (%s)" % r.get("why"))
+        r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 500)"); ok(not r["ok"] and re.search(r"₹0(\.00)? free on this challan for others", r["why"]), "A4. fee and others 500 over the 400 fee (no others, its tax all used): the 100 of others refused (next-tds-interest2: the fee first, then others) (%s)" % r.get("why"))
         r = J("() => TDSReg.setPortion('chA', '26Q', '2026-27', 'Q1', 100, 400)"); ok(r["ok"], "A4. within each limit: given")
         # next-tds-forms-2025: Form 140 carries the challan as deposited (fields 9, 10) and the interest allocation "as
         # provided in field no. 9" (field 24), as Protean's file format 1.1 says; the portion stays in FinCom's register (a
@@ -105,7 +105,7 @@ try:
         cdA = [l.split("^") for l in J(BUILD).split("\r\n") if "^CD^" in l]
         ok(any(c[8] == "150.00" and c[9] == "400.00" and c[23] == "100.00" for c in cdA), "A4. Form 140's challan record: the challan as deposited (interest 150, fee 400) and the interest allocated here, 100 (field 24)")
         r = J("() => TDSReg.setPortion('chA', '27Q', '2026-27', 'Q1', 60, 0)"); ok(not r["ok"] and re.search(r"₹50(\.00)? free on this challan for interest", r["why"]), "A4. another return gets only what is left (%s)" % r.get("why"))
-        ok(J("() => TDSReg.balance(TDS.challans().find(c => c.id === 'chA'))") == {"tax": 0, "interest": 50, "fee": 0, "total": 50}, "A4. the balance by head: tax 0, interest 50, fee 0")
+        ok({k: v for k, v in J("() => TDSReg.balance(TDS.challans().find(c => c.id === 'chA'))").items() if k in ("tax", "interest", "fee", "total")} == {"tax": 0, "interest": 50, "fee": 0, "total": 50}, "A4. the balance by head: tax 0, interest 50, fee 0")
         # filed: locked
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; }")
         r = J("(b) => TDSCH.untag(b.slice(0, 1))", may194c); ok(not r["ok"] and "locked" in r["why"], "A5. untag on a filed return refused: %s" % r.get("why"))

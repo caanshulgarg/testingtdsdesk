@@ -74,7 +74,7 @@ const Certs = {
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
       const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);
-      if (Math.abs(e.rate - r.rate) < 0.05 || Math.abs(short) < 1) return;
+      if (Math.abs(e.rate - r.rate) < 0.05 || Math.abs(short) < TDS.MIN_WARN) return;
       out.push({row: r, expected: e.rate, why: e.why, short});
     });
     return out.sort((a, b) => Math.abs(b.short) - Math.abs(a.short));

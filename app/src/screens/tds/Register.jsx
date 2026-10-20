@@ -202,8 +202,8 @@ function ChallanDetail({ x, cx }) {
   const c = x.c, [act, setAct] = useState(S.regSetType === c.id ? "type" : "");
   const hand = TDSReg.srcOf(c) === "hand", noEdit = TDSReg.canEdit(c), noDel = TDSReg.canDelete(c), trail = TDSReg.trail(c.id).slice(0, 30);
   const sp = TDSReg.split(c), pu = TDSReg.portionsUsed(c, cx), bal = TDSReg.balance(c, cx), usedTax = TDSReg.usedTax(c, cx);
-  const feeUsed = r2(Math.min(num(c.fee), pu.fee)), othersUsed = r2(pu.fee - feeUsed);
-  const heads = [["Tax", sp.tax, usedTax, bal.tax], ["Interest", sp.interest, pu.interest, bal.interest], ["Fee", sp.fee, feeUsed, r2(sp.fee - feeUsed)], ["Others", sp.others, othersUsed, r2(sp.others - othersUsed)]];
+  // next-tds-interest2: the 234E fee and others allocated apart (TDSReg.pp); past its own, a head draws on the tax (bal)
+  const heads = [["Tax", sp.tax, usedTax, bal.tax], ["Interest", sp.interest, pu.interest, bal.interest], ["Fee", sp.fee, pu.fee234, bal.fee234], ["Others", sp.others, pu.others, bal.others]];
   const [tc, tw] = tracesWords(c), ent = voucherWords(c);
   const off = (u) => { const r = TDSReg.removeUse(c.id, u.form, u.fy, u.q); if (!r.ok) { toast(r.why); return; }
     toast("Taken off " + u.form + " " + u.q + " " + u.fy + ".", { actions: [{ label: "Undo", run: () => { TDSReg.undoRemove(r); render(); } }] }); render(); };

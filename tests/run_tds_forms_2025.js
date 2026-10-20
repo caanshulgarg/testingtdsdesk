@@ -95,8 +95,8 @@ function against(form, text, label){
     if (cents(c[21]) !== mine.reduce((a, d) => a + cents(d[23]), 0)) bad.push("CD " + c[3] + " field 22: the sum of DD field 24");
     // next-challan-match (the owner, 17-Oct-2026; GAPS.md Q2): fields 24 and 25 are what is ALLOCATED to this statement
     // (0.00 when none), never more than the challan's interest and others as deposited (fields 9, 11)
-    if (!/^\d+\.00$/.test(c[23]) || !/^\d+\.00$/.test(c[24]) || cents(c[23]) > cents(c[8]) || cents(c[24]) > cents(c[10])) bad.push("CD " + c[3] + " fields 24, 25: allocated, within fields 9, 11 (" + [c[23], c[24], c[8], c[10]] + ")");
-    if (cents(c[11]) < cents(c[20]) + cents(c[23]) + cents(c[24]) + (c[12] === "C" ? cents(c[9]) : 0)) bad.push("CD " + c[3] + " field 12: not less than the deductees' tax + the allocations (+ the fee)");
+    if (!/^\d+\.00$/.test(c[23]) || !/^\d+\.00$/.test(c[24]) || cents(c[23]) > cents(c[8]) || cents(c[24]) > cents(c[9]) + cents(c[10])) bad.push("CD " + c[3] + " fields 24, 25: allocated, within fields 9, 10 + 11 (" + [c[23], c[24], c[8], c[9], c[10]] + ")");
+    if (cents(c[11]) < cents(c[20]) + cents(c[23]) + cents(c[24])) bad.push("CD " + c[3] + " field 12: not less than the deductees' tax + the allocations (field 25: the fee and others, next-tds-interest2)");
   });
   dds.forEach((d, i) => {
     const k = dds.slice(0, i + 1).filter(z => z[4] === d[4]).length;

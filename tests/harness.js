@@ -15,6 +15,9 @@ function load(htmlPath, names){
   // the 2B matching rules shared with the server (server/_shared/match2b.js, at the head of the app): always loaded too,
   // since GST2B.fromJson reads a 2B through them
   names = decl.filter(d => /^(m2b|M2B_)/.test(d.name) && !names.includes(d.name)).map(d => d.name).concat(names);
+  // next-tds-interest2: TDSReg's allocation actions live in src/js/86 (TDSRegActs, put on TDSReg there): loaded with TDSReg
+  const ri = names.indexOf("TDSReg");
+  if (ri >= 0 && !names.includes("TDSRegActs") && decl.some(d => d.name === "TDSRegActs")) names = names.slice(0, ri + 1).concat(["TDSRegActs"], names.slice(ri + 1));
   const parts = names.map(n => {
     const k = decl.findIndex(d => d.name === n);
     if (k < 0) throw new Error("not found: " + n);

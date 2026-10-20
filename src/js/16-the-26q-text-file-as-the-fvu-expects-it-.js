@@ -335,8 +335,9 @@ const TDS26Q = {
     const put = (type, vals) => { ln++; lines.push([ln].concat(this.oldRec(type, vals)).join("^")); };
     const cds = chs.map(({c, part, dds}) => {
       const sum = n => r2(dds.reduce((a, d) => a + num(d[n]), 0));
-      const tax = sum(14), interest = r2(num(part.interest)), fee = r2(num(part.fee));
-      return {c, dds, tax, interest, fee, total: r2(tax + interest + fee), deposited: sum(19), deducted: sum(17)};
+      // (next-tds-interest2: the 234E fee in its own field 39, others in 26 and 35)
+      const tax = sum(14), interest = r2(num(part.interest)), others = r2(num(part.others)), fee = r2(num(part.fee) - others);
+      return {c, dds, tax, interest, fee, others, total: r2(tax + interest + fee + others), deposited: sum(19), deducted: sum(17)};
     });
     const earlier = this.oldEarlier(form, fy, q), mobile = firm.personMobile || firm.personPhone || "";
     const salaryTotal = r2((sds || []).reduce((a, s) => a + num(s[19]), 0));
@@ -351,8 +352,8 @@ const TDS26Q = {
       70: form === "24Q" && q === "Q4" ? "0" : "", 71: form === "24Q" && q === "Q4" ? "0.00" : ""});
     cds.forEach((x, ci) => {
       put("CD", {3: "1", 4: ci + 1, 5: x.dds.length, 6: "N", 12: x.c.serial, 16: x.c.bsr, 18: dmy(x.c.date),
-        22: money(x.tax), 23: "0.00", 24: "0.00", 25: money(x.interest), 26: "0.00", 27: money(x.total), 29: money(x.deposited), 30: money(x.tax), 31: "0.00", 32: "0.00",
-        33: money(x.deducted), 34: money(x.interest), 35: "0.00", 37: "N", 39: money(x.fee), 40: String(x.c.minorHead || "200")});
+        22: money(x.tax), 23: "0.00", 24: "0.00", 25: money(x.interest), 26: money(x.others), 27: money(x.total), 29: money(x.deposited), 30: money(x.tax), 31: "0.00", 32: "0.00",
+        33: money(x.deducted), 34: money(x.interest), 35: money(x.others), 37: "N", 39: money(x.fee), 40: String(x.c.minorHead || "200")});
       x.dds.forEach((d, di) => put("DD", Object.assign({3: "1", 4: ci + 1, 5: di + 1, 6: "O"}, d)));
     });
     (sds || []).forEach((s, i) => {

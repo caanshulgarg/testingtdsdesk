@@ -94,52 +94,29 @@ const TDSReg = {
   // a challan's interest and fee by return: what a person allocated (chPortions), and nothing else. next-challan-match (the
   // owner, 17-Oct-2026; FVU 1.2's "interest allocated" / "others allocated"): interest and fee are ALLOCATED to a return
   // explicitly, the Challans tab offering the amount (TDSMatch.defaultPortion); none allocated, the return's file carries
-  // 0.00. (Before, none set gave the whole to the challan's home return by itself.) The fee portion is the fee and others
-  // together, the fee first (the register's split, tds/Register.jsx)
+  // 0.00. (Before, none set gave the whole to the challan's home return by itself.) next-tds-interest2 (the owner, 20-Oct-2026):
+  // the 234E fee and the others each allocated apart ({interest, fee, others}); one kept before as fee alone is the fee and
+  // others together, the fee first (pp). fee: the two together, as the files and lists before read it; fee234, others: each
   portions(c){ return ((this.books().chPortions || {})[c && c.id]) || null; },
   explicit(c){ return !!this.portions(c); },
-  portionsUsed(c, cx){ const v = Object.values(this.portions(c, cx) || {}), s = (f) => r2(v.reduce((a, x) => a + num(x[f]), 0)); return {interest: s("interest"), fee: s("fee")}; },
+  pp(c, x){ const t = num(x.fee), f = "others" in x ? t : Math.min(t, num(c.fee)), o = "others" in x ? num(x.others) : r2(t - f); return {interest: num(x.interest), fee: r2(f + o), fee234: f, others: o}; },
+  portionsUsed(c, cx){ const v = Object.values(this.portions(c, cx) || {}).map(x => this.pp(c, x)), s = (f) => r2(v.reduce((a, x) => a + x[f], 0)); return {interest: s("interest"), fee: s("fee"), fee234: s("fee234"), others: s("others")}; },
   // what a return uses of every challan: its own share (the return's Challans figure; the TDS review, M6)
   usedBy(fy, q, form, cx){ const k = this.key(form, fy, q); return r2(Object.values((cx || this.ctx()).uses).reduce((a, m) => a + num((m[k] || {}).tax), 0)); },
   // what is left of a challan, by head: {tax, interest, fee, total}. Tax: less what its deductions use and what was moved
   // to interest or fee (next-tds-interest, the owner, 20-Oct-2026: interest or fee allocated past the challan's own, from
   // its free tax, one way only); interest and fee: less what was given to returns
   balance(c, cx){
-    const pu = this.portionsUsed(c, cx), oi = r2(pu.interest - num(c.interest)), of = r2(pu.fee - this.feeOf(c)), M = (v) => Math.max(0, v);
-    const interest = M(-oi), fee = M(-of), tax = r2(num(c.tax) - this.usedTax(c, cx) - M(oi) - M(of));
-    return {tax, interest, fee, total: r2(tax + interest + fee)};
+    const pu = this.portionsUsed(c, cx), M = (v) => Math.max(0, v), oi = r2(pu.interest - num(c.interest)), of = r2(pu.fee234 - num(c.fee)), oo = r2(pu.others - num(c.others));
+    const interest = M(-oi), fee234 = M(-of), others = M(-oo), fee = r2(fee234 + others), tax = r2(num(c.tax) - this.usedTax(c, cx) - M(oi) - M(of) - M(oo));
+    return {tax, interest, fee, fee234, others, total: r2(tax + interest + fee)};
   },
   usedTax(c, cx){ return r2((cx || this.ctx()).use[c.id] || 0); },
   // the interest and fee a return's file carries for a challan: its portion (portions: a person's, else all to the home return)
   portionFor(c, form, fy, q, cx){
-    const x = (this.portions(c, cx) || {})[this.key(form, fy, q)] || {};
-    return {interest: num(x.interest), fee: num(x.fee), set: this.explicit(c)};
+    return Object.assign(this.pp(c, (this.portions(c, cx) || {})[this.key(form, fy, q)] || {}), {set: this.explicit(c)});
   },
-  // give a return a part of a challan's interest and fee; past the challan's own, from its free tax (balance); refused past
-  // what the challan holds, and on a locked return
-  setPortion(chId, form, fy, q, interest, fee, opt){
-    const b = S.books, c = this.chOf(chId);
-    if (!b || !c) return {ok: false, why: "No such challan."};
-    if (this.locked(fy, q, form)) return {ok: false, why: this.lockWords(fy, q, form)};
-    const k = this.key(form, fy, q), cur = JSON.parse(JSON.stringify(this.portions(c) || {}));
-    const others = (f) => r2(Object.keys(cur).filter(x => x !== k).reduce((a, x) => a + num(cur[x][f]), 0));
-    interest = r2(num(interest)); fee = r2(num(fee));
-    if (interest < 0 || fee < 0) return {ok: false, why: "An amount cannot be below nil."};
-    const M = (v) => Math.max(0, v), hi = r2(num(c.interest) - others("interest")), hf = r2(this.feeOf(c) - others("fee"));
-    const over = M(interest - hi) + M(fee - hf), room = r2(num(c.tax) - this.usedTax(c) - M(-hi) - M(-hf));
-    if (over > 0.005 && TDSCH.p(over) > TDSCH.p(room)){
-      const fi = r2(M(hi) + M(room)), i = interest > fi, x = i ? fi : r2(M(hf) + M(room - M(interest - hi)));
-      return {ok: false, why: money(x) + " free on this challan for " + (i ? "interest" : "the fee") + ": " + money(r2((i ? interest : fee) - x)) + " more cannot be given."};
-    }
-    const was = cur[k] ? Object.assign({}, cur[k]) : null;
-    if (interest || fee) cur[k] = {interest, fee}; else delete cur[k];
-    const all = Object.assign({}, b.chPortions || {});
-    if (Object.keys(cur).length) all[chId] = cur; else delete all[chId];
-    b.chPortions = all;
-    this.log({act: "portion", ch: c, form, fy, q, interest, fee, note: this.notes(c, form, fy, q).join("; ")});
-    if (!(opt && opt.nosave)){ this.done(); saveBooks(); }
-    return {ok: true, was};
-  },
+  // setPortion, useBalance, undoUse, removeUse, undoRemove: in src/js/86 (the TDS screens' own file; legacy.js's size)
   // ---------------- notes: other form, earlier period (allowed, said) ----------------
   notes(c, form, fy, q){
     const out = [], nf = this.homeForm(c), cfy = TDS.fyOf(c.date), cq = TDS.qOf(c.date);
@@ -242,67 +219,6 @@ const TDSReg = {
   // next-challan-match: the "Auto-allocate N" button (autoAllocate) and the one-click suggestions of other forms' and
   // earlier periods' balances (suggestions) are gone: the one matcher (TDSMatch, src/js/86) suggests, a person confirms.
   // ---------------- one rule, one function: a challan's balance used by a return ----------------
-  // The register's "Use…" and a return's "Add from register" (and its one-click suggestions) are this one call: the
-  // return's open deductions, oldest first, each whole, up to the amount given (never past the challan's tax left);
-  // interest and fee, when given, added to the return's portion (setPortion's limit). Refused, nothing changed, over
-  // any balance or on a return marked filed. only(r): which deductions may be used (a new challan's own placing).
-  // {ok, why, n, ids, tax, interest, fee, short, was (the portion before, for Undo)}
-  useBalance(chId, form, fy, q, amount, interest, fee, via, only){
-    const c = this.chOf(chId);
-    if (!c) return {ok: false, why: "No such challan."};
-    form = form || "26Q";
-    if (!this.FORMS.includes(form) || !/^Q[1-4]$/.test(q || "") || !/^\d{4}-\d{2}$/.test(fy || "")) return {ok: false, why: "Choose the form, the year and the quarter."};
-    if (this.locked(fy, q, form)) return {ok: false, why: this.lockWords(fy, q, form)};
-    const cx = this.ctx(), bal = this.balance(c, cx), want = r2(num(amount)), wi = r2(num(interest)), wf = r2(num(fee));
-    if (want < 0 || wi < 0 || wf < 0) return {ok: false, why: "An amount cannot be below nil."};
-    if (!want && !wi && !wf) return {ok: false, why: "Give the amount to use."};
-    if (TDSCH.p(want) > TDSCH.p(bal.tax)) return {ok: false, why: money(bal.tax) + " left on this challan: " + money(r2(want - bal.tax)) + " more cannot be used."};
-    let room = TDSCH.p(want); const ids = [];
-    this.openRows(fy, q, form, cx).filter(r => !only || only(r)).forEach(r => { if (TDSCH.p(r.tds) <= room){ room -= TDSCH.p(r.tds); ids.push(r.id); } });
-    if (want && !ids.length) return {ok: false, why: "No open deduction of " + form + " " + q + " " + fy + " fits within " + money(want) + "."};
-    let n = 0, tax = 0, was = null;
-    if (ids.length){
-      const r = TDSCH.tag(ids, chId, {via: via || "balance", cx, nosave: true});
-      if (!r.ok) return r;
-      n = r.n; tax = r2(ids.reduce((a, id) => a + cx.byRow[id].r.tds, 0));
-    }
-    if (wi || wf){
-      const cur = this.portionFor(c, form, fy, q, cx);
-      const r = this.setPortion(chId, form, fy, q, r2(cur.interest + wi), r2(cur.fee + wf), {nosave: true});
-      if (!r.ok){ if (ids.length) TDSCH.untag(ids, {cx, nosave: true}); return r; }
-      was = r.was || {interest: 0, fee: 0};
-    }
-    this.done(); saveBooks();
-    return {ok: true, n, ids, tax, interest: wi, fee: wf, short: r2(want - tax), was, chId, form, fy, q};
-  },
-  // Undo of a use: its deductions off again, its portion as it was
-  undoUse(r){
-    if (!r || !r.ok) return {ok: false};
-    if (r.ids && r.ids.length){ const u = TDSCH.untag(r.ids, {nosave: true}); if (!u.ok) return u; }
-    if (r.was) this.setPortion(r.chId, r.form, r.fy, r.q, r.was.interest, r.was.fee, {nosave: true});
-    this.done(); saveBooks(); return {ok: true};
-  },
-  // the return's open total: what "Use…" fills in (the balance, or less when the return needs less)
-  openTotal(fy, q, form, cx){ return r2(this.openRows(fy, q, form, cx).reduce((a, r) => a + r.tds, 0)); },
-  // a return's use of a challan taken off: its deductions untagged and its interest and fee portion cleared; refused when
-  // filed. {ok, ids, was} (for Undo: use them again)
-  removeUse(chId, form, fy, q){
-    const c = this.chOf(chId);
-    if (!c) return {ok: false, why: "No such challan."};
-    if (this.locked(fy, q, form)) return {ok: false, why: this.lockWords(fy, q, form)};
-    const cx = this.ctx(), u = (cx.uses[chId] || {})[this.key(form, fy, q)], ids = u ? u.ids.slice() : [];
-    if (ids.length){ const r = TDSCH.untag(ids, {cx, nosave: true}); if (!r.ok) return r; }
-    const p = this.explicit(c) ? this.portions(c, cx) : null, was = p && p[this.key(form, fy, q)] ? Object.assign({}, p[this.key(form, fy, q)]) : null;
-    if (was) this.setPortion(chId, form, fy, q, 0, 0, {nosave: true});
-    this.done(); saveBooks();
-    return {ok: true, n: ids.length, ids, was, chId, form, fy, q};
-  },
-  undoRemove(r){
-    if (!r || !r.ok) return {ok: false};
-    if (r.ids.length){ const t = TDSCH.tag(r.ids, r.chId, {via: "tag", nosave: true}); if (!t.ok) return t; }
-    if (r.was) this.setPortion(r.chId, r.form, r.fy, r.q, r.was.interest, r.was.fee, {nosave: true});
-    this.done(); saveBooks(); return {ok: true};
-  },
   // the open returns a challan may be used by: every form and quarter with deductions, of any year (a challan may pay a
   // later return from its unused balance, or an earlier one paid late), not marked filed (or under correction); its own
   // return first. [{form, fy, q, open (₹ still on no challan), own}]
