@@ -47,7 +47,7 @@ const MIS = {
       const n = FS.nature(l);
       if (n.rev){
         c = c || FS.cfg(S.books);
-        const w = (c.map || {})[l] || FS.place(l, 0, c.kind), s = w === "pur" && c.mfg ? "mat" : w;
+        const w = (c.lmap || c.map || {})[l] || FS.place(l, 0, c.kind), s = w === "pur" && c.mfg ? "mat" : w;
         const h = s === "mat" || s === "pur" || s === "chg" ? "pur" : s === "exp" ? (n.gp ? "dir" : "exp") : s === "exc" ? "exp" : s;
         return this.HEADS.some(z => z[0] === h) ? {s, h} : null;
       }

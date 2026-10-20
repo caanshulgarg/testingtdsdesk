@@ -52,6 +52,7 @@ run_figures_agree.py                     120  TDSDESK_SITE=../app/dist-test
 run_fixture_books.js                  120
 run_fs.js                             120
 run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
+run_fin_statements.js                 120
 run_gateway_errors.js                 120
 run_group_case.js                     120
 run_gst9.js                           120

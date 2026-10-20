@@ -1,0 +1,60 @@
+{
+"groups": {
+"Asha Rao Capital": "Capital Account",
+"Vikram Sen Capital": "Capital Account",
+"Asha Rao Drawings": "Capital Account",
+"Vikram Sen Drawings": "Capital Account",
+"Asha Rao Current A/c": "Capital Account",
+"Profit & Loss A/c": "Reserves & Surplus",
+"Laptop": "Fixed Assets",
+"Accumulated Depreciation - Laptop": "Fixed Assets",
+"Heron Foods": "Sundry Debtors",
+"Ibis Supplies": "Sundry Creditors",
+"GST Payable": "Duties & Taxes",
+"Kestrel Bank": "Bank Accounts",
+"Consultancy Fees": "Sales Accounts",
+"Partners' Remuneration": "Indirect Expenses",
+"Interest on Partners' Capital": "Indirect Expenses",
+"Salaries": "Indirect Expenses",
+"Rent": "Indirect Expenses",
+"Depreciation": "Indirect Expenses",
+"Office Expenses": "Indirect Expenses"
+},
+"o": {
+"Asha Rao Capital": -400000,
+"Vikram Sen Capital": -300000,
+"Asha Rao Drawings": 0,
+"Vikram Sen Drawings": 0,
+"Asha Rao Current A/c": -50000,
+"Laptop": 150000,
+"Accumulated Depreciation - Laptop": -50000,
+"Heron Foods": 300000,
+"Ibis Supplies": -80000,
+"GST Payable": -20000,
+"Kestrel Bank": 200000,
+"Profit & Loss A/c": 250000
+},
+"c": {
+"Asha Rao Capital": -400000,
+"Vikram Sen Capital": -300000,
+"Asha Rao Drawings": 120000,
+"Vikram Sen Drawings": 90000,
+"Asha Rao Current A/c": -50000,
+"Laptop": 150000,
+"Accumulated Depreciation - Laptop": -110000,
+"Heron Foods": 450000,
+"Ibis Supplies": -60000,
+"GST Payable": -25000,
+"Profit & Loss A/c": 250000,
+"Kestrel Bank": 765000
+},
+"plc": {
+"Consultancy Fees": -2400000,
+"Partners' Remuneration": 600000,
+"Interest on Partners' Capital": 84000,
+"Salaries": 500000,
+"Rent": 240000,
+"Depreciation": 60000,
+"Office Expenses": 36000
+}
+}

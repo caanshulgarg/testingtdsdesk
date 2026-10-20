@@ -5,8 +5,8 @@
 /* ================================================================== */
 const FS = {
   // what a group is, from Tally's own flags when the masters are read, else from the reserved names
-  nature(l){
-    const b = S.books || {}, info = b.groupInfo || {}, path = Books.groupPath(l), top = path[path.length - 1] || "";
+  nature(l, gp){
+    const b = S.books || {}, info = b.groupInfo || {}, path = gp || Books.groupPath(l), top = path[path.length - 1] || "";
     const x = ledLook(info, top) || ledLook(info, path[0]);     // the group in any capitals ("Cash-in-hand", "Cash-in-Hand")
     if (x) return {rev: x.rev, gp: x.gp, dr: x.dr, path, top};
     const t = top.toLowerCase();
@@ -42,11 +42,20 @@ const FS = {
   cfg(b){
     const c = Object.assign({kind: "co", mfg: false, map: {}, stock: {}, shares: "", face: ""}, (b && b.fs) || {});
     if (!c.kindSet){ const e = this.entityOf(b && b.cid && typeof S === "object" && S.companies ? S.companies[b.cid] : null).code; if (e) c.kind = e === "C" ? "co" : "nc"; }
+    // b.fs.map may hold a code of the financial statements (FinSt, src/js/88: "10A"): read here and in MIS as its line (lmap,
+    // not enumerable, so a setting saved from cfg() keeps the codes)
+    Object.defineProperty(c, "lmap", {value: Object.fromEntries(Object.entries(c.map || {}).map(([l, v]) => [l, this.lineOf(v)]))});
     return c;
   },
+  lineOf(v){
+    const m = /^(\d+)([A-Z])$/.exec(v || ""), k = m && m[2];
+    if (!m) return v === "none" ? "" : v;
+    return {3: k > "O" ? "capital" : "share", 4: "reserves", 30: "ltb", 31: "dtl", 32: "oltl", 5: "ACD".includes(k) ? "ltp" : "stp", 33: "stb", 6: "tp", 7: "ocl", 8: k === "E" ? "dep" : "ppe", 34: k === "D" ? "dep" : "intang", 35: "cwip", 36: "nci",
+      9: "dta", 38: k === "C" ? "onca" : "ltla", 37: "ci", 39: "inv", 10: "tr", 11: "cash", 12: "EK".includes(k) ? "oca" : "stla", 13: "rev", 14: "oth", 40: "mat", 41: "pur", 42: "chg", 15: "emp", 16: "fin", 17: "exp", 43: "exc", 22: "tax"}[m[1]] || "";
+  },
   // where a ledger goes by rule, before any choice by hand; bal is Tally's sign (a debit is negative)
-  place(l, bal, kind){
-    const n = this.nature(l), p = n.path.map(g => g.toLowerCase()), has = g => p.includes(g), up = l.toUpperCase();
+  place(l, bal, kind, gp){
+    const n = this.nature(l, gp), p = n.path.map(g => g.toLowerCase()), has = g => p.includes(g), up = l.toUpperCase();
     if (n.rev){
       if (!n.dr) return n.gp ? "rev" : "oth";
       if (n.gp) return has("purchase accounts") ? "pur" : "exp";
@@ -100,7 +109,7 @@ const FS = {
     const all = Array.from(new Set(Object.keys(close).concat(Object.keys(mv)))).sort();
     all.forEach(l => {
       const v = num(close[l]), n = this.nature(l);
-      const where = (c.map || {})[l] || this.place(l, v, c.kind);
+      const where = c.lmap[l] || this.place(l, v, c.kind);
       if (n.rev){
         // a revenue ledger with no entries in the year: listed at nil (the Mapping tab lists every ledger)
         if (!R.rows.some(r => r.l === l)){ const k = (MIS.plHead(l, c) || {}).s || where; (plDet[k] = plDet[k] || []).push([l, 0]); }
@@ -126,7 +135,7 @@ const FS = {
     const sec = s2 => lines.filter(z => z[2] === s2).reduce((a, z) => a + num(put[z[0]]), 0);
     const eqL = r2(sec("EQ") + sec("NCL") + sec("CL")), assets = r2(sec("NCA") + sec("CA"));
     // last year, when the balances before the year are known
-    const py = {}; all.forEach(l => { const v = num(open[l]); if (!v || this.nature(l).rev) return; const where = (c.map || {})[l] || this.place(l, v, c.kind), side = lines.find(z => z[0] === where);
+    const py = {}; all.forEach(l => { const v = num(open[l]); if (!v || this.nature(l).rev) return; const where = c.lmap[l] || this.place(l, v, c.kind), side = lines.find(z => z[0] === where);
       const liab = side && ["EQ", "NCL", "CL"].includes(side[2]); const k = side ? where : "ocl"; py[k] = r2((py[k] || 0) + (liab || !side ? v : -v)); });
     if (!integrated && num(stock.open)) py.inv = r2((py.inv || 0) + num(stock.open));
     const pyRev = r2(all.filter(l => this.nature(l).rev).reduce((a, l) => a + num(open[l]), 0));
@@ -138,8 +147,8 @@ const FS = {
     const pays = MIS.ageing(to, "p", close), recv = MIS.ageing(to, "r", close), msme = MIS.msme();
     // each asset with its line (review of 02-Oct-2026: CRM Software and Tally Software were in the PPE table and under
     // intangible assets too): the PPE note lists the PPE, the intangible assets' note the intangibles
-    const fa = all.filter(l => ["ppe", "intang", "cwip"].includes((c.map || {})[l] || this.place(l, num(close[l]), c.kind)) && !this.nature(l).rev).map(l => {
-      const o = -num(open[l]), cl = -num(close[l]), k = (c.map || {})[l] || this.place(l, num(close[l]), c.kind); let addn = 0, del = 0;
+    const fa = all.filter(l => ["ppe", "intang", "cwip"].includes(c.lmap[l] || this.place(l, num(close[l]), c.kind)) && !this.nature(l).rev).map(l => {
+      const o = -num(open[l]), cl = -num(close[l]), k = c.lmap[l] || this.place(l, num(close[l]), c.kind); let addn = 0, del = 0;
       (b.vouchers || []).forEach(v => { if (v.date < from || v.date > to || v.opt || v.cancel) return; v.ent.forEach(e => { if (e.l !== l) return; if (e.a < 0 && !/DEPRECIATION/i.test(v.narr || "")) addn += -e.a; else if (e.a > 0) del += e.a; }); });
       return {l, k, open: r2(o), add: r2(addn), del: r2(del), close: r2(cl)};
     }).filter(x => x.open || x.close || x.add || x.del);

@@ -15,6 +15,7 @@ import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import FixedAssets from "./FixedAssets.jsx";
+import "../../lib/finGlobals.js";   // ROUND 99: FinSt (src/js/88), the statements in the audit format, comes with this page
 
 const m = (v) => INR.format(r2(v || 0));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
