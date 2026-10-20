@@ -1,5 +1,5 @@
 /* next-tds-clear (19-Oct-2026; the owner: TDS "like ClearTax, not cluttered"): the TDS home, a return's frame (one header
-   line, one row of step tabs, one summary strip; round 94), Validate & file, the one-line rows and the drawers. At most three bands above
+   line, one row of step tabs; round 94; no summary strip, next-tds-tidy2), Validate & file, the one-line rows and the drawers. At most three bands above
    any table; one primary button a screen; red only for errors, amber for warnings, green for Filed / Processed / passed. */
 .rt-sp { flex: 1 1 auto; }
 .rt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; }
@@ -9,11 +9,6 @@
 .rt-prob { border: 0; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--warn-soft); color: var(--warn); }
 .rt-prob.bad { background: var(--bad-soft); color: var(--bad); }
 .rt-head .more-btn { min-width: 32px; justify-content: center; }
-.rt-strip { display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; padding: 0 2px; margin: 0 0 14px; font-size: 13px; }
-.rt-fig .rt-fl { color: var(--text-secondary, var(--muted)); }
-.rt-fig b { font-size: 14.5px; font-variant-numeric: tabular-nums; }
-.rt-fig small { color: var(--text-secondary, var(--muted)); font-size: 12px; }
-.rt-fig.bad b { color: var(--bad); }
 /* round 94: the steps as one row of underlined tabs (Arc's tab look, arc-clean.css §1, the same as other pages' tab rows),
    kept in view under the header as the page scrolls; the count muted after the label; a dot for a step with an error
    (red) or a warning (amber) */
@@ -228,7 +223,6 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #app #tdsDnTable .panbox.compact input { width: 70px; }
 #app #tdsDnTable .dd-ch { max-width: 172px; }
 @media (max-width: 1439px) { .dd-two { grid-template-columns: minmax(0, 1fr) 206px; } .dd-side { padding: 6px; } }
-#app #tdsDnTable th.dt, #app #tdsDnTable td.dt { width: 56px; }
 #app #tdsDnTable thead .hf-sel { width: 14px; min-width: 14px; max-width: 14px; }
 #app #tdsDnTable > tbody > tr > td.dt, #app #tdsDnTable > thead > tr > th.dt { padding-left: 5px !important; padding-right: 4px !important; }
 @media (max-width: 1439px) { .dd-chf { flex-direction: row; flex-wrap: wrap; column-gap: 8px; } }
@@ -373,11 +367,6 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 #app .chg-wrap table.chg-table.bk-table:not(.cards) tr > :first-child { padding-left: 10px; }
 #app .chg-wrap table.chg-table.bk-table:not(.cards) thead th, #app .wd-wrap table.wd-table.bk-table:not(.cards) thead th { padding: 8px 5px; }
 /* next-tds-addlist: filters, ticks and the bulk bar of Deductions by challan and + Add deduction; a name missing; a chip */
-.wd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; font-size: 13px; }
-#app .wd-filters input[type=search], .wd-filters input[type=search] { width: auto; min-width: 170px; flex: 1 1 170px; max-width: 260px; padding: 6px 10px; font: inherit; font-size: 13px; border: 1px solid var(--rule-strong, var(--border)); border-radius: 8px; background: var(--sheet, var(--surface-raised)); color: var(--ink); }
-#app .wd-filters select, .wd-filters select { width: auto; flex: 0 1 auto; min-width: 0; max-width: 100%; font-size: 13px; padding-top: 5px; padding-bottom: 5px; }
-.wd-fprob, .wd-tickall { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); white-space: nowrap; }
-.wd-tickall { margin: 0 0 4px; }
 .wd-bulk { position: sticky; bottom: calc(var(--rt-bottom, 0px) + 2px); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 14px; margin: 10px 0 0; border: 1.5px solid var(--brand); border-radius: 10px; background: var(--sheet, var(--surface-raised)); color: var(--ink); font-size: 13.5px; box-shadow: 0 -2px 10px rgb(0 0 0 / .08); }
 .wd-bulk b { font-variant-numeric: tabular-nums; }
 .wd-bulk .bad, .wd-bad { color: var(--bad); font-weight: 600; }
@@ -387,4 +376,32 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .wd-namefix { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .wd-namefix input { min-width: 160px; }
 .wd-cands td[data-wd-name] { white-space: normal; min-width: 140px; }
-@media (max-width: 760px) { #app .wd-filters input[type=search], .wd-filters input[type=search] { max-width: none; flex-basis: 100%; } #app .wd-filters select, .wd-filters select { flex: 1 1 140px; } .wd-bulk { gap: 4px 10px; padding: 7px 10px; } }
+@media (max-width: 760px) { .wd-bulk { gap: 4px 10px; padding: 7px 10px; } }
+
+/* next-tds-tidy2 (20-Oct-2026; the owner: "Alignment of columns should be done properly"): every table of a return the same
+   way: figures right-aligned with tabular figures under a right-aligned heading, never wrapped; a date one width, on one
+   line; text left; a PAN one width. The filters are in the headings (tds/ColF.jsx): the funnel beside the label */
+#app .rt table.bk-table > thead > tr > th, .rt-drawer table.bk-table > thead > tr > th { text-align: left; vertical-align: bottom; }
+#app .rt table.bk-table > * > tr > th.n, #app .rt table.bk-table > * > tr > td.n, .rt-drawer table.bk-table > * > tr > th.n, .rt-drawer table.bk-table > * > tr > td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#app .rt table.bk-table > * > tr > th.ac, #app .rt table.bk-table > * > tr > td.ac, #app .rt table.bk-table > * > tr > th.ck, #app .rt table.bk-table > * > tr > td.ck, .rt-drawer table.bk-table > * > tr > th.ac, .rt-drawer table.bk-table > * > tr > td.ac, .rt-drawer table.bk-table > * > tr > th.ck, .rt-drawer table.bk-table > * > tr > td.ck { text-align: center; }
+#app .rt table.bk-table > * > tr > th.dt, #app .rt table.bk-table > * > tr > td.dt, .rt-drawer table.bk-table > * > tr > th.dt, .rt-drawer table.bk-table > * > tr > td.dt { width: 108px; min-width: 108px; max-width: 108px; white-space: nowrap; font-variant-numeric: tabular-nums; box-sizing: border-box; }
+#app .rt table.bk-table > * > tr > th.pan, #app .rt table.bk-table > * > tr > td.pan, .rt-drawer table.bk-table > * > tr > th.pan, .rt-drawer table.bk-table > * > tr > td.pan { width: 112px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#app .rt table.bk-table > thead > tr > th .colh, .rt-drawer table.bk-table > thead > tr > th .colh { gap: 4px; max-width: 100%; }
+#app .rt table.bk-table > thead > tr > th.n .colh, .rt-drawer table.bk-table > thead > tr > th.n .colh { justify-content: flex-end; }
+#app .rt table.bk-table > thead > tr > th .colf.tcf, .rt-drawer table.bk-table > thead > tr > th .colf.tcf { width: 20px; height: 20px; flex: 0 0 auto; }
+#app .rt table.bk-table tfoot td.n, .rt-drawer table.bk-table tfoot td.n { font-weight: 600; }
+.tcf-pop .cp-list { max-height: 220px; }
+.tcf-shown { font-size: 12.5px; color: var(--text-secondary, var(--muted)); font-weight: 400; white-space: nowrap; }
+.wd-foot .tcf-shown { margin-left: auto; }
+tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
+/* the Add drawer's lists: the name column takes the room left, so the date stays its one width */
+.rt-drawer table.wd-cands > thead > tr > th:nth-child(2) { width: 60%; }
+/* the date headings may take two lines ("Deduction date" with its funnel); the dates under them never do */
+#app .rt table.bk-table > thead > tr > th.dt, .rt-drawer table.bk-table > thead > tr > th.dt { white-space: normal; }
+#app .rt table.bk-table > thead > tr > th.dt .colh, .rt-drawer table.bk-table > thead > tr > th.dt .colh { display: inline-flex; flex-wrap: nowrap; align-items: center; }
+#app .rt table.bk-table > thead > tr > th.dt .gfl, .rt-drawer table.bk-table > thead > tr > th.dt .gfl { white-space: normal; }
+/* a deduction with no party: the chip and Fix on one line, the reason one muted line under it (in full on a hover) */
+.wd-noname { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; max-width: 100%; }
+.wd-namewhy { display: block; flex-basis: 100%; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-secondary, var(--muted)); font-weight: 400; }
+.wd-namefix { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.wd-namefix input[data-wd-name-input] { min-width: 180px; }

@@ -293,7 +293,7 @@ export function PlainDeductions({ form, fy, q, extra }) {
     {c ? <ChallanTicker c={c} form={form} fy={fy} q={q} locked={locked} sugg={TDSMatch.suggest(form, fy, q)} mode="deductions" /> : <>
       <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-plain-table="">
         <thead><tr><th className="dt">Date</th><th>{form === "24Q" ? "Employee" : "Deductee"}</th><th>PAN</th><th>Section</th><th className="n">Paid</th><th className="n">TDS</th><th>Challan</th></tr></thead>
-        <tbody>{shown.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party || r.employee}</td><td>{r.pan || <span className="tag bad">no PAN</span>}</td><td>{TDS.sec(r.section)}</td>
+        <tbody>{shown.map((r) => <tr key={r.id}><td className="dt">{day(r.date)}</td><td>{r.party || r.employee}</td><td>{r.pan || <span className="tag bad">no PAN</span>}</td><td>{TDS.sec(r.section)}</td>
           <td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td><td><ChallanCell r={r} /></td></tr>)}</tbody></table></div>
       {!shown.length && <p className="note">No deduction matches these filters.</p>}</>}
   </div>;

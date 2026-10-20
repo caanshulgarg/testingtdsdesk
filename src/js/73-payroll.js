@@ -54,7 +54,9 @@ const Payroll = {
     const E = (x.employees || []).filter(e => e && e.guid && e.name).map(e => ({guid: e.guid, name: e.name, parent: e.parent || "", category: e.category || "", group: !!e.is_group,
       pan: String(e.pan || "").toUpperCase(), joined: TDS.ymd(e.joined), left: TDS.ymd(e.left_on), designation: e.designation || "", gone: !!e.gone_at}));
     const isEmp = new Set(E.filter(e => !e.group).map(e => normName(e.name)));
-    const A = (x.allocs || []).filter(a => live(a) && H[a.ledger] && isEmp.has(normName(a.centre)))
+    // next-tds-tidy2 (Leads, Q1 2026-27): a salary payment's or a TDS deposit's cost centres are not pay (the net paid to
+    // an employee on "Salary Payable" by employee, 7-Apr / 7-May, read as that day's salary): payroll entries only
+    const A = (x.allocs || []).filter(a => live(a) && H[a.ledger] && isEmp.has(normName(a.centre)) && !/payment|receipt|contra/i.test(V[a.guid].type))
       .map(a => ({guid: a.guid, day: V[a.guid].day, head: a.ledger, employee: a.centre, amt: r2(num(a.amount))}));
     const P = (x.pays || []).filter(p => live(p)).map(p => ({guid: p.guid, day: V[p.guid].day, ledger: p.ledger || "", employee: p.employee, amt: r2(Math.abs(num(p.amount))), paidOn: TDS.ymd(p.paid_on) || V[p.guid].day}));
     b.payroll = {book: x.book || "", at: new Date().toISOString(), employees: E, heads: H, allocs: A, pays: P, vouchers: V};
@@ -72,6 +74,9 @@ const Payroll = {
     if (/employer/i.test(t) || /gratuity/i.test(t)) return "employer";
     if (/deduction/i.test(t)) return "ded";
     if (!t.trim() && this.isTds(name)) return "ded";       // a TDS head Tally gave no type
+    // a ledger in payroll with no pay type ("Salary Payable", "EPF Payable") is no pay head: not salary (heads read before
+    // Bridge 2.4.4 carry no type at all: then earnings, as before)
+    if (!t.trim() && !this.headsOld()) return "other";
     return "earn";
   },
   isArrears(name){ return /\bar{1,2}ears?\b/i.test(String(name || "")); },
@@ -199,7 +204,7 @@ const Payroll = {
       heads.add(a.head); r.heads[a.head] = r2((r.heads[a.head] || 0) + v); r.vouchers.add(a.guid);
       if (kind === "earn") r.gross = r2(r.gross + v);
       else if (kind === "ded") r.ded = r2(r.ded + v);
-      else r[kind] = r2(r[kind] + v);
+      else if (kind !== "other") r[kind] = r2(r[kind] + v);
       if (this.isTds(a.head)) r.tds = r2(r.tds + v);
       if (this.isPT(a.head)) r.pt = r2(r.pt + v);
     });
@@ -236,6 +241,13 @@ const Payroll = {
     // head not read as TDS, an employee's TDS missing from the split) stays, as its own row "TDS not split by employee"
     // with a warning: never dropped. id "pay:<entry>|~"
     const split = {}; out.forEach(r => { const g = r.id.slice(4, r.id.indexOf("|")); split[g] = r2((split[g] || 0) + r.tds); });
+    // next-tds-tidy2: one row per employee per payroll month (a second entry of the month, arrears or a correction, added to
+    // the first's row, its id kept so its challan stays)
+    const mon = {};
+    out.sort((a, c) => String(a.date).localeCompare(String(c.date))).slice().forEach(r => { const k = normName(r.employee) + "|" + this.ym(r.date), f = mon[k];
+      if (!f){ mon[k] = r; return; }
+      f.paid = r2(f.paid + r.paid); f.tds = r2(f.tds + r.tds); f.rate = f.paid ? r2(f.tds / f.paid * 100) : null; if (r.note && !f.note){ f.note = r.note; f.arrears = r.arrears; }
+      f.also = (f.also || []).concat(r.id.slice(4, r.id.indexOf("|"))); out.splice(out.indexOf(r), 1); });
     (b.vouchers || []).forEach(v => {
       if (!v || !ents[v.id] || !d.vouchers[v.id] || typeof Books !== "object") return;
       const bk = r2((Books.lines(v).tds || []).filter(t => /^(192|392)/.test(String(t.section || ""))).reduce((a, t) => a + t.amount, 0)), gap = r2(bk - (split[v.id] || 0));

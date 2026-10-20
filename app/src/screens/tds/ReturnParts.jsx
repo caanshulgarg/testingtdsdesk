@@ -64,7 +64,7 @@ export function FixRows({ title, rows, unit = "deductions", go }) {
   if (!rows.length) return null;
   return <section className="dash-card" style={{ marginBottom: 12 }}><h3>{title}</h3>
     <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">TDS</th></tr></thead>
-      <tbody>{rows.slice(0, 300).map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td>{Certs.validPan(r.pan) ? r.pan : <span className="tag warn">no PAN</span>}</td><td>{r.section}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
+      <tbody>{rows.slice(0, 300).map((r) => <tr key={r.id}><td className="dt">{day(r.date)}</td><td>{r.party}</td><td>{Certs.validPan(r.pan) ? r.pan : <span className="tag warn">no PAN</span>}</td><td>{r.section}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
     {rows.length > 300 && <p className="note">The first 300 of {rows.length} {unit}.</p>}
     {go && <div className="row" style={{ marginTop: 6 }}>{go}</div>}
   </section>;

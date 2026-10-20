@@ -82,11 +82,13 @@ try:
         n0 = pg.locator("#tdsDnTable > tbody > tr").count()
         opts = pg.evaluate("[...document.querySelectorAll('#app select[aria-label=Section] option')].map(o => o.textContent)")
         ok(any(o.startswith("393(1) Sl. 6(i) [old 194C]") for o in opts), "the section filter: new and old (%s)" % opts[1:])
+        # next-tds-tidy2: the find box is the Deductee column's filter (its funnel)
+        pg.click('#app #tdsDnTable thead [data-cf="deductions:name"]'); pg.wait_for_timeout(200)
         for q, want in [("194C", "old number"), ("393(1) Sl. 6(i)", "new provision")]:
-            pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', q); pg.wait_for_timeout(500)
+            pg.fill('[data-cf-pop="deductions:name"] input[aria-label="Find a deductee, PAN, voucher or ledger"]', q); pg.wait_for_timeout(600)
             rows = pg.locator("#tdsDnTable > tbody > tr").count()
             ok(0 < rows < n0 and "194C" in pg.inner_text("#tdsDnTable > tbody"), "find by the %s “%s”: %d of %d" % (want, q, rows, n0))
-        pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
+        pg.keyboard.press("Escape"); pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(300)
         pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(300)
         ok(pg.locator('#app button:has-text("Make FVU file (draft)")').count() == 1 and pg.locator('#app [data-draft="140"]').count() == 1,
            "Validate & file: Make FVU file (a draft for Form 140) and the warning, one amber line")
@@ -158,6 +160,12 @@ try:
     # every figure and file, as before the redesign (the owner, 19-Oct-2026: the year page's "Should have deducted" list is
     # gone, the TDS not deducted being the Audit's alone; its amounts, not covered / TDS due / interest / 40(a)(ia), were
     # taken out of tdsgst-before.json for tds/2025-26/year and tds/2026-27/year)
+    # next-tds-tidy2 (the owner: "24Q ... I am not able to choose challan"): Form 138's Deductions picks a challan as 26Q's
+    # (this return's challans); the old list offered every challan of the books with its balance in a select. Those
+    # balances of other quarters' challans (₹8,92,000.00 … ₹8,98,000.00 on every 24Q page) were taken out; and the
+    # summary strip is gone by the owner's word ("TDS … · On challans … · Left ₹0.00 — we don't need that"): the certificates
+    # page, drawn under the last return opened (24Q Q4), showed that return's strip (₹0.00 left in 2025-26, TDS ₹8,000.00 in
+    # 2026-27): taken out of tds/2025-26/certs and tds/2026-27/certs
     before = json.load(open(os.path.join(HERE, "fixtures", "tdsgst-before.json")))
     after = snapshot(SITE, PORT + 1)
     d = compare(before, after)

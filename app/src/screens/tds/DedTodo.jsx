@@ -18,7 +18,7 @@ import { AddChallan } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { fixesOf } from "./DedSmart.jsx";
 import { openAllChallans } from "./AllChallans.jsx";
-import { chIds, chMissing, missingName } from "./onChallan.js";
+import { chIds, chMissing, missingName, chipW } from "./onChallan.js";
 import { DedName } from "./DedName.jsx";
 import "./clear.css";
 
@@ -70,8 +70,8 @@ export function groupOf(r, m, issue, probs, form, ids) {
 }
 
 const Cells = ({ r, prob }) => <>
-  <td className="dt-p">{r.party || r.employee ? <button type="button" className="linkbtn dt-name" data-row-detail={r.id} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party || r.employee}</button> : <DedName r={r} />}
-    {prob && prob.k !== "name" ? <span className="dt-flag" data-dt-flag={prob.k}>{prob.words}</span> : null}</td>
+  <td className="dt-p">{r.party || r.employee ? <button type="button" className="linkbtn dt-name" data-row-detail={r.id} onClick={() => { S.tdsRowDet = r.id; render(); }}>{r.party || r.employee}</button> : <DedName r={r} locked={!!(TDSReg.rowLocked && TDSReg.rowLocked(r.id))} />}
+    {prob && prob.k !== "name" ? <span className="dt-flag" data-dt-flag={prob.k} title={prob.words}>{chipW(prob)}</span> : null}</td>
   <td className="dt-s">{TDS.sec(r.section) || r.section}</td><td className="dt-d">{dm6(r.date)}</td>
   <td className="n dt-a">{money(r.paid)}</td><td className="n dt-t">TDS {money(r.tds)}</td></>;
 
@@ -87,7 +87,7 @@ function ConfirmRow({ r, x, locked }) {
   const c = TDS.challans().find((z) => z.id === x.s.chId);
   const yes = () => { const y = TDSCH.tag([r.id], x.s.chId, { via: "suggestion", note: "suggestion confirmed: " + x.s.words + (x.s.rule === "g" ? " (" + x.s.reason + ")" : "") }); if (!y.ok) toast(y.why); render(); };
   return <tr data-dt-row={r.id} data-dt-in="confirm"><Cells r={r} prob={x.prob} />
-    <td className="dt-act"><span className="dt-to" data-dd-sugg-cell={r.id}>→ Challan <b>{c ? chWords(c) : x.s.chId}</b> <span className="dt-why">({x.s.rule === "g" || x.s.ai ? "AI: " : ""}{x.s.words || x.s.reason})</span></span>
+    <td className="dt-act"><span className="dt-to" data-dd-sugg-cell={r.id}>→ Challan <b>{c ? chWords(c) : x.s.chId}</b> <span className="dt-why dt-short" title={(x.s.rule === "g" || x.s.ai ? "AI: " : "") + (x.s.words || x.s.reason || "")}>{x.s.rule === "g" || x.s.ai ? "AI" : "why?"}</span></span>
       {!locked && <span className="dt-btns"><button type="button" className="btn small dt-do" data-dd-sugg={r.id} data-dt-confirm={r.id} onClick={yes}>Confirm</button>
         <button type="button" className="btn small" data-dt-other={r.id} onClick={() => tdsMoveOpen([r.id])}>Other</button></span>}</td></tr>;
 }
@@ -97,9 +97,9 @@ function ChooseRow({ r, x, locked, cx }) {
   const pick = (id) => { const y = TDSMatch.move([r.id], id); if (!y.ok) toast(y.why); render(); };
   const split = () => (x.s ? tdsSplitOpen(x.s.key) : tdsSplitRow(r.id, best[0] ? best[0].c.id : ""));
   return <tr data-dt-row={r.id} data-dt-in="choose"><Cells r={r} prob={x.prob} />
-    <td className="dt-act">{x.miss ? <span className="dt-why bad" data-dt-miss={x.miss}>Its challan {missingName(x.miss)} is missing — choose again</span>
-      : fit.length ? <span className="dt-why">Pick the challan that paid it:</span>
-        : <span className="dt-why">{x.s ? x.s.reason : x.w ? x.w.words : "No one challan has enough left."}</span>}
+    <td className="dt-act">{x.miss ? <span className="dt-why bad" data-dt-miss={x.miss} title={"Its challan " + missingName(x.miss) + " is missing — choose again"}>Challan {missingName(x.miss)} missing</span>
+      : fit.length ? <span className="dt-why">Pick:</span>
+        : <span className="dt-why" title={x.s ? x.s.reason : x.w ? x.w.words : "No one challan has enough left."}>No challan fits</span>}
       {!locked && <span className="dt-btns">{fit.map((b) => <button key={b.c.id} type="button" className="btn small dt-pick dt-do" data-dt-pick={b.c.id} onClick={() => pick(b.c.id)}>
           {b.c.serial} · {dm6(b.c.date)}{chSec(b.c) ? " · " + chSec(b.c) : ""} · {money(b.left)} left</button>)}
         {!fit.length && best.length > 0 && <button type="button" className="btn small dt-do" data-dt-split={r.id} onClick={split}>Split across challans…</button>}
@@ -132,7 +132,7 @@ function FixRow({ r, x, issue, m, locked }) {
   const rate = p.k === "rate" ? fixesOf(r, issue, m).find((f) => f.k === "rate") : null;
   const c = r.challan ? TDS.challans().find((z) => z.id === r.challan) : null;
   return <tr data-dt-row={r.id} data-dt-in="fix"><Cells r={r} prob={null} />
-    <td className="dt-act"><span className="dt-fixw" data-dt-problem={p.k}>{p.words}</span>{c ? <span className="dt-why"> · on {c.serial} · {dm6(c.date)}</span> : null}
+    <td className="dt-act"><span className="dt-fixw" data-dt-problem={p.k} title={p.words}>{chipW(p)}</span>{c ? <span className="dt-why"> · on {c.serial} · {dm6(c.date)}</span> : null}
       {!locked && <span className="dt-btns">{p.k === "name" ? <span className="dt-why">Give its name: Fix, beside “Name missing”</span>
         : p.k === "early" || p.k === "sec" ? <button type="button" className="btn small dt-do" data-dt-fix={r.id} data-dt-move={r.id} onClick={() => tdsMoveOpen([r.id])}>Move to another challan…</button>
         : p.k === "pan" ? (pan ? <PanBox party={r.party || r.employee} compact onSaved={() => setPan(false)} />

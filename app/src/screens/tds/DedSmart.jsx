@@ -43,7 +43,7 @@ export function saveField(r, k, v) {
 export function Cell({ r, k, children, form, locked, next }) {
   const on = S.tdsCell && S.tdsCell.id === r.id && S.tdsCell.k === k;
   const [v, setV] = useState(null);
-  if (locked || form === "27EQ") return children;
+  if (locked || form === "27EQ" || form === "24Q") return children;
   const start = () => { S.tdsCell = { id: r.id, k }; setV(null); render(); };
   if (!on) return <span className="dd-cell" role="button" tabIndex={-1} data-cell-edit={k} title="Click to change" onClick={start}>{children}</span>;
   const cur = v != null ? v : k === "date" ? iso(r.date) : k === "credit" ? iso(r.credit || r.date) : k === "section" ? r.section : String(r[k] == null ? "" : r[k]);

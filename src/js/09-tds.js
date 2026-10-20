@@ -193,7 +193,7 @@ const TDS = {
     const b192 = this.allRows().filter(r => /^(192|392)/.test(String(r.section || ""))), books = typeof Payroll === "object" && Payroll.booksRows ? Payroll.booksRows(b192) : b192;
     if (!pay.length && !sheet.length) return books;
     const payFy = new Set(pay.map(r => r.fy)), sheetFy = new Set(sheet.map(r => r.fy).filter(fy => !payFy.has(fy)));
-    const covered = new Set(pay.map(r => r.id.slice(4, r.id.indexOf("|"))));
+    const covered = new Set(pay.map(r => r.id.slice(4, r.id.indexOf("|")))); pay.forEach(r => (r.also || []).forEach(g => covered.add(g)));
     return books.filter(r => !sheetFy.has(r.fy) && !covered.has(String(r.id).split("|")[0])).concat(pay, sheet.filter(r => sheetFy.has(r.fy)))
       .sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },

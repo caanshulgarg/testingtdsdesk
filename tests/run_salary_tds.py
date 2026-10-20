@@ -15,6 +15,12 @@ made up (the amounts are the client's, each kept against a made-up name).
   6. salary kept without payroll: journals "Salary Dr / TDS on Salary Cr / Salary <name> Cr" (a TDS ledger with no section
      number): one row per employee
   7. a year of payroll months and journal months together
+  9. next-tds-tidy2 (the owner on Leads' Form 138 Q1: "7 Apr salary, 30 Apr salary, 7 May salary"): the salary payments
+     (Payment vouchers whose "Salary Payable" line Tally allocates to each employee as a cost centre: 7-Apr the March
+     salary, 7-May the April salary) and the TDS deposit (TDS 192B debited, 30-Apr) are not deductions: one row per employee
+     per payroll month, dated the payroll entry; the pay register, Annexure II and Form 16 count no payment as salary
+ 10. Form 138's Deductions step as 26Q's: Select challan (the 192 challans), + Add deduction to this challan, tick boxes and
+     Move to this challan, the footer's balance; Remove from challan gives the balance back; Annexure I under ⋯
 Run under flock /tmp/fincom-app.lock with the other screen tests."""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -142,8 +148,13 @@ try:
         ok(y == 540000, "Form 16 / Annexure II: the year's TDS of an employee (%s)" % y)
         pg.wait_for_timeout(300)
         strip = pg.inner_text("#app")
-        ok("5,67,464" in strip, "the Form 138 Q1 page shows TDS ₹5,67,464")
-        ok(pg.locator('[data-list="q24Annex1"] tbody tr').count() == q1["n"], "Annexure I: one row per employee per month with pay (%d)" % q1["n"])
+        # next-tds-tidy2: no summary strip; the return's TDS is in the Deductees table's foot
+        pg.evaluate("() => { S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("+((document.querySelector('#app [data-dee-tds]') || {dataset: {}}).dataset.deeTds || 0)") == 567464 and "5,67,464" in pg.inner_text("#app [data-dee-total]"),
+           "the Form 138 Q1 page shows TDS ₹5,67,464 (Employees' foot)")
+        pg.evaluate("() => { S.tdsTab = 'deductions'; S.tdsDedView = 'table'; render(); }"); pg.wait_for_timeout(300)
+        ok(pg.locator('[data-list="q24Annex1"] tbody tr').count() == q1["n"], "Annexure I (Deductions › ⋯): one row per employee per month with pay (%d)" % q1["n"])
+        pg.evaluate("() => { S.tdsDedView = ''; render(); }")
         pg.screenshot(path=os.path.join(OUT, "q1-deductions.png"), full_page=True)
 
         print("== 2. the choice: \"This pay head is TDS\"")
@@ -237,7 +248,11 @@ try:
         ok(all(r["pan"] == "LMNPR4111V" for r in n1["rows"] if r["e"] == "Ram Prakash"), "the PAN of the \"Salary <name>\" ledger")
         pg.evaluate("() => { S.tdsTab = 'deductions'; render(); }"); pg.wait_for_timeout(300)
         t6 = pg.inner_text("#app")
-        ok("Ram Prakash" in t6 and "Meena Gupta" in t6 and "37,000" in t6, "the Form 138 page lists the employees and ₹37,000")
+        ok("Ram Prakash" in t6 and "Meena Gupta" in t6, "the Form 138 Deductions step lists the employees")
+        # next-tds-tidy2: the TDS (it was the summary strip's) in the Employees table's foot
+        pg.evaluate("() => { S.tdsTab = 'deductees'; render(); }"); pg.wait_for_timeout(300)
+        ok("37,000" in pg.inner_text("#app [data-dee-total]"), "the Form 138 page shows ₹37,000 (Employees' foot)")
+        pg.evaluate("() => { S.tdsTab = 'deductions'; render(); }"); pg.wait_for_timeout(300)
         pg.screenshot(path=os.path.join(OUT, "nonpayroll.png"), full_page=True)
 
         print("== 7. a year of payroll months and journal months")
@@ -253,6 +268,68 @@ try:
         ok(pg.evaluate("Payroll.annexI('2026-27', 'Q2').length") == q7["n"], "Annexure I carries both")
         ok(pg.evaluate("Payroll.yearOf(Payroll.empByName('LI Naveen Rawat'), '2026-27').tds") == 540000, "the year's TDS of an employee counts the journal month too")
         ok(pg.evaluate("TDS.salarySource('2026-27')") == "payroll", "the year's source stays Tally's payroll")
+
+        print("== 9. salary payments and the TDS deposit are not deductions (Leads, Q1 2026-27)")
+        def leads_tables():
+            T = payroll_tables()
+            def vch(g, day, vt, no):
+                T["tally_vouchers"].append({"guid": g, "alter_id": 5000 + len(T["tally_vouchers"]), "day": day, "vtype": vt, "vno": no, "party": "DBS Bank", "cancelled": False, "optional": False,
+                                            "deleted_at": None, "book_id": BOOK, "narration": "", "gstin": "", "cmp_gstin": "", "pos": "", "ref": "", "ref_date": "", "tds_tally": None, "tds_tally_alter_id": ""})
+            def alloc(g, day, led, cen, amt): T["tally_cost_allocs"].append({"guid": g, "alter_id": str(next(x["alter_id"] for x in T["tally_vouchers"] if x["guid"] == g)), "day": day, "ledger": led, "centre": cen, "amount": str(amt), "gone_at": None, "book_id": BOOK})
+            def line(g, led, amt): T["tally_lines"].append({"guid": g, "ledger": led, "amount": str(amt), "rate": "", "hsn": "", "book_id": BOOK})
+            # one NEFT a person on the 7th (as Leads pays): the March salary on 7-Apr, April's on 7-May, May's on 7-Jun;
+            # Tally allocates the "Salary Payable" debit to the employee as a cost centre
+            for day, src in (("2026-04-07", "2026-04-30"), ("2026-05-07", "2026-04-30"), ("2026-06-07", "2026-05-31")):
+                for i, (e, hs) in enumerate(sorted(PAY[src].items())):
+                    net = -sum(hs.values()); g = "li-neft-%s-%02d" % (day, i)
+                    vch(g, day, "Payment", "N%s%02d" % (day[5:7], i)); line(g, "Salary Payable", -net); line(g, "DBS Bank", net); alloc(g, day, "Salary Payable", e, -net)
+            # the TDS deposits: TDS 192B debited from the bank (one allocated to an employee's cost centre too)
+            for day, amt, cen in (("2026-04-30", 161563, "1Primary Cost"), ("2026-05-12", 188296, NAV), ("2026-06-06", 188296, "1Primary Cost")):
+                g = "li-tdsdep-" + day; vch(g, day, "Payment", "T" + day[5:7]); line(g, "TDS 192B", -amt); line(g, "DBS Bank", amt); alloc(g, day, "TDS 192B", cen, -amt)
+            return T
+        load(pg, leads_tables())
+        l1 = pg.evaluate(Q, ["2026-27", "Q1"])
+        days = sorted(set(r["date"] for r in l1["rows"]))
+        ok(days == ["20260430", "20260531", "20260630"], "Form 138 Q1 rows dated the payroll entries only, no 7-Apr / 7-May / 7-Jun salary payment, no 30-Apr deposit (%s)" % days)
+        per = {}
+        for r in l1["rows"]: per[(r["e"], r["date"][:6])] = per.get((r["e"], r["date"][:6]), 0) + 1
+        ok(l1["n"] == q1["n"] and max(per.values()) == 1, "one row per employee per payroll month (%d rows, as without the payments: %d)" % (l1["n"], q1["n"]))
+        ok(l1["tds"] == 567464 and {k: v for k, v in l1["by"].items() if v} == WANT_Q1 and not l1["unsplit"], "Q1 TDS ₹5,67,464, each employee as in Tally (%s)" % l1["tds"])
+        ok(all(r["tds"] >= 0 for r in l1["rows"]), "no negative TDS row from a deposit")
+        ok(pg.evaluate("Payroll.register('202604').rows.reduce((s, r) => s + r.gross, 0)") == pg.evaluate("Object.values(%s).reduce((s, h) => s - Object.entries(h).filter(([k]) => /Basic|HRA|Special|Conveyance/.test(k)).reduce((a, [, v]) => a + v, 0), 0)" % json.dumps(PAY["2026-04-30"])),
+           "the pay register's April gross is the payroll's (no salary payment in it)")
+        y9 = pg.evaluate("(() => { const s = Payroll.yearOf(Payroll.empByName('LI Naveen Rawat'), '2026-27'); return [s.tds, s.months, s.gross]; })()")
+        ok(y9[0] == 540000 and y9[1] == 6, "Form 16 / Annexure II: the year's TDS and months of an employee are the payroll's (%s)" % y9)
+
+        print("== 10. Form 138's Deductions step: Select challan, Add, tick and move, Remove")
+        pg.evaluate("""() => { S.books.challans = [
+            {id: 'c24a', bsr: '0510308', serial: '80146', date: '2026-05-07', section: '192', tax: 188296, interest: 0, fee: 0, others: 0},
+            {id: 'c24b', bsr: '0510308', serial: '86163', date: '2026-06-06', section: '192', tax: 188296, interest: 0, fee: 0, others: 0},
+            {id: 'c24c', bsr: '0510308', serial: '95365', date: '2026-07-06', section: '192', tax: 190872, interest: 0, fee: 0, others: 0}];
+          TDSReg.forget(); S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = 'c24a'; render(); }""")
+        pg.wait_for_timeout(500)
+        opts = pg.evaluate("[...document.querySelectorAll('#app [data-wd-sel] option')].map(o => o.value)")
+        ok(opts[:3] == ["c24a", "c24b", "c24c"] and opts[-1] == "__none", "Select challan lists the 192 challans, then Not on any challan (%s)" % opts)
+        ok(pg.locator('#app [data-wd-table="c24a"]').count() == 1 and pg.locator('#app [data-wd-add-open="c24a"]').count() == 1, "the chosen challan's table, with + Add deduction to this challan")
+        pg.click('#app [data-wd-add-open="c24a"]'); pg.wait_for_timeout(400)
+        apr = pg.evaluate("TDS.formRows('24Q').filter(r => r.fy === '2026-27' && TDS.ymd(r.date).startsWith('202604') && r.tds > 0.005).map(r => r.id)")
+        ok(pg.locator('[data-wd-addlist="c24a"] [data-wd-cand]').count() >= len(apr) > 0, "the deductions not on a challan are offered (%d April rows)" % len(apr))
+        for rid in apr: pg.check('[data-wd-addlist] [data-wd-tick="%s"]' % rid)
+        pg.wait_for_timeout(200)
+        bk = pg.evaluate("() => { const b = document.querySelector('[data-wd-bulk]'); return b ? [+b.dataset.wdBulk, +b.dataset.tot, +b.dataset.after] : null; }")
+        ok(bk == [len(apr), 188296, 0], "ticked April's rows: TDS ₹1,88,296, balance after ₹0 (%s)" % bk)
+        pg.click('[data-wd-bulk-move]'); pg.wait_for_timeout(500)
+        pg.evaluate("() => { S.tdsWinAdd = ''; render(); }"); pg.wait_for_timeout(300)
+        ft = pg.evaluate("() => { const f = document.querySelector('#app [data-wd-foot]'); return f ? [+f.dataset.here, +f.dataset.bal, +f.dataset.n] : null; }")
+        ok(ft == [188296, 0, len(apr)], "on the challan: Used here ₹1,88,296, Balance ₹0, %d deductions (%s)" % (len(apr), ft))
+        ok(pg.evaluate("TDS.formRows('24Q').filter(r => r.challan === 'c24a').length") == len(apr), "each April row now carries the challan")
+        one = apr[0]; t1 = pg.evaluate("(id) => TDS.formRows('24Q').find(r => r.id === id).tds", one)
+        pg.check('#app [data-wd-rtick="%s"]' % one); pg.wait_for_timeout(200); pg.click('#app [data-wd-bulk-off]'); pg.wait_for_timeout(400)
+        ft2 = pg.evaluate("() => { const f = document.querySelector('#app [data-wd-foot]'); return [+f.dataset.bal, +f.dataset.n]; }")
+        ok(ft2 == [t1, len(apr) - 1], "Remove from challan: the balance back to ₹%s, one row fewer (%s)" % (t1, ft2))
+        ok(pg.locator('#app [data-wd-more]').count() == 1, "Annexure I is under ⋯")
+        pg.screenshot(path=os.path.join(OUT, "q1-by-challan.png"), full_page=True)
+
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):
             ctx = br.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme); p2 = ctx.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))

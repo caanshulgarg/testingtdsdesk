@@ -64,17 +64,18 @@ try:
         go("2026-27/Q1/26Q/deductions"); E("() => { S.tdsDedView = 'table'; S.tdsFl = {}; render(); }"); W(400)
         rows = E("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => ({id: r.id, pan: r.pan, section: r.section, paid: r.paid, tds: r.tds, challan: r.challan}))")
         print("1. Needs fixing")
-        chip = pg.locator("#app [data-step-tool] [data-ded-show=fix]")   # next-tds-clear: a Show pill of the step's toolbar
-        ok(chip.count() == 1, "the deductions' filter bar has Needs fixing")
-        n = int(chip.locator(".sbar-n").inner_text()) if chip.count() else -1
+        # next-tds-tidy2 (the owner: "Filters should be there in columns only"): Needs fixing is a tick in the Deductee column's filter
+        pg.click("#app #tdsDnTable thead [data-cf='deductions:name']"); W(200)
+        chip = pg.locator("[data-cf-pop='deductions:name'] [data-cf-flag='deductions:fix']")
+        ok(chip.count() == 1, "the Deductee column's filter has Needs fixing")
         flagged = E("""() => { const rs = TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1'), iss = new Set(Certs.issues('2026-27', 'Q1').map(x => x.row.id));
           const pay = new Set(TDS26Q.payCodeRows('2026-27', 'Q1', '26Q').map(x => x.row.id)), known = (x) => !!TDS.STD[TDS.sec(x)] || RULE_DEFAULTS.some(d => d.old && TDS.sec(d.old) === TDS.sec(x));
           return rs.filter(r => !Certs.validPan(r.pan) || Certs.inoperative(r.pan) || iss.has(r.id) || !r.challan || pay.has(r.id) || !known(r.section)).length; }""")
-        ok(n == flagged and n > 0, "its count: the deductions with a problem the return finds (%d, %d)" % (n, flagged))
         all_n = pg.locator("#tdsDnTable > tbody > tr").count()
-        if chip.count(): chip.click(); W(500)
+        if chip.count(): chip.check(); W(500)
         shown = pg.locator("#tdsDnTable > tbody > tr").count()
-        ok(chip.count() and chip.get_attribute("aria-pressed") == "true" and shown == n, "pressed: only those (%d of %d)" % (shown, all_n))
+        ok(chip.count() and chip.is_checked() and shown == flagged and flagged > 0, "ticked: only the deductions with a problem the return finds (%d of %d; %d)" % (shown, all_n, flagged))
+        pg.keyboard.press("Escape")
         E("() => { S.tdsFl = {}; render(); }"); W(300)
 
         print("2. the section's name")
@@ -126,8 +127,8 @@ try:
         ok(len(tb) > 1 and tb[1]["sec"].strip() == "194J", "the new section on the second deduction, its code (%s)" % (len(tb) > 1 and tb[1]["sec"]))
         ok(tb and any("edited in FinCom: books ₹" in e for e in tb[0]["edited"]) and E("INR.format(%s)" % newtds) in tb[0]["text"], "the new TDS, and 'edited in FinCom: books ₹…' under it (%s)" % (tb and tb[0]["edited"]))
         total = round(sum(r["tds"] for r in rows) + 500, 2)
-        card = pg.inner_text("#app [data-ret-strip]")
-        ok(E("INR.format(%s)" % total) in card, "the summary strip: TDS %s" % total)
+        card = pg.inner_text("#app [data-ded-count]")   # next-tds-tidy2: no summary strip; the table's foot has the TDS
+        ok(E("INR.format(%s)" % total) in card, "the table's foot: TDS %s" % total)
         ok("2 edited in FinCom" in pg.inner_text("#app [data-ded-count]"), "the count of deductions shown says it")
         ok(E("(() => { const v = S.books.vouchers.find(v => '%s'.startsWith(v.id + '|')); return JSON.stringify(v).includes('%s'); })()" % (r1["id"], newpan)) is False, "the books from Tally are not changed")
         log = E("S.books.tdsEdits['%s'].log.map(l => [l.field, !!l.by, !!l.at])" % r1["id"])

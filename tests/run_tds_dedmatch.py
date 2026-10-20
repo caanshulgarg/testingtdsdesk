@@ -89,12 +89,14 @@ try:
         ok(sorted(shown) == sorted(want) and shown, "chA clicked in the panel: its deductions and its suggestions only (%d)" % len(shown))
         pg.click('#app [data-dd-ch="chA"]'); pg.wait_for_timeout(400)
         ok(pg.locator("#tdsDnTable > tbody > tr[data-ded-row]").count() > len(shown), "clicked again: all")
-        pg.click('#app [data-ded-show="fix"]'); pg.wait_for_timeout(300)
+        # next-tds-tidy2: "Needs fixing" and the find box are the Deductee column's filter
+        pg.click('#app #tdsDnTable thead [data-cf="deductions:name"]'); pg.wait_for_timeout(200)
+        pg.check('[data-cf-pop="deductions:name"] [data-cf-flag="deductions:fix"]'); pg.wait_for_timeout(300)
         nf = pg.locator("#tdsDnTable > tbody > tr[data-ded-row]").count()
-        pg.click('#app [data-ded-show=""], #app [data-ded-show="all"]'); pg.wait_for_timeout(300)
-        pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', "Contractor 1"); pg.wait_for_timeout(400)
+        pg.uncheck('[data-cf-pop="deductions:name"] [data-cf-flag="deductions:fix"]'); pg.wait_for_timeout(300)
+        pg.fill('[data-cf-pop="deductions:name"] input[aria-label="Find a deductee, PAN, voucher or ledger"]', "Contractor 1"); pg.wait_for_timeout(500)
         nq = pg.locator("#tdsDnTable > tbody > tr[data-ded-row]").count()
-        pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', ""); pg.wait_for_timeout(300)
+        pg.fill('[data-cf-pop="deductions:name"] input[aria-label="Find a deductee, PAN, voucher or ledger"]', ""); pg.wait_for_timeout(400); pg.keyboard.press("Escape")
         ok(nf > 0 and 0 < nq, "the filters still work: Needs fixing %d, find %d" % (nf, nq))
         n = pg.locator("#app [data-dd-accept-all]").inner_text()
         pg.click("#app [data-dd-accept-all]"); pg.wait_for_timeout(700)
@@ -195,7 +197,8 @@ try:
         seen3 = [r for v in st3["g"].values() for r in v["rows"]]
         ok(st3["line"] == "%d|%d|%d" % (len(qrows), after.get("done", 0), len(seen3) - after.get("done", 0)), "the line still equals the groups (%s)" % st3["line"])
         fx = pg.locator('#app [data-dt-group="fix"] tr[data-dt-row]').first
-        ok(fx.count() == 1 and "no PAN" in fx.inner_text() and fx.locator("[data-dt-addpan]").count() == 1, "Fix the row: ZZ Contractor 1, no PAN, Add PAN")
+        # next-tds-tidy2: the problem a short chip ("No PAN"), its words on a hover
+        ok(fx.count() == 1 and "No PAN" in fx.inner_text() and fx.locator("[data-dt-problem=pan]").get_attribute("title") == "no PAN" and fx.locator("[data-dt-addpan]").count() == 1, "Fix the row: ZZ Contractor 1, No PAN, Add PAN")
         # no challan at all: one block per section and month, Add challan and Paid in Tally? Add BSR
         J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); render(); }"); pg.wait_for_timeout(800)
         heads = J("[...document.querySelectorAll('#app [data-dt-pay]')].map(b => b.dataset.dtPay)")

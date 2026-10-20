@@ -113,9 +113,12 @@ def snapshot(site, port=8290, shots=None):
                     # next-tds-clear (19-Oct-2026): what a return showed on its tabs is now a click away on its steps: By
                     # section and By employee are toggles of Deductions, and Validate & file's lines open their lists
                     # ("Review ▸"); each is shown as a person would open it
-                    for extra in ["S.tdsTab = 'deductions'; S.tdsDedView = 'sections';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.q24View = 'emp';", "S.tdsTab = 'file'; S.q24View = ''; S.tdsValOpen = '*';"]:
+                    # next-tds-tidy2: Form 138's Deductions opens on Select challan as 26Q's; its rows are on the challans and
+                    # in "Not on any challan" (Done opened), Annexure I in one table under ⋯ (S.tdsDedView "table")
+                    for extra in ["S.tdsTab = 'deductions'; S.tdsDedView = 'sections';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.q24View = 'emp';", "S.tdsTab = 'file'; S.q24View = ''; S.tdsValOpen = '*';",
+                                  "S.tdsTab = 'deductions'; S.tdsValOpen = ''; S.tdsDedView = 'table';", "S.tdsTab = 'deductions'; S.tdsDedView = ''; S.tdsWinCh = '__none'; S.dtDoneOpen = true;"]:
                         pg.evaluate("() => { " + extra + " render(); }"); take(key)
-                    pg.evaluate("() => { S.tdsDedView = ''; S.q24View = ''; S.tdsValOpen = ''; render(); }")
+                    pg.evaluate("() => { S.tdsDedView = ''; S.q24View = ''; S.tdsValOpen = ''; S.tdsWinCh = ''; S.dtDoneOpen = false; render(); }")
                     if form != "24Q":
                         pg.evaluate("() => { window.__files = []; S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(60)
                         if press(r"^(Download the .* text file|Make FVU file)"):

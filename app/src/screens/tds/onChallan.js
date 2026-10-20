@@ -26,3 +26,6 @@ export const usedHere = (c, key, cx) => r2(num(((cx.uses[c.id] || {})[key] || {}
 // section), and whether a challan is dated before a deduction (it can never pay it: never offered, never ticked)
 export const placeIssues = (r, c) => TDSEdit.placeIssues(r, c);
 export const earlyFor = (r, c) => TDSEdit.early(r, c);
+// next-tds-tidy2 (the owner: "no long sentences in rows"): a row's problem as one short chip; the full words on a hover
+const CHIP = { name: "Name missing", early: "Early challan", sec: "Other section", pan: "No PAN", rate: "Rate?", paycode: "Code?", other: "Check" };
+export const chipW = (p) => (p ? CHIP[p.k] || (String(p.words || "").length <= 14 ? p.words : "Check") : "");

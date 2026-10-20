@@ -169,11 +169,29 @@ b.tdsFiled = {};
 f = build("2026-27", "Q2", FIRM, "26Q");
 ok(field(of(f.text, "BH")[0], 52) === "N" && (f.notes || []).some(n => /not marked filed/.test(n)), "V. 140 Q2: Q1 not marked filed: N, and the note says so (" + J(f.notes) + ")");
 // a section split by what FinCom does not know gets no code (To fix)
-b = books([V("i1", "20260510", "Beta", 100000, 10000, "TDS 194I", "Office Rent"), V("i2", "20260511", "Gamma", 100000, 10000, "TDS 194J", "Sundry Charges")]);
-b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 20000}]; b.alloc = {"i1|TDS 194I": "c1", "i2|TDS 194J": "c1"};
+// (next-tds-tidy2: the rate deducted now decides 194J at 2% or 10%, so the unknown kind is a 194J at 7%: no rule decides it)
+b = books([V("i1", "20260510", "Beta", 100000, 10000, "TDS 194I", "Office Rent"), V("i2", "20260511", "Gamma", 100000, 7000, "TDS 194J", "Sundry Charges")]);
+b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 17000}]; b.alloc = {"i1|TDS 194I": "c1", "i2|TDS 194J": "c1"};
 f = build("2026-27", "Q1", FIRM, "26Q");
 const ofP = (party) => of(f.text, "DD").find(d => d[8] === party) || [];
 ok(field(ofP("Beta"), 15) === "1009" && field(ofP("Gamma"), 15) === "" && (f.missingCodes || []).some(m => /194J/.test(m)), "V. 140: office rent is 1009; a 194J payment of unknown kind gets no code and is listed (" + [field(ofP("Beta"), 15), field(ofP("Gamma"), 15)] + J(f.missingCodes) + ")");
+// next-tds-tidy2 (the owner: "Winman does not ask this"): 194J decided as Winman does: the rate deducted (2% technical 1026,
+// 10% professional 1027; a director's 1028 only where the words say so), then the ledgers' words, then the choice made
+// once for the deductee and ledger
+b = books([V("j1", "20260510", "Gamma", 100000, 10000, "TDS 194J", "Accounting Fees"), V("j2", "20260511", "Beta", 100000, 2000, "TDS 194J", "Sundry Charges"),
+  V("j3", "20260512", "Delta", 50000, 5000, "TDS 194J", "Directors Sitting Fees"), V("j4", "20260513", "Alpha Ltd", 50000, 3500, "TDS 194J", "Software Support")]);
+b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260607", tax: 20500}]; b.alloc = {"j1|TDS 194J": "c1", "j2|TDS 194J": "c1", "j3|TDS 194J": "c1", "j4|TDS 194J": "c1"};
+f = build("2026-27", "Q1", FIRM, "26Q");
+ok([field(ofP("Gamma"), 15), field(ofP("Beta"), 15), field(ofP("Delta"), 15), field(ofP("Alpha Ltd"), 15)].join() === "1027,1026,1028,1026" && !(f.missingCodes || []).length,
+  "V. 140: 194J by the rate (10% → 1027, 2% → 1026), director's words → 1028, 'Software' at 7% → 1026; nothing to confirm (" + [field(ofP("Gamma"), 15), field(ofP("Beta"), 15), field(ofP("Delta"), 15), field(ofP("Alpha Ltd"), 15)] + J(f.missingCodes) + ")");
+ok(x.TDS26Q.payCodeRows("2026-27", "Q1", "26Q").length === 0, "V. 140: To fix has no payment code to confirm for them");
+b = books([V("k1", "20260510", "Gamma", 100000, 7000, "TDS 194J", "Sundry Charges"), V("k2", "20260610", "Gamma", 50000, 3500, "TDS 194J", "Sundry Charges")]);
+b.challans = [{id: "c1", bsr: "0240020", serial: "00011", date: "20260707", tax: 10500}]; b.alloc = {"k1|TDS 194J": "c1", "k2|TDS 194J": "c1"};
+const asked = x.TDS26Q.payCodeRows("2026-27", "Q1", "26Q");
+ok(asked.length === 2 && new Set(asked.map(a => x.TDS26Q.payKey(a.row))).size === 1, "V. 140: undecided, the two deductions of one deductee and ledger are one question (" + asked.map(a => x.TDS26Q.payKey(a.row)) + ")");
+b.tdsPayKind = {[x.TDS26Q.payKey(asked[0].row)]: "technical"};
+f = build("2026-27", "Q1", FIRM, "26Q");
+ok(of(f.text, "DD").every(d => field(d, 15) === "1026") && x.TDS26Q.payCodeRows("2026-27", "Q1", "26Q").length === 0, "V. 140: the one choice (technical) gives both their code, 1026");
 
 // ---------------- Form 144 (27Q)
 b = books([V("n1", "20260520", "Globex Inc", 100000, 20800, "TDS 195", "Technical Fees Abroad")]);

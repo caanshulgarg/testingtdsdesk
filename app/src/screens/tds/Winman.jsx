@@ -23,8 +23,9 @@ import { AddChallan, say } from "./Register.jsx";
 import { PanBox } from "./PanBook.jsx";
 import { openAdd } from "./AddDeduction.jsx";
 import More from "../../parts/More.jsx";
-import { unplacedOf, usedHere, chIds, placeIssues, earlyFor } from "./onChallan.js";
+import { unplacedOf, usedHere, chIds, placeIssues, earlyFor, chipW } from "./onChallan.js";
 import { DedName } from "./DedName.jsx";
+import { useCF, Th } from "./ColF.jsx";
 import "./clear.css";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -70,37 +71,31 @@ function Reason({ r, form }) {
   return <span title={m.remark === "A" ? "Lower deduction: certificate " + (m.certFull || m.certNo || "") : "Higher rate: no PAN or PAN inoperative"}>{m.remark === "A" ? "A · lower" : m.remark === "C" ? "C · higher" : m.remark}</span>;
 }
 
-// next-tds-addlist (the owner, 19-Oct-2026: "no filter anywhere ... there should be tick box system to move bulk"): the
-// filters of a list of deductions (S.tdsWinF the drawer's, S.tdsWinTF the challan's table): name or PAN, section, month,
-// on challan (the drawer: any, none, one), problems only
+// next-tds-addlist (the owner, 19-Oct-2026: "there should be tick box system to move bulk"); next-tds-tidy2 (20-Oct-2026:
+// "Filters should be there in columns only"): the filters of a list of deductions are in its column headers (tds/ColF.jsx):
+// Name (name, PAN, voucher; "Problems only"), PAN, Section, the dates by month, the amounts from / to; kept per table
+// (S.tdsCF["wd-table"] the challan's table, "wd-add" / "wd-other" the Add drawer's two lists)
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const monW = (ym) => MON[+String(ym).slice(4, 6) - 1] + " " + String(ym).slice(0, 4);
+const monW = (ym) => (String(ym).length === 6 ? MON[+String(ym).slice(4, 6) - 1] + " " + String(ym).slice(0, 4) : ym);
 const prevYm = (ym) => { const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 1 ? (y - 1) + "12" : y + String(m - 1).padStart(2, "0"); };
 const secOf = (r) => TDS.sec(r.section) || r.section || "";
 // a problem of a row besides "not on a challan" (TDSEdit.problems: no name, no valid PAN, the rate, its challan's date or section)
 const hasProb = (r, probs) => ((probs || {})[r.id] || []).some((p) => p !== "not against a challan");
-function passF(F, r, probs, extra) {
-  const q = String(F.q || "").trim().toLowerCase();
-  if (q && ![r.party, r.employee, r.pan, r.voucher, r.ledger].join(" ").toLowerCase().includes(q)) return false;
-  if (F.sec && secOf(r) !== F.sec) return false;
-  if (F.mon && TDS.ymd(r.date).slice(0, 6) !== F.mon) return false;
-  if (F.prob && !(hasProb(r, probs) || extra)) return false;
-  return true;
+const ymOf = (d) => TDS.ymd(d).slice(0, 6);
+// the column filters of a list of deductions; at(x) the deduction of a list item ({r} in the Add drawer)
+export function dedDefs(probs, at = (x) => x, extra) {
+  return [
+    { k: "name", title: "Name", kind: "q", placeholder: "Name, PAN or voucher", get: (x) => { const r = at(x); return [r.party, r.employee, r.pan, r.voucher, r.ledger].join(" "); },
+      flag: { k: "prob", label: "Problems only", test: (x) => hasProb(at(x), probs) || !!(extra && extra(x)) } },
+    { k: "pan", title: "PAN", kind: "pick", get: (x) => (Certs.validPan(at(x).pan) ? "Has a PAN" : "No valid PAN") },
+    { k: "sec", title: "Section", kind: "pick", get: (x) => secOf(at(x)) },
+    { k: "date", title: "Deduction date", kind: "pick", get: (x) => ymOf(at(x).date), label: monW },
+    { k: "credit", title: "Paid date", kind: "pick", get: (x) => ymOf(at(x).credit || at(x).date), label: monW },
+    { k: "paid", title: "Amount paid", kind: "num", get: (x) => at(x).paid },
+    { k: "tds", title: "TDS", kind: "num", get: (x) => at(x).tds },
+    { k: "rate", title: "Rate", kind: "pick", get: (x) => (at(x).rate != null ? at(x).rate + "%" : "") },
+  ];
 }
-const fOn = (F) => !!(F.q || F.sec || F.mon || F.on || F.prob);
-function Filters({ F, set, rows, ons, kind }) {
-  const secs = Array.from(new Set(rows.map(secOf).filter(Boolean))).sort(), mons = Array.from(new Set(rows.map((r) => TDS.ymd(r.date).slice(0, 6)).filter((x) => x.length === 6))).sort();
-  return <div className="wd-filters" data-wd-filters={kind}>
-    <input type="search" className="wd-fq" value={F.q || ""} placeholder="Name or PAN" aria-label="Find by name or PAN" data-wd-f="q" onChange={(ev) => set("q", ev.target.value)} />
-    <select value={F.sec || ""} aria-label="Section" data-wd-f="sec" onChange={(ev) => set("sec", ev.target.value)}><option value="">Every section</option>{secs.map((x) => <option key={x} value={x}>{x}</option>)}</select>
-    <select value={F.mon || ""} aria-label="Month" data-wd-f="mon" onChange={(ev) => set("mon", ev.target.value)}><option value="">Every month</option>{mons.map((x) => <option key={x} value={x}>{monW(x)}</option>)}</select>
-    {ons && <select value={F.on || ""} aria-label="On challan" data-wd-f="on" onChange={(ev) => set("on", ev.target.value)}><option value="">On challan: any</option><option value="none">Not on any challan</option>
-      {ons.map((o) => <option key={o.id} value={"ch:" + o.id}>{"On " + o.serial + " · " + day(o.date)}</option>)}</select>}
-    <label className="wd-fprob"><input type="checkbox" checked={!!F.prob} data-wd-f="prob" onChange={(ev) => set("prob", ev.target.checked ? "1" : "")} /> Problems only</label>
-    {fOn(F) && <button type="button" className="linkbtn" data-wd-fclear="" onClick={() => set("", "")}>Clear</button>}
-  </div>;
-}
-const setter = (key) => (k, v) => { S[key] = k ? Object.assign({}, S[key] || {}, { [k]: v }) : {}; render(); };
 
 // the deductions not on a challan, best fit for this challan first: never one deducted after the challan was deposited
 // (last, and it cannot be ticked), then its suggestions, those it can hold, of its section, deducted in its month or the
@@ -130,16 +125,17 @@ function AddList({ c, rows, m, form, locked, probs }) {
   // the other challan, now fully used, with tax unaccounted)
   const ids = chIds(), byId = Object.fromEntries(TDS.challans().map((x) => [x.id, x]));
   const othersAll = rows.filter((r) => r.tds > 0.005 && r.challan && r.challan !== c.id && ids.has(r.challan)).map((r) => ({ r, o: byId[r.challan], ...fitOf(c, r, left) })).sort(fitSort);
-  const F = S.tdsWinF || {}, setF = setter("tdsWinF");
-  const list = F.on && F.on !== "none" ? [] : all.filter((x) => passF(F, x.r, probs, x.early));
-  const others = F.on === "none" ? [] : othersAll.filter((x) => (!F.on || F.on === "ch:" + x.o.id) && passF(F, x.r, probs, x.early));
-  const ons = Array.from(new Set(othersAll.map((x) => x.o))).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)));
+  const at = (x) => x.r, early = (x) => x.early;
+  const cfA = useCF("wd-add", dedDefs(probs, at, early), all), list = cfA.shown;
+  const cfO = useCF("wd-other", dedDefs(probs, at, early).concat([{ k: "on", title: "On", kind: "pick", get: (x) => x.o.serial + " · " + day(x.o.date) }]), othersAll), others = cfO.shown;
   // the ticks (S.tdsWinSel): rows shown in either list; one deducted after this challan's date is never ticked
   const sel = S.tdsWinSel || {}, shown = list.concat(others), can = shown.filter((x) => !x.early && !locked);
   const picked = all.concat(othersAll).filter((x) => sel[x.r.id] && !x.early), tot = r2(picked.reduce((a, x) => a + x.r.tds, 0)), after = r2(left - tot);
   const tick = (id, on) => { S.tdsWinSel = Object.assign({}, sel, { [id]: on }); if (!on) delete S.tdsWinSel[id]; render(); };
-  const allOn = can.length > 0 && can.every((x) => sel[x.r.id]);
-  const tickAll = (on) => { const n = Object.assign({}, sel); can.forEach((x) => { if (on) n[x.r.id] = true; else delete n[x.r.id]; }); S.tdsWinSel = n; render(); };
+  // "Select all shown" in each list's heading: that list's rows shown and tickable
+  const canOf = (l) => l.filter((x) => !x.early && !locked), allOf = (l) => canOf(l).length > 0 && canOf(l).every((x) => sel[x.r.id]);
+  const tickAll = (l, on) => { const n = Object.assign({}, sel); canOf(l).forEach((x) => { if (on) n[x.r.id] = true; else delete n[x.r.id]; }); S.tdsWinSel = n; render(); };
+  const tkAll = (l, k) => <th className="ck">{canOf(l).length > 0 ? <input type="checkbox" checked={allOf(l)} data-wd-tickall={k} aria-label="Select all shown" title={"Select all shown (" + canOf(l).length + ")"} onChange={(ev) => tickAll(l, ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>;
   const moveHere = async (r) => {
     const o = byId[r.challan], ob = TDSReg.balance(o, cx).tax;
     if (r.tds > left + 0.005) { toast(money(left) + " left on this challan: " + money(r.tds) + " does not fit."); return; }
@@ -161,31 +157,30 @@ function AddList({ c, rows, m, form, locked, probs }) {
   const tk = (x) => <td className="ck"><input type="checkbox" checked={!!sel[x.r.id] && !x.early} disabled={locked || !!x.early} data-wd-tick={x.r.id}
     aria-label={"Tick " + (x.r.party || x.r.employee || "this deduction")} title={x.early ? "Deducted " + day(x.r.date) + ", after this challan's date " + day(c.date) + ": this challan cannot pay it" : undefined}
     onChange={(ev) => tick(x.r.id, ev.target.checked)} /></td>;
-  const why = (x) => (x.early ? <span className="wd-chip bad" data-wd-early={x.r.id}>after this challan's date</span> : null);
+  const why = (x) => (x.early ? <span className="wd-chip bad" data-wd-early={x.r.id} title={"Deducted " + day(x.r.date) + ", after this challan's date " + day(c.date)}>After challan</span> : null);
   const nm = (r) => <td data-wd-name={r.id}><DedName r={r} locked={locked} /></td>;
-  const cnt = (n, of) => (fOn(F) ? n + " of " + of : String(of));
   return <SideDrawer open onClose={close} kind="wd-add" wide title={"Add to challan " + c.serial + " · " + day(c.date)} description={money(left) + " left · " + all.length + " not on a challan"}>
     <div data-wd-addlist={c.id}>
       {!locked && (form === "26Q" || form === "27Q") && <p className="wd-addnew"><button type="button" className="btn small" data-wd-new="" onClick={() => { S.tdsWinAdd = ""; openAdd({ chId: c.id }); }}>Type a new deduction…</button></p>}
-      <Filters F={F} set={setF} rows={all.concat(othersAll).map((x) => x.r)} ons={ons} kind="add" />
-      {can.length > 0 && <label className="wd-tickall"><input type="checkbox" checked={allOn} data-wd-tickall="" onChange={(ev) => tickAll(ev.target.checked)} /> Select all shown ({can.length})</label>}
-      <h4 className="wd-addh" data-wd-addh="none">Not on any challan ({cnt(list.length, all.length)})</h4>
-      {list.length ? <div className="bk-tablewrap"><table className="bk-table wd-cands gf-off">
-        <thead><tr><th className="ck"><span className="sr-only">Tick</span></th><th>Name</th><th>Section</th><th className="dt">Date</th><th className="n">TDS</th><th></th><th></th></tr></thead>
+      <h4 className="wd-addh" data-wd-addh="none">Not on any challan ({all.length})</h4>
+      {all.length ? <div className="bk-tablewrap"><table className="bk-table wd-cands gf-off" data-wd-none="">
+        <thead><tr>{tkAll(list, "none")}<Th cf={cfA} k="name">Name</Th><Th cf={cfA} k="sec">Section</Th><Th cf={cfA} k="date" cls="dt">Date</Th><Th cf={cfA} k="tds" cls="n">TDS</Th><th></th><th className="ac"></th></tr></thead>
         <tbody>{list.map((x) => <tr key={x.r.id} data-wd-cand={x.r.id} className={x.fits && !x.early ? "" : "wd-over"}>{tk(x)}
-          {nm(x.r)}<td>{secOf(x.r)}</td><td>{day(x.r.date)}</td><td className="n">{money(x.r.tds)}</td>
+          {nm(x.r)}<td>{secOf(x.r)}</td><td className="dt">{day(x.r.date)}</td><td className="n">{money(x.r.tds)}</td>
           <td>{why(x) || (x.sg ? <span className="tag info" title={x.s.reason}>suggested</span> : !x.sec ? <span className="wd-dim">other section</span> : null)}</td>
           <td>{x.early ? null : x.fits ? <button type="button" className="btn small" disabled={locked} data-wd-put={x.r.id} aria-label={"Put on this challan: " + (x.r.party || "")} onClick={() => put(x)}>Add</button>
-            : <button type="button" className="linkbtn" data-wd-split={x.r.id} disabled={locked || left < 0.005} title={"More than the " + money(left) + " left"} onClick={() => { S.tdsWinAdd = ""; tdsSplitRow(x.r.id, c.id); }}>Split…</button>}</td></tr>)}</tbody></table></div>
-        : all.length ? <p className="note" data-wd-nonefit="">None shown: change the filters.</p> : <p className="note" data-wd-allon="">All deductions are on a challan. To move one here, pick it below.</p>}
-      <h4 className="wd-addh" data-wd-addh="other">On other challans ({cnt(others.length, othersAll.length)})</h4>
-      {others.length > 0 && <div className="bk-tablewrap"><table className="bk-table wd-cands gf-off" data-wd-others="">
-        <thead><tr><th className="ck"><span className="sr-only">Tick</span></th><th>Name</th><th>Section</th><th className="dt">Date</th><th className="n">TDS</th><th>On</th><th></th></tr></thead>
+            : <button type="button" className="linkbtn" data-wd-split={x.r.id} disabled={locked || left < 0.005} title={"More than the " + money(left) + " left"} onClick={() => { S.tdsWinAdd = ""; tdsSplitRow(x.r.id, c.id); }}>Split…</button>}</td></tr>)}</tbody>
+          {cfA.on && <tfoot><tr className="wd-cffoot"><td colSpan={7}>{cfA.foot()}</td></tr></tfoot>}</table></div>
+        : <p className="note" data-wd-allon="">All deductions are on a challan. To move one here, pick it below.</p>}
+      <h4 className="wd-addh" data-wd-addh="other">On other challans ({othersAll.length})</h4>
+      {othersAll.length > 0 && <div className="bk-tablewrap"><table className="bk-table wd-cands gf-off" data-wd-others="">
+        <thead><tr>{tkAll(others, "other")}<Th cf={cfO} k="name">Name</Th><Th cf={cfO} k="sec">Section</Th><Th cf={cfO} k="date" cls="dt">Date</Th><Th cf={cfO} k="tds" cls="n">TDS</Th><Th cf={cfO} k="on">On</Th><th className="ac"></th></tr></thead>
         <tbody>{others.map((x) => { const r = x.r, o = x.o, ok = x.fits && !x.early;
           return <tr key={r.id} data-wd-other={r.id} className={ok ? "" : "wd-over"}>{tk(x)}
-            {nm(r)}<td>{secOf(r)}</td><td>{day(r.date)}</td><td className="n">{money(r.tds)}</td>
-            <td data-wd-on={o.id}>on {o.serial} · {day(o.date)}{earlyFor(r, o) ? <> <span className="wd-chip bad" data-wd-chip="early">Challan dated before the deduction</span></> : null}</td>
-            <td>{why(x) || <button type="button" className="btn small" data-wd-move={r.id} disabled={locked || !ok} title={ok ? "Take it off " + o.serial + " and put it on this challan" : "More than the " + money(left) + " left"} onClick={() => moveHere(r)}>Move here</button>}</td></tr>; })}</tbody></table></div>}
+            {nm(r)}<td>{secOf(r)}</td><td className="dt">{day(r.date)}</td><td className="n">{money(r.tds)}</td>
+            <td data-wd-on={o.id}>on {o.serial} · {day(o.date)}{earlyFor(r, o) ? <> <span className="wd-chip bad" data-wd-chip="early" title="Challan dated before the deduction: it cannot pay it">{chipW({ k: "early" })}</span></> : null}</td>
+            <td>{why(x) || <button type="button" className="btn small" data-wd-move={r.id} disabled={locked || !ok} title={ok ? "Take it off " + o.serial + " and put it on this challan" : "More than the " + money(left) + " left"} onClick={() => moveHere(r)}>Move here</button>}</td></tr>; })}</tbody>
+          {cfO.on && <tfoot><tr className="wd-cffoot"><td colSpan={7}>{cfO.foot()}</td></tr></tfoot>}</table></div>}
       {picked.length > 0 && <div className="wd-bulk" data-wd-bulk={picked.length} data-tot={tot} data-after={after}>
         <span><b>{picked.length} selected</b> · TDS <b>{money(tot)}</b></span>
         <span data-wd-bulk-after={after} className={after < -0.005 ? "bad" : ""}>Balance after: <b>{money(after)}</b></span>
@@ -202,6 +197,32 @@ function undoMove(was) {
   Object.keys(by).forEach((ch) => { const y = TDSMatch.move(by[ch], ch); if (!y.ok) toast(y.why); });
 }
 
+// next-tds-tidy2 (the owner: "Challan dated before the deduction · Move to another challan…" on 6 rows): each deduction on
+// a challan deposited before it, to the earliest challan of its section dated on or after it with enough left (the plan
+// keeps count of what each challan has left); none such: taken off, so it is in "Pay a challan". [{r, from, to}]
+export function earlyPlan(rows) {
+  const cx = TDSReg.ctx(), chs = TDS.challans(), byId = Object.fromEntries(chs.map((x) => [x.id, x])), left = {};
+  const bal = (c) => (left[c.id] != null ? left[c.id] : (left[c.id] = TDSReg.balance(c, cx).tax));
+  return rows.filter((r) => r.challan && byId[r.challan] && earlyFor(r, byId[r.challan])).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)))
+    .map((r) => {
+      const to = chs.filter((c) => c.id !== r.challan && !earlyFor(r, c) && (!chSec(c) || TDSCH.secOk(chSec(c), r.section)) && bal(c) + 0.005 >= r.tds)
+        .sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id)))[0] || null;
+      if (to) left[to.id] = r2(bal(to) - r.tds);
+      return { r, from: byId[r.challan], to };
+    });
+}
+async function fixEarly(rows) {
+  const plan = earlyPlan(rows);
+  if (!plan.length) return;
+  const line = (x) => esc((x.r.party || x.r.employee || "?") + " · " + day(x.r.date) + " · " + money(x.r.tds) + ": " + x.from.serial + " (" + day(x.from.date) + ") → " + (x.to ? x.to.serial + " (" + day(x.to.date) + ")" : "no challan fits: Pay a challan"));
+  const ok = await askConfirm({ title: "Put " + plan.length + " on the right challans?", ok: "Move", body: "<ul style=\"margin:0;padding-left:18px\">" + plan.map((x) => "<li>" + line(x) + "</li>").join("") + "</ul>" });
+  if (!ok || !ok.ok) return;
+  const was = plan.map((x) => [x.r.id, x.from.id]); let n = 0;
+  plan.forEach((x) => { const y = x.to ? TDSMatch.move([x.r.id], x.to.id) : TDSMatch.takeOff([x.r.id]); if (y && y.ok) n++; else if (y) toast(y.why); });
+  toast(n + " moved.", { actions: [{ label: "Undo", run: () => { undoMove(was); render(); } }] });
+  render();
+}
+
 export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, todo, tools }) {
   const cx = TDSReg.ctx(), list = winChallans(form, fy, q, cx), key = TDSReg.key(form, fy, q);
   // the challan chosen belongs to its return: another return opened starts on its own default
@@ -214,11 +235,10 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
   const pick = (v) => { S.tdsWinCh = v; S.tdsWinAdd = ""; S.tdsWinRSel = {}; S.tdsWinSel = {}; render(); };
   const unit = form === "27EQ" ? ["collection", "collections"] : ["deduction", "deductions"];
   const onAll = c ? rows.filter((r) => r.challan === c.id).sort((a, b) => TDS.ymd(a.date).localeCompare(TDS.ymd(b.date)) || String(a.id).localeCompare(String(b.id))) : [];
-  const TF = S.tdsWinTF || {}, on = onAll.filter((r) => passF(TF, r, probs));
+  const cf = useCF("wd-table", dedDefs(probs), onAll), on = cf.shown;
+  const chBy = Object.fromEntries(TDS.challans().map((x) => [x.id, x])), earlyN = rows.filter((r) => r.challan && chBy[r.challan] && earlyFor(r, chBy[r.challan])).length;
   const C = (r, k, el) => <Cell r={r} k={k} form={form} locked={locked}>{el}</Cell>;
   const bal = c ? TDSReg.balance(c, cx).tax : 0, used = c ? TDSReg.usedTax(c, cx) : 0, here = c ? usedHere(c, key, cx) : 0;
-  // the return's deductions on a challan dated before them (none can stand: Validate & file refuses the file)
-  const chBy = Object.fromEntries(TDS.challans().map((x) => [x.id, x])), early = rows.filter((r) => r.challan && earlyFor(r, chBy[r.challan]));
   // the ticks of the challan's table (S.tdsWinRSel): Remove from challan in one go
   const rsel = S.tdsWinRSel || {}, rpicked = onAll.filter((r) => rsel[r.id]), rtot = r2(rpicked.reduce((a, r) => a + r.tds, 0));
   const rtick = (id, v) => { S.tdsWinRSel = Object.assign({}, rsel, { [id]: v }); if (!v) delete S.tdsWinRSel[id]; render(); };
@@ -238,21 +258,23 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
           {list.map((x, i) => <option key={x.id} value={x.id}>{(i + 1) + " · " + day(x.date) + " · " + money(totalOf(x))}</option>)}
           {(un.length > 0 || cur === "__none") && <option value="__none">Not on any challan ({un.length})</option>}</select></label>
       {c && <span className="wd-chw" title={c.bsr + " · " + c.serial}>BSR {c.bsr} · serial {c.serial}{chSec(c) ? " · " + chSec(c) : ""}</span>}
-      <span className="rt-sp" />{tools}
+      <span className="rt-sp" />
+      {!locked && earlyN > 0 && <button type="button" className="btn small" data-wd-fix-early={earlyN} title="Each to the earliest challan of its section dated on or after it, with enough left" onClick={() => fixEarly(rows)}>Put {earlyN} on the right challans</button>}
+      {tools}
     </div>
-    {early.length > 0 && <p className="wd-un wd-bad" data-wd-early-n={early.length}>{early.length} {early.length === 1 ? unit[0] + " is" : unit[1] + " are"} on a challan dated before the deduction: a challan cannot pay tax deducted after it was deposited · <button type="button" className="linkbtn" data-wd-early-show="" onClick={() => pick("__none")}>Fix</button></p>}
+    {/* next-tds-tidy2 (the owner: "this should not be here"): no banner of deductions on a challan dated before them; the
+        row's chip and Validate & file's error say it */}
     {!c ? todo
-      : <>{onAll.length > 0 && <Filters F={TF} set={setter("tdsWinTF")} rows={onAll} kind="table" />}
-        {fOn(TF) && <p className="wd-dim" data-wd-shown={on.length + "|" + onAll.length}>Showing {on.length} of {onAll.length}</p>}
-        <div className="bk-tablewrap wd-wrap"><table className="bk-table wd-table gf-off" data-wd-table={c.id}>
+      : <><div className="bk-tablewrap wd-wrap"><table className="bk-table wd-table gf-off" data-wd-table={c.id}>
         <thead><tr><th className="ck">{!locked && on.length > 0 ? <input type="checkbox" checked={rAll} data-wd-rtickall="" aria-label="Select all shown" onChange={(ev) => rtickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>
-          <th>Name</th><th>PAN</th><th className="n">Amount paid</th><th className="dt">Paid date</th><th className="dt">Deduction date</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th><th className="n">Rate</th><th>Reason lower/higher</th><th>Section</th><th className="n">Shortfall/Excess</th><th className="ck"><span className="sr-only">Take off</span></th></tr></thead>
+          <Th cf={cf} k="name">Name</Th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="paid" cls="n">Amount paid</Th><Th cf={cf} k="credit" cls="dt">Paid date</Th><Th cf={cf} k="date" cls="dt">Deduction date</Th>
+          <Th cf={cf} k="tds" cls="n">{form === "27EQ" ? "TCS" : "TDS"}</Th><Th cf={cf} k="rate" cls="n">Rate</Th><th>Reason lower/higher</th><Th cf={cf} k="sec">Section</Th><th className="n">Shortfall/Excess</th><th className="ck"><span className="sr-only">Take off</span></th></tr></thead>
         <tbody>{on.map((r) => { const iss = issueOf[r.id], short = iss ? r2(num(iss.short)) : 0, pi = placeIssues(r, c);
           return <tr key={r.id} data-wd-row={r.id} className={probs[r.id] ? "rt-fix" : undefined}>
             <td className="ck">{!locked && <input type="checkbox" checked={!!rsel[r.id]} data-wd-rtick={r.id} aria-label={"Tick " + (r.party || r.employee || "this deduction")} onChange={(ev) => rtick(r.id, ev.target.checked)} />}</td>
             <td className="wd-name" data-wd-name={r.id}><DedName r={r} locked={locked} title={(r.voucher ? "Voucher " + r.voucher + " · " : "") + "Details"} onOpen={() => { S.tdsRowDet = r.id; render(); }} />
-              {pi.map((x) => <span key={x.k} className="wd-chip bad" data-wd-chip={x.k}>{x.words}</span>)}</td>
-            <td>{Certs.validPan(r.pan) ? r.pan : (r.party || r.employee) ? <PanBox party={r.party || r.employee} compact /> : null}</td>
+              {pi.length > 0 && <span className="wd-chip bad" data-wd-chip={pi[0].k} title={pi.map((x) => x.words).join("; ")}>{chipW(pi[0])}</span>}</td>
+            <td className="pan">{Certs.validPan(r.pan) ? r.pan : (r.party || r.employee) ? <PanBox party={r.party || r.employee} compact /> : null}</td>
             <td className="n">{C(r, "paid", money(r.paid))}</td><td className="dt">{C(r, "credit", day(r.credit || r.date))}</td><td className="dt">{C(r, "date", day(r.date))}</td>
             <td className="n">{C(r, "tds", money(r.tds))}</td><td className="n">{C(r, "rate", r.rate != null ? r.rate + "%" : "")}</td><td><Reason r={r} form={form} /></td>
             <td>{C(r, "section", <span data-sec={TDS.sec(r.section)}>{TDS.sec(r.section) || r.section}</span>)}</td>
@@ -266,7 +288,7 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, tod
           <button type="button" className="btn small" data-wd-bulk-off="" disabled={locked} onClick={removeSel}>Remove from challan</button></div>}
         <div className="wd-foot" data-wd-foot={c.id} data-amt={r2(num(c.tax))} data-here={here} data-used={used} data-bal={bal} data-n={onAll.length}>
           <span>Used here <b>{money(here)}</b></span>{Math.abs(used - here) > 0.005 && <span title="This return's and the other returns' TDS on the challan">Amount utilised (all returns) <b>{money(used)}</b></span>}
-          <span>Balance <b className={bal < -0.005 ? "bad" : ""} data-wd-bal={bal}>{money(bal)}</b></span><span>Number of {unit[1]} <b>{onAll.length}</b></span></div>
+          <span>Balance <b className={bal < -0.005 ? "bad" : ""} data-wd-bal={bal}>{money(bal)}</b></span><span>Number of {unit[1]} <b>{onAll.length}</b></span>{cf.foot()}</div>
         {S.tdsWinAdd === c.id && <AddList c={c} rows={rows} m={m} form={form} locked={locked} probs={probs} />}</>}
   </div>;
 }
@@ -278,7 +300,17 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
   const nPays = tallyPays ? tallyPays.n : 0;
   const rows = list.map((c, i) => { const p = TDSReg.portionFor(c, form, fy, q, cx), b = TDSReg.balance(c, cx).tax;
     return { c, no: i + 1, int: num(p.interest), oth: num(p.fee), here: usedHere(c, key, cx), used: TDSReg.usedTax(c, cx), bal: b, ok: TDSReg.srcOf(c) === "upload" || !!c.cin }; });
-  const sum = (f) => r2(rows.reduce((a, x) => a + f(x), 0));
+  // next-tds-tidy2: the grid's filters in its headers (Date by month, Section, Type, Verified, the amounts); the totals are of
+  // the challans shown, "n of N shown" in the foot while a filter is on
+  const cf = useCF("chg", [
+    { k: "date", title: "Date", kind: "pick", get: (x) => ymOf(x.c.date), label: monW },
+    { k: "sec", title: "Section", kind: "pick", get: (x) => chSec(x.c) || "—" },
+    { k: "tax", title: "Tax", kind: "num", get: (x) => x.c.tax },
+    { k: "type", title: "Type", kind: "pick", get: (x) => String(x.c.minorHead || "200") },
+    { k: "ok", title: "Verified", kind: "pick", get: (x) => (x.ok ? "Matched" : "Not checked") },
+    { k: "bal", title: "Balance", kind: "num", get: (x) => x.bal },
+  ], rows), shown = cf.shown;
+  const sum = (f) => r2(shown.reduce((a, x) => a + f(x), 0));
   // round 94: "Used in all returns" only where some challan is used by another return too (else it repeats Used here)
   const allCol = rows.some((x) => Math.abs(x.used - x.here) > 0.005), cols = allCol ? 17 : 16;
   return <div className="chg" data-chg={TDSReg.key(form, fy, q)}>
@@ -295,9 +327,9 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
     </div>
     {pays && tallyPays ? <div data-cm-tally-pays="">{tallyPays.el}<p className="note"><button className="linkbtn" onClick={() => setPays(false)}>Close</button></p></div> : null}
     <div className="bk-tablewrap chg-wrap"><table className="bk-table chg-table gf-off">
-      <thead><tr><th className="n">No</th><th className="dt">Date</th><th>Section</th><th className="n">Tax</th><th className="n">Interest</th><th className="n">Fee</th><th className="n">Others</th><th className="n">Total</th>
-        <th>Serial</th><th>BSR</th><th>Type</th><th>Verified</th><th className="n">Interest allocated</th><th className="n">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<th className="n">Balance</th></tr></thead>
-      <tbody>{rows.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
+      <thead><tr><th className="n">No</th><Th cf={cf} k="date" cls="dt">Date</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="tax" cls="n">Tax</Th><th className="n">Interest</th><th className="n">Fee</th><th className="n">Others</th><th className="n">Total</th>
+        <th>Serial</th><th>BSR</th><Th cf={cf} k="type">Type</Th><Th cf={cf} k="ok">Verified</Th><th className="n">Interest allocated</th><th className="n">Others allocated</th><th className="n" title="This return's TDS on the challan">Used here</th>{allCol && <th className="n" title="Every return's TDS on the challan">Used in all returns</th>}<Th cf={cf} k="bal" cls="n">Balance</Th></tr></thead>
+      <tbody>{shown.map((x) => <tr key={x.c.id} data-chg-row={x.c.id} className="chg-click" tabIndex={0} title="Its deductions"
           onClick={() => openChallanDeductions(x.c.id)} onKeyDown={(ev) => { if (ev.key === "Enter") openChallanDeductions(x.c.id); }}>
         <td className="n">{x.no}</td><td className="dt">{day(x.c.date)}</td><td>{chSec(x.c) || "—"}</td><td className="n">{amt(x.c.tax)}</td><td className="n">{amt0(x.c.interest)}</td><td className="n">{amt0(x.c.fee)}</td><td className="n">{amt0(x.c.others)}</td><td className="n">{amt(totalOf(x.c))}</td>
         <td>{x.c.serial}</td><td>{x.c.bsr}</td><td title={TYPE[String(x.c.minorHead || "200")] || ""}>{String(x.c.minorHead || "200")}</td><td>{x.ok ? <span className="ac-chip ok" title="From the income-tax portal (its CIN)">Matched</span> : <span className="wd-dim" title="Typed or from Tally: not checked against the portal">Not checked</span>}</td>
@@ -305,7 +337,8 @@ export function ChallanGrid({ fy, q, form, tallyPays }) {
         {!locked && <tr className="wd-addrow"><td colSpan={cols}><button type="button" className="linkbtn" data-chg-add="" onClick={() => setAdding(!adding)}>+ Add challan</button></td></tr>}</tbody>
       <tfoot><tr><td colSpan={3}>Total</td><td className="n" data-chg-tax={sum((x) => num(x.c.tax))}>{amt(sum((x) => num(x.c.tax)))}</td><td className="n">{amt(sum((x) => num(x.c.interest)))}</td><td className="n">{amt(sum((x) => num(x.c.fee)))}</td>
         <td className="n">{amt(sum((x) => num(x.c.others)))}</td><td className="n">{amt(sum((x) => totalOf(x.c)))}</td><td colSpan={4}></td><td className="n">{amt(sum((x) => x.int))}</td><td className="n">{amt(sum((x) => x.oth))}</td>
-        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td></tr></tfoot></table></div>
+        <td className="n" data-chg-here-sum={sum((x) => x.here)}>{amt(sum((x) => x.here))}</td>{allCol && <td className="n">{amt(sum((x) => x.used))}</td>}<td className="n">{amt(sum((x) => x.bal))}</td></tr>
+        {cf.on && <tr className="wd-cffoot"><td colSpan={cols}>{cf.foot("challans")}</td></tr>}</tfoot></table></div>
     {adding && <AddChallan form={form} onDone={() => setAdding(false)} />}
   </div>;
 }

@@ -4,7 +4,9 @@
 //      (All challans of the year first) · ONE primary button naming the next step ("Next: Challans →")
 //   2. one row of tabs (Deductor · Deductees N · [Employees & declarations] · Challans N · Deductions N · Validate &
 //      file · After filing): a count only, a dot for a step with a problem; on a phone a select
-//   3. one summary strip, amounts only: TDS · On challans · Left
+//   (next-tds-tidy2, 20-Oct-2026; the owner: "TDS ₹… · On challans ₹… · Left ₹0.00 — we don't need that": no summary
+//   strip; the TDS is in the Deductees table's foot, what is on challans in the Challans grid's, a TDS left off a challan
+//   is in the "N to fix" count)
 // The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings), shown once, in the header.
 // The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
 import { useRef } from "react";
@@ -100,7 +102,7 @@ export function SideDrawer({ open, onClose, title, description, kind, wide, chil
 }
 
 // the frame (round 94, 19-Oct-2026; the owner: "Deductor, Deductee, Challan, Deduction can come horizontally; remove
-// double info anywhere"). steps: [{id, label, count, off, why}]; strip: [{label, value, bad}] (amounts only);
+// double info anywhere"). steps: [{id, label, count, off, why}]; (round 94's strip is gone, next-tds-tidy2);
 // val: the Validate panel's {errors, warnings}: the header's "N to fix" is the one problem count; a step's tab carries a
 // dot (red: an error of that step, amber: a warning), never a number of problems. primary: [label, onClick] or null.
 // No keys of its own (round 88's F8 / F10 / F11 / F12 and the tabs at the foot are gone).
@@ -109,7 +111,7 @@ const dotOf = (id, val) => {
   const of = (l) => l.some((x) => x.n > 0 && (id === "file" ? true : x.step === id));
   return of(val.errors) ? "bad" : of(val.warnings) ? "warn" : "";
 };
-export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], strip = [], steps, children }) {
+export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, primary, more = [], steps, children }) {
   const cur = S.tdsTab, n = val ? val.errors.length + val.warnings.length : 0, filedOn = TDSFiled.get(fy, q, form);
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
@@ -136,8 +138,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
     <label className="rt-railsel"><span className="sr-only">Step</span>
       <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
         {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id !== "file" && s.count != null ? " · " + s.count : ""}</option>)}</select></label>
-    {strip.length > 0 && <div className="rt-strip" data-ret-strip="">{strip.map((f) => <span key={f.label} className={"rt-fig" + (f.bad ? " bad" : "")} data-fig={f.label}>
-      <span className="rt-fl">{f.label}</span> <b>{f.value}</b></span>)}</div>}
     <div className="rt-main" data-ret-step={cur}>{children}</div>
   </div>;
 }

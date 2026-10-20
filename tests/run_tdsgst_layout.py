@@ -108,7 +108,8 @@ try:
         ok(st.inner_text().strip() == "Filed" and "Filed 05-Aug-2026" in (st.get_attribute("title") or ""), "the header's status: Filed (05-Aug-2026 on a hover)")
         ok(pg.locator("#app [data-ret-lock='locked']").count() == 1, "filed: the lock said in the header")
         figs = E("[...document.querySelectorAll('#app [data-ret-strip] [data-fig]')].map(e => e.dataset.fig)")
-        ok(figs == ["TDS", "On challans", "Left"] and pg.locator("#app [data-ret-strip] small").count() == 0 and "To look at" not in text("#app"), "the summary strip: TDS · On challans · Left, amounts only; no To look at (%s)" % figs)
+        # next-tds-tidy2 (the owner: "TDS ₹… · On challans ₹… · Left ₹0.00 — we don't need that"): no summary strip
+        ok(figs == [] and pg.locator("#app [data-ret-strip], #app .rt-strip").count() == 0 and "To look at" not in text("#app"), "no summary strip; no To look at (%s)" % figs)
         steps = E("[...document.querySelectorAll('#app nav[data-return-tabs] button[data-ret-tab]')].map(b => b.dataset.retTab)")
         ok(steps == ["deductor", "deductees", "challans", "deductions", "file", "after"] and pg.locator("#app .rt-rail").count() == 0, "the steps' tabs, no rail: %s" % steps)
         hash_go("#/c/%s/books/tds/2026-27/Q2/26Q" % cid)
@@ -268,13 +269,17 @@ try:
                     ok(m["rowBars"] == 0, "%s: no row of filter boxes over the table (%d)" % (at, m["rowBars"]))
                     want = {"tds-deductions": ["Month", "PAN", "Section", "Challan", "Rate"], "tds-deductees": [], "gst-details": ["Part"], "gst-bills": ["Customer", "Part", "Place of supply", "Rate"]}[name]
                     ok(sorted(m["hfs"]) == sorted(want), "%s: the filters in the table's headers (%s)" % (at, m["hfs"]))
-                    ok(m["inTabs"] >= (3 if name.startswith("tds-") or name == "gst-bills" else 2) if name.startswith("tds-") else m["inTabs"] >= (3 if name == "tds-deductions" else 2), "%s: find, Show and ⋯ (Export, Import) in one toolbar over the table (%d)" % (at, m["inTabs"]))
+                    # next-tds-tidy2: a TDS table has no find box or Show pills above it (they are in its column headers): its
+                    # toolbar keeps ⋯ (Export, Import)
+                    ok(m["inTabs"] >= 1 if name.startswith("tds-") else m["inTabs"] >= 2, "%s: find, Show and ⋯ (Export, Import) in one toolbar over the table (%d)" % (at, m["inTabs"]))
                 ok(all(n <= 2 for _, n in m["why"]), "%s: a rate's reason on two lines at most (%s)" % (at, m["why"][:2]))
                 ok(not m["nums"] and not m["heads"], "%s: the figures and their headers to the right (%s %s)" % (at, m["nums"][:3], m["heads"][:3]))
                 ok(not m["wrapped"], "%s: each figure and date on one line (%s)" % (at, m["wrapped"][:4]))
                 ok(m["rr"] == 0, "%s: one ₹ before a figure, never ₹₹" % at)
                 if not capture and name in before:
-                    miss = [a for a in before.get(name, []) if a not in amts]
+                    # next-tds-tidy2: the strip's "Left ₹0.00" is gone by the owner's word (a TDS left off a challan is in the
+                    # "N to fix" count); its TDS is in the Deductees foot, its On challans in the Challans grid's
+                    miss = [a for a in before.get(name, []) if a not in amts and not (name.startswith("tds-") and a == "₹0.00")]
                     ok(not miss and before.get(name), "%s: every figure shown before is still shown (%d; missing %s)" % (at, len(before.get(name, [])), miss[:5]))
                 pg.screenshot(path=os.path.join(HERE, "out", "t70-%s-%dx%d.png" % (name, vw, vh)))
         pg.set_viewport_size({"width": 1440, "height": 900})

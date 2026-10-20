@@ -181,9 +181,30 @@ const TDS26Q = {
       if (!k) return {code: "", why: "payment code to confirm: " + sec + " to " + (r.party || "?") + ", no valid PAN to tell an individual or HUF (" + Object.values(e.byPan)[0] + ") from others (" + e.other + ")"};
       return {code: e.byPan[k] || e.other, why: ""};
     }
-    const c = e.by && e.by[r.pay];
+    const c = e.by && e.by[r.pay || this.payGuess(r)];
     return c ? {code: c, why: ""} : {code: "", why: "payment code to confirm: " + sec + ", what was paid for is not known (" + Object.keys(e.by || {}).join(" or ") + ")"};
   },
+  // next-tds-tidy2 (the owner: "Winman does not ask this"): what a 194J or 194-I payment was for when Tally's ledgers did
+  // not say (r.pay): the rate deducted (194J 2% technical, 10% professional, a director's only where the words say so;
+  // 194-I 2% machinery, 10% building), then the words of the party and the ledgers (professional, legal, audit, accounting,
+  // consultancy; technical, software, IT, AMC, service charges; director, sitting fee), then the choice made before for the
+  // deductee and ledger (b.tdsPayKind, Validate & file › Payment code to confirm). "" when none decides
+  payGuess(r){
+    const sec = TDS.sec(r.section);
+    if (sec !== "194J" && sec !== "194I") return "";
+    const v = this.vch(r), w = [r.party, r.ledger].concat(v ? (v.ent || []).map(e => e.l) : []).join(" ").toUpperCase();
+    const rt = num(r.paid) > 0 ? r.tds / r.paid * 100 : num(r.rate), at = x => Math.abs(rt - x) < 0.06;
+    if (sec === "194I") return at(2) ? "rent_machinery" : at(10) ? "rent_building" : TDSRate.kindOf(w).replace(/^(?!rent_).*/, "") || this.payKind(r);
+    if (/DIRECTOR|SITTING\s*FEE/.test(w)) return "director";
+    if (at(2)) return "technical";
+    if (at(10)) return "professional";
+    if (/TECHNICAL|SOFTWARE|\bIT\b|\bAMC\b|SERVICE\s*CHARGE|CALL\s*CENT/.test(w)) return "technical";
+    if (/PROFESSIONAL|LEGAL|AUDIT|ACCOUNTING|CONSULT|ADVOCATE|RETAINER/.test(w)) return "professional";
+    return this.payKind(r);
+  },
+  vch(r){ const b = S.books || {}; if (this._vb !== b.vouchers){ this._vb = b.vouchers; this._vm = new Map((b.vouchers || []).map(v => [v.id, v])); } return this._vm.get(String(r.id).split("|")[0]); },
+  payKey(r){ return normName(r.party || "") + "|" + (r.ledger || ""); },
+  payKind(r){ return ((S.books || {}).tdsPayKind || {})[this.payKey(r)] || ""; },
   // the deductions of a new-form return (FY 2026-27 on) with no confirmed payment code: [{row, why}] (To fix)
   payCodeRows(fy, q, form){
     if (!TDS.isNew(fy) || !TDS_FORMS[form]) return [];
@@ -204,7 +225,7 @@ const TDS26Q = {
     const s = TDS.sec(r.section), t = TDS_SEC_CODES[s];
     if (!t) return this.code(r.section);
     if (t.code) return t.code;
-    return (t.by && t.by[r.pay]) || "";
+    return (t.by && t.by[r.pay || this.payGuess(r)]) || "";
   },
   // A: a certificate covers the payment (its number goes beside); C: the higher rate, with no PAN or an inoperative one
   remark(r, form){
