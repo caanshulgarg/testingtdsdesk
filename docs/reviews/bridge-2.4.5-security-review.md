@@ -51,6 +51,7 @@ published reports pack, the two-step QR fix and the FSX guards, out of scope her
 | 11 | 438114131..556508c20 (the fixes, and the withdrawn 2.4.5 setup moved to assets-test/bridge-go-old unchanged) | none High or Medium (Low: the window probe's last pass can add up to 250 ms per hung window to the request's end; accepted) | - |
 | 12 | 556508c20..7919db499 (ROUND 103 evening) | none High or Medium: tally_device_period_night is security definer with search_path public, pg_temp, owner of the firm only (a viewer and another firm refused, tested), hours checked 0-23; the five new tally_devices columns select-only for authenticated (update refused, tested); tally_period_next still service_role only (its cap 30); no new Tally request (FinComEmployees and FinComVoucherObject as approved; the 3 s only for a payroll voucher's entry request, entryTC unchanged; every other request 2 s, tested); the bank details stripped on the period path as on the live path (Go and tally-ingest tests on the real 7.1 captures); no AI | - |
 | 13 | 7919db499..9cf6e2f25 (the merge of staging-next 6ab4a38b8: per-account browser copies, already reviewed and published there; no file of bridge-go/, server/tally-cloud/ or the 2.4.5 app parts touched) | none | - |
+| 14 | 1ecb71351..b747273fc (tests/run_period_ingest.py only: the office hours set around the hour the test runs at; no bridge, cloud or app file, the setup of 1ecb71351 unchanged) | none | - |
 
 No High or Medium open at 2b18c4072 (ROUND 103 fixes: r103_test.go, r245_test.go, r245ini_test.go, allowlist_test.go; tests/run_migration98.py 4b; tests/run_period_ingest.py; tests/run_older_entries_ui.py 4b). Each fix came with a test (Go: r245_test.go, r245ini_test.go, r245jobs_test.go;
 SQL: tests/run_migration98.py; tally-ingest: tests/run_period_ingest.py; app: tests/run_older_entries_ui.py,
@@ -72,4 +73,4 @@ tests/run_tally_ini_ui.py).
 
 The whole range reviewed, as release-check reads it (the last range in this note):
 
-Range: 33994f94c..9cf6e2f25
+Range: 33994f94c..b747273fc
