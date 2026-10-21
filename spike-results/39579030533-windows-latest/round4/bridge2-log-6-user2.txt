@@ -1,0 +1,5 @@
+2026-10-21 10:04:30  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=209
+2026-10-21 10:04:32  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line d802e3ba…): asking Tally by MasterID
+2026-10-21 10:04:32  Recorder: entry fetch of FinCom Spike U2: answered in 9 ms
+2026-10-21 10:04:32  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line d802e3ba…): taken: Tally's GUID f853aa72-125b-48c9-8012-733633507256-00000002, AlterID 2
+2026-10-21 10:04:32  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike U2: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it

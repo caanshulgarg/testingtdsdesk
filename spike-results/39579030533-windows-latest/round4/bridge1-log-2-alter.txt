@@ -1,0 +1,27 @@
+2026-10-21 09:56:03  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 95a4566d…): asking Tally by MasterID
+2026-10-21 09:56:04  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 95a4566d…): taken: Tally's GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000004, AlterID 4
+2026-10-21 09:56:04  Renumbering: made Receipt 2 of 01-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-21 09:57:42  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 736a4637…): asking Tally by MasterID
+2026-10-21 09:57:43  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-21 09:57:43  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 736a4637…): taken: Tally's GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000005, AlterID 5
+2026-10-21 09:57:43  Renumbering: made Purchase 1 of 01-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Purchase entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-21 09:59:18  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-21 09:59:18  Tally 9000 did not answer in time at 09:59:18 (TDSDeskCompanies, try 1); trying again by itself at 09:59:33
+2026-10-21 09:59:18  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-21 09:59:18  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 44734243…): asking Tally by MasterID
+2026-10-21 09:59:18  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 44734243…): held at once: waiting: Tally busy; FinCom asks again at 09:59 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-21 09:59:20  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskCompanies) 2.6s after the stop; its answer is discarded and the next request goes now
+2026-10-21 09:59:20  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 44734243…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-21 09:59:21  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+2026-10-21 09:59:21  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+2026-10-21 09:59:21  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 44734243…): taken: Tally's GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000006, AlterID 6
+2026-10-21 09:59:21  Recorder: Sales 1 of 20261001 in FinCom Spike Co resolved: sent as created with its GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000006 and body
+2026-10-21 09:59:21  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-21 09:59:21  Renumbering: made Sales 1 of 01-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Sales entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-21 10:00:40  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 4bf6a09e…): asking Tally by MasterID
+2026-10-21 10:00:40  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+2026-10-21 10:00:40  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 4bf6a09e…): taken: Tally's GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000007, AlterID 7
+2026-10-21 10:00:40  Renumbering: made Credit Note 1 of 01-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Credit Note entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-21 10:01:28  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 60bb8166…): asking Tally by MasterID
+2026-10-21 10:01:28  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+2026-10-21 10:01:28  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 60bb8166…): taken: Tally's GUID 088e89c3-57d7-4a19-a599-b1aceedda33f-00000003, AlterID 8

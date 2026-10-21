@@ -1,0 +1,9 @@
+{
+  "ledger-list-2.3.0.xml": "Tally's answer to FinComLedgers as 2.3.0 (e628ae0) builds it (MasterID 0..2000): 428 ledgers, 260236 bytes",
+  "ledger-list-2.3.1.xml": "Tally's answer to FinComLedgers as the ref (504b18e52da1e40bf7ff4e2ce7011e4c7ff040f3) builds it (MasterID 0..2000): 428 ledgers, 422094 bytes",
+  "s9-ledger-changes.xml": "S9: Tally's answer to the bridge's ledger changes request (FinComLedgerChanges, AlterID 642..643); 2839 bytes, 12 ms",
+  "s8-ledger-by-name.xml": "S8: Tally's answer to the bridge's ledger by name request (FinComLedgerByName, S231 New Party); 2486 bytes, 9 ms",
+  "ledger-by-name-tds-deductee.xml": "Tally's answer to the bridge's ledger by name request (FinComLedgerByName, S231 Contractor, a TDS deductee 'Company - Resident'); 2630 bytes, 6 ms",
+  "s15-ledger-by-name.xml": "S15: Tally's answer to the bridge's ledger by name request (FinComLedgerByName, S231 Renamed Party, renamed from S231 Old Name Party); 2494 bytes, 9 ms",
+  "_run": "run 39579030533, bridge 504b18e52da1e40bf7ff4e2ce7011e4c7ff040f3, TallyPrime 7.1 Educational on Windows, 2026-10-21 10:45"
+}

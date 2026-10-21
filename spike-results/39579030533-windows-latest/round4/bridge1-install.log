@@ -1,0 +1,16 @@
+2026-10-21 09:53:46  Setup: FinCom Bridge 2.4.5 setup started: Windows Server 2025 Datacenter 24H2 build 26100 (Windows 11); user runneradmin; administrator: yes; command line: /S /CURRENTUSER /MODE=sole
+2026-10-21 09:53:46  Setup: Silent install: user, sole mode, into C:\Users\runneradmin\AppData\Local\FinCom Bridge
+2026-10-21 09:53:46  Setup: Installing: user, sole mode, into C:\Users\runneradmin\AppData\Local\FinCom Bridge, as runneradmin
+2026-10-21 09:53:46  Setup: Files written in C:\Users\runneradmin\AppData\Local\FinCom Bridge
+2026-10-21 09:53:46  Setup: Shortcuts and the Apps entry (this user) written
+2026-10-21 09:53:46  Setup: Running: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" install --per-user --mode sole --fincom "https://staging.fincom.live/review/" --postonly "any"
+2026-10-21 09:53:46  Install: Windows Windows Server 2025 Datacenter 24H2 (build 26100), program C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe
+2026-10-21 09:53:46  Install (just for this user, no service): FinCom Bridge 2.4.5 for runnervm0xl3a\runneradmin (S-1-5-21-4239583824-265399229-1323058055-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+2026-10-21 09:53:50  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+2026-10-21 09:53:50  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+2026-10-21 09:53:50  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+2026-10-21 09:53:50  Install: tally.ini C:\Program Files\TallyPrime\tally.ini: added TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl (the backup C:\Program Files\TallyPrime\tally.ini.fincom-bak keeps the file as it was); FinCom's add-on loads at Tally's next start
+2026-10-21 09:53:50  Install: starts when runnervm0xl3a\runneradmin signs in to Windows (HKCU Run)
+2026-10-21 09:53:51  Install: done; the bridge answers on 127.0.0.1:9100
+2026-10-21 09:53:51  Setup: FinComBridge.exe install: done, the bridge answers
+2026-10-21 09:53:51  Setup: Finished: installed and running (sole mode)
