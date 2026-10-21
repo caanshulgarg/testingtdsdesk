@@ -54,9 +54,23 @@ export function facts(o) {
   F.bankBorrow = codes(["30A", "33A"], "cy"); F.bankBorrowPy = codes(["30A", "33A"], "py");
   F.otherBorrow = codes(["30B", "33B", "33C"], "cy");
   F.borrow = R2(F.bankBorrow + F.otherBorrow); F.borrowPy = R2(F.bankBorrowPy + codes(["30B", "33B", "33C"], "py"));
-  // the peak in the year is asked (only the year-end balances are in the trial balance); the larger year-end is its prefill
-  F.bankBorrowPeak = Math.max(F.bankBorrow, F.bankBorrowPy);
-  F.borrowPeak = Math.max(F.borrow, F.borrowPy);
+  // the highest borrowings "at any point of time during the year" (CARO para 1(2)(v): banks and financial institutions,
+  // 30A / 33A; the IFC exemption: banks, financial institutions and bodies corporate, every borrowing code): the
+  // ledgers' opening balances rolled through the day book day by day, the largest day-end total and its date
+  const peak = (cs) => {
+    const led = rows.filter((r) => cs.includes(r.code)), names = new Set(led.map((r) => r.ledger));
+    let bal = R2(led.reduce((t, r) => t - N(r.py), 0)), best = { amount: Math.max(0, bal), date: from };
+    const byDay = {};
+    vouchers.forEach((v) => { if (!v || v.date < from || v.date > to) return; (v.ent || []).forEach((e) => { if (names.has(e.l)) byDay[v.date] = (byDay[v.date] || 0) + N(e.a); }); });
+    Object.keys(byDay).sort().forEach((dt) => { bal = R2(bal + byDay[dt]); if (bal > best.amount + 0.005) best = { amount: bal, date: dt }; });
+    // the books' own year end (adjustments included) is never below the peak
+    const close = R2(led.reduce((t, r) => t - N(r.final), 0));
+    if (close > best.amount + 0.005) best = { amount: close, date: to };
+    return best;
+  };
+  const pb = peak(["30A", "33A"]), pa = peak(["30A", "30B", "33A", "33B", "33C"]);
+  F.bankBorrowPeak = pb.amount; F.bankBorrowPeakDate = pb.date;
+  F.borrowPeak = pa.amount; F.borrowPeakDate = pa.date;
   F.ltBorrow = noteT("30", "cy"); F.stBorrow = noteT("33", "cy");
   F.termLoans = byCode(["30A"]).map((r) => ({ ledger: r.ledger, cy: -N(r.final), py: -N(r.py) }));
   F.secured = byCode(["30A", "33A"]).map((r) => ({ ledger: r.ledger, cy: -N(r.final), py: -N(r.py) }));

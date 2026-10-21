@@ -30,6 +30,7 @@ const cr = (v) => "₹" + (Math.round((+v || 0) / 1e5) / 100).toLocaleString("en
 function Applies({ c }) {
   const ap = c.ap, sm = ap.smallTest, cls = { private: "Private company", public: "Unlisted public company", listed: "Listed company", opc: "One person company", s8: "Section 8 company" }[ap.cls];
   const bits = [cls, ap.small ? "a small company (paid-up " + cr(sm.paidUp) + ", turnover " + cr(sm.turnover) + "; limits " + cr(sm.limits.paidUp) + " / " + cr(sm.limits.turnover) + ")" : "not a small company" + (sm.why.length ? " (" + sm.why[0] + ")" : ""),
+    "highest bank borrowings " + cr(ap.peakBank) + (c.a.e_peak_bank !== "" && c.a.e_peak_bank != null ? " (typed: " + (c.a.e_peak_why || "no reason yet") + ")" : " on " + longDate(c.f.bankBorrowPeakDate)),
     ap.abridged ? "abridged Board's Report (Rule 8A)" : "full Board's Report", "CARO 2020: " + (ap.caro.applies ? "applies" : "not applicable"), "IFC: " + (ap.ifc.applies ? "applies" : "not applicable"), "CSR: " + (ap.csr.applies ? "applies" : "not applicable")];
   return <p className="rp-applies" data-rp-applies="">{bits.join(" · ")}</p>;
 }
@@ -46,13 +47,14 @@ function Preview({ doc, c }) {
 }
 
 // one question: its box, where its answer came from, marked when it is still needed
-function Field({ q, v, src, need, fy }) {
+function Field({ q, v, src, need, fy, f }) {
+  const hint = typeof q.hint === "function" ? q.hint(f) : q.hint || "";
   const put = (x) => { setAnswer(S.books, fy, q.k, x); if (typeof saveBooks === "function") saveBooks(); render(); };
   const id = "rpq-" + q.k;
   let box;
   if (q.t === "choice") box = <select id={id} aria-label={q.l} value={v == null ? "" : v} onChange={(ev) => put(ev.target.value)}>{v == null || v === "" ? <option value="">Choose…</option> : null}{q.o.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>;
-  else if (q.t === "long") box = <CommitBox id={id} as="textarea" rows={2} aria-label={q.l} value={v == null ? "" : v} placeholder={q.hint || ""} onCommit={(x) => put(x.trim())} />;
-  else if (q.t === "num" || q.t === "int") box = <CommitBox id={id} aria-label={q.l} inputMode="decimal" value={v == null ? "" : v} onCommit={(x) => { const t = String(x).replace(/[,₹\s]/g, ""); if (t === "") { put(null); return; } if (!isFinite(+t)) return false; put(q.t === "int" ? Math.round(+t) : +t); }} />;
+  else if (q.t === "long") box = <CommitBox id={id} as="textarea" rows={2} aria-label={q.l} value={v == null ? "" : v} placeholder={hint} onCommit={(x) => put(x.trim())} />;
+  else if (q.t === "num" || q.t === "int") box = <CommitBox id={id} aria-label={q.l} inputMode="decimal" placeholder={hint} value={v == null ? "" : v} onCommit={(x) => { const t = String(x).replace(/[,₹\s]/g, ""); if (t === "") { put(null); return; } if (!isFinite(+t)) return false; put(q.t === "int" ? Math.round(+t) : +t); }} />;
   else if (q.t === "date") box = <CommitBox id={id} type="date" aria-label={q.l} value={v ? String(v).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3") : ""} onCommit={(x) => put(x ? String(x).replace(/-/g, "") : null)} />;
   else if (q.t === "rows") {
     const list = Array.isArray(v) ? v : [];
@@ -64,7 +66,7 @@ function Field({ q, v, src, need, fy }) {
         <button type="button" className="linkbtn" onClick={() => put(list.filter((_, j) => j !== i))}>Remove</button></div>)}
       <button type="button" className="linkbtn" data-rp-add={q.k} onClick={() => put(list.concat([Object.fromEntries(q.cols.map(([k]) => [k, ""]))]))}>Add a row</button>
     </div>;
-  } else box = <CommitBox id={id} aria-label={q.l} value={v == null ? "" : v} placeholder={q.hint || ""} onCommit={(x) => put(x.trim())} />;
+  } else box = <CommitBox id={id} aria-label={q.l} value={v == null ? "" : v} placeholder={hint} onCommit={(x) => put(x.trim())} />;
   return <div className={"rp-q" + (need ? " need" : "")} data-q={q.k} data-q-need={need ? "" : undefined}>
     <label htmlFor={id}>{q.l}{need && <em> needed</em>}</label>
     <div className="rp-q-box">{box}</div>
@@ -86,7 +88,7 @@ function Questionnaire({ p, fy }) {
       if (!qs.length) return null;
       return <section key={sk} className="rp-qs" data-rp-qs={sk}><h4>{title}</h4>
         {sk === "C" && !c.ap.caro.applies ? <p className="note">CARO 2020 does not apply: {c.ap.caro.reason}.</p> : null}
-        {qs.map((q) => <Field key={q.k} q={q} v={c.a[q.k]} src={c.R.src[q.k]} need={need.has(q.k)} fy={fy} />)}</section>;
+        {qs.map((q) => <Field key={q.k} q={q} v={c.a[q.k]} src={c.R.src[q.k]} need={need.has(q.k)} fy={fy} f={c.f} />)}</section>;
     })}
   </div>;
 }

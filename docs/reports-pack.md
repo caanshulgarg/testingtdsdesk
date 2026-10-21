@@ -13,7 +13,9 @@ Tests: `tests/run_reports_pack.js`, `tests/run_reports_pack_ui.py`.
   under a special Act. The earlier limits' result is shown beside in a year of change.
 - CARO 2020 para 1(2): banking, insurance, s.8, OPC, small company excluded; private company exempt when capital +
   reserves ≤ ₹1 cr, bank / FI borrowings ≤ ₹1 cr at any time, revenue ≤ ₹10 cr, and not a holding company or a
-  subsidiary of a public company. No CARO change for FY 2025-26.
+  subsidiary OF A PUBLIC COMPANY (a private group keeps it). Peak borrowings: the largest day-end total of the
+  borrowing ledgers rolled through the day book (CARO: 30A/33A; IFC: all borrowing codes), with its date; a typed
+  figure replaces it only with a reason. No CARO change for FY 2025-26.
 - IFC (s.143(3)(i)): OPC, small company, or private company with turnover < ₹50 cr and borrowings < ₹25 cr and no
   filing default are exempt.
 - CSR (s.135): preceding year net worth ≥ ₹500 cr, turnover ≥ ₹1,000 cr or net profit ≥ ₹5 cr; 2% of the 3-year average.

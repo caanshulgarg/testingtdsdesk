@@ -56,9 +56,13 @@ const ANSWERS = {e_agm_no: 11, e_board_date: "20260905", e_audit_date: "20260905
   ok(!ap(pvt).small && !ap(pvt).caro.applies && /private company/.test(ap(pvt).caro.reason), "a private company (not small) at exactly ₹1 crore capital and reserves, ₹1 crore bank borrowings, ₹10 crore revenue: exempt");
   ok(ap(Object.assign({}, pvt, {reserves: 0.5 * CR + 1})).caro.applies, "capital and reserves ₹1 above ₹1 crore: CARO applies");
   ok(ap(Object.assign({}, pvt, {bankBorrowPeak: 1 * CR + 1})).caro.applies, "bank borrowings ₹1 above ₹1 crore at any time: CARO applies");
-  ok(ap(pvt, {e_peak_bank: 1 * CR + 1}).caro.applies, "... the peak borrowings answered in the questionnaire count");
+  ok(ap(pvt, {e_peak_bank: 1 * CR + 1, e_peak_why: "sanction letter"}).caro.applies, "... the peak borrowings typed over (with a reason) count");
   ok(ap(Object.assign({}, pvt, {revenue: 10 * CR + 1})).caro.applies, "revenue ₹1 above ₹10 crore: CARO applies");
-  ok(ap(pvt, {e_holdsub: "subsidiary_public"}).caro.applies && ap(pvt, {e_holdsub: "holding"}).caro.applies, "a subsidiary of a public company or a holding company: no private-company exemption");
+  ok(!ap(pvt, {e_holdsub: "holding", e_pub_group: "no"}).caro.applies, "para 1(2)(v): a private company holding a private subsidiary, within the limits: still exempt");
+  ok(!ap(pvt, {e_holdsub: "subsidiary", e_pub_group: "no"}).caro.applies, "... a subsidiary of a private company, within the limits: still exempt");
+  ok(ap(pvt, {e_holdsub: "subsidiary", e_pub_group: "yes"}).caro.applies && ap(pvt, {e_holdsub: "holding", e_pub_group: "yes"}).caro.applies && ap(pvt, {e_holdsub: "subsidiary_public"}).caro.applies,
+    "a subsidiary of a public company, or a holding company of a public company: no private-company exemption");
+  ok(P.Q.e_pub_group && P.Q.e_pub_group.l === "Is the company a holding company or a subsidiary of a public company?", "the questionnaire asks it in those words");
   ok(ap({}, {e_class: "public"}).caro.applies && !ap({}, {e_class: "opc"}).caro.applies && !ap({}, {e_class: "s8"}).caro.applies && !ap({paidUp: 11 * CR}, {e_sector: "banking"}).caro.applies, "public: applies; OPC, section 8, banking company: excluded");
 
   console.log("\nApplicability: internal financial controls (s.143(3)(i))");
@@ -106,6 +110,10 @@ const ANSWERS = {e_agm_no: 11, e_board_date: "20260905", e_audit_date: "20260905
   ok(f.statDues.length === 1 && f.statDues[0].ledger === "TDS Payable 194C" && f.statDues[0].amount === 5000 && f.statDues[0].due === "20250707", "statutory dues over six months (CARO 3(vii)(a)): TDS ₹5,000 payable since 7 July 2025 (" + JSON.stringify(f.statDues) + ")");
   ok(!f.statDues.some(x => /192|194J|PF|Professional|IGST/.test(x.ledger)), "... the March dues are not over six months");
   eq(f.cashLoss, 0, "no cash loss (profit before tax plus depreciation is positive)");
+  ok(f.bankBorrowPeak === 1500000 && f.bankBorrowPeakDate === "20250915" && f.bankBorrow === 500000, "peak bank borrowings from the day book: ₹15,00,000 on 15 September 2025 (year end ₹5,00,000) (" + f.bankBorrowPeak + " on " + f.bankBorrowPeakDate + ")");
+  ok(f.borrowPeak === 1500000 && f.borrowPeakDate === "20250915", "peak of all borrowings (IFC): ₹15,00,000 on 15 September 2025, above the year end's ₹10,00,000 (" + f.borrowPeak + ")");
+  { const pk2 = P.pack({d, dR, vouchers: b.vouchers, store: {"2025": {a: {e_peak_bank: 2 * CR}}}, fy: "2025"});
+    ok(pk2.c.ap.peakBank === 2 * CR && P.missing(pk2.c.R, pk2.c.ap, pk2.c.f).some(q => q.k === "e_peak_why"), "a peak typed over the books' asks for its reason"); }
   eq(f.cash, row("Cash").final, "cash on hand (MRL) = the ledger"); eq(f.bank, row("Northbank Current A/c").final, "bank balance (MRL) = the ledger");
   eq(f.msme, (dR.notes.find(n => n.key === "6").lines.find(l => l.code === "6A") || {}).cy, "MSME dues = Note 6 (6A)");
   ok(f.estimates.length >= 3, "the estimates the MRL names: " + f.estimates.join("; "));

@@ -4,7 +4,8 @@
 //
 //   applicability(f, a)
 //     f  {fyEnd, paidUp, turnover, turnoverPy, revenue, reserves, netWorthPy, pbtPy, bankBorrowPeak, borrowPeak, ...}
-//     a  answers: e_class (private | public | listed | opc | s8), e_holdsub (none | holding | subsidiary | subsidiary_public),
+//     a  answers: e_class (private | public | listed | opc | s8), e_holdsub (none | holding | subsidiary; subsidiary_public read as subsidiary + e_pub_group yes),
+//        e_pub_group (yes: a holding company or a subsidiary of a public company),
 //        e_sector (general | banking | insurance | nidhi | nbfc), e_filing_default (yes | no), e_peak_bank, e_peak_borrow,
 //        e_format (auto | full | abridged), e_mdna, e_cg, c_wc_limits, b_ids, csr_np (net profit u/s 198, preceding year)
 import { LAW, smallLimits } from "./law.js";
@@ -53,7 +54,8 @@ export function applicability(f, a) {
   else if (cls === "s8") caro.reason = "a company licensed under section 8 of the Act";
   else if (opc) caro.reason = "a one person company";
   else if (small) caro.reason = "a small company as defined in section 2(85) of the Act";
-  else if (pvt && hs !== "holding" && hs !== "subsidiary_public") {
+  // para 1(2)(v): the exemption is lost only by a holding company or a subsidiary OF A PUBLIC COMPANY
+  else if (pvt && !(yes(a.e_pub_group) || hs === "subsidiary_public")) {
     const P = LAW.caroPvt, capRes = N(f.paidUp) + N(f.reserves);
     if (capRes <= P.capRes && peakBank <= P.bankBorrow && N(f.revenue) <= P.revenue) caro.reason = "a private company whose paid-up capital and reserves and surplus do not exceed ₹1 crore, whose borrowings from banks and financial institutions did not exceed ₹1 crore at any time during the year, and whose total revenue does not exceed ₹10 crore";
     caro.tests = { capRes, bankBorrow: peakBank, revenue: N(f.revenue) };
