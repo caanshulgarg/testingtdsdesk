@@ -1,0 +1,39 @@
+;;TallyPrime workstation specific parameters file
+[TALLY]
+
+;;Specify the path of Capsule Folder
+Capsule=
+
+;;Specify location of Data files
+Data=C:\Users\Public\TallyPrime\data
+
+;;Specify location of Config files
+Config=C:\Program Files\TallyPrime
+
+;;Specify location of Language Files
+LangPath=C:\Program Files\TallyPrime\lang
+
+
+;; Specify list of companies to preload,
+;; TO STOP DEFAULT LOADING set the following line to NO
+Default Companies = Yes
+Load = 100000
+
+;; Specify list of TDL files for user defined reports and changes.
+;; TO STOP LOADING TDL FILES, set the following line to NO
+User TDL = Yes
+;;tdl = <tdlfile.1>
+
+;; Specify Color details of local monitor
+Color = Yes
+Sound = Yes
+Client Server = None
+ServerPort = 9000
+Enable ODBC Server = Yes
+Load Buffering = Yes
+Ignore TCP Timeout = Yes
+;; TallyGatewayServer = server:port
+TallyGatewayServer=localhost:9999
+Tally License Serial Number=0
+
+;; end-of-file
