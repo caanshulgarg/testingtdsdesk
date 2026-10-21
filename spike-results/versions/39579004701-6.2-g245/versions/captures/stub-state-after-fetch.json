@@ -1,0 +1,6098 @@
+{
+  "counted": {
+    "20261021": 0,
+    "20261020": 0,
+    "20261019": 0,
+    "20261002": 2216,
+    "20261001": 2216,
+    "20260902": 2216,
+    "20260901": 2216,
+    "20260831": 800,
+    "20260802": 2216,
+    "20260801": 2216,
+    "20260731": 2216,
+    "20260702": 300,
+    "20260701": 2216,
+    "20260602": 2216,
+    "20260601": 100,
+    "20260531": 0,
+    "20260502": 2216,
+    "20260501": 2216,
+    "20260402": 2216,
+    "20260401": 2217
+  },
+  "heads": {
+    "20261021": 0,
+    "20261020": 0,
+    "20261019": 0,
+    "20261002": 2216,
+    "20261001": 2216,
+    "20260902": 2216,
+    "20260901": 2216,
+    "20260831": 800,
+    "20260802": 2216,
+    "20260801": 2216,
+    "20260731": 2216,
+    "20260702": 300,
+    "20260701": 2216,
+    "20260602": 2216,
+    "20260601": 100,
+    "20260531": 0,
+    "20260502": 2216,
+    "20260501": 2216,
+    "20260402": 2216,
+    "20260401": 2217
+  },
+  "held": {
+    "20261021": 0,
+    "20261020": 0,
+    "20261019": 0,
+    "20261002": 2216,
+    "20261001": 2216,
+    "20260902": 2216,
+    "20260901": 2216,
+    "20260831": 800,
+    "20260802": 2216,
+    "20260801": 2216,
+    "20260731": 2216,
+    "20260702": 300,
+    "20260701": 2216,
+    "20260602": 2216,
+    "20260601": 100,
+    "20260531": 0,
+    "20260502": 2216,
+    "20260501": 2216,
+    "20260402": 2216,
+    "20260401": 2217
+  },
+  "done": [
+    "20260401",
+    "20260402",
+    "20260501",
+    "20260502",
+    "20260531",
+    "20260601",
+    "20260602",
+    "20260701",
+    "20260702",
+    "20260731",
+    "20260801",
+    "20260802",
+    "20260831",
+    "20260901",
+    "20260902",
+    "20261001",
+    "20261002",
+    "20261019",
+    "20261020",
+    "20261021"
+  ],
+  "upload": {
+    "20261018": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261017": {
+      "why": "over2s",
+      "type": "Purchase",
+      "words": "Tally took too long to give 17-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261016": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261015": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261014": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261013": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261012": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261011": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261010": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261009": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261008": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261007": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261006": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261005": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261004": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Oct-2026. Please upload that day's Day Book."
+    },
+    "20261003": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Oct-2026. Please upload that day's Day Book."
+    },
+    "20260930": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260929": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260928": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260927": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260926": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260925": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260924": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260923": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260922": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260921": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260920": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260919": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260918": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260917": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260916": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260915": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260914": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260913": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260912": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260911": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260910": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260909": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260908": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260907": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260906": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260905": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260904": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260903": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Sep-2026. Please upload that day's Day Book."
+    },
+    "20260830": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260829": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260828": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260827": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260826": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260825": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260824": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260823": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260822": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260821": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260820": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260819": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260818": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260817": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260816": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260815": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260814": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260813": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260812": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260811": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260810": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260809": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260808": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260807": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260806": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260805": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260804": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260803": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Aug-2026. Please upload that day's Day Book."
+    },
+    "20260730": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260729": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260728": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260727": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260726": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260725": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260724": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260723": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260722": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260721": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260720": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260719": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260718": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260717": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260716": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260715": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260714": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260713": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260712": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260711": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260710": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260709": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260708": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260707": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260706": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260705": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260704": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260703": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Jul-2026. Please upload that day's Day Book."
+    },
+    "20260630": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260629": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260628": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260627": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260626": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260625": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260624": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260623": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260622": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260621": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260620": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260619": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260618": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260617": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260616": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260615": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260614": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260613": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260612": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260611": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260610": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260609": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260608": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260607": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260606": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260605": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260604": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260603": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Jun-2026. Please upload that day's Day Book."
+    },
+    "20260530": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-May-2026. Please upload that day's Day Book."
+    },
+    "20260529": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-May-2026. Please upload that day's Day Book."
+    },
+    "20260528": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-May-2026. Please upload that day's Day Book."
+    },
+    "20260527": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-May-2026. Please upload that day's Day Book."
+    },
+    "20260526": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-May-2026. Please upload that day's Day Book."
+    },
+    "20260525": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-May-2026. Please upload that day's Day Book."
+    },
+    "20260524": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-May-2026. Please upload that day's Day Book."
+    },
+    "20260523": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-May-2026. Please upload that day's Day Book."
+    },
+    "20260522": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-May-2026. Please upload that day's Day Book."
+    },
+    "20260521": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-May-2026. Please upload that day's Day Book."
+    },
+    "20260520": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-May-2026. Please upload that day's Day Book."
+    },
+    "20260519": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-May-2026. Please upload that day's Day Book."
+    },
+    "20260518": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-May-2026. Please upload that day's Day Book."
+    },
+    "20260517": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-May-2026. Please upload that day's Day Book."
+    },
+    "20260516": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-May-2026. Please upload that day's Day Book."
+    },
+    "20260515": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-May-2026. Please upload that day's Day Book."
+    },
+    "20260514": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-May-2026. Please upload that day's Day Book."
+    },
+    "20260513": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-May-2026. Please upload that day's Day Book."
+    },
+    "20260512": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-May-2026. Please upload that day's Day Book."
+    },
+    "20260511": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-May-2026. Please upload that day's Day Book."
+    },
+    "20260510": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-May-2026. Please upload that day's Day Book."
+    },
+    "20260509": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-May-2026. Please upload that day's Day Book."
+    },
+    "20260508": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-May-2026. Please upload that day's Day Book."
+    },
+    "20260507": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-May-2026. Please upload that day's Day Book."
+    },
+    "20260506": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-May-2026. Please upload that day's Day Book."
+    },
+    "20260505": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-May-2026. Please upload that day's Day Book."
+    },
+    "20260504": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-May-2026. Please upload that day's Day Book."
+    },
+    "20260503": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-May-2026. Please upload that day's Day Book."
+    },
+    "20260430": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 30-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260429": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 29-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260428": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 28-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260427": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 27-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260426": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 26-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260425": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 25-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260424": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 24-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260423": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 23-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260422": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 22-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260421": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 21-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260420": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 20-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260419": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 19-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260418": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 18-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260417": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 17-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260416": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 16-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260415": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 15-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260414": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 14-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260413": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 13-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260412": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 12-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260411": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 11-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260410": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 10-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260409": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 09-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260408": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 08-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260407": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 07-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260406": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 06-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260405": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 05-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260404": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 04-Apr-2026. Please upload that day's Day Book."
+    },
+    "20260403": {
+      "why": "over2s",
+      "type": "Sales",
+      "words": "Tally took too long to give 03-Apr-2026. Please upload that day's Day Book."
+    }
+  },
+  "want": {
+    "20260601": [
+      "8866",
+      "8867",
+      "8868",
+      "8869",
+      "8870",
+      "8871",
+      "8872",
+      "8873",
+      "8874",
+      "8875",
+      "8876",
+      "8877",
+      "8878",
+      "8879",
+      "8880",
+      "8881",
+      "8882",
+      "8883",
+      "8884",
+      "8885",
+      "8886",
+      "8887",
+      "8888",
+      "8889",
+      "8890",
+      "8891",
+      "8892",
+      "8893",
+      "8894",
+      "8895",
+      "8896",
+      "8897",
+      "8898",
+      "8899",
+      "8900",
+      "8901",
+      "8902",
+      "8903",
+      "8904",
+      "8905",
+      "8906",
+      "8907",
+      "8908",
+      "8909",
+      "8910",
+      "8911",
+      "8912",
+      "8913",
+      "8914",
+      "8915",
+      "8916",
+      "8917",
+      "8918",
+      "8919",
+      "8920",
+      "8921",
+      "8922",
+      "8923",
+      "8924",
+      "8925",
+      "8926",
+      "8927",
+      "8928",
+      "8929",
+      "8930",
+      "8931",
+      "8932",
+      "8933",
+      "8934",
+      "8935",
+      "8936",
+      "8937",
+      "8938",
+      "8939",
+      "8940",
+      "8941",
+      "8942",
+      "8943",
+      "8944",
+      "8945",
+      "8946",
+      "8947",
+      "8948",
+      "8949",
+      "8950",
+      "8951",
+      "8952",
+      "8953",
+      "8954",
+      "8955",
+      "8956",
+      "8957",
+      "8958",
+      "8959",
+      "8960",
+      "8961",
+      "8962",
+      "8963",
+      "8964",
+      "8965"
+    ],
+    "20260702": [
+      "13398",
+      "13399",
+      "13400",
+      "13401",
+      "13402",
+      "13403",
+      "13404",
+      "13405",
+      "13406",
+      "13407",
+      "13408",
+      "13409",
+      "13410",
+      "13411",
+      "13412",
+      "13413",
+      "13414",
+      "13415",
+      "13416",
+      "13417",
+      "13418",
+      "13419",
+      "13420",
+      "13421",
+      "13422",
+      "13423",
+      "13424",
+      "13425",
+      "13426",
+      "13427",
+      "13428",
+      "13429",
+      "13430",
+      "13431",
+      "13432",
+      "13433",
+      "13434",
+      "13435",
+      "13436",
+      "13437",
+      "13438",
+      "13439",
+      "13440",
+      "13441",
+      "13442",
+      "13443",
+      "13444",
+      "13445",
+      "13446",
+      "13447",
+      "13448",
+      "13449",
+      "13450",
+      "13451",
+      "13452",
+      "13453",
+      "13454",
+      "13455",
+      "13456",
+      "13457",
+      "13458",
+      "13459",
+      "13460",
+      "13461",
+      "13462",
+      "13463",
+      "13464",
+      "13465",
+      "13466",
+      "13467",
+      "13468",
+      "13469",
+      "13470",
+      "13471",
+      "13472",
+      "13473",
+      "13474",
+      "13475",
+      "13476",
+      "13477",
+      "13478",
+      "13479",
+      "13480",
+      "13481",
+      "13482",
+      "13483",
+      "13484",
+      "13485",
+      "13486",
+      "13487",
+      "13488",
+      "13489",
+      "13490",
+      "13491",
+      "13492",
+      "13493",
+      "13494",
+      "13495",
+      "13496",
+      "13497",
+      "13498",
+      "13499",
+      "13500",
+      "13501",
+      "13502",
+      "13503",
+      "13504",
+      "13505",
+      "13506",
+      "13507",
+      "13508",
+      "13509",
+      "13510",
+      "13511",
+      "13512",
+      "13513",
+      "13514",
+      "13515",
+      "13516",
+      "13517",
+      "13518",
+      "13519",
+      "13520",
+      "13521",
+      "13522",
+      "13523",
+      "13524",
+      "13525",
+      "13526",
+      "13527",
+      "13528",
+      "13529",
+      "13530",
+      "13531",
+      "13532",
+      "13533",
+      "13534",
+      "13535",
+      "13536",
+      "13537",
+      "13538",
+      "13539",
+      "13540",
+      "13541",
+      "13542",
+      "13543",
+      "13544",
+      "13545",
+      "13546",
+      "13547",
+      "13548",
+      "13549",
+      "13550",
+      "13551",
+      "13552",
+      "13553",
+      "13554",
+      "13555",
+      "13556",
+      "13557",
+      "13558",
+      "13559",
+      "13560",
+      "13561",
+      "13562",
+      "13563",
+      "13564",
+      "13565",
+      "13566",
+      "13567",
+      "13568",
+      "13569",
+      "13570",
+      "13571",
+      "13572",
+      "13573",
+      "13574",
+      "13575",
+      "13576",
+      "13577",
+      "13578",
+      "13579",
+      "13580",
+      "13581",
+      "13582",
+      "13583",
+      "13584",
+      "13585",
+      "13586",
+      "13587",
+      "13588",
+      "13589",
+      "13590",
+      "13591",
+      "13592",
+      "13593",
+      "13594",
+      "13595",
+      "13596",
+      "13597",
+      "13598",
+      "13599",
+      "13600",
+      "13601",
+      "13602",
+      "13603",
+      "13604",
+      "13605",
+      "13606",
+      "13607",
+      "13608",
+      "13609",
+      "13610",
+      "13611",
+      "13612",
+      "13613",
+      "13614",
+      "13615",
+      "13616",
+      "13617",
+      "13618",
+      "13619",
+      "13620",
+      "13621",
+      "13622",
+      "13623",
+      "13624",
+      "13625",
+      "13626",
+      "13627",
+      "13628",
+      "13629",
+      "13630",
+      "13631",
+      "13632",
+      "13633",
+      "13634",
+      "13635",
+      "13636",
+      "13637",
+      "13638",
+      "13639",
+      "13640",
+      "13641",
+      "13642",
+      "13643",
+      "13644",
+      "13645",
+      "13646",
+      "13647",
+      "13648",
+      "13649",
+      "13650",
+      "13651",
+      "13652",
+      "13653",
+      "13654",
+      "13655",
+      "13656",
+      "13657",
+      "13658",
+      "13659",
+      "13660",
+      "13661",
+      "13662",
+      "13663",
+      "13664",
+      "13665",
+      "13666",
+      "13667",
+      "13668",
+      "13669",
+      "13670",
+      "13671",
+      "13672",
+      "13673",
+      "13674",
+      "13675",
+      "13676",
+      "13677",
+      "13678",
+      "13679",
+      "13680",
+      "13681",
+      "13682",
+      "13683",
+      "13684",
+      "13685",
+      "13686",
+      "13687",
+      "13688",
+      "13689",
+      "13690",
+      "13691",
+      "13692",
+      "13693",
+      "13694",
+      "13695",
+      "13696",
+      "13697"
+    ],
+    "20260831": [
+      "20346",
+      "20347",
+      "20348",
+      "20349",
+      "20350",
+      "20351",
+      "20352",
+      "20353",
+      "20354",
+      "20355",
+      "20356",
+      "20357",
+      "20358",
+      "20359",
+      "20360",
+      "20361",
+      "20362",
+      "20363",
+      "20364",
+      "20365",
+      "20366",
+      "20367",
+      "20368",
+      "20369",
+      "20370",
+      "20371",
+      "20372",
+      "20373",
+      "20374",
+      "20375",
+      "20376",
+      "20377",
+      "20378",
+      "20379",
+      "20380",
+      "20381",
+      "20382",
+      "20383",
+      "20384",
+      "20385",
+      "20386",
+      "20387",
+      "20388",
+      "20389",
+      "20390",
+      "20391",
+      "20392",
+      "20393",
+      "20394",
+      "20395",
+      "20396",
+      "20397",
+      "20398",
+      "20399",
+      "20400",
+      "20401",
+      "20402",
+      "20403",
+      "20404",
+      "20405",
+      "20406",
+      "20407",
+      "20408",
+      "20409",
+      "20410",
+      "20411",
+      "20412",
+      "20413",
+      "20414",
+      "20415",
+      "20416",
+      "20417",
+      "20418",
+      "20419",
+      "20420",
+      "20421",
+      "20422",
+      "20423",
+      "20424",
+      "20425",
+      "20426",
+      "20427",
+      "20428",
+      "20429",
+      "20430",
+      "20431",
+      "20432",
+      "20433",
+      "20434",
+      "20435",
+      "20436",
+      "20437",
+      "20438",
+      "20439",
+      "20440",
+      "20441",
+      "20442",
+      "20443",
+      "20444",
+      "20445",
+      "20446",
+      "20447",
+      "20448",
+      "20449",
+      "20450",
+      "20451",
+      "20452",
+      "20453",
+      "20454",
+      "20455",
+      "20456",
+      "20457",
+      "20458",
+      "20459",
+      "20460",
+      "20461",
+      "20462",
+      "20463",
+      "20464",
+      "20465",
+      "20466",
+      "20467",
+      "20468",
+      "20469",
+      "20470",
+      "20471",
+      "20472",
+      "20473",
+      "20474",
+      "20475",
+      "20476",
+      "20477",
+      "20478",
+      "20479",
+      "20480",
+      "20481",
+      "20482",
+      "20483",
+      "20484",
+      "20485",
+      "20486",
+      "20487",
+      "20488",
+      "20489",
+      "20490",
+      "20491",
+      "20492",
+      "20493",
+      "20494",
+      "20495",
+      "20496",
+      "20497",
+      "20498",
+      "20499",
+      "20500",
+      "20501",
+      "20502",
+      "20503",
+      "20504",
+      "20505",
+      "20506",
+      "20507",
+      "20508",
+      "20509",
+      "20510",
+      "20511",
+      "20512",
+      "20513",
+      "20514",
+      "20515",
+      "20516",
+      "20517",
+      "20518",
+      "20519",
+      "20520",
+      "20521",
+      "20522",
+      "20523",
+      "20524",
+      "20525",
+      "20526",
+      "20527",
+      "20528",
+      "20529",
+      "20530",
+      "20531",
+      "20532",
+      "20533",
+      "20534",
+      "20535",
+      "20536",
+      "20537",
+      "20538",
+      "20539",
+      "20540",
+      "20541",
+      "20542",
+      "20543",
+      "20544",
+      "20545",
+      "20546",
+      "20547",
+      "20548",
+      "20549",
+      "20550",
+      "20551",
+      "20552",
+      "20553",
+      "20554",
+      "20555",
+      "20556",
+      "20557",
+      "20558",
+      "20559",
+      "20560",
+      "20561",
+      "20562",
+      "20563",
+      "20564",
+      "20565",
+      "20566",
+      "20567",
+      "20568",
+      "20569",
+      "20570",
+      "20571",
+      "20572",
+      "20573",
+      "20574",
+      "20575",
+      "20576",
+      "20577",
+      "20578",
+      "20579",
+      "20580",
+      "20581",
+      "20582",
+      "20583",
+      "20584",
+      "20585",
+      "20586",
+      "20587",
+      "20588",
+      "20589",
+      "20590",
+      "20591",
+      "20592",
+      "20593",
+      "20594",
+      "20595",
+      "20596",
+      "20597",
+      "20598",
+      "20599",
+      "20600",
+      "20601",
+      "20602",
+      "20603",
+      "20604",
+      "20605",
+      "20606",
+      "20607",
+      "20608",
+      "20609",
+      "20610",
+      "20611",
+      "20612",
+      "20613",
+      "20614",
+      "20615",
+      "20616",
+      "20617",
+      "20618",
+      "20619",
+      "20620",
+      "20621",
+      "20622",
+      "20623",
+      "20624",
+      "20625",
+      "20626",
+      "20627",
+      "20628",
+      "20629",
+      "20630",
+      "20631",
+      "20632",
+      "20633",
+      "20634",
+      "20635",
+      "20636",
+      "20637",
+      "20638",
+      "20639",
+      "20640",
+      "20641",
+      "20642",
+      "20643",
+      "20644",
+      "20645",
+      "20646",
+      "20647",
+      "20648",
+      "20649",
+      "20650",
+      "20651",
+      "20652",
+      "20653",
+      "20654",
+      "20655",
+      "20656",
+      "20657",
+      "20658",
+      "20659",
+      "20660",
+      "20661",
+      "20662",
+      "20663",
+      "20664",
+      "20665",
+      "20666",
+      "20667",
+      "20668",
+      "20669",
+      "20670",
+      "20671",
+      "20672",
+      "20673",
+      "20674",
+      "20675",
+      "20676",
+      "20677",
+      "20678",
+      "20679",
+      "20680",
+      "20681",
+      "20682",
+      "20683",
+      "20684",
+      "20685",
+      "20686",
+      "20687",
+      "20688",
+      "20689",
+      "20690",
+      "20691",
+      "20692",
+      "20693",
+      "20694",
+      "20695",
+      "20696",
+      "20697",
+      "20698",
+      "20699",
+      "20700",
+      "20701",
+      "20702",
+      "20703",
+      "20704",
+      "20705",
+      "20706",
+      "20707",
+      "20708",
+      "20709",
+      "20710",
+      "20711",
+      "20712",
+      "20713",
+      "20714",
+      "20715",
+      "20716",
+      "20717",
+      "20718",
+      "20719",
+      "20720",
+      "20721",
+      "20722",
+      "20723",
+      "20724",
+      "20725",
+      "20726",
+      "20727",
+      "20728",
+      "20729",
+      "20730",
+      "20731",
+      "20732",
+      "20733",
+      "20734",
+      "20735",
+      "20736",
+      "20737",
+      "20738",
+      "20739",
+      "20740",
+      "20741",
+      "20742",
+      "20743",
+      "20744",
+      "20745",
+      "20746",
+      "20747",
+      "20748",
+      "20749",
+      "20750",
+      "20751",
+      "20752",
+      "20753",
+      "20754",
+      "20755",
+      "20756",
+      "20757",
+      "20758",
+      "20759",
+      "20760",
+      "20761",
+      "20762",
+      "20763",
+      "20764",
+      "20765",
+      "20766",
+      "20767",
+      "20768",
+      "20769",
+      "20770",
+      "20771",
+      "20772",
+      "20773",
+      "20774",
+      "20775",
+      "20776",
+      "20777",
+      "20778",
+      "20779",
+      "20780",
+      "20781",
+      "20782",
+      "20783",
+      "20784",
+      "20785",
+      "20786",
+      "20787",
+      "20788",
+      "20789",
+      "20790",
+      "20791",
+      "20792",
+      "20793",
+      "20794",
+      "20795",
+      "20796",
+      "20797",
+      "20798",
+      "20799",
+      "20800",
+      "20801",
+      "20802",
+      "20803",
+      "20804",
+      "20805",
+      "20806",
+      "20807",
+      "20808",
+      "20809",
+      "20810",
+      "20811",
+      "20812",
+      "20813",
+      "20814",
+      "20815",
+      "20816",
+      "20817",
+      "20818",
+      "20819",
+      "20820",
+      "20821",
+      "20822",
+      "20823",
+      "20824",
+      "20825",
+      "20826",
+      "20827",
+      "20828",
+      "20829",
+      "20830",
+      "20831",
+      "20832",
+      "20833",
+      "20834",
+      "20835",
+      "20836",
+      "20837",
+      "20838",
+      "20839",
+      "20840",
+      "20841",
+      "20842",
+      "20843",
+      "20844",
+      "20845",
+      "20846",
+      "20847",
+      "20848",
+      "20849",
+      "20850",
+      "20851",
+      "20852",
+      "20853",
+      "20854",
+      "20855",
+      "20856",
+      "20857",
+      "20858",
+      "20859",
+      "20860",
+      "20861",
+      "20862",
+      "20863",
+      "20864",
+      "20865",
+      "20866",
+      "20867",
+      "20868",
+      "20869",
+      "20870",
+      "20871",
+      "20872",
+      "20873",
+      "20874",
+      "20875",
+      "20876",
+      "20877",
+      "20878",
+      "20879",
+      "20880",
+      "20881",
+      "20882",
+      "20883",
+      "20884",
+      "20885",
+      "20886",
+      "20887",
+      "20888",
+      "20889",
+      "20890",
+      "20891",
+      "20892",
+      "20893",
+      "20894",
+      "20895",
+      "20896",
+      "20897",
+      "20898",
+      "20899",
+      "20900",
+      "20901",
+      "20902",
+      "20903",
+      "20904",
+      "20905",
+      "20906",
+      "20907",
+      "20908",
+      "20909",
+      "20910",
+      "20911",
+      "20912",
+      "20913",
+      "20914",
+      "20915",
+      "20916",
+      "20917",
+      "20918",
+      "20919",
+      "20920",
+      "20921",
+      "20922",
+      "20923",
+      "20924",
+      "20925",
+      "20926",
+      "20927",
+      "20928",
+      "20929",
+      "20930",
+      "20931",
+      "20932",
+      "20933",
+      "20934",
+      "20935",
+      "20936",
+      "20937",
+      "20938",
+      "20939",
+      "20940",
+      "20941",
+      "20942",
+      "20943",
+      "20944",
+      "20945",
+      "20946",
+      "20947",
+      "20948",
+      "20949",
+      "20950",
+      "20951",
+      "20952",
+      "20953",
+      "20954",
+      "20955",
+      "20956",
+      "20957",
+      "20958",
+      "20959",
+      "20960",
+      "20961",
+      "20962",
+      "20963",
+      "20964",
+      "20965",
+      "20966",
+      "20967",
+      "20968",
+      "20969",
+      "20970",
+      "20971",
+      "20972",
+      "20973",
+      "20974",
+      "20975",
+      "20976",
+      "20977",
+      "20978",
+      "20979",
+      "20980",
+      "20981",
+      "20982",
+      "20983",
+      "20984",
+      "20985",
+      "20986",
+      "20987",
+      "20988",
+      "20989",
+      "20990",
+      "20991",
+      "20992",
+      "20993",
+      "20994",
+      "20995",
+      "20996",
+      "20997",
+      "20998",
+      "20999",
+      "21000",
+      "21001",
+      "21002",
+      "21003",
+      "21004",
+      "21005",
+      "21006",
+      "21007",
+      "21008",
+      "21009",
+      "21010",
+      "21011",
+      "21012",
+      "21013",
+      "21014",
+      "21015",
+      "21016",
+      "21017",
+      "21018",
+      "21019",
+      "21020",
+      "21021",
+      "21022",
+      "21023",
+      "21024",
+      "21025",
+      "21026",
+      "21027",
+      "21028",
+      "21029",
+      "21030",
+      "21031",
+      "21032",
+      "21033",
+      "21034",
+      "21035",
+      "21036",
+      "21037",
+      "21038",
+      "21039",
+      "21040",
+      "21041",
+      "21042",
+      "21043",
+      "21044",
+      "21045",
+      "21046",
+      "21047",
+      "21048",
+      "21049",
+      "21050",
+      "21051",
+      "21052",
+      "21053",
+      "21054",
+      "21055",
+      "21056",
+      "21057",
+      "21058",
+      "21059",
+      "21060",
+      "21061",
+      "21062",
+      "21063",
+      "21064",
+      "21065",
+      "21066",
+      "21067",
+      "21068",
+      "21069",
+      "21070",
+      "21071",
+      "21072",
+      "21073",
+      "21074",
+      "21075",
+      "21076",
+      "21077",
+      "21078",
+      "21079",
+      "21080",
+      "21081",
+      "21082",
+      "21083",
+      "21084",
+      "21085",
+      "21086",
+      "21087",
+      "21088",
+      "21089",
+      "21090",
+      "21091",
+      "21092",
+      "21093",
+      "21094",
+      "21095",
+      "21096",
+      "21097",
+      "21098",
+      "21099",
+      "21100",
+      "21101",
+      "21102",
+      "21103",
+      "21104",
+      "21105",
+      "21106",
+      "21107",
+      "21108",
+      "21109",
+      "21110",
+      "21111",
+      "21112",
+      "21113",
+      "21114",
+      "21115",
+      "21116",
+      "21117",
+      "21118",
+      "21119",
+      "21120",
+      "21121",
+      "21122",
+      "21123",
+      "21124",
+      "21125",
+      "21126",
+      "21127",
+      "21128",
+      "21129",
+      "21130",
+      "21131",
+      "21132",
+      "21133",
+      "21134",
+      "21135",
+      "21136",
+      "21137",
+      "21138",
+      "21139",
+      "21140",
+      "21141",
+      "21142",
+      "21143",
+      "21144",
+      "21145"
+    ]
+  },
+  "entries_sent": {
+    "20260601": 100,
+    "20260702": 300,
+    "20260831": 800
+  },
+  "bad_dates": [],
+  "ledger_progress": [],
+  "beats": 1049,
+  "period_days_listed": [
+    [
+      "10:22:10",
+      [
+        "20260910",
+        "20260909",
+        "20260908"
+      ],
+      false
+    ],
+    [
+      "10:22:15",
+      [
+        "20260910",
+        "20260909",
+        "20260908"
+      ],
+      false
+    ],
+    [
+      "10:22:20",
+      [
+        "20260909",
+        "20260908",
+        "20260907"
+      ],
+      false
+    ],
+    [
+      "10:22:25",
+      [
+        "20260908",
+        "20260907",
+        "20260906"
+      ],
+      false
+    ],
+    [
+      "10:22:30",
+      [
+        "20260908",
+        "20260907",
+        "20260906"
+      ],
+      false
+    ],
+    [
+      "10:22:35",
+      [
+        "20260907",
+        "20260906",
+        "20260905"
+      ],
+      false
+    ],
+    [
+      "10:22:40",
+      [
+        "20260907",
+        "20260906",
+        "20260905"
+      ],
+      false
+    ],
+    [
+      "10:22:45",
+      [
+        "20260906",
+        "20260905",
+        "20260904"
+      ],
+      false
+    ],
+    [
+      "10:22:50",
+      [
+        "20260906",
+        "20260905",
+        "20260904"
+      ],
+      false
+    ],
+    [
+      "10:22:55",
+      [
+        "20260905",
+        "20260904",
+        "20260903"
+      ],
+      false
+    ],
+    [
+      "10:23:00",
+      [
+        "20260905",
+        "20260904",
+        "20260903"
+      ],
+      false
+    ],
+    [
+      "10:23:05",
+      [
+        "20260904",
+        "20260903",
+        "20260902"
+      ],
+      false
+    ],
+    [
+      "10:23:10",
+      [
+        "20260904",
+        "20260903",
+        "20260902"
+      ],
+      false
+    ],
+    [
+      "10:23:15",
+      [
+        "20260903",
+        "20260902",
+        "20260901"
+      ],
+      false
+    ],
+    [
+      "10:23:20",
+      [
+        "20260903",
+        "20260902",
+        "20260901"
+      ],
+      false
+    ],
+    [
+      "10:23:25",
+      [
+        "20260831",
+        "20260830",
+        "20260829"
+      ],
+      false
+    ],
+    [
+      "10:23:30",
+      [
+        "20260830",
+        "20260829",
+        "20260828"
+      ],
+      false
+    ],
+    [
+      "10:23:35",
+      [
+        "20260830",
+        "20260829",
+        "20260828"
+      ],
+      false
+    ],
+    [
+      "10:23:40",
+      [
+        "20260829",
+        "20260828",
+        "20260827"
+      ],
+      false
+    ],
+    [
+      "10:23:45",
+      [
+        "20260829",
+        "20260828",
+        "20260827"
+      ],
+      false
+    ],
+    [
+      "10:23:50",
+      [
+        "20260828",
+        "20260827",
+        "20260826"
+      ],
+      false
+    ],
+    [
+      "10:23:55",
+      [
+        "20260827",
+        "20260826",
+        "20260825"
+      ],
+      false
+    ],
+    [
+      "10:24:00",
+      [
+        "20260827",
+        "20260826",
+        "20260825"
+      ],
+      false
+    ],
+    [
+      "10:24:05",
+      [
+        "20260826",
+        "20260825",
+        "20260824"
+      ],
+      false
+    ],
+    [
+      "10:24:10",
+      [
+        "20260826",
+        "20260825",
+        "20260824"
+      ],
+      false
+    ],
+    [
+      "10:24:15",
+      [
+        "20260825",
+        "20260824",
+        "20260823"
+      ],
+      false
+    ],
+    [
+      "10:24:20",
+      [
+        "20260825",
+        "20260824",
+        "20260823"
+      ],
+      false
+    ],
+    [
+      "10:24:25",
+      [
+        "20260824",
+        "20260823",
+        "20260822"
+      ],
+      false
+    ],
+    [
+      "10:24:30",
+      [
+        "20260824",
+        "20260823",
+        "20260822"
+      ],
+      false
+    ],
+    [
+      "10:24:35",
+      [
+        "20260823",
+        "20260822",
+        "20260821"
+      ],
+      false
+    ],
+    [
+      "10:24:40",
+      [
+        "20260823",
+        "20260822",
+        "20260821"
+      ],
+      false
+    ],
+    [
+      "10:24:45",
+      [
+        "20260822",
+        "20260821",
+        "20260820"
+      ],
+      false
+    ],
+    [
+      "10:24:50",
+      [
+        "20260822",
+        "20260821",
+        "20260820"
+      ],
+      false
+    ],
+    [
+      "10:24:55",
+      [
+        "20260821",
+        "20260820",
+        "20260819"
+      ],
+      false
+    ],
+    [
+      "10:25:00",
+      [
+        "20260821",
+        "20260820",
+        "20260819"
+      ],
+      false
+    ],
+    [
+      "10:25:05",
+      [
+        "20260820",
+        "20260819",
+        "20260818"
+      ],
+      false
+    ],
+    [
+      "10:25:10",
+      [
+        "20260820",
+        "20260819",
+        "20260818"
+      ],
+      false
+    ],
+    [
+      "10:25:15",
+      [
+        "20260819",
+        "20260818",
+        "20260817"
+      ],
+      false
+    ],
+    [
+      "10:25:20",
+      [
+        "20260819",
+        "20260818",
+        "20260817"
+      ],
+      false
+    ],
+    [
+      "10:25:25",
+      [
+        "20260818",
+        "20260817",
+        "20260816"
+      ],
+      false
+    ],
+    [
+      "10:25:30",
+      [
+        "20260818",
+        "20260817",
+        "20260816"
+      ],
+      false
+    ],
+    [
+      "10:25:35",
+      [
+        "20260817",
+        "20260816",
+        "20260815"
+      ],
+      false
+    ],
+    [
+      "10:25:40",
+      [
+        "20260816",
+        "20260815",
+        "20260814"
+      ],
+      false
+    ],
+    [
+      "10:25:45",
+      [
+        "20260816",
+        "20260815",
+        "20260814"
+      ],
+      false
+    ],
+    [
+      "10:25:50",
+      [
+        "20260815",
+        "20260814",
+        "20260813"
+      ],
+      false
+    ],
+    [
+      "10:25:55",
+      [
+        "20260815",
+        "20260814",
+        "20260813"
+      ],
+      false
+    ],
+    [
+      "10:26:00",
+      [
+        "20260814",
+        "20260813",
+        "20260812"
+      ],
+      false
+    ],
+    [
+      "10:26:05",
+      [
+        "20260814",
+        "20260813",
+        "20260812"
+      ],
+      false
+    ],
+    [
+      "10:26:10",
+      [
+        "20260813",
+        "20260812",
+        "20260811"
+      ],
+      false
+    ],
+    [
+      "10:26:15",
+      [
+        "20260813",
+        "20260812",
+        "20260811"
+      ],
+      false
+    ],
+    [
+      "10:26:20",
+      [
+        "20260812",
+        "20260811",
+        "20260810"
+      ],
+      false
+    ],
+    [
+      "10:26:25",
+      [
+        "20260812",
+        "20260811",
+        "20260810"
+      ],
+      false
+    ],
+    [
+      "10:26:30",
+      [
+        "20260811",
+        "20260810",
+        "20260809"
+      ],
+      false
+    ],
+    [
+      "10:26:35",
+      [
+        "20260811",
+        "20260810",
+        "20260809"
+      ],
+      false
+    ],
+    [
+      "10:26:40",
+      [
+        "20260810",
+        "20260809",
+        "20260808"
+      ],
+      false
+    ],
+    [
+      "10:26:45",
+      [
+        "20260810",
+        "20260809",
+        "20260808"
+      ],
+      false
+    ],
+    [
+      "10:26:50",
+      [
+        "20260809",
+        "20260808",
+        "20260807"
+      ],
+      false
+    ],
+    [
+      "10:26:55",
+      [
+        "20260809",
+        "20260808",
+        "20260807"
+      ],
+      false
+    ],
+    [
+      "10:27:00",
+      [
+        "20260808",
+        "20260807",
+        "20260806"
+      ],
+      false
+    ],
+    [
+      "10:27:05",
+      [
+        "20260808",
+        "20260807",
+        "20260806"
+      ],
+      false
+    ],
+    [
+      "10:27:10",
+      [
+        "20260807",
+        "20260806",
+        "20260805"
+      ],
+      false
+    ],
+    [
+      "10:27:15",
+      [
+        "20260806",
+        "20260805",
+        "20260804"
+      ],
+      false
+    ],
+    [
+      "10:27:20",
+      [
+        "20260806",
+        "20260805",
+        "20260804"
+      ],
+      false
+    ],
+    [
+      "10:27:25",
+      [
+        "20260805",
+        "20260804",
+        "20260803"
+      ],
+      false
+    ],
+    [
+      "10:27:30",
+      [
+        "20260805",
+        "20260804",
+        "20260803"
+      ],
+      false
+    ],
+    [
+      "10:27:35",
+      [
+        "20260804",
+        "20260803",
+        "20260802"
+      ],
+      false
+    ],
+    [
+      "10:27:40",
+      [
+        "20260804",
+        "20260803",
+        "20260802"
+      ],
+      false
+    ],
+    [
+      "10:27:45",
+      [
+        "20260803",
+        "20260802",
+        "20260801"
+      ],
+      false
+    ],
+    [
+      "10:27:50",
+      [
+        "20260803",
+        "20260802",
+        "20260801"
+      ],
+      false
+    ],
+    [
+      "10:27:55",
+      [
+        "20260731",
+        "20260730",
+        "20260729"
+      ],
+      false
+    ],
+    [
+      "10:28:00",
+      [
+        "20260730",
+        "20260729",
+        "20260728"
+      ],
+      false
+    ],
+    [
+      "10:28:05",
+      [
+        "20260730",
+        "20260729",
+        "20260728"
+      ],
+      false
+    ],
+    [
+      "10:28:10",
+      [
+        "20260729",
+        "20260728",
+        "20260727"
+      ],
+      false
+    ],
+    [
+      "10:28:15",
+      [
+        "20260728",
+        "20260727",
+        "20260726"
+      ],
+      false
+    ],
+    [
+      "10:28:20",
+      [
+        "20260728",
+        "20260727",
+        "20260726"
+      ],
+      false
+    ],
+    [
+      "10:28:25",
+      [
+        "20260727",
+        "20260726",
+        "20260725"
+      ],
+      false
+    ],
+    [
+      "10:28:30",
+      [
+        "20260727",
+        "20260726",
+        "20260725"
+      ],
+      false
+    ],
+    [
+      "10:28:35",
+      [
+        "20260726",
+        "20260725",
+        "20260724"
+      ],
+      false
+    ],
+    [
+      "10:28:40",
+      [
+        "20260726",
+        "20260725",
+        "20260724"
+      ],
+      false
+    ],
+    [
+      "10:28:45",
+      [
+        "20260725",
+        "20260724",
+        "20260723"
+      ],
+      false
+    ],
+    [
+      "10:28:50",
+      [
+        "20260725",
+        "20260724",
+        "20260723"
+      ],
+      false
+    ],
+    [
+      "10:28:55",
+      [
+        "20260724",
+        "20260723",
+        "20260722"
+      ],
+      false
+    ],
+    [
+      "10:29:00",
+      [
+        "20260724",
+        "20260723",
+        "20260722"
+      ],
+      false
+    ],
+    [
+      "10:29:05",
+      [
+        "20260723",
+        "20260722",
+        "20260721"
+      ],
+      false
+    ],
+    [
+      "10:29:10",
+      [
+        "20260723",
+        "20260722",
+        "20260721"
+      ],
+      false
+    ],
+    [
+      "10:29:15",
+      [
+        "20260722",
+        "20260721",
+        "20260720"
+      ],
+      false
+    ],
+    [
+      "10:29:20",
+      [
+        "20260722",
+        "20260721",
+        "20260720"
+      ],
+      false
+    ],
+    [
+      "10:29:25",
+      [
+        "20260721",
+        "20260720",
+        "20260719"
+      ],
+      false
+    ],
+    [
+      "10:29:30",
+      [
+        "20260721",
+        "20260720",
+        "20260719"
+      ],
+      false
+    ],
+    [
+      "10:29:35",
+      [
+        "20260720",
+        "20260719",
+        "20260718"
+      ],
+      false
+    ],
+    [
+      "10:29:40",
+      [
+        "20260720",
+        "20260719",
+        "20260718"
+      ],
+      false
+    ],
+    [
+      "10:29:45",
+      [
+        "20260719",
+        "20260718",
+        "20260717"
+      ],
+      false
+    ],
+    [
+      "10:29:51",
+      [
+        "20260718",
+        "20260717",
+        "20260716"
+      ],
+      false
+    ],
+    [
+      "10:29:56",
+      [
+        "20260718",
+        "20260717",
+        "20260716"
+      ],
+      false
+    ],
+    [
+      "10:30:01",
+      [
+        "20260717",
+        "20260716",
+        "20260715"
+      ],
+      false
+    ],
+    [
+      "10:30:06",
+      [
+        "20260717",
+        "20260716",
+        "20260715"
+      ],
+      false
+    ],
+    [
+      "10:30:11",
+      [
+        "20260716",
+        "20260715",
+        "20260714"
+      ],
+      false
+    ],
+    [
+      "10:30:16",
+      [
+        "20260716",
+        "20260715",
+        "20260714"
+      ],
+      false
+    ],
+    [
+      "10:30:21",
+      [
+        "20260715",
+        "20260714",
+        "20260713"
+      ],
+      false
+    ],
+    [
+      "10:30:26",
+      [
+        "20260715",
+        "20260714",
+        "20260713"
+      ],
+      false
+    ],
+    [
+      "10:30:31",
+      [
+        "20260714",
+        "20260713",
+        "20260712"
+      ],
+      false
+    ],
+    [
+      "10:30:36",
+      [
+        "20260714",
+        "20260713",
+        "20260712"
+      ],
+      false
+    ],
+    [
+      "10:30:41",
+      [
+        "20260713",
+        "20260712",
+        "20260711"
+      ],
+      false
+    ],
+    [
+      "10:30:46",
+      [
+        "20260713",
+        "20260712",
+        "20260711"
+      ],
+      false
+    ],
+    [
+      "10:30:51",
+      [
+        "20260712",
+        "20260711",
+        "20260710"
+      ],
+      false
+    ],
+    [
+      "10:30:56",
+      [
+        "20260712",
+        "20260711",
+        "20260710"
+      ],
+      false
+    ],
+    [
+      "10:31:01",
+      [
+        "20260711",
+        "20260710",
+        "20260709"
+      ],
+      false
+    ],
+    [
+      "10:31:06",
+      [
+        "20260711",
+        "20260710",
+        "20260709"
+      ],
+      false
+    ],
+    [
+      "10:31:11",
+      [
+        "20260710",
+        "20260709",
+        "20260708"
+      ],
+      false
+    ],
+    [
+      "10:31:16",
+      [
+        "20260710",
+        "20260709",
+        "20260708"
+      ],
+      false
+    ],
+    [
+      "10:31:21",
+      [
+        "20260709",
+        "20260708",
+        "20260707"
+      ],
+      false
+    ],
+    [
+      "10:31:26",
+      [
+        "20260708",
+        "20260707",
+        "20260706"
+      ],
+      false
+    ],
+    [
+      "10:31:31",
+      [
+        "20260708",
+        "20260707",
+        "20260706"
+      ],
+      false
+    ],
+    [
+      "10:31:36",
+      [
+        "20260708",
+        "20260707",
+        "20260706"
+      ],
+      false
+    ],
+    [
+      "10:31:41",
+      [
+        "20260708",
+        "20260707",
+        "20260706"
+      ],
+      false
+    ],
+    [
+      "10:31:46",
+      [
+        "20260707",
+        "20260706",
+        "20260705"
+      ],
+      false
+    ],
+    [
+      "10:31:51",
+      [
+        "20260706",
+        "20260705",
+        "20260704"
+      ],
+      false
+    ],
+    [
+      "10:31:56",
+      [
+        "20260706",
+        "20260705",
+        "20260704"
+      ],
+      false
+    ],
+    [
+      "10:32:01",
+      [
+        "20260705",
+        "20260704",
+        "20260703"
+      ],
+      false
+    ],
+    [
+      "10:32:06",
+      [
+        "20260705",
+        "20260704",
+        "20260703"
+      ],
+      false
+    ],
+    [
+      "10:32:11",
+      [
+        "20260704",
+        "20260703",
+        "20260702"
+      ],
+      false
+    ],
+    [
+      "10:32:16",
+      [
+        "20260704",
+        "20260703",
+        "20260702"
+      ],
+      false
+    ],
+    [
+      "10:32:21",
+      [
+        "20260703",
+        "20260702",
+        "20260701"
+      ],
+      false
+    ],
+    [
+      "10:32:26",
+      [
+        "20260703",
+        "20260702",
+        "20260701"
+      ],
+      false
+    ],
+    [
+      "10:32:31",
+      [
+        "20260630",
+        "20260629",
+        "20260628"
+      ],
+      false
+    ],
+    [
+      "10:32:36",
+      [
+        "20260630",
+        "20260629",
+        "20260628"
+      ],
+      false
+    ],
+    [
+      "10:32:41",
+      [
+        "20260629",
+        "20260628",
+        "20260627"
+      ],
+      false
+    ],
+    [
+      "10:32:46",
+      [
+        "20260629",
+        "20260628",
+        "20260627"
+      ],
+      false
+    ],
+    [
+      "10:32:51",
+      [
+        "20260628",
+        "20260627",
+        "20260626"
+      ],
+      false
+    ],
+    [
+      "10:32:56",
+      [
+        "20260628",
+        "20260627",
+        "20260626"
+      ],
+      false
+    ],
+    [
+      "10:33:01",
+      [
+        "20260627",
+        "20260626",
+        "20260625"
+      ],
+      false
+    ],
+    [
+      "10:33:06",
+      [
+        "20260627",
+        "20260626",
+        "20260625"
+      ],
+      false
+    ],
+    [
+      "10:33:11",
+      [
+        "20260626",
+        "20260625",
+        "20260624"
+      ],
+      false
+    ],
+    [
+      "10:33:16",
+      [
+        "20260626",
+        "20260625",
+        "20260624"
+      ],
+      false
+    ],
+    [
+      "10:33:21",
+      [
+        "20260625",
+        "20260624",
+        "20260623"
+      ],
+      false
+    ],
+    [
+      "10:33:26",
+      [
+        "20260625",
+        "20260624",
+        "20260623"
+      ],
+      false
+    ],
+    [
+      "10:33:31",
+      [
+        "20260624",
+        "20260623",
+        "20260622"
+      ],
+      false
+    ],
+    [
+      "10:33:36",
+      [
+        "20260624",
+        "20260623",
+        "20260622"
+      ],
+      false
+    ],
+    [
+      "10:33:41",
+      [
+        "20260623",
+        "20260622",
+        "20260621"
+      ],
+      false
+    ],
+    [
+      "10:33:46",
+      [
+        "20260623",
+        "20260622",
+        "20260621"
+      ],
+      false
+    ],
+    [
+      "10:33:51",
+      [
+        "20260622",
+        "20260621",
+        "20260620"
+      ],
+      false
+    ],
+    [
+      "10:33:56",
+      [
+        "20260622",
+        "20260621",
+        "20260620"
+      ],
+      false
+    ],
+    [
+      "10:34:01",
+      [
+        "20260621",
+        "20260620",
+        "20260619"
+      ],
+      false
+    ],
+    [
+      "10:34:06",
+      [
+        "20260620",
+        "20260619",
+        "20260618"
+      ],
+      false
+    ],
+    [
+      "10:34:11",
+      [
+        "20260620",
+        "20260619",
+        "20260618"
+      ],
+      false
+    ],
+    [
+      "10:34:16",
+      [
+        "20260619",
+        "20260618",
+        "20260617"
+      ],
+      false
+    ],
+    [
+      "10:34:21",
+      [
+        "20260619",
+        "20260618",
+        "20260617"
+      ],
+      false
+    ],
+    [
+      "10:34:26",
+      [
+        "20260618",
+        "20260617",
+        "20260616"
+      ],
+      false
+    ],
+    [
+      "10:34:31",
+      [
+        "20260618",
+        "20260617",
+        "20260616"
+      ],
+      false
+    ],
+    [
+      "10:34:36",
+      [
+        "20260617",
+        "20260616",
+        "20260615"
+      ],
+      false
+    ],
+    [
+      "10:34:41",
+      [
+        "20260617",
+        "20260616",
+        "20260615"
+      ],
+      false
+    ],
+    [
+      "10:34:46",
+      [
+        "20260616",
+        "20260615",
+        "20260614"
+      ],
+      false
+    ],
+    [
+      "10:34:51",
+      [
+        "20260616",
+        "20260615",
+        "20260614"
+      ],
+      false
+    ],
+    [
+      "10:34:56",
+      [
+        "20260615",
+        "20260614",
+        "20260613"
+      ],
+      false
+    ],
+    [
+      "10:35:01",
+      [
+        "20260615",
+        "20260614",
+        "20260613"
+      ],
+      false
+    ],
+    [
+      "10:35:06",
+      [
+        "20260614",
+        "20260613",
+        "20260612"
+      ],
+      false
+    ],
+    [
+      "10:35:11",
+      [
+        "20260614",
+        "20260613",
+        "20260612"
+      ],
+      false
+    ],
+    [
+      "10:35:16",
+      [
+        "20260613",
+        "20260612",
+        "20260611"
+      ],
+      false
+    ],
+    [
+      "10:35:21",
+      [
+        "20260613",
+        "20260612",
+        "20260611"
+      ],
+      false
+    ],
+    [
+      "10:35:26",
+      [
+        "20260612",
+        "20260611",
+        "20260610"
+      ],
+      false
+    ],
+    [
+      "10:35:31",
+      [
+        "20260612",
+        "20260611",
+        "20260610"
+      ],
+      false
+    ],
+    [
+      "10:35:36",
+      [
+        "20260611",
+        "20260610",
+        "20260609"
+      ],
+      false
+    ],
+    [
+      "10:35:41",
+      [
+        "20260610",
+        "20260609",
+        "20260608"
+      ],
+      false
+    ],
+    [
+      "10:35:46",
+      [
+        "20260610",
+        "20260609",
+        "20260608"
+      ],
+      false
+    ],
+    [
+      "10:35:51",
+      [
+        "20260609",
+        "20260608",
+        "20260607"
+      ],
+      false
+    ],
+    [
+      "10:35:56",
+      [
+        "20260609",
+        "20260608",
+        "20260607"
+      ],
+      false
+    ],
+    [
+      "10:36:01",
+      [
+        "20260608",
+        "20260607",
+        "20260606"
+      ],
+      false
+    ],
+    [
+      "10:36:06",
+      [
+        "20260608",
+        "20260607",
+        "20260606"
+      ],
+      false
+    ],
+    [
+      "10:36:11",
+      [
+        "20260607",
+        "20260606",
+        "20260605"
+      ],
+      false
+    ],
+    [
+      "10:36:16",
+      [
+        "20260607",
+        "20260606",
+        "20260605"
+      ],
+      false
+    ],
+    [
+      "10:36:21",
+      [
+        "20260606",
+        "20260605",
+        "20260604"
+      ],
+      false
+    ],
+    [
+      "10:36:26",
+      [
+        "20260606",
+        "20260605",
+        "20260604"
+      ],
+      false
+    ],
+    [
+      "10:36:31",
+      [
+        "20260605",
+        "20260604",
+        "20260603"
+      ],
+      false
+    ],
+    [
+      "10:36:36",
+      [
+        "20260605",
+        "20260604",
+        "20260603"
+      ],
+      false
+    ],
+    [
+      "10:36:41",
+      [
+        "20260604",
+        "20260603",
+        "20260602"
+      ],
+      false
+    ],
+    [
+      "10:36:46",
+      [
+        "20260604",
+        "20260603",
+        "20260602"
+      ],
+      false
+    ],
+    [
+      "10:36:51",
+      [
+        "20260603",
+        "20260602",
+        "20260601"
+      ],
+      false
+    ],
+    [
+      "10:36:56",
+      [
+        "20260603",
+        "20260602",
+        "20260601"
+      ],
+      false
+    ],
+    [
+      "10:37:01",
+      [
+        "20260531",
+        "20260530",
+        "20260529"
+      ],
+      false
+    ],
+    [
+      "10:37:06",
+      [
+        "20260530",
+        "20260529",
+        "20260528"
+      ],
+      false
+    ],
+    [
+      "10:37:11",
+      [
+        "20260529",
+        "20260528",
+        "20260527"
+      ],
+      false
+    ],
+    [
+      "10:37:16",
+      [
+        "20260529",
+        "20260528",
+        "20260527"
+      ],
+      false
+    ],
+    [
+      "10:37:22",
+      [
+        "20260528",
+        "20260527",
+        "20260526"
+      ],
+      false
+    ],
+    [
+      "10:37:27",
+      [
+        "20260528",
+        "20260527",
+        "20260526"
+      ],
+      false
+    ],
+    [
+      "10:37:32",
+      [
+        "20260527",
+        "20260526",
+        "20260525"
+      ],
+      false
+    ],
+    [
+      "10:37:37",
+      [
+        "20260527",
+        "20260526",
+        "20260525"
+      ],
+      false
+    ],
+    [
+      "10:37:42",
+      [
+        "20260526",
+        "20260525",
+        "20260524"
+      ],
+      false
+    ],
+    [
+      "10:37:47",
+      [
+        "20260526",
+        "20260525",
+        "20260524"
+      ],
+      false
+    ],
+    [
+      "10:37:52",
+      [
+        "20260525",
+        "20260524",
+        "20260523"
+      ],
+      false
+    ],
+    [
+      "10:37:57",
+      [
+        "20260525",
+        "20260524",
+        "20260523"
+      ],
+      false
+    ],
+    [
+      "10:38:02",
+      [
+        "20260524",
+        "20260523",
+        "20260522"
+      ],
+      false
+    ],
+    [
+      "10:38:07",
+      [
+        "20260524",
+        "20260523",
+        "20260522"
+      ],
+      false
+    ],
+    [
+      "10:38:12",
+      [
+        "20260523",
+        "20260522",
+        "20260521"
+      ],
+      false
+    ],
+    [
+      "10:38:17",
+      [
+        "20260523",
+        "20260522",
+        "20260521"
+      ],
+      false
+    ],
+    [
+      "10:38:22",
+      [
+        "20260522",
+        "20260521",
+        "20260520"
+      ],
+      false
+    ],
+    [
+      "10:38:27",
+      [
+        "20260522",
+        "20260521",
+        "20260520"
+      ],
+      false
+    ],
+    [
+      "10:38:32",
+      [
+        "20260521",
+        "20260520",
+        "20260519"
+      ],
+      false
+    ],
+    [
+      "10:38:37",
+      [
+        "20260520",
+        "20260519",
+        "20260518"
+      ],
+      false
+    ],
+    [
+      "10:38:42",
+      [
+        "20260520",
+        "20260519",
+        "20260518"
+      ],
+      false
+    ],
+    [
+      "10:38:47",
+      [
+        "20260519",
+        "20260518",
+        "20260517"
+      ],
+      false
+    ],
+    [
+      "10:38:52",
+      [
+        "20260519",
+        "20260518",
+        "20260517"
+      ],
+      false
+    ],
+    [
+      "10:38:57",
+      [
+        "20260518",
+        "20260517",
+        "20260516"
+      ],
+      false
+    ],
+    [
+      "10:39:02",
+      [
+        "20260518",
+        "20260517",
+        "20260516"
+      ],
+      false
+    ],
+    [
+      "10:39:07",
+      [
+        "20260517",
+        "20260516",
+        "20260515"
+      ],
+      false
+    ],
+    [
+      "10:39:12",
+      [
+        "20260517",
+        "20260516",
+        "20260515"
+      ],
+      false
+    ],
+    [
+      "10:39:17",
+      [
+        "20260516",
+        "20260515",
+        "20260514"
+      ],
+      false
+    ],
+    [
+      "10:39:22",
+      [
+        "20260516",
+        "20260515",
+        "20260514"
+      ],
+      false
+    ],
+    [
+      "10:39:27",
+      [
+        "20260515",
+        "20260514",
+        "20260513"
+      ],
+      false
+    ],
+    [
+      "10:39:32",
+      [
+        "20260515",
+        "20260514",
+        "20260513"
+      ],
+      false
+    ],
+    [
+      "10:39:37",
+      [
+        "20260514",
+        "20260513",
+        "20260512"
+      ],
+      false
+    ],
+    [
+      "10:39:42",
+      [
+        "20260514",
+        "20260513",
+        "20260512"
+      ],
+      false
+    ],
+    [
+      "10:39:47",
+      [
+        "20260513",
+        "20260512",
+        "20260511"
+      ],
+      false
+    ],
+    [
+      "10:39:52",
+      [
+        "20260513",
+        "20260512",
+        "20260511"
+      ],
+      false
+    ],
+    [
+      "10:39:57",
+      [
+        "20260512",
+        "20260511",
+        "20260510"
+      ],
+      false
+    ],
+    [
+      "10:40:02",
+      [
+        "20260512",
+        "20260511",
+        "20260510"
+      ],
+      false
+    ],
+    [
+      "10:40:07",
+      [
+        "20260511",
+        "20260510",
+        "20260509"
+      ],
+      false
+    ],
+    [
+      "10:40:12",
+      [
+        "20260511",
+        "20260510",
+        "20260509"
+      ],
+      false
+    ],
+    [
+      "10:40:17",
+      [
+        "20260510",
+        "20260509",
+        "20260508"
+      ],
+      false
+    ],
+    [
+      "10:40:22",
+      [
+        "20260509",
+        "20260508",
+        "20260507"
+      ],
+      false
+    ],
+    [
+      "10:40:27",
+      [
+        "20260509",
+        "20260508",
+        "20260507"
+      ],
+      false
+    ],
+    [
+      "10:40:32",
+      [
+        "20260508",
+        "20260507",
+        "20260506"
+      ],
+      false
+    ],
+    [
+      "10:40:37",
+      [
+        "20260508",
+        "20260507",
+        "20260506"
+      ],
+      false
+    ],
+    [
+      "10:40:42",
+      [
+        "20260507",
+        "20260506",
+        "20260505"
+      ],
+      false
+    ],
+    [
+      "10:40:47",
+      [
+        "20260507",
+        "20260506",
+        "20260505"
+      ],
+      false
+    ],
+    [
+      "10:40:52",
+      [
+        "20260506",
+        "20260505",
+        "20260504"
+      ],
+      false
+    ],
+    [
+      "10:40:57",
+      [
+        "20260506",
+        "20260505",
+        "20260504"
+      ],
+      false
+    ],
+    [
+      "10:41:02",
+      [
+        "20260505",
+        "20260504",
+        "20260503"
+      ],
+      false
+    ],
+    [
+      "10:41:07",
+      [
+        "20260505",
+        "20260504",
+        "20260503"
+      ],
+      false
+    ],
+    [
+      "10:41:12",
+      [
+        "20260504",
+        "20260503",
+        "20260502"
+      ],
+      false
+    ],
+    [
+      "10:41:17",
+      [
+        "20260504",
+        "20260503",
+        "20260502"
+      ],
+      false
+    ],
+    [
+      "10:41:22",
+      [
+        "20260503",
+        "20260502",
+        "20260501"
+      ],
+      false
+    ],
+    [
+      "10:41:27",
+      [
+        "20260503",
+        "20260502",
+        "20260501"
+      ],
+      false
+    ],
+    [
+      "10:41:32",
+      [
+        "20260430",
+        "20260429",
+        "20260428"
+      ],
+      false
+    ],
+    [
+      "10:41:37",
+      [
+        "20260430",
+        "20260429",
+        "20260428"
+      ],
+      false
+    ],
+    [
+      "10:41:42",
+      [
+        "20260429",
+        "20260428",
+        "20260427"
+      ],
+      false
+    ],
+    [
+      "10:41:47",
+      [
+        "20260429",
+        "20260428",
+        "20260427"
+      ],
+      false
+    ],
+    [
+      "10:41:52",
+      [
+        "20260428",
+        "20260427",
+        "20260426"
+      ],
+      false
+    ],
+    [
+      "10:41:57",
+      [
+        "20260428",
+        "20260427",
+        "20260426"
+      ],
+      false
+    ],
+    [
+      "10:42:02",
+      [
+        "20260427",
+        "20260426",
+        "20260425"
+      ],
+      false
+    ],
+    [
+      "10:42:07",
+      [
+        "20260427",
+        "20260426",
+        "20260425"
+      ],
+      false
+    ],
+    [
+      "10:42:12",
+      [
+        "20260426",
+        "20260425",
+        "20260424"
+      ],
+      false
+    ],
+    [
+      "10:42:17",
+      [
+        "20260426",
+        "20260425",
+        "20260424"
+      ],
+      false
+    ],
+    [
+      "10:42:22",
+      [
+        "20260425",
+        "20260424",
+        "20260423"
+      ],
+      false
+    ],
+    [
+      "10:42:27",
+      [
+        "20260425",
+        "20260424",
+        "20260423"
+      ],
+      false
+    ],
+    [
+      "10:42:32",
+      [
+        "20260424",
+        "20260423",
+        "20260422"
+      ],
+      false
+    ],
+    [
+      "10:42:37",
+      [
+        "20260424",
+        "20260423",
+        "20260422"
+      ],
+      false
+    ],
+    [
+      "10:42:42",
+      [
+        "20260423",
+        "20260422",
+        "20260421"
+      ],
+      false
+    ],
+    [
+      "10:42:47",
+      [
+        "20260423",
+        "20260422",
+        "20260421"
+      ],
+      false
+    ],
+    [
+      "10:42:52",
+      [
+        "20260422",
+        "20260421",
+        "20260420"
+      ],
+      false
+    ],
+    [
+      "10:42:57",
+      [
+        "20260422",
+        "20260421",
+        "20260420"
+      ],
+      false
+    ],
+    [
+      "10:43:02",
+      [
+        "20260421",
+        "20260420",
+        "20260419"
+      ],
+      false
+    ],
+    [
+      "10:43:07",
+      [
+        "20260421",
+        "20260420",
+        "20260419"
+      ],
+      false
+    ],
+    [
+      "10:43:12",
+      [
+        "20260420",
+        "20260419",
+        "20260418"
+      ],
+      false
+    ],
+    [
+      "10:43:17",
+      [
+        "20260419",
+        "20260418",
+        "20260417"
+      ],
+      false
+    ],
+    [
+      "10:43:22",
+      [
+        "20260419",
+        "20260418",
+        "20260417"
+      ],
+      false
+    ],
+    [
+      "10:43:27",
+      [
+        "20260418",
+        "20260417",
+        "20260416"
+      ],
+      false
+    ],
+    [
+      "10:43:32",
+      [
+        "20260418",
+        "20260417",
+        "20260416"
+      ],
+      false
+    ],
+    [
+      "10:43:37",
+      [
+        "20260417",
+        "20260416",
+        "20260415"
+      ],
+      false
+    ],
+    [
+      "10:43:42",
+      [
+        "20260417",
+        "20260416",
+        "20260415"
+      ],
+      false
+    ],
+    [
+      "10:43:47",
+      [
+        "20260416",
+        "20260415",
+        "20260414"
+      ],
+      false
+    ],
+    [
+      "10:43:52",
+      [
+        "20260416",
+        "20260415",
+        "20260414"
+      ],
+      false
+    ],
+    [
+      "10:43:57",
+      [
+        "20260415",
+        "20260414",
+        "20260413"
+      ],
+      false
+    ],
+    [
+      "10:44:02",
+      [
+        "20260415",
+        "20260414",
+        "20260413"
+      ],
+      false
+    ],
+    [
+      "10:44:07",
+      [
+        "20260414",
+        "20260413",
+        "20260412"
+      ],
+      false
+    ],
+    [
+      "10:44:12",
+      [
+        "20260414",
+        "20260413",
+        "20260412"
+      ],
+      false
+    ],
+    [
+      "10:44:18",
+      [
+        "20260413",
+        "20260412",
+        "20260411"
+      ],
+      false
+    ],
+    [
+      "10:44:23",
+      [
+        "20260413",
+        "20260412",
+        "20260411"
+      ],
+      false
+    ],
+    [
+      "10:44:28",
+      [
+        "20260412",
+        "20260411",
+        "20260410"
+      ],
+      false
+    ],
+    [
+      "10:44:33",
+      [
+        "20260412",
+        "20260411",
+        "20260410"
+      ],
+      false
+    ],
+    [
+      "10:44:38",
+      [
+        "20260411",
+        "20260410",
+        "20260409"
+      ],
+      false
+    ],
+    [
+      "10:44:43",
+      [
+        "20260411",
+        "20260410",
+        "20260409"
+      ],
+      false
+    ],
+    [
+      "10:44:48",
+      [
+        "20260410",
+        "20260409",
+        "20260408"
+      ],
+      false
+    ],
+    [
+      "10:44:53",
+      [
+        "20260410",
+        "20260409",
+        "20260408"
+      ],
+      false
+    ],
+    [
+      "10:44:58",
+      [
+        "20260409",
+        "20260408",
+        "20260407"
+      ],
+      false
+    ],
+    [
+      "10:45:03",
+      [
+        "20260408",
+        "20260407",
+        "20260406"
+      ],
+      false
+    ],
+    [
+      "10:45:08",
+      [
+        "20260408",
+        "20260407",
+        "20260406"
+      ],
+      false
+    ],
+    [
+      "10:45:13",
+      [
+        "20260407",
+        "20260406",
+        "20260405"
+      ],
+      false
+    ],
+    [
+      "10:45:18",
+      [
+        "20260407",
+        "20260406",
+        "20260405"
+      ],
+      false
+    ],
+    [
+      "10:45:23",
+      [
+        "20260406",
+        "20260405",
+        "20260404"
+      ],
+      false
+    ],
+    [
+      "10:45:28",
+      [
+        "20260406",
+        "20260405",
+        "20260404"
+      ],
+      false
+    ],
+    [
+      "10:45:33",
+      [
+        "20260405",
+        "20260404",
+        "20260403"
+      ],
+      false
+    ],
+    [
+      "10:45:38",
+      [
+        "20260405",
+        "20260404",
+        "20260403"
+      ],
+      false
+    ],
+    [
+      "10:45:43",
+      [
+        "20260404",
+        "20260403",
+        "20260402"
+      ],
+      false
+    ],
+    [
+      "10:45:48",
+      [
+        "20260404",
+        "20260403",
+        "20260402"
+      ],
+      false
+    ],
+    [
+      "10:45:53",
+      [
+        "20260403",
+        "20260402",
+        "20260401"
+      ],
+      false
+    ],
+    [
+      "10:45:58",
+      [
+        "20260403",
+        "20260402",
+        "20260401"
+      ],
+      false
+    ],
+    [
+      "11:29:13",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:18",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:23",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:29",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:34",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:39",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:44",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:49",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:54",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:29:59",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:04",
+      [
+        "20260601",
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:09",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:14",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:19",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:24",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:29",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:34",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:39",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:44",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:49",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:54",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:30:59",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:04",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:09",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:14",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:19",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:24",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:29",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:34",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:39",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:44",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:49",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:54",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:31:59",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:04",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:09",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:14",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:19",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:24",
+      [
+        "20260702",
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:29",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:34",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:39",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:44",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:49",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:54",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:32:59",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:04",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:09",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:14",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:19",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:24",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:29",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:34",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:39",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:44",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:49",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:54",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:33:59",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:04",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:09",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:14",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:19",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:24",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:29",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:34",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:39",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:44",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:49",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:54",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:34:59",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:04",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:09",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:14",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:19",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:24",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:30",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:35",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:40",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:45",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:50",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:35:55",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:00",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:05",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:10",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:15",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:20",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:25",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:30",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:35",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:40",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:45",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:50",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:36:55",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:00",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:05",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:10",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:15",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:20",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:25",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:30",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:35",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:40",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:45",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:50",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:37:55",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:00",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:05",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:10",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:15",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:20",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:25",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:30",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:35",
+      [
+        "20260831"
+      ],
+      true
+    ],
+    [
+      "11:38:40",
+      [
+        "20260831"
+      ],
+      true
+    ]
+  ],
+  "tallyIni": [
+    {
+      "at": "2026-10-21T10:11:16Z",
+      "path": "C:\\Program Files\\TallyPrime\\tally.ini",
+      "state": "already"
+    }
+  ],
+  "company_guid": "e3d8d968-d4f5-4072-b8f2-7da99c810869",
+  "fetch_seeded": true,
+  "heads_asked": {
+    "20261021": 1,
+    "20261020": 1,
+    "20261019": 1,
+    "20261002": 1,
+    "20261001": 1,
+    "20260902": 1,
+    "20260901": 1,
+    "20260831": 2,
+    "20260802": 1,
+    "20260801": 1,
+    "20260731": 1,
+    "20260702": 2,
+    "20260701": 1,
+    "20260602": 1,
+    "20260601": 2,
+    "20260531": 1,
+    "20260502": 1,
+    "20260501": 1,
+    "20260402": 1,
+    "20260401": 1
+  },
+  "periodPull": {
+    "companies": {
+      "fincom spike co": {
+        "asked": 800,
+        "at": "2026-10-21T11:38:41Z",
+        "day": "20260831",
+        "heads": 800,
+        "left": 0,
+        "phase": "sent"
+      }
+    },
+    "stopped": [],
+    "uploadDays": [
+      {
+        "at": "2026-10-21T10:38:08Z",
+        "atN": 1792579088551911600,
+        "company": "FinCom Spike Co",
+        "day": "20260524",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 24-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:38:18Z",
+        "atN": 1792579098089546900,
+        "company": "FinCom Spike Co",
+        "day": "20260523",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 23-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:38:27Z",
+        "atN": 1792579107626296800,
+        "company": "FinCom Spike Co",
+        "day": "20260522",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 22-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:38:37Z",
+        "atN": 1792579117167713500,
+        "company": "FinCom Spike Co",
+        "day": "20260521",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 21-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:38:46Z",
+        "atN": 1792579126723765500,
+        "company": "FinCom Spike Co",
+        "day": "20260520",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 20-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:38:56Z",
+        "atN": 1792579136262660000,
+        "company": "FinCom Spike Co",
+        "day": "20260519",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 19-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:05Z",
+        "atN": 1792579145800644000,
+        "company": "FinCom Spike Co",
+        "day": "20260518",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 18-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:15Z",
+        "atN": 1792579155343345500,
+        "company": "FinCom Spike Co",
+        "day": "20260517",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 17-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:24Z",
+        "atN": 1792579164899752300,
+        "company": "FinCom Spike Co",
+        "day": "20260516",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 16-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:34Z",
+        "atN": 1792579174435295400,
+        "company": "FinCom Spike Co",
+        "day": "20260515",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 15-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:43Z",
+        "atN": 1792579183981389000,
+        "company": "FinCom Spike Co",
+        "day": "20260514",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 14-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:39:53Z",
+        "atN": 1792579193529721500,
+        "company": "FinCom Spike Co",
+        "day": "20260513",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 13-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:03Z",
+        "atN": 1792579203076890900,
+        "company": "FinCom Spike Co",
+        "day": "20260512",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 12-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:12Z",
+        "atN": 1792579212609579600,
+        "company": "FinCom Spike Co",
+        "day": "20260511",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 11-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:22Z",
+        "atN": 1792579222145847700,
+        "company": "FinCom Spike Co",
+        "day": "20260510",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 10-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:31Z",
+        "atN": 1792579231688036700,
+        "company": "FinCom Spike Co",
+        "day": "20260509",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 09-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:41Z",
+        "atN": 1792579241226247100,
+        "company": "FinCom Spike Co",
+        "day": "20260508",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 08-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:40:50Z",
+        "atN": 1792579250770641200,
+        "company": "FinCom Spike Co",
+        "day": "20260507",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 07-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:00Z",
+        "atN": 1792579260326435700,
+        "company": "FinCom Spike Co",
+        "day": "20260506",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 06-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:09Z",
+        "atN": 1792579269859146600,
+        "company": "FinCom Spike Co",
+        "day": "20260505",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 05-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:19Z",
+        "atN": 1792579279393887400,
+        "company": "FinCom Spike Co",
+        "day": "20260504",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 04-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:28Z",
+        "atN": 1792579288930109600,
+        "company": "FinCom Spike Co",
+        "day": "20260503",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 03-May-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:42Z",
+        "atN": 1792579302329347700,
+        "company": "FinCom Spike Co",
+        "day": "20260430",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 30-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:41:51Z",
+        "atN": 1792579311878811200,
+        "company": "FinCom Spike Co",
+        "day": "20260429",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 29-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:01Z",
+        "atN": 1792579321435372000,
+        "company": "FinCom Spike Co",
+        "day": "20260428",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 28-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:10Z",
+        "atN": 1792579330993460400,
+        "company": "FinCom Spike Co",
+        "day": "20260427",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 27-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:20Z",
+        "atN": 1792579340527026500,
+        "company": "FinCom Spike Co",
+        "day": "20260426",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 26-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:30Z",
+        "atN": 1792579350063471900,
+        "company": "FinCom Spike Co",
+        "day": "20260425",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 25-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:39Z",
+        "atN": 1792579359598908100,
+        "company": "FinCom Spike Co",
+        "day": "20260424",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 24-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:49Z",
+        "atN": 1792579369143066000,
+        "company": "FinCom Spike Co",
+        "day": "20260423",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 23-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:42:58Z",
+        "atN": 1792579378699310200,
+        "company": "FinCom Spike Co",
+        "day": "20260422",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 22-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:08Z",
+        "atN": 1792579388252553000,
+        "company": "FinCom Spike Co",
+        "day": "20260421",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 21-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:17Z",
+        "atN": 1792579397783546900,
+        "company": "FinCom Spike Co",
+        "day": "20260420",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 20-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:27Z",
+        "atN": 1792579407318494500,
+        "company": "FinCom Spike Co",
+        "day": "20260419",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 19-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:36Z",
+        "atN": 1792579416852178700,
+        "company": "FinCom Spike Co",
+        "day": "20260418",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 18-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:46Z",
+        "atN": 1792579426385738600,
+        "company": "FinCom Spike Co",
+        "day": "20260417",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 17-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:43:55Z",
+        "atN": 1792579435927501200,
+        "company": "FinCom Spike Co",
+        "day": "20260416",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 16-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:05Z",
+        "atN": 1792579445476264300,
+        "company": "FinCom Spike Co",
+        "day": "20260415",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 15-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:15Z",
+        "atN": 1792579455011068600,
+        "company": "FinCom Spike Co",
+        "day": "20260414",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 14-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:24Z",
+        "atN": 1792579464558948800,
+        "company": "FinCom Spike Co",
+        "day": "20260413",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 13-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:34Z",
+        "atN": 1792579474115053800,
+        "company": "FinCom Spike Co",
+        "day": "20260412",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 12-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:43Z",
+        "atN": 1792579483660714500,
+        "company": "FinCom Spike Co",
+        "day": "20260411",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 11-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:44:53Z",
+        "atN": 1792579493203041200,
+        "company": "FinCom Spike Co",
+        "day": "20260410",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 10-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:02Z",
+        "atN": 1792579502735437400,
+        "company": "FinCom Spike Co",
+        "day": "20260409",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 09-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:12Z",
+        "atN": 1792579512271147100,
+        "company": "FinCom Spike Co",
+        "day": "20260408",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 08-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:21Z",
+        "atN": 1792579521806660000,
+        "company": "FinCom Spike Co",
+        "day": "20260407",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 07-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:31Z",
+        "atN": 1792579531349536600,
+        "company": "FinCom Spike Co",
+        "day": "20260406",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 06-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:40Z",
+        "atN": 1792579540892255300,
+        "company": "FinCom Spike Co",
+        "day": "20260405",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 05-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:50Z",
+        "atN": 1792579550422559400,
+        "company": "FinCom Spike Co",
+        "day": "20260404",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 04-Apr-2026. Please upload that day's Day Book."
+      },
+      {
+        "at": "2026-10-21T10:45:59Z",
+        "atN": 1792579559952705000,
+        "company": "FinCom Spike Co",
+        "day": "20260403",
+        "why": "over2s, type Sales",
+        "words": "Tally took too long to give 03-Apr-2026. Please upload that day's Day Book."
+      }
+    ]
+  }
+}

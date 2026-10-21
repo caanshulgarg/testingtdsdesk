@@ -1,0 +1,1 @@
+2026-10-21 10:23:19  Notification shown: Tally not open (tally:b4dd07638bf71a6f; not shown again for this problem)

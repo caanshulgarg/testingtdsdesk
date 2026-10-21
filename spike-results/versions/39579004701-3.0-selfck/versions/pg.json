@@ -1,0 +1,1 @@
+{"env":{"PGPASSWORD":"root"},"psql":"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe","db":"postgresql://postgres:root@127.0.0.1:5432/postgres"}
