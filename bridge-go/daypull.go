@@ -126,20 +126,24 @@ var pull = struct {
 	mu      sync.Mutex
 	items   []pullItem
 	work    *pullWork
-	stopped map[int]string    // a Tally whose answer carried another date: no day asked of it until the bridge restarts
-	upload  map[string]M      // the days marked "upload" (said once): key -> {company, day, words, at}
-	tell    map[string]M      // the "upload" days FinCom has not taken yet: key -> {body, at}
-	done    map[string]bool   // days finished in this run, until the cloud lists them again in a fresh answer
-	state   map[string]M      // per company, for the beat: {day, phase, heads, asked, at, waiting}
-	said    map[string]string // the last "waiting" reason said per company (said once)
+	stopped map[int]string       // a Tally whose answer carried another date: no day asked of it until the bridge restarts
+	upload  map[string]M         // the days marked "upload" (said once): key -> {company, day, words, at}
+	tell    map[string]M         // the "upload" days FinCom has not taken yet: key -> {body, at}
+	done    map[string]time.Time // days finished in this run: not asked again for 2 minutes
+	state   map[string]M         // per company, for the beat: {day, phase, heads, asked, at, waiting}
+	said    map[string]string    // the last "waiting" reason said per company (said once)
 	lastAsk time.Time
-}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, done: map[string]bool{}, state: map[string]M{}, said: map[string]string{}}
+}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
-	// no list (paused in FinCom, the period done, another choice, a cloud without migration 98): nothing listed, and the
-	// day being read is left at once (review 245 R1: Pause stops the reads)
-	v := j["periodDays"]
+	// an empty list (paused in FinCom, the period done, reading stopped): nothing listed, and the day being read is left at
+	// once (review 245 R1: Pause stops the reads). No list at all (the cloud could not work it out this time, or a cloud
+	// without migration 98): nothing changes (review 245 R2: a passing fault never throws away what was read)
+	v, has := j["periodDays"]
+	if !has {
+		return
+	}
 	var items []pullItem
 	for _, x := range arr(v) {
 		e := obj(x)
@@ -169,10 +173,16 @@ func applyPeriodDays(j M) {
 		keep[it.key()] = true
 	}
 	if pull.work != nil && !keep[pull.work.it.key()] {
-		pull.work = nil // FinCom no longer lists it (paused, or done): nothing more is asked of it
+		if len(items) == 0 {
+			pull.work = nil // FinCom lists nothing (paused, done, stopped): nothing more is asked of it
+		} else {
+			// FinCom lists other days first (the day being read was handed out a moment ago): it is finished here; FinCom
+			// refuses it in words if it is no longer wanted (pullCloudOK), and nothing more is asked then
+			items = append(items, pull.work.it)
+		}
 	}
-	// a day finished here is not asked again from the same answer it was finished under; a fresh listing (the cloud
-	// still lacks entries) asks it again
+	// a day finished here is not asked again for 2 minutes (review 245 R2: a day FinCom still lists is not read again at
+	// every beat; other days go first)
 	var fresh []pullItem
 	for _, it := range items {
 		if _, up := pull.upload[it.key()]; up {
@@ -180,7 +190,11 @@ func applyPeriodDays(j M) {
 		}
 		fresh = append(fresh, it)
 	}
-	pull.done = map[string]bool{}
+	for k, t := range pull.done {
+		if nowFn().Sub(t) >= 2*time.Minute {
+			delete(pull.done, k)
+		}
+	}
 	pull.items = fresh
 }
 
@@ -365,6 +379,7 @@ func pullNote(it pullItem, phase string, w *pullWork) {
 
 // --- the loop: one request at a time, at most DayPullPerTurn a turn, the conditions looked at before every one
 func dayPullLoop() {
+	pullLoad()
 	sleepOrStop(20 * time.Second)
 	for !stopping() {
 		n := 0
@@ -413,7 +428,7 @@ func pullCurrent() *pullWork {
 		return pull.work
 	}
 	for _, it := range pull.items {
-		if pull.done[it.key()] {
+		if _, d := pull.done[it.key()]; d {
 			continue
 		}
 		if _, up := pull.upload[it.key()]; up {
@@ -581,8 +596,8 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 		why += ": " + str(r.json["error"])
 	}
 	liveSayOnce("pull|cloud|"+w.it.key(), "Older entries of "+w.it.Company+": FinCom did not take "+what+" of "+liveDay(w.it.Day)+" ("+cutRunes(why, 160)+"); sent again later")
-	if r.code == 409 {
-		pullDrop(w)
+	if r.code == 409 || (r.code == 200 && r.json != nil) {
+		pullDrop(w) // refused in words (no longer wanted, another choice): left; FinCom lists it again if it still wants it
 	}
 	return false
 }
@@ -663,17 +678,18 @@ func pullFlush(w *pullWork) bool {
 // a day FinCom marked to be uploaded by hand: kept here for the tray's one quiet line (FinCom was told already)
 func pullNoteUpload(it pullItem, why, words string) {
 	pull.mu.Lock()
-	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339Nano)}
+	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano()}
 	// at most 500 kept (the oldest dropped from the tray's list first; FinCom keeps every one)
 	for len(pull.upload) > 500 {
-		ok, oldest := "", ""
+		ok, oldest := "", int64(-1)
 		for k, v := range pull.upload {
-			if a := str(v["at"]); oldest == "" || a < oldest {
+			if a := toI64(v["atN"]); oldest < 0 || a < oldest {
 				ok, oldest = k, a
 			}
 		}
 		delete(pull.upload, ok)
 	}
+	pullSaveLocked()
 	pull.mu.Unlock()
 	writeLog("Older entries of " + it.Company + ": " + liveDay(it.Day) + " is not asked again (" + why + "): " + words)
 }
@@ -685,7 +701,7 @@ func pullFinish(w *pullWork, how string) {
 	if pull.work == w {
 		pull.work = nil
 	}
-	pull.done[w.it.key()] = true
+	pull.done[w.it.key()] = nowFn()
 	st := pull.state[companyKey(w.it.Company)]
 	if st != nil {
 		st["phase"] = or(how, "sent")
@@ -711,20 +727,35 @@ func pullMarkUpload(w *pullWork, why, typ string) {
 // FinCom told that a day is to be uploaded: until it takes it (an answer 200 with ok), told again at most once a minute
 // from the loop (review 245 R1: else FinCom kept listing the day and the year's count never ended). Nothing is asked of Tally.
 func pullTell(key string, body M) {
-	r := invokeCloud(body, 30)
+	r := invokeCloud(body, 10)
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
 		pull.mu.Lock()
 		delete(pull.tell, key)
+		pullSaveLocked()
 		pull.mu.Unlock()
 		return
 	}
 	pull.mu.Lock()
 	pull.tell[key] = M{"body": body, "at": nowFn()}
+	pullSaveLocked()
 	pull.mu.Unlock()
 	liveSayOnce("pull|upcloud|"+key, "Older entries of "+str(body["company"])+": FinCom was not told that "+liveDay(str(body["day"]))+" is to be uploaded; it is told again later")
 }
 
+// in the background, one at a time (review 245 R2: an unreachable cloud never holds the day reads)
+var pullTelling atomic.Bool
+
 func pullTellAgain() {
+	if !pullTelling.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer pullTelling.Store(false)
+		pullTellDue()
+	}()
+}
+
+func pullTellDue() {
 	pull.mu.Lock()
 	var due []string
 	var bodies []M
@@ -736,6 +767,37 @@ func pullTellAgain() {
 	pull.mu.Unlock()
 	for i, k := range due {
 		pullTell(k, bodies[i])
+	}
+}
+
+// the days to upload and those FinCom has not taken yet, kept on disk (review 245 R2: a restart never asks such a day of
+// Tally again)
+func pullFile() string { return sp("period-upload.json") }
+
+func pullSaveLocked() {
+	tell := M{}
+	for k, v := range pull.tell {
+		tell[k] = obj(v["body"])
+	}
+	_ = saveFile(pullFile(), jsonText(M{"upload": pull.upload, "tell": tell}))
+}
+
+func pullLoad() {
+	j := readObjFile(pullFile())
+	if j == nil {
+		return
+	}
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	for k, v := range obj(j["upload"]) {
+		if e := obj(v); e != nil {
+			pull.upload[k] = e
+		}
+	}
+	for k, v := range obj(j["tell"]) {
+		if b := obj(v); b != nil {
+			pull.tell[k] = M{"body": b, "at": time.Time{}}
+		}
 	}
 }
 
@@ -767,7 +829,7 @@ func pullUploadListLocked() []any {
 	}
 	// the newest last (review 245 R1: the 50 kept are the latest marked, of every company)
 	sort.Slice(ks, func(a, b int) bool {
-		x, y := str(pull.upload[ks[a]]["at"]), str(pull.upload[ks[b]]["at"])
+		x, y := toI64(pull.upload[ks[a]]["atN"]), toI64(pull.upload[ks[b]]["atN"])
 		if x != y {
 			return x < y
 		}

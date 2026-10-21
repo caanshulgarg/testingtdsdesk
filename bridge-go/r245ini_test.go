@@ -226,14 +226,41 @@ func TestR245TallyIniWriteFailsPutBack(t *testing.T) {
 	if b, _ := os.ReadFile(p); string(b) != orig {
 		t.Fatalf("not put back: %q", b)
 	}
-	if exists(filepath.Join(exe, tallyIniMarkerName)) {
+	if strings.TrimSpace(readText(filepath.Join(exe, tallyIniMarkerName))) == BridgeVersion {
 		t.Fatal("the marker written though tally.ini failed")
 	}
 	fail = false
-	if !tallyIniAfterUpdate(exe, func(string) {}) || !exists(filepath.Join(exe, tallyIniMarkerName)) {
+	if !tallyIniAfterUpdate(exe, func(string) {}) || strings.TrimSpace(readText(filepath.Join(exe, tallyIniMarkerName))) != BridgeVersion {
 		t.Fatal("not tried again at the next start")
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "FinComRecorder.tdl") {
 		t.Fatalf("not added the second time: %q", b)
+	}
+}
+
+// review 245 R2: a tally.ini that always fails is tried at three starts, then not again for this version
+func TestR245TallyIniFailsThreeStartsAtMost(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	t.Setenv("ProgramData", t.TempDir())
+	d1 := t.TempDir()
+	old := tallyIniDirsFn
+	tallyIniDirsFn = func() []string { return []string{d1} }
+	t.Cleanup(func() { tallyIniDirsFn = old })
+	_ = os.WriteFile(filepath.Join(d1, "tally.ini"), []byte("[Tally]\r\n"), 0o644)
+	ow := iniWriteFn
+	iniWriteFn = func(string, []byte) error { return errors.New("access denied") }
+	t.Cleanup(func() { iniWriteFn = ow })
+	exe := t.TempDir()
+	runs := 0
+	for i := 0; i < 6; i++ {
+		if tallyIniAfterUpdate(exe, func(string) {}) {
+			runs++
+		}
+	}
+	if runs != 3 {
+		t.Fatalf("ran %d times, want 3", runs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(d1, "tally.ini")); string(b) != "[Tally]\r\n" {
+		t.Fatalf("changed: %q", b)
 	}
 }

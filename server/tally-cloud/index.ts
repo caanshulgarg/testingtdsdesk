@@ -1456,9 +1456,12 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
 // while the computer's reading is paused in the tray or stopped (by the bridge or from FinCom). A cloud without 98: said
 // once, nothing listed, the beat as before
 let periodMissing = 0;
-async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise<Record<string, unknown>[]> {
+// review 245 R2: null (the key left out of the answer: the bridge keeps what it reads) when it could not be worked out; a
+// list, empty when paused, stopped or done (the bridge then stops at once)
+async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
-  if (stopped || Date.now() - periodMissing < 600000) return out;
+  if (stopped) return out;
+  if (Date.now() - periodMissing < 600000) return null;
   try {
     const s = (v: unknown, n: number) => typeof v === "string" ? v.trim().slice(0, n) : "";
     const open = new Map<string, string>();
@@ -1482,9 +1485,9 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
       const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: 3 - out.length });
       if (error) {
         const m = String(error.message || "");
-        if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return out; }
+        if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
         fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", company, m.slice(0, 200));
-        continue;
+        return null;
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= 3) break;
@@ -1496,6 +1499,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
     }
   } catch (e) {
     fail("period_next", e); console.log("tally-ingest beat: the days of the period not worked out:", String((e as Error)?.message || e).slice(0, 200));
+    return null;
   }
   return out;
 }
@@ -1583,9 +1587,7 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
     try {
       const company = typeof p?.company === "string" ? p.company.slice(0, 200) : "";
       if (!company || p?.done === true) continue;     // a round's end goes by its own call
-      // review 245 R1: only a progress noted in the last 2 minutes (a round cut off is not made current again)
-      const at = Date.parse(typeof p?.at === "string" ? p.at : "");
-      if (!Number.isFinite(at) || Math.abs(Date.now() - at) > 120000) continue;
+      // (the bridge carries only a progress noted in its last 2 minutes: a round cut off is not made current again)
       const book = await bookForBeat(firm, company);
       if (!book) continue;
       const n = (v: unknown) => Math.max(0, Math.min(10000000, Math.floor(Number(v) || 0)));
@@ -3363,7 +3365,7 @@ Deno.serve(sentry.wrap(async (req) => {
         const periodDays = await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop);
         await ledgerProgressFromBeat(firm, dev, b);
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays.length ? { periodDays } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

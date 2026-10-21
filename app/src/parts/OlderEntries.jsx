@@ -8,7 +8,7 @@
 // Resume; it goes on from where it stopped. A day Tally could not give quickly enough shows ONE quiet line with its Upload
 // (the words FinCom keeps); nothing else about Tally is shown here. The cloud keeps it all (migration 98:
 // tally_period_status, tally_period_choose, tally_period_pause); a cloud without 98 shows nothing.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const POLL_MS = 15000;
 const nf = (n) => Number(n || 0).toLocaleString("en-IN");
@@ -36,10 +36,13 @@ export default function OlderEntries({ cid, where }) {
   const bk = bookOf(cid), book = bk && bk.book;
   const [st, setSt] = useState(null), [off, setOff] = useState(false), [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [fy, setFy] = useState(0), [part, setPart] = useState("");
-  const load = () => !book ? Promise.resolve() : rpc("tally_period_status", { p_book: book }).then((r) => { if (r && r.ok) { setSt(r); setOff(false); } }, (e) => {
+  // review 245 R2: an answer for the book shown before is never shown under this one
+  const cur = useRef(book); cur.current = book;
+  const load = () => { const b = book; return !b ? Promise.resolve() : rpc("tally_period_status", { p_book: b }).then((r) => { if (cur.current !== b) return; if (r && r.ok) { setSt(r); setOff(false); } }, (e) => {
+    if (cur.current !== b) return;
     // a cloud without migration 98 (the function not there): nothing shown, quietly
     if (/PGRST202|tally_period_status|does not exist|schema cache|404/i.test(String((e && e.message) || e))) setOff(true);
-  });
+  }); };
   // review 245 R1: another book starts from its own state (the year and part chosen there, not the previous client's)
   useEffect(() => { setSt(null); setFy(0); setPart(""); setErr(""); load(); }, [book]);
   const pull = st && st.pull;
@@ -50,7 +53,9 @@ export default function OlderEntries({ cid, where }) {
   const chosenFy = fy || (pull ? fyOf8(pull.fy) : now - 1);
   const half = !!(pull && pull.half && fyOf8(pull.fy) === chosenFy);
   // the part shown: the person's pick, else the running pull's own part for its year (a reload never offers to switch it)
-  const curPart = !half ? "year" : part || (pull && fyOf8(pull.fy) === chosenFy ? pull.part : "year");
+  const running = pull && fyOf8(pull.fy) === chosenFy ? pull.part : "";
+  // review 245 R2: a half-year already chosen stays shown (and chosen) while a new day of the year is being counted
+  const curPart = part && (half || part === "year") ? part : running || "year";
   const act = (fn, args, what) => { setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); if (r && r.pull !== undefined) setSt(r); else return load(); },
       (e) => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy("")); };

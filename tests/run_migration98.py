@@ -8,15 +8,15 @@ run_migration92.py builds it. Written before the file. Checks:
      tally-ingest's for service_role only, the helpers for nobody.
   1. the person's choice: a year that has begun, the whole year; half-years refused until the year is counted at more than
      20,000 vouchers; another firm's book refused; a viewer cannot change it; pause and resume.
-  2. the next days: while counting, the year's days not counted, newest first, at most 3, fetch false, the same days again
-     until counted (review 245 R1: a day being read is never taken from the bridge), never after today; then the part's
-     days counted and not done, fetch true; none while paused.
+  2. the next days: while counting, the year's days not counted, newest first, at most 3, fetch false, days handed out in
+     the last 2 minutes after the others (review 245 R2: a day that does not end never holds the rest back), never after
+     today; then the part's days counted and not done, fetch true; none while paused.
   3. a day's heads: Tally's count kept; FinCom's count of them (a GUID held at a lower AlterID is not held); the MasterIDs it
      lacks; a day with every entry held is done at once; a day outside the year chosen refused.
   4. the entries: stored through the entry path (the day's books as a Day Book would make them); an entry of another date
      refused; one FinCom holds at a higher AlterID left as it is; the day then done; a locked month: nothing stored, the day
      marked to upload with its words (never fetched again); an entry with no ledger line (seen) held, so its day ends; a
-     MasterID Tally no longer has (gone) out of the day's count.
+     MasterID Tally gave no entry for (gone) stays counted until the day is counted again.
   5. a day to upload by hand: never handed out again; its words in the status.
   6. the status: "x of y vouchers, left", the year's count, half offered above 20,000; the ledger progress never back.
 RED_WITHOUT_98=1: the same checks without the file (they fail)."""
@@ -136,7 +136,7 @@ try:
     ok(isinstance(n1, list) and len(n1) == 3 and [x["day"] for x in n1] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3)] and all(x["fetch"] is False for x in n1)
        and "Sales" in n1[0]["types"] and "Contra" in n1[0]["types"], "2. the year's last 3 days, counting (%s)" % str(n1)[:200])
     n2 = j("select tally_period_next(%s, 3)::text" % q(B))
-    ok([x["day"] for x in n2] == [x["day"] for x in n1], "2. the same days again until counted (%s)" % [x["day"] for x in n2])
+    ok([x["day"] for x in n2] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3, 6)], "2. days handed out in the last 2 minutes come after the others (%s)" % [x["day"] for x in n2])
     APPU("select tally_period_pause(%s, true)::text" % q(B))
     ok(j("select tally_period_next(%s, 3)::text" % q(B)) == [], "2. none while paused")
     APPU("select tally_period_pause(%s, false)::text" % q(B))
@@ -173,9 +173,9 @@ try:
     # an entry with no ledger line (a stock journal): seen at its AlterID, its day ends; a MasterID gone from Tally: out of the count
     j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(40)), js([H(1040, 5040, "Stock Journal"), H(1041, 5041)])))
     e4e = j("select tally_period_entries(%s, %s, '[]'::jsonb, '[]'::jsonb, %s, %s)::text" % (q(B), q(D(40)), js({G(1040): 5040}), js(["1041"])))
-    ok(e4e.get("ok") is True and e4e.get("n") == 1 and e4e.get("held") == 1 and e4e.get("done") is True, "4. seen held, gone out of the count: the day done (%s)" % e4e)
+    ok(e4e.get("ok") is True and e4e.get("n") == 2 and e4e.get("held") == 1 and e4e.get("done") is False, "4. seen held; gone NOT taken out on one empty answer (%s)" % e4e)
     h4f = j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(40)), js([H(1040, 5040, "Stock Journal")])))
-    ok(h4f.get("held") == 1 and h4f.get("done") is True, "4. counted again: the seen entry still held (%s)" % h4f)
+    ok(h4f.get("held") == 1 and h4f.get("done") is True, "4. counted again without the gone entry: the seen one still held, the day done (%s)" % h4f)
     print("== 5. a day to upload by hand")
     u5 = j("select tally_period_upload(%s, %s, 'over2s', 'Sales', %s)::text" % (q(B), q(D(30)), q("Tally took too long to give X. Please upload that day's Day Book.")))
     ok(u5.get("ok") is True, "5. marked")

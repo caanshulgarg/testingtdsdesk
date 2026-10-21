@@ -74,7 +74,7 @@ func ledCountFor(company string, port int, ls M, save func(), inBudget func() bo
 			ls["countChunked"], ls["cAfter"], ls["cN"] = true, 0, 0
 			save()
 			writeLog("Keeping " + company + ": the ledger count took Tally longer than 2 s; it is counted 2,000 MasterIDs a request")
-		case err != nil && !tallyNoAnswer(err):
+		case err != nil && ledNothingSent(err):
 			// nothing reached Tally (the retry schedule, a posting first, reading stopped): asked at the read's next turn
 			liveSayOnce("ledcount|"+companyKey(company), "Keeping "+company+": the ledger count waits ("+cutRunes(err.Error(), 120)+")")
 			return
@@ -96,7 +96,7 @@ func ledCountFor(company string, port int, ls M, save func(), inBudget func() bo
 			upto = 0
 		}
 		raw, err := invokeTally(tc, port, ledgerIdsRequest(company, after, upto), 5)
-		if err != nil && !errors.Is(err, errRecorderStop) && !tallyNoAnswer(err) {
+		if err != nil && ledNothingSent(err) {
 			// nothing reached Tally (the retry schedule, a posting first, Tally still on the request stopped): the count
 			// goes on from here at the next turn
 			liveSayOnce("ledcount|"+companyKey(company), "Keeping "+company+": the ledger count waits ("+cutRunes(err.Error(), 120)+")")
@@ -119,6 +119,12 @@ func ledCountFor(company string, port int, ls M, save func(), inBudget func() bo
 		save()
 		keepRest(100 * time.Millisecond)
 	}
+}
+
+// an error that says nothing reached Tally (review 245 R2: an answer that could not be read is not one of them: the count
+// is given up for the round then, never sent again every turn)
+func ledNothingSent(err error) bool {
+	return gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped)
 }
 
 // --- the progress
@@ -160,6 +166,16 @@ func ledProgressNote(company, round string, read, of int, done bool) {
 	// sent in the background, in order (review 245 R1: a slow cloud never holds the ledger read and its Tally turn)
 	ledProgOnce.Do(func() { go ledProgSender() })
 	ledProgWG.Add(1)
+	if done {
+		// the round's end is never dropped (review 245 R2: the beat does not carry it): it waits for room, 10 s at most
+		select {
+		case ledProgQ <- body:
+		case <-time.After(10 * time.Second):
+			ledProgWG.Done()
+			liveSayOnce("ledprog|end|"+k, "Ledger progress of "+company+": the end of the read could not be queued for FinCom")
+		}
+		return
+	}
 	select {
 	case ledProgQ <- body:
 	default:

@@ -181,8 +181,8 @@ end $function$;
 -- ---------------------------------------------------------------- 4. tally-ingest (service role only)
 -- the next days for a bridge (at most p_max, 3): while the year is being counted, the days not counted (newest first,
 -- fetch false); then the part's days counted and not done (newest first, fetch true). Never a day marked "upload", never a
--- day after today. The same days are listed again until done (review 245 R1: a day being read is never taken away from
--- the bridge by the next beat). A day of a month locked in FinCom is not fetched: marked to upload (unlock, then upload).
+-- day after today. Days handed out in the last 2 minutes come after the others (review 245 R2: a day that does not end
+-- never holds the rest back; the bridge finishes the day it is reading though the next answer lists others first). A day of a month locked in FinCom is not fetched: marked to upload (unlock, then upload).
 -- Types for a split: Tally's six standard ones first, then every type the book's entries and Tally's day lists name, the
 -- most used first (at most 40; never one with a quote mark)
 create or replace function public.tally_period_next(p_book uuid, p_max integer) returns jsonb
@@ -198,6 +198,7 @@ begin
   -- counting: the year's days with no count yet
   for d in select g::date from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
             where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))
+            order by exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and x.asked_at > now() - interval '2 minutes'), g desc
             limit lim loop
     out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false));
     n := n + 1;
@@ -211,7 +212,7 @@ begin
        and tally_month_locked(p_book, array[x.day]) is not null;
     for d in select x.day from tally_period_days x
               where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
-              order by x.day desc limit lim loop
+              order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit lim loop
       out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true));
       n := n + 1;
     end loop;
@@ -223,7 +224,7 @@ begin
         select unnest(array['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']) as t, 0 as o, 0::bigint as c
         union all select v.vtype, 1, count(*) from tally_vouchers v where v.book_id = p_book group by v.vtype
         union all select h->>3, 1, count(*) from tally_period_days x, jsonb_array_elements(coalesce(x.heads, '[]'::jsonb)) h
-                   where x.book_id = p_book and jsonb_typeof(h) = 'array' group by h->>3) a
+                   where x.book_id = p_book and x.day between p.fy_start and fy_to and jsonb_typeof(h) = 'array' group by h->>3) a
        where t is not null and t <> '' and t !~ '["[:cntrl:]]' and length(t) <= 60 and t = btrim(t)
        group by t order by min(o), sum(c) desc, t limit 40) z;
     select coalesce(jsonb_agg(e || jsonb_build_object('types', types)), '[]'::jsonb) into out from jsonb_array_elements(out) e;
@@ -299,12 +300,9 @@ begin
   for k in select jsonb_object_keys(coalesce(case when jsonb_typeof(p_seen) = 'object' then p_seen end, '{}'::jsonb)) loop
     if length(k) between 1 and 100 and coalesce(p_seen->>k, '') ~ '^[0-9]{1,15}$' then sn := sn || jsonb_build_object(k, (p_seen->>k)::bigint); end if;
   end loop;
-  -- MasterIDs Tally no longer has: out of the day's list (and its count)
+  -- MasterIDs Tally gave no entry for (p_gone): NOT taken out of the day's list (review 245 R2: one empty answer is no
+  -- proof); a day whose entry is really gone ends when it is counted again (its fresh list no longer names it)
   hd := d.heads;
-  if jsonb_typeof(p_gone) = 'array' and jsonb_array_length(p_gone) > 0 then
-    select coalesce(jsonb_agg(x), '[]'::jsonb) into hd from jsonb_array_elements(d.heads) x
-     where not (x->>1 = any (select jsonb_array_elements_text(p_gone)));
-  end if;
   -- an entry FinCom holds at a higher AlterID than Tally's answer gave: left as it is
   select coalesce(jsonb_agg(v), '[]'::jsonb) into vs from jsonb_array_elements(coalesce(p_vouchers, '[]'::jsonb)) v
    where not exists (select 1 from tally_vouchers t where t.book_id = p_book and t.guid = v->>'guid' and coalesce(t.alter_id, 0) > coalesce((v->>'alter')::bigint, 0));

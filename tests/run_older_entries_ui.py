@@ -88,6 +88,10 @@ def main():
         E(CLOUD, [dict(BIG, part="h1"), None, False]); pg.wait_for_timeout(1200)
         pressed = E("() => [...document.querySelectorAll('#app [data-older-part]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.getAttribute('data-older-part'))")
         ok(pressed == ["h1"] and n(card + " [data-older-start]") == 0 and n(card + " [data-older-pause]") == 1, "opened again: the running part shown, no Start (%s)" % pressed)
+        # review 245 R2: a new day of the year being counted (half false for a moment): Apr-Sep still shown, no Start
+        E(CLOUD, [dict(BIG, part="h1", half=False, counting=False), None, False]); pg.wait_for_timeout(1200)
+        pressed = E("() => [...document.querySelectorAll('#app [data-older-part]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.getAttribute('data-older-part'))")
+        ok(pressed == ["h1"] and n(card + " [data-older-start]") == 0, "half false a moment: the running Apr-Sep kept, no Start (%s)" % pressed)
         E(CLOUD, [DONE, None, False]); pg.wait_for_timeout(1200)
         ok(txt(card + " [data-older-progress]") == "FY 2025-26: 12,960 of 12,960 vouchers (100%) · all in FinCom ✓" and n(card + " [data-older-pause]") == 0, "done (%s)" % txt(card + " [data-older-progress]"))
         print("== 4. one quiet line for a day to upload")

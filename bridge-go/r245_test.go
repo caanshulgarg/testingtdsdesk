@@ -229,7 +229,8 @@ func pullBridge(t *testing.T) (*standTally, *standCloud, *pullModel) {
 func pullReset() {
 	pull.mu.Lock()
 	pull.items, pull.work = nil, nil
-	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]bool{}, map[string]M{}, map[string]string{}
+	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]time.Time{}, map[string]M{}, map[string]string{}
+	_ = os.Remove(pullFile())
 	pull.mu.Unlock()
 }
 
@@ -316,7 +317,9 @@ func TestR245PullOneDayHeadsThenMissingEntries(t *testing.T) {
 	if len(f.ids()) != n1 {
 		t.Fatalf("asked again: %v", f.ids()[n1:])
 	}
-	// listed again (FinCom holds every entry now): the heads only, nothing fetched
+	// listed again 2 minutes later (FinCom holds every entry now): the heads only, nothing fetched
+	at2 := nowFn().Add(3 * time.Minute)
+	nowFn = func() time.Time { return at2 }
 	applyPeriodDays(pullList("20250915"))
 	pullRun(t, 5)
 	if f.n(vchObjectID) != objs || f.n(dayHeadsID) != 2 {
@@ -665,12 +668,20 @@ func TestR245ReviewAnswerWithoutListStops(t *testing.T) {
 	if w := pullCurrent(); w == nil {
 		t.Fatal("no day taken")
 	}
+	// R2: no list at all (the cloud could not work it out this time): nothing changes
 	applyPeriodDays(M{"ok": true})
 	pull.mu.Lock()
 	n, w := len(pull.items), pull.work
 	pull.mu.Unlock()
+	if n != 1 || w == nil {
+		t.Fatalf("an answer without periodDays dropped the day (%d days, work %v)", n, w != nil)
+	}
+	applyPeriodDays(M{"ok": true, "periodDays": []any{}})
+	pull.mu.Lock()
+	n, w = len(pull.items), pull.work
+	pull.mu.Unlock()
 	if n != 0 || w != nil {
-		t.Fatalf("an answer without periodDays kept %d days (work %v)", n, w != nil)
+		t.Fatalf("an empty list kept %d days (work %v)", n, w != nil)
 	}
 	n0 := f.n("")
 	pullRun(t, 5)
@@ -737,6 +748,10 @@ func TestR245ReviewUploadToldAgain(t *testing.T) {
 	nowFn = func() time.Time { return at }
 	n0 := f.n("")
 	pullTurn()
+	for i := 0; i < 100 && pullTelling.Load(); i++ { // told in the background
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
 	pull.mu.Lock()
 	n = len(pull.tell)
 	pull.mu.Unlock()
@@ -787,5 +802,41 @@ func TestR245ReviewCountHolds(t *testing.T) {
 	ledCountFor(zz, f.port, ls, func() {}, nil, false)
 	if toInt(ls["of"]) != 3000 {
 		t.Fatalf("the count: %v", ls)
+	}
+}
+
+// review 245 R2: a day finished is not asked again for 2 minutes though FinCom lists it again; the days to upload survive a
+// restart (never asked of Tally again)
+func TestR245ReviewDoneSpacedAndUploadKept(t *testing.T) {
+	f, _, _ := pullBridge(t)
+	pullDay(f, "20250404", 900, "Sales")
+	applyPeriodDays(pullList("20250404"))
+	pullRun(t, 10)
+	n1 := f.n(dayHeadsID)
+	applyPeriodDays(pullList("20250404"))
+	pullRun(t, 10)
+	if f.n(dayHeadsID) != n1 {
+		t.Fatalf("asked again at once: %v", f.ids())
+	}
+	at := nowFn().Add(3 * time.Minute)
+	nowFn = func() time.Time { return at }
+	applyPeriodDays(pullList("20250404"))
+	pullRun(t, 10)
+	if f.n(dayHeadsID) != n1+1 {
+		t.Fatalf("not asked after 2 minutes: %v", f.ids())
+	}
+	// upload kept on disk
+	applyPeriodDays(pullList("20250405"))
+	pullMarkUpload(pullCurrent(), "over2s", "")
+	pull.mu.Lock()
+	pull.upload, pull.tell = map[string]M{}, map[string]M{}
+	pull.mu.Unlock()
+	pullLoad()
+	applyPeriodDays(pullList("20250405"))
+	pull.mu.Lock()
+	n := len(pull.items)
+	pull.mu.Unlock()
+	if n != 0 {
+		t.Fatal("a day to upload asked again after a restart")
 	}
 }

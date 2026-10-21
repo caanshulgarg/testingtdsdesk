@@ -67,7 +67,7 @@ try:
     base = {"version": "2.4.5", "bridge": GA}
     beat = dict(base, kind="beat", tally=True, open=["BIG CO", "SECOND CO"], companies=[{"name": "BIG CO", "open": True, "guid": CG}, {"name": "SECOND CO", "open": True}],
                 tallyIni=[{"path": r"C:\Program Files\TallyPrime\tally.ini", "state": "usertdl-no", "why": "this Tally is set not to load any add-on (User TDL = No)", "at": "2026-10-21T10:00:00+05:30", "extra": "x" * 9000}],
-                ledgerProgress=[{"company": "BIG CO", "company_guid": CG, "round": "r1", "read": 312, "of": 1240, "done": False, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, {"company": "BIG CO", "company_guid": CG, "round": "r0", "read": 5, "of": 9, "done": False, "at": "2026-01-01T00:00:00Z"}])
+                ledgerProgress=[{"company": "BIG CO", "company_guid": CG, "round": "r1", "read": 312, "of": 1240, "done": False, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}])
     print("== 1. the beat")
     c, r = call(beat)
     pd = r.get("periodDays") or []
@@ -81,9 +81,9 @@ try:
     ok(lp and lp[-1]["p_book"] == BOOK and lp[-1]["p_read"] == 312 and lp[-1]["p_of"] == 1240, "1. the beat's ledger progress kept (%s)" % lp[-1:])
     n0 = len(FS.ARGS.get("tally_period_next") or [])
     c, r = call(dict(beat, paused=True))
-    ok(c == 200 and "periodDays" not in r and len(FS.ARGS.get("tally_period_next") or []) == n0, "1. none while paused (%s)" % r.get("periodDays"))
+    ok(c == 200 and r.get("periodDays") == [] and len(FS.ARGS.get("tally_period_next") or []) == n0, "1. none while paused: an empty list, so the bridge stops at once (%s)" % r.get("periodDays"))
     c, r = call(dict(beat, readStopped={"by": "self", "reason": "x", "at": "2026-10-21T10:00:00"}))
-    ok(c == 200 and "periodDays" not in r, "1. none while reading is stopped")
+    ok(c == 200 and r.get("periodDays") == [], "1. none while reading is stopped")
     FS.NO_FN.add("tally_period_next")
     c, r = call(beat)
     ok(c == 200 and "periodDays" not in r and r.get("ok") is True, "1. a cloud without 98: the beat as before")

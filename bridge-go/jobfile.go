@@ -11,6 +11,7 @@
 //     writer's replace), takes the newest update kept in memory first, and tries again for up to 2 s on a file locked or
 //     not whole, and for 0.4 s on a file missing while its job folder exists (a job never made is "no job" at once);
 //     the quick read (postingGoing, called often) does not wait for a missing file.
+//
 // Review 245 R1: every write of a path holds that path's own lock and the background flush writes the newest text kept
 // at that moment (never a text it took earlier), so an older update can never land over a newer one; the flush never
 // makes a job folder again (a folder removed meanwhile stays removed).
@@ -126,6 +127,16 @@ func jobFileFlushLater(path string) {
 			text, ok := jobFiles.pending[path] // the newest now, under the path's lock: never an older one over a newer
 			jobFiles.mu.Unlock()
 			if !ok {
+				l.Unlock()
+				return
+			}
+			if fi, derr := os.Stat(filepath.Dir(path)); derr != nil || !fi.IsDir() {
+				// the job folder was removed meanwhile: its update goes with it (review 245 R2: not read from memory for ever)
+				jobFiles.mu.Lock()
+				if jobFiles.pending[path] == text {
+					delete(jobFiles.pending, path)
+				}
+				jobFiles.mu.Unlock()
 				l.Unlock()
 				return
 			}

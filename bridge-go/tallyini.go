@@ -193,6 +193,9 @@ func tallyIniApply(path, addon string) (M, error) {
 		// review 245 R1: a write cut short (disk full, an antivirus) may have left the file short: put back as it was
 		// (the in-place write keeps the file's own permissions; the backup .fincom-bak holds it too)
 		e["state"] = "failed"
+		if cur, rerr := os.ReadFile(path); rerr == nil && bytes.Equal(cur, raw) {
+			return e, fmt.Errorf("tally.ini could not be written (%v): not changed", err) // never opened: nothing to put back
+		}
 		if perr := iniWriteFn(path, raw); perr != nil {
 			return e, fmt.Errorf("tally.ini could not be written (%v) nor put back (%v): its backup %s.fincom-bak holds it as it was", err, perr, path)
 		}
@@ -334,15 +337,23 @@ const tallyIniMarkerName = "fincom-tallyini-version.txt"
 
 func tallyIniAfterUpdate(dir string, log func(string)) bool {
 	marker := filepath.Join(dir, tallyIniMarkerName)
-	if strings.TrimSpace(readText(marker)) == BridgeVersion {
+	mk := strings.Fields(readText(marker))
+	if len(mk) == 1 && mk[0] == BridgeVersion {
 		return false
+	}
+	// a tally.ini that failed is tried at the next start, three starts at most (review 245 R2: a file this bridge may never
+	// write, the per-user bridge's under Program Files, is not tried at every start for ever)
+	tries := 0
+	if len(mk) == 3 && mk[0] == BridgeVersion && mk[1] == "try" {
+		tries = toInt(mk[2])
 	}
 	log("FinCom Bridge " + BridgeVersion + ", its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)")
 	for _, e := range tallyIniStep(log) {
 		// review 245 R1: a tally.ini that could not be read or written (locked by Tally or an antivirus a moment): the
 		// marker is not written, so the step runs again at the next start
-		if st := str(e["state"]); st == "failed" || st == "unreadable" {
+		if st := str(e["state"]); (st == "failed" || st == "unreadable") && tries < 2 {
 			log("tally.ini " + str(e["path"]) + ": tried again at the bridge's next start")
+			_ = saveFile(marker, fmt.Sprintf("%s try %d", BridgeVersion, tries+1))
 			return true
 		}
 	}
