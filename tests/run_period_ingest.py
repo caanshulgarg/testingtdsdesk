@@ -146,6 +146,14 @@ try:
     FS.rpc = real_e
     ok(c == 200 and r.get("ok") is True and "Unlock the month" in str(r.get("upload")), "3. a locked month: ok, the words to upload (%s)" % r)
 
+    # review 245 R3: a company GUID that is not the book's recorded one: refused, nothing kept
+    FS.T["tally_sync_cursor"].append({"book_id": BOOK, "company_guid": CG})
+    n3 = len(FS.ARGS.get("tally_period_heads") or [])
+    c, r = call(dict(base, kind="period_heads", company="BIG CO", company_guid="other-copy-guid", day="20250830", heads=heads))
+    ok(c == 409 and r.get("otherGuid") is True and len(FS.ARGS.get("tally_period_heads") or []) == n3, "3. another company GUID (a same-named copy): 409, nothing kept (%s)" % r)
+    c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid="other-copy-guid", round="r9", read=1, of=2, done=False))
+    ok(c == 409, "3. ledger progress of another GUID: 409")
+
     print("== 4. ledger_progress")
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid=CG, round="r2", read=1240, of=1240, done=True))
     lp = FS.ARGS["tally_ledger_progress_save"][-1]

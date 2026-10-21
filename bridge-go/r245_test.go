@@ -230,7 +230,10 @@ func pullReset() {
 	pull.mu.Lock()
 	pull.items, pull.work = nil, nil
 	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]time.Time{}, map[string]M{}, map[string]string{}
+	pullSaveMu.Lock()
+	pullSaveText.Store("")
 	_ = os.Remove(pullFile())
+	pullSaveMu.Unlock()
 	pull.mu.Unlock()
 }
 
@@ -828,6 +831,7 @@ func TestR245ReviewDoneSpacedAndUploadKept(t *testing.T) {
 	// upload kept on disk
 	applyPeriodDays(pullList("20250405"))
 	pullMarkUpload(pullCurrent(), "over2s", "")
+	pullSaveNow()
 	pull.mu.Lock()
 	pull.upload, pull.tell = map[string]M{}, map[string]M{}
 	pull.mu.Unlock()

@@ -56,9 +56,10 @@ export default function OlderEntries({ cid, where }) {
   const running = pull && fyOf8(pull.fy) === chosenFy ? pull.part : "";
   // review 245 R2: a half-year already chosen stays shown (and chosen) while a new day of the year is being counted
   const curPart = part && (half || part === "year") ? part : running || "year";
-  const act = (fn, args, what) => { setBusy(what); setErr("");
-    return rpc(fn, args).then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); if (r && r.pull !== undefined) setSt(r); else return load(); },
-      (e) => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy("")); };
+  const act = (fn, args, what) => { const b = book; setBusy(what); setErr("");
+    // review 245 R3: a reply for the book shown before is never shown under this one
+    return rpc(fn, args).then((r) => { if (cur.current !== b) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); if (r && r.pull !== undefined) setSt(r); else return load(); },
+      (e) => { if (cur.current === b) setErr("FinCom’s cloud did not answer; try again in a minute."); }).finally(() => setBusy("")); };
   const start = () => act("tally_period_choose", { p_book: book, p_fy_start: fyIso(chosenFy), p_part: curPart }, "start");
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");
   const same = pull && fyOf8(pull.fy) === chosenFy && (pull.part === curPart);

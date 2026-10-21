@@ -1476,18 +1476,18 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
       try { book = await bookForBeat(firm, company); } catch { book = null; }
       if (!book || books.has(book)) continue;
       books.add(book);
-      let guid = beatGuid;
-      if (!guid) {
-        const { data } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
-        guid = s((data as any[] | null)?.[0]?.company_guid, 100);
-      }
+      // review 245 R3: the book's own recorded company GUID; a computer whose company of that name has another GUID (a
+      // restored or test copy) is never handed the book's days
+      const recorded = await bookGuidOf(book);
+      if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
+      const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
       const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: 3 - out.length });
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
         fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", company, m.slice(0, 200));
-        return null;
+        continue;     // review 245 R3: that company is left out of this answer; the others go on (and Pause still stops)
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= 3) break;
@@ -1502,6 +1502,20 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
     return null;
   }
   return out;
+}
+// the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
+async function bookGuidOf(book: string): Promise<string> {
+  const { data } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
+  const g = (data as any[] | null)?.[0]?.company_guid;
+  return typeof g === "string" ? g.trim().slice(0, 100) : "";
+}
+// at most 300 older-entries calls a minute from one computer (heads, entries, progress)
+const periodAt = new Map<string, number[]>();
+function periodAllowed(devId: string) {
+  const now = Date.now(), had = (periodAt.get(devId) || []).filter((t) => now - t < 60000);
+  if (had.length >= 300) { periodAt.set(devId, had); return false; }
+  had.push(now); periodAt.set(devId, had);
+  return true;
 }
 // a day's heads from Tally (its count, by FinComDayHeads), or the day to be uploaded by hand
 async function periodHeads(book: string, body: any) {
@@ -3701,10 +3715,14 @@ Deno.serve(sentry.wrap(async (req) => {
       }
       case "period_heads": case "period_entries": case "ledger_progress": {
         // FinCom Bridge 2.4.5 (migration 98): older entries for the period the person chose; the ledger read's progress
+        if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many older-entries calls in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
+        // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
+        const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
+        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }
       case "groups": {

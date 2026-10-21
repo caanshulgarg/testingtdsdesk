@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -147,11 +148,41 @@ func iniAddAddon(raw []byte, addon string) ([]byte, string, []string) {
 	return b, "added", add
 }
 
+// tally.ini read only when the file opened is the one looked at (fi, by Lstat): no link swapped in between
+func iniReadSame(path string, fi os.FileInfo) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if oi, err := f.Stat(); err != nil || !os.SameFile(oi, fi) {
+		return nil, errors.New("tally.ini changed while it was opened (a link?): not read")
+	}
+	return io.ReadAll(io.LimitReader(f, 4<<20))
+}
+
 // the file written: the backup first (never overwritten), then the new bytes in place (the file keeps its permissions);
 // read back to check. A link, junction or anything but a regular file is never followed or written
 var iniWriteFn = func(path string, b []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	// review 245 R3: opened without truncating, then checked to be the very file looked at (no link or junction swapped
+	// in between), and only then cut and written
+	li, err := os.Lstat(path)
 	if err != nil {
+		return err
+	}
+	if !li.Mode().IsRegular() {
+		return errors.New("not a plain file (a link or a folder): not touched")
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	if fi, err := f.Stat(); err != nil || !os.SameFile(fi, li) {
+		f.Close()
+		return errors.New("tally.ini changed while it was opened (a link?): not touched")
+	}
+	if err := f.Truncate(0); err != nil {
+		f.Close()
 		return err
 	}
 	if _, err := f.Write(b); err != nil {
@@ -172,7 +203,7 @@ func tallyIniApply(path, addon string) (M, error) {
 		e["state"] = "refused"
 		return e, errors.New("not a plain file (a link or a folder): not touched")
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := iniReadSame(path, fi)
 	if err != nil {
 		e["state"] = "unreadable"
 		return e, err
@@ -184,7 +215,15 @@ func tallyIniApply(path, addon string) (M, error) {
 	}
 	bak := path + ".fincom-bak"
 	if _, err := os.Lstat(bak); errors.Is(err, os.ErrNotExist) {
-		if err := os.WriteFile(bak, raw, 0o644); err != nil {
+		// made new only (O_EXCL: never through a link planted under that name, never over a file)
+		bf, err := os.OpenFile(bak, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			_, err = bf.Write(raw)
+			if cerr := bf.Close(); err == nil {
+				err = cerr
+			}
+		}
+		if err != nil {
 			e["state"] = "failed"
 			return e, fmt.Errorf("the backup %s could not be written (%v): tally.ini not changed", bak, err)
 		}

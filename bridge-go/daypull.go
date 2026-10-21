@@ -460,7 +460,7 @@ func pullStep() (bool, bool) {
 	case !w.sentHeads:
 		return false, pullSendHeads(w)
 	case len(w.want) > 0:
-		if len(w.got)+len(w.gone) >= pullFlushAt() {
+		if len(w.got)+len(w.gone) >= pullFlushAt() || pullGotBytes(w) >= 4<<20 {
 			return false, pullFlush(w)
 		}
 		port, why := pullMayAsk(w.it)
@@ -596,8 +596,10 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 		why += ": " + str(r.json["error"])
 	}
 	liveSayOnce("pull|cloud|"+w.it.key(), "Older entries of "+w.it.Company+": FinCom did not take "+what+" of "+liveDay(w.it.Day)+" ("+cutRunes(why, 160)+"); sent again later")
-	if r.code == 409 || (r.code == 200 && r.json != nil) {
-		pullDrop(w) // refused in words (no longer wanted, another choice): left; FinCom lists it again if it still wants it
+	if (r.code >= 400 && r.code < 500) || (r.code == 200 && r.json != nil) {
+		// refused (no longer wanted, paused, another choice, too large, not linked): left, nothing more asked of Tally for
+		// it; FinCom lists it again if it still wants it (review 245 R3: never the same refused body for ever)
+		pullDrop(w)
 	}
 	return false
 }
@@ -647,6 +649,15 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	}
 	pullNote(it, "fetch", w)
 	return true, true
+}
+
+// the size of the entries read and not sent (review 245 R3: a batch stays far below the cloud's body limit)
+func pullGotBytes(w *pullWork) int {
+	n := 0
+	for _, x := range w.got {
+		n += len(x)
+	}
+	return n
 }
 
 // the entries read go to FinCom (period_entries); taken: they are not sent again
@@ -774,12 +785,33 @@ func pullTellDue() {
 // Tally again)
 func pullFile() string { return sp("period-upload.json") }
 
+// a snapshot taken under the lock; written to disk after it is let go (review 245 R3: no disk write while holding the lock
+// the request gate reads), in order (pullSaveMu)
 func pullSaveLocked() {
 	tell := M{}
 	for k, v := range pull.tell {
 		tell[k] = obj(v["body"])
 	}
-	_ = saveFile(pullFile(), jsonText(M{"upload": pull.upload, "tell": tell}))
+	up := M{}
+	for k, v := range pull.upload {
+		up[k] = v
+	}
+	pullSaveText.Store(jsonText(M{"upload": up, "tell": tell}))
+	go pullSaveNow()
+}
+
+var (
+	pullSaveText atomic.Value
+	pullSaveMu   sync.Mutex
+)
+
+func pullSaveNow() {
+	pullSaveMu.Lock()
+	defer pullSaveMu.Unlock()
+	if t, ok := pullSaveText.Load().(string); ok && t != "" {
+		_ = saveFile(pullFile(), t)
+		pullSaveText.Store("")
+	}
 }
 
 func pullLoad() {

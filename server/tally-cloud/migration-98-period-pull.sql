@@ -244,7 +244,8 @@ begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
   select * into p from tally_period_pulls where book_id = p_book;
   fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
-  if not found or p_day is null or p_day < p.fy_start or p_day > fy_to or p_day > (now() at time zone 'Asia/Kolkata')::date then
+  -- review 245 R3: only while the pull goes (paused: refused in words, so the bridge leaves the day at once)
+  if not found or p.state <> 'going' or p_day is null or p_day < p.fy_start or p_day > fy_to or p_day > (now() at time zone 'Asia/Kolkata')::date then
     return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day');
   end if;
   if jsonb_typeof(coalesce(p_heads, 'null'::jsonb)) <> 'array' or jsonb_array_length(p_heads) > 100000 then
@@ -281,11 +282,16 @@ end $function$;
 -- entry path (as the Day Book's, p_keep false); then the day counted again from its heads
 create or replace function public.tally_period_entries(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_seen jsonb, p_gone jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
-declare d tally_period_days%rowtype; lk date; vs jsonb; ls jsonb; g text[]; stale int; res jsonb; h record; sn jsonb := '{}'::jsonb; hd jsonb; k text; w text;
+declare d tally_period_days%rowtype; pp tally_period_pulls%rowtype; pr record; lk date; vs jsonb; ls jsonb; g text[]; stale int; res jsonb; h record; sn jsonb := '{}'::jsonb; hd jsonb; k text; w text;
 begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
   select * into d from tally_period_days where book_id = p_book and day = p_day;
   if not found or d.heads is null then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  -- review 245 R3: only while the pull goes, for a day of the part chosen
+  select * into pp from tally_period_pulls where book_id = p_book;
+  if not found or pp.state <> 'going' then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  select d_from, d_to into pr from tally_period_range(pp.fy_start, pp.part);
+  if p_day < pr.d_from or p_day > pr.d_to then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
   if exists (select 1 from jsonb_array_elements(coalesce(p_vouchers, '[]'::jsonb)) v where coalesce(v->>'day', '') <> to_char(p_day, 'YYYY-MM-DD')) then
     return jsonb_build_object('ok', false, 'error', 'an entry of another date');
   end if;
@@ -316,8 +322,9 @@ begin
     end if;
   end if;
   select * into h from tally_period_held(p_book, hd, 0, d.seen || sn);
-  update tally_period_days set seen = d.seen || sn, heads = hd, tally_n = jsonb_array_length(hd), held_n = h.held,
-         done_at = case when h.held >= jsonb_array_length(hd) then coalesce(done_at, now()) end where book_id = p_book and day = p_day;
+  -- (the heads and the count are the latest tally_period_heads stored; only FinCom's side is written here)
+  update tally_period_days set seen = seen || sn, held_n = h.held,
+         done_at = case when h.held >= coalesce(tally_n, 0) then coalesce(done_at, now()) end where book_id = p_book and day = p_day;
   return jsonb_build_object('ok', true, 'stored', jsonb_array_length(vs), 'stale', stale, 'n', jsonb_array_length(hd), 'held', h.held, 'done', h.held >= jsonb_array_length(hd));
 end $function$;
 

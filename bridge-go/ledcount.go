@@ -191,7 +191,13 @@ var (
 
 func ledProgSender() {
 	for body := range ledProgQ {
-		if r := invokeCloud(body, 5); r.code != 200 {
+		r := invokeCloud(body, 5)
+		// the round's end tried again (3 times in all, 5 s apart): FinCom learns of it only by this call
+		for i := 0; i < 2 && r.code != 200 && truthy(body["done"]) && !stopping(); i++ {
+			time.Sleep(5 * time.Second)
+			r = invokeCloud(body, 5)
+		}
+		if r.code != 200 {
 			liveSayOnce("ledprog|"+companyKey(str(body["company"])), "Ledger progress of "+str(body["company"])+" not taken by FinCom ("+or(r.err, fmt.Sprint("HTTP ", r.code))+"); the beat carries it")
 		}
 		ledProgWG.Done()
