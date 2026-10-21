@@ -161,6 +161,11 @@ jobs:
         # than before: cancelled at 30 minutes (runs 39575174342, 39579001545). Run on its own (tests/ci/run_ci.sh --shard
         # 2/8), the share took 33.4 minutes of test time, all 43 tests passing (run_tally_clicks 407 s, run_ask_fab_overlap
         # 317 s, run_seed 175 s the longest). Ten shares, about 20 to 27 minutes each; no test skipped
+        # 21-Oct-2026 (staging-next 6ab4a38b8): run_account_switch.py (480 s limit) moved the deal (run_ci.sh deals by time
+        # limit, not by time taken) and share 2 drew run_tally_clicks (380 s) and run_ask_fab_overlap (315 s) together:
+        # 28.2 minutes of test step on one run (39614561258), cancelled at 30 on the next (39619243608). Run on its own the
+        # share took 30.6 minutes, all 43 tests passing, none hanging (run_keep_daily 164 s, run_ui_standards 110 s next).
+        # Ten shares (as next-245 did for the same reason), the two long UI tests in different shares; no test skipped
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
