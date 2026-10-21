@@ -45,6 +45,10 @@ const Cloud = {
     const j = await this.signInCall(String(email).trim(), password);
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
+    // another person than the owner of the copy open here (LocalOwner, src/js/00): their own copy is opened, in a
+    // fresh page, before anything of this one is shown or sent with their sign-in
+    const uid = j.user && j.user.id;
+    if (LocalOwner.other(uid)){ LocalOwner.switchTo(uid, "", (j.user && j.user.email) || String(email).trim()); return new Promise(() => {}); }
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
     await this.whoAmI();
     return true;
@@ -83,6 +87,9 @@ const Cloud = {
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");
     opts = opts || {};
+    // nothing goes with another person's sign-in, and nothing is written to a firm other than the one of the copy here
+    const held = LocalOwner.guard(opts.method || "GET", s);
+    if (held) throw new Error(held);
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
     const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
     if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
@@ -104,6 +111,8 @@ const Cloud = {
   async whoAmI(){
     const rows = await this.api("members?select=user_id,firm_id,name,email,role,active");
     const me = (rows || []).find(m => m.user_id === (this.sess() || {}).user_id) || (rows || [])[0];
+    // the copy here is this person's in this firm, or theirs is opened (LocalOwner, src/js/00) before the firm is set
+    if (me && !(await LocalOwner.ensure((this.sess() || {}).user_id || me.user_id, me.firm_id, (this.sess() || {}).email || me.email))) return new Promise(() => {});
     this.st.members = rows || [];
     if (me){ this.st.role = me.role; this.st.firm = me.firm_id; }
     this.st.email = (this.sess() || {}).email || "";
@@ -187,6 +196,8 @@ async function cloudMarkDeleted(path, why){
 }
 function cloudDelsSent(rows){ const d = Cloud.dels(); let n = 0; rows.forEach(r => { if (r.deleted && d[cloudKey(r)]){ delete d[cloudKey(r)]; n++; } }); if (n) Cloud.setDels(d); }
 async function cloudPush(){
+  // never a record of one firm's copy while signed in to another (owner, 21-Oct-2026): held, said once in the console
+  if (!LocalOwner.mayPush(Cloud.st.firm)) return 0;
   const {changes} = cloudChanges();
   if (!changes.length) return 0;
   const marks = Cloud.marks();
@@ -503,6 +514,9 @@ async function cloudSync(manual){
   const before = JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]);
   let toSend = 0; try { toSend = cloudChanges().changes.length; } catch (e){}
   Cloud.st.busy = manual || toSend ? "Syncing\u2026" : ""; Cloud.st.error = "";
+  // this person's copy opened again (LocalOwner): what they changed here and had not sent goes now, and is said so
+  if (LocalOwner.restored){ const r = LocalOwner.restored; LocalOwner.restored = null;
+    if (toSend) toast("Welcome back. " + toSend + " change(s) made here earlier" + (r.firmName ? " for " + r.firmName : "") + " are being sent now."); }
   if (manual) render();
   let changed = !!Cloud.st.busy;
   try {
@@ -541,6 +555,8 @@ Cloud.fn = async function(name, body, retry){
   if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
+  const held = LocalOwner.guard("POST", s);
+  if (held) throw new Error(held);
   let r;
   // a request the browser stopped before the server answered (no connection, or this site not allowed by the
   // function): said in words, not the browser's "Load failed" / "Failed to fetch"
@@ -567,6 +583,7 @@ Cloud.fn = async function(name, body, retry){
 };
 async function loadAccount(quiet){
   if (Cloud.st.mfa) return null;                 // nothing of the firm before the two-step code
+  if (LocalOwner.stale) return null;             // this page is being opened again for another sign-in
   setTimeout(() => loadDocq(true), 0);
   if (!Cloud.on()) return null;
   try {
@@ -1521,7 +1538,7 @@ function doAct(act, t){
     case "cloudSignOut": {
       flushBillSaves();
       // no question first (spec K9, round 2): this computer keeps everything; signing in again undoes it
-      signOutHere("Signed out. This computer keeps its own copy of everything; changes made now are shared when you sign in again.");
+      signOutHere("Signed out. Changes made here now are shared when you sign in again.");
       break;
     }
     case "bridgeTest": { const k = document.querySelector('[data-bridge="key"]'), u = document.querySelector('[data-bridge="url"]');
@@ -2299,6 +2316,9 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   // stability batch 2: the opening work in short steps, the browser free to draw and to take a click between them (one
   // long block of up to 200 ms on an office computer before); the same work, in the same order
   const pause = () => new Promise(r => (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield().then(r, r) : setTimeout(r, 0));
+  // whose copy is opened (owner, 21-Oct-2026): the signed-in person's, before any of this browser's databases is opened
+  LocalOwner.boot();
+  if (LocalOwner.displaced) S.signedOutWhy = "Your sign-in ended: someone else signed in in another tab. Sign in again; your work is kept.";
   await Store.init();
   await pause();
   try { await Store.loadFirm(); }
@@ -2330,6 +2350,11 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
   startCloudSync();
+  // opened again after signing in as another person (LocalOwner.switchTo): what the sign-in does next, done here
+  if (LocalOwner.after && Cloud.on()){
+    S.signInOpening = Date.now(); setTimeout(render, 15000); toast("Signed in as " + LocalOwner.after.email + ". This browser opened your own copy.");
+    setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000);
+  }
   // stability batch 2: asked only for the sign-in page, where its "Create an account" line is (SignIn.jsx asks too, when
   // the page is shown later), not on every open of FinCom used without an account
   if (!Cloud.on() && signInNeeded()) loadSignupInfo();

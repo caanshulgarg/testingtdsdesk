@@ -96,6 +96,8 @@ function sessionEnded(reason){
 // the other tabs of this browser: signed out there means signed out here, said so; signed in there brings this tab in
 window.addEventListener("storage", ev => {
   if (!ev || ev.key !== SESS_KEY) return;
+  // signed in there as another person: this page holds the last person's copy, so it is opened again (LocalOwner)
+  if (ev.newValue){ let u = ""; try { u = (JSON.parse(ev.newValue) || {}).user_id || ""; } catch (e){} if (LocalOwner.other(u)){ LocalOwner.leave(); return; } }
   if (!ev.newValue){
     if (Cloud.st.state === "off" && !Cloud.st.firm && !Cloud.st.email) return;   // this tab was not signed in
     if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
@@ -227,7 +229,10 @@ function signOutHere(msg, clearLocal, why, local){
   Cloud.setCfg({gate: true});
   S.signedOutWhy = why || "";
   S.view = "home"; S.coId = null;
-  const after = () => { toast(msg || "Signed out."); render(); };
+  // whose copy stays here, in plain words (owner, 21-Oct-2026): the next person to sign in here gets their own
+  const fn = S.firm && S.firm.firmName;
+  const kept = clearLocal ? "" : " This browser\u2019s copy of " + (fn || "your firm") + " is kept for you only.";
+  const after = () => { toast((msg || "Signed out.") + kept); render(); };
   // the page is reloaded after clearing, so nothing of the firm stays in memory either
   if (clearLocal) clearLocalCopy().then(() => location.reload(), () => location.reload()); else after();
 }
@@ -264,10 +269,14 @@ async function signOutAll(){
 // removes this firm's copy from this browser (only after everything has reached the firm account)
 async function clearLocalCopy(){
   try { const d = IDBStore.dbp && await IDBStore.dbp; if (d && d.close) d.close(); IDBStore.dbp = null; } catch (e){}
-  const names = ["tdsdesk", "tdsdesk-bank", "tdsdesk-work", "tdsdesk-files", "tdsdesk-docs"];
-  try { if (indexedDB.databases) (await indexedDB.databases()).forEach(d => { if (d.name && /^tdsdesk/.test(d.name) && !names.includes(d.name)) names.push(d.name); }); } catch (e){}
+  try { const b = BankDB.dbp && await BankDB.dbp; if (b && b.close) b.close(); BankDB.dbp = null; } catch (e){}
+  // this copy only (LocalOwner): the copies of other people put aside in this browser are theirs, not removed here
+  const names = ["tdsdesk-bank", "tdsdesk-work"].map(n => LocalOwner.db(n));
   await Promise.all(names.map(n => new Promise(r => { try { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); } catch (e){ r(); } })));
-  try { Object.keys(localStorage).filter(k => /^tdsdesk:/.test(k) && !/^tdsdesk:(cloud|bridge)$/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e){}
+  try { Object.keys(localStorage).filter(k => LocalOwner.firmKey(k)).forEach(k => localStorage.removeItem(k)); } catch (e){}
+  // the firm account's "pulled up to" time goes too (the next sign-in fetches everything again), and the copy is nobody's
+  Cloud.setCfg({lastPull: ""});
+  const s = LocalOwner.read(); s.cur = {slot: s.cur.slot}; LocalOwner.write(s);
   S.companies = {}; S.data = {}; S.inbox = {}; S.docq = {};
 }
 // There is no automatic sign-out (section D, 03-Oct-2026): the idle timer of earlier builds (30 minutes without a
