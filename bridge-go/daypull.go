@@ -586,6 +586,8 @@ func pullSendHeads(w *pullWork) bool {
 }
 
 // a cloud answer taken; else the day waits (the cloud's queue keeps it)
+var rePullRefusedRead = regexp.MustCompile(`another date|larger than FinCom takes`)
+
 func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
 		return true
@@ -596,7 +598,7 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 		why += ": " + str(r.json["error"])
 	}
 	liveSayOnce("pull|cloud|"+w.it.key(), "Older entries of "+w.it.Company+": FinCom did not take "+what+" of "+liveDay(w.it.Day)+" ("+cutRunes(why, 160)+"); sent again later")
-	if r.code == 400 && r.json != nil && regexp.MustCompile(`another date|larger than FinCom takes`).MatchString(str(r.json["error"])) {
+	if r.code == 413 || (r.code == 400 && r.json != nil && rePullRefusedRead.MatchString(str(r.json["error"]))) {
 		// refused for what was read (an entry too large, another date): the same would be read again; to be uploaded
 		pullMarkUpload(w, "shape", "")
 		return false

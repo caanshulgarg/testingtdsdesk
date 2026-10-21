@@ -1506,6 +1506,12 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
   // nothing listed while one company's days could not be worked out: the key left out (the bridge keeps the day it reads)
   return unsure && out.length === 0 ? null : out;
 }
+// the company's GUID as this computer's last heartbeat named it ("" when none)
+function beatGuidOf(dev: any, company: string): string {
+  const cs = (dev?.info?.beat?.companies || []) as any[];
+  const c = Array.isArray(cs) ? cs.find((x) => x && typeof x.name === "string" && x.name === company) : null;
+  return c && typeof c.guid === "string" ? c.guid.trim().slice(0, 100) : "";
+}
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
   const { data, error } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
@@ -3271,6 +3277,8 @@ Deno.serve(sentry.wrap(async (req) => {
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
+            // 2.4.5: the company's GUID as the bridge holds it (the ledger progress of a bridge not holding it yet is matched by it)
+            ...(typeof c?.guid === "string" && c.guid ? { guid: s(c.guid, 100) } : {}),
             // phase 2 (migration 44): Tally's highest change numbers and the recorder's state, when the bridge says them
             ...(altOf(c?.altvchid) !== null ? { altvchid: altOf(c?.altvchid), altmstid: altOf(c?.altmstid) } : {}),
             ...(typeof c?.recorderSeen === "boolean" ? { recorderSeen: c.recorderSeen, recorderLastAt: s(c?.recorderLastAt, 40) } : {}) })),
@@ -3728,7 +3736,10 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
-        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        // (ledger progress from a bridge that holds no GUID for the name yet: taken when this computer's own heartbeat
+        // names the company with the book's GUID)
+        const named = sent || (body.kind === "ledger_progress" ? beatGuidOf(dev, String(body.company || "")) : "");
+        if (recorded && named.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }

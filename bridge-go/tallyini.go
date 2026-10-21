@@ -190,7 +190,7 @@ func tallyIniApply(path, addon string) (M, error) {
 		return e, err
 	}
 	// review 245 R5: the folder itself is no link or junction to somewhere else
-	if real, rerr := filepath.EvalSymlinks(filepath.Dir(path)); rerr != nil || !strings.EqualFold(filepath.Clean(real), filepath.Clean(filepath.Dir(path))) {
+	if di, derr := os.Lstat(filepath.Dir(path)); derr != nil || !di.IsDir() || di.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
 		e["state"] = "refused"
 		return e, errors.New("the TallyPrime folder is a link or junction to another place: not touched")
 	}
