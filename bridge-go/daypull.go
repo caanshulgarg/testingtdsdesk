@@ -596,7 +596,12 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 		why += ": " + str(r.json["error"])
 	}
 	liveSayOnce("pull|cloud|"+w.it.key(), "Older entries of "+w.it.Company+": FinCom did not take "+what+" of "+liveDay(w.it.Day)+" ("+cutRunes(why, 160)+"); sent again later")
-	if (r.code >= 400 && r.code < 500) || (r.code == 200 && r.json != nil) {
+	if r.code == 400 || r.code == 413 {
+		// refused for what was read (too large, another date): the same would be read again; the day is to be uploaded
+		pullMarkUpload(w, "shape", "")
+		return false
+	}
+	if (r.code >= 400 && r.code < 500 && r.code != 429) || (r.code == 200 && r.json != nil) {
 		// refused (no longer wanted, paused, another choice, too large, not linked): left, nothing more asked of Tally for
 		// it; FinCom lists it again if it still wants it (review 245 R3: never the same refused body for ever)
 		pullDrop(w)
@@ -810,7 +815,7 @@ func pullSaveNow() {
 	defer pullSaveMu.Unlock()
 	if t, ok := pullSaveText.Load().(string); ok && t != "" {
 		_ = saveFile(pullFile(), t)
-		pullSaveText.Store("")
+		pullSaveText.CompareAndSwap(t, "") // a newer snapshot stored meanwhile stays, for its own write
 	}
 }
 

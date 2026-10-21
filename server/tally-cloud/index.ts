@@ -1487,7 +1487,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
         fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", company, m.slice(0, 200));
-        continue;     // review 245 R3: that company is left out of this answer; the others go on (and Pause still stops)
+        return null;     // review 245 R4: not worked out: the key left out, the bridge keeps the day it reads
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= 3) break;
@@ -1505,7 +1505,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
 }
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
-  const { data } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
+  const { data, error } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
+  if (error) throw new Error("the book's company GUID could not be read: " + String(error.message || "").slice(0, 160));     // never let a call through unchecked
   const g = (data as any[] | null)?.[0]?.company_guid;
   return typeof g === "string" ? g.trim().slice(0, 100) : "";
 }
@@ -1601,9 +1602,12 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
     try {
       const company = typeof p?.company === "string" ? p.company.slice(0, 200) : "";
       if (!company || p?.done === true) continue;     // a round's end goes by its own call
+      const pg = typeof p?.company_guid === "string" ? p.company_guid.trim() : "";
       // (the bridge carries only a progress noted in its last 2 minutes: a round cut off is not made current again)
       const book = await bookForBeat(firm, company);
       if (!book) continue;
+      const rg = await bookGuidOf(book);
+      if (rg && pg && rg.toLowerCase() !== pg.toLowerCase()) continue;     // a same-named copy's progress is never kept
       const n = (v: unknown) => Math.max(0, Math.min(10000000, Math.floor(Number(v) || 0)));
       const { error } = await db.rpc("tally_ledger_progress_save", { p_book: book, p_round: typeof p?.round === "string" ? p.round.slice(0, 64) : "", p_read: n(p?.read), p_of: n(p?.of), p_done: false, p_device: dev.id });
       if (error && missingFn(String(error.message || ""))) { periodMissing = Date.now(); return; }
@@ -3721,7 +3725,8 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
-        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        // (ledger progress without a GUID yet, from a bridge that holds none for the name, is taken: only a different one is refused)
+        if (recorded && (sent || body.kind !== "ledger_progress") && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }

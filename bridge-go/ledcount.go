@@ -193,7 +193,7 @@ func ledProgSender() {
 	for body := range ledProgQ {
 		r := invokeCloud(body, 5)
 		// the round's end tried again (3 times in all, 5 s apart): FinCom learns of it only by this call
-		for i := 0; i < 2 && r.code != 200 && truthy(body["done"]) && !stopping(); i++ {
+		for i := 0; i < 2 && (r.code == 0 || r.code >= 500) && truthy(body["done"]) && !stopping(); i++ {
 			time.Sleep(5 * time.Second)
 			r = invokeCloud(body, 5)
 		}
