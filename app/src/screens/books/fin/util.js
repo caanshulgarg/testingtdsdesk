@@ -29,7 +29,8 @@ export const fyEnd = (fy) => String(+fy + 1) + "0331";
 let memo = { key: "", d: null };
 export function built(b, fy, unit, dec) {
   const co = typeof CO === "function" ? CO() : null, firm = S.firm || {};
-  let fsTxt = ""; try { fsTxt = JSON.stringify(b.fs || {}); } catch (e) { fsTxt = String(Date.now()); }
+  // the reports' answers (b.fs.reports, ROUND 100) do not change the statements
+  let fsTxt = ""; try { fsTxt = JSON.stringify(Object.assign({}, b.fs, { reports: undefined })); } catch (e) { fsTxt = String(Date.now()); }
   const key = [b.cid, fy, unit, dec, (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
     co ? [co.name, co.pan, co.cin, co.entity, co.address].join("|") : "", [firm.firmName, firm.frn, firm.partner, firm.mno].join("|")].join("\u0001");
   if (memo.key === key && memo.d) return memo.d;
