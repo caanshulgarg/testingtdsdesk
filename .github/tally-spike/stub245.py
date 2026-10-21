@@ -25,7 +25,7 @@ STD = ['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']
 ctl = {'phase': 'off'}
 ctl_mtime = 0.0
 st = {'counted': {}, 'heads': {}, 'held': {}, 'done': [], 'upload': {}, 'want': {}, 'entries_sent': {}, 'bad_dates': [], 'ledger_progress': [],
-      'beats': 0, 'period_days_listed': [], 'tallyIni': None, 'company_guid': '', 'fetch_seeded': False, 'heads_asked': {}}
+      'beats': 0, 'period_days_listed': [], 'tallyIni': None, 'company_guid': '', 'fetch_seeded': False, 'heads_asked': {}, 'stops': [], 'stopped_for': None, 'oldDaysTest': None}
 HEADS = {}   # day -> {mid: (guid, alter, type)} as Tally last listed it
 HOLD = {}    # day -> {mid: alter} FinCom holds
 LED_SENT = ''
@@ -56,22 +56,31 @@ def day_done(day):
     return day in st['counted'] and held_n(day) >= len(HEADS.get(day, {}))
 
 def seed_fetch():
-    # when the fetch starts: FinCom holds every entry counted, except the days named missing (as if their entries had never come)
-    if st['fetch_seeded']:
+    # when a fetch starts (each new choice, chosen_at): FinCom holds every entry counted, except the days named missing
+    # (as if their entries had never come)
+    chosen = ctl.get('chosen_at') or '2026-04-01T00:00:00Z'
+    if st['fetch_seeded'] == chosen:
         return
     miss = set(ctl.get('missing') or [])
     for d, h in HEADS.items():
-        HOLD[d] = {} if d in miss else {mid: a for mid, (g, a, t) in h.items()}
-    st['fetch_seeded'] = True
+        if d in miss:
+            HOLD[d] = {}
+        elif not st['fetch_seeded']:
+            HOLD[d] = {mid: a for mid, (g, a, t) in h.items()}
+    st['fetch_seeded'] = chosen
 
 def period_days(guid):
     co = ctl.get('company', '')
     out = []
     ph = ctl.get('phase', 'off')
+    chosen = ctl.get('chosen_at') or '2026-04-01T00:00:00Z'
+    # ROUND 103 (1b): stopped by the bridge: nothing listed until the harness makes a fresh choice (a new chosen_at)
+    if st['stopped_for'] and st['stopped_for'] == chosen:
+        return out
     if ph == 'count':
         for d in ctl.get('count_days') or []:
             if d not in st['counted'] and d not in st['upload']:
-                out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': False, 'types': STD})
+                out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': False, 'types': STD, 'chosenAt': chosen})
             if len(out) == 3:
                 break
     elif ph == 'fetch':
@@ -80,7 +89,7 @@ def period_days(guid):
             if d in st['upload']:
                 continue
             if d not in st['counted'] or not day_done(d):
-                out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': True, 'types': STD})
+                out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': True, 'types': STD, 'chosenAt': chosen})
             if len(out) == 3:
                 break
     return out
@@ -130,7 +139,10 @@ class H(BaseHTTPRequestHandler):
                 if body.get('tallyIni') is not None:
                     st['tallyIni'] = body.get('tallyIni')
                 st['periodPull'] = body.get('periodPull')
-                out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True, 'recorderSource': 'both'}
+                if body.get('oldDaysTest') is not None:
+                    st['oldDaysTest'] = body.get('oldDaysTest')
+                # ROUND 103 (1c): this computer's switch on (as the owner switches it in FinCom)
+                out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True, 'recorderSource': 'both', 'periodFetch': True}
                 rf = list(HELD_LINES.values())[:20]
                 if rf: out['refetch'] = rf
                 if st['company_guid'] and ctl.get('phase') in ('count', 'fetch'):
@@ -191,6 +203,11 @@ class H(BaseHTTPRequestHandler):
                 # the bodies are large: the log keeps their count and sizes only
                 logged = {k2: v for k2, v in body.items() if k2 != 'vouchers'}
                 logged['vouchers_n'] = len(body.get('vouchers') or []); logged['vouchers_chars'] = sum(len(str(v)) for v in body.get('vouchers') or [])
+            elif kind == 'period_stop':
+                st['stops'].append({k2: body.get(k2) for k2 in ('company', 'company_guid', 'day', 'why', 'words')} | {'at': time.strftime('%H:%M:%S')})
+                st['stopped_for'] = ctl.get('chosen_at') or '2026-04-01T00:00:00Z'
+                save_state()
+                out = {'ok': True}
             elif kind == 'ledger_progress':
                 st['ledger_progress'].append({k2: body.get(k2) for k2 in ('company', 'company_guid', 'round', 'read', 'of', 'done')} | {'at': time.strftime('%H:%M:%S')})
                 save_state()

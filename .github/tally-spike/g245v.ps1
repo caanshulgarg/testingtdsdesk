@@ -9,6 +9,8 @@
 #   g1 the installer added FinCom's add-on to tally.ini (add only, after the other TDL, backup = the file as it was, User
 #      TDL not added again); Tally started again from that tally.ini loads FinCom's add-on AND the client's other TDL; the
 #      beat reports "added"; the per-user first-start marker written
+#   (ROUND 103: only Educational-allowed dates, the 1st, 2nd and 31st, are listed; the stand-in cloud has the
+#    computer's switch on)
 #   g2 the year counted day by day (FinComDayHeads, one day at a time, only days FinCom listed): every day's count exactly
 #      Tally's own; the year above 20,000 vouchers (the half-years offered)
 #   g3 the chosen part (Apr-Sep) fetched: FinCom ends holding every entry Tally lists for every day of it; only what
@@ -21,6 +23,8 @@
 #   g6 the ledger count (Connect Tally step 5, the "ledgers" wake): FinComLedgerIds; the progress sent to FinCom never
 #      going back and ending "N of N" with N Tally's own ledger count; every request under 2 s
 #   g7 a tally.ini with User TDL = No: the setup run again leaves it byte for byte; the beat reports usertdl-no
+#   g9 freeze safety: a day's list held at Tally (Tally suspended 5 s by proxy235.py) stops reading older entries of the
+#      company: FinCom told (period_stop, over2s), nothing more asked, Tally answering after (ROUND 103, 1b)
 #   g8 job files under load: a posting job of 300 entries (POST /jobs) while the job is read without pause (GET /jobs?id=
 #      and progress.json opened directly): never "no such job", never unreadable, the count never going back, done with
 #      every entry
@@ -35,6 +39,7 @@ $G5 = 'g5 postings first during the fetch'
 $G6 = 'g6 the exact ledger count and its progress'
 $G7 = 'g7 User TDL = No left untouched and reported'
 $G8 = 'g8 job files read while written: nothing lost, never missing'
+$G9 = 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)'
 $fcAddon = 'C:\ProgramData\FinCom\addon\FinComRecorder.tdl'
 $otherTdl = 'C:\fcother\FinComOtherTest.tdl'
 $iniPath = Join-Path $dir 'tally.ini'
@@ -151,7 +156,9 @@ try {
   # ================================================================ g2 the year counted
   $today = (Get-Date).ToString('yyyyMMdd')
   $days = @(); $d = [DateTime]::ParseExact('20260401', 'yyyyMMdd', $null)
-  while ($d.ToString('yyyyMMdd') -le $today -and $d.ToString('yyyyMMdd') -le '20270331') { $days += $d.ToString('yyyyMMdd'); $d = $d.AddDays(1) }
+  # ROUND 103 (2): only the dates Educational TallyPrime takes (the 1st, 2nd and 31st: run 39563247775 showed every other
+  # date answered in 2-15 s, the date not applied); the stand-in cloud lists only those
+  while ($d.ToString('yyyyMMdd') -le $today -and $d.ToString('yyyyMMdd') -le '20270331') { if ($d.Day -in 1, 2, 31) { $days += $d.ToString('yyyyMMdd') }; $d = $d.AddDays(1) }
   [array]::Reverse($days)
   Say "g245: counting FY 2026-27, $($days.Count) days (newest first)"
   Start-Sleep 70   # the person's 60 s (the keys of the restart) go by first
@@ -243,7 +250,12 @@ try {
   }
 
   # ================================================================ g6 the ledger count
+  # ROUND 103 (2): the company kept in step first (Update now, as a person presses it), so the "ledgers" wake reads
   $nLed = TruthLedgers
+  $mK = Mark
+  $null = Bridge POST '/keep' @{ company = $co1; now = $true } 60
+  $t = Get-Date; while (((Get-Date) - $t).TotalMinutes -lt 15) { Start-Sleep 10; if (@((StubReqs) | Select-Object -Skip $mK | Where-Object { $_.kind -in 'ledger_list', 'ledgers' }).Count) { break } }
+  Start-Sleep 30
   $tL = NowMs
   G5Ctl @{ company = $co1; phase = 'off'; ledgers_at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
   $t = Get-Date; $lp = @()
@@ -257,24 +269,46 @@ try {
   $worstL = (@($pxL | Where-Object { $_.id -in 'FinComLedgerIds', 'FinComLedgers' }) | Measure-Object -Property ms -Maximum).Maximum
   GRes $G6 $(if (-not $lp.Count) { 'FAIL' } elseif ($last.done -eq $true -and [int]$last.read -eq $nLed -and [int]$last.of -eq $nLed -and $back -eq 0 -and $ofSame -eq 0 -and $ids.Count -ge 1 -and $worstL -le 2000) { 'PASS' } else { 'FAIL' }) ("Tally's ledgers {0}; FinComLedgerIds asked {1} time(s) ({2} ms), FinComLedgers {3} chunk(s), worst {4} ms; progress sent {5} time(s): {6}; the last '{7} of {8} ledgers' done {9}; going back {10}; 'of' not Tally's count {11}" -f (Nf $nLed), $ids.Count, (($ids | ForEach-Object { $_.ms }) -join '/'), $ledReq.Count, $worstL, $lp.Count, (($lp | Select-Object -First 6 | ForEach-Object { "$($_.read)/$($_.of)" }) -join ', '), (Nf $last.read), (Nf $last.of), $last.done, $back, $ofSame)
 
-  # ================================================================ g7 User TDL = No (the setup run again)
+  # ================================================================ g7 User TDL = No put in after the first start: the bridge
+  # restarted (no setup) looks at tally.ini again, read only, and reports it (ROUND 103, 1a)
   $iniC = (G5Ini) + @('User TDL = No', "TDL = $otherTdl")
   Set-Content -Path $iniPath -Value $iniC -Encoding ASCII
   $hC = (Get-FileHash $iniPath).Hash; $hBak = (Get-FileHash $bak -ErrorAction SilentlyContinue).Hash
-  Copy-Item $iniPath (Join-Path $cap 'tally-ini-C-before-setup.txt') -Force
+  Copy-Item $iniPath (Join-Path $cap 'tally-ini-C-before-restart.txt') -Force
   $m0 = (GLog).Count
-  $p = Start-Process -FilePath $setup -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
-  if (-not $p.WaitForExit(300000)) { Write-Host 'the setup did not end in 5 minutes' }
-  Start-Sleep 15
+  $rr = Bridge POST '/tray/restart' @{} 20
+  $p = [pscustomobject]@{ ExitCode = $(if ($rr -and $rr.ok) { 0 } else { 1 }) }
+  Start-Sleep 20
   $cfg2 = Get-Content "$h1\tds-bridge.config.json" -Raw | ConvertFrom-Json; $bport = [int]$cfg2.Port; $bkey = "$($cfg2.Key)"
   $st2 = $null; for ($i = 0; $i -lt 30 -and -not $st2; $i++) { $st2 = Bridge GET '/status' $null 10; if (-not $st2) { Start-Sleep 3 } }
   $t = Get-Date; $iniMe = $null
   while (((Get-Date) - $t).TotalMinutes -lt 4) { Start-Sleep 10; $gs = GState; $iniMe = @(@((Prop $gs 'tallyIni')) | Where-Object { "$($_.path)" -ieq $iniPath -and "$($_.state)" -eq 'usertdl-no' }) | Select-Object -First 1; if ($iniMe) { break } }
   $hC2 = (Get-FileHash $iniPath).Hash; $hBak2 = (Get-FileHash $bak -ErrorAction SilentlyContinue).Hash
-  Copy-Item $iniPath (Join-Path $cap 'tally-ini-C-after-setup.txt') -Force
-  $lC = @((GLog) | Select-Object -Skip $m0 | Where-Object { $_ -match 'User TDL = No' } | Select-Object -Last 2)
-  GRes $G7 $(if ($p.ExitCode -ne 0 -or -not $st2) { 'HARNESS' } elseif ($hC -eq $hC2 -and $hBak -eq $hBak2 -and $iniMe) { 'PASS' } else { 'FAIL' }) ("the setup run again (exit {0}, the bridge {1}); tally.ini byte for byte the same {2}; the backup untouched {3}; the beat: {4}; the log: {5}" -f $p.ExitCode, $(if ($st2) { $st2.version } else { 'not answering' }), ($hC -eq $hC2), ($hBak -eq $hBak2), $(if ($iniMe) { "$($iniMe.state): $($iniMe.why)" } else { 'no usertdl-no entry' }), ($lC -join ' | '))
+  Copy-Item $iniPath (Join-Path $cap 'tally-ini-C-after-restart.txt') -Force
+  $lC = @((GLog) | Select-Object -Skip $m0 | Where-Object { $_ -match 'User TDL = No|usertdl-no|looked at again' } | Select-Object -Last 2)
+  GRes $G7 $(if ($p.ExitCode -ne 0 -or -not $st2) { 'HARNESS' } elseif ($hC -eq $hC2 -and $hBak -eq $hBak2 -and $iniMe) { 'PASS' } else { 'FAIL' }) ("the bridge restarted from the tray's address (asked {0}, the bridge {1}); tally.ini byte for byte the same {2}; the backup untouched {3}; the beat: {4}; the log: {5}" -f $p.ExitCode, $(if ($st2) { $st2.version } else { 'not answering' }), ($hC -eq $hC2), ($hBak -eq $hBak2), $(if ($iniMe) { "$($iniMe.state): $($iniMe.why)" } else { 'no usertdl-no entry' }), ($lC -join ' | '))
   Set-Content -Path $iniPath -Value $script:g5IniA -Encoding ASCII   # back as it was (the client's own)
+
+  # ================================================================ g9 freeze safety (ROUND 103, 1b): the next day's list held
+  # at Tally (proxy235.py suspends Tally for 5 s at the first FinComDayHeads), the bridge stops at 2 s and stops reading
+  # older entries of the company; FinCom told; nothing more asked; Tally answering after
+  $chosen = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+  $oct = @($days | Where-Object { $_ -ge '20261001' -and $_ -le '20261031' }); [array]::Reverse($oct)
+  [IO.File]::WriteAllText($proxyCtl, (@{ suspendOn = '^FinComDayHeads$'; pid = $script:tpid; sec = 5 } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+  $t9 = NowMs
+  G5Ctl @{ company = $co1; phase = 'fetch'; count_days = $days; part_days = $oct; missing = @($oct | Select-Object -First 1); chosen_at = $chosen }
+  $t = Get-Date; $stops = @()
+  while (((Get-Date) - $t).TotalMinutes -lt 8) { Start-Sleep 10; $gs = GState; $stops = @((Prop $gs 'stops')); if ($stops.Count) { break } }
+  Start-Sleep 90
+  G5Ctl @{ company = $co1; phase = 'off' }
+  $px = GProxy
+  $sus = @($px | Where-Object { $_.event -eq 'suspend' -and [int64]$_.t -ge $t9 })
+  $heads9 = @($px | Where-Object { $_.id -in 'FinComDayHeads', 'FinComVoucherObject' -and [int64]$_.t0 -ge $t9 })
+  $after = @($heads9 | Select-Object -Skip 1)
+  $resp9 = DbResponding
+  $st9 = (GState).periodPull
+  GRes $G9 $(if (-not $sus.Count) { 'HARNESS' } elseif ($stops.Count -eq 1 -and "$($stops[0].why)" -eq 'over2s' -and -not $after.Count -and $resp9) { 'PASS' } else { 'FAIL' }) ("Tally suspended 5 s at the first day's list ({0}); FinCom told: {1}; requests for older days after the stop: {2}; Tally responding after {3}" -f $sus.Count, $(if ($stops.Count) { ($stops | ForEach-Object { "$($_.day) $($_.why): $($_.words)" }) -join ' | ' } else { 'nothing' }), $(if ($after.Count) { ($after | ForEach-Object { "$($_.id) $($_.ms) ms" }) -join ', ' } else { 'none' }), $resp9)
+  Remove-Item $proxyCtl -Force -ErrorAction SilentlyContinue
 
   # ================================================================ g8 job files read while written
   $jid = "g245stress-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
@@ -299,7 +333,7 @@ try {
   GRes $G8 $(if (-not $jr) { 'HARNESS' } elseif ($status -eq 'done' -and $okN -eq 300 -and $noJob -eq 0 -and $unread -eq 0 -and $fileMiss -eq 0 -and $fileBad -eq 0 -and $backN -eq 0) { 'PASS' } else { 'FAIL' }) ("the job of 300 entries: {0}, {1} of 300 posted; read {2} times while written: 'no such job' {3}, not answered {4}; progress.json opened directly: missing or locked {5}, not whole {6}; the count going back {7}; {8} min" -f $status, $okN, $reads, $noJob, $unread, $fileMiss, $fileBad, $backN, [math]::Round(((Get-Date) - $t).TotalMinutes, 1))
 } catch {
   Write-Host "g245 stopped: $_ $($_.ScriptStackTrace)"
-  foreach ($c in @($G1, $G2, $G3, $G4, $G5, $G6, $G7, $G8)) { GRes $c 'HARNESS' "the harness stopped: $_" }
+  foreach ($c in @($G1, $G2, $G3, $G4, $G5, $G6, $G7, $G9, $G8)) { GRes $c 'HARNESS' "the harness stopped: $_" }
 }
 $script:frz.stop = $true
 Snap 'g245-end'
