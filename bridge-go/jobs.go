@@ -40,6 +40,9 @@ func jobDir(id string) (string, error) {
 // 2.4.5: the newest update, the file read sharing delete, a locked or missing file tried again (jobfile.go)
 func readProgress(dir string) M { return jobFileRead(filepath.Join(dir, "progress.json")) }
 
+// postingGoing's read: a missing progress.json is not waited for
+func readProgressNow(dir string) M { return jobFileReadNow(filepath.Join(dir, "progress.json")) }
+
 var progMu sync.Mutex
 
 func writeProgress(dir string, p M) error {
@@ -835,7 +838,7 @@ func postingGoing() bool {
 		if err != nil {
 			continue
 		}
-		p := readProgress(dir)
+		p := readProgressNow(dir)
 		if p == nil {
 			return true // just started: its progress not written yet
 		}

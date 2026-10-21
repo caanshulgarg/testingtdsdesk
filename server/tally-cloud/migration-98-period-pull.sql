@@ -42,6 +42,8 @@ create table if not exists public.tally_period_days (
   upload_why   text check (upload_why is null or length(upload_why) <= 40),
   upload_type  text check (upload_type is null or length(upload_type) <= 100),
   upload_words text check (upload_words is null or length(upload_words) <= 300),
+  seen         jsonb not null default '{}'::jsonb,                -- {guid: alterId}: entries Tally gave that FinCom keeps no entry
+                                                                  -- of (no ledger line: a stock journal, a delivery note); held
   primary key (book_id, day)
 );
 create table if not exists public.tally_ledger_progress (
@@ -71,16 +73,17 @@ language sql immutable security definer set search_path = public, pg_temp as $fu
          case p_part when 'h1' then (p_fy + interval '6 months' - interval '1 day')::date else (p_fy + interval '1 year' - interval '1 day')::date end
 $function$;
 
--- the heads of a day FinCom holds (each GUID live in tally_vouchers at the same or a higher AlterID): how many, and the
--- MasterIDs it lacks (at most p_max)
-create or replace function public.tally_period_held(p_book uuid, p_heads jsonb, p_max integer, out held integer, out want jsonb)
+-- the heads of a day FinCom holds (each GUID live in tally_vouchers at the same or a higher AlterID, or seen: given by Tally
+-- at that AlterID and not an accounting entry FinCom keeps): how many, and the MasterIDs it lacks (at most p_max)
+create or replace function public.tally_period_held(p_book uuid, p_heads jsonb, p_max integer, p_seen jsonb, out held integer, out want jsonb)
 language sql stable security definer set search_path = public, pg_temp as $function$
   with h as (
     select x->>0 as guid, x->>1 as mid, case when coalesce(x->>2, '') ~ '^[0-9]{1,15}$' then (x->>2)::bigint else 0 end as alt
       from jsonb_array_elements(coalesce(p_heads, '[]'::jsonb)) x
      where jsonb_typeof(x) = 'array'),
   k as (
-    select h.*, exists (select 1 from tally_vouchers v where v.book_id = p_book and v.guid = h.guid and v.deleted_at is null and coalesce(v.alter_id, 0) >= h.alt) as have from h)
+    select h.*, (exists (select 1 from tally_vouchers v where v.book_id = p_book and v.guid = h.guid and v.deleted_at is null and coalesce(v.alter_id, 0) >= h.alt)
+                 or (coalesce(p_seen->>h.guid, '') ~ '^[0-9]{1,15}$' and (p_seen->>h.guid)::bigint >= h.alt)) as have from h)
   select (select count(*)::int from k where have),
          coalesce((select jsonb_agg(m) from (select mid as m from k where not have and mid ~ '^[0-9]{1,18}$' order by mid::numeric limit greatest(p_max, 0)) z), '[]'::jsonb)
 $function$;
@@ -111,9 +114,11 @@ begin
   pdays := greatest(0, least(r.d_to, today) - r.d_from + 1);
   select count(*), coalesce(sum(tally_n), 0) into cdays, fyn from tally_period_days d
    where d.book_id = p_book and d.day between p.fy_start and least(fy_to, today) and (d.tally_n is not null or d.upload_at is not null);
-  select count(*), coalesce(sum(d.tally_n), 0), coalesce(sum(case when d.done_at is not null then d.tally_n else least(d.held_n, d.tally_n) end), 0)
+  -- a day marked "upload" counts as looked at (review 245 R1: else the period was never done); its entries are not in y
+  select count(*), coalesce(sum(d.tally_n) filter (where d.upload_at is null), 0),
+         coalesce(sum(case when d.done_at is not null then d.tally_n else least(d.held_n, d.tally_n) end) filter (where d.upload_at is null), 0)
     into pcount, y, x from tally_period_days d
-   where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and d.tally_n is not null;
+   where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and (d.tally_n is not null or d.upload_at is not null);
   select coalesce(jsonb_agg(jsonb_build_object('day', to_char(d.day, 'YYYYMMDD'), 'words', d.upload_words, 'why', d.upload_why) order by d.day), '[]'::jsonb) into up
     from tally_period_days d where d.book_id = p_book and d.day between p.fy_start and fy_to and d.upload_at is not null;
   return jsonb_build_object('ok', true, 'ledger', led, 'pull', jsonb_build_object(
@@ -176,8 +181,10 @@ end $function$;
 -- ---------------------------------------------------------------- 4. tally-ingest (service role only)
 -- the next days for a bridge (at most p_max, 3): while the year is being counted, the days not counted (newest first,
 -- fetch false); then the part's days counted and not done (newest first, fetch true). Never a day marked "upload", never a
--- day after today, never one handed out in the last 2 minutes. Types for a split: the book's own voucher types and Tally's
--- six standard ones
+-- day after today. The same days are listed again until done (review 245 R1: a day being read is never taken away from
+-- the bridge by the next beat). A day of a month locked in FinCom is not fetched: marked to upload (unlock, then upload).
+-- Types for a split: Tally's six standard ones first, then every type the book's entries and Tally's day lists name, the
+-- most used first (at most 40; never one with a quote mark)
 create or replace function public.tally_period_next(p_book uuid, p_max integer) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare p tally_period_pulls%rowtype; r record; fy_to date; today date := (now() at time zone 'Asia/Kolkata')::date; out jsonb := '[]'::jsonb; d date; n int := 0;
@@ -188,29 +195,38 @@ begin
   if not found or p.state <> 'going' or lim = 0 then return out; end if;
   fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
   select d_from, d_to into r from tally_period_range(p.fy_start, p.part);
-  select coalesce(jsonb_agg(t), '[]'::jsonb) into types from (
-    select t from (select unnest(array['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']) as t
-                   union select distinct v.vtype from tally_vouchers v where v.book_id = p_book and v.vtype <> '' and v.vtype !~ '["<>&]' and length(v.vtype) <= 60) a
-    order by t limit 40) z;
   -- counting: the year's days with no count yet
   for d in select g::date from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
-            where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null or x.asked_at > now() - interval '2 minutes'))
+            where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))
             limit lim loop
-    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false, 'types', types));
+    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false));
     n := n + 1;
   end loop;
   if n = 0 and not exists (select 1 from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
                             where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))) then
-    -- the year is counted: the part's days FinCom does not hold whole
+    -- the year is counted: the part's days FinCom does not hold whole; a locked month's days marked to upload, not fetched
+    update tally_period_days x set upload_at = now(), upload_why = 'locked',
+           upload_words = 'FinCom did not bring in ' || to_char(x.day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month, then upload that day''s Day Book.'
+     where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
+       and tally_month_locked(p_book, array[x.day]) is not null;
     for d in select x.day from tally_period_days x
               where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
-                and (x.asked_at is null or x.asked_at <= now() - interval '2 minutes')
               order by x.day desc limit lim loop
-      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'types', types));
+      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true));
       n := n + 1;
     end loop;
   end if;
   if n > 0 then
+    -- the types (only when a day is listed): the six first, then the book's own, the most used first
+    select coalesce(jsonb_agg(t order by o, c desc, t), '[]'::jsonb) into types from (
+      select t, min(o) as o, sum(c) as c from (
+        select unnest(array['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']) as t, 0 as o, 0::bigint as c
+        union all select v.vtype, 1, count(*) from tally_vouchers v where v.book_id = p_book group by v.vtype
+        union all select h->>3, 1, count(*) from tally_period_days x, jsonb_array_elements(coalesce(x.heads, '[]'::jsonb)) h
+                   where x.book_id = p_book and jsonb_typeof(h) = 'array' group by h->>3) a
+       where t is not null and t <> '' and t !~ '["[:cntrl:]]' and length(t) <= 60 and t = btrim(t)
+       group by t order by min(o), sum(c) desc, t limit 40) z;
+    select coalesce(jsonb_agg(e || jsonb_build_object('types', types)), '[]'::jsonb) into out from jsonb_array_elements(out) e;
     insert into tally_period_days (book_id, firm_id, day, asked_at)
     select p_book, p.firm_id, to_date(e->>'day', 'YYYYMMDD'), now() from jsonb_array_elements(out) e
     on conflict (book_id, day) do update set asked_at = now();
@@ -234,7 +250,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'the day''s list is not a list');
   end if;
   n := jsonb_array_length(p_heads);
-  select * into h from tally_period_held(p_book, p_heads, 2000);
+  select * into h from tally_period_held(p_book, p_heads, 2000, coalesce((select x.seen from tally_period_days x where x.book_id = p_book and x.day = p_day), '{}'::jsonb));
   insert into tally_period_days (book_id, firm_id, day, tally_n, held_n, heads, via, counted_at, done_at)
   values (p_book, p.firm_id, p_day, n, h.held, p_heads, case when p_via = 'split' then 'split' else 'day' end, now(), case when h.held >= n then now() end)
   on conflict (book_id, day) do update set tally_n = excluded.tally_n, held_n = excluded.held_n, heads = excluded.heads, via = excluded.via, counted_at = now(),
@@ -262,9 +278,9 @@ end $function$;
 -- the entries FinCom lacked, read from Tally by FinComVoucherObject (parsed by tally-ingest as a Day Book's entries): each
 -- dated the day, a locked month refused, an entry FinCom holds at a higher AlterID left as it is; stored through the one
 -- entry path (as the Day Book's, p_keep false); then the day counted again from its heads
-create or replace function public.tally_period_entries(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb) returns jsonb
+create or replace function public.tally_period_entries(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_seen jsonb, p_gone jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
-declare d tally_period_days%rowtype; lk date; vs jsonb; ls jsonb; g text[]; stale int; res jsonb; h record;
+declare d tally_period_days%rowtype; lk date; vs jsonb; ls jsonb; g text[]; stale int; res jsonb; h record; sn jsonb := '{}'::jsonb; hd jsonb; k text; w text;
 begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
   select * into d from tally_period_days where book_id = p_book and day = p_day;
@@ -274,7 +290,20 @@ begin
   end if;
   lk := tally_month_locked(p_book, array[p_day]);
   if lk is not null then
-    return jsonb_build_object('ok', false, 'locked', true, 'error', format('month locked: %s (nothing stored)', to_char(lk, 'YYYY-MM')));
+    -- review 245 R1: never fetched again; the one quiet line asks for the day to be uploaded once the month is unlocked
+    w := 'FinCom did not bring in ' || to_char(p_day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month, then upload that day''s Day Book.';
+    update tally_period_days set upload_at = coalesce(upload_at, now()), upload_why = 'locked', upload_words = w where book_id = p_book and day = p_day;
+    return jsonb_build_object('ok', true, 'locked', true, 'upload', w, 'stored', 0);
+  end if;
+  -- entries Tally gave that FinCom keeps no entry of (no ledger line): held as seen at their AlterID
+  for k in select jsonb_object_keys(coalesce(case when jsonb_typeof(p_seen) = 'object' then p_seen end, '{}'::jsonb)) loop
+    if length(k) between 1 and 100 and coalesce(p_seen->>k, '') ~ '^[0-9]{1,15}$' then sn := sn || jsonb_build_object(k, (p_seen->>k)::bigint); end if;
+  end loop;
+  -- MasterIDs Tally no longer has: out of the day's list (and its count)
+  hd := d.heads;
+  if jsonb_typeof(p_gone) = 'array' and jsonb_array_length(p_gone) > 0 then
+    select coalesce(jsonb_agg(x), '[]'::jsonb) into hd from jsonb_array_elements(d.heads) x
+     where not (x->>1 = any (select jsonb_array_elements_text(p_gone)));
   end if;
   -- an entry FinCom holds at a higher AlterID than Tally's answer gave: left as it is
   select coalesce(jsonb_agg(v), '[]'::jsonb) into vs from jsonb_array_elements(coalesce(p_vouchers, '[]'::jsonb)) v
@@ -288,9 +317,10 @@ begin
       return jsonb_build_object('ok', false, 'error', coalesce(res->>'error', 'not stored'), 'locked', coalesce((res->>'locked')::boolean, false));
     end if;
   end if;
-  select * into h from tally_period_held(p_book, d.heads, 0);
-  update tally_period_days set held_n = h.held, done_at = case when h.held >= coalesce(tally_n, 0) then coalesce(done_at, now()) end where book_id = p_book and day = p_day;
-  return jsonb_build_object('ok', true, 'stored', jsonb_array_length(vs), 'stale', stale, 'n', d.tally_n, 'held', h.held, 'done', h.held >= coalesce(d.tally_n, 0));
+  select * into h from tally_period_held(p_book, hd, 0, d.seen || sn);
+  update tally_period_days set seen = d.seen || sn, heads = hd, tally_n = jsonb_array_length(hd), held_n = h.held,
+         done_at = case when h.held >= jsonb_array_length(hd) then coalesce(done_at, now()) end where book_id = p_book and day = p_day;
+  return jsonb_build_object('ok', true, 'stored', jsonb_array_length(vs), 'stale', stale, 'n', jsonb_array_length(hd), 'held', h.held, 'done', h.held >= jsonb_array_length(hd));
 end $function$;
 
 -- the ledger read's progress: never back within a round; "of" never below "read"
@@ -306,18 +336,18 @@ begin
   on conflict (book_id) do update set
     read = case when tally_ledger_progress.round = excluded.round and not excluded.done then greatest(tally_ledger_progress.read, excluded.read) else excluded.read end,
     of = greatest(excluded.of, case when tally_ledger_progress.round = excluded.round and not excluded.done then greatest(tally_ledger_progress.read, excluded.read) else excluded.read end),
-    round = excluded.round, done = excluded.done, at = now(), device_id = excluded.device_id;
+    round = excluded.round, done = excluded.done or (tally_ledger_progress.round = excluded.round and tally_ledger_progress.done), at = now(), device_id = excluded.device_id;
   return jsonb_build_object('ok', true);
 end $function$;
 
 -- ---------------------------------------------------------------- 5. who may call
-revoke all on function public.tally_period_range(date, text), public.tally_period_held(uuid, jsonb, integer), public.tally_period_status_of(uuid), public.tally_period_half(uuid, date),
+revoke all on function public.tally_period_range(date, text), public.tally_period_held(uuid, jsonb, integer, jsonb), public.tally_period_status_of(uuid), public.tally_period_half(uuid, date),
   public.tally_period_member(uuid, boolean) from public, anon, authenticated, service_role;
 revoke all on function public.tally_period_choose(uuid, date, text), public.tally_period_pause(uuid, boolean), public.tally_period_status(uuid) from public, anon;
 grant execute on function public.tally_period_choose(uuid, date, text), public.tally_period_pause(uuid, boolean), public.tally_period_status(uuid) to authenticated, service_role;
 revoke all on function public.tally_period_next(uuid, integer), public.tally_period_heads(uuid, date, jsonb, text), public.tally_period_upload(uuid, date, text, text, text),
-  public.tally_period_entries(uuid, date, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) from public, anon, authenticated;
+  public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.tally_period_next(uuid, integer), public.tally_period_heads(uuid, date, jsonb, text), public.tally_period_upload(uuid, date, text, text, text),
-  public.tally_period_entries(uuid, date, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) to service_role;
+  public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) to service_role;
 
 commit;

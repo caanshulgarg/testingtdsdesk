@@ -370,7 +370,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the nightly run read the list as before
 	bar := k.kind == "ledgers"
 	if bar {
-		ledCountFor(company, port, ls, save)
+		ledCountFor(company, port, ls, save, inBudget, nextPoison(st, 0) > 0)
 	}
 	for !truthy(ls["done"]) {
 		if !inBudget() || keepHold() != "" {

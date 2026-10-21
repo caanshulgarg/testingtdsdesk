@@ -1489,7 +1489,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= 3) break;
         if (!isDay(String(d?.day || ""))) continue;
-        const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length <= 60 && !/["<>&]/.test(t)).slice(0, 40);
+        // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
+        const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
         out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types });
       }
     }
@@ -1536,6 +1537,17 @@ async function periodEntries(book: string, body: any) {
   const xs = (Array.isArray(body?.vouchers) ? body.vouchers : []).filter((x: unknown) => typeof x === "string").slice(0, 500) as string[];
   if (xs.some((x) => x.length > MAX_RECORDER_XML)) return reply(400, { ok: false, error: "an entry's XML is larger than FinCom takes" });
   const r = parseDay(dropBankDetails(xs.join("\n")));
+  // review 245 R1: an entry Tally gave that is no accounting entry (no ledger line: a stock journal, a delivery note) is
+  // kept by FinCom as seen at its AlterID, so its day can end; one with another date stays refused below
+  const parsed = new Set(dayVouchers(r).map((v: any) => v.guid));
+  const seen: Record<string, number> = {};
+  for (const x of xs) {
+    const g = (x.match(/<GUID[^>]*>\s*([^<]{1,100}?)\s*<\/GUID>/) || [])[1];
+    const a = Number((x.match(/<ALTERID[^>]*>\s*(\d{1,15})\s*</) || [])[1] || 0);
+    const dt = ((x.match(/<DATE[^>]*>\s*(\d{8})\s*</) || [])[1] || "");
+    if (g && !parsed.has(g) && dt === day) seen[g] = a;
+  }
+  const gone = (Array.isArray(body?.gone) ? body.gone : []).map((m: unknown) => String(m).replace(/\D/g, "")).filter((m: string) => m.length > 0 && m.length <= 18).slice(0, 2000);
   if (r.dates.some((x: string) => x !== day)) return reply(400, { ok: false, error: "an entry of another date (" + r.dates.filter((x: string) => x !== day).slice(0, 3).join(", ") + ")" });
   const lines = dayLines(r);
   const good: any[] = [], bad: string[] = [];
@@ -1546,7 +1558,7 @@ async function periodEntries(book: string, body: any) {
     good.push({ ...v, day: iso(day), full: body?.full === true });
   }
   const keep = new Set(good.map((v) => v.guid));
-  const { data, error } = await db.rpc("tally_period_entries", { p_book: book, p_day: iso(day), p_vouchers: good, p_lines: lines.filter((l: any[]) => keep.has(l[0])) });
+  const { data, error } = await db.rpc("tally_period_entries", { p_book: book, p_day: iso(day), p_vouchers: good, p_lines: lines.filter((l: any[]) => keep.has(l[0])), p_seen: seen, p_gone: gone });
   if (error) return periodError(error);
   const d = (data || {}) as any;
   if (bad.length) {
@@ -1554,6 +1566,8 @@ async function periodEntries(book: string, body: any) {
     await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: "entries", p_type: "", p_words: PERIOD_ENTRY_WORDS(day) });
   }
   if (d.ok !== true) return reply(200, { ok: false, locked: d.locked === true, error: String(d.error || "not stored"), ...(bad.length ? { upload: PERIOD_ENTRY_WORDS(day) } : {}) });
+  // a month locked in FinCom: the day is not fetched again; the one quiet line asks for it to be uploaded once unlocked
+  if (d.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(d.upload || PERIOD_ENTRY_WORDS(day)) });
   return reply(200, { ok: true, stored: d.stored, stale: d.stale, held: d.held, n: d.n, done: d.done === true, ...(bad.length ? { notTaken: bad.length, upload: PERIOD_ENTRY_WORDS(day) } : {}) });
 }
 // the ledger read's progress (Connect Tally step 5)
@@ -1569,6 +1583,9 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
     try {
       const company = typeof p?.company === "string" ? p.company.slice(0, 200) : "";
       if (!company || p?.done === true) continue;     // a round's end goes by its own call
+      // review 245 R1: only a progress noted in the last 2 minutes (a round cut off is not made current again)
+      const at = Date.parse(typeof p?.at === "string" ? p.at : "");
+      if (!Number.isFinite(at) || Math.abs(Date.now() - at) > 120000) continue;
       const book = await bookForBeat(firm, company);
       if (!book) continue;
       const n = (v: unknown) => Math.max(0, Math.min(10000000, Math.floor(Number(v) || 0)));

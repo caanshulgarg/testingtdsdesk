@@ -43,13 +43,25 @@ func ledIdsCount(raw string) (int, int64) {
 var reLedIDRow = re(`<LEDGER\b[^>]*>[\s\S]*?</LEDGER\s*>`)
 
 // the count for a round (ls: the round's state): asked when not known yet in this round. Nothing returned is an error the
-// person sees: a stop or a failure leaves the round without "of N"
-func ledCountFor(company string, port int, ls M, save func()) {
+// person sees: a stop or a failure leaves the round without "of N". The same holds as the read's own (review 245 R1):
+// someone working in Tally or FinCom's own reading (keepHold), the round's time budget; nothing that reached no Tally
+// (the retry schedule, a posting first, reading stopped) gives the count up: it goes on at the read's next turn. A company
+// with a ledger known to hang Tally (poisoned) is not counted (the read skips that ledger; the bar runs without "of N").
+func ledCountFor(company string, port int, ls M, save func(), inBudget func() bool, poisoned bool) {
 	if toInt(ls["of"]) > 0 || truthy(ls["countGaveUp"]) {
 		return
 	}
+	if poisoned {
+		ls["countGaveUp"] = true
+		save()
+		return
+	}
+	held := func() bool { return keepHold() != "" || (inBudget != nil && !inBudget()) }
 	tc := recorderTC(nil)
 	if !truthy(ls["countChunked"]) {
+		if held() {
+			return
+		}
 		raw, err := invokeTally(tc, port, ledgerIdsRequest(company, 0, 0), 5)
 		switch {
 		case err == nil && strings.Contains(raw, "<ENVELOPE"):
@@ -62,6 +74,10 @@ func ledCountFor(company string, port int, ls M, save func()) {
 			ls["countChunked"], ls["cAfter"], ls["cN"] = true, 0, 0
 			save()
 			writeLog("Keeping " + company + ": the ledger count took Tally longer than 2 s; it is counted 2,000 MasterIDs a request")
+		case err != nil && !tallyNoAnswer(err):
+			// nothing reached Tally (the retry schedule, a posting first, reading stopped): asked at the read's next turn
+			liveSayOnce("ledcount|"+companyKey(company), "Keeping "+company+": the ledger count waits ("+cutRunes(err.Error(), 120)+")")
+			return
 		default:
 			ls["countGaveUp"] = true // not asked again this round (nothing shown; the bar runs without "of N")
 			save()
@@ -70,6 +86,9 @@ func ledCountFor(company string, port int, ls M, save func()) {
 	}
 	bound := companyAlterM(company)
 	for i := 0; i < 200; i++ {
+		if held() {
+			return
+		}
 		after := toI64(ls["cAfter"])
 		tail := bound <= 0 || after >= bound
 		upto := after + 2000
@@ -138,16 +157,42 @@ func ledProgressNote(company, round string, read, of int, done bool) {
 	for kk, v := range e {
 		body[kk] = v
 	}
-	if r := invokeCloud(body, 5); r.code != 200 {
-		liveSayOnce("ledprog|"+k, "Ledger progress of "+company+" not taken by FinCom ("+or(r.err, fmt.Sprint("HTTP ", r.code))+"); the beat carries it")
+	// sent in the background, in order (review 245 R1: a slow cloud never holds the ledger read and its Tally turn)
+	ledProgOnce.Do(func() { go ledProgSender() })
+	ledProgWG.Add(1)
+	select {
+	case ledProgQ <- body:
+	default:
+		ledProgWG.Done() // the queue is full (the cloud is slow): this one is left to the beat
 	}
 }
+
+var (
+	ledProgQ    = make(chan M, 64)
+	ledProgOnce sync.Once
+	ledProgWG   sync.WaitGroup
+)
+
+func ledProgSender() {
+	for body := range ledProgQ {
+		if r := invokeCloud(body, 5); r.code != 200 {
+			liveSayOnce("ledprog|"+companyKey(str(body["company"])), "Ledger progress of "+str(body["company"])+" not taken by FinCom ("+or(r.err, fmt.Sprint("HTTP ", r.code))+"); the beat carries it")
+		}
+		ledProgWG.Done()
+	}
+}
+
+// waits until every progress queued is sent (tests; the bridge never waits on it)
+func ledProgFlush() { ledProgWG.Wait() }
 
 func ledProgressBeat() []any {
 	ledProg.mu.Lock()
 	defer ledProg.mu.Unlock()
 	out := []any{}
 	for _, v := range ledProg.last {
+		if t, err := time.Parse(time.RFC3339, str(v["at"])); err == nil && nowFn().Sub(t) > 2*time.Minute {
+			continue // a round cut off or long ended: not carried again (FinCom keeps what it was told)
+		}
 		out = append(out, v)
 	}
 	return out

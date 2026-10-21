@@ -84,6 +84,10 @@ def main():
         pg.click(card + ' [data-older-part="h1"]'); pg.click(card + " [data-older-start]"); pg.wait_for_timeout(800)
         ch = [c for c in E("window.__rpc") if c[0] == "tally_period_choose"]
         ok(ch[-1][1]["p_part"] == "h1" and "Apr–Sep" in txt(card + " [data-older-progress]"), "Apr–Sep chosen (%s / %s)" % (ch[-1], txt(card + " [data-older-progress]")))
+        # review 245 R1: the page opened again while Apr-Sep goes: Apr-Sep shown chosen, no Start beside Pause
+        E(CLOUD, [dict(BIG, part="h1"), None, False]); pg.wait_for_timeout(1200)
+        pressed = E("() => [...document.querySelectorAll('#app [data-older-part]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.getAttribute('data-older-part'))")
+        ok(pressed == ["h1"] and n(card + " [data-older-start]") == 0 and n(card + " [data-older-pause]") == 1, "opened again: the running part shown, no Start (%s)" % pressed)
         E(CLOUD, [DONE, None, False]); pg.wait_for_timeout(1200)
         ok(txt(card + " [data-older-progress]") == "FY 2025-26: 12,960 of 12,960 vouchers (100%) · all in FinCom ✓" and n(card + " [data-older-pause]") == 0, "done (%s)" % txt(card + " [data-older-progress]"))
         print("== 4. one quiet line for a day to upload")

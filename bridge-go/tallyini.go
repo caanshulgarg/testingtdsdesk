@@ -190,8 +190,13 @@ func tallyIniApply(path, addon string) (M, error) {
 		}
 	}
 	if err := iniWriteFn(path, nb); err != nil {
+		// review 245 R1: a write cut short (disk full, an antivirus) may have left the file short: put back as it was
+		// (the in-place write keeps the file's own permissions; the backup .fincom-bak holds it too)
 		e["state"] = "failed"
-		return e, fmt.Errorf("tally.ini could not be written (%v): not changed", err)
+		if perr := iniWriteFn(path, raw); perr != nil {
+			return e, fmt.Errorf("tally.ini could not be written (%v) nor put back (%v): its backup %s.fincom-bak holds it as it was", err, perr, path)
+		}
+		return e, fmt.Errorf("tally.ini could not be written (%v): put back as it was", err)
 	}
 	if back, err := os.ReadFile(path); err != nil || !bytes.Equal(back, nb) {
 		_ = iniWriteFn(path, raw) // put back as it was
@@ -333,7 +338,14 @@ func tallyIniAfterUpdate(dir string, log func(string)) bool {
 		return false
 	}
 	log("FinCom Bridge " + BridgeVersion + ", its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)")
-	tallyIniStep(log)
+	for _, e := range tallyIniStep(log) {
+		// review 245 R1: a tally.ini that could not be read or written (locked by Tally or an antivirus a moment): the
+		// marker is not written, so the step runs again at the next start
+		if st := str(e["state"]); st == "failed" || st == "unreadable" {
+			log("tally.ini " + str(e["path"]) + ": tried again at the bridge's next start")
+			return true
+		}
+	}
 	if err := saveFile(marker, BridgeVersion); err != nil {
 		log("The tally.ini marker " + marker + " could not be written: " + err.Error() + " (the step runs again at the next start)")
 	}

@@ -229,7 +229,7 @@ func pullBridge(t *testing.T) (*standTally, *standCloud, *pullModel) {
 func pullReset() {
 	pull.mu.Lock()
 	pull.items, pull.work = nil, nil
-	pull.stopped, pull.upload, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]bool{}, map[string]M{}, map[string]string{}
+	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]bool{}, map[string]M{}, map[string]string{}
 	pull.mu.Unlock()
 }
 
@@ -582,6 +582,7 @@ func TestR245LedgerCountAndProgress(t *testing.T) {
 			t.Fatal("the count asked after the read began")
 		}
 	}
+	ledProgFlush()
 	c.mu.Lock()
 	ps := append([]M{}, prog...)
 	c.mu.Unlock()
@@ -620,10 +621,10 @@ func TestR245LedgerCountChunkedWhenStopped(t *testing.T) {
 	}
 	f.mu.Unlock()
 	ls := M{}
-	ledCountFor(zz, f.port, ls, func() {})
+	ledCountFor(zz, f.port, ls, func() {}, nil, false)
 	retryReset()
 	resetEarlier()
-	ledCountFor(zz, f.port, ls, func() {})
+	ledCountFor(zz, f.port, ls, func() {}, nil, false)
 	if toInt(ls["of"]) != 4500 || !truthy(ls["countChunked"]) {
 		t.Fatalf("chunked count: %v (%v)", ls, f.ids())
 	}
@@ -653,4 +654,138 @@ func r245Reset() {
 	iniSt.mu.Lock()
 	iniSt.files, iniSt.seen = map[string]M{}, time.Time{}
 	iniSt.mu.Unlock()
+}
+
+// --- review 245 round 1
+// R1-1: an answer with no list (paused in FinCom, done, a cloud without 98) leaves the day being read at once
+func TestR245ReviewAnswerWithoutListStops(t *testing.T) {
+	f, _, _ := pullBridge(t)
+	pullDay(f, "20250401", 900, "Sales", "Receipt", "Sales")
+	applyPeriodDays(pullList("20250401"))
+	if w := pullCurrent(); w == nil {
+		t.Fatal("no day taken")
+	}
+	applyPeriodDays(M{"ok": true})
+	pull.mu.Lock()
+	n, w := len(pull.items), pull.work
+	pull.mu.Unlock()
+	if n != 0 || w != nil {
+		t.Fatalf("an answer without periodDays kept %d days (work %v)", n, w != nil)
+	}
+	n0 := f.n("")
+	pullRun(t, 5)
+	if got := f.ids()[n0:]; len(got) != 0 {
+		t.Fatalf("asked after the list went: %v", got)
+	}
+}
+
+// R1-2: a type with "&", "<" or ">" is asked (escaped in the request); a type with a quote mark never
+func TestR245ReviewTypeNamesWithAmpersand(t *testing.T) {
+	if !pullTypeOK("Sales & Returns") || !pullTypeOK("Purchase <GST>") || pullTypeOK(`Sales "A"`) || pullTypeOK("") {
+		t.Fatal("pullTypeOK")
+	}
+	f, _, _ := pullBridge(t)
+	d := "20250831"
+	applyPeriodDays(M{"periodDays": []any{M{"company": zz, "company_guid": b220CoGUID, "day": d, "fetch": true, "types": []any{"Sales & Returns"}}}})
+	x := dayHeadsTypeRequest(zz, d, "Sales & Returns")
+	if !strings.Contains(x, "$VoucherTypeName = &#34;Sales &amp; Returns&#34;") && !strings.Contains(x, "$VoucherTypeName = &quot;Sales &amp; Returns&quot;") {
+		t.Fatalf("not escaped: %s", x)
+	}
+	if !dayHeadsExact(recorderTC(nil), x) {
+		t.Fatal("a listed type with & refused")
+	}
+	if err := checkAllowed(x); err != nil {
+		t.Fatalf("not allowed: %v", err)
+	}
+	if _, err := invokeTally(recorderTC(nil), f.port, x, 5); err != nil {
+		t.Fatalf("not sent: %v", err)
+	}
+}
+
+// R1-5: a day marked "upload" that FinCom did not take is told again (once a minute), never asked of Tally again
+func TestR245ReviewUploadToldAgain(t *testing.T) {
+	f, c, _ := pullBridge(t)
+	fail := true
+	var told []M
+	c.mu.Lock()
+	prev := c.other
+	c.other = func(k string, b M) (int, M) {
+		if k == "period_heads" && truthy(b["upload"]) {
+			told = append(told, b)
+			if fail {
+				return 500, M{"ok": false}
+			}
+		}
+		return prev(k, b)
+	}
+	c.mu.Unlock()
+	pullDay(f, "20250402", 900, "Sales")
+	applyPeriodDays(pullList("20250402"))
+	w := pullCurrent()
+	pullMarkUpload(w, "over2s", "Sales")
+	pull.mu.Lock()
+	n := len(pull.tell)
+	pull.mu.Unlock()
+	if n != 1 || len(told) != 1 {
+		t.Fatalf("not kept to tell again: %d, told %d", n, len(told))
+	}
+	pullTellAgain() // within the minute: not told
+	c.mu.Lock()
+	fail = false
+	c.mu.Unlock()
+	at := nowFn().Add(61 * time.Second)
+	nowFn = func() time.Time { return at }
+	n0 := f.n("")
+	pullTurn()
+	pull.mu.Lock()
+	n = len(pull.tell)
+	pull.mu.Unlock()
+	if n != 0 || len(told) != 2 {
+		t.Fatalf("told again: %d left, told %d", n, len(told))
+	}
+	if got := f.ids()[n0:]; len(got) != 0 {
+		t.Fatalf("asked of Tally: %v", got)
+	}
+}
+
+// R1-15: FinCom's own reading (the marker) holds the day reads as every background read
+func TestR245ReviewKeepHoldWaits(t *testing.T) {
+	f, _, _ := pullBridge(t)
+	pullDay(f, "20250403", 900, "Sales")
+	applyPeriodDays(pullList("20250403"))
+	setFinComReading()
+	t.Cleanup(func() { _ = os.Remove(sp("fincom-reading.txt")) })
+	n0 := f.n("")
+	pullRun(t, 5)
+	if got := f.ids()[n0:]; len(got) != 0 {
+		t.Fatalf("asked while FinCom reads: %v", got)
+	}
+	_ = os.Remove(sp("fincom-reading.txt"))
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 1 {
+		t.Fatalf("not asked after: %v", f.ids())
+	}
+}
+
+// R1-8/11/12: the count keeps the read's holds; nothing reached Tally: not given up; a poisoned company not counted
+func TestR245ReviewCountHolds(t *testing.T) {
+	f := ledgerTally(t, 3000, "")
+	noteCompanyGUID(zz, f.guid)
+	if _, err := companyCheck(fin, zz, f.port); err != nil {
+		t.Fatal(err)
+	}
+	ls := M{}
+	ledCountFor(zz, f.port, ls, func() {}, func() bool { return false }, false)
+	if f.n(ledIdsID) != 0 || truthy(ls["countGaveUp"]) {
+		t.Fatalf("out of budget: asked %d, gave up %v", f.n(ledIdsID), ls["countGaveUp"])
+	}
+	ledCountFor(zz, f.port, ls, func() {}, nil, true)
+	if f.n(ledIdsID) != 0 || !truthy(ls["countGaveUp"]) {
+		t.Fatalf("poisoned: asked %d, gave up %v", f.n(ledIdsID), ls["countGaveUp"])
+	}
+	ls = M{}
+	ledCountFor(zz, f.port, ls, func() {}, nil, false)
+	if toInt(ls["of"]) != 3000 {
+		t.Fatalf("the count: %v", ls)
+	}
 }

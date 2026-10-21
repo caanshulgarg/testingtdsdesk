@@ -8,12 +8,15 @@ run_migration92.py builds it. Written before the file. Checks:
      tally-ingest's for service_role only, the helpers for nobody.
   1. the person's choice: a year that has begun, the whole year; half-years refused until the year is counted at more than
      20,000 vouchers; another firm's book refused; a viewer cannot change it; pause and resume.
-  2. the next days: while counting, the year's days not counted, newest first, at most 3, fetch false, never one handed out
-     in the last 2 minutes, never after today; then the part's days counted and not done, fetch true; none while paused.
+  2. the next days: while counting, the year's days not counted, newest first, at most 3, fetch false, the same days again
+     until counted (review 245 R1: a day being read is never taken from the bridge), never after today; then the part's
+     days counted and not done, fetch true; none while paused.
   3. a day's heads: Tally's count kept; FinCom's count of them (a GUID held at a lower AlterID is not held); the MasterIDs it
      lacks; a day with every entry held is done at once; a day outside the year chosen refused.
   4. the entries: stored through the entry path (the day's books as a Day Book would make them); an entry of another date
-     refused; one FinCom holds at a higher AlterID left as it is; the day then done; a locked month refused, nothing stored.
+     refused; one FinCom holds at a higher AlterID left as it is; the day then done; a locked month: nothing stored, the day
+     marked to upload with its words (never fetched again); an entry with no ledger line (seen) held, so its day ends; a
+     MasterID Tally no longer has (gone) out of the day's count.
   5. a day to upload by hand: never handed out again; its words in the status.
   6. the status: "x of y vouchers, left", the year's count, half offered above 20,000; the ledger progress never back.
 RED_WITHOUT_98=1: the same checks without the file (they fail)."""
@@ -133,7 +136,7 @@ try:
     ok(isinstance(n1, list) and len(n1) == 3 and [x["day"] for x in n1] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3)] and all(x["fetch"] is False for x in n1)
        and "Sales" in n1[0]["types"] and "Contra" in n1[0]["types"], "2. the year's last 3 days, counting (%s)" % str(n1)[:200])
     n2 = j("select tally_period_next(%s, 3)::text" % q(B))
-    ok([x["day"] for x in n2] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3, 6)], "2. not handed out twice within 2 minutes (%s)" % [x["day"] for x in n2])
+    ok([x["day"] for x in n2] == [x["day"] for x in n1], "2. the same days again until counted (%s)" % [x["day"] for x in n2])
     APPU("select tally_period_pause(%s, true)::text" % q(B))
     ok(j("select tally_period_next(%s, 3)::text" % q(B)) == [], "2. none while paused")
     APPU("select tally_period_pause(%s, false)::text" % q(B))
@@ -148,24 +151,31 @@ try:
     ok(j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(out), js([]))).get("ok") is False, "3. a day outside the year refused")
 
     print("== 4. the entries")
-    e4 = j("select tally_period_entries(%s, %s, %s, %s)::text" % (q(B), q(D(10)), js([V(1002, 5009, D(10)), V(1003, 5003, D(10))]), js(LN(1002) + LN(1003))))
+    e4 = j("select tally_period_entries(%s, %s, %s, %s, '{}'::jsonb, '[]'::jsonb)::text" % (q(B), q(D(10)), js([V(1002, 5009, D(10)), V(1003, 5003, D(10))]), js(LN(1002) + LN(1003))))
     ok(e4.get("ok") is True and e4.get("stored") == 2 and e4.get("held") == 3 and e4.get("done") is True, "4. stored, the day done (%s)" % e4)
     ok(db.one("select count(*) from tally_vouchers where book_id = %s and day = %s and deleted_at is null" % (q(B), q(D(10)))) == "3", "4. the day's three entries in the books")
     ok(db.one("select alter_id from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(1002)))) == "5009", "4. the newer AlterID kept")
     ok(db.one("select count(*) from tally_lines where book_id = %s and guid = %s" % (q(B), q(G(1003)))) == "4", "4. its lines stored")
-    e4b = j("select tally_period_entries(%s, %s, %s, %s)::text" % (q(B), q(D(10)), js([V(1004, 5004, D(12))]), js(LN(1004))))
+    e4b = j("select tally_period_entries(%s, %s, %s, %s, '{}'::jsonb, '[]'::jsonb)::text" % (q(B), q(D(10)), js([V(1004, 5004, D(12))]), js(LN(1004))))
     ok(e4b.get("ok") is False and db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(1004)))) == "0", "4. an entry of another date refused, nothing stored")
-    e4c = j("select tally_period_entries(%s, %s, %s, %s)::text" % (q(B), q(D(10)), js([V(1002, 5001, D(10))]), js(LN(1002))))
+    e4c = j("select tally_period_entries(%s, %s, %s, %s, '{}'::jsonb, '[]'::jsonb)::text" % (q(B), q(D(10)), js([V(1002, 5001, D(10))]), js(LN(1002))))
     ok(e4c.get("ok") is True and e4c.get("stale") == 1 and db.one("select alter_id from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(1002)))) == "5009", "4. an older AlterID left as it is (%s)" % e4c)
     if not RED:
         db.sql("insert into tally_month_locks (firm_id, client_id, book_id, month, locked_by) values (%s, 'c1', %s, %s, %s)" % (q(F), q(B), q(D(20)[:8] + "01"), q(OWNER)))
     j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(20)), js([H(1010, 5010)])))
     locked = db.one("select to_regclass('public.tally_month_locks')")
     if locked:
-        e4d = j("select tally_period_entries(%s, %s, %s, %s)::text" % (q(B), q(D(20)), js([V(1010, 5010, D(20))]), js(LN(1010))))
-        ok(e4d.get("ok") is False and e4d.get("locked") is True and db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(1010)))) == "0", "4. a locked month refused, nothing stored (%s)" % e4d)
+        e4d = j("select tally_period_entries(%s, %s, %s, %s, '{}'::jsonb, '[]'::jsonb)::text" % (q(B), q(D(20)), js([V(1010, 5010, D(20))]), js(LN(1010))))
+        ok(e4d.get("ok") is True and e4d.get("locked") is True and "Unlock the month" in str(e4d.get("upload")) and db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(1010)))) == "0", "4. a locked month: nothing stored, the words to upload (%s)" % e4d)
+        ok(db.one("select upload_why from tally_period_days where book_id = %s and day = %s" % (q(B), q(D(20)))) == "locked", "4. the locked day marked to upload, never fetched again")
 
         db.sql("update tally_month_locks set unlocked_at = now() where book_id = %s" % q(B))
+    # an entry with no ledger line (a stock journal): seen at its AlterID, its day ends; a MasterID gone from Tally: out of the count
+    j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(40)), js([H(1040, 5040, "Stock Journal"), H(1041, 5041)])))
+    e4e = j("select tally_period_entries(%s, %s, '[]'::jsonb, '[]'::jsonb, %s, %s)::text" % (q(B), q(D(40)), js({G(1040): 5040}), js(["1041"])))
+    ok(e4e.get("ok") is True and e4e.get("n") == 1 and e4e.get("held") == 1 and e4e.get("done") is True, "4. seen held, gone out of the count: the day done (%s)" % e4e)
+    h4f = j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(40)), js([H(1040, 5040, "Stock Journal")])))
+    ok(h4f.get("held") == 1 and h4f.get("done") is True, "4. counted again: the seen entry still held (%s)" % h4f)
     print("== 5. a day to upload by hand")
     u5 = j("select tally_period_upload(%s, %s, 'over2s', 'Sales', %s)::text" % (q(B), q(D(30)), q("Tally took too long to give X. Please upload that day's Day Book.")))
     ok(u5.get("ok") is True, "5. marked")
@@ -176,9 +186,10 @@ try:
     db.sql("insert into tally_period_days (book_id, firm_id, day, tally_n, held_n, heads, via, counted_at) select %s, %s, g::date, 70, 0, '[]'::jsonb, 'day', now() from generate_series(%s::date, %s::date, interval '1 day') g on conflict (book_id, day) do update set tally_n = 70, heads = '[]'::jsonb, counted_at = now() where tally_period_days.tally_n is null and tally_period_days.upload_at is null"
            % (q(B), q(F), q(FYS), q((FY + datetime.timedelta(days=days - 1)).isoformat())))
     st = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
-    ok(st.get("counting") is False and st.get("half") is True and st.get("yearVouchers", 0) > 20000 and st.get("y") == st.get("yearVouchers") and st.get("x") == 3 and st.get("left") == st["y"] - 3,
+    # y: the part's counted days not marked to upload (the locked day's 1 entry left out); x: 3 of 10 + 1 of 40
+    ok(st.get("counting") is False and st.get("half") is True and st.get("yearVouchers", 0) > 20000 and st.get("y") == st.get("yearVouchers") - 1 and st.get("x") == 4 and st.get("left") == st["y"] - 4,
        "6. counted: y, x and left; half-years offered above 20,000 (%s)" % {k: st.get(k) for k in ("counting", "half", "yearVouchers", "y", "x", "left")})
-    ok(len(st.get("upload") or []) == 1 and "Please upload" in st["upload"][0]["words"], "6. the day to upload in the status")
+    ok(len(st.get("upload") or []) == 2 and all("upload" in u["words"] for u in st["upload"]), "6. the days to upload in the status (%s)" % st.get("upload"))
     n6 = j("select tally_period_next(%s, 3)::text" % q(B))
     ok(isinstance(n6, list) and len(n6) == 3 and all(x["fetch"] is True for x in n6) and D8(30) not in [x["day"] for x in n6] and D8(10) not in [x["day"] for x in n6], "6. the fetch phase: undone days, newest first (%s)" % [x["day"] for x in n6])
     h6 = APPU("select tally_period_choose(%s, %s, 'h1')::text" % (q(B), q(FYS)))
@@ -196,6 +207,9 @@ try:
     j("select tally_ledger_progress_save(%s, 'r2', 1301, 1301, true, null)::text" % q(B))
     lp = APPU("select tally_period_status(%s)::text" % q(B)).get("ledger") or {}
     ok(lp.get("done") is True and lp.get("read") == 1301, "6. the round's end (%s)" % lp)
+    j("select tally_ledger_progress_save(%s, 'r2', 1301, 1301, false, null)::text" % q(B))
+    lp = APPU("select tally_period_status(%s)::text" % q(B)).get("ledger") or {}
+    ok(lp.get("done") is True, "6. a late beat of the same round never makes it not done (%s)" % lp)
 finally:
     db.stop()
 print("\n" + ("PASSED" if not fails else "FAILED: %d" % len(fails)))

@@ -13,7 +13,7 @@ read's progress. Written before the code. Checks:
      goes to be uploaded by hand (the answer says so); a salary payment's bank details never reach the database;
   4. ledger_progress (and the beat's ledgerProgress) reach tally_ledger_progress_save.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
-import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil
+import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
@@ -67,7 +67,7 @@ try:
     base = {"version": "2.4.5", "bridge": GA}
     beat = dict(base, kind="beat", tally=True, open=["BIG CO", "SECOND CO"], companies=[{"name": "BIG CO", "open": True, "guid": CG}, {"name": "SECOND CO", "open": True}],
                 tallyIni=[{"path": r"C:\Program Files\TallyPrime\tally.ini", "state": "usertdl-no", "why": "this Tally is set not to load any add-on (User TDL = No)", "at": "2026-10-21T10:00:00+05:30", "extra": "x" * 9000}],
-                ledgerProgress=[{"company": "BIG CO", "company_guid": CG, "round": "r1", "read": 312, "of": 1240, "done": False}])
+                ledgerProgress=[{"company": "BIG CO", "company_guid": CG, "round": "r1", "read": 312, "of": 1240, "done": False, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, {"company": "BIG CO", "company_guid": CG, "round": "r0", "read": 5, "of": 9, "done": False, "at": "2026-01-01T00:00:00Z"}])
     print("== 1. the beat")
     c, r = call(beat)
     pd = r.get("periodDays") or []
@@ -128,6 +128,23 @@ try:
     bank = V(8, "20250830").replace("</ALLLEDGERENTRIES.LIST></VOUCHER>", "<BANKALLOCATIONS.LIST><BANKEMPLOYEENAME>Asha Rao</BANKEMPLOYEENAME><ACCOUNTNUMBER>50100123456781</ACCOUNTNUMBER><IFSCODE>HDFC0001234</IFSCODE><AMOUNT>100.00</AMOUNT></BANKALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST></VOUCHER>")
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[bank], full=True))
     ok(c == 200 and "50100123456781" not in json.dumps(FS.ARGS["tally_period_entries"][-1]) and "HDFC0001234" not in json.dumps(FS.ARGS["tally_period_entries"][-1]), "3. a salary payment's bank details never reach the database")
+
+    # review 245 R1: an entry with no ledger line (a stock journal) passed as seen at its AlterID; gone MasterIDs passed on;
+    # a locked month: the words to upload
+    sj = ('<VOUCHER VCHTYPE="Stock Journal"><DATE>20250830</DATE><GUID>%s-%08x</GUID><VOUCHERTYPENAME>Stock Journal</VOUCHERTYPENAME><ALTERID> 77</ALTERID><MASTERID> 9</MASTERID></VOUCHER>' % (CG, 9))
+    c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(10, "20250830"), sj], gone=["11", "x12"], full=True))
+    e = (FS.ARGS.get("tally_period_entries") or [{}])[-1]
+    ok(c == 200 and e.get("p_seen") == {"%s-%08x" % (CG, 9): 77} and [v["guid"][-2:] for v in e.get("p_vouchers") or []] == ["0a"] and e.get("p_gone") == ["11", "12"], "3. seen and gone passed on (%s / %s)" % (e.get("p_seen"), e.get("p_gone")))
+    real_e = rpc
+    def locked_rpc(name, a):
+        if name == "tally_period_entries":
+            FS.ARGS.setdefault(name, []).append(a)
+            return {"ok": True, "locked": True, "stored": 0, "upload": "FinCom did not bring in 30-Aug-2025: its month is locked in FinCom. Unlock the month, then upload that day's Day Book."}
+        return real_e(name, a)
+    FS.rpc = locked_rpc
+    c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(13, "20250830")], full=True))
+    FS.rpc = real_e
+    ok(c == 200 and r.get("ok") is True and "Unlock the month" in str(r.get("upload")), "3. a locked month: ok, the words to upload (%s)" % r)
 
     print("== 4. ledger_progress")
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid=CG, round="r2", read=1240, of=1240, done=True))

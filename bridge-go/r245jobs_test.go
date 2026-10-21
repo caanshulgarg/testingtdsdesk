@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -149,5 +150,68 @@ func TestJobFileSharedReadWaitsForMissing(t *testing.T) {
 	t0 := time.Now()
 	if m := readProgress(filepath.Join(t.TempDir(), "never")); m != nil || time.Since(t0) > 100*time.Millisecond {
 		t.Fatalf("no job: %v after %s", m, time.Since(t0))
+	}
+}
+
+// review 245 R1-7: the background flush of an older update never lands over a newer one written meanwhile; R1-21: it
+// never makes a removed job folder again
+func TestJobFileSharedFlushNeverOverNewer(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	dir := filepath.Join(t.TempDir(), "job-race-1")
+	_ = os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "progress.json")
+	var refuse atomic.Bool
+	var slowT1 atomic.Bool
+	old := renameFn
+	renameFn = func(a, b string) error {
+		if filepath.Base(b) == "progress.json" {
+			if refuse.Load() {
+				return errors.New("in use")
+			}
+			if slowT1.Load() {
+				if bb, _ := os.ReadFile(a); strings.Contains(string(bb), `"done":1`) {
+					time.Sleep(150 * time.Millisecond) // the flush of T1 slow at the rename
+				}
+			}
+		}
+		return old(a, b)
+	}
+	t.Cleanup(func() { renameFn = old })
+	refuse.Store(true)
+	if err := jobFileSave(path, `{"done":1}`); err == nil {
+		t.Fatal("T1 said written")
+	}
+	slowT1.Store(true)
+	refuse.Store(false)
+	if err := jobFileSave(path, `{"done":2}`); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(600 * time.Millisecond)
+	if m := readObjFile(path); toInt(m["done"]) != 2 {
+		t.Fatalf("on disk %v, want the newer (done 2)", m)
+	}
+	// a removed folder stays removed
+	refuse.Store(true)
+	_ = jobFileSave(path, `{"done":3}`)
+	for i := 0; i < 50; i++ { // the flush's own temporary file may land while the folder is removed: removed again
+		if os.RemoveAll(dir) == nil {
+			if _, err := os.Stat(dir); err != nil {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	refuse.Store(false)
+	time.Sleep(600 * time.Millisecond)
+	if _, err := os.Stat(dir); err == nil {
+		es, _ := os.ReadDir(dir)
+		var ns []string
+		for _, e := range es {
+			ns = append(ns, e.Name())
+		}
+		t.Fatalf("the flush made the removed job folder again: %v", ns)
+	}
+	if m := jobFileReadNow(filepath.Join(t.TempDir(), "none", "progress.json")); m != nil {
+		t.Fatal("a job never made")
 	}
 }

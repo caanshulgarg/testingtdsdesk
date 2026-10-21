@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,5 +191,49 @@ func TestR245TallyIniApplyAndStep(t *testing.T) {
 	}
 	if !exists(filepath.Join(pd, "FinCom", "addon", "FinComRecorder.tdl")) {
 		t.Fatal("the add-on itself was not written where the line names it")
+	}
+}
+
+// review 245 R1-9: a write cut short is put back as it was; R1-10: a failed tally.ini leaves the first-start marker unwritten
+// (the step runs again at the next start)
+func TestR245TallyIniWriteFailsPutBack(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	t.Setenv("ProgramData", t.TempDir())
+	d1 := t.TempDir()
+	old := tallyIniDirsFn
+	tallyIniDirsFn = func() []string { return []string{d1} }
+	t.Cleanup(func() { tallyIniDirsFn = old })
+	iniSt.mu.Lock()
+	iniSt.files = map[string]M{}
+	iniSt.mu.Unlock()
+	orig := "[Tally]\r\nUser TDL = Yes\r\n"
+	p := filepath.Join(d1, "tally.ini")
+	_ = os.WriteFile(p, []byte(orig), 0o644)
+	ow := iniWriteFn
+	fail := true
+	iniWriteFn = func(path string, b []byte) error {
+		if fail && string(b) != orig {
+			_ = os.WriteFile(path, b[:5], 0o644) // cut short, then the error
+			return errors.New("disk full")
+		}
+		return ow(path, b)
+	}
+	t.Cleanup(func() { iniWriteFn = ow })
+	exe := t.TempDir()
+	if !tallyIniAfterUpdate(exe, func(string) {}) {
+		t.Fatal("the step did not run")
+	}
+	if b, _ := os.ReadFile(p); string(b) != orig {
+		t.Fatalf("not put back: %q", b)
+	}
+	if exists(filepath.Join(exe, tallyIniMarkerName)) {
+		t.Fatal("the marker written though tally.ini failed")
+	}
+	fail = false
+	if !tallyIniAfterUpdate(exe, func(string) {}) || !exists(filepath.Join(exe, tallyIniMarkerName)) {
+		t.Fatal("not tried again at the next start")
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "FinComRecorder.tdl") {
+		t.Fatalf("not added the second time: %q", b)
 	}
 }

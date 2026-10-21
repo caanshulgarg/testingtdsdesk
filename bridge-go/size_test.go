@@ -240,7 +240,7 @@ func TestSizeBigCompany(t *testing.T) {
 	}
 	// 2.4.5: the step-5 ledger count (FinComLedgerIds, MasterIDs only; one request, its 2 s stop) at 50,000 ledgers
 	cls := M{}
-	ledCountFor(zz, f.port, cls, func() {})
+	ledCountFor(zz, f.port, cls, func() {}, nil, false)
 	if toInt(cls["of"]) != bigLedgers {
 		t.Fatalf("the ledger count at 50,000 ledgers: %v", cls)
 	}

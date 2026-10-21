@@ -35,12 +35,13 @@ export function progressWords(p) {
 export default function OlderEntries({ cid, where }) {
   const bk = bookOf(cid), book = bk && bk.book;
   const [st, setSt] = useState(null), [off, setOff] = useState(false), [busy, setBusy] = useState(""), [err, setErr] = useState("");
-  const [fy, setFy] = useState(0), [part, setPart] = useState("year");
+  const [fy, setFy] = useState(0), [part, setPart] = useState("");
   const load = () => !book ? Promise.resolve() : rpc("tally_period_status", { p_book: book }).then((r) => { if (r && r.ok) { setSt(r); setOff(false); } }, (e) => {
     // a cloud without migration 98 (the function not there): nothing shown, quietly
     if (/PGRST202|tally_period_status|does not exist|schema cache|404/i.test(String((e && e.message) || e))) setOff(true);
   });
-  useEffect(() => { setSt(null); load(); }, [book]);
+  // review 245 R1: another book starts from its own state (the year and part chosen there, not the previous client's)
+  useEffect(() => { setSt(null); setFy(0); setPart(""); setErr(""); load(); }, [book]);
   const pull = st && st.pull;
   const going = !!(pull && pull.state === "going" && !pull.done);
   useEffect(() => { if (!going) return; const t = setInterval(load, POLL_MS); return () => clearInterval(t); }, [going, book]);
@@ -48,7 +49,8 @@ export default function OlderEntries({ cid, where }) {
   const now = fyNow(), years = [0, 1, 2, 3, 4, 5].map((i) => now - i);
   const chosenFy = fy || (pull ? fyOf8(pull.fy) : now - 1);
   const half = !!(pull && pull.half && fyOf8(pull.fy) === chosenFy);
-  const curPart = half ? part : "year";
+  // the part shown: the person's pick, else the running pull's own part for its year (a reload never offers to switch it)
+  const curPart = !half ? "year" : part || (pull && fyOf8(pull.fy) === chosenFy ? pull.part : "year");
   const act = (fn, args, what) => { setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); if (r && r.pull !== undefined) setSt(r); else return load(); },
       (e) => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy("")); };
@@ -58,7 +60,7 @@ export default function OlderEntries({ cid, where }) {
   return <section className="dash-card older-entries" data-older-entries={where || ""} style={{ marginBottom: 12 }}>
     <h3>Bring older entries from Tally</h3>
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <select data-older-fy="" aria-label="Financial year" value={chosenFy} onChange={(ev) => { setFy(Number(ev.target.value)); setPart("year"); }}>
+      <select data-older-fy="" aria-label="Financial year" value={chosenFy} onChange={(ev) => { setFy(Number(ev.target.value)); setPart(""); }}>
         {years.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}</select>
       <span className="seg" role="group" aria-label="Which part of the year" data-older-parts="">
         {PARTS.map(([k, label]) => {

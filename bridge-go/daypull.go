@@ -58,9 +58,11 @@ func dayHeadsTypeRequest(company, day, vtype string) string {
 	return formCollection(dayHeadsID, company, collFilterGE, day, day, dayHeadsFetch, `$VoucherTypeName = "`+vtype+`"`)
 }
 
-// a voucher type name that may be asked (no quote mark, no control character, not empty, 60 characters at most)
+// a voucher type name that may be asked (no quote mark, no control character, not empty, 60 characters at most). "&",
+// "<" and ">" are allowed (review 245 R1: "Sales & Returns"): fcCollection escapes the formula for XML, and inside the
+// formula's quotes they are plain characters; a quote mark could end the string, so a type with one is never asked
 func pullTypeOK(t string) bool {
-	if t == "" || len([]rune(t)) > 60 || strings.ContainsAny(t, "\"<>&") || strings.TrimSpace(t) != t {
+	if t == "" || len([]rune(t)) > 60 || strings.ContainsAny(t, "\"") || strings.TrimSpace(t) != t {
 		return false
 	}
 	for _, r := range t {
@@ -126,18 +128,18 @@ var pull = struct {
 	work    *pullWork
 	stopped map[int]string    // a Tally whose answer carried another date: no day asked of it until the bridge restarts
 	upload  map[string]M      // the days marked "upload" (said once): key -> {company, day, words, at}
+	tell    map[string]M      // the "upload" days FinCom has not taken yet: key -> {body, at}
 	done    map[string]bool   // days finished in this run, until the cloud lists them again in a fresh answer
 	state   map[string]M      // per company, for the beat: {day, phase, heads, asked, at, waiting}
 	said    map[string]string // the last "waiting" reason said per company (said once)
 	lastAsk time.Time
-}{stopped: map[int]string{}, upload: map[string]M{}, done: map[string]bool{}, state: map[string]M{}, said: map[string]string{}}
+}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, done: map[string]bool{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
-	v, ok := j["periodDays"]
-	if !ok {
-		return
-	}
+	// no list (paused in FinCom, the period done, another choice, a cloud without migration 98): nothing listed, and the
+	// day being read is left at once (review 245 R1: Pause stops the reads)
+	v := j["periodDays"]
 	var items []pullItem
 	for _, x := range arr(v) {
 		e := obj(x)
@@ -279,6 +281,10 @@ func pullMayAsk(it pullItem) (int, string) {
 	if busy, _ := tallyBusy(port); busy {
 		return 0, "Tally is busy"
 	}
+	// the holds every background read keeps (review 245 R1): FinCom's own reading, Tally just opened and still loading
+	if h := keepHold(); h != "" {
+		return 0, h
+	}
 	if !platTallyResponds() {
 		return 0, "Tally's window is not answering"
 	}
@@ -384,6 +390,7 @@ func pullTurn() int {
 	if !cloudOn() {
 		return 0
 	}
+	pullTellAgain()
 	sent := 0
 	for i := 0; i < pullPerTurn()*2 && sent < pullPerTurn(); i++ {
 		s, more := pullStep()
@@ -656,7 +663,17 @@ func pullFlush(w *pullWork) bool {
 // a day FinCom marked to be uploaded by hand: kept here for the tray's one quiet line (FinCom was told already)
 func pullNoteUpload(it pullItem, why, words string) {
 	pull.mu.Lock()
-	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339)}
+	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339Nano)}
+	// at most 500 kept (the oldest dropped from the tray's list first; FinCom keeps every one)
+	for len(pull.upload) > 500 {
+		ok, oldest := "", ""
+		for k, v := range pull.upload {
+			if a := str(v["at"]); oldest == "" || a < oldest {
+				ok, oldest = k, a
+			}
+		}
+		delete(pull.upload, ok)
+	}
 	pull.mu.Unlock()
 	writeLog("Older entries of " + it.Company + ": " + liveDay(it.Day) + " is not asked again (" + why + "): " + words)
 }
@@ -685,12 +702,41 @@ func pullMarkUpload(w *pullWork, why, typ string) {
 	if why != "over2s" {
 		words = "FinCom could not read " + liveDay(it.Day) + " from Tally. Please upload that day's Day Book."
 	}
-	r := invokeCloud(M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "upload": true, "why": why, "type": typ, "words": words}, 30)
-	if r.code != 200 {
-		liveSayOnce("pull|upcloud|"+it.key(), "Older entries of "+it.Company+": FinCom was not told that "+liveDay(it.Day)+" is to be uploaded; it is told again later")
-	}
+	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "upload": true, "why": why, "type": typ, "words": words}
 	pullNoteUpload(it, why+map[bool]string{true: ", type " + typ, false: ""}[typ != ""], words)
 	pullFinish(w, "upload")
+	pullTell(it.key(), body)
+}
+
+// FinCom told that a day is to be uploaded: until it takes it (an answer 200 with ok), told again at most once a minute
+// from the loop (review 245 R1: else FinCom kept listing the day and the year's count never ended). Nothing is asked of Tally.
+func pullTell(key string, body M) {
+	r := invokeCloud(body, 30)
+	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
+		pull.mu.Lock()
+		delete(pull.tell, key)
+		pull.mu.Unlock()
+		return
+	}
+	pull.mu.Lock()
+	pull.tell[key] = M{"body": body, "at": nowFn()}
+	pull.mu.Unlock()
+	liveSayOnce("pull|upcloud|"+key, "Older entries of "+str(body["company"])+": FinCom was not told that "+liveDay(str(body["day"]))+" is to be uploaded; it is told again later")
+}
+
+func pullTellAgain() {
+	pull.mu.Lock()
+	var due []string
+	var bodies []M
+	for k, v := range pull.tell {
+		if t, ok := v["at"].(time.Time); !ok || nowFn().Sub(t) >= time.Minute {
+			due, bodies = append(due, k), append(bodies, obj(v["body"]))
+		}
+	}
+	pull.mu.Unlock()
+	for i, k := range due {
+		pullTell(k, bodies[i])
+	}
 }
 
 // --- for the beat and the tray
@@ -719,7 +765,14 @@ func pullUploadListLocked() []any {
 	for k := range pull.upload {
 		ks = append(ks, k)
 	}
-	sort.Strings(ks)
+	// the newest last (review 245 R1: the 50 kept are the latest marked, of every company)
+	sort.Slice(ks, func(a, b int) bool {
+		x, y := str(pull.upload[ks[a]]["at"]), str(pull.upload[ks[b]]["at"])
+		if x != y {
+			return x < y
+		}
+		return ks[a] < ks[b]
+	})
 	out := []any{}
 	for _, k := range ks {
 		out = append(out, pull.upload[k])
