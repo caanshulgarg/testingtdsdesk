@@ -6,7 +6,7 @@
 #         test, A..F, its answers captured), c7 the Tally version string the bridge reads (the read test's "Tally program")
 # One line per check in versions\results.txt: PASS / FAIL / HARNESS (the harness, not the bridge or Tally) with the times.
 $ErrorActionPreference = 'Continue'
-$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg'); $dsrc = ($env:VMODE -eq 'dsrc'); $dpath = ($env:VMODE -eq 'dpath'); $tdsgst = ($env:VMODE -eq 'tdsgst'); $gsttype = ($env:VMODE -eq 'gsttype'); $tdsch = ($env:VMODE -eq 'tdsch'); $payroll = ($env:VMODE -eq 'payroll'); $tdsm = ($env:VMODE -eq 'tdsm'); $paym = ($env:VMODE -eq 'paym'); $payg = ($env:VMODE -eq 'payg'); $dbm = ($env:VMODE -eq 'dbm'); $dbres = ($env:VMODE -eq 'dbres'); $dbbig = ($env:VMODE -eq 'dbbig')   # dbm / dbres: 2.4.5, dbmv.ps1 / dbresv.ps1 after c2 (no bridge; the one-day Day Book, the split by type, the ledger count forms; the same reads through Tally closed, a modal screen, Tally not answering); tdsm: 2.4.3, tdsmv.ps1 after c2 (no bridge; the TDS master requests of the ref measured); gsttype: 2.4.2, gsttypev.ps1 after c2 (no bridge; what Tally stores for an entry's GST type, as the entry request answers it); tdsgst: round 43, tdsgstv.ps1 (masters before the bridge, then the entries, the bridge's lines, the amendments; stubg.py as the cloud);  dpath: dpathv.ps1 after c2 (no bridge; the data folder formula for 2.4.1's add-on);  bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
+$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg'); $dsrc = ($env:VMODE -eq 'dsrc'); $dpath = ($env:VMODE -eq 'dpath'); $tdsgst = ($env:VMODE -eq 'tdsgst'); $gsttype = ($env:VMODE -eq 'gsttype'); $tdsch = ($env:VMODE -eq 'tdsch'); $payroll = ($env:VMODE -eq 'payroll'); $tdsm = ($env:VMODE -eq 'tdsm'); $paym = ($env:VMODE -eq 'paym'); $payg = ($env:VMODE -eq 'payg'); $dbm = ($env:VMODE -eq 'dbm'); $dbres = ($env:VMODE -eq 'dbres'); $dbbig = ($env:VMODE -eq 'dbbig'); $g245 = ($env:VMODE -eq 'g245')   # g245: bridge 2.4.5's gate (g245v.ps1: ZZ BIG TEST before the bridge, then the chosen-period fetch, the ledger count, tally.ini, job files; stub245.py, proxy235.py); dbm / dbres: 2.4.5, dbmv.ps1 / dbresv.ps1 after c2 (no bridge; the one-day Day Book, the split by type, the ledger count forms; the same reads through Tally closed, a modal screen, Tally not answering); tdsm: 2.4.3, tdsmv.ps1 after c2 (no bridge; the TDS master requests of the ref measured); gsttype: 2.4.2, gsttypev.ps1 after c2 (no bridge; what Tally stores for an entry's GST type, as the entry request answers it); tdsgst: round 43, tdsgstv.ps1 (masters before the bridge, then the entries, the bridge's lines, the amendments; stubg.py as the cloud);  dpath: dpathv.ps1 after c2 (no bridge; the data folder formula for 2.4.1's add-on);  bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $rec = 'C:\ProgramData\FinCom\recorder'
 $co1 = 'FinCom Spike Co'
@@ -84,6 +84,7 @@ Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
 # 2.4.1's gate: UPG_FROM=2.4.0 installs the published 2.4.0 first (bridge-dist\old240) and its add-on
 $upgFrom = if ($env:UPG_FROM) { $env:UPG_FROM } else { '2.3.3' }; $upgOld = 'old' + ($upgFrom -replace '\.', '')
 $upgNames = if ($upgFrom -eq '2.3.3') { @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
+  elseif ($upgFrom -eq '2.4.4') { @('u1 2.4.5 installed over 2.4.4: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.4: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
   elseif ($upgFrom -eq '2.4.3') { @('u1 2.4.4 installed over 2.4.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.3: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
   elseif ($upgFrom -eq '2.4.2') { @('u1 2.4.3 installed over 2.4.2: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.2: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
   elseif ($upgFrom -eq '2.4.1') { @('u1 2.4.2 installed over 2.4.1: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.1: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
@@ -195,7 +196,7 @@ if ($share) {
   if ($c2ok) { . (Join-Path $PSScriptRoot 'sharev.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS share: not run (c2: Tally or the company not up)' -Encoding UTF8 }
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
 }
-if (-not $full -and -not $renum -and -not $bankb -and -not $s235 -and -not $tds240 -and -not $selfck -and -not $upg -and -not $dsrc -and -not $tdsgst -and -not $payg) { Say 'quick mode: done'; Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return }
+if (-not $full -and -not $renum -and -not $bankb -and -not $s235 -and -not $tds240 -and -not $selfck -and -not $upg -and -not $dsrc -and -not $tdsgst -and -not $payg -and -not $g245) { Say 'quick mode: done'; Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return }
 $s235Checks = @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day')
 if (-not $c2ok -and $s235) { foreach ($c in $s235Checks) { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok -and $tds240) { foreach ($c in 't1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
@@ -204,6 +205,7 @@ if (-not $c2ok -and $upg) { foreach ($c in $upgNames) { Result $c 'HARNESS' 'not
 if (-not $c2ok -and $dsrc) { foreach ($c in 'd1 a save in folder 1 (the bridge''s own Tally): applied, its line with dp= of folder 1', 'd2 a save in folder 2 (one Tally, one folder at a time): never fetched, never applied; other_source with folder 2''s data id, no body', 'd2b a save in folder 2 with two Tallys at once: never fetched, never applied; other_source with folder 2''s data id, no body', 'd3 FinCom chooses folder 2: after a fresh starting point folder 2''s new saves applied, folder 1''s held', 'd4 the fallback by number: asked once, answered within 2 s, taken only when exactly one voucher matches') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok -and $tdsgst) { foreach ($c in 'g1 masters and entries made in Tally', 'g2 the bridge sent every entry (phase 1)', 'g3 the amendments made in Tally and sent (phase 2)', 'g4 the Day Book and masters exported') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok -and $payg) { foreach ($c in 'w1 the payroll company made in Tally (masters and the 36 entries)', 'w2 FinComEmployees: only payroll rows reach FinCom, nothing personal', 'w3 the ledger list carries the pay-head fields', 'w4 every entry reaches FinCom; a salary payment keeps the employee and amount, never the bank details', 'w5 the payroll entry within 3 s, every other request within 2 s, Tally responding') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
+if (-not $c2ok -and $g245) { foreach ($c in 'g1 the installer added the add-on to tally.ini; Tally loads it and the client''s other TDL at start', 'g2 the year counted day by day, every day exactly Tally''s count', 'g3 the chosen part fetched: FinCom holds every entry Tally lists, only what it lacked asked', 'g4 no request over 2 s, one at a time, Tally''s window never blocked 2 s, Tally responding', 'g5 postings first during the fetch', 'g6 the exact ledger count and its progress', 'g7 User TDL = No left untouched and reported', 'g8 job files read while written: nothing lost, never missing') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok -and $bankb) { Result 'b1 bank dates set in Bank Reconciliation reach FinCom' 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)'; return }
 if (-not $c2ok -and $renum) { foreach ($c in 'r1 insert with renumbering on', 'r2 delete with renumbering on') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok) {
@@ -215,11 +217,13 @@ if (-not $c2ok) {
 Say '---- the stub cloud and the bridge'
 $stubLog = Join-Path $out 'stub-requests.jsonl'
 $py = (Get-Command python).Source
-$stubPy = if ($tdsgst -or $payg) { 'stubg.py' } elseif ($dsrc) { 'stubds.py' } elseif ($renum -or $bankb) { 'stubr.py' } elseif ($s235) { 'stub235.py' } elseif ($selfck) { 'stubsc.py' } else { 'stubv.py' }   # s235: the stub whose beat answer carries FinCom's read stop   # renum: the stub that keeps FinCom's copy and answers renumber_list
+$stubPy = if ($g245) { 'stub245.py' } elseif ($tdsgst -or $payg) { 'stubg.py' } elseif ($dsrc) { 'stubds.py' } elseif ($renum -or $bankb) { 'stubr.py' } elseif ($s235) { 'stub235.py' } elseif ($selfck) { 'stubsc.py' } else { 'stubv.py' }   # s235: the stub whose beat answer carries FinCom's read stop   # renum: the stub that keeps FinCom's copy and answers renumber_list
 # selfck: the runner's PostgreSQL with migration 65's tally_selfcheck_words (from the ref's migration file) for the stub's
 # words (stubsc.py, its third argument). Nothing else of the migration; a database of this runner only
 $stubArgs = "`"$PSScriptRoot\$stubPy`" 8787 `"$stubLog`""
 $script:scPgOk = $false; $script:scPgWhy = ''
+# g245: the stub's control file (written by g245v.ps1) and its state (read by g245v.ps1)
+if ($g245) { $stubArgs += " `"$(Join-Path $out 'stub245-ctl.json')`" `"$(Join-Path $out 'stub-state.json')`"" }
 if ($selfck) {
   try {
     $svc = @(Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue)[0]
@@ -251,6 +255,8 @@ Imp 'All Masters' '<LEDGER NAME="Spike Income" ACTION="Create"><NAME.LIST><NAME>
 if ($tdsgst) { $tgPhase = 'masters'; . (Join-Path $PSScriptRoot 'tdsgstv.ps1') }
 # payg (2.4.4's gate): the payroll test company's masters before the bridge starts
 if ($payg) { $pgPhase = 'masters'; . (Join-Path $PSScriptRoot 'paygv.ps1') }
+# g245 (2.4.5's gate): ZZ BIG TEST and tally.ini as a client's, before the bridge starts (its starting point above them)
+if ($g245) { $g5Phase = 'masters'; . (Join-Path $PSScriptRoot 'g245v.ps1') }
 if ($renum -or $s235 -or $bankb -or $tds240 -or $selfck -or $upg -or $dsrc -or $tdsgst -or $payg) { Imp 'Vouchers' '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261001</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>renum before the bridge</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' 'renum journal' | Out-Null }
 # bankb (next-bankdate): the bank ledger and four contras with bank allocations (2-10-2026, Share Bank) made by XML before
 # the bridge starts, so its starting point and the bank route's first number are above them (no add-on line for an import)
@@ -283,6 +289,13 @@ if ($upg) {
 # dsrc (2.4.1, two data sources): the D4 voucher type, folder 2 copied from folder 1 (Tally closed), Tally on folder 1,
 # proxy235.py between the bridge and Tally, the heartbeat every 5 s (dsrcv.ps1 seed)
 if ($dsrc) { $dsPhase = 'seed'; . (Join-Path $PSScriptRoot 'dsrcv.ps1') }
+# g245: every request the bridge sends Tally through proxy235.py (logged with its time); the heartbeat every 5 s (FinCom's
+# day list reaches the bridge within seconds, as tally-ingest answers each beat)
+if ($g245) {
+  . (Join-Path $PSScriptRoot 's235proxy.ps1')
+  $script:proxyOk = Start-S235Proxy
+  $seed.TallyHost = '127.0.0.2'; $seed.CloudBeatSec = 5
+}
 if ($s235) {
   # s235: every request the bridge sends Tally goes through proxy235.py (127.0.0.2:9000, logged); the heartbeat every 5 s
   # (FinCom's stop and lift reach the bridge within seconds); the bridge's office hours said (KeepOfficeFrom/To) only when
@@ -340,6 +353,10 @@ $tdlErr = Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, *err*.lo
 foreach ($f in $tdlErr) { Info "Tally file $($f.FullName): $((Get-Content $f.FullName -Tail 5) -join ' | ')" }
 if ($s235) {
   . (Join-Path $PSScriptRoot 's235v.ps1')
+  Stop-S235Proxy; if ($script:tpid) { Stop-Process -Id $script:tpid -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; return
+}
+if ($g245) {
+  $g5Phase = 'run'; . (Join-Path $PSScriptRoot 'g245v.ps1')
   Stop-S235Proxy; if ($script:tpid) { Stop-Process -Id $script:tpid -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; return
 }
 if ($payg) {
