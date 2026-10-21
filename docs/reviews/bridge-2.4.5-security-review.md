@@ -50,6 +50,7 @@ published reports pack, the two-step QR fix and the FSX guards, out of scope her
 | 10 | d25f13424..438114131 (ROUND 103) | 2 High, 4 Medium: the window hold measured from before the send (a wait for Tally's lock counted as a freeze) and "no freeze" said when no window of Tally could be seen (a Windows service); an entry request over 2 s did not stop the period; an older choice's stop could stop a newer choice (tally_period_stop not tied to chosen_at, day not checked against the year); the by-type form still passed the gate; the re-check looked into folders the setup never knew and read files under the lock; the upload line offered only the days from the stop | 2b18c4072 |
 | 11 | 438114131..556508c20 (the fixes, and the withdrawn 2.4.5 setup moved to assets-test/bridge-go-old unchanged) | none High or Medium (Low: the window probe's last pass can add up to 250 ms per hung window to the request's end; accepted) | - |
 | 12 | 556508c20..7919db499 (ROUND 103 evening) | none High or Medium: tally_device_period_night is security definer with search_path public, pg_temp, owner of the firm only (a viewer and another firm refused, tested), hours checked 0-23; the five new tally_devices columns select-only for authenticated (update refused, tested); tally_period_next still service_role only (its cap 30); no new Tally request (FinComEmployees and FinComVoucherObject as approved; the 3 s only for a payroll voucher's entry request, entryTC unchanged; every other request 2 s, tested); the bank details stripped on the period path as on the live path (Go and tally-ingest tests on the real 7.1 captures); no AI | - |
+| 13 | 7919db499..9cf6e2f25 (the merge of staging-next 6ab4a38b8: per-account browser copies, already reviewed and published there; no file of bridge-go/, server/tally-cloud/ or the 2.4.5 app parts touched) | none | - |
 
 No High or Medium open at 2b18c4072 (ROUND 103 fixes: r103_test.go, r245_test.go, r245ini_test.go, allowlist_test.go; tests/run_migration98.py 4b; tests/run_period_ingest.py; tests/run_older_entries_ui.py 4b). Each fix came with a test (Go: r245_test.go, r245ini_test.go, r245jobs_test.go;
 SQL: tests/run_migration98.py; tally-ingest: tests/run_period_ingest.py; app: tests/run_older_entries_ui.py,
@@ -71,4 +72,4 @@ tests/run_tally_ini_ui.py).
 
 The whole range reviewed, as release-check reads it (the last range in this note):
 
-Range: 33994f94c..7919db499
+Range: 33994f94c..9cf6e2f25
