@@ -10,8 +10,10 @@
 -- Functions: for the app (signed in, the firm's own books): tally_period_choose, tally_period_pause, tally_period_status;
 -- for tally-ingest (service role only): tally_period_next, tally_period_heads, tally_period_upload, tally_period_entries,
 -- tally_ledger_progress_save, tally_period_stop; the owner's tally_device_period_fetch with three new columns of
--- tally_devices (ROUND 103: reading older entries switched on per computer, default off). Add-only: three new tables,
--- fifteen new functions (five helpers nobody may call), three columns added, no existing function, table or row changed;
+-- tally_devices (ROUND 103: reading older entries switched on per computer, default off) and tally_device_period_night with
+-- five more (ROUND 103, the owner's decision of 21-Oct-2026, evening: office hours per computer, 20:00-08:00 IST and Sunday
+-- by default; outside them up to 30 days an answer). Add-only: three new tables, sixteen new functions (five helpers nobody
+-- may call), eight columns added to tally_devices, no existing function, table or row changed;
 -- every new table with its own grants (ROUND 101: service_role only; the app reads through the functions). One transaction,
 -- lock_timeout 10 s, safe twice. Tested by tests/run_migration98.py. Deploy order: 98, then the tally-ingest of next-245
 -- (without 98 that tally-ingest says nothing of older entries and the beat goes on as before).
@@ -33,7 +35,11 @@ create table if not exists public.tally_period_pulls (
   stopped_at timestamptz,
   stop_day   date,
   stop_why   text check (stop_why is null or length(stop_why) <= 40),
-  stop_words text check (stop_words is null or length(stop_words) <= 300)
+  stop_words text check (stop_words is null or length(stop_words) <= 300),
+  -- ROUND 103 (the owner's decision of 21-Oct-2026, evening): the pace FinCom last handed days out at (night: outside
+  -- the computer's office hours, up to 30 days an answer; day: 3), for the status line's time left
+  pace       text check (pace is null or pace in ('day', 'night')),
+  pace_at    timestamptz
 );
 create table if not exists public.tally_period_days (
   book_id      uuid not null references public.tally_books(book_id) on delete cascade,
@@ -64,6 +70,9 @@ create table if not exists public.tally_ledger_progress (
   at         timestamptz not null default now(),
   device_id  uuid
 );
+-- (a stand that ran an earlier copy of this file gets the two pace columns too)
+alter table public.tally_period_pulls add column if not exists pace text check (pace is null or pace in ('day', 'night'));
+alter table public.tally_period_pulls add column if not exists pace_at timestamptz;
 alter table public.tally_period_pulls enable row level security;
 alter table public.tally_period_days enable row level security;
 alter table public.tally_ledger_progress enable row level security;
@@ -110,6 +119,7 @@ $function$;
 create or replace function public.tally_period_status_of(p_book uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $function$
 declare p tally_period_pulls%rowtype; r record; fy_to date; y bigint; x bigint; ydays int; cdays int; pdays int; pcount int; fyn bigint; up jsonb; led jsonb; today date := (now() at time zone 'Asia/Kolkata')::date;
+  rn bigint; rmin numeric; rate int; cn bigint; cmin numeric; crate numeric; eta int;
 begin
   select coalesce(jsonb_build_object('read', read, 'of', greatest(of, read), 'done', done, 'at', at, 'round', round), 'null'::jsonb) into led from tally_ledger_progress where book_id = p_book;
   select * into p from tally_period_pulls where book_id = p_book;
@@ -127,6 +137,17 @@ begin
          coalesce(sum(case when d.done_at is not null then d.tally_n else least(d.held_n, d.tally_n) end) filter (where d.upload_at is null), 0)
     into pcount, y, x from tally_period_days d
    where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and (d.tally_n is not null or d.upload_at is not null);
+  -- ROUND 103: the speed of the last 30 minutes (entries of the part's days done, a minute; days counted, a minute), from
+  -- when those days were handed out; at least 2 minutes measured, else no time left is shown
+  select coalesce(sum(d.tally_n), 0), extract(epoch from now() - min(coalesce(d.asked_at, d.counted_at))) / 60 into rn, rmin from tally_period_days d
+   where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and d.upload_at is null and d.done_at > now() - interval '30 minutes';
+  select count(*), extract(epoch from now() - min(coalesce(d.asked_at, d.counted_at))) / 60 into cn, cmin from tally_period_days d
+   where d.book_id = p_book and d.day between p.fy_start and least(fy_to, today) and d.counted_at > now() - interval '30 minutes';
+  rate := case when rmin >= 2 and rn > 0 then round(rn / rmin)::int end;
+  crate := case when cmin >= 2 and cn > 0 then cn / cmin end;
+  eta := case when p.state <> 'going' then null
+              when cdays < ydays then case when crate > 0 then ceil((ydays - cdays) / crate)::int end
+              when rate > 0 then ceil(greatest(y - least(x, y), 0)::numeric / rate)::int end;
   select coalesce(jsonb_agg(jsonb_build_object('day', to_char(d.day, 'YYYYMMDD'), 'words', d.upload_words, 'why', d.upload_why) order by d.day), '[]'::jsonb) into up
     from tally_period_days d where d.book_id = p_book and d.day between p.fy_start and fy_to and d.upload_at is not null;
   return jsonb_build_object('ok', true, 'ledger', led, 'pull', jsonb_build_object(
@@ -136,6 +157,7 @@ begin
     'partDays', pdays, 'partCounted', pcount, 'y', y, 'x', least(x, y), 'left', greatest(y - x, 0),
     'done', p.state <> 'stopped' and cdays >= ydays and pcount >= pdays and x >= y and pdays > 0,
     'upload', up, 'chosenAt', p.chosen_at,
+    'pace', case when p.pace_at > now() - interval '10 minutes' then p.pace end, 'rate', rate, 'etaMin', eta,
     'stopped', case when p.state = 'stopped' then jsonb_build_object('day', to_char(p.stop_day, 'YYYYMMDD'), 'words', p.stop_words, 'why', p.stop_why, 'at', p.stopped_at,
       'from', to_char(r.d_from, 'YYYYMMDD'), 'to', to_char(least(r.d_to, today), 'YYYYMMDD')) end));
 end $function$;
@@ -200,11 +222,14 @@ end $function$;
 create or replace function public.tally_period_next(p_book uuid, p_max integer) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare p tally_period_pulls%rowtype; r record; fy_to date; today date := (now() at time zone 'Asia/Kolkata')::date; out jsonb := '[]'::jsonb; d date; n int := 0;
-  types jsonb; fetch boolean := false; lim int := least(greatest(coalesce(p_max, 3), 0), 3);
+  types jsonb; fetch boolean := false; lim int := least(greatest(coalesce(p_max, 3), 0), 30);
 begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
   select * into p from tally_period_pulls where book_id = p_book;
   if not found or p.state <> 'going' or lim = 0 then return out; end if;
+  -- ROUND 103 (the owner's decision of 21-Oct-2026, evening): tally-ingest asks 3 by day, up to 30 outside the computer's
+  -- office hours; the pace kept for the status line
+  update tally_period_pulls set pace = case when lim > 3 then 'night' else 'day' end, pace_at = now() where book_id = p_book;
   fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
   select d_from, d_to into r from tally_period_range(p.fy_start, p.part);
   -- counting: the year's days with no count yet
@@ -394,6 +419,34 @@ begin
   return jsonb_build_object('ok', true, 'device', p_device, 'periodFetch', d.period_fetch, 'at', d.period_fetch_at, 'by', d.period_fetch_by);
 end $function$;
 
+-- ROUND 103 (the owner's decision of 21-Oct-2026, evening): office hours per computer. Outside them (from period_night_from
+-- to period_night_to, India's time, and all Sunday when period_night_sunday) tally-ingest hands out up to 30 days an answer
+-- instead of 3, so the period is read day after day while Tally is idle. 20:00 to 08:00 and Sunday by default; an owner
+-- changes them on FinCom's Tally page (tally_device_period_night); the per-computer switch (period_fetch) still wins
+alter table public.tally_devices add column if not exists period_night_from smallint not null default 20 check (period_night_from between 0 and 23);
+alter table public.tally_devices add column if not exists period_night_to smallint not null default 8 check (period_night_to between 0 and 23);
+alter table public.tally_devices add column if not exists period_night_sunday boolean not null default true;
+alter table public.tally_devices add column if not exists period_night_at timestamptz;
+alter table public.tally_devices add column if not exists period_night_by uuid;
+grant select (period_night_from, period_night_to, period_night_sunday, period_night_at, period_night_by) on public.tally_devices to authenticated;
+create or replace function public.tally_device_period_night(p_device uuid, p_from integer, p_to integer, p_sunday boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid := my_firm(); d tally_devices%rowtype;
+begin
+  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'only an owner of the firm can set a computer''s office hours' using errcode = '42501'; end if;
+  if p_device is null or not exists (select 1 from tally_devices x where x.id = p_device and x.firm_id = f and not coalesce(x.revoked, false))
+    then raise exception 'not a computer of your firm'; end if;
+  if p_from is null or p_to is null or p_from not between 0 and 23 or p_to not between 0 and 23 then
+    raise exception 'give the hours from 0 to 23 (India''s time)'; end if;
+  if p_sunday is null then raise exception 'say whether all Sunday is outside office hours (true or false)'; end if;
+  perform pg_advisory_xact_lock(hashtext('tally_device_period_night:' || p_device::text));
+  update tally_devices set period_night_from = p_from, period_night_to = p_to, period_night_sunday = p_sunday, period_night_at = now(), period_night_by = auth.uid()
+   where id = p_device and firm_id = f;
+  select * into d from tally_devices where id = p_device;
+  return jsonb_build_object('ok', true, 'device', p_device, 'from', d.period_night_from, 'to', d.period_night_to, 'sunday', d.period_night_sunday, 'at', d.period_night_at, 'by', d.period_night_by);
+end $function$;
+
 -- ---------------------------------------------------------------- 5. who may call
 revoke all on function public.tally_period_range(date, text), public.tally_period_held(uuid, jsonb, integer, jsonb), public.tally_period_status_of(uuid), public.tally_period_half(uuid, date),
   public.tally_period_member(uuid, boolean) from public, anon, authenticated, service_role;
@@ -407,5 +460,7 @@ revoke all on function public.tally_period_stop(uuid, date, text, text, timestam
 grant execute on function public.tally_period_stop(uuid, date, text, text, timestamptz) to service_role;
 revoke all on function public.tally_device_period_fetch(uuid, boolean) from public, anon;
 grant execute on function public.tally_device_period_fetch(uuid, boolean) to authenticated;
+revoke all on function public.tally_device_period_night(uuid, integer, integer, boolean) from public, anon;
+grant execute on function public.tally_device_period_night(uuid, integer, integer, boolean) to authenticated;
 
 commit;

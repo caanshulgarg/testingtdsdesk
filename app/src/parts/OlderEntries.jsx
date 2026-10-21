@@ -21,15 +21,31 @@ function bookOf(cid) { return typeof TCloud === "object" && TCloud.book ? TCloud
 const rpc = (fn, args) => (typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(fn, args) : Promise.reject(new Error("no cloud")));
 const dayWords = (d8) => { try { return fmtDate(tallyDate(d8)); } catch (e) { return d8; } };
 
+// ROUND 103 (the owner's decision of 21-Oct-2026, evening): the time left at the pace FinCom hands days out now (night:
+// outside the computer's office hours, day after day; day: 3 days a heartbeat), from the last 30 minutes' speed (the cloud's
+// etaMin); none while paused or stopped, or before the speed is known. Under an hour to the minute, else to 10 minutes
+export function etaWords(min) {
+  const m = Math.round(Number(min));
+  if (!(m > 0)) return "";
+  if (m < 60) return "about " + m + " min";
+  const r = Math.round(m / 10) * 10, h = Math.floor(r / 60), mm = r % 60;
+  return "about " + h + " h" + (mm ? " " + mm + " min" : "");
+}
+function etaTail(p, counting) {
+  if (!p || p.state !== "going" || p.done || !(Number(p.etaMin) > 0)) return "";
+  const pace = p.pace === "night" ? " at night pace" : p.pace === "day" ? " at day pace" : "";
+  return " · " + etaWords(p.etaMin) + " left" + (counting ? " to count" : "") + pace;
+}
+
 // "8,412 of 12,960 vouchers (65%) · 4,548 left" (the percentage never 100 until every one is in)
 export function progressWords(p) {
   if (!p) return "";
-  if (p.counting) return "Counting the year in Tally… " + nf(p.countedDays) + " of " + nf(p.yearDays) + " days";
+  if (p.counting) return "Counting the year in Tally… " + nf(p.countedDays) + " of " + nf(p.yearDays) + " days" + etaTail(p, true);
   const y = Number(p.y || 0), x = Math.min(Number(p.x || 0), y), left = Math.max(y - x, 0);
   if (!y) return "Tally lists no vouchers for this period";
   let pct = Math.round((x * 100) / y);
   if (left > 0 && pct >= 100) pct = 99;
-  return nf(x) + " of " + nf(y) + " vouchers (" + pct + "%) · " + (left ? nf(left) + " left" : "all in FinCom ✓");
+  return nf(x) + " of " + nf(y) + " vouchers (" + pct + "%) · " + (left ? nf(left) + " left" + etaTail(p, false) : "all in FinCom ✓");
 }
 
 export default function OlderEntries({ cid, where }) {
@@ -80,6 +96,9 @@ export default function OlderEntries({ cid, where }) {
     </div>
     {pull && <p className="tg-progress" data-older-progress={pull.counting ? "counting" : pull.done ? "done" : "fetching"} role="status" style={{ margin: "8px 0 0" }}>
       {(pull.state === "paused" ? "Paused · " : pull.state === "stopped" ? "Stopped · " : "") + fyLabel(fyOf8(pull.fy)) + (pull.part === "h1" ? " Apr–Sep" : pull.part === "h2" ? " Oct–Mar" : "") + ": " + progressWords(pull)}</p>}
+    {/* ROUND 103 (the owner's decision of 21-Oct-2026, evening): hands-free reading is for gaps and small or medium
+        clients; a big company's first load is the Day Book upload */}
+    {where === "books" && <p className="note" data-older-big="" style={{ margin: "8px 0 0" }}>For a big company's first load, export the Day Book from Tally (Alt+E) and upload it here — minutes instead of hours.</p>}
     {pull && pull.counting && <p className="note" style={{ margin: "4px 0 0" }}>FinCom Bridge reads one day at a time, only while nobody is working in Tally. Nothing else is needed.</p>}
     {pull && !pull.counting && pull.half && pull.part === "year" && !pull.done && <p className="note" data-older-half="" style={{ margin: "4px 0 0" }}>{"This year holds " + nf(pull.yearVouchers) + " vouchers: you may bring in April–September or October–March first."}</p>}
     {err && <p className="note" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}

@@ -87,6 +87,31 @@ try:
     ok(len(ti) == 1 and ti[0]["state"] == "usertdl-no" and "extra" not in ti[0] and "User TDL = No" in ti[0]["why"], "1. the beat keeps the tally.ini report, cleaned (%s)" % ti)
     lp = FS.ARGS.get("tally_ledger_progress_save") or []
     ok(lp and lp[-1]["p_book"] == BOOK and lp[-1]["p_read"] == 312 and lp[-1]["p_of"] == 1240, "1. the beat's ledger progress kept (%s)" % lp[-1:])
+    # ROUND 103 (the owner's decision of 21-Oct-2026, evening): 3 days by day, up to 30 outside the computer's office hours
+    # (India's time; 20:00-08:00 and Sunday by default; the owner's hours per computer)
+    ok(r.get("periodNight") in (True, False), "1. the beat says the pace (%s)" % r.get("periodNight"))
+    h = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).hour
+    devA = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=False)
+    keep = NEXT[BOOK]
+    NEXT[BOOK] = [{"day": "202508%02d" % (31 - i) if i < 31 else "202507%02d" % (62 - i), "fetch": True, "types": []} for i in range(40)]
+    c, r = call(beat)
+    ok(c == 200 and r.get("periodNight") is False and len(r.get("periodDays") or []) == 3 and FS.ARGS["tally_period_next"][-1]["p_max"] == 3, "1. inside office hours: 3 days, periodNight false (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
+    devA.update(period_night_from=h, period_night_to=(h + 2) % 24)
+    c, r = call(beat)
+    ok(c == 200 and r.get("periodNight") is True and len(r.get("periodDays") or []) == 30 and FS.ARGS["tally_period_next"][-1]["p_max"] == 30, "1. outside office hours: up to 30 days, periodNight true (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
+    devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=True)
+    sunday = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).weekday() == 6
+    c, r = call(beat)
+    ok(r.get("periodNight") is sunday, "1. all Sunday outside office hours when set (today Sunday: %s; %s)" % (sunday, r.get("periodNight")))
+    devA["period_fetch"] = False
+    devA.update(period_night_from=h, period_night_to=(h + 2) % 24)
+    n9 = len(FS.ARGS.get("tally_period_next") or [])
+    c, r = call(beat)
+    ok(r.get("periodDays") == [] and r.get("periodFetch") is False and len(FS.ARGS.get("tally_period_next") or []) == n9, "1. the computer's switch off wins at night (%s)" % r.get("periodDays"))
+    devA["period_fetch"] = True
+    for k in ("period_night_from", "period_night_to", "period_night_sunday"): devA.pop(k, None)
+    NEXT[BOOK] = keep
     n0 = len(FS.ARGS.get("tally_period_next") or [])
     c, r = call(dict(beat, paused=True))
     ok(c == 200 and r.get("periodDays") == [] and len(FS.ARGS.get("tally_period_next") or []) == n0, "1. none while paused: an empty list, so the bridge stops at once (%s)" % r.get("periodDays"))
@@ -136,6 +161,21 @@ try:
     bank = V(8, "20250830").replace("</ALLLEDGERENTRIES.LIST></VOUCHER>", "<BANKALLOCATIONS.LIST><BANKEMPLOYEENAME>Asha Rao</BANKEMPLOYEENAME><ACCOUNTNUMBER>50100123456781</ACCOUNTNUMBER><IFSCODE>HDFC0001234</IFSCODE><AMOUNT>100.00</AMOUNT></BANKALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST></VOUCHER>")
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[bank], full=True))
     ok(c == 200 and "50100123456781" not in json.dumps(FS.ARGS["tally_period_entries"][-1]) and "HDFC0001234" not in json.dumps(FS.ARGS["tally_period_entries"][-1]), "3. a salary payment's bank details never reach the database")
+
+    # ROUND 103 (B): a payroll voucher and a salary payment read by the period fetch (FinComVoucherObject as 2.4.4 keeps them,
+    # testdata/payroll244 7.1) go the payroll path: each employee's pay-head amounts as cost allocations, the salary paid to
+    # each employee by name, no bank detail; counted like any other entry
+    PAYD = os.path.join(HERE, "..", "bridge-go", "testdata", "payroll244", "7.1")
+    pr = open(os.path.join(PAYD, "obj-PR-NOV-stripped.xml")).read().replace("20261101", "20250830")
+    sal = open(os.path.join(PAYD, "obj-SAL-PAY-NOV-stripped.xml")).read().replace("20261202", "20250830")
+    c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[pr, sal], gone=[], full=True))
+    e = (FS.ARGS.get("tally_period_entries") or [{}])[-1]
+    pv = {v.get("type"): v for v in e.get("p_vouchers") or []}
+    costs = [x for x in (pv.get("Payroll") or {}).get("costs") or []]
+    sp = (pv.get("Payment") or {}).get("salpay") or []
+    ok(c == 200 and r.get("ok") is True and sorted(pv) == ["Payment", "Payroll"], "3. a payroll voucher and a salary payment stored (%s, %s)" % (r, sorted(pv)))
+    ok(any(x.get("centre") == "FC Emp One" and x.get("amt") == -50000 for x in costs) and len([l for l in e.get("p_lines") or [] if l[0] == pv["Payroll"]["guid"]]) >= 2, "3. the payroll's pay heads per employee kept (%s)" % costs[:3])
+    ok(sp and all(x.get("employee") for x in sp) and "ACCOUNTNUMBER" not in json.dumps(e) and "IFSCODE" not in json.dumps(e), "3. the salary paid per employee, no bank detail (%s)" % sp[:2])
 
     # review 245 R1: an entry with no ledger line (a stock journal) passed as seen at its AlterID; gone MasterIDs passed on;
     # a locked month: the words to upload

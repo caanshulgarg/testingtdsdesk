@@ -588,3 +588,17 @@ func bankCleanOnce(dir string) int {
 	}
 	return n
 }
+
+// ROUND 103 (B): the company's payroll list has been read whole and FinCom took it (or the company has no payroll row)
+// (the key employeesCheckOn keeps it under)
+func employeesTaken(company string) bool {
+	_, guid := latestNumbers(company)
+	if guid == "" {
+		guid = heldGUID(company)
+	}
+	if guid == "" {
+		return false
+	}
+	e := empGet(companyKey(company) + "|" + guid)
+	return e != nil && truthy(e["sent"])
+}

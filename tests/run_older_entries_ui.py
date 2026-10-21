@@ -78,6 +78,15 @@ def main():
         print("== 3. fetching, halves, done")
         E(CLOUD, [FETCH, None, False]); pg.wait_for_timeout(1200)
         ok(txt(card + " [data-older-progress]") == "FY 2025-26: 8,412 of 12,960 vouchers (65%) · 4,548 left", "the owner's words exactly (%s)" % txt(card + " [data-older-progress]"))
+        # ROUND 103 (the owner's decision of 21-Oct-2026, evening): the time left at the pace FinCom hands out days now
+        E(CLOUD, [dict(FETCH, pace="night", rate=1900, etaMin=100), None, False]); pg.wait_for_timeout(1200)
+        ok(txt(card + " [data-older-progress]") == "FY 2025-26: 8,412 of 12,960 vouchers (65%) · 4,548 left · about 1 h 40 min left at night pace", "the time left at night pace (%s)" % txt(card + " [data-older-progress]"))
+        E(CLOUD, [dict(FETCH, pace="day", rate=60, etaMin=76), None, False]); pg.wait_for_timeout(1200)
+        ok(txt(card + " [data-older-progress]").endswith("· about 1 h 20 min left at day pace"), "the time left at day pace, rounded (%s)" % txt(card + " [data-older-progress]"))
+        E(CLOUD, [dict(COUNTING, pace="night", etaMin=12), None, False]); pg.wait_for_timeout(1200)
+        ok(txt(card + " [data-older-progress]") == "FY 2025-26: Counting the year in Tally… 132 of 365 days · about 12 min left to count at night pace", "counting: its time left (%s)" % txt(card + " [data-older-progress]"))
+        E(CLOUD, [dict(FETCH, state="paused", pace="night", etaMin=100), None, False]); pg.wait_for_timeout(1200)
+        ok("about" not in txt(card + " [data-older-progress]"), "paused: no time left (%s)" % txt(card + " [data-older-progress]"))
         E(CLOUD, [BIG, None, False]); pg.wait_for_timeout(1200)
         parts = E("() => [...document.querySelectorAll('#app [data-older-part]')].map(b => b.disabled)")
         ok(parts == [False, False, False] and "25,300 vouchers" in txt(card + " [data-older-half]"), "above 20,000 a year: the halves offered (%s / %s)" % (parts, txt(card + " [data-older-half]")))
@@ -112,6 +121,9 @@ def main():
         pg.click(sl + " button"); pg.wait_for_timeout(300)
         pk = E("window.__pick")
         ok(len(pk) == 1 and pk[0][0] == E("tallyDate('20250401')") and pk[0][1] == E("tallyDate('20260331')"), "Upload: the period's days from its start to its end (review 103: not from the stop day) (%s)" % pk)
+        print("== 4c. ROUND 103: a big company's first load: the Day Book upload (Books › From Tally only)")
+        BIGWORDS = "For a big company's first load, export the Day Book from Tally (Alt+E) and upload it here — minutes instead of hours."
+        ok(txt(card + " [data-older-big]") == BIGWORDS, "the words on From Tally (%s)" % txt(card + " [data-older-big]"))
         print("== 5. a cloud without migration 98")
         E(CLOUD, [None, None, True]); pg.wait_for_timeout(1500)
         ok(n(card) == 0 and not [e for e in errors if "PGRST202" in e], "no card, no error")
@@ -136,6 +148,7 @@ def main():
         ok(txt(s5 + " [data-guide-ledgers-count]") == "312 of 1,240 ledgers" and "Reading GB TEXCOAT" in txt(s5 + " [data-guide-ledgers-reading]"), "step 5 while reading: '312 of 1,240 ledgers' (%s)" % txt(s5 + " [data-guide-ledgers-reading]"))
         ids = E(TP.SETUP, [[d6], all3, [], "owner", TP.CLIENTS, True, TP.HELD_ALL]); pg.wait_for_timeout(2500)
         ok(n('#app [data-connect-guide="done"] [data-older-entries="connect"]') == 1, "all six done: the same card after step 6 (%s)" % n("#app [data-older-entries]"))
+        ok(n('#app [data-older-entries="connect"] [data-older-big]') == 0, "the Day Book words on From Tally only")
 
         print("== 7. its own chunk, the budgets")
         older = [f for f in glob.glob(os.path.join(SITE, "assets", "*.js")) if "Bring older entries from Tally" in open(f, encoding="utf-8", errors="replace").read()]

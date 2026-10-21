@@ -16,6 +16,13 @@ What 2.4.5 changes (the full notes: docs/bridge-2.4.5-notes.md):
    "User TDL = No" is left as it is and shown under Help & support.
 5. Job progress files are written so that no update is lost.
 6. FinCom's cloud stores these (migration 98, run on staging before the tally-ingest of 2.4.5).
+7. Night and Sunday pace: outside office hours (20:00-08:00 IST and all Sunday unless you change them on FinCom's Tally
+   page, per computer) the chosen period is read day after day while Tally is idle; the progress line shows the time
+   left ("about 1 h 40 min left at night pace"). For a big company's first load, the Day Book export (Alt+E) and upload
+   is still the quick way: Books > From Tally says so.
+8. Payroll in the older entries: a payroll voucher of the period comes with every employee's pay heads (its entry
+   request may take Tally up to 3 seconds, as in 2.4.4); the payroll's employees are read first; a salary payment keeps
+   the employee and amount, never the bank details.
 
 Before you start: migration 98 has run on staging and the tally-ingest of 2.4.5 is deployed; you are signed in to FinCom
 as the owner; TallyPrime 7.1 is open on NWS144 with a ZZ TEST company that has entries in an earlier year. Copy
@@ -49,6 +56,13 @@ CHECK 3 - OLDER ENTRIES
    never freezing; at the end "all in FinCom". Y equals Tally's voucher count for that year (Day Book, Ctrl+F12 period).
    If Tally is ever slow for a day (over 2 s), FinCom stops reading by itself and shows one line asking for the Day Book of
    the days still missing; it does not try again until you choose the period again.
+
+CHECK 3b - NIGHT PACE AND PAYROLL (after 20:00 IST, or on a Sunday)
+   FinCom's Tally page > this computer's Details: "Faster reading of older entries outside office hours: 20:00 to 08:00
+   and all Sunday (India time)" > Change lets you set other hours (owner only). With CHECK 3 still going, after 20:00:
+   You should see: the progress line goes up faster and ends with "about ... left at night pace"; Tally never freezes.
+   If the company has payroll in that year: Payroll > the payroll voucher of a month in the period shows in FinCom's
+   books with each employee's pay heads; the salary payment shows each employee's amount, and no bank account number.
 
 CHECK 4 - YOUR WORK GOES FIRST
    While CHECK 3 runs, save a Journal of Rs 1, narration "TRIAL 245 first".

@@ -31,12 +31,14 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8364/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
-    def scene(ini, role="owner", odt=None, pf=False, missing=False):
+    def scene(ini, role="owner", odt=None, pf=False, missing=False, night=None):
         E(SETUP, [{"devs": devs(ini, odt), "alerts": [], "gap": None}, role])
         # ROUND 103 (1c): the computer's switch (tally_devices.period_fetch) as the cloud gives it; the owner's control call kept
-        E("""([pf, missing, d1]) => { const api = Cloud.api; window.__pf = pf; window.__ctl = [];
-          Cloud.api = async (p) => { if (/^tally_devices\\?select=id,period_fetch/.test(p)) { if (missing) throw new Error('column tally_devices.period_fetch does not exist (42703)'); return [{id: d1, period_fetch: window.__pf}]; } return api(p); };
-          TCloud.control = async (fn, args, done) => { window.__ctl.push([fn, args]); window.__pf = !!args.p_on; }; }""", [pf, missing, D1])
+        # ROUND 103 (evening): the computer's office hours (period_night_*), as the cloud gives them (none: the defaults)
+        E("""([pf, missing, d1, night]) => { const api = Cloud.api; window.__pf = pf; window.__ctl = []; window.__night = night;
+          Cloud.api = async (p) => { if (/^tally_devices\\?select=id,period_fetch/.test(p)) { if (missing) throw new Error('column tally_devices.period_fetch does not exist (42703)'); return [Object.assign({id: d1, period_fetch: window.__pf}, window.__night || {})]; } return api(p); };
+          TCloud.control = async (fn, args, done) => { window.__ctl.push([fn, args]); if (fn === 'tally_device_period_fetch') window.__pf = !!args.p_on;
+            if (fn === 'tally_device_period_night') window.__night = {period_night_from: args.p_from, period_night_to: args.p_to, period_night_sunday: args.p_sunday}; }; }""", [pf, missing, D1, night])
         E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
         E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
         E("() => document.querySelectorAll('#app [data-computer] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
@@ -61,8 +63,26 @@ with sync_playwright() as p:
     scene([], role="member", pf=True)
     v = pfl()
     ok(v and v[0] == "on" and not v[2], "staff: the state only, no button (%s)" % v)
+    # ROUND 103 (the owner's decision of 21-Oct-2026, evening): the office hours, outside which the period is read faster
+    nl = lambda: E("() => { const e = document.querySelector('#app [data-computer] [data-card-more] [data-period-night]'); return e ? [e.innerText.trim(), !!e.querySelector('[data-period-night-edit]')] : null; }")
+    scene([], pf=True, night={"period_night_from": 20, "period_night_to": 8, "period_night_sunday": True})
+    v = nl()
+    ok(v and v[0].startswith("Faster reading of older entries outside office hours: 20:00 to 08:00 and all Sunday (India time)") and v[1], "the owner: the hours, with Change (%s)" % v)
+    pg.click('#app [data-period-night-edit]'); pg.wait_for_timeout(300)
+    pg.select_option('#app [data-period-night-from]', "21"); pg.select_option('#app [data-period-night-to]', "7"); pg.uncheck('#app [data-period-night-sunday]')
+    pg.click('#app [data-period-night-save]'); pg.wait_for_timeout(600)
+    ok(E("window.__ctl")[-1:] == [["tally_device_period_night", {"p_device": D1, "p_from": 21, "p_to": 7, "p_sunday": False}]], "Save: tally_device_period_night (%s)" % E("window.__ctl"))
+    v = nl()
+    ok(v and v[0].startswith("Faster reading of older entries outside office hours: 21:00 to 07:00 (India time)"), "the new hours shown (%s)" % v)
+    scene([], pf=True)
+    ok((nl() or [""])[0].startswith("Faster reading of older entries outside office hours: 20:00 to 08:00 and all Sunday"), "none kept yet: the defaults (%s)" % nl())
+    scene([], role="member", pf=True, night={"period_night_from": 22, "period_night_to": 6, "period_night_sunday": False})
+    v = nl()
+    ok(v and "22:00 to 06:00" in v[0] and not v[1], "staff: the hours only, no Change (%s)" % v)
+    scene([], pf=False)
+    ok(nl() is None, "reading older entries off on the computer: no hours line")
     scene([], missing=True)
-    ok(pfl() is None, "a cloud without the column: nothing of the switch")
+    ok(pfl() is None and nl() is None, "a cloud without the column: nothing of the switch")
     # ROUND 103 (1d): the tray's old-days test as the beat says it
     scene([], odt={"company": "ZZ TEST", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze", "state": "done"})
     o = E("() => { const e = document.querySelector('#app [data-card-more] [data-old-days-test]'); return e ? [e.getAttribute('data-old-days-test'), e.innerText.trim()] : null; }")

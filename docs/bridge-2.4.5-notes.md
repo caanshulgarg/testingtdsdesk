@@ -47,6 +47,27 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
    posted or sent but the result, which the heartbeat carries to the Tally page: "Old-days test on <PC>: 0.21 s / 0.34 s /
    0.18 s · no freeze" (or the reason it stopped). Started by a person only: a web page is refused. Code: bridge-go/oldtest.go.
 
+2c. **Night and Sunday pace (ROUND 103, the owner's decision of 21-Oct-2026, evening).** Outside office hours (20:00 to
+   08:00 IST and all Sunday by default; an owner changes them per computer on FinCom's Tally page, "Faster reading of older
+   entries outside office hours"; tally_devices.period_night_from / _to / _sunday, migration 98, tally_device_period_night,
+   owner only) tally-ingest answers periodNight and lists up to 30 days a heartbeat (3 by day). The bridge then reads day
+   after day while Tally is idle: up to 400 requests a turn with no rest between them (each one still after the six
+   conditions, under its 2 s stop, one in flight, postings and saves first, the freeze safety), 200 entries a call to
+   FinCom, and as soon as the listed days are done it asks FinCom for the next ones (an early heartbeat, at most one every
+   10 s). The per-computer switch still wins. The progress line shows the time left at the pace FinCom hands days out now,
+   from the last 30 minutes' speed ("8,412 of 12,960 vouchers (65%) · 4,548 left · about 1 h 40 min left at night pace";
+   none while paused or stopped). Books › From Tally adds: "For a big company's first load, export the Day Book from Tally
+   (Alt+E) and upload it here — minutes instead of hours." Hands-free reading is for gaps and small or medium clients.
+
+2d. **Payroll in the older entries (ROUND 103, the owner's ask; his decision of 12-Oct-2026 kept).** A payroll voucher
+   listed by FinComDayHeads (its type Tally's own Payroll, or a type this bridge has seen carrying employees' pay heads) goes
+   through the 2.4.4 payroll path: FinComVoucherObject, every employee's pay-head allocations kept, a salary payment's
+   BANKEMPLOYEENAME and AMOUNT only, the bank details stripped. Its entry request may take 3 s and its freeze-safety
+   threshold (Tally's window not answering) is 3 s; every other request 2 s. Before the first payroll entry of the period
+   the payroll's employees (FinComEmployees, 2.4.4's read) are read and taken by FinCom, so the entry's employee rows link;
+   until then the payroll entry waits. A payroll voucher counts in the progress like any other. A custom payroll voucher
+   type the bridge has not yet seen carrying pay heads keeps the 2 s limit on its first entry (as in 2.4.4).
+
 3. **The exact ledger count (Connect Tally step 5).** On the full ledger read (the "ledgers" wake) the bridge asks
    FinComLedgerIds once (MasterIDs only; when that one request is stopped at 2 s, in chunks of 2,000 MasterIDs) and counts
    the rows; the step shows "312 of 1,240 ledgers" as the read goes on (never going back within a round; the cloud's

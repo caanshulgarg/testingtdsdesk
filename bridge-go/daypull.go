@@ -73,9 +73,42 @@ func pullTypeOK(t string) bool {
 	return true
 }
 
-func pullIdleSec() int  { return keepNum("DayPullIdleSec", 60) }
-func pullPerTurn() int  { return maxI(1, keepNum("DayPullPerTurn", 40)) }
-func pullFlushAt() int  { return maxI(1, minI(keepNum("DayPullBatch", 50), 200)) }
+func pullIdleSec() int      { return keepNum("DayPullIdleSec", 60) }
+func pullPerTurnDay() int   { return maxI(1, keepNum("DayPullPerTurn", 40)) }
+func pullFlushAtDay() int   { return maxI(1, minI(keepNum("DayPullBatch", 50), 200)) }
+func pullNightDays() int    { return maxI(1, minI(keepNum("DayPullNightDays", 30), 30)) }
+func pullNightBeatSec() int { return maxI(5, keepNum("DayPullNightBeatSec", 10)) }
+
+// ROUND 103 (the owner's decision of 21-Oct-2026, evening): outside office hours (FinCom's beat answer says periodNight;
+// the hours are the owner's, per computer, on FinCom's Tally page: 20:00-08:00 IST and Sunday unless he changes them) the
+// period is read day after day while Tally is idle: more requests a turn, no rest between them (the conditions are still looked at before each), bigger batches to
+// FinCom. Every request keeps its own 2 s stop (a payroll entry its 3 s), one in flight, the six conditions before each,
+// postings first and the freeze safety; the per-computer switch (periodFetch) wins
+func pullPerTurn() int {
+	if pullNight() {
+		return maxI(1, keepNum("DayPullNightPerTurn", 400))
+	}
+	return pullPerTurnDay()
+}
+func pullFlushAt() int {
+	if pullNight() {
+		return maxI(1, minI(keepNum("DayPullNightBatch", 200), 200))
+	}
+	return pullFlushAtDay()
+}
+func pullGapMs() int {
+	if pullNight() {
+		return keepNumZero("DayPullNightGapMs", 0)
+	}
+	return keepNumZero("DayPullGapMs", 100)
+}
+
+// the night pace holds only while FinCom's answers keep saying so (an answer older than three beats: the day pace)
+func pullNight() bool {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	return pull.night && nowFn().Sub(pull.nightAt) < time.Duration(3*beatEvery()+60)*time.Second && !nowFn().Before(pull.nightAt)
+}
 func pullHeadsMax() int { return keepNum("DayPullHeadsMax", 30000) }
 func pullWait() time.Duration {
 	return time.Duration(keepNum("DayPullCloudWaitSec", 60)) * time.Second
@@ -135,7 +168,11 @@ var pull = struct {
 	state   map[string]M         // per company, for the beat: {day, phase, heads, asked, at, waiting}
 	said    map[string]string    // the last "waiting" reason said per company (said once)
 	lastAsk time.Time
-}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+	night   bool                 // FinCom's last answer said: outside office hours (periodNight)
+	nightAt time.Time            // when it said so
+	beatAt  time.Time            // the last early beat asked at night
+	empAt   map[string]time.Time // payroll: the employees found read and taken by FinCom (per company and GUID), looked at again after 10 minutes
+}{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -148,6 +185,11 @@ func applyPeriodDays(j M) {
 	}
 	if !has {
 		return
+	}
+	night := truthy(j["periodNight"]) && len(arr(v)) > 0
+	max := 3
+	if night {
+		max = pullNightDays()
 	}
 	var items []pullItem
 	for _, x := range arr(v) {
@@ -170,12 +212,13 @@ func applyPeriodDays(j M) {
 			}
 		}
 		items = append(items, it)
-		if len(items) == 3 {
+		if len(items) >= max {
 			break
 		}
 	}
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
+	pull.night, pull.nightAt = night, nowFn()
 	keep := map[string]bool{}
 	for _, it := range items {
 		keep[it.key()] = true
@@ -398,12 +441,34 @@ func dayPullLoop() {
 				}
 			}()
 			n = pullTurn()
+			pullAfterTurn(n)
 		}()
 		if n == 0 {
 			sleepOrStop(2 * time.Second)
 		} else {
 			sleepOrStop(500 * time.Millisecond)
 		}
+	}
+}
+
+// at night, the listed days done: FinCom is asked for the next ones now (an early beat, at most one every
+// DayPullNightBeatSec), so the period is read day after day; by day the beat keeps its own time
+func pullAfterTurn(sent int) {
+	if sent > 0 || !pullNight() || pullCurrent() != nil {
+		return
+	}
+	pull.mu.Lock()
+	due := nowFn().Sub(pull.beatAt) >= time.Duration(pullNightBeatSec())*time.Second || nowFn().Before(pull.beatAt)
+	if due {
+		pull.beatAt = nowFn()
+	}
+	pull.mu.Unlock()
+	if !due {
+		return
+	}
+	select {
+	case beatNow <- struct{}{}:
+	default:
 	}
 }
 
@@ -418,7 +483,9 @@ func pullTurn() int {
 		s, more := pullStep()
 		if s {
 			sent++
-			keepRest(time.Duration(keepNum("DayPullGapMs", 100)) * time.Millisecond)
+			if g := pullGapMs(); g > 0 {
+				keepRest(time.Duration(g) * time.Millisecond)
+			}
 		}
 		if !more {
 			break
@@ -630,9 +697,27 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	it := w.it
 	mid := w.want[0]
-	held := windowHoldFn()
+	// ROUND 103 (B, the owner's decision of 12-Oct-2026 kept for older days): a payroll voucher (its type as Tally's list of
+	// the day names it: Tally's own Payroll, or a type this bridge has seen carrying employees' pay heads) goes through the
+	// payroll path: its employees read and taken by FinCom first, its entry request stopped at 3 s and its window watched
+	// against 3 s; every other entry 2 s
+	pay := payrollEntry(it.Company, w.heads[mid].Type)
+	if pay {
+		if why := pullEmployeesFirst(it, port); why != "" {
+			pullSayWait(it, why)
+			return false, false
+		}
+	}
+	tc := recorderTC(nil)
 	var took float64
-	got, err := fetchVouchersByMasterIn(recorderTC(func(sec float64) { took += sec }), it.Company, port, it.Day, []string{mid}, liveBodySec())
+	tc.timed = func(sec float64) { took += sec }
+	tc = entryTC(tc, it.Company, w.heads[mid].Type)
+	limit := recorderLimitMs()
+	if pay {
+		limit = tc.limitMs
+	}
+	held := windowHoldFn()
+	got, err := fetchVouchersByMasterIn(tc, it.Company, port, it.Day, []string{mid}, liveBodySec())
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	if took == 0 {
 		holdMs = 0
@@ -649,7 +734,7 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 		// request of it, not only the day's list)
 		pullStopCompany(w, "over2s", "the entry with MasterID "+mid)
 		return true, false
-	case holdMs >= 2000:
+	case holdMs >= limit:
 		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the entry with MasterID %s was read", float64(holdMs)/1000, mid))
 		return true, false
 	case err == nil:
@@ -680,6 +765,29 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	}
 	pullNote(it, "fetch", w)
 	return true, true
+}
+
+// payroll (ROUND 103, B): the company's employees (FinComEmployees, 2.4.4's read) read and taken by FinCom before the first
+// payroll entry of the period, so the entry's employee rows link; "" when they are, else why the entry waits. Looked at
+// again after 10 minutes (the master counter may have moved: employeesCheckOn reads again when it did)
+func pullEmployeesFirst(it pullItem, port int) string {
+	key := companyKey(it.Company) + "|" + strings.ToLower(it.CGUID)
+	pull.mu.Lock()
+	at, ok := pull.empAt[key]
+	pull.mu.Unlock()
+	if ok && nowFn().Sub(at) < 10*time.Minute && !nowFn().Before(at) {
+		return ""
+	}
+	if _, err := employeesCheckOn(it.Company, port); err != nil && !gaveWay(err) {
+		writeLog("Older entries of " + it.Company + ": the payroll's employees: " + cutRunes(err.Error(), 200))
+	}
+	if !employeesTaken(it.Company) {
+		return "the payroll's employees are read first (FinComEmployees), then its payroll entries"
+	}
+	pull.mu.Lock()
+	pull.empAt[key] = nowFn()
+	pull.mu.Unlock()
+	return ""
 }
 
 // the size of the entries read and not sent (review 245 R3: a batch stays far below the cloud's body limit)

@@ -163,7 +163,8 @@
 //                                                       and the bridge does not ask again that night; at most 30 calls a minute
 //                                                       from one computer (429)
 //   FinCom Bridge 2.4.5 (ROUND 102, migration 98): older entries only for a period the person chose in FinCom (tally_period_pulls).
-//   The beat's answer carries periodDays [{company, company_guid, day: yyyymmdd, fetch, types}] (at most 3 days in all; the
+//   The beat's answer carries periodDays [{company, company_guid, day: yyyymmdd, fetch, types}] (at most 3 days in all, 30
+//   outside the computer's office hours with periodNight true (ROUND 103: 20:00-08:00 IST and Sunday by default); the
 //   year's days not counted first, then the part's days FinCom does not hold whole; none while the computer's reading is
 //   paused or stopped); the bridge answers with
 //   {kind:"period_heads", company, company_guid, day, via: day|split, n, heads:[[guid, masterId, alterId, type]]}
@@ -1458,8 +1459,20 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
 let periodMissing = 0;
 // review 245 R2: null (the key left out of the answer: the bridge keeps what it reads) when it could not be worked out; a
 // list, empty when paused, stopped or done (the bridge then stops at once)
-async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise<Record<string, unknown>[] | null> {
+// ROUND 103 (the owner's decision of 21-Oct-2026, evening): outside the computer's office hours (India's time; from
+// period_night_from to period_night_to, and all Sunday when period_night_sunday; 20:00-08:00 and Sunday by default, the
+// owner's per computer on the Tally page, migration 98) up to 30 days an answer, else 3. The same hour twice: no night hours
+function periodNightNow(dev: any, now = Date.now()): boolean {
+  const ist = new Date(now + 5.5 * 3600e3), h = ist.getUTCHours(), sun = ist.getUTCDay() === 0;
+  const hr = (v: unknown, d: number) => { const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= 23 ? n : d; };
+  const from = hr(dev?.period_night_from, 20), to = hr(dev?.period_night_to, 8), sunday = dev?.period_night_sunday === undefined || dev?.period_night_sunday === null ? true : dev.period_night_sunday === true;
+  if (sunday && sun) return true;
+  if (from === to) return false;
+  return from < to ? h >= from && h < to : h >= from || h < to;
+}
+async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
+  max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
   let unsure = false;
   if (stopped) return out;
   if (Date.now() - periodMissing < 600000) return null;
@@ -1472,7 +1485,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
     }
     const books = new Set<string>();
     for (const [company, beatGuid] of [...open].slice(0, 20)) {
-      if (out.length >= 3) break;
+      if (out.length >= max) break;
       let book: string | null = null;
       try { book = await bookForBeat(firm, company); } catch { book = null; }
       if (!book || books.has(book)) continue;
@@ -1484,7 +1497,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
-      const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: 3 - out.length });
+      const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max - out.length });
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
@@ -1492,7 +1505,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
         unsure = true; continue;     // review 245 R5: that company left out; the others go on
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
-        if (out.length >= 3) break;
+        if (out.length >= max) break;
         if (!isDay(String(d?.day || ""))) continue;
         // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
@@ -3413,10 +3426,13 @@ Deno.serve(sentry.wrap(async (req) => {
         // ROUND 103 (1c): only on a computer whose owner switched reading older entries on (tally_devices.period_fetch,
         // migration 98; off by default and on a cloud without the column): else an empty list and periodFetch false
         const periodFetch = (dev as any).period_fetch === true;
-        const periodDays = periodFetch ? await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop) : [];
+        // ROUND 103 (evening): outside this computer's office hours up to 30 days an answer (the bridge reads day after day
+        // while Tally is idle and asks again when they are done); the switch above still wins
+        const periodNight = periodFetch && periodNightNow(dev);
+        const periodDays = periodFetch ? await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop, periodNight ? 30 : 3) : [];
         await ledgerProgressFromBeat(firm, dev, b);
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

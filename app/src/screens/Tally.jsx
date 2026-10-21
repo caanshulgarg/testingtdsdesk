@@ -1139,23 +1139,47 @@ function TallyIniLines({ r }) {
 // owner switches it on or off (tally_device_period_fetch); staff see the state only. The tray's old-days test (read only)
 // as the bridge's heartbeat last said it: "Old-days test on <PC>: 0.21 s / 0.34 s / 0.18 s · no freeze". A cloud without
 // the column shows nothing of the switch
+// the computer's office hours as the cloud keeps them (none kept: 20:00 to 08:00 and all Sunday)
+const hh = (h) => String(h).padStart(2, "0") + ":00";
+function nightOf(x) {
+  const n = (v, dflt) => { const k = Number(v); return v !== null && v !== undefined && Number.isInteger(k) && k >= 0 && k <= 23 ? k : dflt; };
+  return { from: n(x.period_night_from, 20), to: n(x.period_night_to, 8), sunday: x.period_night_sunday === undefined || x.period_night_sunday === null ? true : x.period_night_sunday === true };
+}
+function nightWords(t) {
+  const h = t.from === t.to ? "" : hh(t.from) + " to " + hh(t.to);
+  return h && t.sunday ? h + " and all Sunday" : h || (t.sunday ? "all Sunday" : "never");
+}
 function OldDaysLines({ r, owner }) {
   const d = r.device || {}, t = ((d.info || {}).beat || {}).oldDaysTest;
-  const [pf, setPf] = useState(null), [n, setN] = useState(0);
+  const [pf, setPf] = useState(null), [n, setN] = useState(0), [nt, setNt] = useState(null), [ed, setEd] = useState(null);
   useEffect(() => {
     if (typeof Cloud !== "object" || !Cloud.api) return;
     let live = true;
-    Cloud.api("tally_devices?select=id,period_fetch&id=eq." + encodeURIComponent(d.id || "")).then((rows) => { const x = [].concat(rows || []).find((y) => y && y.id === d.id); if (live) setPf(x ? x.period_fetch === true : null); },
-      () => { if (live) setPf(null); });    // a cloud without the column (42703): nothing of the switch
+    Cloud.api("tally_devices?select=id,period_fetch,period_night_from,period_night_to,period_night_sunday&id=eq." + encodeURIComponent(d.id || "")).then((rows) => { const x = [].concat(rows || []).find((y) => y && y.id === d.id); if (live) { setPf(x ? x.period_fetch === true : null); setNt(x ? nightOf(x) : null); } },
+      () => { if (live) { setPf(null); setNt(null); } });    // a cloud without the column (42703): nothing of the switch
     return () => { live = false; };
   }, [d.id, n]);
   const known = pf !== null, on = pf === true;
   const flip = () => { if (typeof TCloud !== "object" || !TCloud.control) return;
     Promise.resolve(TCloud.control("tally_device_period_fetch", { p_device: d.id, p_on: !on }, "Reading older entries " + (on ? "off" : "on") + " for " + (d.name || "the computer") + "; the bridge takes it at its next heartbeat."))
       .then(() => setN((x) => x + 1)); };
+  const saveNight = () => { if (typeof TCloud !== "object" || !TCloud.control || !ed) return;
+    Promise.resolve(TCloud.control("tally_device_period_night", { p_device: d.id, p_from: ed.from, p_to: ed.to, p_sunday: ed.sunday }, "Office hours for " + (d.name || "the computer") + " saved; FinCom uses them from its next heartbeat."))
+      .then(() => { setEd(null); setN((x) => x + 1); }); };
+  const hours = Array.from({ length: 24 }, (_, i) => i);
   return <>
     {known && <div className="row" style={ROW}><span className="note" data-period-fetch={on ? "on" : "off"}>{"Reading older entries on this computer: " + (on ? "on" : "off")}
       {owner && <> <button className="btn small" data-period-fetch-switch="" onClick={flip}>{on ? "Switch off" : "Switch on"}</button></>}</span></div>}
+    {/* ROUND 103 (the owner's decision of 21-Oct-2026, evening): outside office hours (India time) the period is read day
+        after day while Tally is idle; 20:00 to 08:00 and all Sunday unless the owner changes them (tally_device_period_night) */}
+    {known && on && nt && <div className="row" style={ROW}><span className="note" data-period-night="">{"Faster reading of older entries outside office hours: " + nightWords(nt) + " (India time)"}
+      {owner && !ed && <> <button className="btn small" data-period-night-edit="" onClick={() => setEd(nt)}>Change</button></>}
+      {owner && ed && <span className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
+        <label>From <select data-period-night-from="" value={ed.from} onChange={(e) => setEd({ ...ed, from: Number(e.target.value) })}>{hours.map((h) => <option key={h} value={h}>{hh(h)}</option>)}</select></label>
+        <label>to <select data-period-night-to="" value={ed.to} onChange={(e) => setEd({ ...ed, to: Number(e.target.value) })}>{hours.map((h) => <option key={h} value={h}>{hh(h)}</option>)}</select></label>
+        <label><input type="checkbox" data-period-night-sunday="" checked={ed.sunday} onChange={(e) => setEd({ ...ed, sunday: e.target.checked })} /> all Sunday</label>
+        <button className="btn small primary" data-period-night-save="" onClick={saveNight}>Save</button>
+        <button className="btn small" data-period-night-cancel="" onClick={() => setEd(null)}>Cancel</button></span>}</span></div>}
     {t && t.line && <div className="row" style={ROW}><span className="note" data-old-days-test={t.stopped ? "stopped" : "ok"}>{"Old-days test on " + pcName(r) + ": " + t.line + (t.company ? " (" + t.company + ")" : "")}</span></div>}
   </>;
 }

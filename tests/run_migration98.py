@@ -60,7 +60,13 @@ ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not 
 alters = sorted(re.findall(r"\balter\s+table\b[^;]*;", code))
 ok("delete from" not in code and not re.search(r"\b(drop|truncate)\b", code) and alters == sorted(["alter table public.%s enable row level security;" % t for t in ("tally_period_pulls", "tally_period_days", "tally_ledger_progress")]
      + ["alter table public.tally_devices add column if not exists period_fetch boolean not null default false;", "alter table public.tally_devices add column if not exists period_fetch_at timestamptz;",
-        "alter table public.tally_devices add column if not exists period_fetch_by uuid;"]),
+        "alter table public.tally_devices add column if not exists period_fetch_by uuid;"]
+     + ["alter table public.tally_devices add column if not exists period_night_from smallint not null default 20 check (period_night_from between 0 and 23);",
+        "alter table public.tally_devices add column if not exists period_night_to smallint not null default 8 check (period_night_to between 0 and 23);",
+        "alter table public.tally_devices add column if not exists period_night_sunday boolean not null default true;",
+        "alter table public.tally_devices add column if not exists period_night_at timestamptz;", "alter table public.tally_devices add column if not exists period_night_by uuid;",
+        "alter table public.tally_period_pulls add column if not exists pace text check (pace is null or pace in ('day', 'night'));",
+        "alter table public.tally_period_pulls add column if not exists pace_at timestamptz;"]),
    "0. add-only: no delete from, drop or truncate; the only table changes are the new tables' row security and tally_devices' three new columns (ROUND 103) (%s)" % alters)
 ok(not re.search(r"supabase\.co|\.supabase\.|qbocskaiewaxqcvaunzc|https?://", low), "0. names no real database")
 TABLES = sorted(re.findall(r"create table if not exists public\.(\w+)", text))
@@ -68,10 +74,10 @@ ok(TABLES == ["tally_ledger_progress", "tally_period_days", "tally_period_pulls"
 for t in TABLES:
     ok(re.search(r"grant select, insert, update, delete on public\.%s to service_role;" % t, text) is not None, "0. %s carries its own grants in the file (ROUND 101)" % t)
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-APP = ["tally_period_choose", "tally_period_pause", "tally_period_status", "tally_device_period_fetch"]
+APP = ["tally_period_choose", "tally_period_pause", "tally_period_status", "tally_device_period_fetch", "tally_device_period_night"]
 SVC = ["tally_ledger_progress_save", "tally_period_entries", "tally_period_heads", "tally_period_next", "tally_period_upload", "tally_period_stop"]
 HELP = ["tally_period_half", "tally_period_held", "tally_period_member", "tally_period_range", "tally_period_status_of"]
-ok(FNS == sorted(APP + SVC + HELP), "0. thirteen new functions (%s)" % FNS)
+ok(FNS == sorted(APP + SVC + HELP), "0. sixteen new functions (%s)" % FNS)
 
 db = pg_stand.start(int(os.environ.get("PG98_PORT") or 30980))
 def psql_text(sql):
@@ -112,7 +118,7 @@ try:
             ok(db.one("select has_table_privilege(%s, 'public.%s', 'select') or has_table_privilege(%s, 'public.%s', 'insert')" % (q(rl), t, q(rl), t)) in ("f", "false"), "0. %s: nothing for %s" % (t, rl))
         ok(all(db.one("select has_table_privilege('service_role', 'public.%s', %s)" % (t, q(p))) in ("t", "true") for p in ("select", "insert", "update", "delete")), "0. %s: service_role reads and writes" % t)
         ok(db.one("select relrowsecurity from pg_class where oid = 'public.%s'::regclass" % t) in ("t", "true"), "0. %s: row security on" % t)
-    sig = {r["proname"]: r["sig"] for r in db.rows("select p.proname, p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like any (array['tally_period%', 'tally_ledger_progress%', 'tally_device_period_fetch'])")}
+    sig = {r["proname"]: r["sig"] for r in db.rows("select p.proname, p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like any (array['tally_period%', 'tally_ledger_progress%', 'tally_device_period_fetch', 'tally_device_period_night'])")}
     ex = lambda rl, fn: db.one("select has_function_privilege(%s, %s, 'execute')" % (q(rl), q(sig.get(fn, "public.nothing()")))) in ("t", "true") if fn in sig else None
     for fn in APP: ok(ex("authenticated", fn) and not ex("anon", fn), "0. %s: authenticated, not anon" % fn)
     for fn in SVC: ok(ex("service_role", fn) and not ex("authenticated", fn) and not ex("anon", fn), "0. %s: service_role only" % fn)
@@ -133,12 +139,21 @@ try:
     ok("not allowed" in str(APPU("select tally_period_next(%s, 3)::text" % q(B))), "1. a signed-in person cannot take the bridge's days")
 
     print("== 2. the next days: counting first")
-    n1 = j("select tally_period_next(%s, 5)::text" % q(B))
+    n1 = j("select tally_period_next(%s, 3)::text" % q(B))
     last = min(TODAY.date(), FY.replace(year=FY.year + 1) - datetime.timedelta(days=1))
     ok(isinstance(n1, list) and len(n1) == 3 and [x["day"] for x in n1] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3)] and all(x["fetch"] is False for x in n1)
        and "Sales" in n1[0]["types"] and "Contra" in n1[0]["types"], "2. the year's last 3 days, counting (%s)" % str(n1)[:200])
     n2 = j("select tally_period_next(%s, 3)::text" % q(B))
     ok([x["day"] for x in n2] == [(last - datetime.timedelta(days=i)).strftime("%Y%m%d") for i in range(3, 6)], "2. days handed out in the last 2 minutes come after the others (%s)" % [x["day"] for x in n2])
+    print("== 2b. ROUND 103: the night pace (tally-ingest asks up to 30 outside office hours; never more)")
+    ok((APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("pace") == "day", "2b. the pace by day in the status")
+    nn = j("select tally_period_next(%s, 40)::text" % q(B))
+    ok(isinstance(nn, list) and len(nn) == 30 and [x["day"] for x in nn][0] == (last - datetime.timedelta(days=6)).strftime("%Y%m%d"), "2b. at night at most 30 days an answer (%d)" % len(nn) if isinstance(nn, list) else nn)
+    ok((APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("pace") == "night", "2b. the pace at night in the status")
+    db.sql("update tally_period_days set asked_at = now() - interval '5 minutes' where book_id = %s" % q(B))
+    j("select tally_period_next(%s, 3)::text" % q(B))
+    ok((APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("pace") == "day", "2b. back to the day pace")
+    db.sql("update tally_period_days set asked_at = now() - interval '5 minutes' where book_id = %s" % q(B))
     APPU("select tally_period_pause(%s, true)::text" % q(B))
     ok(j("select tally_period_next(%s, 3)::text" % q(B)) == [], "2. none while paused")
     APPU("select tally_period_pause(%s, false)::text" % q(B))
@@ -213,6 +228,15 @@ try:
     ok("not a computer of your firm" in str(APPU("select tally_device_period_fetch(%s, true)::text" % q(DV), OTHER)) or "owner" in str(APPU("select tally_device_period_fetch(%s, true)::text" % q(DV), OTHER)), "4c. another firm refused")
     on = APPU("select tally_device_period_fetch(%s, true)::text" % q(DV))
     ok(on.get("ok") is True and on.get("periodFetch") is True and db.one("select period_fetch_by from tally_devices where id = %s" % q(DV)) == OWNER, "4c. the owner switches it on, who and when kept (%s)" % on)
+    print("== 4d. ROUND 103: office hours per computer (20:00-08:00 IST and Sunday by default), owner only")
+    ok(db.one("select period_night_from || '-' || period_night_to || '-' || period_night_sunday from tally_devices where id = %s" % q(DV)) in ("20-8-true", "20-8-t"), "4d. 20:00 to 08:00 and Sunday by default")
+    for c in ("period_night_from", "period_night_to", "period_night_sunday", "period_night_at", "period_night_by"):
+        ok(db.one("select has_column_privilege('authenticated', 'public.tally_devices', %s, 'select')" % q(c)) in ("t", "true") and db.one("select has_column_privilege('authenticated', 'public.tally_devices', %s, 'update')" % q(c)) in ("f", "false"), "4d. %s: the firm reads it, nobody updates it directly" % c)
+    ok("owner" in str(APPU("select tally_device_period_night(%s, 21, 7, false)::text" % q(DV), VIEWER)), "4d. a viewer refused")
+    ok("owner" in str(APPU("select tally_device_period_night(%s, 21, 7, false)::text" % q(DV), OTHER)) or "not a computer" in str(APPU("select tally_device_period_night(%s, 21, 7, false)::text" % q(DV), OTHER)), "4d. another firm refused")
+    ok("0 to 23" in str(APPU("select tally_device_period_night(%s, 24, 7, false)::text" % q(DV))), "4d. an hour out of range refused")
+    nt = APPU("select tally_device_period_night(%s, 21, 7, false)::text" % q(DV))
+    ok(nt.get("ok") is True and nt.get("from") == 21 and nt.get("to") == 7 and nt.get("sunday") is False and db.one("select period_night_by from tally_devices where id = %s" % q(DV)) == OWNER, "4d. the owner sets 21:00-07:00, no Sunday (%s)" % nt)
     print("== 5. a day to upload by hand")
     u5 = j("select tally_period_upload(%s, %s, 'over2s', 'Sales', %s)::text" % (q(B), q(D(30)), q("Tally took too long to give X. Please upload that day's Day Book.")))
     ok(u5.get("ok") is True, "5. marked")
@@ -233,6 +257,13 @@ try:
     ok(h6.get("ok") is True and (h6.get("pull") or {}).get("part") == "h1" and (h6["pull"]["to"] == (FY.replace(month=9, day=30)).strftime("%Y%m%d")), "6. Apr-Sep chosen once the year is over 20,000 (%s)" % str(h6.get("pull"))[:160])
     n7 = j("select tally_period_next(%s, 3)::text" % q(B))
     ok(n7 and all(x["day"] <= FY.replace(month=9, day=30).strftime("%Y%m%d") for x in n7), "6. only Apr-Sep handed out (%s)" % [x["day"] for x in n7])
+    print("== 6b. ROUND 103: the speed and the time left (the last 30 minutes' days done)")
+    st6 = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
+    ok(st6.get("etaMin") is None, "6b. no time left shown before anything was done at this pace (%s)" % st6.get("etaMin"))
+    db.sql("update tally_period_days set done_at = now(), held_n = tally_n, asked_at = now() - interval '10 minutes' where book_id = %s and day in (select day from tally_period_days where book_id = %s and day <= %s and done_at is null and upload_at is null order by day desc limit 20)"
+           % (q(B), q(B), q(FY.replace(month=9, day=30).isoformat())))
+    st7 = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
+    ok(st7.get("rate") == 140 and isinstance(st7.get("etaMin"), int) and st7["etaMin"] == -(-st7["left"] // 140), "6b. 1,400 entries in 10 minutes: 140 a minute, the time left from what is left (%s)" % {k: st7.get(k) for k in ("rate", "etaMin", "left")})
     print("== 6. the ledger progress")
     j("select tally_ledger_progress_save(%s, 'r1', 312, 1240, false, null)::text" % q(B))
     j("select tally_ledger_progress_save(%s, 'r1', 200, 1240, false, null)::text" % q(B))
