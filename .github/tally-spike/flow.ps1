@@ -6,6 +6,9 @@ $data = "$env:RUNNER_TEMP\TallyData"; New-Item -ItemType Directory -Force $data 
 $tdl = Join-Path $env:GITHUB_WORKSPACE 'bridge-go\addon\FinComRecorder.tdl'
 $rec = 'C:\ProgramData\FinCom\recorder'; New-Item -ItemType Directory -Force $rec | Out-Null
 $co = 'FinCom Spike Co'
+# tally.ini as TallyPrime's installer left it, kept before the harness writes its own (mode dbbig reports it: 2.4.5's
+# installer adds the add-on to this file)
+if ((Test-Path $ini) -and -not (Test-Path "$env:RUNNER_TEMP\tally-ini-installed.txt")) { Copy-Item $ini "$env:RUNNER_TEMP\tally-ini-installed.txt" }
 function Shot($n) { & "$PSScriptRoot\shot.ps1" $n }
 function Keys($k, $wait = 3, $n = '') { & "$PSScriptRoot\keys.ps1" '^tally$' $k; Start-Sleep $wait; if ($n) { Shot $n } }
 function Post($label, $body) {

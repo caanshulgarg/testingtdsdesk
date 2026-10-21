@@ -65,7 +65,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="dbm dbres payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -74,7 +74,7 @@ jobs:
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
             if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
             for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
           done
           echo "matrix={\"include\":[${inc%,}]}" | tee -a "$GITHUB_OUTPUT"
@@ -169,6 +169,8 @@ jobs:
           # dbm / dbres test data: ZZ BIG TEST's masters and vouchers from its own generator at the ref, re-dated by the
           # harness onto Educational-mode days (harness/.github/tally-spike/dbm/redate.py)
           # (the harness checkout is gone once the ref is checked out at the root: redate.py is taken from this run's commit)
+          # dbbig: the same, about 30,000 entries all in FY 2026-27 (DBM_PROFILE=big)
+          case ",${{ steps.mode.outputs.modes }}," in *,dbbig,*) export DBM_PROFILE=big ;; esac
           if [ -f ../tests/fixtures/big/make_big_company.py ] && git fetch -q --depth 1 origin ${{ github.sha }} && git show FETCH_HEAD:.github/tally-spike/dbm/redate.py > "$RUNNER_TEMP/redate.py"; then
             n=$(python3 "$RUNNER_TEMP/redate.py" --total)
             python3 ../tests/fixtures/big/make_big_company.py --vouchers "$n" --chunk 100000 --out dist/dbmgen > /dev/null
@@ -271,12 +273,12 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres'
+        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig'
         with:
           fetch-depth: 0
       # mhook / ledlist need only the harness and the add-on folder: the whole history took 47-60 min on 08-Oct-2026
       - uses: actions/checkout@v4
-        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres'
+        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig'
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -335,6 +337,7 @@ jobs:
           if ($env:VMODE -eq 'payroll') { $want += @('y1 payroll and statutory payroll on (company switches read back)', 'y2 payroll masters by XML (attendance types, groups, 3 employees with details, pay heads)', 'y3 payroll entries by XML (attendance, payroll x2 months, employer PF, salary payment, TDS on salary)', 'y4 raw answers kept (object exports, FinComVoucherObject, full entries, List of Accounts, FinComLedgers)', 'y5 500 employees: candidate requests timed (one at a time, 5 each)') }
           if ($env:VMODE -eq 'paym') { $want += @('p1 payroll made by XML (pay heads, 2,000 employees, 20 other cost centres, a payroll of 500)', 'p2 the ledger requests give the pay-head fields', 'p3 FinComEmployees, chunked, finds every cost centre, the payroll ones marked', 'p4 the 500-employee payroll entry (FinComVoucherObject) under 3 s, Tally responding', 'p5 times at 20,000 ledgers and 2,000 employees (every 2.4.4 master request under 2 s, Tally responding)') }
           if ($env:VMODE -eq 'dbm') { $want += @('k1 test data made in Tally (ledgers, entries on the test days as Tally holds them)', 'k2 the Day Book for one day: the date forms that give exactly that day', 'k3 the collection date forms (FinComDatesProbe) for one day', 'k4 a day split by voucher type: exact per type, each under 2 s', 'k5 the ledger count: candidate forms exact at ~1,240 and ~5,000 ledgers, under 2 s', 'k6 one request at a time, 2 s hard stop: overruns kept, Tally responding after each') }
+          if ($env:VMODE -eq 'dbbig') { $want += @('i1 tally.ini as TallyPrime installs it (captured before the harness wrote its own)', 'i2 the add-on added to tally.ini (add only, backup, other TDL kept): loaded at Tally start, the other TDL too', 'i3 tally.ini with User TDL = No: what Tally does with an added User TDL = Yes', 'i4 idempotent and untouched by Tally: a second run changes nothing, Tally keeps the lines and their order', 'b1 big company made (about 30,000 entries, 20,000 ledgers)', 'b2 one day of the Day Book on the big company (D1, D5), and whether D5 moves Tally''s current date', 'b3 one day by the collection date forms on the big company', 'b4 a day split by voucher type on the big company', 'b5 the voucher count of a period (month, quarter, half-year, year)', 'b6 the ledger count at 20,000 and 50,000 ledgers', 'b7 one request at a time, 2 s stop, Tally''s window blocked time kept') }
           if ($env:VMODE -eq 'dbres') { $want += @('r1 missing days with Tally closed and reopened: resumed, every day fetched or marked upload, nothing twice', 'r2 missing days with a modal screen left open: no request held over 2 s unseen, finished after it closed', 'r3 missing days with Tally not answering: stopped at 2 s, waited, resumed', 'r4 the ledger read through close / modal / not answering: every ledger once, progress never back, count right', 'r5 Tally responsive at the end of every scenario') }
           if ($env:VMODE -eq 'tdsm') { $want += @('m1 TDS masters made (natures with rates and threshold, duty ledger with nature, certificate, special rate)', 'm2 the ledger requests give the nature, the special rate and the certificate', 'm3 FinComTdsNatures, chunked, finds every nature with its section, rates and threshold', 'm4 the challan fields in FinComVoucherObject''s answer', 'm5 times on ZZ BIG TEST''s masters and at 20,000 ledgers (every 2.4.3 request under 2 s, Tally responding)') }
           if ($env:VMODE -eq 'gsttype') { $want += @('x1 the GST entries made in Tally', 'x2 the entry request answered for every entry (raw kept, timed)', 'x3 the blocked credit as Tally keeps it') }

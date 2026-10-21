@@ -24,6 +24,16 @@ TARGETS = {"20260131": 300, "20260601": 50, "20260702": 300, "20260831": 800}
 EMPTY = {"20251201"}
 BACKGROUND = 8
 PER_FILE = 200
+FROM = "20250401"
+# Mode dbbig (DBM_PROFILE=big): a big company, about 30,000 entries, all in FY 2026-27 (Educational-mode Tally refuses
+# the earlier year's dates as "Out of Range", run 38790555479): 01-Jun 100, 02-Jul 300, 31-Aug 800, 31-May none, and the
+# rest spread over the other 13 allowed days of Apr-Oct 2026 (about 2,215 each: 01-Aug is the "heavy day")
+if os.environ.get("DBM_PROFILE") == "big":
+    TARGETS = {"20260601": 100, "20260702": 300, "20260831": 800}
+    EMPTY = {"20260531"}
+    BACKGROUND = 2216
+    PER_FILE = 500
+    FROM = "20260401"
 
 
 def allowed_days():
@@ -35,7 +45,7 @@ def allowed_days():
                 day = date(y, m, d)
             except ValueError:
                 continue
-            if day <= date(2026, 10, 2):
+            if FROM <= day.strftime("%Y%m%d") and day <= date(2026, 10, 2):
                 out.append(day.strftime("%Y%m%d"))
         m += 1
         if m == 13:
