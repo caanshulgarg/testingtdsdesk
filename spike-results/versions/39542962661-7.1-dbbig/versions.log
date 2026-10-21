@@ -1,0 +1,416 @@
+[04:33:16] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-21, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-21, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1532 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+  INFO dbbig: window probe running True (beats 20)
+[04:33:52] ---- dbbig: tally.ini (the add-on loaded by Tally itself)
+######## PASS i1 tally.ini as TallyPrime installs it (captured before the harness wrote its own): 51 lines: ;;TallyPrime workstation specific parameters file / [TALLY] / ;;Specify the path of Capsule Folder / Capsule= / ;;Specify location of Data files / Data=C:\Users\Public\TallyPrime\data / ;;Specify location of Config files / Config=C:\Program Files\TallyPrime / ;;Specify location of Language Files / LangPath=C:\Program Files\TallyPrime\lang / ;; Specify list of companies to preload, / ;; TO STOP DEFAULT LOADING set the following line to NO / Default Companies = Yes / Load = 100000 / ;; Specify list of TDL files for user defined reports and changes. / ;; TO STOP LOADING TDL FILES, set the following line to NO / User TDL = Yes / ;;tdl = <tdlfile.1> / ;; Specify Color details of local monitor / Color = Yes / Sound = Yes / Client Server = None / ServerPort = 9000 / Enable ODBC Server = Yes / Load Buffering = Yes / Ignore TCP Timeout = Yes / ;; TallyGatewayServer = server:port / TallyGatewayServer=localhost:9999 / Tally License Serial Number=0 / ;;Specify the maximum size (in MB) for the incremental backup file (IncrState.1800) / ;;Once this size is reached, the file will be recreated automatically / ;;For example, to set this to 500 MB write IncrementalBackupBufferLimit=500 / ;;or for 1 GB write IncrementalBackupBufferLimit=1024 / IncrementalBackupBufferLimit=1024 / ;;Specify Migration Configurations / ;;Specify Port number of TallyPrime or TallyPrime Edit Log for Migration / MigrationTallyPrimePort=9009 / ;;Specify Port number of Migration Tool / MigrationToolPort=9509 / ;; end-of-file
+[04:33:54] db: Tally (pid 1388) closed
+[04:33:56] db: Tally (pid 1388) closed
+[04:33:56] db: Tally started (pid 1336), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-ini-A-other-tdl-started (1024x768)
+[db] ini probe A-other-tdl: created 1, altered 0, errors 0, 19.2 ms
+[04:34:36] db: Tally (pid 1336) closed
+  INFO dbbig ini A-other-tdl: up True; added [TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl]; second run changed False; backup = original True; others kept in order True; add-on formula 'C:\ProgramData\FinCom\recorder\' recorder grew False; other TDL formula 'other-loaded'; Tally left the file as written True
+[04:34:40] db: Tally (pid 1336) closed
+[04:34:42] db: Tally (pid 1336) closed
+[04:34:42] db: Tally started (pid 1076), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-ini-B-no-tdl-lines-started (1024x768)
+[db] ini probe B-no-tdl-lines: created 1, altered 0, errors 0, 17.8 ms
+[04:35:21] db: Tally (pid 1076) closed
+  INFO dbbig ini B-no-tdl-lines: up True; added [User TDL = Yes | TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl]; second run changed False; backup = original True; others kept in order True; add-on formula 'C:\ProgramData\FinCom\recorder\' recorder grew False; other TDL formula ''; Tally left the file as written True
+[04:35:25] db: Tally (pid 1076) closed
+[04:35:27] db: Tally (pid 1076) closed
+[04:35:27] db: Tally started (pid 9104), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-ini-C-usertdl-no-started (1024x768)
+[db] ini probe C-usertdl-no: created 1, altered 0, errors 0, 17.3 ms
+[04:36:06] db: Tally (pid 9104) closed
+  INFO dbbig ini C-usertdl-no: up True; added [User TDL = Yes | TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl]; second run changed False; backup = original True; others kept in order True; add-on formula 'C:\ProgramData\FinCom\recorder\' recorder grew False; other TDL formula 'other-loaded'; Tally left the file as written True
+[04:36:10] db: Tally (pid 9104) closed
+[04:36:12] db: Tally (pid 9104) closed
+[04:36:12] db: Tally started (pid 6236), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-ini-D-already-there-started (1024x768)
+[db] ini probe D-already-there: created 1, altered 0, errors 0, 17.9 ms
+[04:36:51] db: Tally (pid 6236) closed
+  INFO dbbig ini D-already-there: up True; added []; second run changed False; backup = original False; others kept in order True; add-on formula 'C:\ProgramData\FinCom\recorder\' recorder grew False; other TDL formula 'other-loaded'; Tally left the file as written True
+######## PASS i2 the add-on added to tally.ini (add only, backup, other TDL kept): loaded at Tally start, the other TDL too: A (User TDL = Yes and another TDL): added [TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl], add-on loaded True (recorder line on an import False), other TDL loaded True, others kept in order True, backup = original True; B (no TDL lines): added [User TDL = Yes | TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl], add-on loaded True (recorder line False)
+######## PASS i3 tally.ini with User TDL = No: what Tally does with an added User TDL = Yes: User TDL = No then an added User TDL = Yes: add-on loaded True, the client's other TDL loaded True (Tally takes the last User TDL line)
+######## PASS i4 idempotent and untouched by Tally: a second run changes nothing, Tally keeps the lines and their order: second run changed nothing: A True (same bytes True), D (already there) changed False; Tally left the file as written after start and close: A True, B True, C True, D True
+[04:36:55] db: Tally (pid 6236) closed
+[04:36:57] db: Tally (pid 6236) closed
+[04:36:57] db: Tally started (pid 8584), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-measure-started (1024x768)
+[04:37:31] ---- dbbig: test data (about 30,000 entries)
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 15.2 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 4918.7 ms
+[db] dbm-vouchers-01.xml: created 500, altered 0, errors 0, 6742.6 ms
+[db] dbm-vouchers-02.xml: created 500, altered 0, errors 0, 6882.3 ms
+[db] dbm-vouchers-03.xml: created 500, altered 0, errors 0, 6906.6 ms
+[db] dbm-vouchers-04.xml: created 500, altered 0, errors 0, 6932.1 ms
+[db] dbm-vouchers-05.xml: created 500, altered 0, errors 0, 7159.4 ms
+[db] dbm-vouchers-06.xml: created 500, altered 0, errors 0, 6953.7 ms
+[db] dbm-vouchers-07.xml: created 500, altered 0, errors 0, 7122.5 ms
+[db] dbm-vouchers-08.xml: created 500, altered 0, errors 0, 7594.9 ms
+[db] dbm-vouchers-09.xml: created 500, altered 0, errors 0, 7436.2 ms
+[db] dbm-vouchers-10.xml: created 500, altered 0, errors 0, 7403 ms
+[db] dbm-vouchers-11.xml: created 500, altered 0, errors 0, 7369.3 ms
+[db] dbm-vouchers-12.xml: created 500, altered 0, errors 0, 7328.3 ms
+[db] dbm-vouchers-13.xml: created 500, altered 0, errors 0, 7475.5 ms
+[db] dbm-vouchers-14.xml: created 500, altered 0, errors 0, 7480.7 ms
+[db] dbm-vouchers-15.xml: created 500, altered 0, errors 0, 7644.5 ms
+[db] dbm-vouchers-16.xml: created 500, altered 0, errors 0, 7954.8 ms
+[db] dbm-vouchers-17.xml: created 500, altered 0, errors 0, 8184.4 ms
+[db] dbm-vouchers-18.xml: created 500, altered 0, errors 0, 8378.8 ms
+[db] dbm-vouchers-19.xml: created 500, altered 0, errors 0, 8542.5 ms
+[db] dbm-vouchers-20.xml: created 500, altered 0, errors 0, 8973.9 ms
+[db] dbm-vouchers-21.xml: created 500, altered 0, errors 0, 8654.7 ms
+[db] dbm-vouchers-22.xml: created 500, altered 0, errors 0, 7576.1 ms
+[db] dbm-vouchers-23.xml: created 500, altered 0, errors 0, 7709.6 ms
+[db] dbm-vouchers-24.xml: created 500, altered 0, errors 0, 7867 ms
+[db] dbm-vouchers-25.xml: created 500, altered 0, errors 0, 8357.8 ms
+[db] dbm-vouchers-26.xml: created 500, altered 0, errors 0, 7919.9 ms
+[db] dbm-vouchers-27.xml: created 500, altered 0, errors 0, 7881.9 ms
+[db] dbm-vouchers-28.xml: created 500, altered 0, errors 0, 8351.8 ms
+[db] dbm-vouchers-29.xml: created 500, altered 0, errors 0, 8095.7 ms
+[db] dbm-vouchers-30.xml: created 500, altered 0, errors 0, 7984.4 ms
+[db] dbm-vouchers-31.xml: created 500, altered 0, errors 0, 8493.3 ms
+[db] dbm-vouchers-32.xml: created 500, altered 0, errors 0, 7699 ms
+[db] dbm-vouchers-33.xml: created 500, altered 0, errors 0, 8004.8 ms
+[db] dbm-vouchers-34.xml: created 500, altered 0, errors 0, 8171.9 ms
+[db] dbm-vouchers-35.xml: created 500, altered 0, errors 0, 8062.4 ms
+[db] dbm-vouchers-36.xml: created 500, altered 0, errors 0, 7882.2 ms
+[db] dbm-vouchers-37.xml: created 500, altered 0, errors 0, 8157.9 ms
+[db] dbm-vouchers-38.xml: created 500, altered 0, errors 0, 7945.3 ms
+[db] dbm-vouchers-39.xml: created 500, altered 0, errors 0, 8056.6 ms
+[db] dbm-vouchers-40.xml: created 500, altered 0, errors 0, 7922.3 ms
+[db] dbm-vouchers-41.xml: created 500, altered 0, errors 0, 8219.1 ms
+[db] dbm-vouchers-42.xml: created 500, altered 0, errors 0, 8243.2 ms
+[db] dbm-vouchers-43.xml: created 500, altered 0, errors 0, 7981.1 ms
+[db] dbm-vouchers-44.xml: created 500, altered 0, errors 0, 7778.9 ms
+[db] dbm-vouchers-45.xml: created 500, altered 0, errors 0, 7940.9 ms
+[db] dbm-vouchers-46.xml: created 500, altered 0, errors 0, 7927.7 ms
+[db] dbm-vouchers-47.xml: created 500, altered 0, errors 0, 8298.6 ms
+[db] dbm-vouchers-48.xml: created 500, altered 0, errors 0, 8519.8 ms
+[db] dbm-vouchers-49.xml: created 500, altered 0, errors 0, 8238.5 ms
+[db] dbm-vouchers-50.xml: created 500, altered 0, errors 0, 9144.9 ms
+[db] dbm-vouchers-51.xml: created 500, altered 0, errors 0, 7930.3 ms
+[db] dbm-vouchers-52.xml: created 500, altered 0, errors 0, 8262.8 ms
+[db] dbm-vouchers-53.xml: created 500, altered 0, errors 0, 8169 ms
+[db] dbm-vouchers-54.xml: created 500, altered 0, errors 0, 7968.4 ms
+[db] dbm-vouchers-55.xml: created 500, altered 0, errors 0, 8035.1 ms
+[db] dbm-vouchers-56.xml: created 500, altered 0, errors 0, 8377.5 ms
+[db] dbm-vouchers-57.xml: created 500, altered 0, errors 0, 8089.7 ms
+[db] dbm-vouchers-58.xml: created 500, altered 0, errors 0, 9237.1 ms
+[db] dbm-vouchers-59.xml: created 500, altered 0, errors 0, 8764.7 ms
+[db] dbm-vouchers-60.xml: created 500, altered 0, errors 0, 8664.1 ms
+[db] dbm-vouchers-61.xml: created 8, altered 0, errors 0, 291.1 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6909.3 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7179.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7032.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7060.9 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7140.3 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7356.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7887.6 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7578 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7581.1 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7725.4 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8210.7 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7862.4 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8061.7 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8100.6 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8718 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8211.7 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8269.2 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 8378.3 ms
+[db] filler ledgers to 20000: created 886, altered 0, errors 0, 7590.8 ms
+  INFO dbbig: masters created 1114 (errors 0); entries created 30008 (errors 0); ledgers 20000; entries in Tally 30009; per test day 20260601=100, 20260702=300, 20260831=800, 20260801=2216, 20260531=0
+######## PASS b1 big company made (about 30,000 entries, 20,000 ledgers): masters created 1114 (errors 0); entries created 30008 (errors 0); ledgers 20000; entries in Tally 30009; per test day (Tally's own list): 20260601=100, 20260702=300, 20260831=800, 20260801=2216, 20260531=0
+[04:48:11] ---- dbbig: the Day Book for one day
+[dbbig] daybook D1 20260601: 35417.9 ms OVERRUN, blocked 35176 ms, 125341532 chars; responding True applied=False dates=20260401 want=100 onDay=0 got=2217
+[dbbig] daybook D5 20260601: 475.4 ms, blocked 250 ms, 5640689 chars; responding True applied=True dates=20260601 want=100 onDay=100 got=100
+[dbbig] daybook D5 20260601: 442.8 ms, blocked 259 ms, 5640689 chars; responding True applied=True dates=20260601 want=100 onDay=100 got=100
+[dbbig] daybook D5 20260601: 452 ms, blocked 252 ms, 5640689 chars; responding True applied=True dates=20260601 want=100 onDay=100 got=100
+[dbbig] daybook D1 20260702: 453.8 ms, blocked 252 ms, 5640689 chars; responding True applied=False dates=20260601 want=300 onDay=0 got=100
+[dbbig] daybook D5 20260702: 1344.2 ms, blocked 977 ms, 17067334 chars; responding True applied=True dates=20260702 want=300 onDay=300 got=300
+[dbbig] daybook D5 20260702: 1346.4 ms, blocked 961 ms, 17067334 chars; responding True applied=True dates=20260702 want=300 onDay=300 got=300
+[dbbig] daybook D5 20260702: 1370.1 ms, blocked 1309 ms, 17067334 chars; responding True applied=True dates=20260702 want=300 onDay=300 got=300
+[dbbig] daybook D1 20260831: 1383.6 ms, blocked 1317 ms, 17067334 chars; responding True applied=False dates=20260702 want=800 onDay=0 got=300
+[dbbig] daybook D5 20260831: 3540.1 ms OVERRUN, blocked 3101 ms, 45345415 chars; responding True applied=True dates=20260831 want=800 onDay=800 got=800
+[dbbig] daybook D5 20260831: 3553.5 ms OVERRUN, blocked 3121 ms, 45345415 chars; responding True applied=True dates=20260831 want=800 onDay=800 got=800
+[dbbig] daybook D5 20260831: 3560.9 ms OVERRUN, blocked 3453 ms, 45345415 chars; responding True applied=True dates=20260831 want=800 onDay=800 got=800
+[dbbig] daybook D1 20260801: 3533.7 ms OVERRUN, blocked 3125 ms, 45345415 chars; responding True applied=False dates=20260831 want=2216 onDay=0 got=800
+[dbbig] daybook D5 20260801: 10166 ms OVERRUN, blocked 9912 ms, 125529150 chars; responding True applied=True dates=20260801 want=2216 onDay=2216 got=2216
+[dbbig] daybook D5 20260801: 10006.7 ms OVERRUN, blocked 9732 ms, 125529150 chars; responding True applied=True dates=20260801 want=2216 onDay=2216 got=2216
+[dbbig] daybook D5 20260801: 9871.4 ms OVERRUN, blocked 9642 ms, 125529150 chars; responding True applied=True dates=20260801 want=2216 onDay=2216 got=2216
+[dbbig] daybook D1 20260531: 10020.2 ms OVERRUN, blocked 9769 ms, 125529150 chars; responding True applied=False dates=20260801 want=0 onDay=0 got=2216
+[dbbig] daybook D5 20260531: 13.4 ms, blocked 0 ms, 364 chars; responding True applied=True dates= want=0 onDay=0 got=0
+[dbbig] daybook D5 20260531: 6.9 ms, blocked 0 ms, 364 chars; responding True applied=True dates= want=0 onDay=0 got=0
+[dbbig] daybook D5 20260531: 7 ms, blocked 0 ms, 364 chars; responding True applied=True dates= want=0 onDay=0 got=0
+[dbbig] sticky D1-after-D5 20260601: 3555.7 ms OVERRUN, blocked 3456 ms, 45345415 chars; responding True dates=20260831 moved=True got=800
+######## PASS b2 one day of the Day Book on the big company (D1, D5), and whether D5 moves Tally's current date: D5 applied every day True; D5 median 1346.4 ms, worst 10166 ms, overruns 6/15, window blocked worst 9912 ms, hung 0; D5 moves the current date True
+[04:50:30] ---- dbbig: the collection date forms for one day
+[dbbig] collection C3 20260601: 39.7 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C3 20260601: 40 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C3 20260601: 38.3 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C3 20260702: 71.8 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C3 20260702: 69.9 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C3 20260702: 70.6 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C3 20260831: 150.7 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C3 20260831: 151.2 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C3 20260831: 150.7 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C3 20260801: 376.1 ms, blocked 252 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C3 20260801: 366.3 ms, blocked 251 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C3 20260801: 367.2 ms, blocked 253 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C3 20260531: 2.8 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C3 20260531: 1.7 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C3 20260531: 1.9 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C4 20260601: 38.2 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C4 20260601: 37.2 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C4 20260601: 36.9 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C4 20260702: 67.5 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C4 20260702: 68.3 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C4 20260702: 69.8 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C4 20260831: 141.5 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C4 20260831: 142.6 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C4 20260831: 145.5 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C4 20260801: 371.8 ms, blocked 250 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C4 20260801: 372.6 ms, blocked 253 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C4 20260801: 374.2 ms, blocked 252 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C4 20260531: 2 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C4 20260531: 1.8 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C4 20260531: 1.8 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C5 20260601: 40.1 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C5 20260601: 40.7 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C5 20260601: 40.6 ms, blocked 0 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C5 20260702: 72.2 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C5 20260702: 72.8 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C5 20260702: 73.4 ms, blocked 0 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C5 20260831: 157.3 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C5 20260831: 156.7 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C5 20260831: 156.8 ms, blocked 0 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C5 20260801: 378.7 ms, blocked 254 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C5 20260801: 378.8 ms, blocked 263 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C5 20260801: 383.1 ms, blocked 255 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C5 20260531: 2.5 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C5 20260531: 1.8 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C5 20260531: 1.8 ms, blocked 0 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C7 20260601: 2795.5 ms OVERRUN, blocked 2412 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C7 20260601: 2981.8 ms OVERRUN, blocked 2732 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C7 20260601: 2937.2 ms OVERRUN, blocked 2747 ms, 123051 chars; responding True applied=True want=100 onDay=100 got=100
+[dbbig] collection C7 20260702: 3029.4 ms OVERRUN, blocked 2731 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C7 20260702: 3132.4 ms OVERRUN, blocked 3088 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C7 20260702: 3084.9 ms OVERRUN, blocked 2784 ms, 366786 chars; responding True applied=True want=300 onDay=300 got=300
+[dbbig] collection C7 20260831: 3092.5 ms OVERRUN, blocked 2740 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C7 20260831: 3124.7 ms OVERRUN, blocked 3093 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C7 20260831: 3375.9 ms OVERRUN, blocked 3073 ms, 975512 chars; responding True applied=True want=800 onDay=800 got=800
+[dbbig] collection C7 20260801: 3400.9 ms OVERRUN, blocked 3101 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C7 20260801: 3241.6 ms OVERRUN, blocked 3108 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C7 20260801: 3253.9 ms OVERRUN, blocked 3084 ms, 2699564 chars; responding True applied=True want=2216 onDay=2216 got=2216
+[dbbig] collection C7 20260531: 3156.8 ms OVERRUN, blocked 3075 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C7 20260531: 3214 ms OVERRUN, blocked 3093 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+[dbbig] collection C7 20260531: 3239.9 ms OVERRUN, blocked 3076 ms, 1540 chars; responding True applied=True want=0 onDay=0 got=0
+######## PASS b3 one day by the collection date forms on the big company: exact on every day: C3, C4, C5, C7
+[04:51:35] ---- dbbig: a day split by voucher type
+[dbbig] split S2-D1 20260831 Contra: 143.2 ms, blocked 0 ms, 1360464 chars; responding True exact=True want=27 got=27
+[dbbig] split S2-D1 20260831 Contra: 136.2 ms, blocked 0 ms, 1360464 chars; responding True exact=True want=27 got=27
+[dbbig] split S2-D1 20260831 Journal: 339.4 ms, blocked 250 ms, 3749885 chars; responding True exact=True want=66 got=66
+[dbbig] split S2-D1 20260831 Journal: 345.3 ms, blocked 251 ms, 3749885 chars; responding True exact=True want=66 got=66
+[dbbig] split S2-D1 20260831 Payment: 422.2 ms, blocked 251 ms, 4846237 chars; responding True exact=True want=95 got=95
+[dbbig] split S2-D1 20260831 Payment: 425.5 ms, blocked 252 ms, 4846237 chars; responding True exact=True want=95 got=95
+[dbbig] split S2-D1 20260831 Purchase: 867.5 ms, blocked 605 ms, 9366497 chars; responding True exact=True want=158 got=158
+[dbbig] split S2-D1 20260831 Purchase: 867.5 ms, blocked 616 ms, 9366497 chars; responding True exact=True want=158 got=158
+[dbbig] split S2-D1 20260831 Receipt: 501.5 ms, blocked 255 ms, 5666343 chars; responding True exact=True want=111 got=111
+[dbbig] split S2-D1 20260831 Receipt: 522.6 ms, blocked 251 ms, 5666343 chars; responding True exact=True want=111 got=111
+[dbbig] split S2-D1 20260831 Sales: 1880.7 ms, blocked 1675 ms, 20357819 chars; responding True exact=True want=343 got=343
+[dbbig] split S2-D1 20260831 Sales: 1867 ms, blocked 1658 ms, 20357819 chars; responding True exact=True want=343 got=343
+[dbbig] split S2-D1 20260801 Contra: 374.2 ms, blocked 250 ms, 3879152 chars; responding True exact=True want=77 got=77
+[dbbig] split S2-D1 20260801 Contra: 346 ms, blocked 0 ms, 3879152 chars; responding True exact=True want=77 got=77
+[dbbig] split S2-D1 20260801 Journal: 930.5 ms, blocked 618 ms, 11021800 chars; responding True exact=True want=194 got=194
+[dbbig] split S2-D1 20260801 Journal: 940.7 ms, blocked 605 ms, 11021800 chars; responding True exact=True want=194 got=194
+[dbbig] split S2-D1 20260801 Payment: 1138 ms, blocked 958 ms, 13262800 chars; responding True exact=True want=260 got=260
+[dbbig] split S2-D1 20260801 Payment: 1155.5 ms, blocked 953 ms, 13262800 chars; responding True exact=True want=260 got=260
+[dbbig] split S2-D1 20260801 Purchase: 2724.8 ms OVERRUN, blocked 2394 ms, 29845338 chars; responding True exact=True want=503 got=503
+[dbbig] split S2-D1 20260801 Purchase: 2735.4 ms OVERRUN, blocked 2377 ms, 29845338 chars; responding True exact=True want=503 got=503
+[dbbig] split S2-D1 20260801 Receipt: 1526.5 ms, blocked 1322 ms, 17712402 chars; responding True exact=True want=347 got=347
+[dbbig] split S2-D1 20260801 Receipt: 1537.6 ms, blocked 1320 ms, 17712402 chars; responding True exact=True want=347 got=347
+[dbbig] split S2-D1 20260801 Sales: 4499.4 ms OVERRUN, blocked 4151 ms, 49809488 chars; responding True exact=True want=835 got=835
+[dbbig] split S2-D1 20260801 Sales: 4499.7 ms OVERRUN, blocked 4154 ms, 49809488 chars; responding True exact=True want=835 got=835
+[dbbig] split S3-5 20260831 Contra: 123.3 ms, blocked 0 ms, 34347 chars; responding True exact=True want=27 got=27
+[dbbig] split S3-5 20260831 Contra: 117.9 ms, blocked 0 ms, 34347 chars; responding True exact=True want=27 got=27
+[dbbig] split S3-5 20260831 Journal: 115 ms, blocked 0 ms, 81930 chars; responding True exact=True want=66 got=66
+[dbbig] split S3-5 20260831 Journal: 116.1 ms, blocked 0 ms, 81930 chars; responding True exact=True want=66 got=66
+[dbbig] split S3-5 20260831 Payment: 124.6 ms, blocked 0 ms, 117347 chars; responding True exact=True want=95 got=95
+[dbbig] split S3-5 20260831 Payment: 119.5 ms, blocked 0 ms, 117347 chars; responding True exact=True want=95 got=95
+[dbbig] split S3-5 20260831 Purchase: 122.6 ms, blocked 0 ms, 194460 chars; responding True exact=True want=158 got=158
+[dbbig] split S3-5 20260831 Purchase: 123.4 ms, blocked 0 ms, 194460 chars; responding True exact=True want=158 got=158
+[dbbig] split S3-5 20260831 Receipt: 122.8 ms, blocked 0 ms, 136851 chars; responding True exact=True want=111 got=111
+[dbbig] split S3-5 20260831 Receipt: 119.6 ms, blocked 0 ms, 136851 chars; responding True exact=True want=111 got=111
+[dbbig] split S3-5 20260831 Sales: 152.7 ms, blocked 0 ms, 418287 chars; responding True exact=True want=343 got=343
+[dbbig] split S3-5 20260831 Sales: 135.2 ms, blocked 0 ms, 418287 chars; responding True exact=True want=343 got=343
+[dbbig] split S3-5 20260801 Contra: 276.2 ms, blocked 0 ms, 95097 chars; responding True exact=True want=77 got=77
+[dbbig] split S3-5 20260801 Contra: 276.5 ms, blocked 0 ms, 95097 chars; responding True exact=True want=77 got=77
+[dbbig] split S3-5 20260801 Journal: 279.3 ms, blocked 0 ms, 237834 chars; responding True exact=True want=194 got=194
+[dbbig] split S3-5 20260801 Journal: 285.5 ms, blocked 250 ms, 237834 chars; responding True exact=True want=194 got=194
+[dbbig] split S3-5 20260801 Payment: 293.4 ms, blocked 0 ms, 318222 chars; responding True exact=True want=260 got=260
+[dbbig] split S3-5 20260801 Payment: 290.9 ms, blocked 0 ms, 318222 chars; responding True exact=True want=260 got=260
+[dbbig] split S3-5 20260801 Purchase: 313.2 ms, blocked 250 ms, 615705 chars; responding True exact=True want=503 got=503
+[dbbig] split S3-5 20260801 Purchase: 320.7 ms, blocked 0 ms, 615705 chars; responding True exact=True want=503 got=503
+[dbbig] split S3-5 20260801 Receipt: 307.5 ms, blocked 252 ms, 424349 chars; responding True exact=True want=347 got=347
+[dbbig] split S3-5 20260801 Receipt: 304.6 ms, blocked 251 ms, 424349 chars; responding True exact=True want=347 got=347
+[dbbig] split S3-5 20260801 Sales: 342.7 ms, blocked 0 ms, 1016067 chars; responding True exact=True want=835 got=835
+[dbbig] split S3-5 20260801 Sales: 330.5 ms, blocked 0 ms, 1016067 chars; responding True exact=True want=835 got=835
+######## PASS b4 a day split by voucher type on the big company: exact and under 2 s for every type on 31-Aug and the heavy 01-Aug: S3-5
+[04:52:47] ---- dbbig: the voucher count of a period
+[dbbig] vcount V1 month: 4827.2 ms OVERRUN, blocked 4542 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=4433 got=30009
+[dbbig] vcount V1 month: 5027.5 ms OVERRUN, blocked 4869 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=4433 got=30009
+[dbbig] vcount V1 month: 5082.1 ms OVERRUN, blocked 4873 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=4433 got=30009
+[dbbig] vcount V1 chunked month: 8918.4 ms OVERRUN, blocked 7324 ms, 0 chars; responding True requests=16 totalMs=70011 exact=False want=4433 got=30009
+[dbbig] vcount V1 chunked month: 4605.4 ms OVERRUN, blocked 4207 ms, 0 chars; responding True requests=16 totalMs=58663 exact=False want=4433 got=30009
+[dbbig] vcount V2 month: 3675 ms OVERRUN, blocked 3472 ms, 1661 chars; responding True exact=False want=4433 got=30009
+[dbbig] vcount V2 month: 3641.4 ms OVERRUN, blocked 3428 ms, 1661 chars; responding True exact=False want=4433 got=30009
+[dbbig] vcount V2 month: 3647.7 ms OVERRUN, blocked 3454 ms, 1661 chars; responding True exact=False want=4433 got=30009
+[dbbig] vcount V1 quarter: 5149.1 ms OVERRUN, blocked 4995 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=11181 got=30009
+[dbbig] vcount V1 quarter: 5203.1 ms OVERRUN, blocked 5067 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=11181 got=30009
+[dbbig] vcount V1 quarter: 5182.9 ms OVERRUN, blocked 4871 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=11181 got=30009
+[dbbig] vcount V1 chunked quarter: 3698.3 ms OVERRUN, blocked 3483 ms, 0 chars; responding True requests=16 totalMs=58556 exact=False want=11181 got=30009
+[dbbig] vcount V1 chunked quarter: 6361.1 ms OVERRUN, blocked 6230 ms, 0 chars; responding True requests=16 totalMs=60382 exact=False want=11181 got=30009
+[dbbig] vcount V2 quarter: 3601.1 ms OVERRUN, blocked 3460 ms, 1661 chars; responding True exact=False want=11181 got=30009
+[dbbig] vcount V2 quarter: 3579.3 ms OVERRUN, blocked 3501 ms, 1661 chars; responding True exact=False want=11181 got=30009
+[dbbig] vcount V2 quarter: 3586.8 ms OVERRUN, blocked 3489 ms, 1661 chars; responding True exact=False want=11181 got=30009
+[dbbig] vcount V1 half: 5145.2 ms OVERRUN, blocked 5016 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=25577 got=30009
+[dbbig] vcount V1 half: 5106.7 ms OVERRUN, blocked 5001 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=25577 got=30009
+[dbbig] vcount V1 half: 5132.2 ms OVERRUN, blocked 4915 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=False want=25577 got=30009
+[dbbig] vcount V1 chunked half: 3630.6 ms OVERRUN, blocked 3509 ms, 0 chars; responding True requests=16 totalMs=57528 exact=False want=25577 got=30009
+[dbbig] vcount V1 chunked half: 3633.9 ms OVERRUN, blocked 3504 ms, 0 chars; responding True requests=16 totalMs=57563 exact=False want=25577 got=30009
+[dbbig] vcount V2 half: 3624.8 ms OVERRUN, blocked 3497 ms, 1661 chars; responding True exact=False want=25577 got=30009
+[dbbig] vcount V2 half: 3599.1 ms OVERRUN, blocked 3473 ms, 1661 chars; responding True exact=False want=25577 got=30009
+[dbbig] vcount V2 half: 3614.1 ms OVERRUN, blocked 3476 ms, 1661 chars; responding True exact=False want=25577 got=30009
+[dbbig] vcount V1 year: 5164.8 ms OVERRUN, blocked 5007 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=True want=30009 got=30009
+[dbbig] vcount V1 year: 5129.3 ms OVERRUN, blocked 4958 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=True want=30009 got=30009
+[dbbig] vcount V1 year: 5125.8 ms OVERRUN, blocked 4912 ms, 35136026 chars; responding True byType=Contra 901, Journal 2644, Payment 3823, Purchase 6604, Receipt 4450, Sales 11587 exact=True want=30009 got=30009
+[dbbig] vcount V1 chunked year: 3643.3 ms OVERRUN, blocked 3522 ms, 0 chars; responding True requests=16 totalMs=57780 exact=True want=30009 got=30009
+[dbbig] vcount V1 chunked year: 3659 ms OVERRUN, blocked 3519 ms, 0 chars; responding True requests=16 totalMs=57875 exact=True want=30009 got=30009
+[dbbig] vcount V2 year: 3612 ms OVERRUN, blocked 3502 ms, 1661 chars; responding True exact=True want=30009 got=30009
+[dbbig] vcount V2 year: 3616.6 ms OVERRUN, blocked 3501 ms, 1661 chars; responding True exact=True want=30009 got=30009
+[dbbig] vcount V2 year: 3617 ms OVERRUN, blocked 3485 ms, 1661 chars; responding True exact=True want=30009 got=30009
+######## PASS b5 the voucher count of a period (month, quarter, half-year, year): month V1 exact False worst 5082.1 ms, month V1 chunked exact False worst 8918.4 ms, month V2 exact False worst 3675 ms; quarter V1 exact False worst 5203.1 ms, quarter V1 chunked exact False worst 6361.1 ms, quarter V2 exact False worst 3601.1 ms; half V1 exact False worst 5145.2 ms, half V1 chunked exact False worst 3633.9 ms, half V2 exact False worst 3624.8 ms; year V1 exact True worst 5164.8 ms, year V1 chunked exact True worst 3659 ms, year V2 exact True worst 3617 ms
+[05:03:33] ---- dbbig: the ledger count
+[dbbig] ledcount L1 20000: 1590 ms, blocked 1332 ms, 1660 chars; responding True requests=1 totalMs=1590 exact=True want=20000 got=20000
+[dbbig] ledcount L1 20000: 1046.8 ms, blocked 975 ms, 1660 chars; responding True requests=1 totalMs=1047 exact=True want=20000 got=20000
+[dbbig] ledcount L1 20000: 1035.8 ms, blocked 628 ms, 1660 chars; responding True requests=1 totalMs=1036 exact=True want=20000 got=20000
+[dbbig] ledcount L2 20000: 1053.7 ms, blocked 974 ms, 1671 chars; responding True requests=1 totalMs=1054 exact=True want=20000 got=20000
+[dbbig] ledcount L2 20000: 1018.7 ms, blocked 957 ms, 1671 chars; responding True requests=1 totalMs=1019 exact=True want=20000 got=20000
+[dbbig] ledcount L2 20000: 1034.7 ms, blocked 626 ms, 1671 chars; responding True requests=1 totalMs=1035 exact=True want=20000 got=20000
+[dbbig] ledcount L3 20000: 150.2 ms, blocked 0 ms, 2310213 chars; responding True requests=1 totalMs=150 exact=True want=20000 got=20000
+[dbbig] ledcount L3 20000: 149.3 ms, blocked 0 ms, 2310213 chars; responding True requests=1 totalMs=149 exact=True want=20000 got=20000
+[dbbig] ledcount L3 20000: 168.9 ms, blocked 0 ms, 2310213 chars; responding True requests=1 totalMs=169 exact=True want=20000 got=20000
+[dbbig] ledcount L3 chunked 20000: 48.4 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=501 exact=True want=20000 got=20000
+[dbbig] ledcount L3 chunked 20000: 53 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=504 exact=True want=20000 got=20000
+[dbbig] ledcount L3 chunked 20000: 45.6 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=493 exact=True want=20000 got=20000
+[dbbig] ledcount L4 chunked 20000: 68.5 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=713 exact=True want=20000 got=20000
+[dbbig] ledcount L4 chunked 20000: 67.5 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=709 exact=True want=20000 got=20000
+[dbbig] ledcount L4 chunked 20000: 77.7 ms, blocked 0 ms, 0 chars; responding True requests=12 totalMs=720 exact=True want=20000 got=20000
+[dbbig] ledread FinComLedgers 20000: 186.1 ms, blocked 0 ms, 1889487 chars; responding True rows=1788 soFar=1788 want=20000
+[dbbig] ledread FinComLedgers 20000: 170.5 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=3788 want=20000
+[dbbig] ledread FinComLedgers 20000: 171.4 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=5788 want=20000
+[dbbig] ledread FinComLedgers 20000: 180.5 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=7788 want=20000
+[dbbig] ledread FinComLedgers 20000: 182.7 ms, blocked 0 ms, 1967534 chars; responding True rows=2000 soFar=9788 want=20000
+[dbbig] ledread FinComLedgers 20000: 170.7 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=11788 want=20000
+[dbbig] ledread FinComLedgers 20000: 176.4 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=13788 want=20000
+[dbbig] ledread FinComLedgers 20000: 184.5 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=15788 want=20000
+[dbbig] ledread FinComLedgers 20000: 177.9 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=17788 want=20000
+[dbbig] ledread FinComLedgers 20000: 167.1 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=19788 want=20000
+[dbbig] ledread FinComLedgers 20000: 46.9 ms, blocked 0 ms, 210348 chars; responding True rows=212 soFar=20000 want=20000
+[dbbig] ledread FinComLedgers 20000: 29.1 ms, blocked 0 ms, 1526 chars; responding True rows=0 soFar=20000 want=20000
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 10062.9 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 10200.3 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 10369.6 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 10643.5 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 10731.3 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 11000.3 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 11214.6 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 11393.4 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 11474.2 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12324.7 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 11952.5 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12288.2 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12241.9 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12449.4 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12874.1 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 12833 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13003.1 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13265 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13422.4 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13530.6 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13751.3 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 13836.2 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 14053.9 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 14212.4 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 14482.8 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 14543.1 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 14952 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 16564.9 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 16526.7 ms
+[db] filler ledgers to 50000: created 1000, altered 0, errors 0, 15392.1 ms
+[dbbig] ledcount L1 50000: 3276.8 ms OVERRUN, blocked 3104 ms, 1660 chars; responding True requests=1 totalMs=3277 exact=True want=50000 got=50000
+[dbbig] ledcount L1 50000: 2611.1 ms OVERRUN, blocked 2410 ms, 1660 chars; responding True requests=1 totalMs=2611 exact=True want=50000 got=50000
+[dbbig] ledcount L1 50000: 2583.8 ms OVERRUN, blocked 2396 ms, 1660 chars; responding True requests=1 totalMs=2584 exact=True want=50000 got=50000
+[dbbig] ledcount L2 50000: 2553.2 ms OVERRUN, blocked 2403 ms, 1671 chars; responding True requests=1 totalMs=2553 exact=True want=50000 got=50000
+[dbbig] ledcount L2 50000: 2544.9 ms OVERRUN, blocked 2374 ms, 1671 chars; responding True requests=1 totalMs=2545 exact=True want=50000 got=50000
+[dbbig] ledcount L2 50000: 2597.5 ms OVERRUN, blocked 2397 ms, 1671 chars; responding True requests=1 totalMs=2598 exact=True want=50000 got=50000
+[dbbig] ledcount L3 50000: 368.8 ms, blocked 253 ms, 5790213 chars; responding True requests=1 totalMs=369 exact=True want=50000 got=50000
+[dbbig] ledcount L3 50000: 371.8 ms, blocked 253 ms, 5790213 chars; responding True requests=1 totalMs=372 exact=True want=50000 got=50000
+[dbbig] ledcount L3 50000: 369.9 ms, blocked 251 ms, 5790213 chars; responding True requests=1 totalMs=370 exact=True want=50000 got=50000
+[dbbig] ledcount L3 chunked 50000: 90.5 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2237 exact=True want=50000 got=50000
+[dbbig] ledcount L3 chunked 50000: 92.1 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2249 exact=True want=50000 got=50000
+[dbbig] ledcount L3 chunked 50000: 95.1 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2257 exact=True want=50000 got=50000
+[dbbig] ledcount L4 chunked 50000: 116.9 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2808 exact=True want=50000 got=50000
+[dbbig] ledcount L4 chunked 50000: 112.8 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2790 exact=True want=50000 got=50000
+[dbbig] ledcount L4 chunked 50000: 123.3 ms, blocked 0 ms, 0 chars; responding True requests=27 totalMs=2798 exact=True want=50000 got=50000
+[dbbig] ledread FinComLedgers 50000: 219.2 ms, blocked 0 ms, 1889487 chars; responding True rows=1788 soFar=1788 want=50000
+[dbbig] ledread FinComLedgers 50000: 208.8 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=3788 want=50000
+[dbbig] ledread FinComLedgers 50000: 222.4 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=5788 want=50000
+[dbbig] ledread FinComLedgers 50000: 209.5 ms, blocked 0 ms, 1967528 chars; responding True rows=2000 soFar=7788 want=50000
+[dbbig] ledread FinComLedgers 50000: 217.6 ms, blocked 0 ms, 1967534 chars; responding True rows=2000 soFar=9788 want=50000
+[dbbig] ledread FinComLedgers 50000: 214.8 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=11788 want=50000
+[dbbig] ledread FinComLedgers 50000: 206.6 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=13788 want=50000
+[dbbig] ledread FinComLedgers 50000: 202.6 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=15788 want=50000
+[dbbig] ledread FinComLedgers 50000: 214.3 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=17788 want=50000
+[dbbig] ledread FinComLedgers 50000: 212.4 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=19788 want=50000
+[dbbig] ledread FinComLedgers 50000: 209.1 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=21788 want=50000
+[dbbig] ledread FinComLedgers 50000: 212.9 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=23788 want=50000
+[dbbig] ledread FinComLedgers 50000: 208.8 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=25788 want=50000
+[dbbig] ledread FinComLedgers 50000: 229.3 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=27788 want=50000
+[dbbig] ledread FinComLedgers 50000: 208.9 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=29788 want=50000
+[dbbig] ledread FinComLedgers 50000: 206.7 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=31788 want=50000
+[dbbig] ledread FinComLedgers 50000: 209.3 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=33788 want=50000
+[dbbig] ledread FinComLedgers 50000: 204.8 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=35788 want=50000
+[dbbig] ledread FinComLedgers 50000: 204.4 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=37788 want=50000
+[dbbig] ledread FinComLedgers 50000: 207.2 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=39788 want=50000
+[dbbig] ledread FinComLedgers 50000: 206.4 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=41788 want=50000
+[dbbig] ledread FinComLedgers 50000: 203.3 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=43788 want=50000
+[dbbig] ledread FinComLedgers 50000: 203.4 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=45788 want=50000
+[dbbig] ledread FinComLedgers 50000: 212.3 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=47788 want=50000
+[dbbig] ledread FinComLedgers 50000: 201 ms, blocked 0 ms, 1971528 chars; responding True rows=2000 soFar=49788 want=50000
+[dbbig] ledread FinComLedgers 50000: 78.7 ms, blocked 0 ms, 210348 chars; responding True rows=212 soFar=50000 want=50000
+[dbbig] ledread FinComLedgers 50000: 63.9 ms, blocked 0 ms, 1526 chars; responding True rows=0 soFar=50000 want=50000
+######## PASS b6 the ledger count at 20,000 and 50,000 ledgers: exact and under 2 s: L1@20000, L2@20000, L3@20000, L3 chunked@20000, L4 chunked@20000, L3@50000, L3 chunked@50000, L4 chunked@50000
+######## PASS b7 one request at a time, 2 s stop, Tally's window blocked time kept: 1041 requests, at most 1 at Tally; 67 overran 2 s; 0 hung; window blocked 2 s or more during 67 (collection C7 x15, daybook D1 x3, daybook D5 x6, ledcount L1 x3, ledcount L2 x3, split S2-D1 x4, sticky D1-after-D5 x1, vcount V1 x12, vcount V1 chunked x8, vcount V2 x12); Tally not responding after 0

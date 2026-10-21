@@ -1,0 +1,331 @@
+"what","form","day","ms","inTime","overrun","hung","ok","err","chars","blockedMs","lightMs","lightOk","responding","applied","dates","want","onDay","got"
+"daybook","D1","20260601","35417.9","False","True","False","True","","125341532","35176","3.5","True","True","False","20260401","100","0","2217"
+"daybook","D5","20260601","475.4","True","False","False","True","","5640689","250","2.1","True","True","True","20260601","100","100","100"
+"daybook","D5","20260601","442.8","True","False","False","True","","5640689","259","2.2","True","True","True","20260601","100","100","100"
+"daybook","D5","20260601","452","True","False","False","True","","5640689","252","1.7","True","True","True","20260601","100","100","100"
+"daybook","D1","20260702","453.8","True","False","False","True","","5640689","252","1.8","True","True","False","20260601","300","0","100"
+"daybook","D5","20260702","1344.2","True","False","False","True","","17067334","977","2.7","True","True","True","20260702","300","300","300"
+"daybook","D5","20260702","1346.4","True","False","False","True","","17067334","961","1.7","True","True","True","20260702","300","300","300"
+"daybook","D5","20260702","1370.1","True","False","False","True","","17067334","1309","1.8","True","True","True","20260702","300","300","300"
+"daybook","D1","20260831","1383.6","True","False","False","True","","17067334","1317","2.1","True","True","False","20260702","800","0","300"
+"daybook","D5","20260831","3540.1","False","True","False","True","","45345415","3101","2","True","True","True","20260831","800","800","800"
+"daybook","D5","20260831","3553.5","False","True","False","True","","45345415","3121","1.8","True","True","True","20260831","800","800","800"
+"daybook","D5","20260831","3560.9","False","True","False","True","","45345415","3453","1.7","True","True","True","20260831","800","800","800"
+"daybook","D1","20260801","3533.7","False","True","False","True","","45345415","3125","1.8","True","True","False","20260831","2216","0","800"
+"daybook","D5","20260801","10166","False","True","False","True","","125529150","9912","2.2","True","True","True","20260801","2216","2216","2216"
+"daybook","D5","20260801","10006.7","False","True","False","True","","125529150","9732","1.6","True","True","True","20260801","2216","2216","2216"
+"daybook","D5","20260801","9871.4","False","True","False","True","","125529150","9642","1.7","True","True","True","20260801","2216","2216","2216"
+"daybook","D1","20260531","10020.2","False","True","False","True","","125529150","9769","2.3","True","True","False","20260801","0","0","2216"
+"daybook","D5","20260531","13.4","True","False","False","True","","364","0","2.3","True","True","True","","0","0","0"
+"daybook","D5","20260531","6.9","True","False","False","True","","364","0","1.6","True","True","True","","0","0","0"
+"daybook","D5","20260531","7","True","False","False","True","","364","0","1.7","True","True","True","","0","0","0"
+"sticky","D1-after-D5","20260601","3555.7","False","True","False","True","","45345415","3456","1.7","True","True",,"20260831",,,"800"
+"collection","C3","20260601","39.7","True","False","False","True","","123051","0","1.7","True","True","True",,"100","100","100"
+"collection","C3","20260601","40","True","False","False","True","","123051","0","1.7","True","True","True",,"100","100","100"
+"collection","C3","20260601","38.3","True","False","False","True","","123051","0","1.7","True","True","True",,"100","100","100"
+"collection","C3","20260702","71.8","True","False","False","True","","366786","0","1.6","True","True","True",,"300","300","300"
+"collection","C3","20260702","69.9","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C3","20260702","70.6","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C3","20260831","150.7","True","False","False","True","","975512","0","1.8","True","True","True",,"800","800","800"
+"collection","C3","20260831","151.2","True","False","False","True","","975512","0","1.6","True","True","True",,"800","800","800"
+"collection","C3","20260831","150.7","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C3","20260801","376.1","True","False","False","True","","2699564","252","1.7","True","True","True",,"2216","2216","2216"
+"collection","C3","20260801","366.3","True","False","False","True","","2699564","251","1.7","True","True","True",,"2216","2216","2216"
+"collection","C3","20260801","367.2","True","False","False","True","","2699564","253","2.3","True","True","True",,"2216","2216","2216"
+"collection","C3","20260531","2.8","True","False","False","True","","1540","0","1.6","True","True","True",,"0","0","0"
+"collection","C3","20260531","1.7","True","False","False","True","","1540","0","1.6","True","True","True",,"0","0","0"
+"collection","C3","20260531","1.9","True","False","False","True","","1540","0","1.7","True","True","True",,"0","0","0"
+"collection","C4","20260601","38.2","True","False","False","True","","123051","0","1.6","True","True","True",,"100","100","100"
+"collection","C4","20260601","37.2","True","False","False","True","","123051","0","1.6","True","True","True",,"100","100","100"
+"collection","C4","20260601","36.9","True","False","False","True","","123051","0","1.6","True","True","True",,"100","100","100"
+"collection","C4","20260702","67.5","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C4","20260702","68.3","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C4","20260702","69.8","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C4","20260831","141.5","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C4","20260831","142.6","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C4","20260831","145.5","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C4","20260801","371.8","True","False","False","True","","2699564","250","1.8","True","True","True",,"2216","2216","2216"
+"collection","C4","20260801","372.6","True","False","False","True","","2699564","253","1.7","True","True","True",,"2216","2216","2216"
+"collection","C4","20260801","374.2","True","False","False","True","","2699564","252","1.7","True","True","True",,"2216","2216","2216"
+"collection","C4","20260531","2","True","False","False","True","","1540","0","1.6","True","True","True",,"0","0","0"
+"collection","C4","20260531","1.8","True","False","False","True","","1540","0","1.6","True","True","True",,"0","0","0"
+"collection","C4","20260531","1.8","True","False","False","True","","1540","0","1.7","True","True","True",,"0","0","0"
+"collection","C5","20260601","40.1","True","False","False","True","","123051","0","1.7","True","True","True",,"100","100","100"
+"collection","C5","20260601","40.7","True","False","False","True","","123051","0","1.7","True","True","True",,"100","100","100"
+"collection","C5","20260601","40.6","True","False","False","True","","123051","0","1.5","True","True","True",,"100","100","100"
+"collection","C5","20260702","72.2","True","False","False","True","","366786","0","1.8","True","True","True",,"300","300","300"
+"collection","C5","20260702","72.8","True","False","False","True","","366786","0","1.7","True","True","True",,"300","300","300"
+"collection","C5","20260702","73.4","True","False","False","True","","366786","0","1.6","True","True","True",,"300","300","300"
+"collection","C5","20260831","157.3","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C5","20260831","156.7","True","False","False","True","","975512","0","1.7","True","True","True",,"800","800","800"
+"collection","C5","20260831","156.8","True","False","False","True","","975512","0","1.6","True","True","True",,"800","800","800"
+"collection","C5","20260801","378.7","True","False","False","True","","2699564","254","1.8","True","True","True",,"2216","2216","2216"
+"collection","C5","20260801","378.8","True","False","False","True","","2699564","263","1.7","True","True","True",,"2216","2216","2216"
+"collection","C5","20260801","383.1","True","False","False","True","","2699564","255","1.7","True","True","True",,"2216","2216","2216"
+"collection","C5","20260531","2.5","True","False","False","True","","1540","0","1.7","True","True","True",,"0","0","0"
+"collection","C5","20260531","1.8","True","False","False","True","","1540","0","1.8","True","True","True",,"0","0","0"
+"collection","C5","20260531","1.8","True","False","False","True","","1540","0","1.6","True","True","True",,"0","0","0"
+"collection","C7","20260601","2795.5","False","True","False","True","","123051","2412","1.7","True","True","True",,"100","100","100"
+"collection","C7","20260601","2981.8","False","True","False","True","","123051","2732","2.4","True","True","True",,"100","100","100"
+"collection","C7","20260601","2937.2","False","True","False","True","","123051","2747","2.2","True","True","True",,"100","100","100"
+"collection","C7","20260702","3029.4","False","True","False","True","","366786","2731","1.7","True","True","True",,"300","300","300"
+"collection","C7","20260702","3132.4","False","True","False","True","","366786","3088","1.8","True","True","True",,"300","300","300"
+"collection","C7","20260702","3084.9","False","True","False","True","","366786","2784","1.8","True","True","True",,"300","300","300"
+"collection","C7","20260831","3092.5","False","True","False","True","","975512","2740","1.8","True","True","True",,"800","800","800"
+"collection","C7","20260831","3124.7","False","True","False","True","","975512","3093","1.6","True","True","True",,"800","800","800"
+"collection","C7","20260831","3375.9","False","True","False","True","","975512","3073","1.7","True","True","True",,"800","800","800"
+"collection","C7","20260801","3400.9","False","True","False","True","","2699564","3101","1.8","True","True","True",,"2216","2216","2216"
+"collection","C7","20260801","3241.6","False","True","False","True","","2699564","3108","1.7","True","True","True",,"2216","2216","2216"
+"collection","C7","20260801","3253.9","False","True","False","True","","2699564","3084","1.8","True","True","True",,"2216","2216","2216"
+"collection","C7","20260531","3156.8","False","True","False","True","","1540","3075","2.2","True","True","True",,"0","0","0"
+"collection","C7","20260531","3214","False","True","False","True","","1540","3093","1.6","True","True","True",,"0","0","0"
+"collection","C7","20260531","3239.9","False","True","False","True","","1540","3076","1.6","True","True","True",,"0","0","0"
+"split","S2-D1","20260831 Contra","143.2","True","False","False","True","","1360464","0","1.8","True","True",,,"27",,"27"
+"split","S2-D1","20260831 Contra","136.2","True","False","False","True","","1360464","0","2.5","True","True",,,"27",,"27"
+"split","S2-D1","20260831 Journal","339.4","True","False","False","True","","3749885","250","1.8","True","True",,,"66",,"66"
+"split","S2-D1","20260831 Journal","345.3","True","False","False","True","","3749885","251","1.9","True","True",,,"66",,"66"
+"split","S2-D1","20260831 Payment","422.2","True","False","False","True","","4846237","251","1.9","True","True",,,"95",,"95"
+"split","S2-D1","20260831 Payment","425.5","True","False","False","True","","4846237","252","1.8","True","True",,,"95",,"95"
+"split","S2-D1","20260831 Purchase","867.5","True","False","False","True","","9366497","605","1.8","True","True",,,"158",,"158"
+"split","S2-D1","20260831 Purchase","867.5","True","False","False","True","","9366497","616","1.8","True","True",,,"158",,"158"
+"split","S2-D1","20260831 Receipt","501.5","True","False","False","True","","5666343","255","1.7","True","True",,,"111",,"111"
+"split","S2-D1","20260831 Receipt","522.6","True","False","False","True","","5666343","251","1.7","True","True",,,"111",,"111"
+"split","S2-D1","20260831 Sales","1880.7","True","False","False","True","","20357819","1675","1.7","True","True",,,"343",,"343"
+"split","S2-D1","20260831 Sales","1867","True","False","False","True","","20357819","1658","1.8","True","True",,,"343",,"343"
+"split","S2-D1","20260801 Contra","374.2","True","False","False","True","","3879152","250","1.8","True","True",,,"77",,"77"
+"split","S2-D1","20260801 Contra","346","True","False","False","True","","3879152","0","1.8","True","True",,,"77",,"77"
+"split","S2-D1","20260801 Journal","930.5","True","False","False","True","","11021800","618","4.2","True","True",,,"194",,"194"
+"split","S2-D1","20260801 Journal","940.7","True","False","False","True","","11021800","605","1.7","True","True",,,"194",,"194"
+"split","S2-D1","20260801 Payment","1138","True","False","False","True","","13262800","958","1.8","True","True",,,"260",,"260"
+"split","S2-D1","20260801 Payment","1155.5","True","False","False","True","","13262800","953","1.9","True","True",,,"260",,"260"
+"split","S2-D1","20260801 Purchase","2724.8","False","True","False","True","","29845338","2394","1.9","True","True",,,"503",,"503"
+"split","S2-D1","20260801 Purchase","2735.4","False","True","False","True","","29845338","2377","1.8","True","True",,,"503",,"503"
+"split","S2-D1","20260801 Receipt","1526.5","True","False","False","True","","17712402","1322","2.1","True","True",,,"347",,"347"
+"split","S2-D1","20260801 Receipt","1537.6","True","False","False","True","","17712402","1320","1.8","True","True",,,"347",,"347"
+"split","S2-D1","20260801 Sales","4499.4","False","True","False","True","","49809488","4151","1.8","True","True",,,"835",,"835"
+"split","S2-D1","20260801 Sales","4499.7","False","True","False","True","","49809488","4154","1.9","True","True",,,"835",,"835"
+"split","S3-5","20260831 Contra","123.3","True","False","False","True","","34347","0","1.6","True","True",,,"27",,"27"
+"split","S3-5","20260831 Contra","117.9","True","False","False","True","","34347","0","1.7","True","True",,,"27",,"27"
+"split","S3-5","20260831 Journal","115","True","False","False","True","","81930","0","1.7","True","True",,,"66",,"66"
+"split","S3-5","20260831 Journal","116.1","True","False","False","True","","81930","0","1.8","True","True",,,"66",,"66"
+"split","S3-5","20260831 Payment","124.6","True","False","False","True","","117347","0","1.7","True","True",,,"95",,"95"
+"split","S3-5","20260831 Payment","119.5","True","False","False","True","","117347","0","1.8","True","True",,,"95",,"95"
+"split","S3-5","20260831 Purchase","122.6","True","False","False","True","","194460","0","1.8","True","True",,,"158",,"158"
+"split","S3-5","20260831 Purchase","123.4","True","False","False","True","","194460","0","1.7","True","True",,,"158",,"158"
+"split","S3-5","20260831 Receipt","122.8","True","False","False","True","","136851","0","1.7","True","True",,,"111",,"111"
+"split","S3-5","20260831 Receipt","119.6","True","False","False","True","","136851","0","1.6","True","True",,,"111",,"111"
+"split","S3-5","20260831 Sales","152.7","True","False","False","True","","418287","0","1.7","True","True",,,"343",,"343"
+"split","S3-5","20260831 Sales","135.2","True","False","False","True","","418287","0","1.6","True","True",,,"343",,"343"
+"split","S3-5","20260801 Contra","276.2","True","False","False","True","","95097","0","1.6","True","True",,,"77",,"77"
+"split","S3-5","20260801 Contra","276.5","True","False","False","True","","95097","0","1.6","True","True",,,"77",,"77"
+"split","S3-5","20260801 Journal","279.3","True","False","False","True","","237834","0","1.7","True","True",,,"194",,"194"
+"split","S3-5","20260801 Journal","285.5","True","False","False","True","","237834","250","1.7","True","True",,,"194",,"194"
+"split","S3-5","20260801 Payment","293.4","True","False","False","True","","318222","0","1.7","True","True",,,"260",,"260"
+"split","S3-5","20260801 Payment","290.9","True","False","False","True","","318222","0","1.8","True","True",,,"260",,"260"
+"split","S3-5","20260801 Purchase","313.2","True","False","False","True","","615705","250","1.7","True","True",,,"503",,"503"
+"split","S3-5","20260801 Purchase","320.7","True","False","False","True","","615705","0","1.7","True","True",,,"503",,"503"
+"split","S3-5","20260801 Receipt","307.5","True","False","False","True","","424349","252","1.8","True","True",,,"347",,"347"
+"split","S3-5","20260801 Receipt","304.6","True","False","False","True","","424349","251","1.7","True","True",,,"347",,"347"
+"split","S3-5","20260801 Sales","342.7","True","False","False","True","","1016067","0","1.8","True","True",,,"835",,"835"
+"split","S3-5","20260801 Sales","330.5","True","False","False","True","","1016067","0","1.7","True","True",,,"835",,"835"
+"object","FinComVoucherObject","20260831","10.8","True","False","False","True","","67484","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.7","True","False","False","True","","68685","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.3","True","False","False","True","","59575","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68749","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68707","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.6","True","False","False","True","","68729","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.9","True","False","False","True","","60507","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.3","True","False","False","True","","68735","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.1","True","False","False","True","","80875","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.4","True","False","False","True","","68742","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.3","True","False","False","True","","68698","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.2","True","False","False","True","","60548","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.1","True","False","False","True","","68746","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.8","True","False","False","True","","68743","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.6","True","False","False","True","","67462","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","80933","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.8","True","False","False","True","","60542","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.9","True","False","False","True","","60542","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","11.8","True","False","False","True","","67486","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.3","True","False","False","True","","68743","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68748","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68746","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.7","True","False","False","True","","68691","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68750","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.6","True","False","False","True","","60513","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68744","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.4","True","False","False","True","","68689","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.9","True","False","False","True","","80871","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.4","True","False","False","True","","68722","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","11.2","True","False","False","True","","60510","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68736","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.4","True","False","False","True","","68741","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","11.6","True","False","False","True","","60504","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","68728","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.7","True","False","False","True","","68745","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.4","True","False","False","True","","59575","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.6","True","False","False","True","","80917","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.8","True","False","False","True","","68734","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68701","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68709","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.7","True","False","False","True","","80910","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.4","True","False","False","True","","68740","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.4","True","False","False","True","","68744","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68749","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.8","True","False","False","True","","60504","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.8","True","False","False","True","","60543","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9","True","False","False","True","","68745","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68740","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","14.3","True","False","False","True","","80862","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68713","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.3","True","False","False","True","","80917","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.7","True","False","False","True","","68758","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","68739","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.6","True","False","False","True","","68701","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68738","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.3","True","False","False","True","","59575","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.6","True","False","False","True","","60525","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.4","True","False","False","True","","68701","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.8","True","False","False","True","","68703","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.4","True","False","False","True","","80868","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.8","True","False","False","True","","59575","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.3","True","False","False","True","","60509","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9","True","False","False","True","","68724","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.9","True","False","False","True","","60536","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.8","True","False","False","True","","60543","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9","True","False","False","True","","68743","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.3","True","False","False","True","","67464","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68713","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.4","True","False","False","True","","80914","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.7","True","False","False","True","","60542","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","80863","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68752","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.4","True","False","False","True","","80885","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68692","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.8","True","False","False","True","","67489","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.3","True","False","False","True","","68751","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","68737","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.3","True","False","False","True","","59575","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9","True","False","False","True","","68739","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68698","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.5","True","False","False","True","","68729","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9","True","False","False","True","","68692","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","67487","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.9","True","False","False","True","","60503","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68704","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.3","True","False","False","True","","68740","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.3","True","False","False","True","","60546","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.1","True","False","False","True","","68741","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.2","True","False","False","True","","60522","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.7","True","False","False","True","","68679","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.1","True","False","False","True","","67492","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.2","True","False","False","True","","80866","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.9","True","False","False","True","","68741","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","7.7","True","False","False","True","","60494","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.6","True","False","False","True","","68757","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","9.7","True","False","False","True","","68730","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","10.2","True","False","False","True","","68735","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","67500","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","8.5","True","False","False","True","","68710","0","0","True","True",,,,,
+"object","FinComVoucherObject","20260831","20","True","False","False","True","","60492","0","0","True","True",,,,,
+"vcount","V1","month","4827.2","False","True","False","True","","35136026","4542","3","True","True",,,"4433",,"30009"
+"vcount","V1","month","5027.5","False","True","False","True","","35136026","4869","2.2","True","True",,,"4433",,"30009"
+"vcount","V1","month","5082.1","False","True","False","True","","35136026","4873","1.8","True","True",,,"4433",,"30009"
+"vcount","V1 chunked","month","8918.4","False","True","False","True","","0","7324","3","True","True",,,"4433",,"30009"
+"vcount","V1 chunked","month","4605.4","False","True","False","True","","0","4207","1.9","True","True",,,"4433",,"30009"
+"vcount","V2","month","3675","False","True","False","True","","1661","3472","1.6","True","True",,,"4433",,"30009"
+"vcount","V2","month","3641.4","False","True","False","True","","1661","3428","1.7","True","True",,,"4433",,"30009"
+"vcount","V2","month","3647.7","False","True","False","True","","1661","3454","1.9","True","True",,,"4433",,"30009"
+"vcount","V1","quarter","5149.1","False","True","False","True","","35136026","4995","2.3","True","True",,,"11181",,"30009"
+"vcount","V1","quarter","5203.1","False","True","False","True","","35136026","5067","1.9","True","True",,,"11181",,"30009"
+"vcount","V1","quarter","5182.9","False","True","False","True","","35136026","4871","2.7","True","True",,,"11181",,"30009"
+"vcount","V1 chunked","quarter","3698.3","False","True","False","True","","0","3483","1.7","True","True",,,"11181",,"30009"
+"vcount","V1 chunked","quarter","6361.1","False","True","False","True","","0","6230","1.7","True","True",,,"11181",,"30009"
+"vcount","V2","quarter","3601.1","False","True","False","True","","1661","3460","1.8","True","True",,,"11181",,"30009"
+"vcount","V2","quarter","3579.3","False","True","False","True","","1661","3501","1.7","True","True",,,"11181",,"30009"
+"vcount","V2","quarter","3586.8","False","True","False","True","","1661","3489","1.6","True","True",,,"11181",,"30009"
+"vcount","V1","half","5145.2","False","True","False","True","","35136026","5016","1.7","True","True",,,"25577",,"30009"
+"vcount","V1","half","5106.7","False","True","False","True","","35136026","5001","1.9","True","True",,,"25577",,"30009"
+"vcount","V1","half","5132.2","False","True","False","True","","35136026","4915","1.8","True","True",,,"25577",,"30009"
+"vcount","V1 chunked","half","3630.6","False","True","False","True","","0","3509","1.8","True","True",,,"25577",,"30009"
+"vcount","V1 chunked","half","3633.9","False","True","False","True","","0","3504","1.8","True","True",,,"25577",,"30009"
+"vcount","V2","half","3624.8","False","True","False","True","","1661","3497","1.9","True","True",,,"25577",,"30009"
+"vcount","V2","half","3599.1","False","True","False","True","","1661","3473","1.7","True","True",,,"25577",,"30009"
+"vcount","V2","half","3614.1","False","True","False","True","","1661","3476","1.8","True","True",,,"25577",,"30009"
+"vcount","V1","year","5164.8","False","True","False","True","","35136026","5007","2.3","True","True",,,"30009",,"30009"
+"vcount","V1","year","5129.3","False","True","False","True","","35136026","4958","1.8","True","True",,,"30009",,"30009"
+"vcount","V1","year","5125.8","False","True","False","True","","35136026","4912","1.7","True","True",,,"30009",,"30009"
+"vcount","V1 chunked","year","3643.3","False","True","False","True","","0","3522","1.7","True","True",,,"30009",,"30009"
+"vcount","V1 chunked","year","3659","False","True","False","True","","0","3519","1.7","True","True",,,"30009",,"30009"
+"vcount","V2","year","3612","False","True","False","True","","1661","3502","1.5","True","True",,,"30009",,"30009"
+"vcount","V2","year","3616.6","False","True","False","True","","1661","3501","1.6","True","True",,,"30009",,"30009"
+"vcount","V2","year","3617","False","True","False","True","","1661","3485","1.8","True","True",,,"30009",,"30009"
+"ledcount","L1","20000","1590","True","False","False","True","","1660","1332","1.7","True","True",,,"20000",,"20000"
+"ledcount","L1","20000","1046.8","True","False","False","True","","1660","975","1.7","True","True",,,"20000",,"20000"
+"ledcount","L1","20000","1035.8","True","False","False","True","","1660","628","1.6","True","True",,,"20000",,"20000"
+"ledcount","L2","20000","1053.7","True","False","False","True","","1671","974","1.6","True","True",,,"20000",,"20000"
+"ledcount","L2","20000","1018.7","True","False","False","True","","1671","957","1.7","True","True",,,"20000",,"20000"
+"ledcount","L2","20000","1034.7","True","False","False","True","","1671","626","1.5","True","True",,,"20000",,"20000"
+"ledcount","L3","20000","150.2","True","False","False","True","","2310213","0","2","True","True",,,"20000",,"20000"
+"ledcount","L3","20000","149.3","True","False","False","True","","2310213","0","1.7","True","True",,,"20000",,"20000"
+"ledcount","L3","20000","168.9","True","False","False","True","","2310213","0","9.9","True","True",,,"20000",,"20000"
+"ledcount","L3 chunked","20000","48.4","True","False","False","True","","0","0","1.7","True","True",,,"20000",,"20000"
+"ledcount","L3 chunked","20000","53","True","False","False","True","","0","0","1.6","True","True",,,"20000",,"20000"
+"ledcount","L3 chunked","20000","45.6","True","False","False","True","","0","0","1.5","True","True",,,"20000",,"20000"
+"ledcount","L4 chunked","20000","68.5","True","False","False","True","","0","0","1.5","True","True",,,"20000",,"20000"
+"ledcount","L4 chunked","20000","67.5","True","False","False","True","","0","0","1.6","True","True",,,"20000",,"20000"
+"ledcount","L4 chunked","20000","77.7","True","False","False","True","","0","0","1.5","True","True",,,"20000",,"20000"
+"ledread","FinComLedgers","20000","186.1","True","False","False","True","","1889487","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","170.5","True","False","False","True","","1967528","0","1.6","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","171.4","True","False","False","True","","1967528","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","180.5","True","False","False","True","","1967528","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","182.7","True","False","False","True","","1967534","0","1.8","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","170.7","True","False","False","True","","1971528","0","1.6","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","176.4","True","False","False","True","","1971528","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","184.5","True","False","False","True","","1971528","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","177.9","True","False","False","True","","1971528","0","1.8","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","167.1","True","False","False","True","","1971528","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","46.9","True","False","False","True","","210348","0","1.7","True","True",,,"20000",,
+"ledread","FinComLedgers","20000","29.1","True","False","False","True","","1526","0","1.5","True","True",,,"20000",,
+"ledcount","L1","50000","3276.8","False","True","False","True","","1660","3104","1.7","True","True",,,"50000",,"50000"
+"ledcount","L1","50000","2611.1","False","True","False","True","","1660","2410","1.7","True","True",,,"50000",,"50000"
+"ledcount","L1","50000","2583.8","False","True","False","True","","1660","2396","1.7","True","True",,,"50000",,"50000"
+"ledcount","L2","50000","2553.2","False","True","False","True","","1671","2403","1.8","True","True",,,"50000",,"50000"
+"ledcount","L2","50000","2544.9","False","True","False","True","","1671","2374","1.7","True","True",,,"50000",,"50000"
+"ledcount","L2","50000","2597.5","False","True","False","True","","1671","2397","1.9","True","True",,,"50000",,"50000"
+"ledcount","L3","50000","368.8","True","False","False","True","","5790213","253","2.3","True","True",,,"50000",,"50000"
+"ledcount","L3","50000","371.8","True","False","False","True","","5790213","253","1.8","True","True",,,"50000",,"50000"
+"ledcount","L3","50000","369.9","True","False","False","True","","5790213","251","1.8","True","True",,,"50000",,"50000"
+"ledcount","L3 chunked","50000","90.5","True","False","False","True","","0","0","1.5","True","True",,,"50000",,"50000"
+"ledcount","L3 chunked","50000","92.1","True","False","False","True","","0","0","1.6","True","True",,,"50000",,"50000"
+"ledcount","L3 chunked","50000","95.1","True","False","False","True","","0","0","1.6","True","True",,,"50000",,"50000"
+"ledcount","L4 chunked","50000","116.9","True","False","False","True","","0","0","1.5","True","True",,,"50000",,"50000"
+"ledcount","L4 chunked","50000","112.8","True","False","False","True","","0","0","1.6","True","True",,,"50000",,"50000"
+"ledcount","L4 chunked","50000","123.3","True","False","False","True","","0","0","1.7","True","True",,,"50000",,"50000"
+"ledread","FinComLedgers","50000","219.2","True","False","False","True","","1889487","0","1.8","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","208.8","True","False","False","True","","1967528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","222.4","True","False","False","True","","1967528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","209.5","True","False","False","True","","1967528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","217.6","True","False","False","True","","1967534","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","214.8","True","False","False","True","","1971528","0","2","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","206.6","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","202.6","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","214.3","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","212.4","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","209.1","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","212.9","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","208.8","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","229.3","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","208.9","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","206.7","True","False","False","True","","1971528","0","1.8","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","209.3","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","204.8","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","204.4","True","False","False","True","","1971528","0","1.9","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","207.2","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","206.4","True","False","False","True","","1971528","0","1.8","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","203.3","True","False","False","True","","1971528","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","203.4","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","212.3","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","201","True","False","False","True","","1971528","0","1.7","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","78.7","True","False","False","True","","210348","0","1.6","True","True",,,"50000",,
+"ledread","FinComLedgers","50000","63.9","True","False","False","True","","1526","0","1.5","True","True",,,"50000",,
