@@ -48,7 +48,7 @@ published reports pack, the two-step QR fix and the FSX guards, out of scope her
 | 8 | 612c345be..c6237e388 | 2 Medium: GUID lookup ambiguous between two same-named companies (fixed: no match then); every parent folder checked could refuse a TallyPrime installed under a mount point or OneDrive folder (accepted, Low here: the folders looked at are under Program Files only, whose parents are C:\ and Program Files; refused means only that the add-on line is not added, said in Help & support) | acaab4996 |
 | 9 | c6237e388..acaab4996 | 1 Medium: the heartbeat GUID lookup sees only the last bridge's companies (info.bridges holds none) | d25f13424 (the lookup removed: ledger progress needs the book's recorded GUID whenever one is recorded) |
 | 10 | d25f13424..438114131 (ROUND 103) | 2 High, 4 Medium: the window hold measured from before the send (a wait for Tally's lock counted as a freeze) and "no freeze" said when no window of Tally could be seen (a Windows service); an entry request over 2 s did not stop the period; an older choice's stop could stop a newer choice (tally_period_stop not tied to chosen_at, day not checked against the year); the by-type form still passed the gate; the re-check looked into folders the setup never knew and read files under the lock; the upload line offered only the days from the stop | 2b18c4072 |
-| 11 | 438114131..2b18c4072 | none High or Medium (Low: the window probe's last pass can add up to 250 ms per hung window to the request's end; accepted) | - |
+| 11 | 438114131..556508c20 (the fixes, and the withdrawn 2.4.5 setup moved to assets-test/bridge-go-old unchanged) | none High or Medium (Low: the window probe's last pass can add up to 250 ms per hung window to the request's end; accepted) | - |
 
 No High or Medium open at 2b18c4072 (ROUND 103 fixes: r103_test.go, r245_test.go, r245ini_test.go, allowlist_test.go; tests/run_migration98.py 4b; tests/run_period_ingest.py; tests/run_older_entries_ui.py 4b). Each fix came with a test (Go: r245_test.go, r245ini_test.go, r245jobs_test.go;
 SQL: tests/run_migration98.py; tally-ingest: tests/run_period_ingest.py; app: tests/run_older_entries_ui.py,
@@ -70,4 +70,4 @@ tests/run_tally_ini_ui.py).
 
 The whole range reviewed, as release-check reads it (the last range in this note):
 
-Range: 33994f94c..2b18c4072
+Range: 33994f94c..556508c20
