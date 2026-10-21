@@ -154,8 +154,13 @@ jobs:
         # out). 17-Oct-2026: 322 tests, and the six shares' test step took 26-29 of the job's 30 minutes (run 39066608644:
         # share 6 cancelled at 30 minutes, every test in it passing when run alone); seven shares, about 24 minutes each.
         # 19-Oct-2026 (next-tds-clear): share 1 was already at 28.7 minutes (run 39106423101) and two TDS tests more took it
-        # past 30 (runs 39200532573, 39203954437: cancelled); eight shares
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        # past 30 (runs 39200532573, 39203954437: cancelled); eight shares.
+        # 21-Oct-2026 (staging-next 6ab4a38b8): run_account_switch.py (480 s limit) moved the deal (run_ci.sh deals by time
+        # limit, not by time taken) and share 2 drew run_tally_clicks (380 s) and run_ask_fab_overlap (315 s) together:
+        # 28.2 minutes of test step on one run (39614561258), cancelled at 30 on the next (39619243608). Run on its own the
+        # share took 30.6 minutes, all 43 tests passing, none hanging (run_keep_daily 164 s, run_ui_standards 110 s next).
+        # Ten shares (as next-245 did for the same reason), the two long UI tests in different shares; no test skipped
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -188,17 +193,17 @@ jobs:
           id postgres
       - name: LibreOffice Calc, only on the share that runs run_fin_xlsx.py (it recalculates the statements' Excel)
         run: |
-          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/8 --dry-run | grep -q '^run_fin_xlsx.py '; then
+          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -q '^run_fin_xlsx.py '; then
             command -v soffice || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc; }
             soffice --version
           fi
-      - name: Tests (share ${{ matrix.shard }} of 8)
+      - name: Tests (share ${{ matrix.shard }} of 10)
         run: |
           # PowerShell 7 comes with GitHub's Ubuntu machines; the bridge tests (run_keep_*.py, run_bridge_fast.py, ...)
           # run bridge/TDSBridge.ps1 with it
           export PWSH="$(command -v pwsh)"
           "$PWSH" -Version
-          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/8
+          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
