@@ -1506,17 +1506,6 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
   // nothing listed while one company's days could not be worked out: the key left out (the bridge keeps the day it reads)
   return unsure && out.length === 0 ? null : out;
 }
-// the company's GUID as this computer's last heartbeat named it ("" when none)
-function beatGuidOf(dev: any, company: string): string {
-  const want = company.trim().toLowerCase(), info = (dev && dev.info) || {}, seen = new Set<string>();
-  for (const b of [info.beat, ...Object.values(info.bridges || {})] as any[]) {
-    for (const x of (b && Array.isArray(b.companies) ? b.companies : []) as any[]) {
-      if (x && typeof x.name === "string" && x.name.trim().toLowerCase() === want && typeof x.guid === "string" && x.guid.trim()) seen.add(x.guid.trim().toLowerCase().slice(0, 100));
-    }
-  }
-  // two companies of that name with different GUIDs on the computer: no answer (never the book's by chance)
-  return seen.size === 1 ? [...seen][0] : "";
-}
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
   const { data, error } = await db.from("tally_sync_cursor").select("company_guid").eq("book_id", book).limit(1);
@@ -3741,10 +3730,9 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
-        // (ledger progress from a bridge that holds no GUID for the name yet: taken when this computer's own heartbeat
-        // names the company with the book's GUID)
-        const named = sent || (body.kind === "ledger_progress" ? beatGuidOf(dev, String(body.company || "")) : "");
-        if (recorded && named.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        // (a bridge holding no GUID for the name yet is refused too when the book has one: never a same-named copy's write;
+        // the bridge notes the GUID at its company check, before any ledger read, so this is rare and only hides the bar)
+        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }
