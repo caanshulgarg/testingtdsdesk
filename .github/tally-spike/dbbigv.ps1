@@ -79,7 +79,7 @@ function Ents([string]$b) {
 }
 function TruthV {
   $r = TSetup ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>DBTruthV</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (LE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="DBTruthV" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE, VOUCHERTYPENAME, MASTERID</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 900
-  return , (Ents $r.body)
+  return (Ents $r.body)
 }
 $rows = [Collections.Generic.List[object]]::new()
 function Row([string]$what, [string]$form, [string]$day, $r, $extra) {
@@ -101,6 +101,8 @@ function Stat($list) {
 function IniBase { @('[Tally]', "Data = $data1", "Config = $dir", "LangPath = $dir\lang", 'Client Server = Both', 'ServerPort = 9000', 'Enable ODBC Server = Yes', 'Ignore TCP Timeout = Yes', 'Default Companies = Yes', "Load = $($folder.Name)") }
 $fcAddon = 'C:\ProgramData\FinCom\addon\FinComRecorder.tdl'
 $otherTdl = 'C:\fcother\FinComOtherTest.tdl'
+# a smoke test of this script off Windows (a fake Tally) puts the two files under DBBIG_MOCK_ROOT
+if ($env:DBBIG_MOCK_ROOT) { $fcAddon = Join-Path $env:DBBIG_MOCK_ROOT 'addon/FinComRecorder.tdl'; $otherTdl = Join-Path $env:DBBIG_MOCK_ROOT 'fcother/FinComOtherTest.tdl' }
 # the 2.4.5 installer's rule, as proposed (the Go code will do exactly this): add only; never remove, change or reorder a
 # line; "User TDL = Yes" added only when no User TDL line exists; the add-on's TDL line added once, right after the last
 # TDL line (else at the end of the [Tally] section); backup <ini>.fincom-bak written before the first change, never
@@ -277,7 +279,7 @@ try {
   # ================================================================ b5: the voucher count of a period
   Say '---- dbbig: the voucher count of a period'
   $PER = [ordered]@{ month = @('20260401', '20260430'); quarter = @('20260401', '20260630'); half = @('20260401', '20260930'); year = @('20260401', '20270331') }
-  $maxMid = [int64](@($tv | ForEach-Object { [int64]('0' + $_.mid) } | Sort-Object)[-1])
+  $maxMid = [int64](@($tv | ForEach-Object { [int64]('0' + $_.mid) } | Sort-Object -Descending) | Select-Object -First 1)
   $vCount = @{}
   function VReq([string]$a, [string]$u, [string]$flt) {
     $f = if ($flt) { '<FILTERS>FinComVoucherIdsOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComVoucherIdsOnly">' + $flt + '</SYSTEM>' } else { '</COLLECTION>' }
