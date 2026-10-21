@@ -14,6 +14,9 @@ A fake firm account with two firms and row-level security (a write of a row of a
   5. Two tabs of two people, neither kept signed in: the later sign-in keeps the browser, the other tab is signed out
      and says why; the tabs do not take the browser back and forth.
   6. A copy from before this change holding another firm's synced clients (the owner's browser): put aside on sign-in.
+  7. "Also remove this firm's work from this computer": the signed-in copy goes, and so do the databases of builds
+     before this change (tdsdesk, tdsdesk-files, tdsdesk-docs) and an older copy put aside as nobody's (the plain
+     tdsdesk-work / tdsdesk-bank); another person's copy put aside here stays theirs; nothing of another firm shows after.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_account_switch.py"""
 import os, json, time, threading, functools, http.server, itertools
 from urllib.parse import urlparse, parse_qs, unquote
@@ -242,6 +245,35 @@ with sync_playwright() as p:
     sign_in(pg, "b@firm-b.in", wait=6500)
     nb = names(pg)
     ok(nb == B_NAMES and not any(n in shown(pg) for n in A_NAMES), "an older copy holding firm A's synced clients is put aside when B signs in (%s)" % sorted(nb))
+    ok(not ST["violations"], "no write across firms (%s)" % ST["violations"])
+    ctx.close()
+
+    # ---------- 7: "remove this firm's work" also removes the databases of before this change ----------
+    ctx = br.new_context(viewport={"width": 1400, "height": 900}); ctx.add_init_script(REC)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append("7: " + str(e)))
+    pg.goto("http://localhost:%d/" % PAGE_PORT); pg.wait_for_timeout(2500)
+    pg.evaluate("""() => Promise.all(['tdsdesk', 'tdsdesk-files', 'tdsdesk-docs'].map(n => new Promise(r => { const q = indexedDB.open(n, 1);
+      q.onupgradeneeded = () => q.result.createObjectStore('x'); q.onsuccess = () => { const t = q.result.transaction('x', 'readwrite'); t.objectStore('x').put({name: 'Old Firm Ltd'}, 1); t.oncomplete = () => { q.result.close(); r(); }; }; })))""")
+    sign_in(pg, "a@firm-a.in")                                           # the plain tdsdesk-work: an older build's copy of firm A
+    pg.evaluate("() => { const s = LocalOwner.read(); s.cur = {slot: s.cur.slot, uid: '', firm: ''}; LocalOwner.write(s); }")
+    pg.evaluate("() => signOutHere('Signed out.')"); pg.wait_for_timeout(800); pg.reload(); pg.wait_for_timeout(2500)
+    sign_in(pg, "b@firm-b.in", wait=6500)                                # put aside as nobody's; B's own copy
+    pg.evaluate("() => signOutHere('Signed out.')"); pg.wait_for_timeout(800)
+    sign_in(pg, "a@firm-a.in", wait=6500)                                # A's own (new) copy, kept for A
+    pg.evaluate("() => signOutHere('Signed out.')"); pg.wait_for_timeout(800)
+    sign_in(pg, "b@firm-b.in", wait=6500)
+    dbs = lambda: sorted(pg.evaluate("() => indexedDB.databases().then(l => l.map(d => d.name).filter(n => /^tdsdesk/.test(n)))"))
+    sl = pg.evaluate("() => LocalOwner.read()")
+    a_slot = next((p["slot"] for p in sl["parked"] if p["uid"] == "uA"), None); b_slot = sl["cur"]["slot"]
+    pg.evaluate("() => signOutHere('Signed out.', true)"); pg.wait_for_timeout(3000); pg.wait_for_load_state("load"); pg.wait_for_timeout(1500)
+    left = dbs(); sl = pg.evaluate("() => LocalOwner.read()")
+    ok(left and all("~" in n for n in left), "the databases of before this change (tdsdesk, -files, -docs, the plain -work / -bank) are removed (left: %s)" % left)
+    ok(b_slot and not names(pg), "the signed-in firm's copy is removed: nothing loads after the page opens again (%s)" % sorted(names(pg)))
+    ok(a_slot and any(n.startswith("tdsdesk-work") and n.endswith("~" + a_slot) for n in left) and any(p["uid"] == "uA" for p in sl["parked"]), "another person's copy put aside here is kept for them (%s)" % left)
+    ok(not any(p["uid"] == "?" for p in sl["parked"]) and not pg.evaluate("() => Object.keys(localStorage).some(k => /^tdsdesk(-test)?:@:/.test(k))"), "the copy nobody can open again is gone from the list and its keys too")
+    sign_in(pg, "b@firm-b.in", wait=6500)
+    nb = names(pg); body = shown(pg)
+    ok(nb == B_NAMES and not any(n in body for n in A_NAMES | {"Old Firm Ltd"}), "signed in again: B's clients only, nothing of another firm (%s)" % sorted(nb))
     ok(not ST["violations"], "no write across firms (%s)" % ST["violations"])
     ctx.close()
 
