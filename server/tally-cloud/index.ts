@@ -1508,13 +1508,14 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
 }
 // the company's GUID as this computer's last heartbeat named it ("" when none)
 function beatGuidOf(dev: any, company: string): string {
-  const want = company.trim().toLowerCase(), info = (dev && dev.info) || {};
+  const want = company.trim().toLowerCase(), info = (dev && dev.info) || {}, seen = new Set<string>();
   for (const b of [info.beat, ...Object.values(info.bridges || {})] as any[]) {
-    const cs = b && Array.isArray(b.companies) ? b.companies : [];
-    const c = cs.find((x: any) => x && typeof x.name === "string" && x.name.trim().toLowerCase() === want && typeof x.guid === "string" && x.guid);
-    if (c) return String(c.guid).trim().slice(0, 100);
+    for (const x of (b && Array.isArray(b.companies) ? b.companies : []) as any[]) {
+      if (x && typeof x.name === "string" && x.name.trim().toLowerCase() === want && typeof x.guid === "string" && x.guid.trim()) seen.add(x.guid.trim().toLowerCase().slice(0, 100));
+    }
   }
-  return "";
+  // two companies of that name with different GUIDs on the computer: no answer (never the book's by chance)
+  return seen.size === 1 ? [...seen][0] : "";
 }
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
