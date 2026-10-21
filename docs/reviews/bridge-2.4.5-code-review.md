@@ -40,6 +40,7 @@ published reports pack, the two-step QR fix and the FSX guards, out of scope her
 | 15 | 556508c20..b747273fc (read-only review of a git archive of b747273fc: the night/Sunday pace, payroll in the period fetch, migration 98's growth, tally-ingest, the app; notes in the session's review-245-r15) | 2 Medium: M1 a payroll entry waiting for its employees could hold the computer's whole period fetch for ever (no other day or company read, read entries not flushed, no upload line); M2 the employees' read inside the period fetch sent up to 30 requests back to back, past the six conditions and the window watch, a chunk over 2 s retried automatically. 6 Low: L1 night flag set before the list was filtered (early beats all night); L2 the employees check keyed by name; L3 the payroll window-hold at 3 s (the owner confirmed on 21-Oct-2026: payroll vouchers only up to 3 s, all else 2 s); L4 tally_period_next stamped days tally-ingest dropped, the ETA speed from an overwritten asked_at; L5 no cloud-side limit on early asks; L6 sign-out-everywhere and the legacy browser databases (staging-next's, out of 2.4.5's scope, not changed here) | 4d665b045 (test-first: r245r15_test.go, r245night_test.go B3, tests/run_migration98.py 2c/4e/6b, tests/run_period_ingest.py; migration 98 md5 105ee690...) |
 | 16 | 4d665b045..0781ab261 (the merge of staging-next 8f5ad0b6d: .github/workflows/ci.yml only, the same ten shares next-245 had; both reasons kept) | none | - |
 | 17 | 0781ab261..26999f5b9 (the setup of 1ecb71351, SHA-256 95236784...0ecc73, moved unchanged to assets-test/bridge-go-old as *-2.4.5-superseded-95236784*; never published) | none | - |
+| 18 | 26999f5b9..4e06a2d44 (bridge-go/release-check.sh: the go test limit 20 -> 40 minutes, its self-test pin with it; no bridge, cloud or app file) | none | - |
 
 No High or Medium open at 2b18c4072 (ROUND 103 fixes: r103_test.go, r245_test.go, r245ini_test.go, allowlist_test.go; tests/run_migration98.py 4b; tests/run_period_ingest.py; tests/run_older_entries_ui.py 4b). Each fix came with a test (Go: r245_test.go, r245ini_test.go, r245jobs_test.go;
 SQL: tests/run_migration98.py; tally-ingest: tests/run_period_ingest.py; app: tests/run_older_entries_ui.py,
@@ -61,4 +62,4 @@ tests/run_tally_ini_ui.py).
 
 The whole range reviewed, as release-check reads it (the last range in this note):
 
-Range: 33994f94c..26999f5b9
+Range: 33994f94c..4e06a2d44
