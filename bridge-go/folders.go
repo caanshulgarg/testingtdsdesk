@@ -76,6 +76,8 @@ func installFinComFolders(allUsers bool, log func(string)) error {
 	if err != nil {
 		log("Install: the recorder trial's folders were NOT made (" + err.Error() + "); the bridge works without them")
 	}
+	// 2.4.5: FinCom's add-on in each TallyPrime's tally.ini (add only, a backup first; User TDL = No left alone: tallyini.go)
+	tallyIniStep(func(s string) { log("Install: " + s) })
 	return err
 }
 

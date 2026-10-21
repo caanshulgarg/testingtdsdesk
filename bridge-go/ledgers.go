@@ -365,6 +365,13 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if ok, err := k.natureList(company, port, st, ls, inBudget, save); !ok {
 		return false, err
 	}
+	// 2.4.5: the exact count first (FinComLedgerIds, rows counted, under the 2 s stop; ledcount.go): the step-5 bar's "of N".
+	// Only for the ledgers-only read Connect Tally's step 5 asks (Import ledgers, the cloud's "ledgers" wake); Update now and
+	// the nightly run read the list as before
+	bar := k.kind == "ledgers"
+	if bar {
+		ledCountFor(company, port, ls, save)
+	}
 	for !truthy(ls["done"]) {
 		if !inBudget() || keepHold() != "" {
 			return false, nil
@@ -446,6 +453,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		}
 		st["ledSize"] = ls["size"]
 		save()
+		if bar {
+			ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false) // 2.4.5: "312 of 1,240 ledgers"
+		}
 		writeLog(fmt.Sprintf("Keeping %s: ledger list MasterID %d-%s, %d ledger(s) (%.1fs); saved", company, after+1, map[bool]string{true: "end", false: fmt.Sprint(upto)}[tail], len(rows), sec))
 		keepRest(time.Duration(maxI(200, int(sec*500))) * time.Millisecond)
 	}
@@ -500,6 +510,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	_ = os.Remove(ledReadFile(dir))
 	writeLog(fmt.Sprintf("Keeping %s: the ledger list read (%d ledgers, %d groups, %d request(s)): %d new, %d changed, %d renamed, %d gone",
 		company, len(read), len(groups), toInt(ls["reqs"]), d.added, len(d.rows)-d.added, len(d.renamed), len(d.gone)))
+	if bar {
+		ledProgressNote(company, round, len(read), len(read), true) // 2.4.5: the round's end, the final count
+	}
 	delete(st, "led")
 	st["ledRun"], st["ledAt"] = k.id, nowS()
 	save()

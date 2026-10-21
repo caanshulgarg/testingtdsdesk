@@ -36,18 +36,9 @@ func jobDir(id string) (string, error) {
 	}
 	return filepath.Join(jobsDir(), id), nil
 }
-func readProgress(dir string) M {
-	for i := 0; i < 5; i++ {
-		if !exists(filepath.Join(dir, "progress.json")) {
-			return nil
-		}
-		if m := readObjFile(filepath.Join(dir, "progress.json")); m != nil {
-			return m
-		}
-		time.Sleep(60 * time.Millisecond)
-	}
-	return nil
-}
+
+// 2.4.5: the newest update, the file read sharing delete, a locked or missing file tried again (jobfile.go)
+func readProgress(dir string) M { return jobFileRead(filepath.Join(dir, "progress.json")) }
 
 var progMu sync.Mutex
 
@@ -55,8 +46,8 @@ func writeProgress(dir string, p M) error {
 	progMu.Lock()
 	defer progMu.Unlock()
 	p["updatedAt"] = time.Now().Format(time.RFC3339Nano)
-	p["seq"] = toInt(p["seq"]) + 1 // round 7 (F4): grows with every change of the job, kept across restarts
-	return saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
+	p["seq"] = toInt(p["seq"]) + 1                                       // round 7 (F4): grows with every change of the job, kept across restarts
+	return jobFileSave(filepath.Join(dir, "progress.json"), jsonText(p)) // 2.4.5: never an update lost (jobfile.go)
 }
 func jobAlive(id string) bool {
 	jobsMu.Lock()

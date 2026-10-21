@@ -81,6 +81,17 @@ func driveEveryRequest(t *testing.T) *standTally {
 	// 2.4.4 (payroll): the employees, a chunk of MasterIDs (payroll.go; the counter path is driven in payroll244_test.go)
 	_, err = invokeTally(recorderTC(nil), f.port, employeeChunkRequest(zz, 0, 2000), empSec())
 	must("employees", err)
+	// 2.4.5: one listed day's heads, F1 and F2 (the day FinCom lists; daypull.go), and the ledger count (ledcount.go); the
+	// paths themselves are driven in r245_test.go
+	noteCompanyGUID(zz, f.guid)
+	applyPeriodDays(M{"periodDays": []any{M{"company": zz, "company_guid": heldGUID(zz), "day": td, "fetch": true}}})
+	_, err = invokeTally(recorderTC(nil), f.port, dayHeadsRequest(zz, td), 5)
+	must("one day's heads", err)
+	_, err = invokeTally(recorderTC(nil), f.port, dayHeadsTypeRequest(zz, td, "Sales"), 5)
+	must("one day's heads, one type", err)
+	applyPeriodDays(M{"periodDays": []any{}})
+	_, err = invokeTally(recorderTC(nil), f.port, ledgerIdsRequest(zz, 0, 0), 5)
+	must("the ledger count", err)
 	// 2.2.0: the change numbers' report form (form b; the company check sends it when form a gives no numbers)
 	_, err = invokeTally(fin, f.port, companyNumbersRequest(zz), 15)
 	must("change numbers, form b", err)

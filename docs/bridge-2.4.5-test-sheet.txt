@@ -1,0 +1,65 @@
+FINCOM 2.4.5 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.5.exe
+Fingerprint: SHA-256 @@SETUP_SHA@@ (FinComBridge-Setup-2.4.5.exe; compare with the .sha256 file next to the setup)
+
+What 2.4.5 changes (the full notes: docs/bridge-2.4.5-notes.md):
+1. Older entries from Tally only for a period you choose: Books > From Tally (and Connect Tally after step 6), "Bring older
+   entries from Tally": a financial year, Whole year / Apr-Sep / Oct-Mar (the halves once the year passes 20,000
+   vouchers), Start, Pause. The bridge reads one day at a time, only while nobody works in Tally; your entries go first.
+   Progress reads like "8,412 of 12,960 vouchers (65%) - 4,548 left".
+2. A day Tally cannot give within 2 seconds even one voucher type at a time shows one quiet line: "Tally took too long to
+   give <day>. Please upload that day's Day Book." with an Upload button. Nothing else about Tally is shown.
+3. Connect Tally step 5 shows the exact ledger count: "312 of 1,240 ledgers".
+4. The installer adds FinCom's add-on to each TallyPrime's tally.ini (TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl,
+   and User TDL = Yes only if there is no User TDL line), keeping a backup tally.ini.fincom-bak. A tally.ini with
+   "User TDL = No" is left as it is and shown under Help & support.
+5. Job progress files are written so that no update is lost.
+6. FinCom's cloud stores these (migration 98, run on staging before the tally-ingest of 2.4.5).
+
+Before you start: migration 98 has run on staging and the tally-ingest of 2.4.5 is deployed; you are signed in to FinCom
+as the owner; TallyPrime 7.1 is open on NWS144 with a ZZ TEST company that has entries in an earlier year. Copy
+C:\Program Files\TallyPrime\tally.ini somewhere before installing. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION AND TALLY.INI
+   Close TallyPrime. Install FinComBridge-Setup-2.4.5.exe and compare its fingerprint. Open tally.ini in Notepad.
+   You should see: the tray says FinCom Bridge 2.4.5; FinCom's Tally page shows version 2.4.5; tally.ini has the line
+   TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl after your other TDL lines (they are all still there, in the
+   same order); tally.ini.fincom-bak next to it is your old file. Open TallyPrime: F1 > TDLs & Add-ons lists FinCom's
+   add-on and every add-on you had.
+
+CHECK 2 - THE LEDGER COUNT
+   Connect Tally > step 5 > read the ledgers again.
+   You should see: "N of M ledgers" counting up, M the exact number of ledgers in Tally (Gateway > Display More Reports >
+   List of Accounts shows the same count).
+
+CHECK 3 - OLDER ENTRIES
+   Books > From Tally > Bring older entries from Tally: choose last year, Whole year, Start. Leave Tally alone.
+   You should see: "Counting the year in Tally... X of 365 days", then "X of Y vouchers (P%) - Z left" going up, Tally
+   never freezing; at the end "all in FinCom". Y equals Tally's voucher count for that year (Day Book, Ctrl+F12 period).
+
+CHECK 4 - YOUR WORK GOES FIRST
+   While CHECK 3 runs, save a Journal of Rs 1, narration "TRIAL 245 first".
+   You should see: it is in FinCom's books in a few seconds, as with 2.4.4; the progress waits while you type and goes
+   on a minute after you stop.
+
+CHECK 5 - PAUSE
+   Press Pause; wait two minutes; press Resume.
+   You should see: the count stops while paused and goes on from where it stopped.
+
+CHECK 6 - USER TDL = NO (only on a spare computer, or put tally.ini back after)
+   Close TallyPrime; in tally.ini set "User TDL = No"; install again.
+   You should see: tally.ini is not changed at all; Help & support in FinCom says the add-on could not be added because
+   tally.ini says User TDL = No.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.4)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.4). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.4 for your line. 2.4.4 brings no older entries
+   and no ledger count; what 2.4.5 brought stays. The TDL line in tally.ini stays (remove it by hand, or copy
+   tally.ini.fincom-bak back, if you want it gone). Automatic updates stay off on this computer until FinCom turns them
+   on again.

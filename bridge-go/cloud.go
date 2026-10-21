@@ -703,6 +703,7 @@ func beatOnce() {
 	// round 18 (the owner's addition of 04-Oct-2026): each company seen open gets the light FinComCompany request, once
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
 	startLightCheck(sessions)
+	go tallyIniSeen() // 2.4.5: a TallyPrime folder not looked at before (at most once in 10 minutes; no request to Tally)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
 	// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words in the tray and the log
 	if r.code == 409 && r.json != nil && truthy(r.json["idRefused"]) {
@@ -736,6 +737,7 @@ func beatOnce() {
 		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
 		applyRefetch(r.json)        // after 2.3.0: this bridge's own held lines FinCom asks for again (body missing, placeholder GUID)
 		applyLedgersWanted(r.json)  // 2.3.1: the ledgers FinCom holds an entry for, asked of the own Tally by name (ledchanges.go)
+		applyPeriodDays(r.json)     // 2.4.5: the days of the period the person chose that FinCom still lacks (daypull.go)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -1075,7 +1077,10 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
 		"renumberAlerts": renumBeat(),
 		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
-		"bankAlerts": bankBeat()}
+		"bankAlerts": bankBeat(),
+		// 2.4.5: the older entries being read for the period the person chose (per company: the day, its phase), the days to
+		// upload by hand, and the ledger read's progress ("312 of 1,240"); the tally.ini step's result per file (tallyini.go)
+		"periodPull": pullBeat(), "ledgerProgress": ledProgressBeat(), "tallyIni": tallyIniBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

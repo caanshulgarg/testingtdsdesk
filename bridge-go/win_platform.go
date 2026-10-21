@@ -561,3 +561,61 @@ func stopCmd(args []string) int {
 	stopService()
 	return 0
 }
+
+// 2.4.5 (plan section 3.2, condition 1): Tally's window answers. Each visible top-level window of a tally.exe of this
+// Windows user's sessions is asked by Windows (IsHungAppWindow: Windows' own test, the window has not taken its messages
+// for 5 s); nothing is sent to Tally. A window Windows calls hung: false. No window seen (the service, another session):
+// true (the port and the answers decide, as before)
+var (
+	procEnumWindows        = user32.NewProc("EnumWindows")
+	procIsHungAppWindow    = user32.NewProc("IsHungAppWindow")
+	procIsWindowVisible    = user32.NewProc("IsWindowVisible")
+	procGetWindowThreadPid = user32.NewProc("GetWindowThreadProcessId")
+)
+
+// windows.NewCallback makes a callback that is never freed (Go keeps at most about 2,000): one, made once, with its
+// state under a lock
+var (
+	respMu   sync.Mutex
+	respPids map[uint32]bool
+	respHung bool
+	respCB   = windows.NewCallback(func(h uintptr, _ uintptr) uintptr {
+		var pid uint32
+		_, _, _ = procGetWindowThreadPid.Call(h, uintptr(unsafe.Pointer(&pid)))
+		if !respPids[pid] {
+			return 1
+		}
+		if v, _, _ := procIsWindowVisible.Call(h); v == 0 {
+			return 1
+		}
+		if r, _, _ := procIsHungAppWindow.Call(h); r != 0 {
+			respHung = true
+			return 0
+		}
+		return 1
+	})
+)
+
+func platTallyResponds() bool {
+	if tallyNotResponding.Load() {
+		return false
+	}
+	ps, ok := processes()
+	if !ok {
+		return true
+	}
+	pids := map[uint32]bool{}
+	for _, p := range ps {
+		if reTally.MatchString(p.Name) && isMine(p.Session) {
+			pids[uint32(p.ID)] = true
+		}
+	}
+	if len(pids) == 0 {
+		return true
+	}
+	respMu.Lock()
+	defer respMu.Unlock()
+	respPids, respHung = pids, false
+	_, _, _ = procEnumWindows.Call(respCB, 0)
+	return !respHung
+}

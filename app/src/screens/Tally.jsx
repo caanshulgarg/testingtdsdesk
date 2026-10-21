@@ -13,7 +13,9 @@ import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry, companiesSeen } from "../parts/TallyLink.jsx";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
+// 2.4.5 (ROUND 102): after step 6, the same "Bring older entries from Tally" as Books › From Tally (its own lazy chunk)
+const OlderEntries = lazy(() => import("../parts/OlderEntries.jsx"));
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
@@ -829,6 +831,12 @@ async function ledImportPoll() {
     try { if (typeof TCloud === "object" && TCloud.on()) await TCloud.status(cid, true); } catch (e) {}
     const at = (cloudBook(cid) || {}).ledgersAt || "";
     let n = null; try { n = await cloudLedgerCount(cid, true); } catch (e) {}
+    // 2.4.5: the exact count while the bridge reads ("312 of 1,240 ledgers"; tally_period_status's ledger, sent by the bridge
+    // after each chunk); a progress older than this import is not this read's
+    try {
+      const bk = cloudBook(cid), r = bk && bk.book ? await TCloud.rpc("tally_period_status", { p_book: bk.book }) : null, lp = r && r.ledger;
+      if (lp && Date.parse(lp.at) >= x.at - 60000) { x.prog = lp; if (lp.done && Number(lp.read) > 0 && n == null) n = Number(lp.read); }
+    } catch (e) {}
     if ((n != null && n > (x.base.n || 0)) || (at && at !== x.base.at && n)) { x.got[cid] = n; try { if (cid === S.coId) await Ledgers.load(cid, { fresh: true }); } catch (e) {} }
     else if (x.via === "bridge") { const r = await Ledgers.load(cid, { force: true }); if (r && r.ok && r.n) x.got[cid] = r.n; }
     if (x.got[cid] != null) x.end = Date.now();
@@ -873,7 +881,9 @@ function LedgersStep({ x, owner }) {
   let body;
   if (reading) body = <>
     <div className="tg-bar" data-guide-ledgers-bar="" role="progressbar" aria-label={"Reading " + co.name + "’s ledgers from Tally"} aria-busy="true"><i /></div>
-    <p className="tg-progress" data-guide-ledgers-reading="">{"Reading " + co.name + "’s ledgers from Tally… "}<b className="tg-clock">{mmss(Date.now() - imp.at)}</b>
+    <p className="tg-progress" data-guide-ledgers-reading="">{"Reading " + co.name + "’s ledgers from Tally… "}
+      {imp.prog && Number(imp.prog.of) > 0 && <><b data-guide-ledgers-count="">{Number(imp.prog.read).toLocaleString("en-IN") + " of " + nOf(Number(imp.prog.of), "ledger", "ledgers")}</b>{" · "}</>}
+      <b className="tg-clock">{mmss(Date.now() - imp.at)}</b>
       <span className="note">{imp.via === "cloud" ? " · asked through FinCom’s cloud; the Tally computer picks it up within a minute or two" : imp.via === "bridge" ? " · FinCom Bridge on this computer is reading" : ""}</span></p></>;
   else if (late) body = <>
     <p className="tg-result bad" data-guide-ledgers-stop="late" role="status">{"Not received in 10 minutes. TallyPrime must be open on " + pc + " with " + company + " open, and reading not paused."}</p>
@@ -981,6 +991,7 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
         <span className="tpc-ok" data-connected-line="">{"● Connected" + (x.openNow.length ? " · " + nOf(x.openNow.length, "company", "companies") + " open in Tally" : "") + " · last entry " + (last ? tallyHm(last) : "none yet")}</span>
         {calm && <span className="note">{" All good" + (x.cur ? " for " + x.cur.name : "") + "."}</span>}
         {" "}<button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button></p>
+      {x.curLinked && <Suspense fallback={null}><OlderEntries cid={x.cid} where="connect" /></Suspense>}
       <GuideOthers x={x} /></section>;
   }
   const owner = isOwner(), r = x.r, s = x.s, pc = r ? r.computer : "the Tally computer", user = (r && r.user) || "the Tally user", allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
@@ -1024,6 +1035,7 @@ function ConnectGuide({ rows, m, latest, connectStep }) {
         {!(d.daybook && !forced("daybook")) && <DaybookStep x={x} />}
       </GuideStep>
     </ol>
+    {d.daybook && x.curLinked && <Suspense fallback={null}><OlderEntries cid={x.cid} where="connect" /></Suspense>}
     {!all && d.install && <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button>}
   </section>;
 }
@@ -1113,6 +1125,16 @@ function cardState(r, n) {
   return ["ok", "Connected"];
 }
 // 2. one card a computer and Windows user
+// FinCom Bridge 2.4.5: what the installer did with FinCom's add-on line in each tally.ini (the beat's tallyIni). A tally.ini
+// that says "User TDL = No" is left untouched (the owner's default, decision pending) and said here for support; a line
+// added or already there says nothing.
+const INI_WORDS = { "usertdl-no": "says User TDL = No, so FinCom left it untouched: Tally does not load FinCom's add-on when it starts.",
+  failed: "could not be changed; FinCom's add-on is not loaded when Tally starts.", refused: "is not an ordinary file; FinCom left it untouched.",
+  unreadable: "could not be read; FinCom left it untouched." };
+function TallyIniLines({ r }) {
+  const l = [].concat((((r.device || {}).info || {}).beat || {}).tallyIni || []).filter((x) => x && INI_WORDS[x.state]);
+  return l.map((x, i) => <div key={i} className="row" style={ROW}><span className="note" data-tally-ini={x.state}>{"tally.ini " + (x.path || "") + " " + INI_WORDS[x.state]}</span></div>);
+}
 function ComputerCard({ r, latest, m, focus }) {
   const owner = isOwner(), p = TCloud.pane, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const rd = r.read || { state: r.online ? "reading" : "offline", text: "" }, live = r.go && !r.old, k = cardKey(r), open = moreOpen(k);
@@ -1150,6 +1172,7 @@ function ComputerCard({ r, latest, m, focus }) {
       <SlowCompanies r={r} />
       <Baselines r={r} owner={owner} />
       <SelfChecks r={r} />
+      <TallyIniLines r={r} />
       <div className="tcard-sub" data-card-settings="">{owner ? "Settings" : "Settings (an owner of the firm changes these)"}</div>
       {owner && !allStopped && <div className="row" style={ROW}>{stopped ? n && n.act === "resume" ? null : <button className="btn small" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
         : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>}</div>}

@@ -183,7 +183,8 @@ func trayStatus() M {
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
 		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow(), "readStopped": readStopAny(),
-		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn())} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
+		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn()),
+		"uploadDays": pullUploadList()} // 2.4.5: the days to upload by hand (daypull.go), one quiet notice each // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
 }
 
 // the way it runs, in words for the log and the tray
@@ -394,6 +395,7 @@ func runBridge(console bool) int {
 	go updateLoop()
 	go beatLoop()
 	go recorderWatchLoop() // round 18: the recorder trial's folder watch (file times only; Tally is not asked)
+	go dayPullLoop()       // 2.4.5: older entries for the period the person chose, one day at a time, idle only (daypull.go)
 	go recorderLiveLoop()  // 2.2.0: the live recorder's uploader (the reader is the watch's turn)
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())

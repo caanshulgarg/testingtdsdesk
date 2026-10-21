@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "dadd3e8e75abe1d671b5bd9cedcc1bb73c6ff98a88e4720d03b4b93b9492ad88",
+    "hash": "e86a264fd7075d99faa480a7118ff12588ac246f9aceeffd023878ca8b0cd373",
     "measured": false
   },
   "autoUpdate": true,
@@ -38,12 +38,18 @@
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",
+  "ledgerProgress": [],
   "nightlyAt": "19:00",
   "notAnsweringSince": "",
   "open": [
     "GARG SHEKHAR & COMPANY"
   ],
   "paused": true,
+  "periodPull": {
+    "companies": {},
+    "stopped": [],
+    "uploadDays": []
+  },
   "ports": [
     {
       "error": "",
@@ -95,11 +101,12 @@
     }
   },
   "tally": true,
+  "tallyIni": [],
   "tallyPort": 9000,
   "tallyRetry": null,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.4.4",
+  "version": "2.4.5",
   "windowsUser": ""
 }

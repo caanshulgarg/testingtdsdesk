@@ -87,6 +87,26 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 	out.WriteString("<ENVELOPE><BODY><DATA><COLLECTION>")
 	isLedger := strings.Contains(body, "<TYPE>Ledger</TYPE>")
 	switch {
+	case id == ledIdsID:
+		// 2.4.5: the ledger count, MasterIDs only (no ledger's fields): its rows at the measured cost of a MasterID row
+		var after, upto int64 = 0, 1 << 62
+		if m := reMidRange.FindStringSubmatch(body); m != nil {
+			after = toI64(m[1])
+			if m[2] != "" {
+				upto = toI64(m[2])
+			}
+		}
+		for mid := maxI64(after+1, 41); mid <= upto && mid <= bigLedgers+40; mid++ {
+			sr.rows++
+			fmt.Fprintf(&out, `<LEDGER NAME="Big Party %05d"><MASTERID> %d</MASTERID></LEDGER>`, mid-40, mid)
+		}
+		out.WriteString("</COLLECTION></DATA></BODY></ENVELOPE>")
+		sr.simMs = float64(sr.rows) * tallyIdsPerRowMs
+		b.mu.Lock()
+		b.reqs = append(b.reqs, sr)
+		b.mu.Unlock()
+		_, _ = w.Write([]byte(out.String()))
+		return true
 	case id == "Import":
 		sr.rows = 1
 		out.Reset()
@@ -166,7 +186,7 @@ func minI64(a, b int64) int64 {
 }
 
 func (b *bigTally) record(sr simReq) {
-	sr.simMs = float64(sr.rows) * tallyPerRowMs
+	sr.simMs = float64(sr.rows) * tallyPerRowMs // (2.4.5's FinComLedgerIds is recorded at its own row cost, above)
 	b.mu.Lock()
 	b.reqs = append(b.reqs, sr)
 	b.mu.Unlock()
@@ -217,6 +237,12 @@ func TestSizeBigCompany(t *testing.T) {
 	}
 	if len(big.reqs) != n0 {
 		t.Fatal("a refused read reached Tally")
+	}
+	// 2.4.5: the step-5 ledger count (FinComLedgerIds, MasterIDs only; one request, its 2 s stop) at 50,000 ledgers
+	cls := M{}
+	ledCountFor(zz, f.port, cls, func() {})
+	if toInt(cls["of"]) != bigLedgers {
+		t.Fatalf("the ledger count at 50,000 ledgers: %v", cls)
 	}
 	// a posting: the import alone (round 15: nothing is read back)
 	if r := postOne(t, "big1", finVoucher("big1", fgParty, "BIG-1", td, "1.00")); r["ok"] != true {

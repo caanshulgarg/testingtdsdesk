@@ -51,6 +51,12 @@ var tallyAllowList = map[string]allowedReq{
 	// 2.4.4 (the owner's decision of 12-Oct-2026, item 1): the payroll's employees (payroll.go)
 	empListID: {purpose: "the payroll's employees (2.4.4): Tally's Cost Centre masters, 2,000 MasterIDs a request at most, exactly GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, PANNUMBER, DATEOFJOIN, DEACTIVATIONDATE, DESIGNATION (stored master fields only, no period); only payroll rows kept, every other cost centre dropped before anything is logged, stored or sent; read again when Tally's master counter moves", maxSec: 0.17,
 		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: every chunk of 2,000 MasterIDs and the open end, 163 ms worst (3.0), the chunk with all 2,000 employees 1.55 MB)"},
+	// 2.4.5 (the owner's approval of 21-Oct-2026, ROUND 102): one day's entry heads for a period the person chose (F1, and
+	// F2 one voucher type at a time when F1 is stopped at 2 s), and the ledger count for the step-5 bar (F3); daypull.go, ledcount.go
+	dayHeadsID: {purpose: "older entries for a period the person chose in FinCom (2.4.5): the entry heads (GUID, MasterID, AlterID, date) of ONE day FinCom listed (SVFROMDATE = SVTODATE), each then asked by FinComVoucherObject; when stopped at 2 s, the same day one voucher type at a time ($VoucherTypeName); idle only, postings first, never the Day Book", maxSec: 1.08,
+		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661, at 30,009 entries: one day of 2,216 entries 376 ms worst (7.1); one voucher type of that day, 503 Purchase entries, 1,080 ms worst (4.1); window blocked 0.79 s at most)"},
+	ledIdsID: {purpose: "the ledger count for Connect Tally's step-5 bar (2.4.5): the ledgers' MasterIDs only, the rows counted (no computed figure); in chunks of 2,000 MasterIDs when the one request is stopped at 2 s", maxSec: 0.41,
+		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661: 50,000 ledgers in one request 405 ms worst (3.0), each chunk of 2,000 MasterIDs 107 ms worst; exact on every release)"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
 	"TDSDeskNames":      {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
@@ -87,6 +93,10 @@ var tallyAllowList = map[string]allowedReq{
 // Simulated cost of one row Tally sends back (the size test, size_test.go): a conservative guess until phase 1's
 // measurement on ZZ BIG TEST replaces it
 const tallyPerRowMs = 0.5
+
+// 2.4.5: FinComLedgerIds answers a MasterID a row (no other field): measured 405 ms for 50,000 ledgers on real TallyPrime 3.0
+// (tally-versions dbbig run 39542962661), 0.0081 ms a row; the size test rounds it up
+const tallyIdsPerRowMs = 0.01
 
 // the measuring tool is running (measure-only ids may go)
 var measuring atomic.Int32
@@ -188,6 +198,8 @@ func allowListSamples() map[string]string {
 		grpListID:            groupListRequest(c),
 		natListID:            natureChunkRequest(c, 0, 5000),
 		empListID:            employeeChunkRequest(c, 0, 2000),
+		dayHeadsID:           dayHeadsRequest(c, a),
+		ledIdsID:             ledgerIdsRequest(c, 0, 0),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),

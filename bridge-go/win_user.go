@@ -344,6 +344,10 @@ func runWorker(args []string) int {
 		}
 	}
 	go updateHealth()
+	// 2.4.5: a per-user bridge that updated itself never ran the install step: FinCom's add-on in tally.ini, once a version
+	if exe, err := os.Executable(); err == nil {
+		tallyIniAfterUpdate(filepath.Dir(exe), writeLog)
+	}
 	code := 9
 	func() {
 		defer func() {

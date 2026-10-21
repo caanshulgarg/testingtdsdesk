@@ -1295,21 +1295,47 @@ function Get-JobDir([string]$id) {
   return (Join-Path $script:JobsDir $id)
 }
 
+# 21-Oct-2026 (FinCom Bridge 2.4.5's job-file fix, ROUND 102): read sharing read, write AND delete (the writer's replace is
+# never blocked by a reader), tried again for up to 2 s on a file locked or not whole, and for 0.4 s on a file missing
+# while its job folder exists (the old Move-Item -Force deleted the file before moving the new one: a read in that moment
+# answered "No such job"); a job folder that is not there is "no job" at once
+function Read-JobText([string]$f) {
+  $fs = New-Object IO.FileStream($f, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+  try { $sr = New-Object IO.StreamReader($fs, (New-Object System.Text.UTF8Encoding($false)), $true); return $sr.ReadToEnd() } finally { $fs.Dispose() }
+}
 function Read-JobProgress([string]$dir) {
   $f = Join-Path $dir 'progress.json'
-  if (-not (Test-Path $f)) { return $null }
-  for ($i = 0; $i -lt 5; $i++) {
-    try { return ([IO.File]::ReadAllText($f) | ConvertFrom-Json) } catch { Start-Sleep -Milliseconds 60 }
+  for ($i = 0; $i -lt 40; $i++) {
+    if (-not [IO.File]::Exists($f)) {
+      if (-not [IO.Directory]::Exists($dir) -or $i -ge 8) { return $null }
+    } else {
+      try { $t = Read-JobText $f; if ($t) { return ($t | ConvertFrom-Json) } } catch { }
+    }
+    Start-Sleep -Milliseconds 50
   }
   return $null
 }
 
-# written whole, then moved into place, so a reader never sees half a file
+# written whole into a temporary file of its own, then put in place by ONE atomic replace ([IO.File]::Replace when the file
+# is there, else [IO.File]::Move; both PowerShell 5.1-safe): the old file is never deleted first, so a reader always finds
+# a whole file; a replace refused for a moment (a reader, an antivirus) is tried again for about 4 s
+function Save-AtomicText([string]$path, [string]$text) {
+  $tmp = $path + '.' + $PID + '.' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp'
+  [IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
+  $wait = 10
+  for ($i = 0; ; $i++) {
+    try {
+      if ([IO.File]::Exists($path)) { [IO.File]::Replace($tmp, $path, [NullString]::Value) } else { [IO.File]::Move($tmp, $path) }     # [NullString]: no backup (a plain $null would pass an empty name)
+      return
+    } catch {
+      if ($i -ge 24) { try { [IO.File]::Delete($tmp) } catch { }; throw }
+      Start-Sleep -Milliseconds $wait; if ($wait -lt 250) { $wait = $wait * 2 }
+    }
+  }
+}
 function Write-JobProgress([string]$dir, $p) {
   $p.updatedAt = (Get-Date).ToString('o')
-  $tmp = Join-Path $dir ('progress.' + $PID + '.tmp')
-  [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $p -Depth 12 -Compress))
-  Move-Item -LiteralPath $tmp -Destination (Join-Path $dir 'progress.json') -Force
+  Save-AtomicText (Join-Path $dir 'progress.json') (ConvertTo-Json -InputObject $p -Depth 12 -Compress)
 }
 
 function Test-ProcessAlive([int]$procId) {
@@ -2081,11 +2107,7 @@ function Read-KeepState([string]$dir) {
   if (-not (Test-Path -LiteralPath $f)) { return $null }
   try { return (ConvertTo-KeepHash (Get-Content -Raw -LiteralPath $f | ConvertFrom-Json)) } catch { return $null }
 }
-function Save-KeepFile([string]$path, [string]$text) {
-  $tmp = $path + '.tmp'
-  [IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
-  Move-Item -LiteralPath $tmp -Destination $path -Force
-}
+function Save-KeepFile([string]$path, [string]$text) { Save-AtomicText $path $text }     # 21-Oct-2026: one atomic replace
 function Add-KeepDays([string]$d, [int]$n) { return (ConvertFrom-TallyDate $d).AddDays($n).ToString('yyyyMMdd') }
 
 # the entries of a period, as numbers only: [guid, change number, date]; 'after' asks only for those changed since

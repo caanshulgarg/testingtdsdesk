@@ -12,10 +12,12 @@
 //   4. How to export from Tally, folded, three steps.
 // Kept, minimally: the tie-out result (one line), the warning when the books are another PAN's, and More (Restore, the
 // removals, and the bridge's own update settings when this computer has one).
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
 import { TallyLinkLine } from "../../parts/TallyLink.jsx";
 import DateBox from "../../parts/DateBox.jsx";
+// 2.4.5 (ROUND 102): "Bring older entries from Tally" for a period the person chooses; its own lazy chunk
+const OlderEntries = lazy(() => import("../../parts/OlderEntries.jsx"));
 const d = (x) => fmtDate(tallyDate(x));
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
@@ -226,6 +228,7 @@ export default function FromTally({ b }) {
     <Status b={b} days={days} />
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     <Upload b={b} />
+    {typeof TCloud === "object" && TCloud.on() && TCloud.book(S.coId) && <Suspense fallback={null}><OlderEntries cid={S.coId} where="books" /></Suspense>}
     <Days days={days} />
     <HowTo />
     <Tieout b={b} />

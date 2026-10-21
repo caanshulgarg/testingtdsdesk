@@ -13,13 +13,13 @@ import (
 // 2.4.3's decision kept as history; a dated "re-measured" line for 2.4.4; the table and its hash; the add-on unchanged
 // from 2.4.3 (the data locations are not in 2.4.4); migration 74 add-only; the notes and the test sheet
 func TestRelease244VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.4" {
+	if BridgeVersion != "2.4.5" { // 2.4.5 (r245_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	want := []string{
-		"allowed for 2.4.4 by the owner's decision of 2026-10-12",
+		"as for 2.4.4: the owner's decision of 2026-10-12",
 		empListID, "GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, PANNUMBER, DATEOFJOIN, DEACTIVATIONDATE, DESIGNATION",
 		"2,000 MasterIDs a request at most", "only payroll rows", "before anything is logged, stored or sent", "FinComEmployeeChanges not approved",
 		"FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName", "PAYTYPE, PAYSTATTYPE, ITCOMPONENT and FORPAYROLL",
@@ -44,7 +44,7 @@ func TestRelease244VersionAndDecisionLine(t *testing.T) {
 	if !strings.Contains(al, "Table hash (SHA-256): "+allowListHash(allowListRows())) {
 		t.Error("the table hash in the doc is not the table's")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-1[2-9][^\n]*allowed for 2\.4\.4`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-12 for 2\.4\.4[^\n]*2\.4\.4 allowed by`).MatchString(al) {
 		t.Error("no dated re-measured line for 2.4.4")
 	}
 	// every row the bridge sends measured (release-check step 5): the new one among them

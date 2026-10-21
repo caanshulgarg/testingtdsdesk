@@ -45,6 +45,7 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 		// ran the install step) the recorder trial's folders are checked and made safe, once, before anything runs
 		if exe, err := os.Executable(); err == nil {
 			foldersAfterUpdate(filepath.Dir(exe), writeLog)
+			tallyIniAfterUpdate(filepath.Dir(exe), writeLog) // 2.4.5: FinCom's add-on in tally.ini (tallyini.go)
 		}
 		done <- runBridge(false)
 	}()

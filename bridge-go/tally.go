@@ -328,6 +328,8 @@ var requestClass = map[string]string{
 	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
 	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
 	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
+	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
+	dayHeadsID: "exception", ledIdsID: "undated",
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
@@ -347,6 +349,13 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return readsOffErr()
+	case dayHeadsID:
+		// 2.4.5 (the owner's decision of 21-Oct-2026): one day FinCom listed for the period the person chose, exactly F1 or F2
+		// as built, under the 2 s stop; refused otherwise whatever ReadDays says (daypull.go)
+		if dayHeadsExact(tc, x) {
+			return nil
+		}
+		return errDayHeadsRefused
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil

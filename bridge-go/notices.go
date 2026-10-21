@@ -354,6 +354,17 @@ func trayProblems(f trayFacts) []trayProblem {
 		stale = append(stale, trayProblem{Kind: "bankstale|" + strings.ToLower(str(e["company"])), Company: str(e["company"]), Day: str(e["day"]), Cond: true,
 			Title: "Bank dates not read", Text: bankStaleWords(str(e["company"]), str(e["since"]))})
 	}
+	// 2.4.5: a day of the period the person chose that Tally could not give within 2 s even one voucher type at a time (or
+	// whose answer carried another date): one quiet line each, its own kind, shown once (never an error box)
+	for _, x := range arr(st["uploadDays"]) {
+		e := obj(x)
+		if e == nil || str(e["company"]) == "" || !isTallyDate(str(e["day"])) {
+			continue
+		}
+		d := fromTallyDate(str(e["day"])).Format("2006-01-02")
+		stale = append(stale, trayProblem{Kind: "uploadday|" + strings.ToLower(str(e["company"])) + "|" + d, Company: str(e["company"]), Day: d, Cond: true,
+			Title: "Upload one day's Day Book", Text: str(e["words"])})
+	}
 	return append([]trayProblem{
 		{Kind: "down", Cond: false},
 		// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words

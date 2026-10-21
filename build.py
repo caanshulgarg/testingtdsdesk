@@ -144,7 +144,16 @@ def react_parts():
     open(os.path.join(out, "test-style.html"), "w", encoding="utf-8").write(read("build/test-style.html"))
     import shutil
     shutil.copytree(os.path.join(ROOT, "assets"), os.path.join(ROOT, "app", "public", "assets"), dirs_exist_ok=True)
+    drop_retired(os.path.join(ROOT, "app", "public", "assets"))
     print("app/legacy: live.js, test.js, app.css; app/public/assets")
+
+# FinCom Bridge 2.4.5 (ROUND 102): the old PowerShell bridge (TDSBridge.ps1, 1.15.0) is retired: it is not shipped with any
+# build (the review site, the React build, site/ and site-test/). Its source stays in bridge/ and assets/connector/ for history
+RETIRED = [os.path.join("connector", "TDSBridge.ps1")]
+def drop_retired(assets_dir):
+    for r in RETIRED:
+        f = os.path.join(assets_dir, r)
+        if os.path.exists(f): os.remove(f)
 
 def main():
     if "--react" in sys.argv: return react_parts()
@@ -158,6 +167,7 @@ def main():
         open(os.path.join(ROOT, d, "index.html"), "w", encoding="utf-8").write(h)
         # the libraries and the bridge setup the page loads from assets/
         shutil.copytree(os.path.join(ROOT, "assets"), os.path.join(ROOT, d, "assets"), dirs_exist_ok=True)
+        drop_retired(os.path.join(ROOT, d, "assets"))
     print("site/index.html       %8d bytes (live)" % len(html.encode("utf-8")))
     print("site-test/index.html  %8d bytes (test)" % len(test.encode("utf-8")))
     if "--check" in sys.argv:

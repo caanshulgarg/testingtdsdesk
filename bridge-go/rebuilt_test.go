@@ -50,24 +50,25 @@ func (v *tVch) isCancelled() string {
 }
 
 type standTally struct {
-	srv       *httptest.Server
-	port      int
-	mu        sync.Mutex
-	guid      string
-	vch       []*tVch
-	ledgers   []string
-	reqs      []string
-	bodies    []string
-	inflight  int
-	maxFlight int
-	alter     int64
-	slow      func(id, body string) time.Duration
-	importAt  func(id, body string) (create bool, delay time.Duration)           // a posting: made or not, and how late it answers
-	led       []*tLed                                                            // the ledger masters (the ledger list; ledgers_test.go)
-	behave    func(w http.ResponseWriter, r *http.Request, id, body string) bool // a failure (faketally_test.go): true when it answered (or never will)
-	coName    string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
-	grp       [][2]string
-	mid       int64 // the last MasterID given
+	srv          *httptest.Server
+	port         int
+	mu           sync.Mutex
+	guid         string
+	vch          []*tVch
+	ledgers      []string
+	reqs         []string
+	bodies       []string
+	inflight     int
+	maxFlight    int
+	alter        int64
+	slow         func(id, body string) time.Duration
+	importAt     func(id, body string) (create bool, delay time.Duration)           // a posting: made or not, and how late it answers
+	led          []*tLed                                                            // the ledger masters (the ledger list; ledgers_test.go)
+	behave       func(w http.ResponseWriter, r *http.Request, id, body string) bool // a failure (faketally_test.go): true when it answered (or never will)
+	headsAllDays bool                                                               // 2.4.5: FinComDayHeads answered with every day's entries (the date not applied)
+	coName       string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
+	grp          [][2]string
+	mid          int64 // the last MasterID given
 	// fault 1 (03-Oct-2026, NWS144): how this Tally stores and answers
 	storeNarr     func(narr string) string // the narration as Tally keeps it (nil: as sent)
 	ansi          bool                     // answers in Windows-1252 bytes (an em dash as 0x97), as a real Tally does for non-ASCII text
@@ -467,6 +468,28 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case "FinComDayHeads": // 2.4.5: one day's entry heads, as a real TallyPrime writes them (testdata/r245); F2: one type
+			day, _ := pinDates(body)
+			typ := pinQuoted(body, "$VoucherTypeName")
+			for _, v := range f.vch {
+				if (v.date == day || f.headsAllDays) && (typ == "" || v.typ == typ) {
+					fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4b8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View"><DATE TYPE="Date">%s</DATE><GUID>%s</GUID><REQUESTORRULE/><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><ALTERID TYPE="Number"> %d</ALTERID><MASTERID TYPE="Number"> %s</MASTERID></VOUCHER>`,
+						v.guid, v.guid, esc(v.typ), v.date, v.guid, esc(v.typ), esc(v.no), v.alter, v.master)
+				}
+			}
+		case "FinComLedgerIds": // 2.4.5: the ledgers' MasterIDs in (after, upto]
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			for _, l := range f.led {
+				if l.mid > after && (upto < 0 || l.mid <= upto) {
+					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME=""><MASTERID TYPE="Number"> %d</MASTERID></LEDGER>`, esc(l.name), l.mid)
+				}
+			}
 		case vchObjectID: // next-fastfetch: the object export "ID:<MasterID>": that one voucher, whatever its date
 			want := group(`<ID TYPE="Name">ID:(\d+)</ID>`, body, 1)
 			found := false
@@ -638,6 +661,8 @@ type standCloud struct {
 	// next-renumber: every renumber_list body, and how it is answered (nil: 200 {ok, entries: []})
 	renumAsks  []M
 	renumReply func(b M) (int, M)
+	// 2.4.5: any other kind (period_heads, period_entries, ledger_progress): answered by other when set (nil: 200 {ok})
+	other func(kind string, b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -783,6 +808,15 @@ func newStandCloud(t *testing.T) *standCloud {
 				c.recBodies = append(c.recBodies, o)
 			}
 			out["results"], out["applied"] = res, len(res)
+		case "period_heads", "period_entries", "ledger_progress":
+			if c.other != nil {
+				code, ans := c.other(k, o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
 		case "days":
 			c.dayPosts = append(c.dayPosts, o)
 			done := []any{}
@@ -823,6 +857,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	stopHold = map[int]time.Time{}
 	bgMu.Unlock()
 	retryReset()   // 2.3.1: the shared retry schedule (retry.go), per test
+	r245Reset()    // 2.4.5: the older entries' days, the ledger progress, the tally.ini results
 	resetEarlier() // and the requests given up while Tally is still on them (inflight.go)
 	decideMu.Lock()
 	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test

@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"path/filepath"
 	"strings"
 )
 
@@ -47,7 +46,7 @@ func checkVchID(c M, entry string) string {
 	if err != nil {
 		return ""
 	}
-	p := readObjFile(filepath.Join(dir, "progress.json"))
+	p := readProgress(dir) // 2.4.5: the newest update, read as the job file is (jobfile.go)
 	for _, x := range arr(p["results"]) {
 		r := obj(x)
 		if r == nil || str(r["id"]) != entry {

@@ -414,3 +414,8 @@ run_2b_automatch_ui.py                300  TDSDESK_SITE=../app/dist-test
 # replaced reloads FinCom once (src/staleChunk.js), the screen opens; files gone for good reload once, never a loop
 run_stale_chunk.py                    120  TDSDESK_SITE=../app/dist-test
 run_chunk_heal.py                     240  TDSDESK_SITE=../app/dist-test
+# FinCom Bridge 2.4.5 (ROUND 102): older entries for a period the person chooses (migration 98, tally-ingest, the page)
+run_migration98.py                    300
+run_period_ingest.py                  180
+run_older_entries_ui.py               240  TDSDESK_SITE=../app/dist-test
+run_tally_ini_ui.py                  180  TDSDESK_SITE=../app/dist-test

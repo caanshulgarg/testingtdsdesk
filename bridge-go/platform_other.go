@@ -20,6 +20,9 @@ func platIdleSec() float64                     { return 99999 }
 func platFrontIsTally() bool                   { return false }
 func platTallyYoung(min float64) bool          { return false }
 
+// 2.4.5: Tally's window answering (not Windows: the tests' stand-in flag)
+func platTallyResponds() bool { return !tallyNotResponding.Load() }
+
 // the Tally program running (not Windows: a stand-in; with the test file, its list of programs)
 func platTallyRunning() bool {
 	if f := fakeData(); f != nil {

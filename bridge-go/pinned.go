@@ -94,6 +94,26 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return employeeChunkRequest(pinCo(x), a, u)
 	}),
+	// 2.4.5: one day only (SVFROMDATE = SVTODATE), F1 or F2 for the type its filter names; FinComLedgerIds in chunks of
+	// 2,000 MasterIDs at most, or the one request for every ledger
+	dayHeadsID: func(x string) []string {
+		a, z := pinDates(x)
+		if len(a) != 8 || a != z {
+			return nil
+		}
+		o := []string{dayHeadsRequest(pinCo(x), a)}
+		if t := pinQuoted(x, "$VoucherTypeName"); pullTypeOK(t) {
+			o = append(o, dayHeadsTypeRequest(pinCo(x), a, t))
+		}
+		return o
+	},
+	ledIdsID: pinOne(func(x string) string {
+		a, u := pinMasterRange(x)
+		if a < 0 || (u > 0 && u-a > 2000) {
+			return ""
+		}
+		return ledgerIdsRequest(pinCo(x), a, u)
+	}),
 	"TDSDeskLedgers":    pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgersFullRequest(pinCo(x), a, u) }),
 	"TDSDeskGroups":     pinOne(func(x string) string { return groupsFullRequest(pinCo(x)) }),
 	"TDSDeskNames":      pinOne(func(x string) string { a, u := pinMasterRange(x); return namesRequest(pinCo(x), a, u) }),

@@ -11,6 +11,8 @@ folder="${1:-react}"; banner="${2:-}"
 case "$folder" in ""|.|..|*/*|assets|src|app|docs|tests) echo "Not a preview folder: $folder"; exit 1;; esac
 ( cd .. && python3 build.py --react >/dev/null )
 FINCOM_BANNER="$banner" npm run build:test >/dev/null
+# FinCom Bridge 2.4.5 (ROUND 102): the retired PowerShell bridge is never published (build.py leaves it out; checked here too)
+[ ! -e dist-test/assets/connector/TDSBridge.ps1 ] || { echo "dist-test still holds assets/connector/TDSBridge.ps1 (the retired PowerShell bridge): stopped."; exit 1; }
 grep -q "qbocskaiewaxqcvaunzc" dist-test/legacy.js && ! grep -q "nrtczucrlgalvtojwoes" dist-test/legacy.js || { echo "The build does not point at the staging database: stopped."; exit 1; }
 tmp=$(mktemp -d)
 git fetch -q origin main
