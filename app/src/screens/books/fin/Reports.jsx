@@ -8,7 +8,11 @@
 import { useEffect, useMemo } from "react";
 import Button from "../../../parts/Button.jsx";
 import CommitBox from "../../../parts/CommitBox.jsx";
-import { st, setFin } from "./util.js";
+// the page's state (S.fin) is changed here directly, not through ./util.js: a lazy chunk importing from the Books file
+// makes Vite share that file's exports, and its loader is then no longer the plain import the heal of src/screens/lazy.js
+// asks again with "?retry=" (tests/run_chunk_heal.py)
+const st = () => (S.fin = S.fin || {});
+const setFin = (patch) => { Object.assign(st(), patch); render(); };
 import { QUESTIONS, SECTIONS, shown, setAnswer, docHtml, longDate, LAW } from "../../../lib/reports/index.js";
 import { ReportsPack, packFor } from "../../../lib/reportsExport.js";
 import "./reports.css";
