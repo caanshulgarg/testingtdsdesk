@@ -1,12 +1,12 @@
-"""python3 run_migration98.py - migration-98-zoho-rolling-minute (21-Oct-2026, branch next-fix-zoho-take; NOT run on staging) on a
-throwaway PostgreSQL (pg_stand through zoho_stand, port 30980 unless PG98_PORT; never a real database), after 75.
+"""python3 run_migration99.py - migration-99-zoho-rolling-minute (21-Oct-2026, branch next-fix-zoho-take; NOT run on staging) on a
+throwaway PostgreSQL (pg_stand through zoho_stand, port 30990 unless PG99_PORT; never a real database), after 75.
 75's zoho_api_take counted by the wall-clock minute: 90 calls at :59 and 90 more at :00 all went through (CI run
-39637004551: 91 calls that crossed :00, all let through). 98 counts any 60 seconds.
+39637004551: 91 calls that crossed :00, all let through). 99 counts any 60 seconds.
   0. the file: one transaction, lock_timeout 10 s; add-only (no "delete from", nothing dropped or truncated; the one table
      change is the new column zoho_api_usage.recent); only zoho_api_take replaced; names no real database; md5 printed
   1. runs, and runs a second time; the function keeps its arguments, result, SECURITY DEFINER, search_path and grants (a
      member still cannot call it); no row of zoho_api_usage changed
-  2. the boundary: 90 calls a second ago in the minute before - 75 lets the next through (RED), 98 does not, and says to
+  2. the boundary: 90 calls a second ago in the minute before - 75 lets the next through (RED), 99 does not, and says to
      wait until they are a minute old
   3. 91 calls at once (one statement) and 91 one after another: 90 go through, the 91st waits
   4. calls more than 60 seconds old do not count (and are not kept); 90 calls 30 seconds ago: wait 30 s
@@ -15,7 +15,7 @@ throwaway PostgreSQL (pg_stand through zoho_stand, port 30980 unless PG98_PORT; 
 import os, re, sys, json, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import zoho_stand
-M98 = zoho_stand.M98
+M99 = zoho_stand.M99
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -24,7 +24,7 @@ def q(s): return "'" + str(s).replace("'", "''") + "'"
 F, OWN = "99999999-9999-9999-9999-999999999998", "55555555-5555-5555-5555-555555555558"
 
 print("== 0. the file")
-text = open(M98).read() if os.path.exists(M98) else ""
+text = open(M99).read() if os.path.exists(M99) else ""
 print("   md5 %s, %d bytes" % (hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
@@ -35,7 +35,7 @@ ok(text and "delete from" not in code and not re.search(r"\b(drop|truncate)\b", 
 ok(re.findall(r"create or replace function public\.([a-z_0-9]+)\(", code) == ["zoho_api_take"], "only zoho_api_take replaced")
 ok(text and not re.search(r"supabase\.co|https?://", text.lower()), "names no real database")
 
-db = zoho_stand.build(int(os.environ.get("PG98_PORT", "30980")), run75=True, run98=False)
+db = zoho_stand.build(int(os.environ.get("PG99_PORT", "30990")), run75=True, run99=False)
 try:
     db.sql("""insert into firms values (%(F)s, 'Firm') on conflict do nothing;
       insert into members (user_id, firm_id, name, role, active) values (%(O)s, %(F)s, 'O', 'owner', true);
@@ -48,10 +48,10 @@ try:
     def ninety_at(ago_ms, day=DAY, minute="date_trunc('minute', now()) - interval '1 minute'"):
         # 90 calls ago_ms milliseconds before now, counted (75's way) in the minute before
         db.sql("delete from zoho_api_usage")   # (the test's own reset of a throwaway database; the migration never removes rows)
-        cols = "connection_id, day, calls, minute, minute_calls" + (", recent" if has98 else "")
-        vals = "%s, %s, 90, %s, 90" % (q(C), day, minute) + (", jsonb_build_array(jsonb_build_array(floor(extract(epoch from now()) * 1000)::bigint - %d, 90))" % ago_ms if has98 else "")
+        cols = "connection_id, day, calls, minute, minute_calls" + (", recent" if has99 else "")
+        vals = "%s, %s, 90, %s, 90" % (q(C), day, minute) + (", jsonb_build_array(jsonb_build_array(floor(extract(epoch from now()) * 1000)::bigint - %d, 90))" % ago_ms if has99 else "")
         db.sql("insert into zoho_api_usage (%s) values (%s)" % (cols, vals))
-    has98 = False
+    has99 = False
     # RED: 75 lets the 91st call through when the 90 were in the minute before, a second ago
     ninety_at(1000)
     ok(take()["ok"] is True, "RED (75): 90 calls a second ago, in the minute before: the next one is let through")
@@ -62,9 +62,9 @@ try:
     USAGE = "select md5(coalesce(string_agg(concat_ws(':', connection_id, day, calls, minute, minute_calls), '|' order by day), '')) from zoho_api_usage"
     fn0, use0 = db.one(FN), db.one(USAGE)
     for i in (1, 2):
-        rc, err = zoho_stand.psql_file(db, M98)
+        rc, err = zoho_stand.psql_file(db, M99)
         ok(rc == 0, "run %d: no error %s" % (i, err[-300:] if rc else ""))
-    has98 = True
+    has99 = True
     ok(db.one(FN) == fn0, "zoho_api_take keeps its arguments, result, SECURITY DEFINER, search_path and grants (%s)" % fn0)
     ok(db.one(USAGE) == use0 and db.one("select string_agg(distinct recent::text, ',') from zoho_api_usage") == "[]", "no row of zoho_api_usage changed; the new column reads []")
     try: db.rows("set role authenticated; set fincom.uid = %s; %s" % (q(OWN), TAKE)); ok(False, "a member cannot call zoho_api_take")

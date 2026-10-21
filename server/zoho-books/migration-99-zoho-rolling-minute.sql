@@ -1,4 +1,4 @@
--- migration-98-zoho-rolling-minute (21-Oct-2026, branch next-fix-zoho-take; NOT run on staging: the owner runs it)
+-- migration-99-zoho-rolling-minute (21-Oct-2026, branch next-fix-zoho-take; NOT run on staging: the owner runs it)
 --
 -- zoho_api_take (75) counted calls per wall-clock minute: the count started again at :00, so 90 calls at 10:00:59 and 90
 -- more at 10:01:00 were all let through - up to 180 within one second, where Zoho allows 100 a minute per organisation
@@ -14,7 +14,7 @@
 --
 -- Add-only: one new column (default '[]', nothing else in the table changes), zoho_api_take replaced with the same
 -- arguments, result, SECURITY DEFINER, search_path and grants (service role only, as 75). One transaction, lock_timeout
--- 10 s, safe to run twice. Runs after 75. Tested on pg_stand: tests/run_migration98.py.
+-- 10 s, safe to run twice. Runs after 75. Tested on pg_stand: tests/run_migration99.py.
 begin;
 set local lock_timeout = '10s';
 
