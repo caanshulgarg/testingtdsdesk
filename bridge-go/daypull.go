@@ -596,8 +596,8 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 		why += ": " + str(r.json["error"])
 	}
 	liveSayOnce("pull|cloud|"+w.it.key(), "Older entries of "+w.it.Company+": FinCom did not take "+what+" of "+liveDay(w.it.Day)+" ("+cutRunes(why, 160)+"); sent again later")
-	if r.code == 400 || r.code == 413 {
-		// refused for what was read (too large, another date): the same would be read again; the day is to be uploaded
+	if r.code == 400 && r.json != nil && regexp.MustCompile(`another date|larger than FinCom takes`).MatchString(str(r.json["error"])) {
+		// refused for what was read (an entry too large, another date): the same would be read again; to be uploaded
 		pullMarkUpload(w, "shape", "")
 		return false
 	}

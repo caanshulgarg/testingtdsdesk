@@ -1460,6 +1460,7 @@ let periodMissing = 0;
 // list, empty when paused, stopped or done (the bridge then stops at once)
 async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
+  let unsure = false;
   if (stopped) return out;
   if (Date.now() - periodMissing < 600000) return null;
   try {
@@ -1478,7 +1479,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
       books.add(book);
       // review 245 R3: the book's own recorded company GUID; a computer whose company of that name has another GUID (a
       // restored or test copy) is never handed the book's days
-      const recorded = await bookGuidOf(book);
+      let recorded = "";
+      try { recorded = await bookGuidOf(book); } catch { unsure = true; continue; }
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
@@ -1487,7 +1489,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
         fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", company, m.slice(0, 200));
-        return null;     // review 245 R4: not worked out: the key left out, the bridge keeps the day it reads
+        unsure = true; continue;     // review 245 R5: that company left out; the others go on
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= 3) break;
@@ -1501,7 +1503,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
     fail("period_next", e); console.log("tally-ingest beat: the days of the period not worked out:", String((e as Error)?.message || e).slice(0, 200));
     return null;
   }
-  return out;
+  // nothing listed while one company's days could not be worked out: the key left out (the bridge keeps the day it reads)
+  return unsure && out.length === 0 ? null : out;
 }
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
@@ -1607,7 +1610,7 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
       const book = await bookForBeat(firm, company);
       if (!book) continue;
       const rg = await bookGuidOf(book);
-      if (rg && pg && rg.toLowerCase() !== pg.toLowerCase()) continue;     // a same-named copy's progress is never kept
+      if (rg && rg.toLowerCase() !== pg.toLowerCase()) continue;     // a same-named copy's progress (or one with no GUID) is never kept
       const n = (v: unknown) => Math.max(0, Math.min(10000000, Math.floor(Number(v) || 0)));
       const { error } = await db.rpc("tally_ledger_progress_save", { p_book: book, p_round: typeof p?.round === "string" ? p.round.slice(0, 64) : "", p_read: n(p?.read), p_of: n(p?.of), p_done: false, p_device: dev.id });
       if (error && missingFn(String(error.message || ""))) { periodMissing = Date.now(); return; }
@@ -3725,8 +3728,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
-        // (ledger progress without a GUID yet, from a bridge that holds none for the name, is taken: only a different one is refused)
-        if (recorded && (sent || body.kind !== "ledger_progress") && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }

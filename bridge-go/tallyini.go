@@ -189,6 +189,11 @@ func tallyIniApply(path, addon string) (M, error) {
 		e["state"] = "missing"
 		return e, err
 	}
+	// review 245 R5: the folder itself is no link or junction to somewhere else
+	if real, rerr := filepath.EvalSymlinks(filepath.Dir(path)); rerr != nil || !strings.EqualFold(filepath.Clean(real), filepath.Clean(filepath.Dir(path))) {
+		e["state"] = "refused"
+		return e, errors.New("the TallyPrime folder is a link or junction to another place: not touched")
+	}
 	if !fi.Mode().IsRegular() {
 		e["state"] = "refused"
 		return e, errors.New("not a plain file (a link or a folder): not touched")
@@ -207,6 +212,9 @@ func tallyIniApply(path, addon string) (M, error) {
 	if bi, err := os.Lstat(bak); err == nil && !bi.Mode().IsRegular() {
 		e["state"] = "refused"
 		return e, fmt.Errorf("the backup %s is not a plain file (a link?): tally.ini not changed", bak)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		e["state"] = "failed"
+		return e, fmt.Errorf("the backup %s could not be looked at (%v): tally.ini not changed", bak, err)
 	} else if errors.Is(err, os.ErrNotExist) {
 		// made new only (O_EXCL: never through a link planted under that name, never over a file)
 		bf, err := os.OpenFile(bak, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
