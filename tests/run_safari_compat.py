@@ -21,7 +21,10 @@ ok(len(files) > 3, "built scripts found (%d)" % len(files))
 for f in files:
     s = open(f, encoding="utf8", errors="replace").read()
     rel = os.path.relpath(f, SITE)
-    ok("(?<=" not in s and "(?<!" not in s, "%s: no regex look-behind" % rel)
+    # a look-behind inside a string handed to new RegExp(...) does not stop the script being read (Safari refuses only a
+    # regex literal); it fails only if that code runs (assets/docx.iife.js: docx's patchDocument, never used by FinCom)
+    lb = [m.start() for m in re.finditer(r"\(\?<[=!]", s) if not re.search(r"new RegExp\(\s*[\"']$", s[max(0, m.start() - 20):m.start()])]
+    ok(not lb, "%s: no regex look-behind" % rel)
     if rel in ("guard.js", "oldcheck.js"): continue
     for pat, what in ((r"\?\?=", "??="), (r"\|\|=", "||="), (r"&&=", "&&="), (r"\bstatic\s*\{", "class static block")):
         ok(not re.search(pat, s), "%s: no %s (Safari 14 cannot read it)" % (rel, what))

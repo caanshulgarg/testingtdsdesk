@@ -3,14 +3,15 @@
 // the Accounts page (its Mapping is the Trial balance & mapping tab). Opens from the client's menu (books:fs), from
 // Reports ("Financial statements"), and from old links to books:fs.
 //
-// Header: year · Unit · Decimals · Details (the company's details, a drawer) · Download Excel · Download PDF (with trial
+// Header: year · Unit · Decimals · Details (the company's details, a drawer) · Reports (a menu: the Board's Report, the auditor's report, the MRL, their questionnaire, Download all; fin/Reports.jsx) · Download Excel · Download PDF (with trial
 // balance), built by window.FinXlsx.download / window.FinPdf.open in the chosen unit and decimals. Tabs: Balance sheet · Profit & loss · Cash flow · Notes · Computation of income ·
 // Trial balance & mapping · Checks (a red count only when a check is not 0).
 //
 // The figures: FinSt.build (src/js/88-fin-statements.js, docs/fin-statements-api.md). The page's state: S.fin (tab, note,
 // the trial balance's filters, ticks, an edit; fin/util.js), S.fsFy (the year, as before). S.fsTab === "dep" still opens
 // the fixed asset register (FixedAssets.jsx), from Note 8 and from the register's old links.
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+import More from "../../parts/More.jsx";
 import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
 import Msg from "../../parts/Msg.jsx";
@@ -22,6 +23,16 @@ import { Tb } from "./fin/Tb.jsx";
 import { Comp } from "./fin/Comp.jsx";
 import Details from "./fin/Details.jsx";
 import "./fin/fin.css";
+// the reports pack (ROUND 100): the Board's Report, the auditor's report, the MRL and their questionnaire, a lazy chunk
+// of its own opened from the header's "Reports" menu (the page keeps its seven tabs)
+const Reports = lazy(() => import("./fin/Reports.jsx"));
+const REP_MENU = [["board", "Board's Report"], ["audit", "Auditor's Report"], ["mrl", "Management representation"], ["q", "Questionnaire"]];
+function downloadAll(kind, fy, o) {
+  // the print window is opened by the click itself (a pop-up opened later is blocked), then filled
+  const w = kind === "pdf" ? window.open("", "_blank") : null;
+  import("../../lib/reportsExport.js").then((m) => (kind === "pdf" ? m.ReportsPack.openPdf(["fs", "board", "audit", "mrl"], fy, o, w) : m.ReportsPack.downloadZip(fy, o)))
+    .catch((e) => { try { if (w) w.close(); } catch (x) { /* */ } toast(e && (e.finLoad || e.code === "lib_missing" || /dynamically imported/.test(String(e && e.message))) ? "The reports are being prepared: they could not be loaded just now, try again in a moment" : "Could not make the file: " + ((e && e.message) || e)); });
+}
 
 export const FIN_TABS = [["bs", "Balance sheet"], ["pl", "Profit & loss"], ["cf", "Cash flow"], ["notes", "Notes"], ["comp", "Computation of income"], ["tb", "Trial balance & mapping"], ["checks", "Checks"]];
 
@@ -80,7 +91,7 @@ export default function FinStatements({ b }) {
     <FixedAssets b={b} fy={fy} /></>;
   if (!fy) return <div className="bk-none">The statements are made from the day book, which is not in yet. <button className="linkbtn" onClick={() => goClient("books:import")}>Bring in from Tally</button></div>;
   const inp = FinSt.inputs(), unit = inp.unit, dec = inp.dec;
-  const d = built(b, fy, unit, dec), tab = FIN_TABS.some(([k]) => k === s.tab) ? s.tab : "bs";
+  const d = built(b, fy, unit, dec), rep = REP_MENU.some(([k]) => k === s.rep) ? s.rep : "", tab = rep ? "" : FIN_TABS.some(([k]) => k === s.tab) ? s.tab : "bs";
   const bad = d && !d.error ? d.checks.filter((x) => x.value !== 0).length : 0;
   const tabs = FIN_TABS.map(([k, l]) => k === "checks" && bad ? [k, l, bad] : [k, l]);
   return <div className="fin" data-fin="" data-phone-scroll="" data-fin-unit={unit} data-fin-dec={dec}>
@@ -90,13 +101,15 @@ export default function FinStatements({ b }) {
       <Seg label="Decimals" value={dec} list={[[0, "0"], [2, "2"]]} onPick={(v) => { FinSt.inputsSet({ dec: v }); render(); }} />
       <span className="fin-sp" />
       <Button className="btn small" data-fin-details-open="" onClick={() => openDetail("finInputs", fy)}>Details</Button>
+      <More label="Reports" align="end" data-fin-reports="" items={REP_MENU.map(([k, l]) => [l, () => setFin({ rep: k, qk: "" }), { "data-fin-rep": k }])
+        .concat([["Download all as one PDF", () => downloadAll("pdf", fy, { unit, dec }), { "data-fin-all": "pdf" }], ["Download all as a zip", () => downloadAll("zip", fy, { unit, dec }), { "data-fin-all": "zip" }]])} />
       <Button className="btn small" data-fin-dl="xlsx" onClick={() => download("xlsx", fy, { unit, dec })}>Download Excel</Button>
       <Button className="btn small" data-fin-dl="pdf" onClick={() => download("pdf", fy, { unit, dec, includeTb: !!s.pdfTb })}>Download PDF</Button>
       <label className="note" style={{ whiteSpace: "nowrap" }}><input type="checkbox" aria-label="PDF with the trial balance" checked={!!s.pdfTb} onChange={(ev) => setFin({ pdfTb: ev.target.checked })} /> with trial balance</label>
     </div>
-    <PageTabs tabs={tabs} value={tab} onPick={(k) => setFin({ tab: k, note: k === "notes" ? s.note : "" })} label="Financial statements" attr="data-fin-tab" max={7} className="fin-tabs" />
+    <PageTabs tabs={tabs} value={tab} onPick={(k) => setFin({ tab: k, rep: "", note: k === "notes" ? s.note : "" })} label="Financial statements" attr="data-fin-tab" max={7} className="fin-tabs" />
     {d.error ? <div className="bk-alert" data-fs-need="">The balances are needed: <Msg text={d.error} /> <button className="linkbtn" onClick={() => goClient("books:import")}>Bring in the balances from Tally</button></div>
-      : <><Body d={d} tab={tab} fy={fy} kind={kind} /><Details d={d} /></>}
+      : <>{rep ? <Suspense fallback={<p className="note" data-rp-loading="">Preparing the reports…</p>}><Reports fy={fy} unit={unit} dec={dec} /></Suspense> : <Body d={d} tab={tab} fy={fy} kind={kind} />}<Details d={d} /></>}
     <div style={{ marginTop: 14 }}><HowPage page="fs" /></div>
   </div>;
 }
