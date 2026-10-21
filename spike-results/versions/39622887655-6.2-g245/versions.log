@@ -1,0 +1,805 @@
+[15:22:27] ---- c1 install and open the company (TallyPrime 6.2)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 17026752 bytes, 2026-10-21, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>6</PRODMAJORREL><PRODMINORREL>2</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 6 PRODMINORREL 2 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-21, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[15:23:00] ---- the stub cloud and the bridge
+[ledger Spike Income] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+[15:23:03] ---- g245 masters (before the bridge): ZZ BIG TEST, Tally's truth, tally.ini as a client's
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 37.1 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 3549.8 ms
+[db] dbm-vouchers-01.xml: created 500, altered 0, errors 0, 5862.6 ms
+[db] dbm-vouchers-02.xml: created 500, altered 0, errors 0, 6635.8 ms
+[db] dbm-vouchers-03.xml: created 500, altered 0, errors 0, 6180.4 ms
+[db] dbm-vouchers-04.xml: created 500, altered 0, errors 0, 6199.6 ms
+[db] dbm-vouchers-05.xml: created 500, altered 0, errors 0, 6559.9 ms
+[db] dbm-vouchers-06.xml: created 500, altered 0, errors 0, 6354.3 ms
+[db] dbm-vouchers-07.xml: created 500, altered 0, errors 0, 6489.1 ms
+[db] dbm-vouchers-08.xml: created 500, altered 0, errors 0, 6625.7 ms
+[db] dbm-vouchers-09.xml: created 500, altered 0, errors 0, 7054 ms
+[db] dbm-vouchers-10.xml: created 500, altered 0, errors 0, 6587.1 ms
+[db] dbm-vouchers-11.xml: created 500, altered 0, errors 0, 7265.4 ms
+[db] dbm-vouchers-12.xml: created 500, altered 0, errors 0, 6618.6 ms
+[db] dbm-vouchers-13.xml: created 500, altered 0, errors 0, 6647.2 ms
+[db] dbm-vouchers-14.xml: created 500, altered 0, errors 0, 6838.1 ms
+[db] dbm-vouchers-15.xml: created 500, altered 0, errors 0, 7141.4 ms
+[db] dbm-vouchers-16.xml: created 500, altered 0, errors 0, 6963.6 ms
+[db] dbm-vouchers-17.xml: created 500, altered 0, errors 0, 7002 ms
+[db] dbm-vouchers-18.xml: created 500, altered 0, errors 0, 7418.7 ms
+[db] dbm-vouchers-19.xml: created 500, altered 0, errors 0, 7627 ms
+[db] dbm-vouchers-20.xml: created 500, altered 0, errors 0, 8423.1 ms
+[db] dbm-vouchers-21.xml: created 500, altered 0, errors 0, 7500.6 ms
+[db] dbm-vouchers-22.xml: created 500, altered 0, errors 0, 7285.1 ms
+[db] dbm-vouchers-23.xml: created 500, altered 0, errors 0, 7270.8 ms
+[db] dbm-vouchers-24.xml: created 500, altered 0, errors 0, 7085.4 ms
+[db] dbm-vouchers-25.xml: created 500, altered 0, errors 0, 7628.2 ms
+[db] dbm-vouchers-26.xml: created 500, altered 0, errors 0, 7351.5 ms
+[db] dbm-vouchers-27.xml: created 500, altered 0, errors 0, 7373.1 ms
+[db] dbm-vouchers-28.xml: created 500, altered 0, errors 0, 7528.1 ms
+[db] dbm-vouchers-29.xml: created 500, altered 0, errors 0, 7178.8 ms
+[db] dbm-vouchers-30.xml: created 500, altered 0, errors 0, 8129.3 ms
+[db] dbm-vouchers-31.xml: created 500, altered 0, errors 0, 7500.5 ms
+[db] dbm-vouchers-32.xml: created 500, altered 0, errors 0, 7160.9 ms
+[db] dbm-vouchers-33.xml: created 500, altered 0, errors 0, 7598.3 ms
+[db] dbm-vouchers-34.xml: created 500, altered 0, errors 0, 7749.5 ms
+[db] dbm-vouchers-35.xml: created 500, altered 0, errors 0, 7021.9 ms
+[db] dbm-vouchers-36.xml: created 500, altered 0, errors 0, 7164.3 ms
+[db] dbm-vouchers-37.xml: created 500, altered 0, errors 0, 7932.4 ms
+[db] dbm-vouchers-38.xml: created 500, altered 0, errors 0, 7374.4 ms
+[db] dbm-vouchers-39.xml: created 500, altered 0, errors 0, 8097.4 ms
+[db] dbm-vouchers-40.xml: created 500, altered 0, errors 0, 7717 ms
+[db] dbm-vouchers-41.xml: created 500, altered 0, errors 0, 7667.9 ms
+[db] dbm-vouchers-42.xml: created 500, altered 0, errors 0, 8446.7 ms
+[db] dbm-vouchers-43.xml: created 500, altered 0, errors 0, 7782.8 ms
+[db] dbm-vouchers-44.xml: created 500, altered 0, errors 0, 7417.3 ms
+[db] dbm-vouchers-45.xml: created 500, altered 0, errors 0, 7324.3 ms
+[db] dbm-vouchers-46.xml: created 500, altered 0, errors 0, 7434.3 ms
+[db] dbm-vouchers-47.xml: created 500, altered 0, errors 0, 7746.9 ms
+[db] dbm-vouchers-48.xml: created 500, altered 0, errors 0, 7434 ms
+[db] dbm-vouchers-49.xml: created 500, altered 0, errors 0, 7554.5 ms
+[db] dbm-vouchers-50.xml: created 500, altered 0, errors 0, 7934.2 ms
+[db] dbm-vouchers-51.xml: created 500, altered 0, errors 0, 7707.5 ms
+[db] dbm-vouchers-52.xml: created 500, altered 0, errors 0, 7963 ms
+[db] dbm-vouchers-53.xml: created 500, altered 0, errors 0, 7829 ms
+[db] dbm-vouchers-54.xml: created 500, altered 0, errors 0, 7615.6 ms
+[db] dbm-vouchers-55.xml: created 500, altered 0, errors 0, 8160.8 ms
+[db] dbm-vouchers-56.xml: created 500, altered 0, errors 0, 8204.6 ms
+[db] dbm-vouchers-57.xml: created 500, altered 0, errors 0, 8252.7 ms
+[db] dbm-vouchers-58.xml: created 500, altered 0, errors 0, 8140.9 ms
+[db] dbm-vouchers-59.xml: created 500, altered 0, errors 0, 7986.5 ms
+[db] dbm-vouchers-60.xml: created 500, altered 0, errors 0, 8502.3 ms
+[db] dbm-vouchers-61.xml: created 8, altered 0, errors 0, 180.3 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 5612.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6021 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6269.1 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6167 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6112.6 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6085.6 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6102.5 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6363 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6349.1 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 6310.5 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7220.5 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7064 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7537.9 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7045.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7399.7 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7267.5 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7235.8 ms
+[db] filler ledgers to 20000: created 1000, altered 0, errors 0, 7473.6 ms
+[db] filler ledgers to 20000: created 889, altered 0, errors 0, 6684.9 ms
+[db] payroll masters (payg): created 18, altered 1, errors 0, 97.8 ms
+[db] 500 employees, batch 1: created 250, altered 0, errors 0, 739.1 ms
+[db] 500 employees, batch 2: created 250, altered 0, errors 0, 764.7 ms
+[db] PE-TDS-202607: created 1, altered 0, errors 0, 25.2 ms
+[db] PE-PAY-202608: created 1, altered 0, errors 0, 21.8 ms
+[db] PE-SAL-202608: created 1, altered 0, errors 0, 27.1 ms
+[db] payroll of 500 employees: created 1, altered 0, errors 0, 260 ms
+  INFO g245: the payroll month: masters created 18 (errors 0), 500 employees created 500, entries created 4 of 4 (PE-PAY-202608 01-Aug, PE-SAL-202608 02-Aug, PE-TDS-202607 02-Aug, PE-PAY-BULK500 31-Aug)
+  INFO g245: masters created 1114 (errors 0); entries created 30008 (errors 0); ledgers 20000; entries in Tally 30013 on 16 days
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.5.exe SHA-256 952367840120be1e60c24432ac351ac3bab8eb49e1f0b8ceef7783f28c0ecc73; bridge source: 1ecb71351c0855e218cbe200bd30fcbad9d9c750 Bridge 2.4.5 rebuilt (ROUND 103 with the night/Sunday pace and payroll in the older-period fetch): setup SHA-256 95236784…0ecc73 (program 79354783…bbf1), release log row (the withdrawn 2de26311 row kept), notes and test sheet fingerprint and build time (21-Oct-2026 20:36 IST); not published
+[15:32:51] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 7792)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.5, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-21 15:32:57  FinCom Bridge 2.4.5: started just for runnervm0xl3a\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-21 15:32:57  FinCom Bridge 2.4.5, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-10-21 15:32:57  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-10-21 15:32:57  FinCom Bridge 2.4.5 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervm0xl3a\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-21 15:32:57  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-21 15:32:57  Recorder: re-scan of the add-on's files for 2.4.5: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-21 15:32:57  Check:  - 
+  bridge log: 2026-10-21 15:33:00  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-21 15:33:00  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-21 15:33:00  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-10-21 15:33:00  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-21 15:33:00  Company FinCom Spike Co: its Tally GUID 9ff5d82c-acd0-46c5-88aa-7a53ad3a646b is held from now on
+  bridge log: 2026-10-21 15:33:00  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=30013, ALTMSTID=20737 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-21 15:33:00  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30013, ALTMSTID=20737
+  bridge log: 2026-10-21 15:33:00  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=30013, ALTMSTID=20737)
+  bridge log: 2026-10-21 15:33:05  Employees of FinCom Spike Co: Tally's master counter 20737: 12 request(s), 508 payroll row(s) kept (9 other cost centre(s) not kept)
+  bridge log: 2026-10-21 15:33:05  Employees of FinCom Spike Co: the payroll list (508) sent to FinCom
+  INFO add-on: recorder files after start: none
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+[15:33:43] ---- g245: the gate
+  INFO g245: the bridge 2.4.5 recorded the company's starting point: True
+[15:33:48] db: Tally (pid 1912) closed
+[15:33:48] db: Tally started (pid 2204), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-ini-A-started (1024x768)
+[15:34:21] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1884)
+[15:34:21] g245: Tally started again (ini-A): pid 2204, company up True, proxy True
+######## PASS g1 the installer added the add-on to tally.ini; Tally loads it and the client's other TDL at start: added by the setup: [TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl]; the lines before kept in order True; after the client's TDL line True; User TDL lines 1; backup = the file as it was True; Tally started again: FinCom's add-on formula 'C:\ProgramData\FinCom\recorder\', the client's TDL formula 'other-loaded'; Tally left the file as it was True; the beat: C:\Program Files\TallyPrime\tally.ini already; the per-user marker '2.4.5' in 'C:\Users\runneradmin\AppData\Local\FinCom Bridge'; the log: 2026-10-21 15:32:57  FinCom Bridge 2.4.5, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved) | 2026-10-21 15:32:57  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+[15:34:41] g245: counting FY 2026-27, 17 days (newest first)
+[g245] counted 0 of 17 days
+[g245] counted 0 of 17 days
+[g245] counted 0 of 17 days
+[g245] counted 13 of 17 days
+[g245] counted 17 of 17 days
+######## PASS g2 the year counted day by day, every day exactly Tally's count: 17 days counted in 1.7 min, 30,013 vouchers in all (Tally's own 30,013); not as Tally: none; above 20,000 (the half-years offered): True; the bridge's waits: 2026-10-21 15:35:57  Older entries of FinCom Spike Co: 02-Oct-2026 waits (Tally has just opened; letting it finish loading); nothing was sent to Tally
+[15:37:31] g245: fetching Apr-Sep (15 days); FinCom lacks 20260601, 20260702, 20260731, 20260801, 20260802, 20260831 (7852 entries)
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 1 of 15 days done; FinComVoucherObject asked 0
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 17
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 45
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 72
+  INFO g245: the posting during the fetch: 582 ms, ok True
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 88
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 115
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 143
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 170
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 198
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 226
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 253
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 281
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 308
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 336
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 364
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 391
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 419
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 446
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 473
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 500
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 528
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 556
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 584
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 612
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 640
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 659
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 687
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 715
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 743
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 772
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 800
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 828
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 856
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 884
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 912
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 940
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 968
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 996
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1025
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1051
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1079
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1108
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1136
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1164
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1192
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1220
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1248
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1276
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1304
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1333
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1361
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1389
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1418
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1444
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1472
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1500
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1528
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1557
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1585
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1613
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1641
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1670
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1698
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1726
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1755
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1783
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1811
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1839
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1866
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1895
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1923
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1952
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 1980
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 2008
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 2036
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 2065
+[g245] fetch: 9 of 15 days done; FinComVoucherObject asked 2093
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2121
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2149
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2177
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2205
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2234
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2261
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2289
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2308
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2337
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2365
+[g245] fetch: 10 of 15 days done; FinComVoucherObject asked 2394
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2420
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2448
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2477
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2505
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2534
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2562
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2590
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2618
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2647
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2675
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2703
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2731
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2759
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2788
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2816
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2845
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2874
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2903
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2931
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2959
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 2988
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3016
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3045
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3073
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3101
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3130
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3158
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3187
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3216
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3244
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3273
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3302
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3331
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3359
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3388
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3417
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3446
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3475
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3502
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3531
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3560
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3589
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3618
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3647
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3676
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3705
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3734
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3763
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3792
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3820
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3849
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3878
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3906
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3935
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3954
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 3983
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4012
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4041
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4070
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4099
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4128
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4157
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4187
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4216
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4245
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4274
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4303
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4332
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4360
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4390
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4417
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4446
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4475
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4504
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4533
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4563
+[g245] fetch: 11 of 15 days done; FinComVoucherObject asked 4592
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4619
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4648
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4677
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4707
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4735
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4765
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4794
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4823
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4853
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4882
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4911
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4941
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4970
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 4999
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5028
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5057
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5086
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5115
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5143
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5172
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5202
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5231
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5260
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5289
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5319
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5348
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5378
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5407
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5437
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5466
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5496
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5525
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5553
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5581
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5597
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5627
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5656
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5686
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5715
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5745
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5774
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5804
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5834
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5864
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5893
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5923
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5952
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 5981
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6010
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6040
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6069
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6099
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6128
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6158
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6188
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6218
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6247
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6277
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6307
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6337
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6366
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6395
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6425
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6455
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6485
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6515
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6545
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6575
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6605
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6632
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6662
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6692
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6722
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6752
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6781
+[g245] fetch: 12 of 15 days done; FinComVoucherObject asked 6811
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6839
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6869
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6899
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6929
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6959
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 6989
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7019
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7049
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7079
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7109
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7139
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7169
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7198
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7223
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7243
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7273
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7303
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7333
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7363
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7393
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7423
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7453
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7483
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7513
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7543
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7573
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7603
+[g245] fetch: 13 of 15 days done; FinComVoucherObject asked 7632
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7654
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7684
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7714
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7744
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7774
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7805
+[g245] fetch: 14 of 15 days done; FinComVoucherObject asked 7835
+[g245] fetch: 15 of 15 days done; FinComVoucherObject asked 7852
+######## FAIL g3 the chosen part fetched: FinCom holds every entry Tally lists, only what it lacked asked: Apr-Sep, 15 days, in 49.7 min: the progress line ends '25,581 of 25,581 vouchers (100%) · all in FinCom'; days not held in full or not as Tally: none; FinCom lacked 7852 entries on 20260601, 20260702, 20260731, 20260801, 20260802, 20260831: all sent True; FinComVoucherObject asked 7852 times (1852 wanted by FinCom; asked twice 0; not wanted 6000); days listed for the fetch outside the part none; entries with another date 0; days to upload: none
+######## FAIL g4 no request over 2 s, one at a time, Tally's window never blocked 2 s, Tally responding: 15752 requests at Tally during the count and the fetch (FinComCompany 6 (worst 20 ms), FinComDayHeads 26 (worst 803 ms), FinComVoucherObject 7852 (worst 1411 ms), Import 1 (worst 63 ms), TDSDeskCompanies 7862 (worst 29 ms), TDSDeskKeepList 5 (worst 2977 ms)); over 2 s (a payroll entry over 3 s): TDSDeskKeepList 2568 ms, TDSDeskKeepList 2727 ms, TDSDeskKeepList 2872 ms, TDSDeskKeepList 2966 ms, TDSDeskKeepList 2977 ms; payroll entries 2 (worst 1411 ms); started while another was at Tally: 0; Tally's window longest not answering 2766 ms (at 16:23:14; spells of 2 s or more: 5, outside a payroll entry or 3 s or more: 5); Tally responding at the end True; the bridge's stops: 2026-10-21 16:13:11  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) | 2026-10-21 16:23:13  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) | 2026-10-21 16:23:13  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+######## FAIL g10 the night pace: day after day, more than 3 days an answer, entries a minute measured: periodNight answered 597 time(s); at most 6 days in one answer; 597 beats in 49.7 min of fetch; 163 entries a minute (7,852 entries over 48 min); the rules of g4 kept: over the limit 5, overlapping 0, window spells not allowed 5
+######## FAIL g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail: the payroll's employees sent 1 time(s) (508 rows), before the first payroll entry True; payroll vouchers sent: 1 on 20260801: 7 employees, 40 allocations; 2 on 20260831: 500 employees, 2500 allocations; the salary payment: 3825: 7 employees; bank details sent: none; payroll entry requests 2 (worst 1411 ms, limit 3,000); the payroll days' counts as Tally's: yes; period stops 0
+######## PASS g5 postings first during the fetch: the posting: 582 ms in all, ok True; its request reached Tally 513 ms after FinCom asked (older-day reads started before it in that time: 0); older-day reads started after it until the posting was done: 0; the fetch went on after it (7788 more reads); the answer {"company":"FinCom Spike Co","ok":true,"port":9000,"results":[{"altered":0,"batchEnd":"30014","batchN":1,"byReply":true,"company":"FinCom Spike Co","created":1,"errors":0,"exceptions":0,"id":"g245-6.2-0d17cc44","ignored":0,"kind":"voucher","lastVchId":"30014","message":"","ok":true,"port":9000,"seco
+######## FAIL g6 the exact ledger count and its progress: Tally's ledgers 20,009; FinComLedgerIds asked 0 time(s) ( ms), FinComLedgers 0 chunk(s), worst  ms; progress sent 0 time(s): ; the last '0 of 0 ledgers' done ; going back 0; 'of' not Tally's count 0
+######## PASS g7 User TDL = No left untouched and reported: the bridge restarted from the tray's address (asked 0, the bridge 2.4.5); tally.ini byte for byte the same True; the backup untouched True; the beat: usertdl-no: this Tally is set not to load any add-on (User TDL = No); left as it is, so FinCom's add-on is not loaded automatically on this computer; the log: 2026-10-21 16:48:18  tally.ini looked at again (read only): C:\Program Files\TallyPrime\tally.ini: usertdl-no
+######## HARNESS g9 a day's list held over 2 s stops reading older entries of the company (freeze safety): Tally suspended 5 s at the first day's list (0); FinCom told: 20261001 over2s: Tally took too long to give 01-Oct-2026, so FinCom stopped reading older entries of FinCom Spike Co. Please upload the Day Book for the days still missing.; requests for older days after the stop: none; Tally responding after True
+  INFO g245: the job's progress file: C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\jobs\g245stress-a3dcf89aa5b2\progress.json (there: True)
+######## PASS g8 job files read while written: nothing lost, never missing: the job of 300 entries: done, 300 of 300 posted; read 232 times while written: 'no such job' 0, not answered 0; progress.json opened directly: missing or locked 0, not whole 0; the count going back 0; 0.2 min
+  bridge log: 2026-10-21 15:35:57  Older entries of FinCom Spike Co: 02-Oct-2026 waits (Tally has just opened; letting it finish loading); nothing was sent to Tally
+  bridge log: 2026-10-21 15:36:51  Older entries of FinCom Spike Co: 02-Oct-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:36:52  Older entries of FinCom Spike Co: 01-Oct-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:36:53  Older entries of FinCom Spike Co: 02-Sep-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:36:54  Older entries of FinCom Spike Co: 01-Sep-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:36:59  Older entries of FinCom Spike Co: 31-Aug-2026: Tally lists 801 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:00  Older entries of FinCom Spike Co: 02-Aug-2026: Tally lists 2218 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:01  Older entries of FinCom Spike Co: 01-Aug-2026: Tally lists 2217 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:04  Older entries of FinCom Spike Co: 31-Jul-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:04  Older entries of FinCom Spike Co: 02-Jul-2026: Tally lists 300 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:05  Older entries of FinCom Spike Co: 01-Jul-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:09  Older entries of FinCom Spike Co: 02-Jun-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:09  Older entries of FinCom Spike Co: 01-Jun-2026: Tally lists 100 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:09  Older entries of FinCom Spike Co: 31-May-2026: Tally lists 0 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:13  Older entries of FinCom Spike Co: 02-May-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:14  Older entries of FinCom Spike Co: 01-May-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:14  Older entries of FinCom Spike Co: 02-Apr-2026: Tally lists 2216 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:37:19  Older entries of FinCom Spike Co: 01-Apr-2026: Tally lists 2217 entries (day); FinCom lacks 0
+  bridge log: 2026-10-21 15:39:05  Older entries of FinCom Spike Co: 01-Aug-2026: Tally lists 2217 entries (day); FinCom lacks 2000
+  bridge log: 2026-10-21 15:39:05  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+  bridge log: 2026-10-21 15:39:05  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-21 15:39:06  Recorder: entry fetch of FinCom Spike Co: answered in 32 ms
+  bridge log: 2026-10-21 15:39:06  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-21 15:39:06  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+  bridge log: 2026-10-21 15:39:07  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-21 15:39:08  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-21 15:39:09  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-21 15:39:09  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-21 15:39:10  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-21 15:39:11  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+  bridge log: 2026-10-21 15:39:11  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-21 15:39:12  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-21 15:39:13  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+  bridge log: 2026-10-21 15:39:19  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-21 15:39:22  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-21 15:39:24  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+  bridge log: 2026-10-21 15:39:27  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-21 15:39:28  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-21 15:39:31  Tally 9000: a background read was stopped at once so FinCom's request goes first; it resumes afterwards from where it was
+  bridge log: 2026-10-21 15:39:32  Older entries of FinCom Spike Co: 01-Aug-2026 waits (a posting goes first); nothing was sent to Tally
+  bridge log: 2026-10-21 15:39:32  Older entries of FinCom Spike Co: 01-Aug-2026: 72 entries sent to FinCom
+  bridge log: 2026-10-21 15:39:32      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30014</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 15:39:32    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30014)
+  bridge log: 2026-10-21 15:39:32  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+  bridge log: 2026-10-21 15:39:38  Recorder: entry fetch of FinCom Spike Co: answered in 37 ms
+  bridge log: 2026-10-21 15:39:54  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-21 15:40:49  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:41:07  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-21 15:41:21  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-21 15:41:44  Recorder: entry fetch of FinCom Spike Co: answered in 38 ms
+  bridge log: 2026-10-21 15:42:02  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:42:18  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-21 15:42:56  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-21 15:43:03  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30013; now ALTVCHID=30014, ALTMSTID=20737
+  bridge log: 2026-10-21 15:43:05  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 15:43:05  Tally 9000 did not answer in time at 15:43:05 (TDSDeskKeepList, try 1); trying again by itself at 15:43:20
+  bridge log: 2026-10-21 15:43:05  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 15:43:06  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 600ms after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 15:43:06  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+  bridge log: 2026-10-21 15:43:17  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:44:29  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:45:42  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:46:54  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:48:07  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:48:08  Recorder: entry fetch of FinCom Spike Co: answered in 39 ms
+  bridge log: 2026-10-21 15:49:07  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+  bridge log: 2026-10-21 15:49:07  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-21 15:49:10  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-21 15:49:10  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-21 15:49:12  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+  bridge log: 2026-10-21 15:49:13  Recorder: entry fetch of FinCom Spike Co: answered in 32 ms
+  bridge log: 2026-10-21 15:49:14  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-21 15:49:15  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-21 15:49:16  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-21 15:49:17  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-21 15:49:19  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:49:23  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-21 15:49:28  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-21 15:49:28  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+  bridge log: 2026-10-21 15:49:29  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+  bridge log: 2026-10-21 15:49:32  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-21 15:49:33  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-21 15:49:37  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-21 15:50:12  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-21 15:50:15  Recorder: entry fetch of FinCom Spike Co: answered in 37 ms
+  bridge log: 2026-10-21 15:50:22  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-21 15:50:30  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+  bridge log: 2026-10-21 15:50:32  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:51:14  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-21 15:51:18  Older entries of FinCom Spike Co: 01-Aug-2026: 128 entries sent to FinCom
+  bridge log: 2026-10-21 15:51:18  Older entries of FinCom Spike Co: 01-Jun-2026: Tally lists 100 entries (day); FinCom lacks 100
+  bridge log: 2026-10-21 15:51:22  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-21 15:51:54  Older entries of FinCom Spike Co: 01-Jun-2026: 100 entries sent to FinCom
+  bridge log: 2026-10-21 15:51:54  Older entries of FinCom Spike Co: 02-Jul-2026: Tally lists 300 entries (day); FinCom lacks 300
+  bridge log: 2026-10-21 15:53:07  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 15:53:07  Tally 9000 did not answer in time at 15:53:07 (TDSDeskKeepList, try 1); trying again by itself at 15:53:22
+  bridge log: 2026-10-21 15:53:07  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 15:53:07  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 700ms after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 15:53:08  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+  bridge log: 2026-10-21 15:53:11  Older entries of FinCom Spike Co: 02-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:53:28  Recorder: entry fetch of FinCom Spike Co: answered in 38 ms
+  bridge log: 2026-10-21 15:53:47  Older entries of FinCom Spike Co: 02-Jul-2026: 100 entries sent to FinCom
+  bridge log: 2026-10-21 15:53:48  Older entries of FinCom Spike Co: 31-Jul-2026: Tally lists 2216 entries (day); FinCom lacks 2000
+  bridge log: 2026-10-21 15:54:14  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+  bridge log: 2026-10-21 15:55:00  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:56:14  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:56:30  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-21 15:57:26  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:58:08  Recorder: entry fetch of FinCom Spike Co: answered in 40 ms
+  bridge log: 2026-10-21 15:58:39  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 15:59:10  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+  bridge log: 2026-10-21 15:59:14  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-21 15:59:15  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+  bridge log: 2026-10-21 15:59:16  Recorder: entry fetch of FinCom Spike Co: answered in 32 ms
+  bridge log: 2026-10-21 15:59:17  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-21 15:59:19  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-21 15:59:19  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-21 15:59:25  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-21 15:59:34  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-21 15:59:35  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-21 15:59:38  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-21 15:59:38  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-21 15:59:44  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+  bridge log: 2026-10-21 15:59:52  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:00:00  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-21 16:00:05  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+  bridge log: 2026-10-21 16:00:07  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-21 16:00:18  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-21 16:00:33  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+  bridge log: 2026-10-21 16:00:54  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-21 16:00:58  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-21 16:01:04  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:01:09  Recorder: entry fetch of FinCom Spike Co: answered in 37 ms
+  bridge log: 2026-10-21 16:01:15  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-21 16:01:44  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-21 16:02:16  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:03:08  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:03:08  Tally 9000 did not answer in time at 16:03:08 (TDSDeskKeepList, try 1); trying again by itself at 16:03:23
+  bridge log: 2026-10-21 16:03:08  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:03:09  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 900ms after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:03:10  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+  bridge log: 2026-10-21 16:03:33  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:04:45  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:04:47  Recorder: entry fetch of FinCom Spike Co: answered in 38 ms
+  bridge log: 2026-10-21 16:05:43  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+  bridge log: 2026-10-21 16:05:57  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:05:58  Older entries of FinCom Spike Co: 01-Aug-2026: Tally lists 2217 entries (day); FinCom lacks 217
+  bridge log: 2026-10-21 16:07:10  Older entries of FinCom Spike Co: 01-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:07:16  Recorder: entry fetch of FinCom Spike Co: answered in 54 ms
+  bridge log: 2026-10-21 16:07:16  Older entries of FinCom Spike Co: 01-Aug-2026: 17 entries sent to FinCom
+  bridge log: 2026-10-21 16:07:17  Older entries of FinCom Spike Co: 02-Aug-2026: Tally lists 2218 entries (day); FinCom lacks 2000
+  bridge log: 2026-10-21 16:07:52  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-21 16:08:29  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:09:11  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+  bridge log: 2026-10-21 16:09:16  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+  bridge log: 2026-10-21 16:09:19  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-21 16:09:21  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-21 16:09:22  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-21 16:09:27  Recorder: entry fetch of FinCom Spike Co: answered in 32 ms
+  bridge log: 2026-10-21 16:09:28  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-21 16:09:32  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-21 16:09:41  Recorder: entry fetch of FinCom Spike Co: answered in 39 ms
+  bridge log: 2026-10-21 16:09:42  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:09:47  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-21 16:09:56  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-21 16:09:59  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-21 16:10:07  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+  bridge log: 2026-10-21 16:10:08  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-21 16:10:11  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-21 16:10:18  Recorder: entry fetch of FinCom Spike Co: answered in 17 ms
+  bridge log: 2026-10-21 16:10:22  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+  bridge log: 2026-10-21 16:10:29  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-21 16:10:37  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-21 16:10:51  Recorder: entry fetch of FinCom Spike Co: answered in 16 ms
+  bridge log: 2026-10-21 16:10:52  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+  bridge log: 2026-10-21 16:10:55  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:11:01  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-21 16:11:15  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-21 16:11:17  Recorder: entry fetch of FinCom Spike Co: answered in 37 ms
+  bridge log: 2026-10-21 16:11:18  Recorder: entry fetch of FinCom Spike Co: answered in 40 ms
+  bridge log: 2026-10-21 16:11:34  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-21 16:11:35  Recorder: entry fetch of FinCom Spike Co: answered in 42 ms
+  bridge log: 2026-10-21 16:12:08  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:12:18  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-21 16:13:11  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:13:11  Tally 9000 did not answer in time at 16:13:11 (TDSDeskKeepList, try 1); trying again by itself at 16:13:26
+  bridge log: 2026-10-21 16:13:11  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:13:12  Older entries of FinCom Spike Co: 02-Aug-2026 waits (Tally did not answer in time lately; the shared retry schedule waits); nothing was sent to Tally
+  bridge log: 2026-10-21 16:13:12  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 1s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:13:12  Older entries of FinCom Spike Co: 02-Aug-2026: 164 entries sent to FinCom
+  bridge log: 2026-10-21 16:13:14  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+  bridge log: 2026-10-21 16:13:24  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-21 16:14:26  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:15:26  Recorder: entry fetch of FinCom Spike Co: answered in 38 ms
+  bridge log: 2026-10-21 16:15:39  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:16:52  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:18:05  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:19:14  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+  bridge log: 2026-10-21 16:19:16  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:19:20  Recorder: entry fetch of FinCom Spike Co: answered in 30 ms
+  bridge log: 2026-10-21 16:19:21  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-21 16:19:23  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-21 16:19:24  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-21 16:19:29  Older entries of FinCom Spike Co: 02-Aug-2026: 36 entries sent to FinCom
+  bridge log: 2026-10-21 16:19:30  Older entries of FinCom Spike Co: 31-Jul-2026: Tally lists 2216 entries (day); FinCom lacks 216
+  bridge log: 2026-10-21 16:19:31  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+  bridge log: 2026-10-21 16:19:35  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+  bridge log: 2026-10-21 16:19:42  Recorder: entry fetch of FinCom Spike Co: answered in 32 ms
+  bridge log: 2026-10-21 16:20:02  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-21 16:20:08  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-21 16:20:11  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-21 16:20:26  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+  bridge log: 2026-10-21 16:20:43  Older entries of FinCom Spike Co: 31-Jul-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:20:47  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-21 16:20:49  Older entries of FinCom Spike Co: 31-Jul-2026: 16 entries sent to FinCom
+  bridge log: 2026-10-21 16:20:49  Older entries of FinCom Spike Co: 31-Aug-2026: Tally lists 801 entries (day); FinCom lacks 801
+  bridge log: 2026-10-21 16:20:51  Recorder: entry fetch of FinCom Spike Co: answered in 35 ms
+  bridge log: 2026-10-21 16:21:06  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-21 16:21:19  Recorder: entry fetch of FinCom Spike Co: answered in 11 ms
+  bridge log: 2026-10-21 16:21:30  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-21 16:21:31  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+  bridge log: 2026-10-21 16:22:01  Older entries of FinCom Spike Co: 31-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:22:26  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-21 16:22:30  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+  bridge log: 2026-10-21 16:23:13  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:23:13  Tally 9000 did not answer in time at 16:23:13 (TDSDeskKeepList, try 1); trying again by itself at 16:23:28
+  bridge log: 2026-10-21 16:23:13  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:23:14  Older entries of FinCom Spike Co: 31-Aug-2026 waits (Tally did not answer in time lately; the shared retry schedule waits); nothing was sent to Tally
+  bridge log: 2026-10-21 16:23:14  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 1s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:23:14  Older entries of FinCom Spike Co: 31-Aug-2026: 190 entries sent to FinCom
+  bridge log: 2026-10-21 16:23:16  Tally 9000 answered in time again (FinComVoucherObject): the background requests are back to normal
+  bridge log: 2026-10-21 16:23:33  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-21 16:23:48  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-21 16:24:28  Older entries of FinCom Spike Co: 31-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:24:46  Recorder: entry fetch of FinCom Spike Co: answered in 37 ms
+  bridge log: 2026-10-21 16:25:41  Older entries of FinCom Spike Co: 31-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:25:47  Recorder: entry fetch of FinCom Spike Co: answered in 1430 ms
+  bridge log: 2026-10-21 16:25:47  Older entries of FinCom Spike Co: 31-Aug-2026: 11 entries sent to FinCom
+  bridge log: 2026-10-21 16:25:48  Older entries of FinCom Spike Co: 02-Aug-2026: Tally lists 2218 entries (day); FinCom lacks 218
+  bridge log: 2026-10-21 16:26:17  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-21 16:26:54  Recorder: entry fetch of FinCom Spike Co: answered in 39 ms
+  bridge log: 2026-10-21 16:27:01  Older entries of FinCom Spike Co: 02-Aug-2026: 200 entries sent to FinCom
+  bridge log: 2026-10-21 16:27:07  Older entries of FinCom Spike Co: 02-Aug-2026: 18 entries sent to FinCom
+  bridge log: 2026-10-21 16:27:21  Update from Tally asked for now
+  bridge log: 2026-10-21 16:27:21  Update from Tally: asked for now
+  bridge log: 2026-10-21 16:27:22  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-21 16:27:22  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:22  Keeping FinCom Spike Co: natures of payment MasterID 5001-10000, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:23  Keeping FinCom Spike Co: natures of payment MasterID 10001-15000, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:23  Keeping FinCom Spike Co: natures of payment MasterID 15001-20000, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:24  Keeping FinCom Spike Co: natures of payment MasterID 20001-25000, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:24  Keeping FinCom Spike Co: natures of payment MasterID 25001-end, 0 (0.2s)
+  bridge log: 2026-10-21 16:27:25  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 1788 ledger(s) (0.6s); saved
+  bridge log: 2026-10-21 16:27:26  Keeping FinCom Spike Co: ledger list MasterID 2001-4000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:26  Keeping FinCom Spike Co: ledger list MasterID 4001-6000, 2000 ledger(s) (0.6s); saved
+  bridge log: 2026-10-21 16:27:27  Keeping FinCom Spike Co: ledger list MasterID 6001-8000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:28  Keeping FinCom Spike Co: ledger list MasterID 8001-10000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:29  Keeping FinCom Spike Co: ledger list MasterID 10001-12000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:30  Keeping FinCom Spike Co: ledger list MasterID 12001-14000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:30  Keeping FinCom Spike Co: ledger list MasterID 14001-16000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:31  Keeping FinCom Spike Co: ledger list MasterID 16001-18000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:32  Keeping FinCom Spike Co: ledger list MasterID 18001-20000, 2000 ledger(s) (0.5s); saved
+  bridge log: 2026-10-21 16:27:32  Keeping FinCom Spike Co: ledger list MasterID 20001-22000, 221 ledger(s) (0.2s); saved
+  bridge log: 2026-10-21 16:27:33  Keeping FinCom Spike Co: ledger list MasterID 22001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-21 16:27:33  Keeping FinCom Spike Co: the ledger list read (20009 ledgers, 29 groups, 19 request(s)): 20009 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-21 16:27:33  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=30014 ALTMSTID=20737
+  bridge log: 2026-10-21 16:27:34  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-21 16:27:34  Update from Tally: done (21 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  bridge log: 2026-10-21 16:33:16  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:33:16  Tally 9000 did not answer in time at 16:33:16 (TDSDeskKeepList, try 1); trying again by itself at 16:33:31
+  bridge log: 2026-10-21 16:33:16  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:33:17  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 1s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:37:24  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+  bridge log: 2026-10-21 16:43:15  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30013; now ALTVCHID=30014, ALTMSTID=20737
+  bridge log: 2026-10-21 16:43:17  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:43:17  Tally 9000 did not answer in time at 16:43:17 (TDSDeskKeepList, try 1); trying again by itself at 16:43:32
+  bridge log: 2026-10-21 16:43:17  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:43:18  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 1.1s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:47:25  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+  bridge log: 2026-10-21 16:48:14  Restarting: asked from the tray icon
+  bridge log: 2026-10-21 16:48:15  FinCom Bridge 2.4.5 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervm0xl3a\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-21 16:48:15  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-21 16:48:15  Check:  - 
+  bridge log: 2026-10-21 16:48:15  Cloud: FinCom Spike Co is linked in FinCom; sending its copy (0 days)
+  bridge log: 2026-10-21 16:48:18  tally.ini looked at again (read only): C:\Program Files\TallyPrime\tally.ini: usertdl-no
+  bridge log: 2026-10-21 16:48:18  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-21 16:48:18  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30014, ALTMSTID=20737
+  bridge log: 2026-10-21 16:48:18  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30013; now ALTVCHID=30014, ALTMSTID=20737
+  bridge log: 2026-10-21 16:48:20  Tally 9000: TDSDeskKeepList took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:48:20  Tally 9000 did not answer in time at 16:48:20 (TDSDeskKeepList, try 1); trying again by itself at 16:48:35
+  bridge log: 2026-10-21 16:48:20  Recorder (Tally's change list) for FinCom Spike Co: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:48:21  Tally 9000 finished the request the bridge stopped waiting for (TDSDeskKeepList) 1.1s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:48:51  Tally 9000: FinComDayHeads 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+  bridge log: 2026-10-21 16:48:51  Tally 9000 did not answer in time at 16:48:51 (FinComDayHeads, try 2); trying again by itself at 16:49:21
+  bridge log: 2026-10-21 16:48:52  Older entries of FinCom Spike Co: stopped at 01-Oct-2026 (one day (yyyymmdd TYPE=Date)): nothing more is asked of Tally for the period; FinCom shows one line to upload the Day Book of the days still missing
+  bridge log: 2026-10-21 16:48:54  Notification shown: Upload the Day Book of the days still missing (periodstop|fincom spike co|2026-10-21T16:48:52Z:d524e2a4ff4217ba; not shown again for this problem)
+  bridge log: 2026-10-21 16:48:55  Tally 9000 finished the request the bridge stopped waiting for (FinComDayHeads) 3.5s after the stop; its answer is discarded and the next request goes now
+  bridge log: 2026-10-21 16:50:24  Posting job g245stress-a3dcf89aa5b2: 300 item(s) for FinCom Spike Co
+  bridge log: 2026-10-21 16:50:25      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30024</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:25  Posting job g245stress-a3dcf89aa5b2: request 1 of 30: 10 vouchers in 0.3 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30024)
+  bridge log: 2026-10-21 16:50:26      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30034</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:26  Posting job g245stress-a3dcf89aa5b2: request 2 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30034)
+  bridge log: 2026-10-21 16:50:26      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30044</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:26  Posting job g245stress-a3dcf89aa5b2: request 3 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30044)
+  bridge log: 2026-10-21 16:50:26      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30054</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:26  Posting job g245stress-a3dcf89aa5b2: request 4 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30054)
+  bridge log: 2026-10-21 16:50:27      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30064</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:27  Posting job g245stress-a3dcf89aa5b2: request 5 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30064)
+  bridge log: 2026-10-21 16:50:27      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30074</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:27  Posting job g245stress-a3dcf89aa5b2: request 6 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30074)
+  bridge log: 2026-10-21 16:50:28      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30084</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:28  Posting job g245stress-a3dcf89aa5b2: request 7 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30084)
+  bridge log: 2026-10-21 16:50:28      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30094</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:28  Posting job g245stress-a3dcf89aa5b2: request 8 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30094)
+  bridge log: 2026-10-21 16:50:28  Light check: skipped: a posting is going (the check goes after it)
+  bridge log: 2026-10-21 16:50:29      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30104</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:29  Posting job g245stress-a3dcf89aa5b2: request 9 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30104)
+  bridge log: 2026-10-21 16:50:29      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30114</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:29  Posting job g245stress-a3dcf89aa5b2: request 10 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30114)
+  bridge log: 2026-10-21 16:50:30      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30124</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:30  Posting job g245stress-a3dcf89aa5b2: request 11 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30124)
+  bridge log: 2026-10-21 16:50:30      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30134</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:30  Posting job g245stress-a3dcf89aa5b2: request 12 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30134)
+  bridge log: 2026-10-21 16:50:30      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30144</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:30  Posting job g245stress-a3dcf89aa5b2: request 13 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30144)
+  bridge log: 2026-10-21 16:50:31      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30154</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:31  Posting job g245stress-a3dcf89aa5b2: request 14 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30154)
+  bridge log: 2026-10-21 16:50:31      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30164</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:31  Posting job g245stress-a3dcf89aa5b2: request 15 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30164)
+  bridge log: 2026-10-21 16:50:32      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30174</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:32  Posting job g245stress-a3dcf89aa5b2: request 16 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30174)
+  bridge log: 2026-10-21 16:50:32      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30184</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:32  Posting job g245stress-a3dcf89aa5b2: request 17 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30184)
+  bridge log: 2026-10-21 16:50:33      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30194</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:33  Posting job g245stress-a3dcf89aa5b2: request 18 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30194)
+  bridge log: 2026-10-21 16:50:33      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30204</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:33  Posting job g245stress-a3dcf89aa5b2: request 19 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30204)
+  bridge log: 2026-10-21 16:50:33      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30214</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:33  Posting job g245stress-a3dcf89aa5b2: request 20 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30214)
+  bridge log: 2026-10-21 16:50:34      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30224</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:34  Posting job g245stress-a3dcf89aa5b2: request 21 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30224)
+  bridge log: 2026-10-21 16:50:34      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30234</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:34  Posting job g245stress-a3dcf89aa5b2: request 22 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30234)
+  bridge log: 2026-10-21 16:50:35      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30244</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:35  Posting job g245stress-a3dcf89aa5b2: request 23 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30244)
+  bridge log: 2026-10-21 16:50:35      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30254</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:35  Posting job g245stress-a3dcf89aa5b2: request 24 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30254)
+  bridge log: 2026-10-21 16:50:36      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30264</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:36  Posting job g245stress-a3dcf89aa5b2: request 25 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30264)
+  bridge log: 2026-10-21 16:50:36      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30274</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:36  Posting job g245stress-a3dcf89aa5b2: request 26 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30274)
+  bridge log: 2026-10-21 16:50:37      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30284</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:37  Posting job g245stress-a3dcf89aa5b2: request 27 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30284)
+  bridge log: 2026-10-21 16:50:37      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30294</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:37  Posting job g245stress-a3dcf89aa5b2: request 28 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30294)
+  bridge log: 2026-10-21 16:50:37      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30304</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:37  Posting job g245stress-a3dcf89aa5b2: request 29 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30304)
+  bridge log: 2026-10-21 16:50:38      Tally replied: <RESPONSE> <CREATED>10</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30314</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-21 16:50:38  Posting job g245stress-a3dcf89aa5b2: request 30 of 30: 10 vouchers in 0.2 s (created 10, altered 0, exceptions 0, ignored 0, last Tally id 30314)
+  bridge log: 2026-10-21 16:50:38  Posting job g245stress-a3dcf89aa5b2: 30 requests, 300 vouchers, 7.2 s total
+  bridge log: 2026-10-21 16:50:38  Posting job g245stress-a3dcf89aa5b2: posting window ALTVCHID 30014 to 30314, 300 voucher(s) and 0 master(s) created
+  bridge log: 2026-10-21 16:50:38  Posting job g245stress-a3dcf89aa5b2 done: Posted 300 of 300 (Tally's reply)
