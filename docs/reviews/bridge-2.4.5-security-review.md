@@ -62,3 +62,7 @@ tests/run_tally_ini_ui.py).
 - assets/connector/latest.json (signed) still names the old connector engine TDSBridge.ps1 that publish no longer ships:
   an old FinCom Connector below engine 1.14.6 gets 404 at its update check.
 - The "User TDL = No: switch on" owner action (the owner's decision of 21-Oct-2026) is 2.4.6's first item.
+
+The whole range reviewed, as release-check reads it (the last range in this note):
+
+Range: 33994f94c..d25f13424
