@@ -132,6 +132,27 @@ Cloud.checkMfa = async function(){
   this.st.mfa = {need: "enrol", required: true};
   return this.st.mfa;
 };
+// the QR code as a safe image source. GoTrue sends qr_code as a raw, un-encoded SVG data URI
+// ("data:image/svg+xml;utf-8,<?xml ...><svg ... fill=\"#000000\" ...>"): the '#' starts a URL fragment and '%' / '"'
+// break it, so Safari (and others) show a blank image. Raw markup is re-encoded as base64; a bare "<svg" is wrapped;
+// base64, already-encoded and PNG sources are kept. Anything else gives "" (never injected as HTML).
+function mfaQrSrc(qr){
+  qr = String(qr || "").trim();
+  if (!qr) return "";
+  const b64 = svg => "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+  if (/^<(\?xml|svg)/i.test(qr)) return b64(qr);
+  if (/^data:image\/png;base64,/i.test(qr)) return qr;
+  if (/^data:image\/svg\+xml/i.test(qr)){
+    const at = qr.indexOf(","), head = qr.slice(0, at), body = qr.slice(at + 1);
+    if (at < 0) return "";
+    if (/;base64$/i.test(head)) return qr;
+    if (/^\s*</.test(body)) return b64(body);
+    try { return b64(decodeURIComponent(body)); } catch (e){ return qr; }   // percent-encoded already
+  }
+  return "";
+}
+// grouped for typing by hand: JBSW Y3DP EHPK 3PXP
+function mfaKeyGroups(k){ return String(k || "").replace(/\s+/g, "").replace(/(.{4})(?=.)/g, "$1 "); }
 // a new authenticator entry: the QR code and the key to type in by hand
 Cloud.enrolStart = async function(){
   // an earlier half-finished set-up is dropped first
@@ -154,9 +175,11 @@ Cloud.mfaVerify = async function(code){
 async function mfaAction(act){
   const done = () => { Cloud.st.busy = ""; render(); };
   if (act === "mfaStart"){
-    Cloud.st.busy = "1"; Cloud.st.error = ""; render();
+    // one set-up at a time: a second press while the first is on its way does nothing
+    if (Cloud.st.busy || mfaAction.starting) return;
+    mfaAction.starting = true; Cloud.st.busy = "1"; Cloud.st.error = ""; render();
     try { await Cloud.enrolStart(); } catch (e){ Cloud.st.error = e.message; }
-    done(); const c = document.getElementById("mfaCode"); if (c) c.focus();
+    mfaAction.starting = false; done(); const c = document.getElementById("mfaCode"); if (c) c.focus();
   } else if (act === "mfaVerify"){
     const code = ((document.getElementById("mfaCode") || {}).value || "").trim();
     if (!/^\d{6}$/.test(code.replace(/\s+/g, ""))){ toast("Type the 6-digit code from the app."); return; }
@@ -164,6 +187,9 @@ async function mfaAction(act){
     try { await Cloud.mfaVerify(code); toast("Two-step sign-in done."); auditEvent("signin.mfa", ""); setTimeout(flushAuditLater, 2500); startCloudSync(); loadAccount(true).then(() => render()); }
     catch (e){ Cloud.st.error = /invalid|expired/i.test(e.message) ? "That code did not match. Check the phone’s clock is right and try the newest code." : e.message; }
     done();
+  } else if (act === "mfaCopyKey"){
+    const k = ((Cloud.st.mfa || {}).secret || "").replace(/\s+/g, "");
+    try { await navigator.clipboard.writeText(k); toast("Key copied."); } catch (e){ toast("Could not copy: select the key and copy it."); }
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
   else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
   else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }
@@ -177,7 +203,7 @@ async function mfaAction(act){
 }
 document.addEventListener("click", ev => {
   const t = ev.target.closest && ev.target.closest("[data-act]");
-  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|Admin)$/.test(t.dataset.act)) return;
+  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|Admin|CopyKey)$/.test(t.dataset.act)) return;
   ev.preventDefault(); ev.stopImmediatePropagation(); mfaAction(t.dataset.act);
 }, true);
 document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "mfaCode"){ ev.preventDefault(); mfaAction("mfaVerify"); } }, true);
