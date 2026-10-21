@@ -21,7 +21,7 @@
 #   red 14   the same line, but the last release row dated 2026-10-09 (after its "re-measured on") -> fails "before the last release"
 #   green 6  BridgeVersion 2.4.5 with "allowed for 2.4.5 by the owner's decision of 2026-10-21" (ROUND 102) -> passes check 4
 #   red 15   the same line under BridgeVersion 2.4.6 -> fails "not 2.4.6"
-#   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
+#   pin      every 'go test' line in release-check.sh carries -timeout 40m (Go's default 10 minutes cut a full run at 588 s
 #            on 05-Oct-2026)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
@@ -168,11 +168,11 @@ expect "red 14: the line re-measured before the last release row's date" 1 "befo
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
 expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"
 
-# pin: every go test command in the script carries the explicit 20-minute limit (GO_TEST_TIMEOUT=20m, used on each line)
+# pin: every go test command in the script carries the explicit 40-minute limit (GO_TEST_TIMEOUT=40m, used on each line)
 S="${RELEASE_CHECK_SCRIPT:-$HERE/release-check.sh}"
 nt="$(grep -cE '^[[:space:]]*go test ' "$S")"; nl="$(grep -E '^[[:space:]]*go test ' "$S" | grep -cF -- '-timeout "$GO_TEST_TIMEOUT"')"
-if [ "$nt" -ge 2 ] && [ "$nt" = "$nl" ] && grep -qx 'GO_TEST_TIMEOUT=20m' "$S"; then echo "PASS  pin: all $nt go test lines run with -timeout 20m"
-else echo "FAIL  pin: $nl of $nt go test lines carry -timeout \$GO_TEST_TIMEOUT, or GO_TEST_TIMEOUT=20m is missing"; FAILS=$((FAILS+1)); fi
+if [ "$nt" -ge 2 ] && [ "$nt" = "$nl" ] && grep -qx 'GO_TEST_TIMEOUT=40m' "$S"; then echo "PASS  pin: all $nt go test lines run with -timeout 40m"
+else echo "FAIL  pin: $nl of $nt go test lines carry -timeout \$GO_TEST_TIMEOUT, or GO_TEST_TIMEOUT=40m is missing"; FAILS=$((FAILS+1)); fi
 
 echo
 if [ "$FAILS" = 0 ]; then echo "release_check_test: all cases as expected"; else echo "release_check_test: $FAILS case(s) wrong"; exit 1; fi
