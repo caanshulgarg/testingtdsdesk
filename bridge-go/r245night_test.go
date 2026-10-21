@@ -358,13 +358,15 @@ func TestR245PullPayrollLimitOnlyPayroll(t *testing.T) {
 }
 
 // B3: the freeze-safety threshold: Tally's window held 2.3 s while a payroll entry was at Tally does not stop; held 2.3 s
-// for an ordinary entry stops; held 3.1 s for a payroll entry stops
+// for an ordinary entry stops; held 3.1 s for a payroll entry stops. The owner's decision of 21-Oct-2026 (review round 15,
+// L3): "YES — payroll vouchers only may hold Tally's window up to 3 s (same as their 3 s request stop); everything else
+// stays 2 s": held 2.9 s for a payroll entry does not stop, 2.0 s for an ordinary entry stops
 func TestR245PullPayrollWindowThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		mid    string
 		holdMs int
 		stop   bool
-	}{{"7", 2300, false}, {"5", 2300, true}, {"7", 3100, true}} {
+	}{{"7", 2300, false}, {"7", 2900, false}, {"5", 2300, true}, {"5", 2000, true}, {"7", 3100, true}} {
 		f, c, m := pullBridge(t)
 		var stops []M
 		c.mu.Lock()
@@ -391,14 +393,15 @@ func TestR245PullPayrollWindowThreshold(t *testing.T) {
 		f.mu.Unlock()
 		old := windowHoldFn
 		hold := tc.holdMs
-		// the list of the day is not held (only the entry under test)
-		listed := false
+		// only the entry under test is held (not the day's list, nor the payroll's employees read before it: review round
+		// 15 watches that read too, against 2 s)
 		windowHoldFn = func() func(time.Time) int {
-			if !listed {
-				listed = true
-				return func(time.Time) int { return 0 }
+			return func(time.Time) int {
+				if f.n(vchObjectID) > 0 {
+					return hold
+				}
+				return 0
 			}
-			return func(time.Time) int { return hold }
 		}
 		applyPeriodDays(pullList("20250930"))
 		pullRun(t, 30)

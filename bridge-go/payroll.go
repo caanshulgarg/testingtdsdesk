@@ -210,22 +210,48 @@ func employeesAfterLightCheck(company string, port int) {
 func employeesCheck(company string) (int, error) { return employeesCheckOn(company, 0) }
 
 func employeesCheckOn(company string, preferred int) (int, error) {
-	if !cloudOn() {
-		return 0, nil
-	}
+	n, _, err := employeesCheckWith(company, preferred, empOpt{})
+	return n, err
+}
+
+// how a check reads (review 245 R15, M2/L2): the older-period fetch reads the employees one request a step (maxReqs 1,
+// on the port its six conditions found, through its own request with Tally's window watched) and only for the company
+// GUID of the day it reads; the light check as 2.4.4 (zero values)
+type empOpt struct {
+	guid    string                                   // the company GUID the caller reads for: another under this name is refused
+	port    int                                      // the port the caller's conditions found (no other look-up)
+	maxReqs int                                      // requests this call may send (0: EmployeeMaxReqs)
+	ask     func(port int, x string) (string, error) // the request (nil: recorderTC, EmployeeSec)
+}
+
+// the GUID the payroll list of the company is kept under: the latest numbers' (else the held one); "" when none, or
+// another company's under this name, or not the one the caller names (review 245 R15, L2)
+func empGUIDFor(company, want string) (M, string) {
 	cur, guid := latestNumbers(company)
-	if cur == nil {
-		return 0, nil
-	}
 	held := heldGUID(company)
 	if guid == "" {
 		guid = held
 	}
-	if guid == "" || (held != "" && !strings.EqualFold(held, guid)) {
-		return 0, nil // no GUID, or another company's under this name: nothing is asked
+	if guid == "" || (held != "" && !strings.EqualFold(held, guid)) || (want != "" && !strings.EqualFold(want, guid)) {
+		return cur, ""
+	}
+	return cur, guid
+}
+
+// n sent, reqs asked of Tally
+func employeesCheckWith(company string, preferred int, o empOpt) (int, int, error) {
+	if !cloudOn() {
+		return 0, 0, nil
+	}
+	cur, guid := empGUIDFor(company, o.guid)
+	if cur == nil {
+		return 0, 0, nil
+	}
+	if guid == "" {
+		return 0, 0, nil // no GUID, or another company's under this name: nothing is asked
 	}
 	if _, has := startPointOf(company); !has {
-		return 0, nil // no starting point recorded: nothing of the company is taken (as for the ledgers)
+		return 0, 0, nil // no starting point recorded: nothing of the company is taken (as for the ledgers)
 	}
 	key := companyKey(company) + "|" + guid
 	m := toI64(cur["altmstid"])
@@ -234,7 +260,7 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 	rd := empReads[key]
 	if empBusy[key] {
 		empReadMu.Unlock()
-		return 0, nil
+		return 0, 0, nil
 	}
 	empBusy[key] = true
 	empReadMu.Unlock()
@@ -245,10 +271,10 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 	}()
 	if rd == nil {
 		if e != nil && truthy(e["sent"]) && toI64(e["after"]) >= m {
-			return 0, nil // the master counter has not moved since the list was read
+			return 0, 0, nil // the master counter has not moved since the list was read
 		}
 		if t, ok := parseTime(str(e["at"])); e != nil && ok && nowFn().Sub(t) < empGap() && !nowFn().Before(t) {
-			return 0, nil // read a short while ago: the next check after the gap
+			return 0, 0, nil // read a short while ago: the next check after the gap
 		}
 		rd = &empRead{rows: map[string]empRow{}}
 	}
@@ -256,17 +282,20 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 		rd.bound = m
 	}
 	if postingGoing() {
-		return 0, nil // a posting goes first
+		return 0, 0, nil // a posting goes first
 	}
 	if retryPending() {
-		return 0, nil // Tally has not answered in time lately: the entries come first, the employees after (never the schedule's try)
+		return 0, 0, nil // Tally has not answered in time lately: the entries come first, the employees after (never the schedule's try)
 	}
-	port, why := ledOwnPort(company, guid, preferred)
+	port, why := o.port, ""
+	if port <= 0 {
+		port, why = ledOwnPort(company, guid, preferred)
+	}
 	if why != "" {
 		liveSayOnce("emp|"+key+"|"+why, "Employees of "+company+": not asked: "+why)
-		return 0, nil
+		return 0, 0, nil
 	}
-	done, reqs, err := empReadOn(company, port, rd)
+	done, reqs, err := empReadOn(company, port, rd, o)
 	empReadMu.Lock()
 	if done {
 		delete(empReads, key)
@@ -278,7 +307,7 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 		if err == nil {
 			writeLog(fmt.Sprintf("Employees of %s: read up to MasterID %d of %d (%d request(s)); the next check goes on", company, rd.after, rd.bound, reqs))
 		}
-		return 0, err
+		return 0, reqs, err
 	}
 	rows := make([]empRow, 0, len(rd.rows))
 	for _, r := range rd.rows {
@@ -290,23 +319,30 @@ func employeesCheckOn(company string, preferred int) (int, error) {
 		// the same list as FinCom has (or a company with no payroll that never sent one): nothing to send
 		empPut(key, ne)
 		writeLog(fmt.Sprintf("Employees of %s: Tally's master counter %d: the payroll list read (%d request(s), %d row(s)); unchanged, nothing sent", company, rd.bound, reqs, len(rows)))
-		return 0, nil
+		return 0, reqs, nil
 	}
 	if serr := empSend(company, guid, rows, rd.bound); serr != nil {
 		ne["sent"], ne["hash"] = false, ""
 		ne["after"] = toI64(e["after"])
 		empPut(key, ne)
-		return 0, serr // read and sent again at the next check after the gap
+		return 0, reqs, serr // read and sent again at the next check after the gap
 	}
 	empPut(key, ne)
 	writeLog(fmt.Sprintf("Employees of %s: Tally's master counter %d: %d request(s), %d payroll row(s) kept (%d other cost centre(s) not kept)", company, rd.bound, reqs, len(rows), rd.dropped))
-	return len(rows), nil
+	return len(rows), reqs, nil
 }
 
 // the chunks from where the read stands: true when the list is read whole (the last request with no upper end answered)
-func empReadOn(company string, port int, rd *empRead) (bool, int, error) {
-	reqs := 0
-	for reqs < empMaxReqs() {
+func empReadOn(company string, port int, rd *empRead, o empOpt) (bool, int, error) {
+	reqs, max := 0, empMaxReqs()
+	if o.maxReqs > 0 {
+		max = minI(max, o.maxReqs)
+	}
+	ask := o.ask
+	if ask == nil {
+		ask = func(port int, x string) (string, error) { return invokeTally(recorderTC(nil), port, x, empSec()) }
+	}
+	for reqs < max {
 		if postingGoing() {
 			return false, reqs, errBackoff
 		}
@@ -318,7 +354,7 @@ func empReadOn(company string, port int, rd *empRead) (bool, int, error) {
 		if tail {
 			upto = 0
 		}
-		raw, err := invokeTally(recorderTC(nil), port, employeeChunkRequest(company, rd.after, upto), empSec())
+		raw, err := ask(port, employeeChunkRequest(company, rd.after, upto))
 		reqs++
 		if err != nil {
 			return false, reqs, err
@@ -340,6 +376,9 @@ func empReadOn(company string, port int, rd *empRead) (bool, int, error) {
 		rd.after = upto
 		if top > rd.bound {
 			rd.bound = top
+		}
+		if reqs >= max {
+			break
 		}
 		keepRest(200 * time.Millisecond)
 	}
@@ -591,11 +630,11 @@ func bankCleanOnce(dir string) int {
 
 // ROUND 103 (B): the company's payroll list has been read whole and FinCom took it (or the company has no payroll row)
 // (the key employeesCheckOn keeps it under)
-func employeesTaken(company string) bool {
-	_, guid := latestNumbers(company)
-	if guid == "" {
-		guid = heldGUID(company)
-	}
+func employeesTaken(company string) bool { return employeesTakenFor(company, "") }
+
+// review 245 R15 (L2): for the company GUID the caller names ("" any): another company's under this name never answers
+func employeesTakenFor(company, guid string) bool {
+	_, guid = empGUIDFor(company, guid)
 	if guid == "" {
 		return false
 	}

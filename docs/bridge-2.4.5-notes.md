@@ -67,6 +67,15 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
    the payroll's employees (FinComEmployees, 2.4.4's read) are read and taken by FinCom, so the entry's employee rows link;
    until then the payroll entry waits. A payroll voucher counts in the progress like any other. A custom payroll voucher
    type the bridge has not yet seen carrying pay heads keeps the 2 s limit on its first entry (as in 2.4.4).
+   **The owner's decision of 21-Oct-2026 (review round 15, L3): YES — payroll vouchers only may hold Tally's window up to
+   3 s, the same as their 3 s request stop; everything else stays 2 s** (FinComDayHeads, every other entry, and the
+   employees' read inside the period fetch). Tests: TestR245PullPayrollWindowThreshold, TestR245R15EmployeesOver2sStops.
+   Review round 15 (M1, M2, L2): while the employees are not in FinCom the day's other entries are read first; the
+   employees are read one request a step, each after the six conditions (pause and read-stop included), Tally's window
+   watched, and a request over its 2 s stop or a window held 2 s stops the company (never retried by itself); they are
+   looked up for the day's own company GUID; the wait is bounded (3 tries a minute apart, 10 minutes a day: settings
+   EmployeeWaitTries, EmployeeWaitMin), then what was read is sent, the day's payroll entries are left out and the day
+   gets the one quiet "upload this day" line naming the payroll, and the other days and companies go on.
 
 3. **The exact ledger count (Connect Tally step 5).** On the full ledger read (the "ledgers" wake) the bridge asks
    FinComLedgerIds once (MasterIDs only; when that one request is stopped at 2 s, in chunks of 2,000 MasterIDs) and counts
@@ -112,6 +121,11 @@ tally_period_choose / pause / status for signed-in members of the book's firm; t
 upload / entries and tally_ledger_progress_save, service role only; five helpers nobody may call). tally-ingest: the
 heartbeat answer carries `periodDays`; new kinds `period_heads`, `period_entries`, `ledger_progress`; the beat keeps
 `tallyIni` and `periodPull`. Without 98 tally-ingest says nothing of older entries and the beat goes on as before.
+Review round 15: tally-ingest asks `tally_period_next_paced` only for the days left of the answer (every day stamped as
+handed out is handed out; the pace said apart), the time left's speed is measured from each day's first hand-out
+(`first_asked_at`, never overwritten), and a computer is handed at most one list of days every 5 s
+(`tally_period_gate`; the key is left out otherwise, so the bridge keeps what it reads). A day whose payroll entries
+were left out is kept with why "payroll".
 Tests: run_migration98.py, run_period_ingest.py, run_older_entries_ui.py.
 
 ## Not in 2.4.5

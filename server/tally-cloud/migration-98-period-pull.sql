@@ -8,12 +8,15 @@
 --   tally_period_days      per day: Tally's count and heads as last listed, FinCom's count of them, done, "upload by hand"
 --   tally_ledger_progress  the ledger read's progress for Connect Tally's step 5 ("312 of 1,240 ledgers")
 -- Functions: for the app (signed in, the firm's own books): tally_period_choose, tally_period_pause, tally_period_status;
--- for tally-ingest (service role only): tally_period_next, tally_period_heads, tally_period_upload, tally_period_entries,
--- tally_ledger_progress_save, tally_period_stop; the owner's tally_device_period_fetch with three new columns of
+-- for tally-ingest (service role only): tally_period_next, tally_period_next_paced, tally_period_heads, tally_period_upload,
+-- tally_period_entries, tally_ledger_progress_save, tally_period_stop, tally_period_gate; the owner's tally_device_period_fetch with three new columns of
 -- tally_devices (ROUND 103: reading older entries switched on per computer, default off) and tally_device_period_night with
 -- five more (ROUND 103, the owner's decision of 21-Oct-2026, evening: office hours per computer, 20:00-08:00 IST and Sunday
--- by default; outside them up to 30 days an answer). Add-only: three new tables, sixteen new functions (five helpers nobody
--- may call), eight columns added to tally_devices, no existing function, table or row changed;
+-- by default; outside them up to 30 days an answer). Review 245 R15: tally_period_next_paced (the pace said apart from how
+-- many days are wanted, so a day is stamped only when it is handed out; L4), tally_period_days.first_asked_at (the speed
+-- for the time left, never overwritten; L4) and tally_period_gate with tally_devices.period_listed_at (at most one list
+-- of days every few seconds a computer; L5). Add-only: three new tables, eighteen new functions (five helpers nobody
+-- may call), nine columns added to tally_devices, no existing function, table or row changed;
 -- every new table with its own grants (ROUND 101: service_role only; the app reads through the functions). One transaction,
 -- lock_timeout 10 s, safe twice. Tested by tests/run_migration98.py. Deploy order: 98, then the tally-ingest of next-245
 -- (without 98 that tally-ingest says nothing of older entries and the beat goes on as before).
@@ -73,6 +76,9 @@ create table if not exists public.tally_ledger_progress (
 -- (a stand that ran an earlier copy of this file gets the two pace columns too)
 alter table public.tally_period_pulls add column if not exists pace text check (pace is null or pace in ('day', 'night'));
 alter table public.tally_period_pulls add column if not exists pace_at timestamptz;
+-- review 245 R15 (L4): when a day was FIRST handed to a bridge (asked_at moves at every hand-out; this one never does), for
+-- the speed behind the time left
+alter table public.tally_period_days add column if not exists first_asked_at timestamptz;
 alter table public.tally_period_pulls enable row level security;
 alter table public.tally_period_days enable row level security;
 alter table public.tally_ledger_progress enable row level security;
@@ -138,10 +144,11 @@ begin
     into pcount, y, x from tally_period_days d
    where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and (d.tally_n is not null or d.upload_at is not null);
   -- ROUND 103: the speed of the last 30 minutes (entries of the part's days done, a minute; days counted, a minute), from
-  -- when those days were handed out; at least 2 minutes measured, else no time left is shown
-  select coalesce(sum(d.tally_n), 0), extract(epoch from now() - min(coalesce(d.asked_at, d.counted_at))) / 60 into rn, rmin from tally_period_days d
+  -- when those days were FIRST handed out (review 245 R15, L4: a hand-out again never shortens the time measured), at
+  -- most the 30 minutes counted; at least 2 minutes measured, else no time left is shown
+  select coalesce(sum(d.tally_n), 0), least(30, extract(epoch from now() - min(coalesce(d.first_asked_at, d.asked_at, d.counted_at))) / 60) into rn, rmin from tally_period_days d
    where d.book_id = p_book and d.day between r.d_from and least(r.d_to, today) and d.upload_at is null and d.done_at > now() - interval '30 minutes';
-  select count(*), extract(epoch from now() - min(coalesce(d.asked_at, d.counted_at))) / 60 into cn, cmin from tally_period_days d
+  select count(*), least(30, extract(epoch from now() - min(coalesce(d.first_asked_at, d.asked_at, d.counted_at))) / 60) into cn, cmin from tally_period_days d
    where d.book_id = p_book and d.day between p.fy_start and least(fy_to, today) and d.counted_at > now() - interval '30 minutes';
   rate := case when rmin >= 2 and rn > 0 then round(rn / rmin)::int end;
   crate := case when cmin >= 2 and cn > 0 then cn / cmin end;
@@ -219,7 +226,9 @@ end $function$;
 -- never holds the rest back; the bridge finishes the day it is reading though the next answer lists others first). A day of a month locked in FinCom is not fetched: marked to upload (unlock, then upload).
 -- Types for a split: Tally's six standard ones first, then every type the book's entries and Tally's day lists name, the
 -- most used first (at most 40; never one with a quote mark)
-create or replace function public.tally_period_next(p_book uuid, p_max integer) returns jsonb
+-- review 245 R15 (L4): p_max is how many days the caller still takes (every day given is stamped as handed out); p_night
+-- says the pace (tally-ingest's night: up to 30 an answer) apart from it, for the status line
+create or replace function public.tally_period_next_paced(p_book uuid, p_max integer, p_night boolean) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare p tally_period_pulls%rowtype; r record; fy_to date; today date := (now() at time zone 'Asia/Kolkata')::date; out jsonb := '[]'::jsonb; d date; n int := 0;
   types jsonb; fetch boolean := false; lim int := least(greatest(coalesce(p_max, 3), 0), 30);
@@ -229,7 +238,7 @@ begin
   if not found or p.state <> 'going' or lim = 0 then return out; end if;
   -- ROUND 103 (the owner's decision of 21-Oct-2026, evening): tally-ingest asks 3 by day, up to 30 outside the computer's
   -- office hours; the pace kept for the status line
-  update tally_period_pulls set pace = case when lim > 3 then 'night' else 'day' end, pace_at = now() where book_id = p_book;
+  update tally_period_pulls set pace = case when coalesce(p_night, lim > 3) then 'night' else 'day' end, pace_at = now() where book_id = p_book;
   fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
   select d_from, d_to into r from tally_period_range(p.fy_start, p.part);
   -- counting: the year's days with no count yet
@@ -265,11 +274,35 @@ begin
        where t is not null and t <> '' and t !~ '["[:cntrl:]]' and length(t) <= 60 and t = btrim(t)
        group by t order by min(o), sum(c) desc, t limit 40) z;
     select coalesce(jsonb_agg(e || jsonb_build_object('types', types)), '[]'::jsonb) into out from jsonb_array_elements(out) e;
-    insert into tally_period_days (book_id, firm_id, day, asked_at)
-    select p_book, p.firm_id, to_date(e->>'day', 'YYYYMMDD'), now() from jsonb_array_elements(out) e
-    on conflict (book_id, day) do update set asked_at = now();
+    insert into tally_period_days (book_id, firm_id, day, asked_at, first_asked_at)
+    select p_book, p.firm_id, to_date(e->>'day', 'YYYYMMDD'), now(), now() from jsonb_array_elements(out) e
+    on conflict (book_id, day) do update set asked_at = now(), first_asked_at = coalesce(tally_period_days.first_asked_at, now());
   end if;
   return out;
+end $function$;
+
+-- as before (a tally-ingest of an earlier build): the pace from p_max
+create or replace function public.tally_period_next(p_book uuid, p_max integer) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  return tally_period_next_paced(p_book, p_max, null);
+end $function$;
+
+-- review 245 R15 (L5): the lists of days a computer is handed are limited on the cloud's side too (the bridge's early
+-- night beat is its own setting): true, and the time kept, when this computer's last list was handed out at least
+-- p_min_ms ago (or never, or the clock went back); else false and nothing changes
+alter table public.tally_devices add column if not exists period_listed_at timestamptz;
+create or replace function public.tally_period_gate(p_device uuid, p_min_ms integer) returns boolean
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare n int;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  update tally_devices set period_listed_at = now()
+   where id = p_device and (period_listed_at is null or period_listed_at > now()
+         or period_listed_at <= now() - make_interval(secs => least(greatest(coalesce(p_min_ms, 5000), 0), 600000) / 1000.0));
+  get diagnostics n = row_count;
+  return n > 0;
 end $function$;
 
 -- a day's heads from Tally: its count kept (a day of the year chosen only), FinCom's count of them, the MasterIDs it lacks
@@ -458,6 +491,8 @@ grant execute on function public.tally_period_next(uuid, integer), public.tally_
   public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) to service_role;
 revoke all on function public.tally_period_stop(uuid, date, text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.tally_period_stop(uuid, date, text, text, timestamptz) to service_role;
+revoke all on function public.tally_period_next_paced(uuid, integer, boolean), public.tally_period_gate(uuid, integer) from public, anon, authenticated;
+grant execute on function public.tally_period_next_paced(uuid, integer, boolean), public.tally_period_gate(uuid, integer) to service_role;
 revoke all on function public.tally_device_period_fetch(uuid, boolean) from public, anon;
 grant execute on function public.tally_device_period_fetch(uuid, boolean) to authenticated;
 revoke all on function public.tally_device_period_night(uuid, integer, integer, boolean) from public, anon;

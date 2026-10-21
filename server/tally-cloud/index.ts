@@ -1470,6 +1470,25 @@ function periodNightNow(dev: any, now = Date.now()): boolean {
   if (from === to) return false;
   return from < to ? h >= from && h < to : h >= from || h < to;
 }
+// review 245 R15 (L5): the lists of days a computer is handed, at most one every PERIOD_LIST_MIN_MS (the bridge's early night
+// beat is its own setting; the cloud keeps its own limit): false when this computer was handed one a moment ago (the key
+// is then left out: the bridge keeps what it reads). A database without tally_period_gate (an earlier copy of 98): true;
+// any other fault: false (nothing listed this beat)
+const PERIOD_LIST_MIN_MS = 5000;
+async function periodGate(device: string): Promise<boolean> {
+  try {
+    const { data, error } = await db.rpc("tally_period_gate", { p_device: device, p_min_ms: PERIOD_LIST_MIN_MS });
+    if (error) {
+      if (missingFn(String(error.message || ""))) return true;
+      fail("period_gate", error);
+      return false;
+    }
+    return data === true;
+  } catch (e) {
+    fail("period_gate", e);
+    return false;
+  }
+}
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1497,9 +1516,13 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3)
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
-      // review 245 R12: at night every company's call says so (p_max above 3: tally_period_next keeps the pace for the
-      // status line), and what it gives is cut to the days left of the answer
-      const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max > 3 ? Math.max(4, max - out.length) : max - out.length });
+      // review 245 R12 / R15 (L4): at night every company's call says so (p_night: the pace for the status line), and it is
+      // asked only for the days left of the answer, so every day it stamps as handed out is handed out
+      let { data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: max > 3 });
+      if (error && missingFn(String(error.message || ""))) {
+        // a database with an earlier copy of 98 (no tally_period_next_paced): as before
+        ({ data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max > 3 ? Math.max(4, max - out.length) : max - out.length }));
+      }
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
@@ -1542,7 +1565,7 @@ async function periodHeads(book: string, body: any) {
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
   if (body?.upload === true) {
     const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-    const why = ["over2s", "dates", "shape", "toomany", "entries"].includes(String(body.why)) ? String(body.why) : "other";
+    const why = ["over2s", "dates", "shape", "toomany", "entries", "payroll"].includes(String(body.why)) ? String(body.why) : "other";
     const { data, error } = await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: why, p_type: s(body.type, 100), p_words: s(body.words, 300) });
     if (error) return periodError(error);
     return reply(200, { ok: !!(data as any)?.ok, ...((data as any)?.ok ? {} : { error: String((data as any)?.error || "not kept") }) });
@@ -3431,7 +3454,9 @@ Deno.serve(sentry.wrap(async (req) => {
         // ROUND 103 (evening): outside this computer's office hours up to 30 days an answer (the bridge reads day after day
         // while Tally is idle and asks again when they are done); the switch above still wins
         const periodNight = periodFetch && periodNightNow(dev);
-        const periodDays = periodFetch ? await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop, periodNight ? 30 : 3) : [];
+        const periodStopped = !!beat.paused || !!beat.readStopped || !!(info as any).readStop;
+        // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
+        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, periodNight ? 30 : 3) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
         return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });

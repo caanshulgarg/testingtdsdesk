@@ -154,6 +154,20 @@ type pullWork struct {
 	asked     int
 	cloudWait time.Time
 	fails     int
+	// review 245 R15 (M1): the payroll's employees waited for: tries that did not get them, since when, the next try, and
+	// the payroll entries left out when the wait ended (the day is then marked "upload")
+	empTries int
+	empSince time.Time
+	empNext  time.Time
+	paySkip  int
+}
+
+// review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
+// EmployeeWaitMin minutes a day; then the day's other entries are read and sent, its payroll entries are left out and the
+// day is marked "upload" (one quiet line), and the other days and companies go on
+func pullEmpTries() int { return maxI(1, keepNum("EmployeeWaitTries", 3)) }
+func pullEmpWait() time.Duration {
+	return time.Duration(maxI(1, keepNum("EmployeeWaitMin", 10))) * time.Minute
 }
 
 var pull = struct {
@@ -186,9 +200,9 @@ func applyPeriodDays(j M) {
 	if !has {
 		return
 	}
-	night := truthy(j["periodNight"]) && len(arr(v)) > 0
+	nightAns := truthy(j["periodNight"]) && len(arr(v)) > 0
 	max := 3
-	if night {
+	if nightAns {
 		max = pullNightDays()
 	}
 	var items []pullItem
@@ -218,7 +232,6 @@ func applyPeriodDays(j M) {
 	}
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
-	pull.night, pull.nightAt = night, nowFn()
 	keep := map[string]bool{}
 	for _, it := range items {
 		keep[it.key()] = true
@@ -247,6 +260,18 @@ func applyPeriodDays(j M) {
 		}
 	}
 	pull.items = fresh
+	// review 245 R15 (L1): the night pace (and its early beats) only while a listed day is left to read here once the list
+	// is filtered (another company GUID, stopped, marked "upload", finished a moment ago): else the beat keeps its own time
+	night := false
+	if nightAns {
+		for _, it := range fresh {
+			if _, d := pull.done[it.key()]; !d {
+				night = true
+				break
+			}
+		}
+	}
+	pull.night, pull.nightAt = night, nowFn()
 }
 
 // the dated guard's FinComDayHeads exception (tally.go): exactly F1 or F2 as built, one day (SVFROMDATE = SVTODATE),
@@ -548,6 +573,10 @@ func pullStep() (bool, bool) {
 		return pullFetchStep(w, port)
 	case len(w.got)+len(w.gone) > 0:
 		return false, pullFlush(w)
+	case w.paySkip > 0:
+		// review 245 R15 (M1): what was read is sent; the payroll entries left out: the day to be uploaded (one quiet line)
+		pullMarkUpload(w, "payroll", "")
+		return false, true
 	}
 	pullFinish(w, "")
 	return false, true
@@ -702,11 +731,22 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	// payroll path: its employees read and taken by FinCom first, its entry request stopped at 3 s and its window watched
 	// against 3 s; every other entry 2 s
 	pay := payrollEntry(it.Company, w.heads[mid].Type)
-	if pay {
-		if why := pullEmployeesFirst(it, port); why != "" {
-			pullSayWait(it, why)
-			return false, false
+	if pay && !pullEmpReady(it) {
+		// review 245 R15 (M1): the day's other entries first, while the payroll's employees are not in FinCom yet
+		for i := 1; i < len(w.want); i++ {
+			if !payrollEntry(it.Company, w.heads[w.want[i]].Type) {
+				w.want[0], w.want[i] = w.want[i], w.want[0]
+				return false, true
+			}
 		}
+		sent, more := pullEmployeesStep(w, port)
+		pull.mu.Lock()
+		still := pull.work == w
+		pull.mu.Unlock()
+		if !more && still && len(w.got)+len(w.gone) > 0 {
+			pullFlush(w) // the day waits for the employees: what was read goes now (the cloud only)
+		}
+		return sent, more
 	}
 	tc := recorderTC(nil)
 	var took float64
@@ -768,26 +808,105 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 }
 
 // payroll (ROUND 103, B): the company's employees (FinComEmployees, 2.4.4's read) read and taken by FinCom before the first
-// payroll entry of the period, so the entry's employee rows link; "" when they are, else why the entry waits. Looked at
-// again after 10 minutes (the master counter may have moved: employeesCheckOn reads again when it did)
-func pullEmployeesFirst(it pullItem, port int) string {
-	key := companyKey(it.Company) + "|" + strings.ToLower(it.CGUID)
+// payroll entry of the period, so the entry's employee rows link. Taken for the day's own company GUID (review 245 R15,
+// L2), looked at again after 10 minutes (the master counter may have moved)
+func pullEmpKey(it pullItem) string { return companyKey(it.Company) + "|" + strings.ToLower(it.CGUID) }
+
+func pullEmpReady(it pullItem) bool {
 	pull.mu.Lock()
-	at, ok := pull.empAt[key]
+	at, ok := pull.empAt[pullEmpKey(it)]
 	pull.mu.Unlock()
-	if ok && nowFn().Sub(at) < 10*time.Minute && !nowFn().Before(at) {
-		return ""
+	return ok && nowFn().Sub(at) < 10*time.Minute && !nowFn().Before(at)
+}
+
+// review 245 R15 (M2): one step of the employees' read inside the period fetch: at most ONE request to Tally (the six
+// conditions, pause and read-stop were looked at just before, by pullStep), Tally's window watched; a request over its
+// 2 s stop or a window held 2 s or more stops the company (never asked again by itself). (M1): the wait is bounded: a try
+// that does not get them (FinCom did not take them, nothing could be asked, a request not answered) counts; after
+// EmployeeWaitTries tries or EmployeeWaitMin minutes the day's payroll entries are left out (pullPayrollGiveUp)
+func pullEmployeesStep(w *pullWork, port int) (bool, bool) {
+	it := w.it
+	if w.empSince.IsZero() {
+		w.empSince = nowFn()
 	}
-	if _, err := employeesCheckOn(it.Company, port); err != nil && !gaveWay(err) {
+	if nowFn().Sub(w.empSince) >= pullEmpWait() {
+		pullPayrollGiveUp(w, fmt.Sprintf("waited %d minutes", int(pullEmpWait().Minutes())))
+		return false, true
+	}
+	if nowFn().Before(w.empNext) {
+		pullSayWait(it, "the payroll's employees are read first (FinComEmployees), then its payroll entries")
+		return false, false
+	}
+	var holdMs int
+	ask := func(port int, x string) (string, error) {
+		held := windowHoldFn()
+		var took float64
+		raw, err := invokeTally(recorderTC(func(sec float64) { took += sec }), port, x, empSec())
+		holdMs = held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+		if took == 0 {
+			holdMs = 0
+		}
+		pullNoteWatched(holdMs)
+		return raw, err
+	}
+	_, reqs, err := employeesCheckWith(it.Company, port, empOpt{guid: it.CGUID, port: port, maxReqs: 1, ask: ask})
+	switch {
+	case errors.Is(err, errRecorderStop):
+		pullStopCompany(w, "over2s", "the payroll's employees")
+		return true, false
+	case holdMs >= recorderLimitMs():
+		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the payroll's employees were read", float64(holdMs)/1000))
+		return true, false
+	case reqs == 0 && (gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped)):
+		return false, false // nothing reached Tally; the day waits
+	case err != nil && !gaveWay(err):
 		writeLog("Older entries of " + it.Company + ": the payroll's employees: " + cutRunes(err.Error(), 200))
 	}
-	if !employeesTaken(it.Company) {
-		return "the payroll's employees are read first (FinComEmployees), then its payroll entries"
+	if employeesTakenFor(it.Company, it.CGUID) {
+		pull.mu.Lock()
+		pull.empAt[pullEmpKey(it)] = nowFn()
+		pull.mu.Unlock()
+		w.empTries, w.empSince, w.empNext = 0, time.Time{}, time.Time{}
+		return reqs > 0, true
 	}
-	pull.mu.Lock()
-	pull.empAt[key] = nowFn()
-	pull.mu.Unlock()
-	return ""
+	if reqs > 0 && err == nil && empReading(it.Company, it.CGUID) {
+		pullNote(it, "employees", w)
+		return true, true // read on at the next step (its conditions looked at again)
+	}
+	w.empTries++
+	if w.empTries >= pullEmpTries() {
+		pullPayrollGiveUp(w, fmt.Sprintf("%d tries", w.empTries))
+		return reqs > 0, true
+	}
+	w.empNext = nowFn().Add(time.Minute)
+	pullSayWait(it, "the payroll's employees are read first (FinComEmployees), then its payroll entries")
+	return reqs > 0, false
+}
+
+// the employees' read of the company (that GUID) is under way (read in part)
+func empReading(company, guid string) bool {
+	_, g := empGUIDFor(company, guid)
+	if g == "" {
+		return false
+	}
+	empReadMu.Lock()
+	defer empReadMu.Unlock()
+	return empReads[companyKey(company)+"|"+g] != nil
+}
+
+// review 245 R15 (M1): the payroll entries of the day are left out (their employees did not reach FinCom); the rest of the
+// day goes on, and the day is then marked "upload" with words naming the payroll
+func pullPayrollGiveUp(w *pullWork, how string) {
+	var keep []string
+	for _, m := range w.want {
+		if payrollEntry(w.it.Company, w.heads[m].Type) {
+			w.paySkip++
+		} else {
+			keep = append(keep, m)
+		}
+	}
+	w.want = keep
+	writeLog(fmt.Sprintf("Older entries of %s: %s: the payroll's employees did not reach FinCom (%s): %d payroll entr%s of the day not asked; the day's Day Book is to be uploaded", w.it.Company, liveDay(w.it.Day), how, w.paySkip, map[bool]string{true: "y", false: "ies"}[w.paySkip == 1]))
 }
 
 // the size of the entries read and not sent (review 245 R3: a batch stays far below the cloud's body limit)
@@ -890,7 +1009,9 @@ func pullDrop(w *pullWork) { pullFinish(w, "waiting") }
 func pullMarkUpload(w *pullWork, why, typ string) {
 	it := w.it
 	words := "Tally took too long to give " + liveDay(it.Day) + ". Please upload that day's Day Book."
-	if why != "over2s" {
+	if why == "payroll" {
+		words = "FinCom could not read the payroll entries of " + liveDay(it.Day) + " from Tally (the payroll's employees did not reach FinCom). Please upload that day's Day Book."
+	} else if why != "over2s" {
 		words = "FinCom could not read " + liveDay(it.Day) + " from Tally. Please upload that day's Day Book."
 	}
 	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "upload": true, "why": why, "type": typ, "words": words}

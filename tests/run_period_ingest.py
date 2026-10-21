@@ -29,11 +29,13 @@ GA = {"id": "go-aaaaaa245245", "computer": "PC-A", "user": "anshul", "mode": "ma
 NEXT = {BOOK: [{"day": "20250830", "fetch": False, "types": ["Sales", "Receipt", 'Bad"Type']}, {"day": "20250829", "fetch": False, "types": ["Sales"]}],
         BOOK2: [{"day": "20250731", "fetch": True, "types": []}, {"day": "20250730", "fetch": True, "types": []}]}
 real = FS.rpc
+GATE = {"fn": lambda a: True}     # review 245 R15 (L5): tally_period_gate as the test sets it
 def rpc(name, a):
     if name.startswith("tally_period") or name == "tally_ledger_progress_save":
         FS.ARGS.setdefault(name, []).append(a)
         if name in FS.NO_FN: raise LookupError("PGRST202")
-        if name == "tally_period_next": return NEXT.get(a["p_book"], [])[: a["p_max"]]
+        if name in ("tally_period_next", "tally_period_next_paced"): return NEXT.get(a["p_book"], [])[: a["p_max"]]
+        if name == "tally_period_gate": return GATE["fn"](a)
         if name == "tally_period_heads": return {"ok": True, "n": len(a["p_heads"]), "held": 1, "done": False, "want": [str(h[1]) for h in a["p_heads"][1:]]}
         if name == "tally_period_entries": return {"ok": True, "stored": len(a["p_vouchers"]), "stale": 0, "held": 2, "n": 3, "done": False}
         return {"ok": True}
@@ -71,7 +73,7 @@ try:
     print("== 1. the beat")
     # ROUND 103 (1c): the computer's switch off (the default): no days, periodFetch false; nothing asked of the database
     c, r = call(beat)
-    ok(c == 200 and r.get("periodDays") == [] and r.get("periodFetch") is False and not FS.ARGS.get("tally_period_next"), "1. the switch off: no days, periodFetch false (%s)" % {k: r.get(k) for k in ("periodDays", "periodFetch")})
+    ok(c == 200 and r.get("periodDays") == [] and r.get("periodFetch") is False and not FS.ARGS.get("tally_period_next_paced") and not FS.ARGS.get("tally_period_gate"), "1. the switch off: no days, periodFetch false (%s)" % {k: r.get(k) for k in ("periodDays", "periodFetch")})
     next(d for d in FS.T["tally_devices"] if d["id"] == DA)["period_fetch"] = True
     # office hours set around now (the day pace whatever the hour this test runs at; the night pace is checked below)
     h0 = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).hour
@@ -99,38 +101,57 @@ try:
     keep = NEXT[BOOK]
     NEXT[BOOK] = [{"day": "202508%02d" % (31 - i) if i < 31 else "202507%02d" % (62 - i), "fetch": True, "types": []} for i in range(40)]
     c, r = call(beat)
-    ok(c == 200 and r.get("periodNight") is False and len(r.get("periodDays") or []) == 3 and FS.ARGS["tally_period_next"][-1]["p_max"] == 3, "1. inside office hours: 3 days, periodNight false (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
+    ok(c == 200 and r.get("periodNight") is False and len(r.get("periodDays") or []) == 3 and FS.ARGS["tally_period_next_paced"][-1]["p_max"] == 3 and FS.ARGS["tally_period_next_paced"][-1]["p_night"] is False, "1. inside office hours: 3 days, periodNight false (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
     devA.update(period_night_from=h, period_night_to=(h + 2) % 24)
     c, r = call(beat)
-    ok(c == 200 and r.get("periodNight") is True and len(r.get("periodDays") or []) == 30 and FS.ARGS["tally_period_next"][-1]["p_max"] == 30, "1. outside office hours: up to 30 days, periodNight true (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
+    ok(c == 200 and r.get("periodNight") is True and len(r.get("periodDays") or []) == 30 and FS.ARGS["tally_period_next_paced"][-1]["p_max"] == 30 and FS.ARGS["tally_period_next_paced"][-1]["p_night"] is True, "1. outside office hours: up to 30 days, periodNight true (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
     # review 245 R12: the second company's call at night still says night (p_max above 3) though fewer days are left; the
     # answer cut to what is left
     NEXT[BOOK] = NEXT[BOOK][:28]
-    n8 = len(FS.ARGS.get("tally_period_next") or [])
+    n8 = len(FS.ARGS.get("tally_period_next_paced") or [])
     c, r = call(beat)
-    a2 = (FS.ARGS.get("tally_period_next") or [])[n8:]
-    ok(len(r.get("periodDays") or []) == 30 and len(a2) == 2 and a2[1]["p_max"] > 3, "1. at night every company's call keeps the night pace, the answer cut to 30 (%s)" % [x["p_max"] for x in a2])
+    a2 = (FS.ARGS.get("tally_period_next_paced") or [])[n8:]
+    # review 245 R15 (L4): the second company is asked only for the 2 days left (so no day is stamped and then dropped),
+    # the night pace said apart
+    ok(len(r.get("periodDays") or []) == 30 and len(a2) == 2 and a2[1]["p_max"] == 2 and a2[1]["p_night"] is True, "1. at night every company's call keeps the night pace, asked only for the days left of 30 (%s)" % [(x["p_max"], x["p_night"]) for x in a2])
+    # a database with an earlier copy of 98 (no tally_period_next_paced): tally_period_next as before
+    FS.NO_FN.add("tally_period_next_paced")
+    n8b = len(FS.ARGS.get("tally_period_next") or [])
+    c, r = call(beat)
+    a3 = (FS.ARGS.get("tally_period_next") or [])[n8b:]
+    ok(len(r.get("periodDays") or []) == 30 and len(a3) == 2 and a3[0]["p_max"] == 30, "1. an earlier 98: tally_period_next as before (%s)" % [x["p_max"] for x in a3])
+    FS.NO_FN.discard("tally_period_next_paced")
+    # review 245 R15 (L5): a computer handed a list a moment ago: the key left out (the bridge keeps what it reads), nothing asked
+    GATE["fn"] = lambda a: False
+    n8c = len(FS.ARGS.get("tally_period_next_paced") or [])
+    c, r = call(beat)
+    g = (FS.ARGS.get("tally_period_gate") or [{}])[-1]
+    ok(c == 200 and "periodDays" not in r and len(FS.ARGS.get("tally_period_next_paced") or []) == n8c and g.get("p_device") == DA and g.get("p_min_ms") == 5000,
+       "1. at most one list every 5 s a computer (%s, %s)" % (r.get("periodDays"), g))
+    c, r = call(dict(beat, paused=True))
+    ok(c == 200 and r.get("periodDays") == [], "1. paused: the empty list is never held back by the limit (%s)" % r.get("periodDays"))
+    GATE["fn"] = lambda a: True
     devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=True)
     sunday = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).weekday() == 6
     c, r = call(beat)
     ok(r.get("periodNight") is sunday, "1. all Sunday outside office hours when set (today Sunday: %s; %s)" % (sunday, r.get("periodNight")))
     devA["period_fetch"] = False
     devA.update(period_night_from=h, period_night_to=(h + 2) % 24)
-    n9 = len(FS.ARGS.get("tally_period_next") or [])
+    n9 = len(FS.ARGS.get("tally_period_next_paced") or [])
     c, r = call(beat)
-    ok(r.get("periodDays") == [] and r.get("periodFetch") is False and len(FS.ARGS.get("tally_period_next") or []) == n9, "1. the computer's switch off wins at night (%s)" % r.get("periodDays"))
+    ok(r.get("periodDays") == [] and r.get("periodFetch") is False and len(FS.ARGS.get("tally_period_next_paced") or []) == n9, "1. the computer's switch off wins at night (%s)" % r.get("periodDays"))
     devA["period_fetch"] = True
     devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=False)
     NEXT[BOOK] = keep
-    n0 = len(FS.ARGS.get("tally_period_next") or [])
+    n0 = len(FS.ARGS.get("tally_period_next_paced") or [])
     c, r = call(dict(beat, paused=True))
-    ok(c == 200 and r.get("periodDays") == [] and len(FS.ARGS.get("tally_period_next") or []) == n0, "1. none while paused: an empty list, so the bridge stops at once (%s)" % r.get("periodDays"))
+    ok(c == 200 and r.get("periodDays") == [] and len(FS.ARGS.get("tally_period_next_paced") or []) == n0, "1. none while paused: an empty list, so the bridge stops at once (%s)" % r.get("periodDays"))
     c, r = call(dict(beat, readStopped={"by": "self", "reason": "x", "at": "2026-10-21T10:00:00"}))
     ok(c == 200 and r.get("periodDays") == [], "1. none while reading is stopped")
-    FS.NO_FN.add("tally_period_next")
+    FS.NO_FN.update(["tally_period_next", "tally_period_next_paced", "tally_period_gate"])
     c, r = call(beat)
     ok(c == 200 and "periodDays" not in r and r.get("ok") is True, "1. a cloud without 98: the beat as before")
-    FS.NO_FN.discard("tally_period_next")
+    FS.NO_FN.difference_update(["tally_period_next", "tally_period_next_paced", "tally_period_gate"])
 
     print("== 2. period_heads")
     heads = [[CG + "-00000001", 1, 5001, "Sales", "PRIVATE"], [CG + "-00000002", 2, 5002, "Receipt"], [CG + "-00000003", 3, 5003, "Sales"]]
@@ -151,6 +172,11 @@ try:
     c, r = call(dict(base, kind="period_heads", company="BIG CO", company_guid=CG, day="20250830", upload=True, why="over2s", type="Sales", words=words))
     u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
     ok(c == 200 and r.get("ok") is True and u.get("p_why") == "over2s" and u.get("p_type") == "Sales" and u.get("p_words") == words and u.get("p_day") == "2025-08-30", "2. upload by hand: kept with its words (%s)" % u)
+    # review 245 R15 (M1): the payroll entries of a day left out (their employees did not reach FinCom): why "payroll" kept
+    pw = "FinCom could not read the payroll entries of 29-Aug-2025 from Tally (the payroll's employees did not reach FinCom). Please upload that day's Day Book."
+    c, r = call(dict(base, kind="period_heads", company="BIG CO", company_guid=CG, day="20250829", upload=True, why="payroll", type="", words=pw))
+    u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
+    ok(c == 200 and u.get("p_why") == "payroll" and u.get("p_words") == pw, "2. a day's payroll left out: why payroll kept (%s)" % u)
 
     print("== 3. period_entries")
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(2, "20250830"), V(3, "20250830")], gone=[], full=True))
