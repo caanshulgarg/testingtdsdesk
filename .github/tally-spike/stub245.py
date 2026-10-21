@@ -9,6 +9,10 @@
 #   - period_entries: each voucher's MasterID / GUID / AlterID / date taken as held (the date must be the day's); "gone"
 #     taken out of the day's heads
 #   - ledger_progress: kept (the step-5 bar); beat "ledgers" {company: at} when the harness asks for the ledger read
+# ROUND 103 (the owner's decision of 21-Oct-2026, evening): ctl "night": true answers periodNight true and lists up to 30
+# days (tally-ingest outside the computer's office hours); "employees" bodies kept (time, count; payroll rows only); each
+# period_entries body's payroll vouchers (VCHTYPE Payroll: the employees' allocations counted) and salary payments
+# (BANKEMPLOYEENAME) kept with any bank detail seen; every period_entries call's time and count (the night pace's speed)
 # The harness steers it with a control file (argv 3, JSON, read again when it changes):
 #   {"company": name, "phase": "off" | "count" | "fetch", "count_days": [yyyymmdd newest first], "part_days": [...],
 #    "missing": [days FinCom holds nothing of when the fetch starts], "ledgers_at": "<ISO time>" or ""}
@@ -25,7 +29,8 @@ STD = ['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']
 ctl = {'phase': 'off'}
 ctl_mtime = 0.0
 st = {'counted': {}, 'heads': {}, 'held': {}, 'done': [], 'upload': {}, 'want': {}, 'entries_sent': {}, 'bad_dates': [], 'ledger_progress': [],
-      'beats': 0, 'period_days_listed': [], 'tallyIni': None, 'company_guid': '', 'fetch_seeded': False, 'heads_asked': {}, 'stops': [], 'stopped_for': None, 'oldDaysTest': None}
+      'beats': 0, 'period_days_listed': [], 'tallyIni': None, 'company_guid': '', 'fetch_seeded': False, 'heads_asked': {}, 'stops': [], 'stopped_for': None, 'oldDaysTest': None,
+      'employees': [], 'payroll': [], 'salpay': [], 'entries_log': [], 'night_beats': 0, 'max_listed': 0}
 HEADS = {}   # day -> {mid: (guid, alter, type)} as Tally last listed it
 HOLD = {}    # day -> {mid: alter} FinCom holds
 LED_SENT = ''
@@ -73,6 +78,7 @@ def period_days(guid):
     co = ctl.get('company', '')
     out = []
     ph = ctl.get('phase', 'off')
+    mx = 30 if ctl.get('night') else 3
     chosen = ctl.get('chosen_at') or '2026-04-01T00:00:00Z'
     # ROUND 103 (1b): stopped by the bridge: nothing listed until the harness makes a fresh choice (a new chosen_at)
     if st['stopped_for'] and st['stopped_for'] == chosen:
@@ -81,7 +87,7 @@ def period_days(guid):
         for d in ctl.get('count_days') or []:
             if d not in st['counted'] and d not in st['upload']:
                 out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': False, 'types': STD, 'chosenAt': chosen})
-            if len(out) == 3:
+            if len(out) == mx:
                 break
     elif ph == 'fetch':
         seed_fetch()
@@ -90,7 +96,7 @@ def period_days(guid):
                 continue
             if d not in st['counted'] or not day_done(d):
                 out.append({'company': co, 'company_guid': guid, 'day': d, 'fetch': True, 'types': STD, 'chosenAt': chosen})
-            if len(out) == 3:
+            if len(out) == mx:
                 break
     return out
 
@@ -142,13 +148,16 @@ class H(BaseHTTPRequestHandler):
                 if body.get('oldDaysTest') is not None:
                     st['oldDaysTest'] = body.get('oldDaysTest')
                 # ROUND 103 (1c): this computer's switch on (as the owner switches it in FinCom)
-                out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True, 'recorderSource': 'both', 'periodFetch': True}
+                out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True, 'recorderSource': 'both', 'periodFetch': True, 'periodNight': bool(ctl.get('night'))}
+                if ctl.get('night'):
+                    st['night_beats'] += 1
                 rf = list(HELD_LINES.values())[:20]
                 if rf: out['refetch'] = rf
                 if st['company_guid'] and ctl.get('phase') in ('count', 'fetch'):
                     pd = period_days(st['company_guid'])
                     out['periodDays'] = pd
                     if pd:
+                        st['max_listed'] = max(st['max_listed'], len(pd))
                         st['period_days_listed'].append([time.strftime('%H:%M:%S'), [x['day'] for x in pd], pd[0]['fetch']])
                         st['period_days_listed'] = st['period_days_listed'][-400:]
                 la = ctl.get('ledgers_at') or ''
@@ -168,6 +177,7 @@ class H(BaseHTTPRequestHandler):
                         if isinstance(r, list) and len(r) >= 4:
                             h[str(r[1])] = (str(r[0]), int(r[2] or 0), str(r[3]))
                     HEADS[d] = h
+                    st['payroll_mids'] = sorted(set(st.get('payroll_mids') or []) | {mid for mid, (g, a, t) in h.items() if t == 'Payroll'}, key=int)
                     st['counted'][d] = len(h)
                     st['heads_asked'][d] = st['heads_asked'].get(d, 0) + 1
                     out = {'ok': True, 'counted': len(h)}
@@ -185,8 +195,15 @@ class H(BaseHTTPRequestHandler):
             elif kind == 'period_entries':
                 d = str(body.get('day', ''))
                 k = HOLD.setdefault(d, {}); n = 0
+                BANK = ('ACCOUNTNUMBER', 'IFSCODE', 'PAYMENTFAVOURING', 'BENEFICIARYCODE', 'SWIFTCODE')
                 for x in body.get('vouchers') or []:
                     x = str(x)
+                    vt = tag(x, 'VOUCHERTYPENAME')
+                    if vt == 'Payroll' or 'VCHTYPE="Payroll"' in x[:300]:
+                        st['payroll'].append({'day': d, 'mid': re.sub(r'\D', '', tag(x, 'MASTERID')).lstrip('0'), 'no': tag(x, 'VOUCHERNUMBER'), 'alloc': x.count('<COSTCENTREALLOCATIONS.LIST>'),
+                                              'employees': len(set(re.findall(r'<COSTCENTREALLOCATIONS\.LIST><NAME>([^<]*)</NAME>', x))), 'bank': [b for b in BANK if '<' + b in x], 'at': time.strftime('%H:%M:%S')})
+                    elif 'BANKEMPLOYEENAME' in x:
+                        st['salpay'].append({'day': d, 'no': tag(x, 'VOUCHERNUMBER'), 'employees': len(re.findall(r'<BANKEMPLOYEENAME>[^<]+</BANKEMPLOYEENAME>', x)), 'bank': [b for b in BANK if '<' + b in x]})
                     dd = re.sub(r'\D', '', tag(x, 'DATE'))
                     if dd != d:
                         st['bad_dates'].append([d, dd]); continue
@@ -197,6 +214,7 @@ class H(BaseHTTPRequestHandler):
                 for g in body.get('gone') or []:
                     HEADS.get(d, {}).pop(str(g), None)
                 st['entries_sent'][d] = st['entries_sent'].get(d, 0) + n
+                st['entries_log'].append([round(time.time(), 3), n])
                 refresh()
                 save_state()
                 out = {'ok': True, 'taken': n}
@@ -212,6 +230,12 @@ class H(BaseHTTPRequestHandler):
                 st['ledger_progress'].append({k2: body.get(k2) for k2 in ('company', 'company_guid', 'round', 'read', 'of', 'done')} | {'at': time.strftime('%H:%M:%S')})
                 save_state()
                 out = {'ok': True}
+            elif kind == 'employees':
+                st['employees'].append({'at': round(time.time(), 3), 'n': len(body.get('employees') or []), 'complete': body.get('complete')})
+                save_state()
+                out = {'ok': True, 'employees': len(body.get('employees') or [])}
+                logged = {k2: v for k2, v in body.items() if k2 != 'employees'}
+                logged['employees_n'] = len(body.get('employees') or [])
             elif kind == 'hello':
                 out = {'ok': True, 'firm': 'Spike', 'device': 'runner'}
             elif kind == 'companies':

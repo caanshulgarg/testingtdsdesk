@@ -25,6 +25,16 @@
 #   g7 a tally.ini with User TDL = No: the setup run again leaves it byte for byte; the beat reports usertdl-no
 #   g9 freeze safety: a day's list held at Tally (Tally suspended 5 s by proxy235.py) stops reading older entries of the
 #      company: FinCom told (period_stop, over2s), nothing more asked, Tally answering after (ROUND 103, 1b)
+#   (ROUND 103, the owner's decisions of 21-Oct-2026, evening) g3 is read at the NIGHT pace (the stand-in cloud answers
+#   periodNight true and lists up to 30 days, as tally-ingest does outside the computer's office hours), with more of
+#   Apr-Sep missing, and a payroll month in it (payg/'s payroll test masters, August 2026's payroll, salary payment and
+#   TDS on salary, and a payroll of 500 employees on 31-Aug-2026):
+#   g10 the night pace: more than 3 days an answer, the bridge reading day after day (an early beat when the listed days
+#      are done); the entries a minute measured (MEASURE line); every rule of g4 kept
+#   g11 the payroll month: the payroll's employees (FinComEmployees) sent before the first payroll entry; every payroll
+#      voucher and the salary payment fetched (the 500-employee payroll's FinComVoucherObject within its 3 s, every other
+#      request within 2 s); each payroll voucher sent with every employee's pay-head allocations, the salary payment with
+#      the employees' names, no bank detail anywhere; the payroll vouchers counted like any other (the day's count = Tally's)
 #   g8 job files under load: a posting job of 300 entries (POST /jobs) while the job is read without pause (GET /jobs?id=
 #      and progress.json opened directly): never "no such job", never unreadable, the count never going back, done with
 #      every entry
@@ -40,6 +50,8 @@ $G6 = 'g6 the exact ledger count and its progress'
 $G7 = 'g7 User TDL = No left untouched and reported'
 $G8 = 'g8 job files read while written: nothing lost, never missing'
 $G9 = 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)'
+$G10 = 'g10 the night pace: day after day, more than 3 days an answer, entries a minute measured'
+$G11 = 'g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail'
 $fcAddon = 'C:\ProgramData\FinCom\addon\FinComRecorder.tdl'
 $otherTdl = 'C:\fcother\FinComOtherTest.tdl'
 $iniPath = Join-Path $dir 'tally.ini'
@@ -70,6 +82,38 @@ if ($g5Phase -eq 'masters') {
   G5Ctl @{ company = $co1; phase = 'off' }
   $script:g5Made = DbMakeData
   $script:g5Led = DbLedgersTo 20000
+  # ROUND 103 (B): a payroll month in the period chosen (TEST DATA: payg/, the 2.4.4 payroll test masters with 7 employees,
+  # their bank details as a real master has them; August 2026's payroll, salary payment and TDS on salary), and a payroll
+  # of 500 employees on 31-Aug-2026 (its entry request may take Tally up to 3 s)
+  $pdir = Join-Path $PSScriptRoot 'payg'
+  $pgS = Get-Content (Join-Path $pdir 'setup.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+  $mx = (Get-Content (Join-Path $pdir 'masters.xml') -Raw -Encoding UTF8).Replace('"' + (LE $pgS.company) + '"', '"' + (LE $co1) + '"').Replace('<NAME>' + (LE $pgS.company) + '</NAME>', '<NAME>' + (LE $co1) + '</NAME>')
+  $pm = DbImp 'All Masters' ('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $mx + '</TALLYMESSAGE>') 'payroll masters (payg)'
+  $grp = "$($pgS.group)"; $cat = "$($pgS.category)"
+  $eb = 0
+  for ($b = 0; $b -lt 2; $b++) {
+    $m = ''
+    for ($j = 1; $j -le 250; $j++) { $n = $b * 250 + $j; $nm = 'PE Bulk {0:d4}' -f $n
+      $m += '<COSTCENTRE NAME="' + $nm + '" ACTION="Create"><NAME.LIST><NAME>' + $nm + '</NAME></NAME.LIST><PARENT>' + (LE $grp) + '</PARENT><CATEGORY>' + (LE $cat) + '</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><DATEOFJOIN>20250401</DATEOFJOIN><DESIGNATION>Operator</DESIGNATION></COSTCENTRE>' }
+    $k = DbImp 'All Masters' ('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $m + '</TALLYMESSAGE>') "500 employees, batch $($b + 1)"; $eb += $k.c
+  }
+  $vxRaw = Get-Content (Join-Path $pdir 'vouchers.xml') -Raw -Encoding UTF8
+  $pv = @([regex]::Matches($vxRaw, '(?s)<VOUCHER [^>]*>.*?</VOUCHER>') | ForEach-Object { $_.Value } | Where-Object { $_ -match '<VOUCHERNUMBER>(PE-PAY-202608|PE-SAL-202608|PE-TDS-202607)</VOUCHERNUMBER>' })
+  $pc = 0; foreach ($v in $pv) { $k = DbImp 'Vouchers' ('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $v + '</TALLYMESSAGE>') ([regex]::Match($v, '<VOUCHERNUMBER>([^<]*)<').Groups[1].Value); $pc += $k.c }
+  $heads = @('PE Basic', 'PE HRA', 'PE Special Allowance', 'PE PF Employee', 'PE Professional Tax'); $earn = @($true, $true, $true, $false, $false)
+  $ce = ''; $tot = 0.0
+  for ($i = 1; $i -le 500; $i++) {
+    $amts = @((30000 + $i), 12000, 8000, 1800, 200); $ea = 0.0; $pa = ''
+    for ($q = 0; $q -lt 5; $q++) { $a = if ($earn[$q]) { - [double]$amts[$q] } else { [double]$amts[$q] }; $ea += $a
+      $pa += '<PAYHEADALLOCATIONS.LIST><PAYHEADNAME>' + $heads[$q] + '</PAYHEADNAME><ISDEEMEDPOSITIVE>' + $(if ($earn[$q]) { 'Yes' } else { 'No' }) + '</ISDEEMEDPOSITIVE><PAYHEADSORTORDER>' + ($q + 1) + '</PAYHEADSORTORDER><AMOUNT>' + ('{0:0.00}' -f $a) + '</AMOUNT></PAYHEADALLOCATIONS.LIST>' }
+    $tot += $ea
+    $ce += '<EMPLOYEEENTRIES.LIST><EMPLOYEENAME>' + ('PE Bulk {0:d4}' -f $i) + '</EMPLOYEENAME><EMPLOYEESORTORDER>' + $i + '</EMPLOYEESORTORDER><AMOUNT>' + ('{0:0.00}' -f $ea) + '</AMOUNT>' + $pa + '</EMPLOYEEENTRIES.LIST>'
+  }
+  $bx = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="PaySlip Voucher View"><DATE>20260831</DATE><EFFECTIVEDATE>20260831</EFFECTIVEDATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>PE-PAY-BULK500</VOUCHERNUMBER><PARTYLEDGERNAME>' + (LE $pgS.payable) + '</PARTYLEDGERNAME><PERSISTEDVIEW>PaySlip Voucher View</PERSISTEDVIEW><ASPAYSLIP>Yes</ASPAYSLIP><VCHENTRYMODE>Payslip</VCHENTRYMODE><NARRATION>PE-PAY-BULK500 payroll of 500 employees (test data)</NARRATION>' +
+    '<LEDGERENTRIES.LIST><LEDGERNAME>' + (LE $pgS.payable) + '</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>' + ('{0:0.00}' -f (- $tot)) + '</AMOUNT></LEDGERENTRIES.LIST><CATEGORYENTRY.LIST><CATEGORY>' + (LE $cat) + '</CATEGORY>' + $ce + '</CATEGORYENTRY.LIST></VOUCHER>'
+  $k = DbImp 'Vouchers' ('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $bx + '</TALLYMESSAGE>') 'payroll of 500 employees'; $pc += $k.c
+  $script:g5Pay = [pscustomobject]@{ masters = $pm.c; mastersErr = $pm.e; bulk = $eb; entries = $pc }
+  Info ("g245: the payroll month: masters created {0} (errors {1}), 500 employees created {2}, entries created {3} of 4 (PE-PAY-202608 01-Aug, PE-SAL-202608 02-Aug, PE-TDS-202607 02-Aug, PE-PAY-BULK500 31-Aug)" -f $pm.c, $pm.e, $eb, $pc)
   $tv = @(TruthV | Where-Object { $_.date })
   $script:g5Truth = @{}; foreach ($g in ($tv | Group-Object date)) { $script:g5Truth[$g.Name] = $g.Count }
   $script:g5TruthMid = @{}; foreach ($e in $tv) { $script:g5TruthMid[$e.mid] = $e.date }
@@ -108,7 +152,7 @@ Add-Type @'
 using System; using System.Runtime.InteropServices;
 public static class G5Frz { [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint ms, out IntPtr res); }
 '@
-$script:frz = [hashtable]::Synchronized(@{ on = $false; stop = $false; h = [IntPtr]::Zero; max = 0.0; maxAt = ''; beats = 0; err = ''; over = 0 })
+$script:frz = [hashtable]::Synchronized(@{ on = $false; stop = $false; h = [IntPtr]::Zero; max = 0.0; maxAt = ''; beats = 0; err = ''; over = 0; spells = [Collections.ArrayList]::Synchronized([Collections.ArrayList]::new()) })
 $script:frzOk = $false
 try {
   $script:frzJob = Start-ThreadJob -ArgumentList $script:frz -ScriptBlock {
@@ -119,7 +163,7 @@ try {
         $t0 = $sw.Elapsed.TotalMilliseconds; $r = [IntPtr]::Zero
         try { $ok = [G5Frz]::SendMessageTimeout($f.h, 0, [IntPtr]::Zero, [IntPtr]::Zero, 2, 250, [ref]$r) } catch { $f.err = "$_"; $ok = [IntPtr]1 }
         if ($ok -eq [IntPtr]::Zero) { if ($null -eq $since) { $since = $t0 }; $cur = $sw.Elapsed.TotalMilliseconds - $since; if ($cur -gt $f.max) { $f.max = $cur; $f.maxAt = (Get-Date).ToString('HH:mm:ss') } }
-        else { if ($null -ne $since -and ($sw.Elapsed.TotalMilliseconds - $since) -ge 2000) { $f.over++ }; $since = $null }
+        else { if ($null -ne $since) { $dur = $sw.Elapsed.TotalMilliseconds - $since; if ($dur -ge 2000) { $f.over++ }; if ($dur -ge 1500) { $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); $null = $f.spells.Add(@(($now - [int64]$dur), $now)) } }; $since = $null }
       } else { $since = $null }
       $f.beats++
       Start-Sleep -Milliseconds 100
@@ -182,11 +226,14 @@ try {
 
   # ================================================================ g3 the part chosen (Apr-Sep), with g5 during it
   $part = @($days | Where-Object { $_ -le '20260930' }); [array]::Reverse($part)
-  $missing = @('20260601', '20260702', '20260831') | Where-Object { $_ -in $part }
+  # ROUND 103: the payroll month's days (01-Aug, 02-Aug, 31-Aug) and the heavy 01-Aug among the days FinCom lacks; read
+  # at the night pace (g10)
+  $missing = @('20260601', '20260702', '20260731', '20260801', '20260802', '20260831') | Where-Object { $_ -in $part }
   $wantTotal = 0; foreach ($m in $missing) { $wantTotal += [int]$script:g5Truth[$m] }
   Say "g245: fetching Apr-Sep ($($part.Count) days); FinCom lacks $($missing -join ', ') ($wantTotal entries)"
   $tFetch = NowMs
-  G5Ctl @{ company = $co1; phase = 'fetch'; count_days = $days; part_days = $part; missing = $missing }
+  $b0 = [int](Prop (GState) 'beats')
+  G5Ctl @{ company = $co1; phase = 'fetch'; count_days = $days; part_days = $part; missing = $missing; night = $true }
   $posted = $false; $imp = $null; $t = Get-Date
   while (((Get-Date) - $t).TotalMinutes -lt 90) {
     Start-Sleep 10; $gs = GState
@@ -229,13 +276,44 @@ try {
 
   # ================================================================ g4 the 2 s rule, one at a time, no freeze
   $pxC = @($px | Where-Object { [int64]$_.t0 -ge $tCount -and [int64]$_.t0 -le $tFetchEnd -and $_.method -eq 'POST' } | Sort-Object { [int64]$_.t0 })
-  $over = @($pxC | Where-Object { [int]$_.ms -gt 2000 })
+  # ROUND 103 (B): a payroll voucher's entry request may take 3 s (the owner's decision of 12-Oct-2026); every other 2 s
+  $payMids = @((Prop $gs 'payroll_mids') | ForEach-Object { "$_" })
+  $isPay = { param($q) $q.id -eq 'FinComVoucherObject' -and "$($q.mid)" -in $payMids }
+  $over = @($pxC | Where-Object { [int]$_.ms -gt $(if (& $isPay $_) { 3000 } else { 2000 }) })
+  $payReqs = @($pxC | Where-Object { & $isPay $_ })
+  # a window spell of 2 s or more is allowed only while a payroll entry was at Tally, and under 3 s
+  $spBad = @(@($script:frz.spells) | Where-Object { ($_[1] - $_[0]) -ge 2000 -and [int64]$_[0] -ge $tCount -and [int64]$_[0] -le $tFetchEnd } | Where-Object { $sp = $_; ($sp[1] - $sp[0]) -ge 3000 -or -not @($payReqs | Where-Object { [int64]$sp[0] -ge ([int64]$_.t0 - 300) -and [int64]$sp[1] -le ([int64]$_.t1 + 300) }).Count })
   $overlap = 0; $prevEnd = 0L; foreach ($q in $pxC) { if ([int64]$q.t0 -lt $prevEnd) { $overlap++ }; $prevEnd = [math]::Max($prevEnd, [int64]$q.t1) }
   $byId = ($pxC | Group-Object id | ForEach-Object { $w = ($_.Group | Measure-Object -Property ms -Maximum).Maximum; "$($_.Name) $($_.Count) (worst $w ms)" }) -join ', '
   $stops = @((GLog) | Where-Object { $_ -match 'longer than 2 s|stopped waiting \(2 s\)|over 2 s' } | Select-Object -Last 3)
   $resp = DbResponding
   $blocked = if ($script:frzOk) { [math]::Round($script:frz.max) } else { -1 }
-  GRes $G4 $(if (-not $pxC.Count -or -not $script:frzOk) { 'HARNESS' } elseif (-not $over.Count -and $overlap -eq 0 -and $blocked -lt 2000 -and $resp) { 'PASS' } else { 'FAIL' }) ("{0} requests at Tally during the count and the fetch ({1}); over 2 s: {2}; started while another was at Tally: {3}; Tally's window longest not answering {4} ms (at {5}; spells of 2 s or more: {6}); Tally responding at the end {7}; the bridge's stops: {8}" -f $pxC.Count, $byId, $(if ($over.Count) { ($over | Select-Object -First 5 | ForEach-Object { "$($_.id) $($_.ms) ms" }) -join ', ' } else { 'none' }), $overlap, $blocked, $script:frz.maxAt, $script:frz.over, $resp, $(if ($stops.Count) { $stops -join ' | ' } else { 'none' }))
+  GRes $G4 $(if (-not $pxC.Count -or -not $script:frzOk) { 'HARNESS' } elseif (-not $over.Count -and $overlap -eq 0 -and -not $spBad.Count -and $blocked -lt 3000 -and $resp) { 'PASS' } else { 'FAIL' }) ("{0} requests at Tally during the count and the fetch ({1}); over 2 s (a payroll entry over 3 s): {2}; payroll entries {3} (worst {4} ms); started while another was at Tally: {5}; Tally's window longest not answering {6} ms (at {7}; spells of 2 s or more: {8}, outside a payroll entry or 3 s or more: {9}); Tally responding at the end {10}; the bridge's stops: {11}" -f $pxC.Count, $byId, $(if ($over.Count) { ($over | Select-Object -First 5 | ForEach-Object { "$($_.id) $($_.ms) ms" }) -join ', ' } else { 'none' }), $payReqs.Count, (($payReqs | Measure-Object -Property ms -Maximum).Maximum), $overlap, $blocked, $script:frz.maxAt, $script:frz.over, $spBad.Count, $resp, $(if ($stops.Count) { $stops -join ' | ' } else { 'none' }))
+
+  # ================================================================ g10 the night pace (ROUND 103, the owner's decision of 21-Oct-2026, evening)
+  $el = @((Prop $gs 'entries_log') | Where-Object { [double]$_[0] * 1000 -ge $tFetch -and [double]$_[0] * 1000 -le $tFetchEnd })
+  $nEnt = ($el | ForEach-Object { [int]$_[1] } | Measure-Object -Sum).Sum
+  $objF = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' } | Sort-Object { [int64]$_.t0 })
+  $spanMin = if ($objF.Count -ge 2) { ([int64]$objF[-1].t1 - [int64]$objF[0].t0) / 60000.0 } else { 0 }
+  $perMin = if ($spanMin -gt 0) { [math]::Round($nEnt / $spanMin) } else { 0 }
+  $maxL = [int](Prop $gs 'max_listed'); $nb = [int](Prop $gs 'night_beats'); $beatsF = [int](Prop $gs 'beats') - $b0
+  $fetchMin = [math]::Round(($tFetchEnd - $tFetch) / 60000.0, 1)
+  $eta200k = if ($perMin -gt 0) { [math]::Round(200000 / $perMin / 60.0, 1) } else { -1 }
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ('MEASURE g10 night pace: ' + ("{0} entries sent in {1} min of entry requests ({2} entries a minute; 2,00,000 entries would take about {3} h at this pace); requests at Tally in the fetch: {4}" -f (Nf $nEnt), [math]::Round($spanMin, 1), (Nf $perMin), $eta200k, ($pxF.Count)))
+  GRes $G10 $(if (-not $gs -or -not $objF.Count) { 'HARNESS' } elseif ($maxL -gt 3 -and $nb -gt 0 -and $perMin -ge 1000 -and -not $over.Count -and $overlap -eq 0 -and -not $spBad.Count) { 'PASS' } else { 'FAIL' }) ("periodNight answered {0} time(s); at most {1} days in one answer; {2} beats in {3} min of fetch; {4} entries a minute ({5} entries over {6} min); the rules of g4 kept: over the limit {7}, overlapping {8}, window spells not allowed {9}" -f $nb, $maxL, $beatsF, $fetchMin, (Nf $perMin), (Nf $nEnt), [math]::Round($spanMin, 1), $over.Count, $overlap, $spBad.Count)
+
+  # ================================================================ g11 the payroll month (ROUND 103, B)
+  $pay = @((Prop $gs 'payroll')); $sal = @((Prop $gs 'salpay')); $emps = @((Prop $gs 'employees'))
+  $firstPay = @($payReqs | Sort-Object { [int64]$_.t0 }) | Select-Object -First 1
+  $empFirst = if ($firstPay -and $emps.Count) { ([double]$emps[0].at * 1000) -lt [int64]$firstPay.t0 } else { $false }
+  $bulk = @($pay | Where-Object { "$($_.no)" -eq 'PE-PAY-BULK500' }) | Select-Object -First 1
+  $aug = @($pay | Where-Object { "$($_.no)" -eq 'PE-PAY-202608' }) | Select-Object -First 1
+  $bankAny = @($pay + $sal | Where-Object { @($_.bank).Count -gt 0 })
+  $cnt = Prop $gs 'counted'
+  $dayOk = @('20260801', '20260802', '20260831' | Where-Object { [int](Prop $cnt $_) -ne [int]$script:g5Truth[$_] })
+  $payWorst = ($payReqs | Measure-Object -Property ms -Maximum).Maximum
+  $stopsPay = @((Prop $gs 'stops'))
+  GRes $G11 $(if (-not $script:g5Pay -or $script:g5Pay.entries -ne 4 -or $script:g5Pay.bulk -ne 500) { 'HARNESS' } elseif ($empFirst -and $bulk -and [int]$bulk.employees -ge 500 -and $aug -and [int]$aug.employees -ge 5 -and $sal.Count -ge 1 -and [int]$sal[0].employees -ge 5 -and -not $bankAny.Count -and -not $dayOk.Count -and $payReqs.Count -ge 2 -and $payWorst -le 3000 -and -not $stopsPay.Count) { 'PASS' } else { 'FAIL' }) ("the payroll's employees sent {0} time(s) ({1} rows), before the first payroll entry {2}; payroll vouchers sent: {3}; the salary payment: {4}; bank details sent: {5}; payroll entry requests {6} (worst {7} ms, limit 3,000); the payroll days' counts as Tally's: {8}; period stops {9}" -f $emps.Count, $(if ($emps.Count) { $emps[-1].n } else { 0 }), $empFirst, (($pay | ForEach-Object { "$($_.no) on $($_.day): $($_.employees) employees, $($_.alloc) allocations" }) -join '; '), (($sal | ForEach-Object { "$($_.no): $($_.employees) employees" }) -join '; '), $(if ($bankAny.Count) { ($bankAny | ForEach-Object { "$($_.no) $(@($_.bank) -join ',')" }) -join '; ' } else { 'none' }), $payReqs.Count, $payWorst, $(if ($dayOk.Count) { "no: $($dayOk -join ', ')" } else { 'yes' }), $stopsPay.Count)
 
   # ================================================================ g5 postings first
   if (-not $imp) { GRes $G5 'HARNESS' 'the fetch never reached 50 entries asked: no posting made during it' }
@@ -333,7 +411,7 @@ try {
   GRes $G8 $(if (-not $jr) { 'HARNESS' } elseif ($status -eq 'done' -and $okN -eq 300 -and $noJob -eq 0 -and $unread -eq 0 -and $fileMiss -eq 0 -and $fileBad -eq 0 -and $backN -eq 0) { 'PASS' } else { 'FAIL' }) ("the job of 300 entries: {0}, {1} of 300 posted; read {2} times while written: 'no such job' {3}, not answered {4}; progress.json opened directly: missing or locked {5}, not whole {6}; the count going back {7}; {8} min" -f $status, $okN, $reads, $noJob, $unread, $fileMiss, $fileBad, $backN, [math]::Round(((Get-Date) - $t).TotalMinutes, 1))
 } catch {
   Write-Host "g245 stopped: $_ $($_.ScriptStackTrace)"
-  foreach ($c in @($G1, $G2, $G3, $G4, $G5, $G6, $G7, $G9, $G8)) { GRes $c 'HARNESS' "the harness stopped: $_" }
+  foreach ($c in @($G1, $G2, $G3, $G4, $G10, $G11, $G5, $G6, $G7, $G9, $G8)) { GRes $c 'HARNESS' "the harness stopped: $_" }
 }
 $script:frz.stop = $true
 Snap 'g245-end'
