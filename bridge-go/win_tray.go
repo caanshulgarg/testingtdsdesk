@@ -635,8 +635,8 @@ func (t *tray) command(id int, st M) {
 			}
 			c := obj(x)
 			size := ""
-			if n := toI64(c["size"]); n >= 0 {
-				size = fmt.Sprintf(" (about %d entries)", n)
+			if i == 0 {
+				size = " (it looks the smallest open)"
 			}
 			if yesNo(title, "Test reading old days on "+str(c["company"])+size+"?\n\nRead only: FinCom Bridge asks Tally for the list of entries of three days ("+strings.Join(days, ", ")+"), one at a time, and stops at once if Tally takes longer than 2 seconds. Nothing is changed, kept or posted.\n\nNo: suggest the next company.") {
 				company = str(c["company"])

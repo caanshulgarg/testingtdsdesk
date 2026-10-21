@@ -1128,7 +1128,7 @@ function cardState(r, n) {
 // FinCom Bridge 2.4.5: what the installer did with FinCom's add-on line in each tally.ini (the beat's tallyIni). A tally.ini
 // that says "User TDL = No" is left untouched (the owner's default, decision pending) and said here for support; a line
 // added or already there says nothing.
-const INI_WORDS = { "usertdl-no": "says User TDL = No, so FinCom left it untouched: Tally does not load FinCom's add-on when it starts.",
+const INI_WORDS = { notadded: "does not have FinCom's add-on line yet; FinCom adds it when Tally is closed.", "usertdl-no": "says User TDL = No, so FinCom left it untouched: Tally does not load FinCom's add-on when it starts.",
   failed: "could not be changed; FinCom's add-on is not loaded when Tally starts.", refused: "is not an ordinary file; FinCom left it untouched.",
   unreadable: "could not be read; FinCom left it untouched." };
 function TallyIniLines({ r }) {

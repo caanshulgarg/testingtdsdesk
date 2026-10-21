@@ -659,29 +659,26 @@ func tallyWindows() []uintptr {
 	return append([]uintptr{}, holdWins...)
 }
 
-func platWindowHold() func() int {
+func platWindowHold() func(from time.Time) int {
 	wins := tallyWindows()
 	if len(wins) == 0 {
-		return func() int { return 0 }
+		// no window of Tally seen (the service in session 0, or Tally not shown): not watched
+		return func(time.Time) int { return -1 }
 	}
 	done := make(chan struct{})
-	res := make(chan int, 1)
+	res := make(chan []spell, 1)
 	go func() {
 		const smtoAbortIfHung = 0x0002
 		var since time.Time
-		worst := 0
+		var spells []spell
 		for {
+			stop := false
 			select {
 			case <-done:
-				if !since.IsZero() {
-					if ms := int(time.Since(since).Milliseconds()); ms > worst {
-						worst = ms
-					}
-				}
-				res <- worst
-				return
+				stop = true
 			default:
 			}
+			callStart := time.Now()
 			answered := true
 			for _, h := range wins {
 				var out uintptr
@@ -693,13 +690,18 @@ func platWindowHold() func() int {
 			}
 			if answered {
 				if !since.IsZero() {
-					if ms := int(time.Since(since).Milliseconds()); ms > worst {
-						worst = ms
-					}
+					spells = append(spells, spell{since, callStart})
 				}
 				since = time.Time{}
 			} else if since.IsZero() {
-				since = time.Now()
+				since = callStart // the window stopped answering no later than when this call began
+			}
+			if stop {
+				if !since.IsZero() {
+					spells = append(spells, spell{since, time.Now()})
+				}
+				res <- spells
+				return
 			}
 			select {
 			case <-done:
@@ -707,8 +709,8 @@ func platWindowHold() func() int {
 			}
 		}
 	}()
-	return func() int {
+	return func(from time.Time) int {
 		close(done)
-		return <-res
+		return worstSpellFrom(<-res, from)
 	}
 }

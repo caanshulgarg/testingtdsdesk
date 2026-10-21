@@ -1555,7 +1555,10 @@ async function periodStop(book: string, body: any) {
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const why = ["over2s", "window"].includes(String(body?.why)) ? String(body.why) : "other";
-  const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300) });
+  // review 103: the choice the bridge was reading (an older stop never stops a newer choice)
+  const chosen = typeof body?.chosenAt === "string" && !isNaN(Date.parse(body.chosenAt)) ? body.chosenAt.slice(0, 40) : "";
+  if (!chosen) return reply(400, { ok: false, error: "no choice" });
+  const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300), p_chosen_at: chosen });
   if (error) return periodError(error);
   console.log("tally-ingest period_stop: older entries stopped by the bridge", book, day, why);
   return reply(200, { ok: !!(data as any)?.ok });

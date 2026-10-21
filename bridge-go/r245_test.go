@@ -94,12 +94,13 @@ func TestR245DayHeadsOnlyListedDays(t *testing.T) {
 		t.Fatal("FinComDayHeads went for a day FinCom did not list")
 	}
 	applyPeriodDays(M{"periodDays": []any{M{"company": zz, "company_guid": g, "day": d, "fetch": true, "types": []any{"Sales", "Receipt"}}}})
-	for _, x := range []string{f1, f2, dayHeadsTypeRequest(zz, d, "Receipt")} {
-		if !dayHeadsExact(tc, x) {
-			t.Fatalf("a listed day refused: %s", x)
-		}
-		if err := checkAllowed(x); err != nil {
-			t.Fatalf("not allowed: %v", err)
+	if !dayHeadsExact(tc, f1) || checkAllowed(f1) != nil {
+		t.Fatal("a listed day refused")
+	}
+	// ROUND 103: the by-type form is no longer sent: refused at the gate though the day is listed
+	for _, x := range []string{f2, dayHeadsTypeRequest(zz, d, "Receipt")} {
+		if dayHeadsExact(tc, x) {
+			t.Fatalf("the by-type form passes: %s", x)
 		}
 	}
 	for name, x := range map[string]string{
@@ -397,7 +398,7 @@ func TestR103PullOver2sStopsCompany(t *testing.T) {
 	c.mu.Lock()
 	ns := len(stops)
 	c.mu.Unlock()
-	if ns != 1 || str(stops[0]["why"]) != "over2s" || str(stops[0]["day"]) != "20250831" ||
+	if ns != 1 || str(stops[0]["why"]) != "over2s" || str(stops[0]["day"]) != "20250831" || str(stops[0]["chosenAt"]) != chosen ||
 		str(stops[0]["words"]) != "Tally took too long to give 31-Aug-2025, so FinCom stopped reading older entries of "+zz+". Please upload the Day Book for the days still missing." {
 		t.Fatalf("FinCom told: %v", stops)
 	}
@@ -461,8 +462,9 @@ func TestR103PullWindowHoldStopsCompany(t *testing.T) {
 		return prev(k, b)
 	}
 	c.mu.Unlock()
-	testWindowHoldMs.Store(2300)
-	t.Cleanup(func() { testWindowHoldMs.Store(0) })
+	old := windowHoldFn
+	windowHoldFn = func() func(time.Time) int { return func(time.Time) int { return 2300 } }
+	t.Cleanup(func() { windowHoldFn = old })
 	pullDay(f, "20250701", 1000, "Sales")
 	pullDay(f, "20250702", 1100, "Sales")
 	applyPeriodDays(pullList("20250702", "20250701"))
@@ -759,22 +761,11 @@ func TestR245ReviewTypeNamesWithAmpersand(t *testing.T) {
 	if !pullTypeOK("Sales & Returns") || !pullTypeOK("Purchase <GST>") || pullTypeOK(`Sales "A"`) || pullTypeOK("") {
 		t.Fatal("pullTypeOK")
 	}
-	f, _, _ := pullBridge(t)
-	d := "20250831"
-	applyPeriodDays(M{"periodDays": []any{M{"company": zz, "company_guid": b220CoGUID, "day": d, "fetch": true, "types": []any{"Sales & Returns"}}}})
-	x := dayHeadsTypeRequest(zz, d, "Sales & Returns")
+	x := dayHeadsTypeRequest(zz, "20250831", "Sales & Returns")
 	if !strings.Contains(x, "$VoucherTypeName = &#34;Sales &amp; Returns&#34;") && !strings.Contains(x, "$VoucherTypeName = &quot;Sales &amp; Returns&quot;") {
 		t.Fatalf("not escaped: %s", x)
 	}
-	if !dayHeadsExact(recorderTC(nil), x) {
-		t.Fatal("a listed type with & refused")
-	}
-	if err := checkAllowed(x); err != nil {
-		t.Fatalf("not allowed: %v", err)
-	}
-	if _, err := invokeTally(recorderTC(nil), f.port, x, 5); err != nil {
-		t.Fatalf("not sent: %v", err)
-	}
+	// ROUND 103: the by-type form is no longer sent (dayHeadsExact refuses it): see TestR245DayHeadsOnlyListedDays
 }
 
 // R1-5: a day marked "upload" that FinCom did not take is told again (once a minute), never asked of Tally again

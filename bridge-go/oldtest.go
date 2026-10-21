@@ -152,14 +152,25 @@ func runOldTest(company string, days []string) M {
 	}()
 	var rs []any
 	var words []string
+	watched := true
 	for _, d := range days {
 		held := windowHoldFn()
-		t0 := time.Now()
-		raw, err := invokeTally(recorderTC(nil), port, dayHeadsRequest(company, d), 5)
-		ms := int(time.Since(t0).Milliseconds())
-		hold := held()
+		var took float64
+		raw, err := invokeTally(recorderTC(func(sec float64) { took += sec }), port, dayHeadsRequest(company, d), 5)
+		ms := int(took * 1000) // Tally's time: from the send (a wait for Tally behind another request is not counted)
+		hold := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+		if took == 0 {
+			hold = 0
+		}
+		if hold < 0 {
+			watched, hold = false, 0
+		}
 		e := M{"day": d, "ms": ms, "holdMs": hold}
 		switch {
+		case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
+			// nothing reached Tally (a posting first, the shared retry wait, reading stopped): not Tally's doing
+			res["ok"], res["state"], res["error"] = false, "failed", "not tested: nothing was sent to Tally ("+cutRunes(err.Error(), 120)+"); try again in a few minutes"
+			return res
 		case errors.Is(err, errRecorderStop):
 			e["stopped"] = "over 2 s"
 			res["stopped"] = "Tally took longer than 2 s to give " + liveDay(d) + "; the test stopped there"
@@ -180,18 +191,23 @@ func runOldTest(company string, days []string) M {
 		raw = ""
 		rs = append(rs, e)
 		words = append(words, fmt.Sprintf("%.2f s", float64(ms)/1000))
-		writeLog(fmt.Sprintf("Old-days test (read only) of %s: %s: %d ms, %v row(s), Tally's window held at most %d ms%s", company, liveDay(d), ms, e["rows"], hold,
+		writeLog(fmt.Sprintf("Old-days test (read only) of %s: %s: %d ms at Tally, %d row(s), Tally's window held at most %d ms%s", company, liveDay(d), ms, toInt(e["rows"]), hold,
 			map[bool]string{true: " - " + str(e["stopped"]) + str(e["error"]), false: ""}[e["stopped"] != nil || e["error"] != nil]))
 		if res["stopped"] != nil {
 			break
 		}
 		keepRest(300 * time.Millisecond)
 	}
+	res["watched"] = watched
 	res["results"] = rs
 	line := strings.Join(words, " / ")
-	if s := str(res["stopped"]); s != "" {
+	switch s := str(res["stopped"]); {
+	case s != "":
 		line += " · " + s
-	} else {
+	case !watched:
+		// the bridge could not see Tally's window (as a Windows service): never said "no freeze" then
+		line += " · each under 2 s; Tally's window could not be watched from here"
+	default:
 		line += " · no freeze"
 	}
 	res["line"] = line

@@ -163,9 +163,12 @@ try:
     ok(c == 409, "3. ledger progress of another GUID: 409")
 
     # ROUND 103 (1b): the bridge stopped the period: tally_period_stop with its day, reason and words
-    c, r = call(dict(base, kind="period_stop", company="BIG CO", company_guid=CG, day="20250830", why="over2s", words="Tally took too long to give 30-Aug-2025, so FinCom stopped reading older entries of BIG CO. Please upload the Day Book for the days still missing."))
+    nstop = len(FS.ARGS.get("tally_period_stop") or [])
+    c, r = call(dict(base, kind="period_stop", company="BIG CO", company_guid=CG, day="20250830", why="over2s", words="x"))
+    ok(c == 400 and len(FS.ARGS.get("tally_period_stop") or []) == nstop, "3. period_stop without the choice it was reading: 400, nothing stopped (%s)" % r)
+    c, r = call(dict(base, kind="period_stop", company="BIG CO", company_guid=CG, day="20250830", why="over2s", chosenAt="2026-10-21T08:00:00.123456+00:00", words="Tally took too long to give 30-Aug-2025, so FinCom stopped reading older entries of BIG CO. Please upload the Day Book for the days still missing."))
     sp = (FS.ARGS.get("tally_period_stop") or [{}])[-1]
-    ok(c == 200 and r.get("ok") is True and sp.get("p_day") == "2025-08-30" and sp.get("p_why") == "over2s" and "stopped reading" in sp.get("p_words", ""), "3. period_stop kept (%s)" % sp)
+    ok(c == 200 and r.get("ok") is True and sp.get("p_day") == "2025-08-30" and sp.get("p_why") == "over2s" and sp.get("p_chosen_at") == "2026-10-21T08:00:00.123456+00:00" and "stopped reading" in sp.get("p_words", ""), "3. period_stop kept with its choice (%s)" % sp)
 
     print("== 4. ledger_progress")
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid=CG, round="r2", read=1240, of=1240, done=True))

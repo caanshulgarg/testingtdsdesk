@@ -84,6 +84,7 @@ func pullWait() time.Duration {
 // one day the cloud listed
 type pullItem struct {
 	Company, CGUID, Day string
+	ChosenAt            string // FinCom's time of the person's choice (ROUND 103: a stop holds until another choice)
 	Fetch               bool
 	Types               []string
 }
@@ -159,7 +160,7 @@ func applyPeriodDays(j M) {
 			liveSayOnce("pull|notown|"+companyKey(co), "Older entries: "+co+": not asked (FinCom names another company GUID than this bridge holds)")
 			continue
 		}
-		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"])}
+		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"]), ChosenAt: cutRunes(str(e["chosenAt"]), 60)}
 		if pullStoppedFor(co, str(e["chosenAt"])) {
 			continue // ROUND 103 (1b): stopped for this company; only a newer choice in FinCom starts it again
 		}
@@ -227,12 +228,7 @@ func dayHeadsExact(tc *TC, x string) bool {
 			continue
 		}
 		if x == dayHeadsRequest(co, a) {
-			return true
-		}
-		for _, t := range it.types() {
-			if x == dayHeadsTypeRequest(co, a, t) {
-				return true
-			}
+			return true // ROUND 103: F1 only; the by-type form is no longer sent (the gate refuses it)
 		}
 	}
 	return false
@@ -502,11 +498,19 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	pull.mu.Lock()
 	pull.lastAsk = nowFn()
 	pull.mu.Unlock()
-	held := windowHoldFn() // ROUND 103 (1b): how long Tally's window did not answer while the request was at Tally
-	raw, err := invokeTally(recorderTC(nil), port, x, 5)
-	holdMs := held()
+	// ROUND 103 (1b): Tally's window watched while the request is at Tally (from its send: the wait for the lock not counted)
+	held := windowHoldFn()
+	var took float64
+	raw, err := invokeTally(recorderTC(func(sec float64) { took += sec }), port, x, 5)
+	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+	if took == 0 {
+		holdMs = 0 // nothing reached Tally
+	}
+	pullNoteWatched(holdMs)
 	_ = typ
 	switch {
+	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
+		return false, false // nothing reached Tally; the day waits
 	case errors.Is(err, errRecorderStop):
 		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;
 		// the days still missing are to be uploaded by hand (one quiet line); never asked again by itself
@@ -516,8 +520,6 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
 		return true, false
 	case err == nil:
-	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
-		return false, false // nothing reached Tally; the day waits
 	default:
 		// not answered (Tally closed, reset), refused or an answer that could not be read: the day stays pending and is
 		// asked again after the shared retry schedule; nothing is shown
@@ -628,20 +630,29 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	it := w.it
 	mid := w.want[0]
-	got, err := fetchVouchersByMasterIn(recorderTC(nil), it.Company, port, it.Day, []string{mid}, liveBodySec())
+	held := windowHoldFn()
+	var took float64
+	got, err := fetchVouchersByMasterIn(recorderTC(func(sec float64) { took += sec }), it.Company, port, it.Day, []string{mid}, liveBodySec())
+	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+	if took == 0 {
+		holdMs = 0
+	}
+	pullNoteWatched(holdMs)
 	switch {
-	case err == nil:
 	case errors.Is(err, errRetryWait) || gaveWay(err) || errors.Is(err, errReadStopped):
 		return false, false
 	case errors.Is(err, errSlowCompany):
 		pullDrop(w) // marked slow meanwhile: not asked (the company's rule, slowco.go)
 		return true, false
 	case errors.Is(err, errRecorderStop):
-		w.stops[mid]++
-		if w.stops[mid] >= liveObjAsksMax {
-			pullMarkUpload(w, "over2s", "")
-		}
+		// ROUND 103 (1b, review): an entry's request over 2 s stops the period too (the freeze safety covers every
+		// request of it, not only the day's list)
+		pullStopCompany(w, "over2s", "the entry with MasterID "+mid)
 		return true, false
+	case holdMs >= 2000:
+		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the entry with MasterID %s was read", float64(holdMs)/1000, mid))
+		return true, false
+	case err == nil:
 	case errors.Is(err, errFastShape):
 		pullMarkUpload(w, "shape", "")
 		return true, false
@@ -736,7 +747,7 @@ func pullStopCompany(w *pullWork, why, what string) {
 	}
 	writeLog(fmt.Sprintf("Older entries of %s: stopped at %s (%s): nothing more is asked of Tally for the period; FinCom shows one line to upload the Day Book of the days still missing", it.Company, liveDay(it.Day), what))
 	pull.mu.Lock()
-	pull.stopCo[companyKey(it.Company)] = M{"company": it.Company, "day": it.Day, "why": why, "words": words, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano()}
+	pull.stopCo[companyKey(it.Company)] = M{"company": it.Company, "day": it.Day, "why": why, "words": words, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano(), "chosenAt": it.ChosenAt}
 	var keep []pullItem
 	for _, x := range pull.items {
 		if companyKey(x.Company) != companyKey(it.Company) {
@@ -747,7 +758,7 @@ func pullStopCompany(w *pullWork, why, what string) {
 	pullSaveLocked()
 	pull.mu.Unlock()
 	pullFinish(w, "stopped")
-	pullTell("stop|"+companyKey(it.Company), M{"kind": "period_stop", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "why": why, "words": words})
+	pullTell("stop|"+companyKey(it.Company), M{"kind": "period_stop", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "why": why, "words": words, "chosenAt": it.ChosenAt})
 }
 
 // the day's turn ends: the cloud's next answer says whether it is done
@@ -840,9 +851,12 @@ func pullStoppedFor(company, chosenAt string) bool {
 	if st == nil {
 		return false
 	}
-	if t, err := time.Parse(time.RFC3339Nano, chosenAt); err == nil && t.UnixNano() > toI64(st["atN"]) {
+	// a different choice than the one stopped (FinCom's own time of the choice, compared as FinCom gives it: no clock of
+	// this computer is involved); the stop of the old choice is not told again
+	if chosenAt != "" && chosenAt != str(st["chosenAt"]) {
 		pull.mu.Lock()
 		delete(pull.stopCo, companyKey(company))
+		delete(pull.tell, "stop|"+companyKey(company))
 		pullSaveLocked()
 		pull.mu.Unlock()
 		writeLog("Older entries of " + company + ": chosen again in FinCom after the stop; read again, one day at a time")
@@ -958,19 +972,25 @@ func pullUploadListLocked() []any {
 // long, at most, Tally's window did not answer (ms) while the request was at Tally. Windows: WM_NULL sent to each visible
 // window of this user's tally.exe every 200 ms with a 250 ms limit (SendMessageTimeout, SMTO_ABORTIFHUNG); nothing is
 // sent to Tally's port. Elsewhere: the tests' stand-in
-var windowHoldFn = func() func() int {
-	stop := platWindowHold()
-	return func() int {
-		m := stop()
-		if t := int(testWindowHoldMs.Load()); t > m {
-			return t
-		}
-		return m
-	}
-}
+var windowHoldFn = platWindowHold
 
-// the tests' stand-in for a window held (0 in use)
-var testWindowHoldMs atomic.Int64
+// a spell of Tally's window not answering
+type spell struct{ a, z time.Time }
+
+// the longest spell (ms) after from (the moment the request was sent: the wait for Tally's lock is not counted)
+func worstSpellFrom(sp []spell, from time.Time) int {
+	worst := 0
+	for _, x := range sp {
+		a := x.a
+		if a.Before(from) {
+			a = from
+		}
+		if ms := int(x.z.Sub(a).Milliseconds()); ms > worst {
+			worst = ms
+		}
+	}
+	return worst
+}
 
 // ROUND 103 (1b): the companies whose older entries are stopped, for the tray's one quiet notice each
 func pullStoppedList() []any {
@@ -981,4 +1001,12 @@ func pullStoppedList() []any {
 		out = append(out, v)
 	}
 	return out
+}
+
+// ROUND 103 (review): Tally's window could not be watched (no window of Tally seen: the bridge as a Windows service, in
+// session 0): said once in the log; the 2 s stop of every request still holds
+func pullNoteWatched(holdMs int) {
+	if holdMs < 0 {
+		liveSayOnce("pull|nowatch", "Older entries: Tally's window cannot be watched from here (no window of Tally seen, e.g. the bridge runs as a Windows service); the 2 s stop of every request still applies")
+	}
 }

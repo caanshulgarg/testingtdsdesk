@@ -306,8 +306,16 @@ func TestR103TallyIniRecheckReadOnly(t *testing.T) {
 	iniSt.rechecked = time.Now().Add(-7 * time.Hour)
 	iniSt.mu.Unlock()
 	_ = os.WriteFile(p, []byte("[Tally]\r\nUser TDL = Yes\r\n"), 0o644)
+	// review 103: a folder the setup never knew is not looked into by the re-check
+	d2 := t.TempDir()
+	p2 := filepath.Join(d2, "tally.ini")
+	_ = os.WriteFile(p2, []byte("[Tally]\r\nUser TDL = No\r\n"), 0o644)
+	tallyIniDirsFn = func() []string { return []string{d1, d2} }
 	if !tallyIniRecheckDue() || tallyIniStateOf(p) != "notadded" {
 		t.Fatalf("after 6 h: %s", tallyIniStateOf(p))
+	}
+	if st := tallyIniStateOf(p2); st != "" {
+		t.Fatalf("an unknown folder was looked into: %s", st)
 	}
 	for _, x := range tallyIniBeat() {
 		if str(obj(x)["path"]) == p && str(obj(x)["checkedAt"]) == "" {

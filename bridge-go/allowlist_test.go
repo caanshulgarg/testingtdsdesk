@@ -87,8 +87,10 @@ func driveEveryRequest(t *testing.T) *standTally {
 	applyPeriodDays(M{"periodDays": []any{M{"company": zz, "company_guid": heldGUID(zz), "day": td, "fetch": true}}})
 	_, err = invokeTally(recorderTC(nil), f.port, dayHeadsRequest(zz, td), 5)
 	must("one day's heads", err)
-	_, err = invokeTally(recorderTC(nil), f.port, dayHeadsTypeRequest(zz, td, "Sales"), 5)
-	must("one day's heads, one type", err)
+	// ROUND 103: the by-type form is no longer sent: refused at the gate
+	if _, err = invokeTally(recorderTC(nil), f.port, dayHeadsTypeRequest(zz, td, "Sales"), 5); err == nil {
+		t.Fatal("the by-type form went to Tally")
+	}
 	applyPeriodDays(M{"periodDays": []any{}})
 	_, err = invokeTally(recorderTC(nil), f.port, ledgerIdsRequest(zz, 0, 0), 5)
 	must("the ledger count", err)

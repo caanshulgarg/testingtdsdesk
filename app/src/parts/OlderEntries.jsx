@@ -85,7 +85,7 @@ export default function OlderEntries({ cid, where }) {
     {err && <p className="note" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}
     {/* ROUND 103 (1b): the bridge stopped reading (Tally too slow or its window held): one quiet line, the days to upload */}
     {pull && pull.stopped && <p className="note" data-older-stopped="" style={{ margin: "4px 0 0" }}>{pull.stopped.words + " "}
-      <button className="linkbtn" data-older-stopped-go="" onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(pull.stopped.day || pull.stopped.from), tallyDate(pull.stopped.to))}>{"Upload " + dayWords(pull.stopped.day || pull.stopped.from) + " to " + dayWords(pull.stopped.to)}</button></p>}
+      <button className="linkbtn" data-older-stopped-go="" onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(pull.stopped.from || pull.stopped.day), tallyDate(pull.stopped.to))}>{"Upload " + dayWords(pull.stopped.from || pull.stopped.day) + " to " + dayWords(pull.stopped.to)}</button></p>}
     {pull && (pull.upload || []).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
       <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayWords(u.day)}</button></p>)}
   </section>;

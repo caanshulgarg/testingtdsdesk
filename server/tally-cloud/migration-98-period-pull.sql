@@ -359,14 +359,19 @@ end $function$;
 
 -- ROUND 103 (1b): the bridge stopped the period for this book (a day's list over 2 s, or Tally's window held over 2 s):
 -- nothing more is listed until the person chooses again; the one quiet line asks for the Day Book of the days missing
-create or replace function public.tally_period_stop(p_book uuid, p_day date, p_why text, p_words text) returns jsonb
+create or replace function public.tally_period_stop(p_book uuid, p_day date, p_why text, p_words text, p_chosen_at timestamptz) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
+declare n int;
 begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  -- review 103: only the choice the bridge was reading (a newer choice is never stopped by an older stop), and only a
+  -- day of that financial year
   update tally_period_pulls set state = 'stopped', stopped_at = now(), stop_day = p_day, stop_why = left(coalesce(p_why, ''), 40),
          stop_words = left(coalesce(nullif(p_words, ''), 'FinCom stopped reading older entries from Tally. Please upload the Day Book for the days still missing.'), 300)
-   where book_id = p_book and state <> 'stopped';
-  return jsonb_build_object('ok', true);
+   where book_id = p_book and state <> 'stopped' and p_chosen_at is not null and chosen_at = p_chosen_at
+     and p_day between fy_start and (fy_start + interval '1 year' - interval '1 day')::date;
+  get diagnostics n = row_count;
+  return jsonb_build_object('ok', true, 'stopped', n > 0);
 end $function$;
 
 -- ROUND 103 (1c): reading older entries is switched on per computer by an owner (default off): tally_devices.period_fetch
@@ -398,8 +403,8 @@ revoke all on function public.tally_period_next(uuid, integer), public.tally_per
   public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.tally_period_next(uuid, integer), public.tally_period_heads(uuid, date, jsonb, text), public.tally_period_upload(uuid, date, text, text, text),
   public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) to service_role;
-revoke all on function public.tally_period_stop(uuid, date, text, text) from public, anon, authenticated;
-grant execute on function public.tally_period_stop(uuid, date, text, text) to service_role;
+revoke all on function public.tally_period_stop(uuid, date, text, text, timestamptz) from public, anon, authenticated;
+grant execute on function public.tally_period_stop(uuid, date, text, text, timestamptz) to service_role;
 revoke all on function public.tally_device_period_fetch(uuid, boolean) from public, anon;
 grant execute on function public.tally_device_period_fetch(uuid, boolean) to authenticated;
 

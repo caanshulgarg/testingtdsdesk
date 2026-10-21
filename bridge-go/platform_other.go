@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 func platNetState() (bool, []proc, []listener) { return false, nil, nil }
@@ -97,6 +98,6 @@ func platListenerUser(port int) (string, bool, error)      { return "", false, n
 
 // ROUND 103 (1b): the window probe while a request is at Tally (not Windows: nothing to watch; the tests use
 // testWindowHoldMs)
-func platWindowHold() func() int {
-	return func() int { return 0 }
+func platWindowHold() func(from time.Time) int {
+	return func(time.Time) int { return 0 }
 }

@@ -68,6 +68,22 @@ func TestR103OldDaysTest(t *testing.T) {
 	if _, err := invokeTally(recorderTC(nil), f.port, dayHeadsRequest(zz, "20260901"), 5); err == nil {
 		t.Fatal("FinComDayHeads went after the test ended")
 	}
+	// review 103: Tally's window not watched (no window seen, e.g. a Windows service): said so, never "no freeze"
+	ow := windowHoldFn
+	windowHoldFn = func() func(time.Time) int { return func(time.Time) int { return -1 } }
+
+	_, _ = callLocal(t, "POST", "/tray/oldtest", "", `{"company":"`+zz+`"}`)
+	for i := 0; i < 200; i++ {
+		_, s = callLocal(t, "GET", "/tray/oldtest", "", "")
+		if str(s["state"]) == "done" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if str(s["state"]) != "done" || strings.Contains(str(s["line"]), "no freeze") || !strings.Contains(str(s["line"]), "could not be watched") {
+		t.Fatalf("not watched: %v", s)
+	}
+	windowHoldFn = ow
 	// over 2 s on the first day: the test stops there
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {

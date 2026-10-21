@@ -59,8 +59,11 @@ tests/run_tally_ini_ui.py).
 - jobFiles.locks keeps one small mutex per job-file path written (cleared at the bridge's restart).
 - A type used only on the slow day itself, not in the book nor in any other day's list, is not asked in a split: that
   day can be counted short; the per-day count is "at least".
-- assets/connector/latest.json (signed) still names the old connector engine TDSBridge.ps1 that publish no longer ships:
-  an old FinCom Connector below engine 1.14.6 gets 404 at its update check.
+- assets/connector/latest.json (signed, unchanged) names https://staging.fincom.live/assets/connector/TDSBridge.ps1
+  (engine 1.14.6, sha256 f47c4c9e...e5b81e06): that root copy on main is untouched by 2.4.5 (publish-preview only leaves
+  it out of the React build it copies into react/ or review/; cp adds, never deletes), so the signed manifest still
+  resolves and its hash still matches. Kept shipped unchanged until the owner re-signs a manifest without it (ROUND 103
+  item 4); removing the file first would make an old FinCom Connector's update check fail.
 - The "User TDL = No: switch on" owner action (the owner's decision of 21-Oct-2026) is 2.4.6's first item.
 
 The whole range reviewed, as release-check reads it (the last range in this note):

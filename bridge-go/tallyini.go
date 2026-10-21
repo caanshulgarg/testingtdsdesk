@@ -404,29 +404,18 @@ func tallyIniRecheckDue() bool {
 	iniSt.rechecked = time.Now()
 	known := tallyIniListLocked()
 	iniSt.mu.Unlock()
+	// review 103: only the files the setup already knew (no new folders looked into), each read outside the lock
 	paths := map[string]string{}
 	for _, x := range known {
 		p := str(obj(x)["path"])
-		paths[strings.ToLower(filepath.Clean(p))] = p
-	}
-	for _, d := range tallyIniDirsFn() {
-		p := filepath.Join(d, "tally.ini")
-		if _, err := os.Lstat(p); err == nil {
+		if p != "" {
 			paths[strings.ToLower(filepath.Clean(p))] = p
 		}
 	}
 	addon := addonIniPath()
-	var changed []string
-	iniSt.mu.Lock()
+	now := map[string]M{}
 	for k, p := range paths {
 		e := M{"path": p, "checkedAt": nowFn().Format(time.RFC3339)}
-		if prev := iniSt.files[k]; prev != nil {
-			for kk, v := range prev {
-				if kk != "state" && kk != "why" && kk != "checkedAt" {
-					e[kk] = v
-				}
-			}
-		}
 		fi, err := os.Lstat(p)
 		switch {
 		case err != nil:
@@ -450,8 +439,20 @@ func tallyIniRecheckDue() bool {
 				e["state"] = state
 			}
 		}
+		now[k] = e
+	}
+	var changed []string
+	iniSt.mu.Lock()
+	for k, e := range now {
+		if prev := iniSt.files[k]; prev != nil {
+			for kk, v := range prev {
+				if _, has := e[kk]; !has && kk != "why" {
+					e[kk] = v
+				}
+			}
+		}
 		if prev := iniSt.files[k]; prev == nil || str(prev["state"]) != str(e["state"]) {
-			changed = append(changed, p+": "+str(e["state"]))
+			changed = append(changed, str(e["path"])+": "+str(e["state"]))
 		}
 		iniSt.files[k] = e
 	}

@@ -186,11 +186,17 @@ try:
     print("== 4b. ROUND 103: a FinComDayHeads answer over 2 s stops the period (never retried by itself)")
     w = "Tally took too long to give 15-Jun-2025, so FinCom stopped reading older entries. Please upload the Day Book for the days still missing."
     st0 = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
-    s4 = j("select tally_period_stop(%s, %s, 'over2s', %s)::text" % (q(B), q(D(75)), q(w)))
-    ok(s4.get("ok") is True, "4b. stopped (%s)" % s4)
+    ca = st0.get("chosenAt")
+    # review 103: an older choice's stop never stops the newer choice; a day outside the year never stops it
+    s4o = j("select tally_period_stop(%s, %s, 'over2s', %s, (%s::timestamptz - interval '1 second'))::text" % (q(B), q(D(75)), q(w), q(ca)))
+    ok(s4o.get("stopped") is False and (APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("state") == "going", "4b. a stop of an older choice: not stopped (%s)" % s4o)
+    s4y = j("select tally_period_stop(%s, %s, 'over2s', %s, %s::timestamptz)::text" % (q(B), q("2001-01-01"), q(w), q(ca)))
+    ok(s4y.get("stopped") is False, "4b. a day outside the year: not stopped (%s)" % s4y)
+    s4 = j("select tally_period_stop(%s, %s, 'over2s', %s, %s::timestamptz)::text" % (q(B), q(D(75)), q(w), q(ca)))
+    ok(s4.get("ok") is True and s4.get("stopped") is True, "4b. stopped (%s)" % s4)
     ok(j("select tally_period_next(%s, 3)::text" % q(B)) == [], "4b. nothing listed once stopped")
     st = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
-    ok(st.get("state") == "stopped" and (st.get("stopped") or {}).get("words") == w and (st.get("stopped") or {}).get("day") == D8(75) and st.get("done") is False, "4b. the status: one line, its words, the day (%s)" % st.get("stopped"))
+    ok(st.get("state") == "stopped" and (st.get("stopped") or {}).get("words") == w and (st.get("stopped") or {}).get("day") == D8(75) and (st.get("stopped") or {}).get("from") == st.get("from") and st.get("done") is False, "4b. the status: one line, its words, the day (%s)" % st.get("stopped"))
     ok(j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(76)), js([H(1060, 5060)]))).get("ok") is False, "4b. a day's list refused once stopped")
     APPU("select tally_period_pause(%s, false)::text" % q(B))
     ok((APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("state") == "stopped", "4b. Resume does not restart a stopped period (only a fresh choice does)")
