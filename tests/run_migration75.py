@@ -135,7 +135,9 @@ try:
     ok(g.get("refused"), "an empty list while entries are held: held")
     ok(db.one("select count(*) from zoho_log where kind = 'error' and message like '%%no longer listed%%'") == "2", "and said in the log, twice")
     db.sql("delete from zoho_api_usage")   # (the test's own reset of a throwaway database; the migration never removes rows)
-    takes = [db.one("select (public.zoho_api_take(%s, 1, 90))->>'ok'" % q(C)) for _ in range(91)]
+    # the 91 calls in ONE statement, so one now(): 75 counts by the wall-clock minute, and 91 separate statements that
+    # crossed :00 were all let through (CI run 39637004551; 98 makes it any 60 seconds, tests/run_migration98.py)
+    takes = db.one("select string_agg((public.zoho_api_take(%s, 1, 90))->>'ok', ',' order by i) from generate_series(1, 91) i" % q(C)).split(",")
     ok(takes.count("true") == 90 and takes[-1] == "false", "zoho_api_take: 90 calls a minute")
     db.sql("update zoho_api_usage set calls = 950, minute_calls = 0")
     t = json.loads(db.one("select public.zoho_api_take(%s, 1, 90)::text" % q(C)))
