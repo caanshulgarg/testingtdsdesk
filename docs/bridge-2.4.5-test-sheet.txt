@@ -1,7 +1,7 @@
 FINCOM 2.4.5 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.5.exe
-Fingerprint: SHA-256 @@SETUP_SHA@@ (FinComBridge-Setup-2.4.5.exe; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 2de26311a2827ced1a07b1406115bc2d93d01cd464c936826ab347b79b9fbfe8 (FinComBridge-Setup-2.4.5.exe, built 21-Oct-2026 15:11 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.5 changes (the full notes: docs/bridge-2.4.5-notes.md):
 1. Older entries from Tally only for a period you choose: Books > From Tally (and Connect Tally after step 6), "Bring older
