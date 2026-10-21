@@ -1497,7 +1497,9 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3)
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
-      const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max - out.length });
+      // review 245 R12: at night every company's call says so (p_max above 3: tally_period_next keeps the pace for the
+      // status line), and what it gives is cut to the days left of the answer
+      const { data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max > 3 ? Math.max(4, max - out.length) : max - out.length });
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }

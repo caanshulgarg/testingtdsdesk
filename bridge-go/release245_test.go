@@ -69,7 +69,7 @@ func TestRelease245Migration98AddOnly(t *testing.T) {
 		t.Error("migration 98 is not one transaction with the lock timeout")
 	}
 	for _, f := range regexp.MustCompile(`create or replace function public\.(\w+)`).FindAllStringSubmatch(code, -1) {
-		if !strings.HasPrefix(f[1], "tally_period_") && f[1] != "tally_ledger_progress_save" && f[1] != "tally_device_period_fetch" {
+		if !strings.HasPrefix(f[1], "tally_period_") && f[1] != "tally_ledger_progress_save" && f[1] != "tally_device_period_fetch" && f[1] != "tally_device_period_night" {
 			t.Errorf("migration 98 replaces %s (not one of its own)", f[1])
 		}
 	}

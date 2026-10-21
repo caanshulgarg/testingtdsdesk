@@ -100,6 +100,13 @@ try:
     devA.update(period_night_from=h, period_night_to=(h + 2) % 24)
     c, r = call(beat)
     ok(c == 200 and r.get("periodNight") is True and len(r.get("periodDays") or []) == 30 and FS.ARGS["tally_period_next"][-1]["p_max"] == 30, "1. outside office hours: up to 30 days, periodNight true (%s, %d)" % (r.get("periodNight"), len(r.get("periodDays") or [])))
+    # review 245 R12: the second company's call at night still says night (p_max above 3) though fewer days are left; the
+    # answer cut to what is left
+    NEXT[BOOK] = NEXT[BOOK][:28]
+    n8 = len(FS.ARGS.get("tally_period_next") or [])
+    c, r = call(beat)
+    a2 = (FS.ARGS.get("tally_period_next") or [])[n8:]
+    ok(len(r.get("periodDays") or []) == 30 and len(a2) == 2 and a2[1]["p_max"] > 3, "1. at night every company's call keeps the night pace, the answer cut to 30 (%s)" % [x["p_max"] for x in a2])
     devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=True)
     sunday = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).weekday() == 6
     c, r = call(beat)
