@@ -73,6 +73,9 @@ try:
     c, r = call(beat)
     ok(c == 200 and r.get("periodDays") == [] and r.get("periodFetch") is False and not FS.ARGS.get("tally_period_next"), "1. the switch off: no days, periodFetch false (%s)" % {k: r.get(k) for k in ("periodDays", "periodFetch")})
     next(d for d in FS.T["tally_devices"] if d["id"] == DA)["period_fetch"] = True
+    # office hours set around now (the day pace whatever the hour this test runs at; the night pace is checked below)
+    h0 = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).hour
+    next(d for d in FS.T["tally_devices"] if d["id"] == DA).update(period_night_from=(h0 + 2) % 24, period_night_to=(h0 + 4) % 24, period_night_sunday=False)
     c, r = call(dict(beat, oldDaysTest={"company": "BIG CO", "state": "done", "at": "2026-10-21T10:00:00+05:30", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze",
                                         "results": [{"day": "20260901", "ms": 210, "holdMs": 0, "rows": 40, "secret": "x"}], "raw": "y" * 5000}))
     ok(r.get("periodFetch") is True, "1. the switch on: periodFetch true")
@@ -117,7 +120,7 @@ try:
     c, r = call(beat)
     ok(r.get("periodDays") == [] and r.get("periodFetch") is False and len(FS.ARGS.get("tally_period_next") or []) == n9, "1. the computer's switch off wins at night (%s)" % r.get("periodDays"))
     devA["period_fetch"] = True
-    for k in ("period_night_from", "period_night_to", "period_night_sunday"): devA.pop(k, None)
+    devA.update(period_night_from=(h + 2) % 24, period_night_to=(h + 4) % 24, period_night_sunday=False)
     NEXT[BOOK] = keep
     n0 = len(FS.ARGS.get("tally_period_next") or [])
     c, r = call(dict(beat, paused=True))
