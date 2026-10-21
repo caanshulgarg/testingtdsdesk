@@ -219,6 +219,136 @@ function D(cid){ return S.data[cid || S.coId] || {parties:{}, entries:{}, loaded
 function CO(cid){ return S.companies[cid || S.coId]; }
 
 /* ------------------------------------------------------------------ */
+/* Whose copy this browser holds (owner, 21-Oct-2026)                  */
+/* ------------------------------------------------------------------ */
+// Signed in as support@ (firm "Garg Shekhar & Company"), signed out, signed in as test@ (firm "ABC") in the same
+// browser: test@ saw support's clients. Everything FinCom keeps in the browser (the databases tdsdesk-work and
+// tdsdesk-bank: the firm record, clients, bills, suppliers, books, the books' sync marks, bank and sales; and the
+// tdsdesk:* keys: the cloud sync marks, removals not sent yet, the client open last, Tally jobs, the firm account's
+// "pulled up to" time) was one copy for whoever signed in next, and the next firm's sync laid its rows over it.
+// Now each copy belongs to one person in one firm (a "slot"): its databases are named for the slot (tdsdesk-work~<slot>;
+// the first one keeps the plain names), and its keys are put aside (tdsdesk:@<slot>:<key>) when another person signs in.
+// Signing in as someone else puts the copy here aside, untouched, and opens that person's own copy (or a new, empty one
+// that fills from their firm account); the page is opened again so nothing of the first copy stays in memory. Their
+// changes not sent yet stay in their copy and are sent when they sign in here again. Nothing of firm A is ever sent
+// while signed in to firm B (guard(), mayPush()).
+//   tdsdesk:slots = {cur: {slot, uid, firm, email, firmName}, parked: [{slot, uid, firm, email, firmName, at, lastPull}]}
+const LocalOwner = {
+  KEY: "tdsdesk:slots", P: "tdsdesk:",
+  // this browser's keys that are not a firm's (the sign-in, its settings, the bridge address, preferences)
+  DEVICE: /^tdsdesk:(cloud|cloudsess|keep|bridge|bridgenudge|refreshing|slots|probe|splitPdf|freeFirst|askClaudeNew|api|bank:test|asst-voice-.*)$/,
+  bound: null,        // the copy this page opened (its databases are open): never changes while the page is open
+  stale: false,       // another sign-in took this browser over: this page writes nothing more and is opened again
+  // sessionStorage, quietly: ss(k) reads, ss(k, v) writes, ss(k, null) removes
+  ss(k, v){ try { k = this.P + k; if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e){} return null; },
+  keys(){ const o = []; try { for (let i = 0; i < localStorage.length; i++) o.push(localStorage.key(i)); } catch (e){} return o; },
+  read(){
+    let s = null; try { s = JSON.parse(localStorage.getItem(this.KEY)); } catch (e){}
+    s = s || {}; s.cur = s.cur || {slot: "", uid: "", firm: ""}; s.parked = s.parked || [];
+    return s;
+  },
+  write(s){ try { localStorage.setItem(this.KEY, JSON.stringify(s)); } catch (e){} },
+  cur(){ return this.read().cur; },
+  // a database's name for the copy this page opened
+  db(base){ const b = this.bound || this.cur(); return b.slot ? base + "~" + b.slot : base; },
+  // a key that belongs to a firm's copy (put aside with it), not to the browser
+  firmKey(k){ k = String(k); return (!k.indexOf(this.P) && k.indexOf(this.P + "@") && !this.DEVICE.test(k)) || k === "tcup-periods"; },
+  sessUid(){ let s = null; try { s = JSON.parse(this.ss("cloudsess") || localStorage.getItem(this.P + "cloudsess")); } catch (e){} return (s && s.access_token && s.user_id) || ""; },
+  // on opening the page, before any database is opened: a sign-in kept here that is not the owner of the copy
+  // here (another tab signed in as someone else, or the page was closed signed in as them) opens that person's copy
+  boot(){
+    let s = this.read();
+    const uid = this.sessUid(), displaced = this.ss("displaced"), own = this.ss("cloudsess");
+    this.ss("displaced", null);
+    if (uid && s.cur.uid && s.cur.uid !== uid){
+      // this tab was opened again because someone else signed in in another tab (or it moved the browser a moment ago),
+      // and its own sign-in is this tab's only ("Keep me signed in" unticked): the later sign-in keeps the browser and this
+      // tab is signed out, never the two tabs taking the browser back and forth
+      if ((displaced || Date.now() - Number(this.ss("bootmove") || 0) < 15000) && own){ this.ss("cloudsess", null); this.displaced = true; }
+      else { s = this.move(s, uid, "", ""); this.ss("bootmove", String(Date.now())); }
+    }
+    this.bound = Object.assign({}, s.cur);
+    try { this.after = JSON.parse(this.ss("afterswitch")); } catch (e){}
+    this.ss("afterswitch", null);
+    if (this.after) this.restored = this.after.restored;
+    // another tab put this copy aside: this page is opened again (it would otherwise show and send the other copy)
+    addEventListener("storage", ev => { if (ev.key === this.KEY && this.cur().slot !== this.bound.slot) this.leave(); });
+  },
+  leave(){ if (this.stale) return; this.stale = true; this.ss("displaced", "1"); try { Live.stop(); } catch (e){} setTimeout(() => location.reload(), 50); },
+  // puts the copy here aside and opens the one of (uid, firm): synchronous, so two tabs cannot do it at once
+  move(s, uid, firm, email, unknown){
+    const P = this.P, old = s.cur, pre = slot => P + "@" + slot + ":", mv = (a, b) => { try { localStorage.setItem(b, localStorage.getItem(a)); localStorage.removeItem(a); } catch (e){} };
+    let raw = {}; try { raw = JSON.parse(localStorage.getItem(P + "cloud")) || {}; } catch (e){}
+    const lastPull = raw.lastPull || ""; delete raw.lastPull;
+    // the copy here, put aside with its keys; the oldest copies put aside, beyond six, removed from this browser
+    this.keys().forEach(k => { if (this.firmKey(k)) mv(k, pre(old.slot) + (k.indexOf(P) ? "~" + k : k.slice(P.length))); });
+    s.parked = s.parked.filter(p => p.slot !== old.slot).concat([{slot: old.slot, uid: unknown ? "?" : old.uid, firm: unknown ? "?" : old.firm, email: old.email, firmName: old.firmName || (S.firm && S.firm.firmName) || "", at: Date.now(), lastPull}]);
+    while (s.parked.length > 6){
+      const p = s.parked.shift();
+      this.keys().forEach(k => { if (!k.indexOf(pre(p.slot))) localStorage.removeItem(k); });
+      ["tdsdesk-work", "tdsdesk-bank"].forEach(b => { try { indexedDB.deleteDatabase(p.slot ? b + "~" + p.slot : b); } catch (e){} });
+    }
+    // this person's own copy, if they had one here, else a new one
+    const mine = s.parked.filter(p => p.uid === uid && (!firm || !p.firm || p.firm === firm)).pop();
+    this.restored = null;
+    if (mine){
+      s.parked = s.parked.filter(p => p !== mine);
+      this.keys().forEach(k => { if (!k.indexOf(pre(mine.slot))){ const r = k.slice(pre(mine.slot).length); mv(k, r[0] === "~" ? r.slice(1) : P + r); } });
+      if (mine.lastPull) raw.lastPull = mine.lastPull;
+      this.restored = {firmName: mine.firmName};
+    }
+    try { localStorage.setItem(P + "cloud", JSON.stringify(raw)); } catch (e){}
+    s.cur = {slot: mine ? mine.slot : Math.random().toString(36).slice(2, 10), uid, firm: firm || (mine && mine.firm) || "", email, firmName: mine && mine.firmName};
+    this.write(s);
+    return s;
+  },
+  // signed in as someone else in this page: their copy is opened, in a fresh page (not on the last person's page)
+  switchTo(uid, firm, email, unknown){
+    this.move(this.read(), uid, firm, email, unknown);
+    this.ss("afterswitch", JSON.stringify({email, restored: this.restored}));
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+    this.leave(); this.ss("displaced", null);
+  },
+  // Cloud.signIn, as soon as the session is known: another person than the owner of the copy open here
+  other(uid){ const b = this.bound; return !!(b && b.uid && uid && b.uid !== uid); },
+  // Cloud.whoAmI, once the firm is known: true when this page may go on with the copy it has open
+  async ensure(uid, firm, email){
+    const s = this.read(), c = s.cur;
+    if (!uid || !firm || (c.uid === uid && c.firm === firm)) return true;
+    if (this.bound && this.bound.slot !== c.slot){ this.leave(); return false; }
+    // nobody's yet (a copy from before 21-Oct-2026, or FinCom used without an account): it becomes this person's, unless
+    // it holds clients this browser sent to a firm account that are not this firm's (the copy of another firm)
+    if ((c.uid === uid && !c.firm) || (!c.uid && !(await this.foreign()))){
+      Object.assign(c, {uid, firm, email}); this.write(s); this.bound = Object.assign({}, c); return true;
+    }
+    this.switchTo(uid, firm, email, !c.uid); return false;
+  },
+  async foreign(){
+    const marks = Cloud.marks(), sent = Object.keys(S.companies).filter(id => (marks["client|" + id + "|" + id] || "gone") !== "gone");
+    for (let i = 0; i < sent.length; i += 40){
+      const part = sent.slice(i, i + 40), have = ((await Cloud.api("clients?select=id&id=in.(" + part.join(",") + ")")) || []).map(r => r.id);
+      // (a firm account with no clients at all cannot say whose they are: a stand-in server keeps none)
+      if (part.some(id => have.indexOf(id) < 0)) return !!((await Cloud.api("clients?select=id&limit=1")) || []).length;
+    }
+    return false;
+  },
+  warn(why){ if (!this.warned) console.warn("FinCom: " + why); this.warned = true; },
+  // before every request to the firm account (Cloud.api, Cloud.fn): "" when it may go; else why not
+  guard(method, sess){
+    const b = this.bound, uid = sess && sess.user_id;
+    if (this.stale || (b && b.uid && uid && uid !== b.uid)){ this.leave(); return "Signed in as someone else; this page opens again."; }
+    if (method !== "GET" && b && b.firm && Cloud.st.firm && Cloud.st.firm !== b.firm){ this.warn("not sent: copy of firm " + b.firm + ", signed in to " + Cloud.st.firm); return "Not sent: this page holds another firm's copy."; }
+    return "";
+  },
+  // the sync's own check before sending this browser's records (cloudPush): the copy's firm is the signed-in firm
+  mayPush(firm){
+    const b = this.bound || {}, uid = (Cloud.sess() || {}).user_id;
+    const ok = !this.stale && !!firm && (!b.firm || b.firm === firm) && (!b.uid || !uid || b.uid === uid);
+    if (!ok) this.warn("sync held: copy of firm " + b.firm + ", signed in to " + firm);
+    return ok;
+  }
+};
+/* ------------------------------------------------------------------ */
 /* Storage: shared database when available, else this browser         */
 /*   config/firm                      firm name + rates               */
 /*   companies/<cid>                  one client                      */
@@ -233,7 +363,7 @@ const IDBStore = {
     this.dbp = new Promise(ok => {
       let done = false; const fin = v => { if (!done){ done = true; ok(v); } };
       try {
-        const r = indexedDB.open("tdsdesk-work", 1);
+        const r = indexedDB.open(LocalOwner.db("tdsdesk-work"), 1);
         r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("docs")) r.result.createObjectStore("docs"); };
         r.onsuccess = () => fin(r.result); r.onerror = () => fin(null); r.onblocked = () => fin(null);
       } catch (e){ fin(null); }

@@ -560,8 +560,9 @@ function toast(msg, o){
 }
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
-function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
-function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
+// a page whose copy another sign-in has put aside (LocalOwner, src/js/00) writes no more of a firm's keys: they are the next person's now
+function lsSet(k, v){ if (typeof LocalOwner === "object" && LocalOwner.stale && LocalOwner.firmKey(k)) return; try { localStorage.setItem(k, v); } catch(e){} }
+function lsDel(k){ if (typeof LocalOwner === "object" && LocalOwner.stale && LocalOwner.firmKey(k)) return; try { localStorage.removeItem(k); } catch(e){} }
 
 /* ------------------------------------------------------------------ */
 /* Preparing pages for reading. Claude sees each image at about 1.2    */

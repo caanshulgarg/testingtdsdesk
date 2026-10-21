@@ -22,7 +22,7 @@ const BankDB = {
       setTimeout(() => finish(null), 3000);
       try {
         if (!window.indexedDB) return finish(null);
-        const r = indexedDB.open("tdsdesk-bank", 1);
+        const r = indexedDB.open(LocalOwner.db("tdsdesk-bank"), 1);
         r.onupgradeneeded = () => { try { r.result.createObjectStore("kv"); } catch (e){} };
         r.onsuccess = () => finish(r.result);
         r.onerror = () => finish(null);
