@@ -1508,9 +1508,13 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean): Promise
 }
 // the company's GUID as this computer's last heartbeat named it ("" when none)
 function beatGuidOf(dev: any, company: string): string {
-  const cs = (dev?.info?.beat?.companies || []) as any[];
-  const c = Array.isArray(cs) ? cs.find((x) => x && typeof x.name === "string" && x.name === company) : null;
-  return c && typeof c.guid === "string" ? c.guid.trim().slice(0, 100) : "";
+  const want = company.trim().toLowerCase(), info = (dev && dev.info) || {};
+  for (const b of [info.beat, ...Object.values(info.bridges || {})] as any[]) {
+    const cs = b && Array.isArray(b.companies) ? b.companies : [];
+    const c = cs.find((x: any) => x && typeof x.name === "string" && x.name.trim().toLowerCase() === want && typeof x.guid === "string" && x.guid);
+    if (c) return String(c.guid).trim().slice(0, 100);
+  }
+  return "";
 }
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {

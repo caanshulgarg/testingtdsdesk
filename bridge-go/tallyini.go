@@ -148,6 +148,23 @@ func iniAddAddon(raw []byte, addon string) ([]byte, string, []string) {
 	return b, "added", add
 }
 
+// the folder and every folder above it are plain folders (no link or junction anywhere on the way: review 245 R6)
+func iniDirPlain(dir string) bool {
+	d := filepath.Clean(dir)
+	for i := 0; i < 64; i++ {
+		di, err := os.Lstat(d)
+		if err != nil || !di.IsDir() || di.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			return false
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			return true
+		}
+		d = up
+	}
+	return false
+}
+
 // tally.ini read only when the file opened is the one looked at (fi, by Lstat): no link swapped in between
 func iniReadSame(path string, _ os.FileInfo) ([]byte, error) {
 	f, err := openNoLink(path, false)
@@ -190,7 +207,7 @@ func tallyIniApply(path, addon string) (M, error) {
 		return e, err
 	}
 	// review 245 R5: the folder itself is no link or junction to somewhere else
-	if di, derr := os.Lstat(filepath.Dir(path)); derr != nil || !di.IsDir() || di.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+	if !iniDirPlain(filepath.Dir(path)) {
 		e["state"] = "refused"
 		return e, errors.New("the TallyPrime folder is a link or junction to another place: not touched")
 	}
