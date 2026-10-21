@@ -129,11 +129,12 @@ var pull = struct {
 	stopped map[int]string       // a Tally whose answer carried another date: no day asked of it until the bridge restarts
 	upload  map[string]M         // the days marked "upload" (said once): key -> {company, day, words, at}
 	tell    map[string]M         // the "upload" days FinCom has not taken yet: key -> {body, at}
+	stopCo  map[string]M         // ROUND 103 (1b): companies whose older entries are stopped: company key -> {company, day, why, words, at, atN}
 	done    map[string]time.Time // days finished in this run: not asked again for 2 minutes
 	state   map[string]M         // per company, for the beat: {day, phase, heads, asked, at, waiting}
 	said    map[string]string    // the last "waiting" reason said per company (said once)
 	lastAsk time.Time
-}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+}{stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -141,6 +142,9 @@ func applyPeriodDays(j M) {
 	// once (review 245 R1: Pause stops the reads). No list at all (the cloud could not work it out this time, or a cloud
 	// without migration 98): nothing changes (review 245 R2: a passing fault never throws away what was read)
 	v, has := j["periodDays"]
+	if pf, ok := j["periodFetch"]; ok && !truthy(pf) {
+		v, has = []any{}, true // ROUND 103 (1c): this computer's switch is off in FinCom: nothing is read
+	}
 	if !has {
 		return
 	}
@@ -156,6 +160,9 @@ func applyPeriodDays(j M) {
 			continue
 		}
 		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"])}
+		if pullStoppedFor(co, str(e["chosenAt"])) {
+			continue // ROUND 103 (1b): stopped for this company; only a newer choice in FinCom starts it again
+		}
 		for _, t := range arr(e["types"]) {
 			if s := str(t); pullTypeOK(s) && len(it.Types) < 40 && !contains(it.Types, s) {
 				it.Types = append(it.Types, s)
@@ -208,6 +215,10 @@ func dayHeadsExact(tc *TC, x string) bool {
 	a, z := pinDates(x)
 	if a == "" || a != z {
 		return false
+	}
+	// ROUND 103 (1d): the tray's old-days test (a person's, read only): F1 exactly, one of its three days, its company
+	if x == dayHeadsRequest(co, a) && oldTestAllows(co, a) {
+		return true
 	}
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
@@ -491,18 +502,20 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	pull.mu.Lock()
 	pull.lastAsk = nowFn()
 	pull.mu.Unlock()
+	held := windowHoldFn() // ROUND 103 (1b): how long Tally's window did not answer while the request was at Tally
 	raw, err := invokeTally(recorderTC(nil), port, x, 5)
+	holdMs := held()
+	_ = typ
 	switch {
-	case err == nil:
 	case errors.Is(err, errRecorderStop):
-		if !w.split {
-			w.split, w.typeIdx, w.heads = true, 0, map[string]pullHead{}
-			writeLog(fmt.Sprintf("Older entries of %s: %s took Tally longer than 2 s; its late answer is not used, and the day is asked one voucher type at a time", it.Company, liveDay(it.Day)))
-			pullNote(it, "split", w)
-			return true, false
-		}
-		pullMarkUpload(w, "over2s", typ)
+		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;
+		// the days still missing are to be uploaded by hand (one quiet line); never asked again by itself
+		pullStopCompany(w, "over2s", form)
 		return true, false
+	case holdMs >= 2000:
+		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
+		return true, false
+	case err == nil:
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
 	default:
@@ -712,6 +725,31 @@ func pullNoteUpload(it pullItem, why, words string) {
 	writeLog("Older entries of " + it.Company + ": " + liveDay(it.Day) + " is not asked again (" + why + "): " + words)
 }
 
+// ROUND 103 (1b): reading older entries of the company stops: FinCom is told (period_stop: no day of the period is listed
+// again until the person chooses again) and keeps one quiet line; here, no day of the company is asked again unless
+// FinCom lists it under a newer choice (chosenAt after the stop). Told again until FinCom takes it (pullTell)
+func pullStopCompany(w *pullWork, why, what string) {
+	it := w.it
+	words := "Tally took too long to give " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". Please upload the Day Book for the days still missing."
+	if why == "window" {
+		words = "Tally stopped answering while FinCom read " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". Please upload the Day Book for the days still missing."
+	}
+	writeLog(fmt.Sprintf("Older entries of %s: stopped at %s (%s): nothing more is asked of Tally for the period; FinCom shows one line to upload the Day Book of the days still missing", it.Company, liveDay(it.Day), what))
+	pull.mu.Lock()
+	pull.stopCo[companyKey(it.Company)] = M{"company": it.Company, "day": it.Day, "why": why, "words": words, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano()}
+	var keep []pullItem
+	for _, x := range pull.items {
+		if companyKey(x.Company) != companyKey(it.Company) {
+			keep = append(keep, x)
+		}
+	}
+	pull.items = keep
+	pullSaveLocked()
+	pull.mu.Unlock()
+	pullFinish(w, "stopped")
+	pullTell("stop|"+companyKey(it.Company), M{"kind": "period_stop", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "why": why, "words": words})
+}
+
 // the day's turn ends: the cloud's next answer says whether it is done
 func pullFinish(w *pullWork, how string) {
 	pull.mu.Lock()
@@ -794,6 +832,25 @@ func pullFile() string { return sp("period-upload.json") }
 
 // a snapshot taken under the lock; written to disk after it is let go (review 245 R3: no disk write while holding the lock
 // the request gate reads), in order (pullSaveMu)
+// stopped for this company, unless FinCom lists the day under a choice made after the stop (the person chose again)
+func pullStoppedFor(company, chosenAt string) bool {
+	pull.mu.Lock()
+	st := pull.stopCo[companyKey(company)]
+	pull.mu.Unlock()
+	if st == nil {
+		return false
+	}
+	if t, err := time.Parse(time.RFC3339Nano, chosenAt); err == nil && t.UnixNano() > toI64(st["atN"]) {
+		pull.mu.Lock()
+		delete(pull.stopCo, companyKey(company))
+		pullSaveLocked()
+		pull.mu.Unlock()
+		writeLog("Older entries of " + company + ": chosen again in FinCom after the stop; read again, one day at a time")
+		return false
+	}
+	return true
+}
+
 func pullSaveLocked() {
 	tell := M{}
 	for k, v := range pull.tell {
@@ -803,7 +860,11 @@ func pullSaveLocked() {
 	for k, v := range pull.upload {
 		up[k] = v
 	}
-	pullSaveText.Store(jsonText(M{"upload": up, "tell": tell}))
+	stop := M{}
+	for k, v := range pull.stopCo {
+		stop[k] = v
+	}
+	pullSaveText.Store(jsonText(M{"upload": up, "tell": tell, "stop": stop}))
 	go pullSaveNow()
 }
 
@@ -838,6 +899,11 @@ func pullLoad() {
 			pull.tell[k] = M{"body": b, "at": time.Time{}}
 		}
 	}
+	for k, v := range obj(j["stop"]) {
+		if e := obj(v); e != nil {
+			pull.stopCo[k] = e
+		}
+	}
 }
 
 // --- for the beat and the tray
@@ -852,7 +918,11 @@ func pullBeat() M {
 	for p, why := range pull.stopped {
 		stopped = append(stopped, M{"port": p, "why": why})
 	}
-	return M{"companies": cos, "uploadDays": pullUploadListLocked(), "stopped": stopped}
+	stopCo := []any{}
+	for _, v := range pull.stopCo {
+		stopCo = append(stopCo, v)
+	}
+	return M{"companies": cos, "uploadDays": pullUploadListLocked(), "stopped": stopped, "stoppedCompanies": stopCo}
 }
 
 func pullUploadList() []any {
@@ -880,6 +950,35 @@ func pullUploadListLocked() []any {
 	}
 	if len(out) > 50 {
 		out = out[len(out)-50:]
+	}
+	return out
+}
+
+// ROUND 103 (1b): started just before a request goes to Tally; the function it gives back stops the probe and says how
+// long, at most, Tally's window did not answer (ms) while the request was at Tally. Windows: WM_NULL sent to each visible
+// window of this user's tally.exe every 200 ms with a 250 ms limit (SendMessageTimeout, SMTO_ABORTIFHUNG); nothing is
+// sent to Tally's port. Elsewhere: the tests' stand-in
+var windowHoldFn = func() func() int {
+	stop := platWindowHold()
+	return func() int {
+		m := stop()
+		if t := int(testWindowHoldMs.Load()); t > m {
+			return t
+		}
+		return m
+	}
+}
+
+// the tests' stand-in for a window held (0 in use)
+var testWindowHoldMs atomic.Int64
+
+// ROUND 103 (1b): the companies whose older entries are stopped, for the tray's one quiet notice each
+func pullStoppedList() []any {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	out := []any{}
+	for _, v := range pull.stopCo {
+		out = append(out, v)
 	}
 	return out
 }

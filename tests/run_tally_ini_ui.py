@@ -20,18 +20,23 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 P_NO, P_ADD = r"C:\Program Files\TallyPrime\tally.ini", r"C:\Program Files\TallyPrime 6\tally.ini"
-def devs(ini):
+def devs(ini, odt=None):
     d = dev(recording=True); b = d["info"]["bridges"]["go-1"]; bt = d["info"]["beat"]
     b["open"] = ["ZZ TEST"]; bt["open"] = ["ZZ TEST"]; b["version"] = "2.4.5"
     if ini is not None: bt["tallyIni"] = ini
+    if odt is not None: bt["oldDaysTest"] = odt
     return [d]
 srv = http.server.ThreadingHTTPServer(("localhost", 8364), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8364/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
-    def scene(ini, role="owner"):
-        E(SETUP, [{"devs": devs(ini), "alerts": [], "gap": None}, role])
+    def scene(ini, role="owner", odt=None, pf=False, missing=False):
+        E(SETUP, [{"devs": devs(ini, odt), "alerts": [], "gap": None}, role])
+        # ROUND 103 (1c): the computer's switch (tally_devices.period_fetch) as the cloud gives it; the owner's control call kept
+        E("""([pf, missing, d1]) => { const api = Cloud.api; window.__pf = pf; window.__ctl = [];
+          Cloud.api = async (p) => { if (/^tally_devices\\?select=id,period_fetch/.test(p)) { if (missing) throw new Error('column tally_devices.period_fetch does not exist (42703)'); return [{id: d1, period_fetch: window.__pf}]; } return api(p); };
+          TCloud.control = async (fn, args, done) => { window.__ctl.push([fn, args]); window.__pf = !!args.p_on; }; }""", [pf, missing, D1])
         E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
         E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
         E("() => document.querySelectorAll('#app [data-computer] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
@@ -46,6 +51,22 @@ with sync_playwright() as p:
     ok(len(lines()) == 1, "staff see the same line")
     scene(None)
     ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-status-line]' % D1).count() == 1, "an older bridge's beat: nothing, the card as before")
+    # ROUND 103 (1c): reading older entries per computer: off by default; the owner switches it; staff see the state only
+    pfl = lambda: E("() => { const e = document.querySelector('#app [data-computer] [data-card-more] [data-period-fetch]'); return e ? [e.getAttribute('data-period-fetch'), e.innerText.trim(), !!e.querySelector('[data-period-fetch-switch]')] : null; }")
+    scene([], pf=False)
+    v = pfl()
+    ok(v and v[0] == "off" and v[1].startswith("Reading older entries on this computer: off") and v[2], "the owner: off, with Switch on (%s)" % v)
+    pg.click('#app [data-period-fetch-switch]'); pg.wait_for_timeout(500)
+    ok(E("window.__ctl") == [["tally_device_period_fetch", {"p_device": D1, "p_on": True}]], "Switch on: tally_device_period_fetch(p_on true) (%s)" % E("window.__ctl"))
+    scene([], role="member", pf=True)
+    v = pfl()
+    ok(v and v[0] == "on" and not v[2], "staff: the state only, no button (%s)" % v)
+    scene([], missing=True)
+    ok(pfl() is None, "a cloud without the column: nothing of the switch")
+    # ROUND 103 (1d): the tray's old-days test as the beat says it
+    scene([], odt={"company": "ZZ TEST", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze", "state": "done"})
+    o = E("() => { const e = document.querySelector('#app [data-card-more] [data-old-days-test]'); return e ? [e.getAttribute('data-old-days-test'), e.innerText.trim()] : null; }")
+    ok(o and o[0] == "ok" and o[1].startswith("Old-days test on ") and "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze (ZZ TEST)" in o[1], "the old-days test line (%s)" % o)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

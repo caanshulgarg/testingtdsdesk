@@ -69,7 +69,15 @@ try:
                 tallyIni=[{"path": r"C:\Program Files\TallyPrime\tally.ini", "state": "usertdl-no", "why": "this Tally is set not to load any add-on (User TDL = No)", "at": "2026-10-21T10:00:00+05:30", "extra": "x" * 9000}],
                 ledgerProgress=[{"company": "BIG CO", "company_guid": CG, "round": "r1", "read": 312, "of": 1240, "done": False, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}])
     print("== 1. the beat")
+    # ROUND 103 (1c): the computer's switch off (the default): no days, periodFetch false; nothing asked of the database
     c, r = call(beat)
+    ok(c == 200 and r.get("periodDays") == [] and r.get("periodFetch") is False and not FS.ARGS.get("tally_period_next"), "1. the switch off: no days, periodFetch false (%s)" % {k: r.get(k) for k in ("periodDays", "periodFetch")})
+    next(d for d in FS.T["tally_devices"] if d["id"] == DA)["period_fetch"] = True
+    c, r = call(dict(beat, oldDaysTest={"company": "BIG CO", "state": "done", "at": "2026-10-21T10:00:00+05:30", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze",
+                                        "results": [{"day": "20260901", "ms": 210, "holdMs": 0, "rows": 40, "secret": "x"}], "raw": "y" * 5000}))
+    ok(r.get("periodFetch") is True, "1. the switch on: periodFetch true")
+    odt = (((next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("beat") or {}).get("oldDaysTest") or {})
+    ok(odt.get("line", "").endswith("no freeze") and "raw" not in odt and "secret" not in (odt.get("results") or [{}])[0] and odt["results"][0]["ms"] == 210, "1. the old-days test kept, cleaned (%s)" % odt)
     pd = r.get("periodDays") or []
     ok(c == 200 and len(pd) == 3, "the beat answers 3 days (%s %s)" % (c, pd))
     ok(pd and pd[0] == {"company": "BIG CO", "company_guid": CG, "day": "20250830", "fetch": False, "types": ["Sales", "Receipt"]}, "1. the first: BIG CO under the beat's GUID, counting, a type with a quote mark left out (%s)" % (pd[:1],))
@@ -153,6 +161,11 @@ try:
     ok(c == 409 and r.get("otherGuid") is True and len(FS.ARGS.get("tally_period_heads") or []) == n3, "3. another company GUID (a same-named copy): 409, nothing kept (%s)" % r)
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid="other-copy-guid", round="r9", read=1, of=2, done=False))
     ok(c == 409, "3. ledger progress of another GUID: 409")
+
+    # ROUND 103 (1b): the bridge stopped the period: tally_period_stop with its day, reason and words
+    c, r = call(dict(base, kind="period_stop", company="BIG CO", company_guid=CG, day="20250830", why="over2s", words="Tally took too long to give 30-Aug-2025, so FinCom stopped reading older entries of BIG CO. Please upload the Day Book for the days still missing."))
+    sp = (FS.ARGS.get("tally_period_stop") or [{}])[-1]
+    ok(c == 200 and r.get("ok") is True and sp.get("p_day") == "2025-08-30" and sp.get("p_why") == "over2s" and "stopped reading" in sp.get("p_words", ""), "3. period_stop kept (%s)" % sp)
 
     print("== 4. ledger_progress")
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid=CG, round="r2", read=1240, of=1240, done=True))

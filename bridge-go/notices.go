@@ -365,6 +365,16 @@ func trayProblems(f trayFacts) []trayProblem {
 		stale = append(stale, trayProblem{Kind: "uploadday|" + strings.ToLower(str(e["company"])) + "|" + d, Company: str(e["company"]), Day: d, Cond: true,
 			Title: "Upload one day's Day Book", Text: str(e["words"])})
 	}
+	// ROUND 103 (1b): reading older entries of a company stopped (a day's list over 2 s, or Tally's window held): one
+	// quiet notice a company, its words (upload the Day Book of the days still missing)
+	for _, x := range arr(st["stoppedCompanies"]) {
+		e := obj(x)
+		if e == nil || str(e["company"]) == "" {
+			continue
+		}
+		stale = append(stale, trayProblem{Kind: "periodstop|" + strings.ToLower(str(e["company"])) + "|" + str(e["at"]), Company: str(e["company"]), Cond: true,
+			Title: "Upload the Day Book of the days still missing", Text: str(e["words"])})
+	}
 	return append([]trayProblem{
 		{Kind: "down", Cond: false},
 		// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words

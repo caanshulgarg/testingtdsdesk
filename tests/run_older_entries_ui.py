@@ -102,6 +102,15 @@ def main():
         E("() => { window.__pick = []; window.tallyPickFor = (a, b) => window.__pick.push([a, b]); }")
         pg.click(ln + " button"); pg.wait_for_timeout(300)
         ok(E("window.__pick") == [["2025-08-31", "2025-08-31"]] or E("window.__pick") == [["31-08-2025", "31-08-2025"]] or len(E("window.__pick")) == 1, "Upload: that day only (%s)" % E("window.__pick"))
+        print("== 4b. ROUND 103: the bridge stopped the period (one quiet line, the days to upload, Start again)")
+        SW = "Tally took too long to give 15-Jun-2025, so FinCom stopped reading older entries of ZZ TEST. Please upload the Day Book for the days still missing."
+        E(CLOUD, [dict(FETCH, state="stopped", stopped={"day": "20250615", "words": SW, "why": "over2s", "from": "20250401", "to": "20260331"}), None, False]); pg.wait_for_timeout(1200)
+        sl = card + " [data-older-stopped]"
+        ok(n(sl) == 1 and txt(sl).startswith(SW) and n(card + " [data-older-pause]") == 0 and n(card + " [data-older-start]") == 1 and txt(card + " [data-older-progress]").startswith("Stopped · "),
+           "stopped: the one line, no Pause, Start offered (%s)" % txt(sl))
+        E("() => { window.__pick = []; window.tallyPickFor = (a, b) => window.__pick.push([a, b]); }")
+        pg.click(sl + " button"); pg.wait_for_timeout(300)
+        ok(len(E("window.__pick")) == 1, "Upload: the days from the stop to the period's end (%s)" % E("window.__pick"))
         print("== 5. a cloud without migration 98")
         E(CLOUD, [None, None, True]); pg.wait_for_timeout(1500)
         ok(n(card) == 0 and not [e for e in errors if "PGRST202" in e], "no card, no error")

@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "e86a264fd7075d99faa480a7118ff12588ac246f9aceeffd023878ca8b0cd373",
+    "hash": "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391",
     "measured": false
   },
   "autoUpdate": true,
@@ -41,6 +41,7 @@
   "ledgerProgress": [],
   "nightlyAt": "19:00",
   "notAnsweringSince": "",
+  "oldDaysTest": null,
   "open": [
     "GARG SHEKHAR & COMPANY"
   ],
@@ -48,6 +49,7 @@
   "periodPull": {
     "companies": {},
     "stopped": [],
+    "stoppedCompanies": [],
     "uploadDays": []
   },
   "ports": [

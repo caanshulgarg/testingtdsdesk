@@ -34,10 +34,21 @@ CHECK 2 - THE LEDGER COUNT
    You should see: "N of M ledgers" counting up, M the exact number of ledgers in Tally (Gateway > Display More Reports >
    List of Accounts shows the same count).
 
+CHECK 2b - TEST READING OLD DAYS (read only; do this BEFORE CHECK 3)
+   Right-click the FinCom icon near the clock > "Test reading old days (read-only)". It suggests the smallest company open
+   in Tally; answer Yes for a small company (No suggests the next one). Leave Tally alone for a minute.
+   You should see: a message "Old-days test: 0.21 s / 0.34 s / 0.18 s - no freeze" (three times, each under 2 s), and the
+   same line on FinCom's Tally page under this computer (Help & support > Details). Nothing changes in Tally or in FinCom.
+   If a time says "longer than 2 s" or "did not answer": stop here and send the line to FinCom; do not do CHECK 3.
+
 CHECK 3 - OLDER ENTRIES
+   Only after CHECK 2b showed "no freeze": on FinCom's Tally page, under this computer's Details, "Reading older entries on
+   this computer: off" > Switch on (owner only).
    Books > From Tally > Bring older entries from Tally: choose last year, Whole year, Start. Leave Tally alone.
    You should see: "Counting the year in Tally... X of 365 days", then "X of Y vouchers (P%) - Z left" going up, Tally
    never freezing; at the end "all in FinCom". Y equals Tally's voucher count for that year (Day Book, Ctrl+F12 period).
+   If Tally is ever slow for a day (over 2 s), FinCom stops reading by itself and shows one line asking for the Day Book of
+   the days still missing; it does not try again until you choose the period again.
 
 CHECK 4 - YOUR WORK GOES FIRST
    While CHECK 3 runs, save a Journal of Rs 1, narration "TRIAL 245 first".

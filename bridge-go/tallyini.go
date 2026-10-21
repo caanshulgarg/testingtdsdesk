@@ -285,9 +285,10 @@ var tallyIniDirsFn = func() []string {
 }
 
 var iniSt = struct {
-	mu    sync.Mutex
-	files map[string]M // path (lower case) -> the last result
-	seen  time.Time
+	mu        sync.Mutex
+	files     map[string]M // path (lower case) -> the last result
+	seen      time.Time
+	rechecked time.Time // ROUND 103 (1a): the last read-only re-check
 }{files: map[string]M{}}
 
 func tallyIniFile() string { return sp("tally-ini.json") }
@@ -389,6 +390,80 @@ func tallyIniSeen() {
 			return
 		}
 	}
+}
+
+// ROUND 103 (1a): every known tally.ini looked at again, READ ONLY, at the bridge's start and every 6 hours: the state
+// reported in the beat as the file is now ("usertdl-no" whenever it appears, "already" when FinCom's line is there,
+// "notadded" when it is not); nothing is written (the line is added only by the setup and a new version's first start)
+func tallyIniRecheckDue() bool {
+	iniSt.mu.Lock()
+	if !iniSt.rechecked.IsZero() && time.Since(iniSt.rechecked) < 6*time.Hour {
+		iniSt.mu.Unlock()
+		return false
+	}
+	iniSt.rechecked = time.Now()
+	known := tallyIniListLocked()
+	iniSt.mu.Unlock()
+	paths := map[string]string{}
+	for _, x := range known {
+		p := str(obj(x)["path"])
+		paths[strings.ToLower(filepath.Clean(p))] = p
+	}
+	for _, d := range tallyIniDirsFn() {
+		p := filepath.Join(d, "tally.ini")
+		if _, err := os.Lstat(p); err == nil {
+			paths[strings.ToLower(filepath.Clean(p))] = p
+		}
+	}
+	addon := addonIniPath()
+	var changed []string
+	iniSt.mu.Lock()
+	for k, p := range paths {
+		e := M{"path": p, "checkedAt": nowFn().Format(time.RFC3339)}
+		if prev := iniSt.files[k]; prev != nil {
+			for kk, v := range prev {
+				if kk != "state" && kk != "why" && kk != "checkedAt" {
+					e[kk] = v
+				}
+			}
+		}
+		fi, err := os.Lstat(p)
+		switch {
+		case err != nil:
+			e["state"] = "missing"
+		case !fi.Mode().IsRegular() || !iniDirPlain(filepath.Dir(p)):
+			e["state"] = "refused"
+		default:
+			raw, rerr := iniReadSame(p, fi)
+			if rerr != nil {
+				e["state"], e["why"] = "unreadable", cutRunes(rerr.Error(), 200)
+				break
+			}
+			_, state, _ := iniAddAddon(raw, addon)
+			switch state {
+			case "added":
+				e["state"] = "notadded" // FinCom's line is not there (read only: not added here)
+			case "usertdl-no":
+				e["state"] = "usertdl-no"
+				e["why"] = "this Tally is set not to load any add-on (User TDL = No); left as it is, so FinCom's add-on is not loaded automatically on this computer"
+			default:
+				e["state"] = state
+			}
+		}
+		if prev := iniSt.files[k]; prev == nil || str(prev["state"]) != str(e["state"]) {
+			changed = append(changed, p+": "+str(e["state"]))
+		}
+		iniSt.files[k] = e
+	}
+	all := tallyIniListLocked()
+	iniSt.mu.Unlock()
+	if len(all) > 0 {
+		_ = saveFile(tallyIniFile(), jsonText(all))
+	}
+	for _, c := range changed {
+		writeLog("tally.ini looked at again (read only): " + c)
+	}
+	return true
 }
 
 // the first start of a version (the service's and the per-user bridge's: a bridge that updated itself never ran the

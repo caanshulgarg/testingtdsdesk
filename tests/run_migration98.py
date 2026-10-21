@@ -58,16 +58,18 @@ print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M98), hashlib.md5(text.en
 low = text.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
 alters = sorted(re.findall(r"\balter\s+table\b[^;]*;", code))
-ok("delete from" not in code and not re.search(r"\b(drop|truncate)\b", code) and alters == sorted("alter table public.%s enable row level security;" % t for t in ("tally_period_pulls", "tally_period_days", "tally_ledger_progress")),
-   "0. add-only: no delete from, drop or truncate; the only table changes are the new tables' row security (%s)" % alters)
+ok("delete from" not in code and not re.search(r"\b(drop|truncate)\b", code) and alters == sorted(["alter table public.%s enable row level security;" % t for t in ("tally_period_pulls", "tally_period_days", "tally_ledger_progress")]
+     + ["alter table public.tally_devices add column if not exists period_fetch boolean not null default false;", "alter table public.tally_devices add column if not exists period_fetch_at timestamptz;",
+        "alter table public.tally_devices add column if not exists period_fetch_by uuid;"]),
+   "0. add-only: no delete from, drop or truncate; the only table changes are the new tables' row security and tally_devices' three new columns (ROUND 103) (%s)" % alters)
 ok(not re.search(r"supabase\.co|\.supabase\.|qbocskaiewaxqcvaunzc|https?://", low), "0. names no real database")
 TABLES = sorted(re.findall(r"create table if not exists public\.(\w+)", text))
 ok(TABLES == ["tally_ledger_progress", "tally_period_days", "tally_period_pulls"], "0. three new tables (%s)" % TABLES)
 for t in TABLES:
     ok(re.search(r"grant select, insert, update, delete on public\.%s to service_role;" % t, text) is not None, "0. %s carries its own grants in the file (ROUND 101)" % t)
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-APP = ["tally_period_choose", "tally_period_pause", "tally_period_status"]
-SVC = ["tally_ledger_progress_save", "tally_period_entries", "tally_period_heads", "tally_period_next", "tally_period_upload"]
+APP = ["tally_period_choose", "tally_period_pause", "tally_period_status", "tally_device_period_fetch"]
+SVC = ["tally_ledger_progress_save", "tally_period_entries", "tally_period_heads", "tally_period_next", "tally_period_upload", "tally_period_stop"]
 HELP = ["tally_period_half", "tally_period_held", "tally_period_member", "tally_period_range", "tally_period_status_of"]
 ok(FNS == sorted(APP + SVC + HELP), "0. thirteen new functions (%s)" % FNS)
 
@@ -110,7 +112,7 @@ try:
             ok(db.one("select has_table_privilege(%s, 'public.%s', 'select') or has_table_privilege(%s, 'public.%s', 'insert')" % (q(rl), t, q(rl), t)) in ("f", "false"), "0. %s: nothing for %s" % (t, rl))
         ok(all(db.one("select has_table_privilege('service_role', 'public.%s', %s)" % (t, q(p))) in ("t", "true") for p in ("select", "insert", "update", "delete")), "0. %s: service_role reads and writes" % t)
         ok(db.one("select relrowsecurity from pg_class where oid = 'public.%s'::regclass" % t) in ("t", "true"), "0. %s: row security on" % t)
-    sig = {r["proname"]: r["sig"] for r in db.rows("select p.proname, p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like any (array['tally_period%', 'tally_ledger_progress%'])")}
+    sig = {r["proname"]: r["sig"] for r in db.rows("select p.proname, p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like any (array['tally_period%', 'tally_ledger_progress%', 'tally_device_period_fetch'])")}
     ex = lambda rl, fn: db.one("select has_function_privilege(%s, %s, 'execute')" % (q(rl), q(sig.get(fn, "public.nothing()")))) in ("t", "true") if fn in sig else None
     for fn in APP: ok(ex("authenticated", fn) and not ex("anon", fn), "0. %s: authenticated, not anon" % fn)
     for fn in SVC: ok(ex("service_role", fn) and not ex("authenticated", fn) and not ex("anon", fn), "0. %s: service_role only" % fn)
@@ -181,6 +183,30 @@ try:
     ok(j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(41)), js([H(1050, 5050)]))).get("ok") is False, "4. paused: a day's list refused")
     ok(j("select tally_period_entries(%s, %s, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb)::text" % (q(B), q(D(40)))).get("ok") is False, "4. paused: entries refused")
     APPU("select tally_period_pause(%s, false)::text" % q(B))
+    print("== 4b. ROUND 103: a FinComDayHeads answer over 2 s stops the period (never retried by itself)")
+    w = "Tally took too long to give 15-Jun-2025, so FinCom stopped reading older entries. Please upload the Day Book for the days still missing."
+    st0 = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
+    s4 = j("select tally_period_stop(%s, %s, 'over2s', %s)::text" % (q(B), q(D(75)), q(w)))
+    ok(s4.get("ok") is True, "4b. stopped (%s)" % s4)
+    ok(j("select tally_period_next(%s, 3)::text" % q(B)) == [], "4b. nothing listed once stopped")
+    st = APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}
+    ok(st.get("state") == "stopped" and (st.get("stopped") or {}).get("words") == w and (st.get("stopped") or {}).get("day") == D8(75) and st.get("done") is False, "4b. the status: one line, its words, the day (%s)" % st.get("stopped"))
+    ok(j("select tally_period_heads(%s, %s, %s, 'day')::text" % (q(B), q(D(76)), js([H(1060, 5060)]))).get("ok") is False, "4b. a day's list refused once stopped")
+    APPU("select tally_period_pause(%s, false)::text" % q(B))
+    ok((APPU("select tally_period_status(%s)::text" % q(B)).get("pull") or {}).get("state") == "stopped", "4b. Resume does not restart a stopped period (only a fresh choice does)")
+    c4 = APPU("select tally_period_choose(%s, %s, %s)::text" % (q(B), q(FYS), q(st0.get("part") or "year")))
+    ok((c4.get("pull") or {}).get("state") == "going" and not (c4.get("pull") or {}).get("stopped"), "4b. the person chooses again: going (%s)" % str(c4.get("pull"))[:120])
+
+    print("== 4c. ROUND 103: the per-computer switch, default off, owner only")
+    DV = "dddddddd-0000-4000-8000-000000000098"
+    db.sql("insert into tally_devices (id, firm_id, name, key_hash) values (%s, %s, 'PC-98', 'kh98') on conflict do nothing" % (q(DV), q(F)))
+    ok(db.one("select period_fetch from tally_devices where id = %s" % q(DV)) in ("f", "false"), "4c. off by default")
+    ok(db.one("select has_column_privilege('authenticated', 'public.tally_devices', 'period_fetch', 'select')") in ("t", "true"), "4c. the firm reads the switch")
+    ok(db.one("select has_column_privilege('authenticated', 'public.tally_devices', 'period_fetch', 'update')") in ("f", "false"), "4c. nobody updates it but through the owner's function")
+    ok("owner" in str(APPU("select tally_device_period_fetch(%s, true)::text" % q(DV), VIEWER)), "4c. a viewer refused")
+    ok("not a computer of your firm" in str(APPU("select tally_device_period_fetch(%s, true)::text" % q(DV), OTHER)) or "owner" in str(APPU("select tally_device_period_fetch(%s, true)::text" % q(DV), OTHER)), "4c. another firm refused")
+    on = APPU("select tally_device_period_fetch(%s, true)::text" % q(DV))
+    ok(on.get("ok") is True and on.get("periodFetch") is True and db.one("select period_fetch_by from tally_devices where id = %s" % q(DV)) == OWNER, "4c. the owner switches it on, who and when kept (%s)" % on)
     print("== 5. a day to upload by hand")
     u5 = j("select tally_period_upload(%s, %s, 'over2s', 'Sales', %s)::text" % (q(B), q(D(30)), q("Tally took too long to give X. Please upload that day's Day Book.")))
     ok(u5.get("ok") is True, "5. marked")

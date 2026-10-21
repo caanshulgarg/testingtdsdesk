@@ -445,6 +445,7 @@ func (t *tray) menu() {
 	add(2, "Open FinCom", mfString)
 	add(11, "Test connection", mfString)
 	add(16, "Measure Tally (for FinCom support)", mfString)
+	add(26, "Test reading old days (read-only)", mfString) // ROUND 103 (1d): the owner's check before older entries are switched on
 	// round 21 (2.1.10): the five trial items only while the owner's "Trial tools on this computer" is on in FinCom
 	for _, it := range trayTrialItems(st) {
 		add(it.id, it.text, mfString)
@@ -613,6 +614,60 @@ func (t *tray) command(id int, st M) {
 				return
 			}
 		}
+	case 26:
+		// ROUND 103 (1d): three days' lists of a past month, one at a time, read only (oldtest.go); the smallest company
+		// open is suggested first, the person says yes to one
+		title := "FinCom Bridge - Test reading old days"
+		pv := trayCall("POST", "/tray/oldtest", M{"preview": true})
+		if pv == nil {
+			msgBox(title, "The bridge is not answering.", mbIconWarning)
+			return
+		}
+		if pv["ok"] != true {
+			msgBox(title, str(pv["error"]), mbIconWarning)
+			return
+		}
+		days := toStrings(pv["days"])
+		company := ""
+		for i, x := range arr(pv["companies"]) {
+			if i >= 5 {
+				break
+			}
+			c := obj(x)
+			size := ""
+			if n := toI64(c["size"]); n >= 0 {
+				size = fmt.Sprintf(" (about %d entries)", n)
+			}
+			if yesNo(title, "Test reading old days on "+str(c["company"])+size+"?\n\nRead only: FinCom Bridge asks Tally for the list of entries of three days ("+strings.Join(days, ", ")+"), one at a time, and stops at once if Tally takes longer than 2 seconds. Nothing is changed, kept or posted.\n\nNo: suggest the next company.") {
+				company = str(c["company"])
+				break
+			}
+		}
+		if company == "" {
+			return
+		}
+		r := trayCall("POST", "/tray/oldtest", M{"company": company})
+		if r == nil || r["ok"] != true {
+			msgBox(title, or(str(r["error"]), "The bridge is not answering."), mbIconWarning)
+			return
+		}
+		var s M
+		for i := 0; i < 150; i++ {
+			time.Sleep(2 * time.Second)
+			s = trayCall("GET", "/tray/oldtest", nil)
+			if s != nil && str(s["state"]) != "running" {
+				break
+			}
+		}
+		if s == nil || str(s["state"]) == "running" {
+			msgBox(title, "The test is still running; its lines are in Show log when it ends.", mbIconWarning)
+			return
+		}
+		if str(s["state"]) == "failed" {
+			msgBox(title, "Not tested: "+str(s["error"]), mbIconWarning)
+			return
+		}
+		msgBox(title, company+"\n\nOld-days test: "+str(s["line"])+"\n\nFinCom shows this on its Tally page. Nothing was changed, kept or posted.", mbIconInfo)
 	case 18:
 		// round 13: three requests for one day, one after the other (up to 60 s each, plus the wait for Tally behind a
 		// copier or posting request); 13b: started in the bridge and polled, as Measure Tally is

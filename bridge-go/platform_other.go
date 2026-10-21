@@ -94,3 +94,9 @@ func localAppData() string { return os.Getenv("LOCALAPPDATA") }
 func platPeerUser(local, remote int) (string, bool, error) { return "", false, nil }
 func platOwnSIDs() []string                                { return nil }
 func platListenerUser(port int) (string, bool, error)      { return "", false, nil }
+
+// ROUND 103 (1b): the window probe while a request is at Tally (not Windows: nothing to watch; the tests use
+// testWindowHoldMs)
+func platWindowHold() func() int {
+	return func() int { return 0 }
+}

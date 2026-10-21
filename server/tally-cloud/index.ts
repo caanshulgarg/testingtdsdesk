@@ -1548,6 +1548,18 @@ function periodError(error: any) {
   if (missingFn(m)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take older entries yet (migration 98)." });
   throw new Error(m);
 }
+// ROUND 103 (1b): the bridge stopped reading older entries of this book (a day's list over 2 s, or Tally's window held
+// over 2 s): nothing more is listed until the person chooses again; the one quiet line asks for the Day Book
+async function periodStop(book: string, body: any) {
+  const day = String(body?.day || "");
+  if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const why = ["over2s", "window"].includes(String(body?.why)) ? String(body.why) : "other";
+  const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300) });
+  if (error) return periodError(error);
+  console.log("tally-ingest period_stop: older entries stopped by the bridge", book, day, why);
+  return reply(200, { ok: !!(data as any)?.ok });
+}
 // the entries FinCom lacked, as FinComVoucherObject's answers kept them (the bridge's strip): read as a Day Book's entries
 // (parse.js), never a salary payment's bank details, each dated the day (another date: refused whole, nothing stored), each
 // whose ledger lines total zero (else not stored, and the day is to be uploaded by hand), then tally_period_entries
@@ -1621,8 +1633,18 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
 function tallyIniOf(b: any) {
   if (!Array.isArray(b?.tallyIni)) return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-  const st = ["added", "already", "usertdl-no", "failed", "refused", "unreadable", "missing"];
-  return { tallyIni: b.tallyIni.slice(0, 10).map((x: any) => ({ path: s(x?.path, 260), state: st.includes(x?.state) ? x.state : "other", why: s(x?.why, 300), at: s(x?.at, 40) })) };
+  const st = ["added", "already", "notadded", "usertdl-no", "failed", "refused", "unreadable", "missing"];
+  return { tallyIni: b.tallyIni.slice(0, 10).map((x: any) => ({ path: s(x?.path, 260), state: st.includes(x?.state) ? x.state : "other", why: s(x?.why, 300), at: s(x?.at, 40), checkedAt: s(x?.checkedAt, 40) })) };
+}
+// ROUND 103 (1d): the tray's old-days test (read only), its last result as the bridge says it: the company, the line
+// ("0.21 s / 0.34 s / 0.18 s · no freeze", or the reason it stopped), each day's time; nothing else kept
+function oldDaysTestOf(b: any) {
+  const o = b?.oldDaysTest;
+  if (!o || typeof o !== "object") return {};
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const n = (v: unknown) => Math.max(0, Math.min(1e7, Math.floor(Number(v) || 0)));
+  return { oldDaysTest: { company: s(o.company, 200), at: s(o.at, 40), line: s(o.line, 300), stopped: s(o.stopped, 300), state: s(o.state, 12),
+    results: (Array.isArray(o.results) ? o.results : []).slice(0, 3).map((r: any) => ({ day: s(r?.day, 8), ms: n(r?.ms), holdMs: n(r?.holdMs), rows: n(r?.rows), stopped: s(r?.stopped, 40) })) } };
 }
 function periodPullOf(b: any) {
   const p = b?.periodPull;
@@ -3306,7 +3328,7 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(b.recorderState && typeof b.recorderState === "object" ? { recorderStuck: stuckOf(b.recorderState) } : {}),
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
-          ...tallyIniOf(b), ...periodPullOf(b),
+          ...tallyIniOf(b), ...periodPullOf(b), ...oldDaysTestOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
@@ -3385,10 +3407,13 @@ Deno.serve(sentry.wrap(async (req) => {
         const wantedAll = [...(held || []), ...auto.names].slice(0, LEDGERS_WANTED_MAX), ledgersWanted = wantedAll.length ? wantedAll : null;
         // FinCom Bridge 2.4.5 (migration 98): the days of the period the person chose (never while reading is paused or stopped),
         // and the ledger read's progress the beat carries (in case a ledger_progress call was lost)
-        const periodDays = await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop);
+        // ROUND 103 (1c): only on a computer whose owner switched reading older entries on (tally_devices.period_fetch,
+        // migration 98; off by default and on a cloud without the column): else an empty list and periodFetch false
+        const periodFetch = (dev as any).period_fetch === true;
+        const periodDays = periodFetch ? await periodDaysFor(firm, b, !!beat.paused || !!beat.readStopped || !!(info as any).readStop) : [];
         await ledgerProgressFromBeat(firm, dev, b);
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -3722,7 +3747,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return await applyEmployees(book, body);
       }
-      case "period_heads": case "period_entries": case "ledger_progress": {
+      case "period_heads": case "period_entries": case "ledger_progress": case "period_stop": {
         // FinCom Bridge 2.4.5 (migration 98): older entries for the period the person chose; the ledger read's progress
         if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many older-entries calls in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
@@ -3734,6 +3759,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // the bridge notes the GUID at its company check, before any ledger read, so this is rare and only hides the bar)
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
+        if (body.kind === "period_stop") return await periodStop(book, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }
       case "groups": {

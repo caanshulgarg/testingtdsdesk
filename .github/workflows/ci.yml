@@ -154,8 +154,14 @@ jobs:
         # out). 17-Oct-2026: 322 tests, and the six shares' test step took 26-29 of the job's 30 minutes (run 39066608644:
         # share 6 cancelled at 30 minutes, every test in it passing when run alone); seven shares, about 24 minutes each.
         # 19-Oct-2026 (next-tds-clear): share 1 was already at 28.7 minutes (run 39106423101) and two TDS tests more took it
-        # past 30 (runs 39200532573, 39203954437: cancelled); eight shares
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        # past 30 (runs 39200532573, 39203954437: cancelled); eight shares.
+        # 21-Oct-2026 (next-245, ROUND 103): staging-next's share 2 already took 26 of the 30 minutes (run 39564605045);
+        # next-245 adds four tests (run_migration98, run_period_ingest, run_older_entries_ui, run_tally_ini_ui), and
+        # run_ci.sh deals the shares by time limit, not by time taken, so the deal moved and share 2 drew more UI tests
+        # than before: cancelled at 30 minutes (runs 39575174342, 39579001545). Run on its own (tests/ci/run_ci.sh --shard
+        # 2/8), the share took 33.4 minutes of test time, all 43 tests passing (run_tally_clicks 407 s, run_ask_fab_overlap
+        # 317 s, run_seed 175 s the longest). Ten shares, about 20 to 27 minutes each; no test skipped
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -188,17 +194,17 @@ jobs:
           id postgres
       - name: LibreOffice Calc, only on the share that runs run_fin_xlsx.py (it recalculates the statements' Excel)
         run: |
-          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/8 --dry-run | grep -q '^run_fin_xlsx.py '; then
+          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -q '^run_fin_xlsx.py '; then
             command -v soffice || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc; }
             soffice --version
           fi
-      - name: Tests (share ${{ matrix.shard }} of 8)
+      - name: Tests (share ${{ matrix.shard }} of 10)
         run: |
           # PowerShell 7 comes with GitHub's Ubuntu machines; the bridge tests (run_keep_*.py, run_bridge_fast.py, ...)
           # run bridge/TDSBridge.ps1 with it
           export PWSH="$(command -v pwsh)"
           "$PWSH" -Version
-          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/8
+          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

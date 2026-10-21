@@ -60,6 +60,7 @@ func TestRelease245Migration98AddOnly(t *testing.T) {
 	m := readText(filepath.Join("..", "server", "tally-cloud", "migration-98-period-pull.sql"))
 	code := regexp.MustCompile(`(?m)--.*$`).ReplaceAllString(strings.ToLower(m), "")
 	for _, bad := range []string{"drop ", "truncate", "alter column", "delete from public.tally_vouchers", "delete from public.tally_ledgers"} {
+		// (ROUND 103: three columns added to tally_devices, "add column if not exists"; nothing dropped or changed)
 		if strings.Contains(code, bad) {
 			t.Errorf("migration 98 has %q", bad)
 		}
@@ -68,7 +69,7 @@ func TestRelease245Migration98AddOnly(t *testing.T) {
 		t.Error("migration 98 is not one transaction with the lock timeout")
 	}
 	for _, f := range regexp.MustCompile(`create or replace function public\.(\w+)`).FindAllStringSubmatch(code, -1) {
-		if !strings.HasPrefix(f[1], "tally_period_") && f[1] != "tally_ledger_progress_save" {
+		if !strings.HasPrefix(f[1], "tally_period_") && f[1] != "tally_ledger_progress_save" && f[1] != "tally_device_period_fetch" {
 			t.Errorf("migration 98 replaces %s (not one of its own)", f[1])
 		}
 	}

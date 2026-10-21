@@ -79,10 +79,13 @@ export default function OlderEntries({ cid, where }) {
       {pull && pull.state === "paused" && <button className="btn small" data-older-resume="" disabled={!!busy} onClick={() => pause(false)}>Resume</button>}
     </div>
     {pull && <p className="tg-progress" data-older-progress={pull.counting ? "counting" : pull.done ? "done" : "fetching"} role="status" style={{ margin: "8px 0 0" }}>
-      {(pull.state === "paused" ? "Paused · " : "") + fyLabel(fyOf8(pull.fy)) + (pull.part === "h1" ? " Apr–Sep" : pull.part === "h2" ? " Oct–Mar" : "") + ": " + progressWords(pull)}</p>}
+      {(pull.state === "paused" ? "Paused · " : pull.state === "stopped" ? "Stopped · " : "") + fyLabel(fyOf8(pull.fy)) + (pull.part === "h1" ? " Apr–Sep" : pull.part === "h2" ? " Oct–Mar" : "") + ": " + progressWords(pull)}</p>}
     {pull && pull.counting && <p className="note" style={{ margin: "4px 0 0" }}>FinCom Bridge reads one day at a time, only while nobody is working in Tally. Nothing else is needed.</p>}
     {pull && !pull.counting && pull.half && pull.part === "year" && !pull.done && <p className="note" data-older-half="" style={{ margin: "4px 0 0" }}>{"This year holds " + nf(pull.yearVouchers) + " vouchers: you may bring in April–September or October–March first."}</p>}
     {err && <p className="note" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}
+    {/* ROUND 103 (1b): the bridge stopped reading (Tally too slow or its window held): one quiet line, the days to upload */}
+    {pull && pull.stopped && <p className="note" data-older-stopped="" style={{ margin: "4px 0 0" }}>{pull.stopped.words + " "}
+      <button className="linkbtn" data-older-stopped-go="" onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(pull.stopped.day || pull.stopped.from), tallyDate(pull.stopped.to))}>{"Upload " + dayWords(pull.stopped.day || pull.stopped.from) + " to " + dayWords(pull.stopped.to)}</button></p>}
     {pull && (pull.upload || []).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
       <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayWords(u.day)}</button></p>)}
   </section>;

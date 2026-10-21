@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -230,6 +229,7 @@ func pullReset() {
 	pull.mu.Lock()
 	pull.items, pull.work = nil, nil
 	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]time.Time{}, map[string]M{}, map[string]string{}
+	pull.stopCo = map[string]M{}
 	pullSaveMu.Lock()
 	pullSaveText.Store("")
 	_ = os.Remove(pullFile())
@@ -350,89 +350,147 @@ func TestR245PullCountingOnlyAndThreeDaysAnAnswer(t *testing.T) {
 	}
 }
 
-// over 2 s: the late answer thrown away, the day asked one voucher type at a time; a type still over 2 s: the day marked
-// "upload", told to FinCom, the one quiet line, never asked again
-func TestR245PullSplitThenUpload(t *testing.T) {
-	f, _, m := pullBridge(t)
-	pullDay(f, "20250831", 1000, "Sales", "Sales", "Receipt", "Payment")
-	var slowSales atomic.Bool
+// ROUND 103 (1b, the owner's freeze safety; replaces the split of 2.4.5's first build): a day's list over 2 s stops
+// reading older entries of that company: FinCom told (period_stop, its words), no by-type request, no later day of the
+// company asked, the tray's one quiet notice, kept across a restart; only a newer choice in FinCom starts it again
+func TestR103PullOver2sStopsCompany(t *testing.T) {
+	f, c, _ := pullBridge(t)
+	var stops []M
+	c.mu.Lock()
+	prev := c.other
+	c.other = func(k string, b M) (int, M) {
+		if k == "period_stop" {
+			stops = append(stops, b)
+			return 200, M{"ok": true}
+		}
+		return prev(k, b)
+	}
+	c.mu.Unlock()
+	pullDay(f, "20250831", 1000, "Sales", "Receipt")
+	pullDay(f, "20250830", 1100, "Sales")
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id != dayHeadsID {
-			return 0
-		}
-		if !strings.Contains(body, "$VoucherTypeName") || (slowSales.Load() && strings.Contains(body, "&#34;Sales&#34;")) {
+		if id == dayHeadsID && strings.Contains(body, "20250831") {
 			return 2500 * time.Millisecond
 		}
 		return 0
 	}
 	f.mu.Unlock()
-	l := pullList("20250831")
-	obj(arr(l["periodDays"])[0])["types"] = []any{"Sales", "Receipt", "Payment"}
+	chosen := nowFn().Add(-time.Hour).Format(time.RFC3339Nano)
+	l := pullList("20250831", "20250830")
+	for _, x := range arr(l["periodDays"]) {
+		obj(x)["chosenAt"] = chosen
+	}
 	applyPeriodDays(l)
-	step := func() {
-		pullRun(t, 10)
-		nowFn = func(t0 time.Time) func() time.Time { return func() time.Time { return t0 } }(nowFn().Add(10 * time.Minute)) // past the retry schedule
-		retryReset()
-		resetEarlier()
-	}
-	for i := 0; i < 6; i++ {
-		step()
-	}
+	pullRun(t, 10)
 	f.mu.Lock()
 	var heads []string
 	for i, id := range f.reqs {
 		if id == dayHeadsID {
-			heads = append(heads, pinQuoted(f.bodies[i], "$VoucherTypeName"))
+			heads = append(heads, f.bodies[i])
 		}
 	}
 	f.mu.Unlock()
-	if len(heads) < 4 || heads[0] != "" || heads[1] != "Sales" || heads[2] != "Receipt" || heads[3] != "Payment" {
-		t.Fatalf("the heads asked: %q", heads)
+	if len(heads) != 1 || strings.Contains(heads[0], "$VoucherTypeName") {
+		t.Fatalf("asked after the stop, or by type: %d requests", len(heads))
 	}
-	if len(m.heads) < 1 || str(m.heads[0]["via"]) != "split" || m.n["20250831"] != 4 {
-		t.Fatalf("the split told: %v", m.heads)
+	c.mu.Lock()
+	ns := len(stops)
+	c.mu.Unlock()
+	if ns != 1 || str(stops[0]["why"]) != "over2s" || str(stops[0]["day"]) != "20250831" ||
+		str(stops[0]["words"]) != "Tally took too long to give 31-Aug-2025, so FinCom stopped reading older entries of "+zz+". Please upload the Day Book for the days still missing." {
+		t.Fatalf("FinCom told: %v", stops)
 	}
-	// another day where Sales alone is still over 2 s
-	pullDay(f, "20250830", 1100, "Sales", "Receipt")
-	slowSales.Store(true)
-	l = pullList("20250830")
-	obj(arr(l["periodDays"])[0])["types"] = []any{"Sales", "Receipt"}
+	// the same choice listed again: never asked
 	applyPeriodDays(l)
-	for i := 0; i < 6; i++ {
-		step()
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 1 {
+		t.Fatalf("asked again under the same choice: %d", f.n(dayHeadsID))
 	}
-	up := m.upload["20250830"]
-	if up == nil || str(up["why"]) != "over2s" || str(up["type"]) != "Sales" || str(up["words"]) != "Tally took too long to give 30-Aug-2025. Please upload that day's Day Book." {
-		t.Fatalf("the upload mark: %v", m.upload)
-	}
-	if _, told := m.n["20250830"]; told {
-		t.Fatal("a day not read whole was counted")
-	}
-	ul := pullUploadList()
-	if len(ul) != 1 || str(obj(ul[0])["words"]) != str(up["words"]) {
-		t.Fatalf("the quiet line: %v", ul)
-	}
-	// the tray: one notice for that day, shown once (noticeGate), never an error
-	ps := trayProblems(trayFacts{St: M{"tallyOpen": true, "online": true, "cloudConnected": true, "uploadDays": ul}, Up: time.Hour})
+	// the tray: one quiet notice for the company
+	ps := trayProblems(trayFacts{St: M{"tallyOpen": true, "online": true, "cloudConnected": true, "stoppedCompanies": pullStoppedList()}, Up: time.Hour})
 	found := 0
 	for _, p := range ps {
-		if strings.HasPrefix(p.Kind, "uploadday|") {
+		if strings.HasPrefix(p.Kind, "periodstop|") {
 			found++
-			if p.Text != str(up["words"]) || p.Day != "2025-08-30" || !p.Cond {
+			if p.Text != str(stops[0]["words"]) || !p.Cond {
 				t.Fatalf("the notice: %+v", p)
 			}
 		}
 	}
 	if found != 1 {
-		t.Fatalf("%d upload notices", found)
+		t.Fatalf("%d stop notices", found)
 	}
-	// listed again by an older cloud: never asked again
-	n := f.n(dayHeadsID)
+	// a restart keeps the stop
+	pullSaveNow()
+	pull.mu.Lock()
+	pull.stopCo = map[string]M{}
+	pull.mu.Unlock()
+	pullLoad()
 	applyPeriodDays(l)
-	step()
-	if f.n(dayHeadsID) != n {
-		t.Fatal("a day marked upload was asked again")
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 1 {
+		t.Fatal("asked after a restart")
+	}
+	// the person chooses again in FinCom: read again
+	f.mu.Lock()
+	f.slow = nil
+	f.mu.Unlock()
+	at := nowFn().Add(time.Minute)
+	nowFn = func() time.Time { return at }
+	l2 := pullList("20250830")
+	obj(arr(l2["periodDays"])[0])["chosenAt"] = at.Format(time.RFC3339Nano)
+	applyPeriodDays(l2)
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 2 {
+		t.Fatalf("not read after a fresh choice: %d", f.n(dayHeadsID))
+	}
+}
+
+// ROUND 103 (1b): Tally's window not answering for 2 s or more while the day's list was at Tally stops it the same way
+func TestR103PullWindowHoldStopsCompany(t *testing.T) {
+	f, c, _ := pullBridge(t)
+	var stops []M
+	c.mu.Lock()
+	prev := c.other
+	c.other = func(k string, b M) (int, M) {
+		if k == "period_stop" {
+			stops = append(stops, b)
+			return 200, M{"ok": true}
+		}
+		return prev(k, b)
+	}
+	c.mu.Unlock()
+	testWindowHoldMs.Store(2300)
+	t.Cleanup(func() { testWindowHoldMs.Store(0) })
+	pullDay(f, "20250701", 1000, "Sales")
+	pullDay(f, "20250702", 1100, "Sales")
+	applyPeriodDays(pullList("20250702", "20250701"))
+	pullRun(t, 10)
+	c.mu.Lock()
+	ns := len(stops)
+	c.mu.Unlock()
+	if f.n(dayHeadsID) != 1 || ns != 1 || str(stops[0]["why"]) != "window" || f.n(vchObjectID) != 0 {
+		t.Fatalf("a window held 2.3 s: %d lists asked, %d entries, told %v", f.n(dayHeadsID), f.n(vchObjectID), stops)
+	}
+}
+
+// ROUND 103 (1c): this computer's switch off in FinCom (periodFetch false): nothing read, the day being read left
+func TestR103PullSwitchOff(t *testing.T) {
+	f, _, _ := pullBridge(t)
+	pullDay(f, "20250601", 1000, "Sales")
+	l := pullList("20250601")
+	l["periodFetch"] = false
+	applyPeriodDays(l)
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 0 {
+		t.Fatal("read with the switch off")
+	}
+	l["periodFetch"] = true
+	applyPeriodDays(l)
+	pullRun(t, 5)
+	if f.n(dayHeadsID) != 1 {
+		t.Fatal("not read with the switch on")
 	}
 }
 
@@ -658,8 +716,11 @@ func r245Reset() {
 	ledProg.last, ledProg.sent = map[string]M{}, map[string]time.Time{}
 	ledProg.mu.Unlock()
 	iniSt.mu.Lock()
-	iniSt.files, iniSt.seen = map[string]M{}, time.Time{}
+	iniSt.files, iniSt.seen, iniSt.rechecked = map[string]M{}, time.Time{}, time.Time{}
 	iniSt.mu.Unlock()
+	oldTest.mu.Lock()
+	oldTest.last, oldTest.allowed = nil, map[string]bool{}
+	oldTest.mu.Unlock()
 }
 
 // --- review 245 round 1

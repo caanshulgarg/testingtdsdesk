@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const iniAddon = `C:\ProgramData\FinCom\addon\FinComRecorder.tdl`
@@ -263,4 +264,63 @@ func TestR245TallyIniFailsThreeStartsAtMost(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(d1, "tally.ini")); string(b) != "[Tally]\r\n" {
 		t.Fatalf("changed: %q", b)
 	}
+}
+
+// ROUND 103 (1a): tally.ini looked at again, read only, at the bridge's start and every 6 hours, for every known
+// TallyPrime folder: a "User TDL = No" put in later is reported; nothing is ever written by the re-check
+func TestR103TallyIniRecheckReadOnly(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	t.Setenv("ProgramData", t.TempDir())
+	d1 := t.TempDir()
+	old := tallyIniDirsFn
+	tallyIniDirsFn = func() []string { return []string{d1} }
+	t.Cleanup(func() { tallyIniDirsFn = old })
+	iniSt.mu.Lock()
+	iniSt.files, iniSt.rechecked = map[string]M{}, time.Time{}
+	iniSt.mu.Unlock()
+	p := filepath.Join(d1, "tally.ini")
+	_ = os.WriteFile(p, []byte("[Tally]\r\nUser TDL = Yes\r\n"), 0o644)
+	tallyIniStep(func(string) {})
+	if st := tallyIniStateOf(p); st != "added" {
+		t.Fatalf("first: %s", st)
+	}
+	// the person (or another program) switches add-ons off later
+	_ = os.WriteFile(p, []byte("[Tally]\r\nUser TDL = No\r\nTDL = C:\\x.tdl\r\n"), 0o644)
+	before, _ := os.ReadFile(p)
+	ow := iniWriteFn
+	iniWriteFn = func(string, []byte) error { t.Fatal("the re-check wrote tally.ini"); return nil }
+	t.Cleanup(func() { iniWriteFn = ow })
+	if !tallyIniRecheckDue() {
+		t.Fatal("not due at the start")
+	}
+	if st := tallyIniStateOf(p); st != "usertdl-no" {
+		t.Fatalf("after the switch: %s", st)
+	}
+	if b, _ := os.ReadFile(p); string(b) != string(before) || exists(p+".fincom-bak2") {
+		t.Fatal("changed")
+	}
+	if tallyIniRecheckDue() {
+		t.Fatal("due again at once")
+	}
+	iniSt.mu.Lock()
+	iniSt.rechecked = time.Now().Add(-7 * time.Hour)
+	iniSt.mu.Unlock()
+	_ = os.WriteFile(p, []byte("[Tally]\r\nUser TDL = Yes\r\n"), 0o644)
+	if !tallyIniRecheckDue() || tallyIniStateOf(p) != "notadded" {
+		t.Fatalf("after 6 h: %s", tallyIniStateOf(p))
+	}
+	for _, x := range tallyIniBeat() {
+		if str(obj(x)["path"]) == p && str(obj(x)["checkedAt"]) == "" {
+			t.Fatal("no time of the re-check in the beat")
+		}
+	}
+}
+
+func tallyIniStateOf(p string) string {
+	for _, x := range tallyIniBeat() {
+		if strings.EqualFold(filepath.Clean(str(obj(x)["path"])), filepath.Clean(p)) {
+			return str(obj(x)["state"])
+		}
+	}
+	return ""
 }

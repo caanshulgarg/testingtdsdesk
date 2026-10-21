@@ -1135,6 +1135,30 @@ function TallyIniLines({ r }) {
   const l = [].concat((((r.device || {}).info || {}).beat || {}).tallyIni || []).filter((x) => x && INI_WORDS[x.state]);
   return l.map((x, i) => <div key={i} className="row" style={ROW}><span className="note" data-tally-ini={x.state}>{"tally.ini " + (x.path || "") + " " + INI_WORDS[x.state]}</span></div>);
 }
+// ROUND 103 (1c, 1d): reading older entries per computer, off by default (tally_devices.period_fetch, migration 98): an
+// owner switches it on or off (tally_device_period_fetch); staff see the state only. The tray's old-days test (read only)
+// as the bridge's heartbeat last said it: "Old-days test on <PC>: 0.21 s / 0.34 s / 0.18 s · no freeze". A cloud without
+// the column shows nothing of the switch
+function OldDaysLines({ r, owner }) {
+  const d = r.device || {}, t = ((d.info || {}).beat || {}).oldDaysTest;
+  const [pf, setPf] = useState(null), [n, setN] = useState(0);
+  useEffect(() => {
+    if (typeof Cloud !== "object" || !Cloud.api) return;
+    let live = true;
+    Cloud.api("tally_devices?select=id,period_fetch&id=eq." + encodeURIComponent(d.id || "")).then((rows) => { const x = [].concat(rows || []).find((y) => y && y.id === d.id); if (live) setPf(x ? x.period_fetch === true : null); },
+      () => { if (live) setPf(null); });    // a cloud without the column (42703): nothing of the switch
+    return () => { live = false; };
+  }, [d.id, n]);
+  const known = pf !== null, on = pf === true;
+  const flip = () => { if (typeof TCloud !== "object" || !TCloud.control) return;
+    Promise.resolve(TCloud.control("tally_device_period_fetch", { p_device: d.id, p_on: !on }, "Reading older entries " + (on ? "off" : "on") + " for " + (d.name || "the computer") + "; the bridge takes it at its next heartbeat."))
+      .then(() => setN((x) => x + 1)); };
+  return <>
+    {known && <div className="row" style={ROW}><span className="note" data-period-fetch={on ? "on" : "off"}>{"Reading older entries on this computer: " + (on ? "on" : "off")}
+      {owner && <> <button className="btn small" data-period-fetch-switch="" onClick={flip}>{on ? "Switch off" : "Switch on"}</button></>}</span></div>}
+    {t && t.line && <div className="row" style={ROW}><span className="note" data-old-days-test={t.stopped ? "stopped" : "ok"}>{"Old-days test on " + pcName(r) + ": " + t.line + (t.company ? " (" + t.company + ")" : "")}</span></div>}
+  </>;
+}
 function ComputerCard({ r, latest, m, focus }) {
   const owner = isOwner(), p = TCloud.pane, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const rd = r.read || { state: r.online ? "reading" : "offline", text: "" }, live = r.go && !r.old, k = cardKey(r), open = moreOpen(k);
@@ -1173,6 +1197,7 @@ function ComputerCard({ r, latest, m, focus }) {
       <Baselines r={r} owner={owner} />
       <SelfChecks r={r} />
       <TallyIniLines r={r} />
+      <OldDaysLines r={r} owner={owner} />
       <div className="tcard-sub" data-card-settings="">{owner ? "Settings" : "Settings (an owner of the firm changes these)"}</div>
       {owner && !allStopped && <div className="row" style={ROW}>{stopped ? n && n.act === "resume" ? null : <button className="btn small" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
         : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>}</div>}

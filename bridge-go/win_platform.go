@@ -619,3 +619,96 @@ func platTallyResponds() bool {
 	_, _, _ = procEnumWindows.Call(respCB, 0)
 	return !respHung
 }
+
+// ROUND 103 (1b): the window probe while a request is at Tally (windowHoldFn, daypull.go)
+var (
+	procSendMessageTimeoutW = user32.NewProc("SendMessageTimeoutW")
+	holdMu                  sync.Mutex
+	holdPids                map[uint32]bool
+	holdWins                []uintptr
+	holdCB                  = windows.NewCallback(func(h uintptr, _ uintptr) uintptr {
+		var pid uint32
+		_, _, _ = procGetWindowThreadPid.Call(h, uintptr(unsafe.Pointer(&pid)))
+		if holdPids[pid] {
+			if v, _, _ := procIsWindowVisible.Call(h); v != 0 && len(holdWins) < 32 {
+				holdWins = append(holdWins, h)
+			}
+		}
+		return 1
+	})
+)
+
+func tallyWindows() []uintptr {
+	ps, ok := processes()
+	if !ok {
+		return nil
+	}
+	pids := map[uint32]bool{}
+	for _, p := range ps {
+		if reTally.MatchString(p.Name) && isMine(p.Session) {
+			pids[uint32(p.ID)] = true
+		}
+	}
+	if len(pids) == 0 {
+		return nil
+	}
+	holdMu.Lock()
+	defer holdMu.Unlock()
+	holdPids, holdWins = pids, nil
+	_, _, _ = procEnumWindows.Call(holdCB, 0)
+	return append([]uintptr{}, holdWins...)
+}
+
+func platWindowHold() func() int {
+	wins := tallyWindows()
+	if len(wins) == 0 {
+		return func() int { return 0 }
+	}
+	done := make(chan struct{})
+	res := make(chan int, 1)
+	go func() {
+		const smtoAbortIfHung = 0x0002
+		var since time.Time
+		worst := 0
+		for {
+			select {
+			case <-done:
+				if !since.IsZero() {
+					if ms := int(time.Since(since).Milliseconds()); ms > worst {
+						worst = ms
+					}
+				}
+				res <- worst
+				return
+			default:
+			}
+			answered := true
+			for _, h := range wins {
+				var out uintptr
+				r, _, _ := procSendMessageTimeoutW.Call(h, 0, 0, 0, smtoAbortIfHung, 250, uintptr(unsafe.Pointer(&out)))
+				if r == 0 {
+					answered = false
+					break
+				}
+			}
+			if answered {
+				if !since.IsZero() {
+					if ms := int(time.Since(since).Milliseconds()); ms > worst {
+						worst = ms
+					}
+				}
+				since = time.Time{}
+			} else if since.IsZero() {
+				since = time.Now()
+			}
+			select {
+			case <-done:
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	}()
+	return func() int {
+		close(done)
+		return <-res
+	}
+}

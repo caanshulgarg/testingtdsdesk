@@ -26,12 +26,26 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
    done when FinCom holds every entry Tally lists for it. Progress: "8,412 of 12,960 vouchers (65%) · 4,548 left", the
    count built day by day (while counting: "Counting the year in Tally… 132 of 365 days"). Code: bridge-go/daypull.go.
 
-2. **Over 2 s, one voucher type at a time.** When a day's list is stopped at 2 s, the same day is asked once per voucher
-   type ($VoucherTypeName = the type; the six standard types and the book's own types the cloud lists). A type that still
-   passes 2 s marks that day "upload by hand": the ONE quiet line the person sees, "Tally took too long to give 01-Jun-2026.
-   Please upload that day's Day Book." with its Upload button (also a bell notice in the tray). A day whose rows carry
-   another date, or an answer FinCom cannot read, gets the same kind of line ("FinCom could not read ..."). Nothing else
-   about Tally is shown.
+2. **Freeze safety (ROUND 103, the owner's decision of 21-Oct-2026; replaces the by-type split of the first build).** A
+   day's list stopped at 2 s, or Tally's window not answering for 2 s or more while it is at Tally (the bridge watches the
+   window: WM_NULL every 200 ms with a 250 ms limit, nothing sent to Tally's port), STOPS reading older entries of that
+   company: FinCom is told (period_stop), lists no more days of the period, and shows ONE quiet line, "Tally took too long
+   to give 01-Jun-2026, so FinCom stopped reading older entries of <company>. Please upload the Day Book for the days still
+   missing." with its Upload button (also a bell notice in the tray). It is never retried by itself: only the person
+   choosing the period again in FinCom starts it again. The by-type form is no longer sent (it stays on the allow-list as
+   approved). A day whose rows carry another date, or an answer FinCom cannot read, gets the one-day line ("FinCom could not
+   read ..."). Nothing else about Tally is shown.
+
+2a. **Off by default, per computer (ROUND 103).** Reading older entries runs only on a computer whose owner switched it on
+   on FinCom's Tally page ("Reading older entries on this computer: on / off"; tally_devices.period_fetch, migration 98,
+   owner only; staff see the state). The heartbeat answers periodFetch; while it is off no day is listed or read.
+
+2b. **"Test reading old days (read-only)", a tray item (ROUND 103).** Before the switch goes on, the owner checks his own
+   licensed Tally: the tray suggests the smallest company open (he says yes to one), and the bridge asks FinComDayHeads (the
+   same approved form) for three days of the month before (the 1st, the 15th and the last day), one at a time, each under
+   the 2 s stop, Tally's window watched; a stop ends the test there. The rows are counted only: nothing is kept, stored,
+   posted or sent but the result, which the heartbeat carries to the Tally page: "Old-days test on <PC>: 0.21 s / 0.34 s /
+   0.18 s · no freeze" (or the reason it stopped). Started by a person only: a web page is refused. Code: bridge-go/oldtest.go.
 
 3. **The exact ledger count (Connect Tally step 5).** On the full ledger read (the "ledgers" wake) the bridge asks
    FinComLedgerIds once (MasterIDs only; when that one request is stopped at 2 s, in chunks of 2,000 MasterIDs) and counts
@@ -43,8 +57,10 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
    after the last TDL line of its [Tally] section, and `User TDL = Yes` only if it has no User TDL line. A backup
    tally.ini.fincom-bak is written once (never overwritten); the file's encoding and line endings are kept; nothing is
    removed or reordered; a second run changes nothing. A tally.ini with `User TDL = No` is left untouched (the owner's
-   default, decision pending) and reported in the heartbeat (`tallyIni`) for Help & support. The per-user worker and the
-   service apply it again after an automatic update (marker fincom-tallyini-version.txt). Code: bridge-go/tallyini.go.
+   default) and reported in the heartbeat (`tallyIni`) for Help & support. The per-user worker and the service apply it
+   again after an automatic update (marker fincom-tallyini-version.txt). ROUND 103: every known tally.ini is looked at
+   again, read only, at each start of the bridge and every 6 hours, so a `User TDL = No` put in later is reported too
+   (states already / notadded / usertdl-no); the re-check never writes. Code: bridge-go/tallyini.go.
 
 5. **Job files that never lose an update.** progress.json and the job files are written to a unique temporary file and
    replaced atomically, retried up to 24 times when Windows holds the file; an update that still cannot be written is kept

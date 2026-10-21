@@ -9,7 +9,9 @@
 --   tally_ledger_progress  the ledger read's progress for Connect Tally's step 5 ("312 of 1,240 ledgers")
 -- Functions: for the app (signed in, the firm's own books): tally_period_choose, tally_period_pause, tally_period_status;
 -- for tally-ingest (service role only): tally_period_next, tally_period_heads, tally_period_upload, tally_period_entries,
--- tally_ledger_progress_save. Add-only: three new tables, thirteen new functions (five helpers nobody may call), no existing function, table or row changed;
+-- tally_ledger_progress_save, tally_period_stop; the owner's tally_device_period_fetch with three new columns of
+-- tally_devices (ROUND 103: reading older entries switched on per computer, default off). Add-only: three new tables,
+-- fifteen new functions (five helpers nobody may call), three columns added, no existing function, table or row changed;
 -- every new table with its own grants (ROUND 101: service_role only; the app reads through the functions). One transaction,
 -- lock_timeout 10 s, safe twice. Tested by tests/run_migration98.py. Deploy order: 98, then the tally-ingest of next-245
 -- (without 98 that tally-ingest says nothing of older entries and the beat goes on as before).
@@ -22,10 +24,16 @@ create table if not exists public.tally_period_pulls (
   firm_id    uuid not null,
   fy_start   date not null check (extract(month from fy_start) = 4 and extract(day from fy_start) = 1),
   part       text not null default 'year' check (part in ('year', 'h1', 'h2')),
-  state      text not null default 'going' check (state in ('going', 'paused')),
+  state      text not null default 'going' check (state in ('going', 'paused', 'stopped')),
   chosen_by  uuid,
   chosen_at  timestamptz not null default now(),
-  paused_at  timestamptz
+  paused_at  timestamptz,
+  -- ROUND 103 (1b): stopped by the bridge (a day's list over 2 s, or Tally's window held over 2 s): never listed again
+  -- until the person chooses again; one quiet line
+  stopped_at timestamptz,
+  stop_day   date,
+  stop_why   text check (stop_why is null or length(stop_why) <= 40),
+  stop_words text check (stop_words is null or length(stop_words) <= 300)
 );
 create table if not exists public.tally_period_days (
   book_id      uuid not null references public.tally_books(book_id) on delete cascade,
@@ -126,8 +134,10 @@ begin
     'yearDays', ydays, 'countedDays', cdays, 'counting', cdays < ydays, 'yearVouchers', fyn,
     'half', cdays >= ydays and fyn > 20000,     -- the owner's decision of 21-Oct-2026: half-years offered above 20,000 vouchers a year
     'partDays', pdays, 'partCounted', pcount, 'y', y, 'x', least(x, y), 'left', greatest(y - x, 0),
-    'done', cdays >= ydays and pcount >= pdays and x >= y and pdays > 0,
-    'upload', up, 'chosenAt', p.chosen_at));
+    'done', p.state <> 'stopped' and cdays >= ydays and pcount >= pdays and x >= y and pdays > 0,
+    'upload', up, 'chosenAt', p.chosen_at,
+    'stopped', case when p.state = 'stopped' then jsonb_build_object('day', to_char(p.stop_day, 'YYYYMMDD'), 'words', p.stop_words, 'why', p.stop_why, 'at', p.stopped_at,
+      'from', to_char(r.d_from, 'YYYYMMDD'), 'to', to_char(least(r.d_to, today), 'YYYYMMDD')) end));
 end $function$;
 
 -- ---------------------------------------------------------------- 3. the app (the firm's own books; owner or staff to change)
@@ -159,7 +169,8 @@ begin
     return jsonb_build_object('ok', false, 'error', 'Half-years are offered once the year is counted at more than 20,000 vouchers.', 'status', tally_period_status_of(p_book));
   end if;
   insert into tally_period_pulls (book_id, firm_id, fy_start, part, state, chosen_by) values (p_book, f, p_fy_start, p_part, 'going', auth.uid())
-  on conflict (book_id) do update set fy_start = excluded.fy_start, part = excluded.part, state = 'going', paused_at = null, chosen_by = excluded.chosen_by, chosen_at = now();
+  on conflict (book_id) do update set fy_start = excluded.fy_start, part = excluded.part, state = 'going', paused_at = null, chosen_by = excluded.chosen_by, chosen_at = now(),
+    stopped_at = null, stop_day = null, stop_why = null, stop_words = null;
   return tally_period_status_of(p_book);
 end $function$;
 
@@ -167,7 +178,8 @@ create or replace function public.tally_period_pause(p_book uuid, p_pause boolea
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := tally_period_member(p_book, true);
 begin
-  update tally_period_pulls set state = case when p_pause then 'paused' else 'going' end, paused_at = case when p_pause then now() end where book_id = p_book;
+  -- a period the bridge stopped (ROUND 103) is never restarted by Resume: only a fresh choice (tally_period_choose) starts it
+  update tally_period_pulls set state = case when p_pause then 'paused' else 'going' end, paused_at = case when p_pause then now() end where book_id = p_book and state <> 'stopped';
   return tally_period_status_of(p_book);
 end $function$;
 
@@ -200,7 +212,7 @@ begin
             where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))
             order by exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and x.asked_at > now() - interval '2 minutes'), g desc
             limit lim loop
-    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false));
+    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false, 'chosenAt', p.chosen_at));
     n := n + 1;
   end loop;
   if n = 0 and not exists (select 1 from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
@@ -213,7 +225,7 @@ begin
     for d in select x.day from tally_period_days x
               where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
               order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit lim loop
-      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true));
+      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', p.chosen_at));
       n := n + 1;
     end loop;
   end if;
@@ -345,6 +357,38 @@ begin
   return jsonb_build_object('ok', true);
 end $function$;
 
+-- ROUND 103 (1b): the bridge stopped the period for this book (a day's list over 2 s, or Tally's window held over 2 s):
+-- nothing more is listed until the person chooses again; the one quiet line asks for the Day Book of the days missing
+create or replace function public.tally_period_stop(p_book uuid, p_day date, p_why text, p_words text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  update tally_period_pulls set state = 'stopped', stopped_at = now(), stop_day = p_day, stop_why = left(coalesce(p_why, ''), 40),
+         stop_words = left(coalesce(nullif(p_words, ''), 'FinCom stopped reading older entries from Tally. Please upload the Day Book for the days still missing.'), 300)
+   where book_id = p_book and state <> 'stopped';
+  return jsonb_build_object('ok', true);
+end $function$;
+
+-- ROUND 103 (1c): reading older entries is switched on per computer by an owner (default off): tally_devices.period_fetch
+alter table public.tally_devices add column if not exists period_fetch boolean not null default false;
+alter table public.tally_devices add column if not exists period_fetch_at timestamptz;
+alter table public.tally_devices add column if not exists period_fetch_by uuid;
+grant select (period_fetch, period_fetch_at, period_fetch_by) on public.tally_devices to authenticated;
+create or replace function public.tally_device_period_fetch(p_device uuid, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid := my_firm(); d tally_devices%rowtype;
+begin
+  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'only an owner of the firm can switch reading older entries on or off for a computer' using errcode = '42501'; end if;
+  if p_device is null or not exists (select 1 from tally_devices x where x.id = p_device and x.firm_id = f and not coalesce(x.revoked, false))
+    then raise exception 'not a computer of your firm'; end if;
+  if p_on is null then raise exception 'say whether reading older entries is on or off (true or false)'; end if;
+  perform pg_advisory_xact_lock(hashtext('tally_device_period_fetch:' || p_device::text));
+  update tally_devices set period_fetch = p_on, period_fetch_at = now(), period_fetch_by = auth.uid() where id = p_device and firm_id = f;
+  select * into d from tally_devices where id = p_device;
+  return jsonb_build_object('ok', true, 'device', p_device, 'periodFetch', d.period_fetch, 'at', d.period_fetch_at, 'by', d.period_fetch_by);
+end $function$;
+
 -- ---------------------------------------------------------------- 5. who may call
 revoke all on function public.tally_period_range(date, text), public.tally_period_held(uuid, jsonb, integer, jsonb), public.tally_period_status_of(uuid), public.tally_period_half(uuid, date),
   public.tally_period_member(uuid, boolean) from public, anon, authenticated, service_role;
@@ -354,5 +398,9 @@ revoke all on function public.tally_period_next(uuid, integer), public.tally_per
   public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.tally_period_next(uuid, integer), public.tally_period_heads(uuid, date, jsonb, text), public.tally_period_upload(uuid, date, text, text, text),
   public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb), public.tally_ledger_progress_save(uuid, text, integer, integer, boolean, uuid) to service_role;
+revoke all on function public.tally_period_stop(uuid, date, text, text) from public, anon, authenticated;
+grant execute on function public.tally_period_stop(uuid, date, text, text) to service_role;
+revoke all on function public.tally_device_period_fetch(uuid, boolean) from public, anon;
+grant execute on function public.tally_device_period_fetch(uuid, boolean) to authenticated;
 
 commit;
