@@ -99,6 +99,8 @@ const FinSt = (() => {
       if (/^(emp|fin|exp)$/.test(line) && STAT_INT.test(nm)) return "16A";
       if (kind === "nc" && /PARTNER/.test(nm) && /^(emp|fin|exp)$/.test(line)) return /INTEREST/.test(nm) ? "16P" : "15P";
       if (/^(fin|exp)$/.test(line) && /BANK CHARGE|BANK COMMISSION/.test(nm)) return "17G";
+      // a director's remuneration is an employee benefit (Schedule III), not an other expense (ROUND 100: the reports pack reads it)
+      if (kind === "co" && /^(emp|exp)$/.test(line) && /DIRECTORS?'?\s*(REMUNERATION|SALARY)|REMUNERATION TO DIRECTORS?|MANAGERIAL REMUNERATION/.test(nm)) return "15A";
     } else {
       if (/INTEREST (ACCRUED|RECEIVABLE)|ACCRUED INTEREST/.test(nm) && !cr) return "12E";
       if (/PROVISION FOR (INCOME )?TAX|INCOME TAX PAYABLE|PROVISION FOR CURRENT TAX/.test(nm) && line !== "dta" && line !== "dtl") return "7D";
@@ -107,7 +109,7 @@ const FinSt = (() => {
       case "share": return /PREF/.test(nm) ? "3B" : "3A";
       case "capital": return kind === "co" ? (/PREF/.test(nm) ? "3B" : "3A") : /DRAWING/.test(nm) ? "3R" : /CURRENT/.test(nm) ? "3Q" : "3P";
       case "reserves": return /PROFIT\s*&\s*LOSS|PROFIT AND LOSS|P\s*&\s*L\b|SURPLUS/.test(nm) ? "4A" : /PREMIUM/.test(nm) ? "4B" : /GENERAL RESERVE/.test(nm) ? "4C" : "4D";
-      case "ltb": return /BANK|TERM LOAN|VEHICLE LOAN|CAR LOAN|SECURED/.test(up) ? "30A" : "30B";
+      case "ltb": return /BANK|TERM LOAN|VEHICLE LOAN|CAR LOAN|\bSECURED/.test(up) ? "30A" : "30B";   // "\b": an "Unsecured Loans" group is not secured
       case "dtl": return "31A";
       case "oltl": return "32A";
       case "ltp": return /GRATUITY/.test(nm) ? "5A" : /LEAVE/.test(nm) ? "5B" : "5D";
