@@ -1285,10 +1285,19 @@ const FSX = (() => {
     const out = [], nm = M.nm, cells = M.cellsByName, V = n => nm[n] || 0, rup = p => "₹" + money(p), face = M.face2 || X.faceRows(M);
     const note = k => M.notes.find(n => n.key === k && n.print);
     const totalRow = t => t.rows.find(r => r.k === "t");
-    const add = (id, items, level) => out.push({id, title: X.CHECKS[id - 1][1], level: level || "error", ok: !items.length, items});
+    // the checks never throw (Sentry FINCOM-APP-STAGING-2: a firm's plain capital note had no 8th column). A row or column
+    // that is not there means "can't check": soft(id, why) keeps a note, and a check with only such notes is a warning
+    // marked skipped, never a failure; guard(id, fn) turns anything else that throws inside a check into the same.
+    const softs = {}, soft = (id, why) => { (softs[id] = softs[id] || []).push(why + ": could not be checked (a row or column is missing)"); };
+    const cell = (r, i) => r && r.c && r.c[i] && typeof r.c[i] === "object" ? r.c[i] : null;
+    const add = (id, items, level) => { const s = softs[id] || [];
+      out.push(items.length || !s.length ? {id, title: X.CHECKS[id - 1][1], level: level || "error", ok: !items.length && !s.length, items: items.concat(s)}
+        : {id, title: X.CHECKS[id - 1][1], level: "warn", ok: false, skipped: true, items: s}); };
+    const guard = (id, fn) => { try { fn(); } catch (e){ if (out.some(c => c.id === id)) return;
+      out.push({id, title: X.CHECKS[id - 1][1], level: "warn", ok: false, skipped: true, items: ["Could not be checked: the statements are missing a row or table this check reads"]}); } };
     const allText = (heads) => { const o = []; M.notes.filter(n => n.print).forEach(n => n.paras.forEach(p => { if (p.t === "h" && !heads) return; o.push({n, x: X.resolveRefs(p.x, M), raw: p.x, t: p.t}); })); return o; };
     // 1
-    { const it = [];
+    guard(1, () => { const it = [];
       ["CY", "PY"].forEach(y => {
         const gt0 = face.bs.findIndex(z => z.k === "gt"), el = sum(face.bs.slice(0, gt0).filter(r => r.k === "r" && r.c[0]), r => r.c[y === "CY" ? 0 : 1].v);
         const gt1 = face.bs.findIndex((z, i) => z.k === "gt" && i > gt0), asRows = face.bs.slice(gt0 + 1, gt1).filter(r => r.k === "r" && r.c[0]), as = sum(asRows, r => r.c[y === "CY" ? 0 : 1].v);
@@ -1300,9 +1309,9 @@ const FSX = (() => {
         // each section subtotal
         let start = 0; face.bs.forEach((r, i) => { if (r.k === "h") start = i; if (r.k === "s"){ const ls = face.bs.slice(start, i).filter(z => z.k === "r" && z.c[0]); const s2 = sum(ls, z => z.c[y === "CY" ? 0 : 1].v); if (s2 !== r.c[y === "CY" ? 0 : 1].v) it.push(y + ": a section subtotal " + rup(r.c[y === "CY" ? 0 : 1].v) + " is not the sum of its lines " + rup(s2)); } });
       });
-      add(1, it); }
+      add(1, it); });
     // 2
-    { const it = [];
+    guard(2, () => { const it = [];
       ["CY", "PY"].forEach((y, j) => {
         const get = t => (face.pl.find(r => r.t === t) || {c: [{v: 0}, {v: 0}]}).c[j].v, lines = ks => sum(face.pl.filter(r => ks.includes(r.note) && r.k === "r"), r => r.c[j].v);
         const inc = get("Total Income"), ex = get("Total Expenses"), pbe = get("Profit before Exceptional & Extraordinary items, and Tax"), pbx = get("Profit before Extraordinary items, and Tax"), pbt = get("Profit before Tax"), pat = get("Profit (Loss) for the Year");
@@ -1315,9 +1324,9 @@ const FSX = (() => {
         if (pat !== pbt - tax) it.push(y + ": PAT " + rup(pat) + " is not PBT less tax " + rup(pbt - tax));
         if (tax !== V("L_tax_" + y)) it.push(y + ": the tax lines do not add to the tax expense");
       });
-      add(2, it); }
+      add(2, it); });
     // 3
-    { const it = [];
+    guard(3, () => { const it = [];
       M.notes.filter(n => n.print && n.lines.length).forEach(n => {
         const ks = n.lines;
         if (n.itBlock){
@@ -1339,13 +1348,15 @@ const FSX = (() => {
         if (!tr) return;
         ["CY", "PY"].forEach((y, j) => {
           const want = sum(ks, k => V("L_" + k + "_" + y)), col = n.key === "capital" || n.key === "current" ? 7 : j;
-          const got = n.key === "capital" || n.key === "current" ? (t.rows.find(r => r.t === (y === "CY" ? "Current Year" : "Previous Year")) || tr).c[7].v : tr.c[col].v;
+          const gc = n.key === "capital" || n.key === "current" ? cell(t.rows.find(r => r.t === (y === "CY" ? "Current Year" : "Previous Year")) || tr, 7) : cell(tr, col);
+          if (!gc){ soft(3, "Note " + n.no + " " + n.title + " (" + y + "): the total"); return; }
+          const got = gc.v;
           if (got !== want) it.push("Note " + n.no + " " + n.title + " (" + y + "): Total " + rup(got) + " differs from the face " + rup(want) + " by " + rup(got - want));
         });
       });
-      add(3, it); }
+      add(3, it); });
     // 4
-    { const it = [];
+    guard(4, () => { const it = [];
       X.allCells(M).forEach(z => {
         if (!z.c.f || z.c.v == null) return;
         let v; try { v = X.evalFormula(M, z.c.f, z.ctx); } catch (e){ it.push(z.where + ", " + (z.label || "a row") + ": the formula does not work (" + e.message + ")"); return; }
@@ -1362,9 +1373,9 @@ const FSX = (() => {
         const b = note("exp") && note("exp").tables.find(t => t.auditorRem), ar = (note("exp").tables[0].rows.find(r => r.t === "Auditor's Remuneration") || {c: [{v: 0}]}).c[0].v;
         if (b && totalRow(b).c[0].v !== ar) it.push("Note " + note("exp").no + ": the auditor's remuneration break-up " + rup(totalRow(b).c[0].v) + " does not equal the line " + rup(ar));
       }
-      add(4, it); }
+      add(4, it); });
     // 5
-    { const it = [];
+    guard(5, () => { const it = [];
       // each ledger; the stock ledgers, the surplus and the partners' accounts take last year's profit or closing stock
       const special = x => x.line === "inv" || (x.line === "reserves" && x.sub === "Surplus") || (M.firm && (x.line === "capital" || x.line === "current"));
       M.L.filter(x => x.hasPy && !x.pl && !special(x) && x.po + x.pd - x.pc !== x.o).forEach(x => it.push(x.l + ": last year's closing " + rup(x.po + x.pd - x.pc) + " is not this year's opening " + rup(x.o)));
@@ -1381,12 +1392,13 @@ const FSX = (() => {
       const ppe = note("ppe");
       if (ppe && !ppe.itBlock){ const c = ppe.tables.find(t => t.far === "cy"), p2 = ppe.tables.find(t => t.far === "py");
         if (c && p2) c.rows.forEach((r, i) => { if (r.k !== "r") return; const q = p2.rows.find(z => z.t === r.t && z.k === "r"); if (!q) return;
+          if (![cell(q, 3), cell(q, 7), cell(r, 0), cell(r, 4)].every(Boolean)){ soft(5, "Note " + ppe.no + " " + r.t + ": the opening against last year's closing"); return; }
           if (q.c[3].v !== r.c[0].v) it.push("Note " + ppe.no + " " + r.t + ": the previous period's closing gross block " + rup(q.c[3].v) + " is not the current period's opening " + rup(r.c[0].v));
           if (q.c[7].v !== r.c[4].v) it.push("Note " + ppe.no + " " + r.t + ": the previous period's closing depreciation " + rup(q.c[7].v) + " is not the current period's opening " + rup(r.c[4].v)); }); }
       if (ppe && ppe.itBlock){ const cy = ppe.cyBlocks || [], py = ppe.pyBlocks || []; cy.forEach(b => { const q = py.find(z => z.b === b.b); if (q && q.cells[9].v !== b.cells[0].v) it.push("Note " + ppe.no + " " + b.b + ": the previous year's closing WDV " + rup(q.cells[9].v) + " is not this year's opening " + rup(b.cells[0].v)); }); }
-      add(5, it); }
+      add(5, it); });
     // 6
-    { const it = [];
+    guard(6, () => { const it = [];
       ["tp", "tr"].forEach(k => { const n = note(k); if (!n) return;
         n.tables.filter(t => t.ageing).forEach(t => { const y = t.y === "cy" ? "CY" : "PY";
           t.rows.forEach(r => { const last = r.c.length - 1, s2 = sum(r.c.slice(0, last), c => c.v); if (s2 !== r.c[last].v) it.push(t.title + ", " + r.t + ": the buckets add to " + rup(s2) + ", not " + rup(r.c[last].v)); });
@@ -1399,9 +1411,9 @@ const FSX = (() => {
         if (n.ageMissing && !M.firm) it.push(n.title + ": the ageing table is not given");
       });
       function r0len(t){ return t.cols.length - 2; }
-      add(6, it); }
+      add(6, it); });
     // 7
-    { const it = [], n = note("share");
+    guard(7, () => { const it = [], n = note("share");
       if (n && n.share){ const s = n.share;
         ["CY", "PY"].forEach(y => { const cnt = y === "CY" ? s.cyN.n : s.pyN.n, fv = y === "CY" ? s.cyFv.v : s.pyFv.v, faceV = V("L_share_" + y), rc = n.tables[1], recon = rc.rows[3].c[y === "CY" ? 1 : 3].v;
           if (Math.round(cnt * fv) !== faceV) it.push(y + ": " + cnt.toLocaleString("en-IN") + " shares x ₹" + rs(fv) + " = " + rup(Math.round(cnt * fv)) + ", but the face shows " + rup(faceV));
@@ -1409,13 +1421,13 @@ const FSX = (() => {
         if (s.cyFv.v !== s.pyFv.v && !(n.tables[1].rows[1].c[0].v)) it.push("The face value changed from ₹" + rs(s.pyFv.v) + " to ₹" + rs(s.cyFv.v) + " with no shares issued: a split or consolidation must be shown in the reconciliation");
         if (n.tables[1].rows[0].c[0].v !== s.pyN.n) it.push("The reconciliation's opening number " + n.tables[1].rows[0].c[0].v + " is not last year's closing " + s.pyN.n);
       }
-      add(7, it); }
+      add(7, it); });
     // 8
-    { const it = [], sp = M.res.CY["Securities Premium"], n = note("share");
+    guard(8, () => { const it = [], sp = M.res.CY["Securities Premium"], n = note("share");
       if (sp && sp.add.v > 0 && !(n && n.tables[1] && n.tables[1].rows[1].c[0].v > 0)) it.push("A securities premium of " + rup(sp.add.v) + " was added in the year, but the share capital reconciliation shows no shares issued");
-      add(8, it); }
+      add(8, it); });
     // 9
-    { const it = [], n = note("reserves");
+    guard(9, () => { const it = [], n = note("reserves");
       if (n){ const t = n.tables[0];
         t.rows.forEach((r, i) => { if (r.k === "r" && (r.c || []).some(c => c && c.v) && !String(r.t || "").trim()) it.push("Note " + n.no + ": an adjustment of " + rup((r.c[0] || {}).v || (r.c[1] || {}).v) + " in the surplus has no caption"); });
         ["CY", "PY"].forEach((y, j) => { const R = M.res[y];
@@ -1424,13 +1436,13 @@ const FSX = (() => {
           if (totalRow(t).c[j].v !== V("L_reserves_" + y)) it.push(y + ": the closing reserves are not the face");
           const pr = t.rows.find(r => /Net Profit/.test(r.t)); if (pr && pr.c[j].v !== V("T_pat_" + y)) it.push(y + ": the profit in reserves " + rup(pr.c[j].v) + " is not the profit for the year " + rup(V("T_pat_" + y))); });
       }
-      add(9, it); }
+      add(9, it); });
     // 10
-    { const it = [];
+    guard(10, () => { const it = [];
       if (M.firm && M.partners.length){
         const sh = sum(M.partners, p => Number(p.share) || 0); if (Math.abs(sh - 100) > 1e-6) it.push("The partners' shares add to " + sh + "%, not 100%");
-        ["capital", "current"].forEach(k => { const n = note(k); if (!n) return; const t = n.tables[0];
-          t.rows.filter(r => r.k === "r").forEach(r => { const s2 = sum(r.c.slice(1, 7), c => c.v); if (s2 !== r.c[7].v) it.push(n.title + ", " + r.t + ": opening + introduced + remuneration + interest - withdrawal + profit = " + rup(s2) + ", not " + rup(r.c[7].v)); }); });
+        ["capital", "current"].forEach(k => { const n = note(k); if (!n) return; const t = n.tables[0]; if (!t || !t.rows) return soft(10, n.title);
+          t.rows.filter(r => r.k === "r").forEach(r => { if (![1, 2, 3, 4, 5, 6, 7].every(i => cell(r, i))) return soft(10, n.title + ", " + r.t); const s2 = sum(r.c.slice(1, 7), c => c.v); if (s2 !== r.c[7].v) it.push(n.title + ", " + r.t + ": opening + introduced + remuneration + interest - withdrawal + profit = " + rup(s2) + ", not " + rup(r.c[7].v)); }); });
         ["CY", "PY"].forEach(y => {
           const rows = M.pAcc.cap.concat(M.pAcc.cur).filter(r => r.y === y), pr = sum(rows, r => r.profit.v);
           if (rows.length && pr !== V("T_pat_" + y)) it.push(y + ": the partners' profit shares add to " + rup(pr) + ", not the profit " + rup(V("T_pat_" + y)));
@@ -1442,9 +1454,9 @@ const FSX = (() => {
           if (rows.length && int !== plInt) it.push(y + ": interest in the partners' accounts " + rup(int) + " is not the P&L's " + rup(plInt));
         });
       } else if (M.firm && M.kind !== "proprietor") it.push("The partners (names, shares, PAN and their capital and current account ledgers) are not given");
-      add(10, it); }
+      add(10, it); });
     // 11
-    { const it = [], n = note("ppe");
+    guard(11, () => { const it = [], n = note("ppe");
       if (n && !n.itBlock){
         if (n.farFromTb) it.push("No fixed asset register: the note shows the written down values from the ledgers; give the register (Details for you)");
         n.tables.filter(t => t.far).forEach(t => t.rows.filter(r => r.k === "r").forEach(r => {
@@ -1471,9 +1483,9 @@ const FSX = (() => {
         const dc = sum(n.cyBlocks || [], b => b.cells[6].v + b.cells[8].v); if ((n.cyBlocks || []).length && dc !== V("L_dep_CY")) it.push("Depreciation in the blocks " + rup(dc) + " is not the P&L depreciation " + rup(V("L_dep_CY")) + " (difference " + rup(dc - V("L_dep_CY")) + ")");
         if (!(n.cyBlocks || []).length) it.push("The income-tax blocks are not given (Details for you)");
       }
-      add(11, it); }
+      add(11, it); });
     // 12
-    { const it = [];
+    guard(12, () => { const it = [];
       ["ltb", "stb"].forEach(k => { const n = note(k); if (!n) return; const t = n.tables.find(z => z.loanTable);
         const ls = (M.det.loans || []).filter(x => (x.table || "") === k || (!x.table && (M.L.find(z => z.l === x.ledger) || {}).line === k));
         ls.forEach(x => { const lz = M.L.find(z => z.l === x.ledger); if (lz && lz.line !== k) it.push(n.title + ": the repayment terms list " + (x.desc || x.ledger) + ", which is classified under " + X.line(lz.line).face);
@@ -1482,9 +1494,9 @@ const FSX = (() => {
         else if (V("L_" + k + "_CY")) it.push(n.title + ": the repayment terms are not given (Details for you)");
         if (k === "ltb" && M.L.some(x => x.line === "ltb" && /CURRENT MATURIT/i.test(x.l))) it.push("Current maturities of long-term debt are in long-term borrowings: show them under short-term borrowings");
       });
-      add(12, it); }
+      add(12, it); });
     // 13
-    { const it = [];
+    guard(13, () => { const it = [];
       if (V("L_inv_CY") || V("L_inv_PY")){
         const S = M.stockCls, cl = sum(X.SUBS.inv, k => S[k].close.v), op = sum(X.SUBS.inv, k => S[k].open.v), pyc = sum(X.SUBS.inv, k => S[k].pyClose.v);
         if (cl !== V("L_inv_CY")) it.push("The closing stock in the notes " + rup(cl) + " is not the face " + rup(V("L_inv_CY")));
@@ -1492,9 +1504,9 @@ const FSX = (() => {
         if (op !== pyc) it.push("The opening stock " + rup(op) + " (the stock ledgers at the start of the year) is not last year's closing " + rup(pyc));
         const ch = note("chg"); if (ch){ const t = ch.tables[0], c = t.rows[1].c[0].v, want = sum(["Work-in-progress", "Finished Goods", "Stock-in-trade"], k => S[k].close.v); if (c !== want) it.push("The change in inventories note's closing " + rup(c) + " is not the inventories note " + rup(want)); }
       }
-      add(13, it); }
+      add(13, it); });
     // 14
-    { const it = [];
+    guard(14, () => { const it = [];
       ["CY", "PY"].forEach(y => {
         const prov = R0(-sum(M.L.filter(x => x.line === "stp" && x.sub === "Provision for Taxation"), x => y === "CY" ? x.cy : x.py)), cur = V("L_taxcur_" + y);
         const adv = R0(sum(M.L.filter(x => x.line === "stla" && x.sub === "Advance Tax and TDS"), x => y === "CY" ? x.cy : x.py));
@@ -1503,9 +1515,9 @@ const FSX = (() => {
       });
       const ddt = (V("L_dta_CY") - V("L_dta_PY")) - (V("L_dtl_CY") - V("L_dtl_PY")), chg = V("L_taxdef_CY");
       if (-ddt !== chg) it.push("The movement in deferred tax on the balance sheet " + rup(-ddt) + " is not the deferred tax charge " + rup(chg));
-      add(14, it); }
+      add(14, it); });
     // 15
-    { const it = [], n = note("eps");
+    guard(15, () => { const it = [], n = note("eps");
       if (n){ const t = n.tables[0], g = l => t.rows.find(r => r.t.startsWith(l));
         ["CY", "PY"].forEach((y, j) => {
           const a = g("Earnings attributable").c[j].v, b = g("Weighted average number of equity shares").c[j].v, basic = g("Basic").c[j].v, dil = g("Diluted").c[j].v, e = g("Dilutive potential").c[j].v, c = g("Adjustments to earnings").c[j].v;
@@ -1516,18 +1528,18 @@ const FSX = (() => {
         const s = note("share"); if (s && s.share && n.faceValue !== s.share.cyFv.v) it.push("The face value in EPS is not Note " + s.no + "'s");
         const fl = face.pl.find(r => /^Basic \(Face value/.test(r.t)); if (fl && s && s.share && !fl.t.includes("₹ " + rs(s.share.cyFv.v) + " each")) it.push("The face value on the face of the P&L is not Note " + s.no + "'s");
       }
-      add(15, it); }
+      add(15, it); });
     // 16
-    { const it = [];
+    guard(16, () => { const it = [];
       (M.ratioList || []).forEach(r => {
         ["CY", "PY"].forEach(y => { const z = r[y]; const v = z.den.v ? z.num.v / z.den.v : null; if ((v == null) !== (z.v == null) || (v != null && Math.abs(v - z.v) > 1e-9)) it.push(r.name + " (" + y + "): shown " + z.v + ", recomputed " + v); });
         const want = r.CY.v != null && r.PY.v != null && r.PY.v !== 0 ? (r.CY.v - r.PY.v) / Math.abs(r.PY.v) : null;
         if ((want == null) !== (r.variance == null) || (want != null && Math.abs(want - r.variance) > 1e-9)) it.push(r.name + ": the % variance is not (CY - PY) / PY");
         if (want != null && Math.abs(want) > 0.25 && !String(r.reason || "").trim()) it.push(r.name + ": varies by " + pct2(want) + " and needs an explanation (Details for you)");
       });
-      add(16, it); }
+      add(16, it); });
     // 17
-    { const it = [], n = note("rp");
+    guard(17, () => { const it = [], n = note("rp");
       if (n){ const c = n.tables.find(t => t.rpBal);
         (c ? c.rows : []).forEach(r => { if (!r.ledger) return; const lz = M.L.find(z => z.l === r.ledger); if (!lz) { it.push(r.t + ": the ledger " + r.ledger + " is not in the books"); return; }
           const s = X.line(lz.line) && X.line(lz.line).side === "L" ? -1 : 1;
@@ -1535,17 +1547,17 @@ const FSX = (() => {
       }
       const listed = new Set((M.det.rpLoans || []).map(x => x.ledger));
       M.L.filter(x => ["stla", "ltla"].includes(x.line) && x.sub === "Loans to related parties" && (x.cy || x.py) && !listed.has(x.l)).forEach(x => it.push(x.l + " (" + rup(x.cy) + ") is a loan to a related party in " + X.line(x.line).face + ", but it is not in the table of loans to promoters, directors, KMPs and related parties"));
-      add(17, it); }
+      add(17, it); });
     // 18
-    { const it = [], nums = M.notes.filter(n => n.print).map(n => n.no);
+    guard(18, () => { const it = [], nums = M.notes.filter(n => n.print).map(n => n.no);
       nums.forEach((v, i) => { if (v !== i + 1) it.push("Note numbers are not in sequence at " + v); });
       const refs = new Set(), faceNos = [];
       face.bs.concat(face.pl).forEach(r => { if (r.note && r.note !== "-"){ refs.add(r.note); if (!M.noteNo[r.note]) it.push("The face refers to a note for " + (r.t || r.note) + " that does not exist"); else faceNos.push(M.noteNo[r.note]); } });
       M.notes.filter(n => n.print && !["gi", "sap", "other", "ratios", "ari", "rp", "eps"].includes(n.key)).forEach(n => { const ref = n.lines.some(k => refs.has(k)) || refs.has(n.key); if (!ref && !n.nil) it.push("Note " + n.no + " " + n.title + " is printed but not referred to on the face, and is not nil"); });
       if (M.co && (refs.has("gi") || refs.has("sap"))) {}
-      add(18, it); }
+      add(18, it); });
     // 19
-    { const it = [];
+    guard(19, () => { const it = [];
       allText().forEach(({n, x}) => {
         const re = /Refer Note\s*([^.;)]*)/gi; let m;
         while ((m = re.exec(x))){ const parts = m[1].split(/[,&]|and/).map(s => s.trim()).filter(s => s !== ""); if (!parts.length) { it.push("Note " + n.no + ": \"Refer Note\" with no number"); continue; }
@@ -1553,32 +1565,32 @@ const FSX = (() => {
       });
       // the ARI's loans clause must point to the loans and advances note
       const ari = note("ari"); if (ari){ ari.paras.filter(p => p.ari === "rpLoans").forEach(p => { const x = X.resolveRefs(p.x, M), m = /Refer Note (\d+)/.exec(x); if (m && +m[1] !== M.noteNo.stla && +m[1] !== M.noteNo.ltla) it.push("Note " + ari.no + ": the loans to promoters and directors point to Note " + m[1] + ", not the loans and advances note " + (M.noteNo.stla || "")); }); }
-      add(19, it); }
+      add(19, it); });
     // 20
-    { const it = [], seen = {};
+    guard(20, () => { const it = [], seen = {};
       allText().forEach(({n, x}) => { const k = x.trim().toLowerCase().replace(/\s+/g, " "); if (k.length < 40) return; if (seen[k]) it.push("Note " + n.no + " repeats a paragraph already in Note " + seen[k].no + ": \"" + x.slice(0, 60) + "...\""); else seen[k] = n;
         const ss = x.replace(/\.\s+/g, ".\u0000").split("\u0000").map(s => s.trim().toLowerCase()).filter(s => s.length > 40); const d = ss.find((s, i) => ss.indexOf(s) !== i); if (d) it.push("Note " + n.no + " repeats a sentence: \"" + d.slice(0, 60) + "...\""); });
-      add(20, it); }
+      add(20, it); });
     // 21
-    { const it = [];
+    guard(21, () => { const it = [];
       allText().forEach(({n, x}) => { const s = x.trim(); if (!s) return;
         if (/\b(is|are|of|the|at|by|to|and|was)\s*[.,:]?$/i.test(s) || /\b(is|are)\s*\.$/i.test(s) || !/[.:;)%"']$/.test(s) && s.length > 30) it.push("Note " + n.no + ": a sentence is cut short: \"..." + s.slice(-50) + "\""); });
-      add(21, it); }
+      add(21, it); });
     // 22
-    { const it = [], k = M.kind;
+    guard(22, () => { const it = [], k = M.kind;
       const wrong = k === "company" ? /\b(the Firm|Partners?'? (capital|current)|the Proprietor|Proprietor's)\b/i : k === "proprietor" ? /\b(the Company|the Firm|Board of Directors|shareholders?)\b/ : /\b(the Company|the Proprietor|Proprietor's|Board of Directors|shareholders?)\b/;
       allText().forEach(({n, x}) => { const m = wrong.exec(x); if (m) it.push("Note " + n.no + " says \"" + m[0] + "\", but this is a " + (X.KINDS[k] || k)); });
-      add(22, it); }
+      add(22, it); });
     // 23
-    { const it = [];
+    guard(23, () => { const it = [];
       M.notes.filter(n => n.print).forEach(n => n.tables.forEach(t => {
         const pyCols = t.cols.map((c, i) => [c, i]).filter(([c]) => /March 31, \d{4}/.test(c.h) && c.h.includes(M.D.pyAsAt.slice(-4)) && !c.h.includes(M.D.cyAsAt.slice(-4)));
         if (!pyCols.length) return;
         t.rows.forEach(r => pyCols.forEach(([c, i]) => { const cy = r.c && r.c[i - 1 - (pyCols.length > 1 ? 1 : 1)]; const v = r.c && r.c[i - 1]; if (r.k !== "h" && r.c && v === null && r.c.some(z => z && typeof z === "object" && z.v)) it.push("Note " + n.no + (t.title ? " (" + t.title + ")" : "") + ", " + r.t + ": the previous-year figure is blank"); }));
       }));
-      add(23, it); }
+      add(23, it); });
     // 24
-    { const it = [], s = M.det.sign || {}, a = s.auditor || {};
+    guard(24, () => { const it = [], s = M.det.sign || {}, a = s.auditor || {};
       [["frn", "the auditor's firm registration number (FRN)"], ["partner", "the signing partner"], ["mno", "the membership number (M.No)"], ["udin", "the UDIN"], ["date", "the date"], ["place", "the place"]].forEach(([k, l]) => { if (!String(a[k] || "").trim()) it.push("Missing: " + l); });
       if (a.mno && !/^\d{6}$/.test(String(a.mno))) it.push("The membership number " + a.mno + " is not 6 digits");
       if (a.udin && !/^\d{8}[A-Z0-9]{10}$/i.test(String(a.udin))) it.push("The UDIN " + a.udin + " is not in the 18-character form");
@@ -1586,9 +1598,9 @@ const FSX = (() => {
       if (M.co){ const ds = s.directors || []; if (ds.length < 2) it.push("Two directors are needed to sign"); ds.forEach(d => { if (!/^\d{8}$/.test(String(d.din || ""))) it.push("Director " + (d.name || "") + ": DIN \"" + (d.din || "") + "\" is not 8 digits"); }); }
       else { const ps = M.kind === "proprietor" ? [s.proprietor || {}] : (s.partners || M.partners || []); if (!ps.length) it.push("The partners who sign are not given");
         ps.forEach(p => { if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(String(p.pan || "").toUpperCase())) it.push((p.name || "A partner") + ": PAN \"" + (p.pan || "") + "\" is not in the form AAAAA9999A"); }); }
-      add(24, it); }
+      add(24, it); });
     // 25
-    { const it = [], D = M.D;
+    guard(25, () => { const it = [], D = M.D;
       if ((M.units || X.UNITS) !== X.UNITS) it.push("The units line \"" + M.units + "\" does not match the whole rupees used");
       M.notes.filter(n => n.print).forEach(n => n.tables.forEach(t => {
         if (!t.cols) return; const hs = t.cols.slice(1).map(c => c.h);
@@ -1598,20 +1610,20 @@ const FSX = (() => {
           if (!X.isPL(n.lines[0] || "x") && n.lines.length && m[1] === "Year ended") it.push("Note " + n.no + ": a balance sheet note's column says \"Year ended\""); });
         hs.forEach(h => { const m = /April 01, (\d{4})/.exec(h); if (m && +m[1] !== Number(M.fy) && +m[1] !== Number(M.fy) - 1) it.push("Note " + n.no + ": the opening column \"" + h + "\" is not April 01 of the year"); });
       }));
-      add(25, it); }
+      add(25, it); });
     // 26 (warnings)
-    { const it = [];
+    guard(26, () => { const it = [];
       const coh = R0(sum(M.L.filter(x => x.line === "cash" && /Cash on hand/.test(x.sub)), x => x.cy));
       if (coh > 200000 * 100 || (V("T_as_CY") && coh > V("T_as_CY") * 0.05 && coh > 50000 * 100)) it.push("Cash on hand of " + rup(coh) + " is large");
       const tr = note("tr"), at = tr && tr.tables.find(t => t.ageing && t.y === "cy");
       if (at){ const g = at.rows[0]; if (g && g.c[6].v && !g.c[0].v && !g.c[1].v) it.push("Trade receivables show nothing not due or under 6 months"); }
       M.notes.filter(n => n.print).forEach(n => n.tables.filter(t => t.ageing).forEach(t => t.rows.filter(r => r.k !== "t").forEach(r => { for (let i = 1; i < r.c.length - 1; i++) if (r.c[i].v && r.c[i].v === r.c[i - 1].v) it.push(t.title + ", " + r.t + ": the same amount " + rup(r.c[i].v) + " in two adjacent buckets"); })));
       M.L.filter(x => x.line === "ltb" && x.sub === "Unsecured|Term loans from banks" && x.cy).forEach(x => it.push(x.l + ": a term loan from a bank shown as unsecured"));
-      add(26, it, "warn"); }
+      add(26, it, "warn"); });
     // 27
-    { const it = [];
+    guard(27, () => { const it = [];
       (M.pages || []).forEach((p, i) => { const has = (p.items || []).some(k => k === "bs" || k === "pl" || k === "cf" || (M.notes.find(n => n.key === k && n.print) && (M.notes.find(n => n.key === k).tables.length || M.notes.find(n => n.key === k).paras.length))); if (!has) it.push("Page " + (i + 1) + " is blank"); });
-      add(27, it); }
+      add(27, it); });
     return out;
   };
   X.UNITS = "(All amounts in ₹, unless otherwise stated)";
