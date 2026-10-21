@@ -9,7 +9,7 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.5.exe |
-| Fingerprint | SHA-256 `2de26311a2827ced1a07b1406115bc2d93d01cd464c936826ab347b79b9fbfe8` (FinComBridge-Setup-2.4.5.exe, built 21-Oct-2026 15:11 IST; compare with the .sha256 file next to the setup); program SHA-256 `ed2e720b5d1fd5a8b7a2bb7198e24ade208f2096347fa60a31fadc21e2ab1961` |
+| Fingerprint | SHA-256 `952367840120be1e60c24432ac351ac3bab8eb49e1f0b8ceef7783f28c0ecc73` (FinComBridge-Setup-2.4.5.exe, built 21-Oct-2026 20:36 IST; compare with the .sha256 file next to the setup); program SHA-256 `7935478305ecd27d205e67563e8c3d63ceb6f6b433cd5a293741548b1604bbf1` |
 | Replaces | 2.4.4 (kept on the computer, so the tray can roll back to it) |
 | Published | not yet: the owner publishes after the report (migration 98 first, then tally-ingest, then the app and the setup) |
 
