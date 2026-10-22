@@ -97,6 +97,10 @@ run_my_mis_ui.py                      300  TDSDESK_SITE=../app/dist-test
 run_mis_schedule_ui.py                300  TDSDESK_SITE=../app/dist-test
 run_mis_run_server.py                 300
 run_migration100.py                   180
+run_migration101.py                   180
+run_autopost_rules.js                 120
+run_autopost_replay.js                120
+run_autopost_ui.py                    300  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
 run_mis_sales.py                      120

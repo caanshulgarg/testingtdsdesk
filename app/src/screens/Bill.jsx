@@ -7,6 +7,7 @@ import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
 import DateBox from "../parts/DateBox.jsx";
 import More from "../parts/More.jsx";
+import { AutoChip, AutoWhy, AutoUndo } from "../parts/AutoPost.jsx";
 import { Info } from "../parts/Answer.jsx";
 
 // ui-tidy (13-Oct-2026): how the bill was read, in one short line ("Read free from the PDF text · all checks passed ✓")
@@ -362,6 +363,9 @@ export default function BillDetail({ id }) {
       <section className="dhead" data-bill-head="">
         <div className="dhead-main">
           <h2>{x.vendorName || "New invoice"}</h2>
+          {(e.auto || e.autoHold) && <div className="dhead-line" data-bill-auto=""><AutoChip x={e} />{(e.auto || e.autoHold).prec && (e.auto || e.autoHold).prec.id && D().entries[(e.auto || e.autoHold).prec.id] && <>{" "}
+            <button className="linkbtn" onClick={() => { S.filter = "approved"; S.selected = (e.auto || e.autoHold).prec.id; render(); }}>Open the bill it copied</button></>} · <AutoUndo x={e} /></div>}
+          <AutoWhy x={e} />
           <div className="dhead-line">
             {e.readMode && <span className={"readby " + (isFree(e.readMode) ? "isfree" : /Claude/.test(e.readMode) ? "isclaude" : "")} data-read-line="">{readWords(e.readMode)}
               {e.checks && e.checks.length > 0 && e.status === "draft" ? <span className="read-ok"> · all checks passed ✓</span> : null}</span>}
