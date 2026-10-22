@@ -11,6 +11,7 @@
 // Writing a PAN back into the Tally ledger would be a Tally posting: not done here (a later option).
 import { useState } from "react";
 import { SideDrawer } from "./Shell.jsx";
+import { useDraft } from "../../parts/DetailDrawer.jsx";
 
 const day = (iso) => { try { return fmtDateTime(iso); } catch (e) { return String(iso || "").slice(0, 10); } };
 
@@ -42,9 +43,10 @@ export function PanConflict({ party, c }) {
 }
 
 export function PanPaste() {
-  const [t, setT] = useState(""), [said, setSaid] = useState(null);
-  const close = () => { S.tdsPanPaste = false; setT(""); setSaid(null); render(); };
-  const run = (text) => { const r = TDSPanFix.bulk(text); setSaid(r); if (r.n) { toast(r.n + " PAN" + (r.n === 1 ? "" : "s") + " saved for the client."); render(); } };
+  // what is pasted and not saved stays as a draft when the panel closes (next-fix-drawers); saved in full, it is cleared
+  const dr = useDraft("pan-paste", S.tdsPanPaste ? S.coId || "client" : null), t = dr.value || "", setT = (v) => dr.set(v), [said, setSaid] = useState(null);
+  const close = () => { S.tdsPanPaste = false; setSaid(null); render(); };
+  const run = (text) => { const r = TDSPanFix.bulk(text); setSaid(r); if (r.n && !r.why.length) dr.clear(); if (r.n) { toast(r.n + " PAN" + (r.n === 1 ? "" : "s") + " saved for the client."); render(); } };
   const excel = async (f) => {
     if (!f) return;
     try {
@@ -54,7 +56,7 @@ export function PanPaste() {
       run(rows.map((r) => { const pi = r.findIndex((x) => /^[A-Za-z]{5}\d{4}[A-Za-z]$/.test(String(x || "").trim())); return pi > 0 ? String(r[pi === 1 ? 0 : pi - 1]).trim() + "\t" + String(r[pi]).trim() : String(r[0]) + "\t" + String(r[1]); }).join("\n"));
     } catch (e) { setSaid({ n: 0, why: ["Could not read this file: " + ((e && e.message) || e)] }); }
   };
-  return <SideDrawer open={!!S.tdsPanPaste} onClose={close} kind="pan-paste" title="Paste PANs" description="One deductee a line: the name as in Tally, then its PAN (a comma or a tab between, as copied from Excel)">
+  return <SideDrawer open={!!S.tdsPanPaste} onClose={close} kind="pan-paste" draft={dr} title="Paste PANs" description="One deductee a line: the name as in Tally, then its PAN (a comma or a tab between, as copied from Excel)">
     <div data-pan-paste="">
       <textarea value={t} rows={10} style={{ width: "100%", fontFamily: "var(--font-mono, monospace)" }} aria-label="Names and PANs" placeholder={"ZZ Consultant 17\tAABCZ9999K\nRavi Menon, ABCPM1234R"} onChange={(ev) => setT(ev.target.value)} />
       <div className="row" style={{ gap: 8, margin: "8px 0", flexWrap: "wrap", alignItems: "center" }}>

@@ -9,6 +9,7 @@
 // rate explained. Saved for the deductee (TDSPanFix.set): every deduction of it, the 206AA rate and the remark C follow.
 import { useState } from "react";
 import { SideDrawer } from "./Shell.jsx";
+import { useDraft } from "../../parts/DetailDrawer.jsx";
 import { F16Link } from "./Files.jsx";
 import More from "../../parts/More.jsx";
 import { useCF, Th } from "./ColF.jsx";
@@ -70,14 +71,17 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
 }
 
 export function DeducteeDetails({ list, form, fy, q, locked, issueOf = {} }) {
-  const p = list.find((x) => x.key === S.tdsDee) || null, [pan, setPan] = useState(null), [name, setName] = useState(null);
-  const close = () => { S.tdsDee = ""; setPan(null); setName(null); render(); };
+  // what is typed and not saved stays as this deductee's draft when the panel closes (next-fix-drawers); Save clears it
+  const p = list.find((x) => x.key === S.tdsDee) || null, dr = useDraft("deductee", p ? form + "|" + p.key : null);
+  const pan = dr.value ? dr.value.pan : null, name = dr.value ? dr.value.name : null;
+  const setPan = (x) => dr.set({ pan: x, name }), setName = (x) => dr.set({ pan, name: x });
+  const [err, setErr] = useState(""), close = () => { S.tdsDee = ""; setErr(""); render(); };
   if (!p) return <SideDrawer open={false} onClose={close} kind="deductee" />;
   const v = pan == null ? p.pan : pan.toUpperCase().replace(/\s/g, ""), nm = name == null ? p.name : name;
   const probs = PANCheck.offline(v, p.party, list), st = PANCheck.status(v), ok = !v || Certs.validPan(v);
   const chOf = (id) => TDS.challans().find((c) => c.id === id);
   const why = p.rows.map((r) => issueOf[r.id]).filter(Boolean);
-  return <SideDrawer open onClose={close} kind="deductee" title="Deductee details" description={p.party + " · " + p.n + " deduction" + (p.n === 1 ? "" : "s") + " · TDS " + money(p.tds)}>
+  return <SideDrawer open onClose={close} kind="deductee" draft={dr} title="Deductee details" description={p.party + " · " + p.n + " deduction" + (p.n === 1 ? "" : "s") + " · TDS " + money(p.tds)}>
     <div data-dee-dialog="">
       <div className="ach-grid">
         <label className="ach-f">Name in the file<input type="text" value={nm} maxLength={75} aria-label="Name in the file" onChange={(ev) => setName(ev.target.value)} disabled={locked} /></label>
@@ -85,9 +89,10 @@ export function DeducteeDetails({ list, form, fy, q, locked, issueOf = {} }) {
       </div>
       <p className="note" data-dee-status=""><PanState st={st} />{" "}{Certs.validPan(v) && st.state === "unknown" && <button className="linkbtn" data-dee-check="" onClick={() => tdsPanCheck([v])}>Check on TRACES</button>}</p>
       {probs.length > 0 && <ul className="note" data-dee-probs="">{probs.map((x) => <li key={x.k} className={x.bad ? "bad" : "warn"} data-dee-prob={x.k}>{x.words}</li>)}</ul>}
+      {err ? <p className="note bad" role="alert" data-dee-err="">{err}</p> : null}
       {locked ? <p className="note">This return is marked filed: open a correction to change the PAN.</p>
         : <div className="row" style={{ gap: 8, margin: "4px 0 10px" }}>
-          <button className="btn small primary" data-dee-save="" disabled={!ok} onClick={() => { const r = tdsDeducteeSet(p.party, { pan: v, name: nm }); if (r.ok) close(); }}>Save for all {p.n} deduction{p.n === 1 ? "" : "s"}</button>
+          <button className="btn small primary" data-dee-save="" disabled={!ok} onClick={() => { const r = tdsDeducteeSet(p.party, { pan: v, name: nm }); if (r.ok) { dr.clear(); close(); } else setErr(r.why || "Not saved."); }}>Save for all {p.n} deduction{p.n === 1 ? "" : "s"}</button>
           <button className="btn small" onClick={close}>Cancel</button></div>}
       <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Section</th><th className="n">Paid</th><th className="n">TDS</th><th className="n">Rate</th><th>Challan</th></tr></thead>
         <tbody>{p.rows.map((r) => { const c = r.challan ? chOf(r.challan) : null; return <tr key={r.id}><td className="dt">{day(r.date)}</td><td title={secTitle(r.section, fy)}>{secShort(r.section, fy)}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td><td className="n">{r.rate != null ? r.rate + "%" : ""}</td>
