@@ -210,12 +210,18 @@ jobs:
         timeout-minutes: 15
         run: |
           python -m playwright install chromium
-          # the packages Playwright's --with-deps would install; the runner image has most of them, and apt-get (bounded and
-          # retried by apt_install.sh) runs only for the missing ones
-          pkgs=$(python -m playwright install-deps --dry-run chromium | sed -n 's/.*--no-install-recommends \([^"]*\).*/\1/p' | tr ' ' '\n' | grep -v '^$' | sort -u)
-          [ -n "$pkgs" ] || { echo "::error::no package list from playwright install-deps --dry-run"; exit 1; }
-          missing=$(for q in $pkgs; do dpkg-query -W -f='${Status}\n' "$q" 2>/dev/null | grep -q '^install ok installed' || echo "$q"; done)
-          if [ -n "$missing" ]; then echo "missing:" $missing; tests/ci/apt_install.sh $missing; else echo "all $(echo "$pkgs" | wc -l) packages Chromium needs are installed"; fi
+          # the packages Playwright's --with-deps would install (its --dry-run's apt-get line, whatever the wrapping around it);
+          # the runner image has most of them, and apt-get (bounded and retried by apt_install.sh) runs only for the missing
+          # ones. Should the list not be readable, Playwright installs them itself: each try cut at 6 minutes, three tries
+          out=$(python -m playwright install-deps --dry-run chromium 2>&1 || true)
+          pkgs=$(printf '%s\n' "$out" | grep -oE 'apt-get install[^"&;|]*' | sed 's/^apt-get install//' | tr ' ' '\n' | grep -vE '^(-.*)?$' | sort -u)
+          if [ -z "$pkgs" ]; then
+            echo "::warning::no package list read from 'playwright install-deps --dry-run':"; printf '%s\n' "$out" | head -20
+            for try in 1 2 3; do timeout 360 python -m playwright install-deps chromium && break; echo "install-deps try $try failed or timed out"; done
+          else
+            missing=$(for q in $pkgs; do dpkg-query -W -f='${Status}\n' "$q" 2>/dev/null | grep -q '^install ok installed' || echo "$q"; done)
+            if [ -n "$missing" ]; then echo "missing:" $missing; tests/ci/apt_install.sh $missing; else echo "all $(echo "$pkgs" | wc -l) packages Chromium needs are installed"; fi
+          fi
           python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); p.chromium.launch().close(); p.stop(); print("Chromium starts")'
       - name: PostgreSQL 16 binaries (tests/pg_stand.py starts its own throwaway server from /usr/lib/postgresql/16/bin)
         timeout-minutes: 15
