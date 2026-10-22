@@ -64,7 +64,8 @@ function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: 
     if (p.startsWith("/rest/v1/tally_vouchers")) { const to = (p.match(/day=lte\.([\d-]+)/) || [])[1]; return json(/offset=0/.test(p) ? V.filter((v) => v.day <= to) : []); }
     if (p.startsWith("/rest/v1/tally_lines")) { const to = (p.match(/day=lte\.([\d-]+)/) || [])[1]; return json(/offset=0/.test(p) ? L.filter((v) => v.day <= to) : []); }
     if (p.startsWith("/rest/v1/tally_bills")) { const to = (p.match(/day=lte\.([\d-]+)/) || [])[1]; return json(/offset=0/.test(p) ? BL.filter((v) => v.day <= to) : []); }
-    if (p.startsWith("/rest/v1/tally_alerts")) { st.alerts.push(JSON.parse(init.body)); return json([{ id: st.alerts.length }]); }
+    // as on staging: tally_alerts.day is NOT NULL, kind one of gap / silent / summary
+    if (p.startsWith("/rest/v1/tally_alerts")) { const row = JSON.parse(init.body); if (!/^\d{4}-\d{2}-\d{2}$/.test(row.day || "") || !["gap", "silent", "summary"].includes(row.kind)) return json({ message: 'null value in column "day" of relation "tally_alerts" violates not-null constraint' }, 400); st.alerts.push(row); return json([{ id: st.alerts.length }]); }
     if (p.startsWith("/rest/v1/mis_runs")) { const r = { id: st.runs.length + 1, ...JSON.parse(init.body) }; st.runs.push(r); return json([r]); }
     return json({ message: "not stood in: " + p }, 404);
   };
@@ -83,7 +84,7 @@ Deno.test("the timer: a wrong key is refused; the right one runs what is due: th
   const run = st.runs[0];
   eq([run.status, run.email, run.by_whom, run.attempt, run.files.length], ["ok", "not set up", "timer", 1, 2], "the run logged: ok, email not set up");
   eq(run.period, { from: "20260901", to: "20260930" }, "last month, in IST (run on 1 October)");
-  assert(st.alerts.length === 1 && st.alerts[0].kind === "summary" && /Monthly MIS for Larkspur Made-up Events is ready/.test(st.alerts[0].words) && /email is not set up/.test(st.alerts[0].words) && st.alerts[0].data.what === "mis", "the bell row: " + JSON.stringify(st.alerts[0]));
+  assert(st.alerts.length === 1 && st.alerts[0].day === "2026-10-01" && st.alerts[0].kind === "summary" && /Monthly MIS for Larkspur Made-up Events is ready/.test(st.alerts[0].words) && /email is not set up/.test(st.alerts[0].words) && st.alerts[0].data.what === "mis", "the bell row: " + JSON.stringify(st.alerts[0]));
   eq(st.resend.length, 0, "no call to Resend without its key");
   // the files open, with the books' figures
   const wb = new ExcelJS.Workbook(); await wb.xlsx.load(st.uploads[0].bytes);

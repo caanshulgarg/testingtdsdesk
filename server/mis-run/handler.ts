@@ -24,6 +24,7 @@ const PERIOD_WORDS: Record<string, string> = { lastMonth: "last month", mtd: "th
 const enc = encodeURIComponent;
 const b64 = (u8: Uint8Array) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 const slug = (s: string) => String(s || "mis").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mis";
+export const istIso = (d: Date) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 export const istDay = (d: Date) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
 
 export function handler(deps: Deps) {
@@ -84,7 +85,7 @@ export function handler(deps: Deps) {
         if (r.ok) { email = "sent"; sent = to; } else { email = "failed"; }
       }
     }
-    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", words: title + (email === "sent" ? ", and emailed to " + sent.length + (sent.length === 1 ? " person" : " people") : email === "not set up" ? " (email is not set up yet: open it in My MIS)" : ""),
+    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", day: istIso(now()), words: title + (email === "sent" ? ", and emailed to " + sent.length + (sent.length === 1 ? " person" : " people") : email === "not set up" ? " (email is not set up yet: open it in My MIS)" : ""),
       data: { what: "mis", schedule: s.id, report: s.report_id, files, period: pr }, at: now().toISOString() });
     return (await insert("mis_runs", { firm_id: s.firm_id, client_id: s.client_id, schedule_id: s.id, report_id: s.report_id, report_name: def.name, period: pr, files, sent_to: sent, email, status: "ok", attempt, by_whom: by }))[0];
   }
@@ -96,7 +97,7 @@ export function handler(deps: Deps) {
     }
     const why = String((last && last.message) || last || "it failed").slice(0, 500);
     await insert("mis_runs", { firm_id: s.firm_id, client_id: s.client_id, schedule_id: s.id, report_id: s.report_id, report_name: s.report_name || "", status: "failed", error: why, attempt: 2, by_whom: by }).catch(() => null);
-    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", words: (s.report_name || "The scheduled MIS") + " could not be prepared: " + why, data: { what: "mis", schedule: s.id, failed: true }, at: now().toISOString() }).catch(() => null);
+    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", day: istIso(now()), words: (s.report_name || "The scheduled MIS") + " could not be prepared: " + why, data: { what: "mis", schedule: s.id, failed: true }, at: now().toISOString() }).catch(() => null);
     return { ok: false, error: why };
   }
 
