@@ -266,7 +266,8 @@ function blockRun(block, def, data, C, pr, ly) {
     const items = block.rows.items.length ? block.rows.items : GST_LINES.map((x) => x[0]);
     if (!data.gst) notes.push("GST by month is worked out from the GST returns' working in the books; it is not available for these books.");
     items.forEach((k) => {
-      const val = (c) => (c.pfrom ? null : data.gst ? r2(monthsIn(c).reduce((s, m) => s + N((data.gst[m] || {})[k]), 0)) : null);
+      // a figure the working does not have (the cloud's: paid from the bank, credit carried) is none, never nought
+      const val = (c) => { if (c.pfrom || !data.gst) return null; const xs = monthsIn(c).map((m) => (data.gst[m] || {})[k]); return xs.some((x) => x != null) ? r2(xs.reduce((s, x) => s + N(x), 0)) : null; };
       rows.push({ key: rowKey("gst", k), label: (GST_LINES.find((x) => x[0] === k) || [, k])[1], val, src: { gst: k } });
     });
   } else if (by === "ageing") {
