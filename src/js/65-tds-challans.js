@@ -46,15 +46,7 @@ const TDSCH = {
     // 194J and its parts (194JA technical, 194JB professional) are paid under one code by many
     return /^194J/.test(a) && /^194J/.test(b) && (a === "194J" || b === "194J");
   },
-  isTdsHead(c){ return !c.minorHead || String(c.minorHead) === "200"; },
   /* ---------- Tally bill-wise ---------- */
-  // the payment voucher a challan was made from, or one of the same date and amount
-  payVoucher(c){
-    const b = S.books || {};
-    if (!c || !b.vouchers) return null;
-    if (c.fromVoucher) return b.vouchers.find(v => v.id === c.fromVoucher) || null;
-    return null;
-  },
   // the deductions a payment voucher pays bill-wise: its TDS-ledger lines' Agst Ref names, met with the New Ref the
   // deduction put on the same ledger
   billIndex(){

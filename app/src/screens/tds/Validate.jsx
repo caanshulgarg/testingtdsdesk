@@ -106,6 +106,10 @@ export function checkReturn(fy, q, form) {
   // information: what goes elsewhere, and the matcher's notes
   if (form === "26Q") { const pr = TDS.portalRows().filter((r) => r.fy === fy && r.q === q).length; if (pr) out.info.push({ k: "portal", n: pr, words: s_(pr, "deduction goes on the portal (26QB / 26QC / 26QD), not this return", "deductions go on the portal (26QB / 26QC / 26QD), not this return"), review: true }); }
   mc.info.forEach((x, i) => out.info.push({ k: "i-" + x.k + i, n: 1, words: x.words }));
+  // the owner, 22-Oct-2026 (Leads Insurance, a blank 194J row of ₹0.71): an entry that adjusts a TDS ledger without a
+  // deductee (a round-off journal) is no deduction (TDS.adjOnly); each such entry said once here, a note, with the entry
+  let adj = []; try { adj = TDSAdj.list(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  adj.forEach((x, i) => out.info.push({ k: "tdsadj" + i, n: 1, words: x.words, adj: x.vid, act: ["Open the entry", () => TDSAdj.open(x)] }));
   out.drift = dn; out.n = out.errors.length + out.warnings.length;
   return out;
 }
@@ -120,7 +124,7 @@ function Line({ it, level, open, onOpen, form, review }) {
     if (it.step === "deductions" && it.k === "rate") { S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: Object.assign({}, (S.tdsFl || {}).deductions || {}, { rate: "q" }) }); S.tdsDedView = "table"; S.tdsDedCh = ""; }
     tdsTabGo(it.step); try { window.scrollTo(0, 0); } catch (e) { /* */ }
   };
-  return <li className={"vf-line " + level} data-val-item={it.k} data-val-level={level}>
+  return <li className={"vf-line " + level} data-val-item={it.k} data-val-level={level} data-tds-adj={it.adj}>
     <div className="vf-row">
       <span className="vf-ic" aria-hidden="true">{level === "error" ? "✕" : level === "warn" ? "!" : "i"}</span>
       <span className="vf-w">{it.words}</span>

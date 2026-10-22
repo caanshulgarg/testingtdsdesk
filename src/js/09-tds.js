@@ -18,7 +18,6 @@ const TDS = {
   isNew(fy){ return String(fy || "") >= this.NEW_FROM; },
   formNo(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? this.NEW_FORM[kind] : kind; },
   formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
-  formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
   certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
   // names only, for the return pages (redesign of 09-Oct-2026, app/src/screens/Books.jsx and TdsReturn.jsx): nothing here
   // is used by a figure or a file. From tax year 2026-27 a form is shown as the Income Tax Department's own PDFs head it,
@@ -216,7 +215,14 @@ const TDS = {
       Audit.under(e.l, /^(sales accounts|direct incomes|indirect incomes|duties & taxes|indirect expenses|direct expenses|purchase accounts)$/i))));
     return cr.length === 1 ? cr[0].l : "";
   },
-  // every voucher that carries a TDS ledger becomes one deduction row
+  // the owner, 22-Oct-2026 (Leads Insurance, 26Q Q1 2025-26: a blank 194J row, paid ₹35.50, TDS ₹0.71 at 2%): an entry
+  // with no deductee and nothing paid for adjusts the TDS ledger; it is no deduction (the amount paid was worked back from
+  // the ledger's rate). A Journal "TDS 94J 2%" Cr 0.71, Round Off Dr 0.71. Known by its lines, not by names: no party
+  // named, and every line of the ledger map's kinds for a TDS or TCS ledger, round-off, TDS interest or fee (tax_other),
+  // bank or cash (LedMaster: by their groups). Any other line (a party's: under Sundry Creditors or Debtors, with a bill
+  // allocation; an expense) keeps the entry a deduction. Said once on the return's Validate as a note (TDSAdj, src/js/89)
+  adjOnly(v){ return !v.party && v.ent.every(e => /^(roundoff|bank|tds|tcs|tax_other)/.test(Books.ledgerOf(e.l).kind)); },
+  // every voucher that carries a TDS ledger becomes one deduction row (but a TDS ledger's adjustment: TDS.adjOnly)
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
     const b = S.books;
@@ -224,7 +230,7 @@ const TDS = {
     const out = [];
     b.vouchers.forEach(v => {
       const L = Books.lines(v);
-      if (!L.tds.length) return;
+      if (!L.tds.length || this.adjOnly(v)) return;
       // the owner, 19-Oct-2026: a TDS entry of its own (the party debited, a TDS ledger credited, no expense in it; a journal
       // often names no party in Tally): its deductee is the party debited (TDSSep.partyOf, src/js/66), and what it was
       // deducted on is the bill it is matched to below, not the entry's own lines (the party's debit read as the amount
