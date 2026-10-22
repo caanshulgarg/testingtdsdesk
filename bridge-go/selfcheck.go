@@ -307,8 +307,19 @@ func selfCheckStart(company string, port int) (*scRun, error) {
 	if sl != nil {
 		return selfCheckSlices(r, sl, port)
 	}
+	// 2.4.5 ROUND 104 (g4, keepauto.go): the undated list only for a company Tally lists well inside 2 s, and never after
+	// Tally's window did not answer for 2 s while it listed: else not asked, recorded "not checked" with its words (the
+	// Day Book upload from the last good check)
+	if why := keepAutoBlocked(company, guid); why != "" {
+		keepAutoSay("Nightly check", company, guid, why)
+		r.stopped = cutRunes("Tally's list of changes is not asked for this company ("+why+")", 290)
+		return r, nil
+	}
 	// b. Tally's list of the entries changed above the mark (source B's request, the 2-second hard stop)
-	raw, err := invokeTally(recorderTC(nil), port, keepListAboveRequest(company, r.after), keepNum("RecorderBTimeoutSec", 5))
+	var took float64
+	watch := keepAutoWatch()
+	raw, err := invokeTally(recorderTC(func(s float64) { took = s }), port, keepListAboveRequest(company, r.after), keepNum("RecorderBTimeoutSec", 5))
+	keepAutoAfter("Nightly check", company, guid, watch(took))
 	return selfCheckListed(r, raw, err)
 }
 

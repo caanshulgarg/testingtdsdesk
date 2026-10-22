@@ -31,6 +31,9 @@ func bankSet(f *standTally, mid, day string) {
 // route's first check (nothing asked: it starts from here)
 func bankBridge(t *testing.T, extra string) (string, *standTally, *standCloud) {
 	t.Helper()
+	// 2.4.5 ROUND 104 (keepauto.go): NWS144's counter (54,392) stands here for a company the route lists within 2 s; the
+	// size guard itself is tested in r245keep_test.go
+	keepAutoMaxSet(t, 1<<40)
 	p, f, c := r222bBridge(t, `,"BankGapMs":0,"BankNightGapMs":0`+extra)
 	f.mu.Lock()
 	f.alter = 54392
@@ -329,6 +332,7 @@ func TestBankDateNightStopAndPosting(t *testing.T) {
 // with its new number and its bank date
 func TestBankDateNoDoubleReadWithRenumber(t *testing.T) {
 	p, f, c := renumBridge(t, `,"BankGapMs":0`)
+	keepAutoMaxSet(t, 1<<40) // 2.4.5 ROUND 104: NWS144's counter stands here for a company listed within 2 s (as bankBridge)
 	f.mu.Lock()
 	f.alter = 54394
 	f.mu.Unlock()

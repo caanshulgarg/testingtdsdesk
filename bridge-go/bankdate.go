@@ -399,6 +399,8 @@ func bankAfterLightCheck(company string, port int) {
 	}
 	port = own
 	ws := bankWindows(company, guid)
+	// 2.4.5 ROUND 104 (g4, keepauto.go): looked at before bank.mu (it reads the light check's numbers)
+	keepWhy := keepAutoBlocked(company, guid)
 	bank.mu.Lock()
 	bankFresh()
 	st, made := bankState(company, guid, v, sp)
@@ -417,6 +419,16 @@ func bankAfterLightCheck(company string, port int) {
 		bank.mu.Unlock()
 		return
 	}
+	if keepWhy != "" {
+		// 2.4.5 ROUND 104 (g4): the list is not asked for this company (too big for 2 s, or Tally's window held 2 s while it
+		// listed): the move is said for a Day Book upload, as for a slow company; nothing is sent to Tally
+		bankAlertNoteLocked(st, int(v-st.Seen), "", " (FinCom does not ask Tally for this company's list of changed entries: Tally would take longer than 2 s)")
+		st.Seen, st.addonN, st.addon, st.listed = v, 0, map[string]int64{}, map[string]bool{}
+		bankSave()
+		bank.mu.Unlock()
+		keepAutoSay("Bank dates", company, guid, keepWhy)
+		return
+	}
 	if st.Route == "night" || bank.busy || postingGoing() {
 		bank.mu.Unlock()
 		return // the nightly check lists it; a posting goes first (the next check)
@@ -424,7 +436,7 @@ func bankAfterLightCheck(company string, port int) {
 	bank.busy = true
 	after := st.Seen
 	bank.mu.Unlock()
-	raw, ms, err := bankList(company, port, after, recorderLimitMs())
+	raw, ms, err := bankList(company, guid, port, after, recorderLimitMs())
 	bank.mu.Lock()
 	defer bank.mu.Unlock()
 	bank.busy = false
@@ -462,11 +474,13 @@ func bankAfterLightCheck(company string, port int) {
 }
 
 // the undated list above an AlterID (keepListAboveRequest, exactly as built), stopped at limitMs: Tally's answer and its time
-func bankList(company string, port int, after int64, limitMs int) (string, int64, error) {
+func bankList(company, guid string, port int, after int64, limitMs int) (string, int64, error) {
 	var took float64
 	tc := recorderTC(func(s float64) { took = s })
 	tc.limitMs = limitMs
+	watch := keepAutoWatch() // 2.4.5 ROUND 104: Tally's window watched while the list is at Tally
 	raw, err := invokeTally(tc, port, keepListAboveRequest(company, after), limitMs/1000+5)
+	keepAutoAfter("Bank dates", company, guid, watch(took))
 	ms := int64(took * 1000)
 	if err == nil && !strings.Contains(raw, "<ENVELOPE") {
 		err = errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
@@ -582,6 +596,7 @@ func bankNightTurn() {
 		}
 		bank.mu.Unlock()
 		cws := bankWindows(c.Company, c.CGUID)
+		keepWhy := keepAutoBlocked(c.Company, c.CGUID) // 2.4.5 ROUND 104 (g4, keepauto.go)
 		bank.mu.Lock()
 		if bankFromOlder(c, cv, csp) {
 			bankSave()
@@ -596,6 +611,16 @@ func bankNightTurn() {
 			bankAlertLocked(c, int(cv-c.Seen), "", true)
 			c.Seen, c.addonN, c.addon, c.listed, c.Night = cv, 0, map[string]int64{}, map[string]bool{}, night
 			bankSave()
+			continue
+		}
+		if keepWhy != "" {
+			// 2.4.5 ROUND 104 (g4): not asked at night either (the owner's 10 s list included): said for a Day Book upload
+			bankAlertNoteLocked(c, int(cv-c.Seen), "", " (FinCom does not ask Tally for this company's list of changed entries: Tally would take longer than 2 s)")
+			c.Seen, c.addonN, c.addon, c.listed, c.Night = cv, 0, map[string]int64{}, map[string]bool{}, night
+			bankSave()
+			bank.mu.Unlock()
+			keepAutoSay("Bank dates", c.Company, c.CGUID, keepWhy)
+			bank.mu.Lock()
 			continue
 		}
 		st, v, sp, ws = c, cv, csp, cws
@@ -615,7 +640,7 @@ func bankNightTurn() {
 	if err == nil {
 		// the clock read again just before the list (finding the port takes time): never inside office hours
 		if held = bankNightListInOfficeHours(nowFn()); !held {
-			raw, ms, err = bankList(company, port, after, bankNightLimitMs())
+			raw, ms, err = bankList(company, guid, port, after, bankNightLimitMs())
 		}
 	}
 	bank.mu.Lock()
@@ -850,6 +875,15 @@ func bankQueue(company, cguid, x string) {
 // --- the alert: said in the log and carried by the beat (7 days). Under bank.mu. n entries (or changes) whose bank date
 // may not be in FinCom; from: the earliest day known ("" : the starting point's)
 func bankAlertLocked(st *bankCo, n int, from string, slow bool) {
+	note := ""
+	if slow {
+		note = " (FinCom does not ask Tally for this company's entries: finding one took longer than 2 s)"
+	}
+	bankAlertNoteLocked(st, n, from, note)
+}
+
+// the alert with its own last words (note: "" or " (...)")
+func bankAlertNoteLocked(st *bankCo, n int, from, note string) {
 	if n < 1 {
 		n = 1
 	}
@@ -870,10 +904,7 @@ func bankAlertLocked(st *bankCo, n int, from string, slow bool) {
 	if from != "" {
 		day = liveDay(from)
 	}
-	words := fmt.Sprintf("%s for %s; upload the Day Book from %s", what, st.Company, day)
-	if slow {
-		words += " (FinCom does not ask Tally for this company's entries: finding one took longer than 2 s)"
-	}
+	words := fmt.Sprintf("%s for %s; upload the Day Book from %s", what, st.Company, day) + note
 	bank.alerts[k] = M{"company": st.Company, "words": words, "n": n, "from": from, "at": nowS()}
 	writeLog("Bank dates: " + words)
 }

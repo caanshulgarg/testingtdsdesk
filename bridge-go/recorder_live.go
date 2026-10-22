@@ -1718,6 +1718,13 @@ func liveSourceB(company string, port int) (int, error) {
 	if guid == "" {
 		guid = heldGUID(company)
 	}
+	// 2.4.5 ROUND 104 (g4, keepauto.go): the undated list goes only for a company Tally lists well inside 2 s, and never
+	// after Tally's window did not answer for 2 s while it listed; else nothing is sent (the add-on's lines, the gap check
+	// and the Day Book cover the changes)
+	if why := keepAutoBlocked(company, guid); why != "" {
+		keepAutoSay("Recorder (Tally's change list)", company, guid, why)
+		return 0, nil
+	}
 	v := toI64(cur["altvchid"])
 	key := companyKey(company) + "|" + guid
 	live.mu.Lock()
@@ -1762,7 +1769,11 @@ func liveSourceB(company string, port int) (int, error) {
 	live.mu.Unlock()
 	liveSaveOffsets() // round 2 R2-9: the spacing holds across a restart after a failure
 	// 2.3.1: a list stopped at 2 s, or not answered, is asked again by the shared retry schedule (retry.go); never off
-	raw, err := invokeTally(recorderTC(nil), port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
+	// 2.4.5 ROUND 104: Tally's window watched while the list is at Tally. Review M5: 5 s
+	var took float64
+	watch := keepAutoWatch()
+	raw, err := invokeTally(recorderTC(func(s float64) { took = s }), port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5))
+	keepAutoAfter("Recorder (Tally's change list)", company, guid, watch(took))
 	if err != nil {
 		return 0, err
 	}
