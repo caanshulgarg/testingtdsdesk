@@ -270,13 +270,18 @@ async function signOutAll(){
 async function clearLocalCopy(){
   try { const d = IDBStore.dbp && await IDBStore.dbp; if (d && d.close) d.close(); IDBStore.dbp = null; } catch (e){}
   try { const b = BankDB.dbp && await BankDB.dbp; if (b && b.close) b.close(); BankDB.dbp = null; } catch (e){}
-  // this copy only (LocalOwner): the copies of other people put aside in this browser are theirs, not removed here
-  const names = ["tdsdesk-bank", "tdsdesk-work"].map(n => LocalOwner.db(n));
+  // this copy (LocalOwner), the databases of builds before 21-Oct-2026 (tdsdesk, -files, -docs) and older copies put aside
+  // as nobody's ("?": no sign-in opens them again); the copies of other people put aside in this browser are theirs
+  const s = LocalOwner.read(), held = s.parked.filter(p => p.uid !== "?").map(p => p.slot), gone = s.parked.filter(p => p.uid === "?").map(p => p.slot);
+  const B = ["tdsdesk-bank", "tdsdesk-work"], names = ["tdsdesk", "tdsdesk-files", "tdsdesk-docs"].concat(B.map(b => LocalOwner.db(b)));
+  gone.forEach(g => B.forEach(b => names.push(g ? b + "~" + g : b)));
+  // and any other copy of these databases that is not one put aside for a person
+  try { (await indexedDB.databases()).forEach(d => { const n = d.name || "", i = n.indexOf("~"); if (B.includes(i < 0 ? n : n.slice(0, i)) && !held.includes(i < 0 ? "" : n.slice(i + 1))) names.push(n); }); } catch (e){}
   await Promise.all(names.map(n => new Promise(r => { try { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); } catch (e){ r(); } })));
-  try { Object.keys(localStorage).filter(k => LocalOwner.firmKey(k)).forEach(k => localStorage.removeItem(k)); } catch (e){}
+  try { Object.keys(localStorage).filter(k => LocalOwner.firmKey(k) || gone.some(g => !k.indexOf(LocalOwner.P + "@" + g + ":"))).forEach(k => localStorage.removeItem(k)); } catch (e){}
   // the firm account's "pulled up to" time goes too (the next sign-in fetches everything again), and the copy is nobody's
   Cloud.setCfg({lastPull: ""});
-  const s = LocalOwner.read(); s.cur = {slot: s.cur.slot}; LocalOwner.write(s);
+  s.cur = {slot: s.cur.slot}; s.parked = s.parked.filter(p => p.uid !== "?"); LocalOwner.write(s);
   S.companies = {}; S.data = {}; S.inbox = {}; S.docq = {};
 }
 // There is no automatic sign-out (section D, 03-Oct-2026): the idle timer of earlier builds (30 minutes without a
