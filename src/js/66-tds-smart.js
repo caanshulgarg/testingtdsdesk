@@ -99,10 +99,12 @@ const TDSRate = {
     return "";
   },
   // a deduction's payment type: the expense ledgers of its entry first (their nature in Tally, then their names), then the
-  // TDS ledger (its nature, then its name)
+  // TDS ledger (its nature, then its name). The party's own line is no expense: its ledger by structure (TDS.led, src/js/09;
+  // next-fix-tds-party: the voucher's party name often differs from the ledger, so a payment debiting "Rao Consultants LLP"
+  // named "Rao Consultants" read the party's ledger as the expense)
   payType(t, v){
-    const b = S.books || {}, info = b.ledInfo || {}, out = [];
-    (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== v.party && !Books.ledgerOf(e.l).kind) out.push(e.l); });
+    const b = S.books || {}, info = b.ledInfo || {}, out = [], p = TDS.led(v);
+    (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== p && !Books.ledgerOf(e.l).kind) out.push(e.l); });
     for (const l of out){ const k = this.kindOf((info[l] || {}).tdsNature); if (k) return k; }
     for (const l of out){ const k = this.kindOf(l); if (k) return k; }
     return this.kindOf((info[t.ledger] || {}).tdsNature) || this.kindOf(t.ledger);
@@ -149,18 +151,19 @@ const TDSInt = {
     const months = TDS.monthsBetween(hit.date, d);
     return months > 0 ? {date: hit.date, voucher: hit.no, amount: hit.amount, months} : null;
   },
-  // every entry that credits a party with an expense and carries no TDS of its own, by party
+  // every entry that credits a party with an expense and carries no TDS of its own, by the party's ledger (TDS.led: the
+  // deductee of the TDS entries it is looked up for; next-fix-tds-party)
   index(){
     const out = {};
     ((S.books || {}).vouchers || []).forEach(v => {
       if (v.opt || v.cancel || !v.party) return;
       const L = Books.lines(v);
       if (L.tds.length) return;
-      const pe = (v.ent || []).find(e => e.l === v.party);
+      const p = TDS.led(v), pe = (v.ent || []).find(e => e.l === p);
       if (!pe || !(pe.a > 0)) return;
       let exp = 0;
-      (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== v.party && !Books.ledgerOf(e.l).kind) exp += -e.a; });
-      if (exp > 0) (out[v.party] = out[v.party] || []).push({id: v.id, date: TDS.ymd(v.date), no: v.no || v.ref || "", amount: r2(exp)});
+      (v.ent || []).forEach(e => { if (e.a < 0 && e.l !== p && !Books.ledgerOf(e.l).kind) exp += -e.a; });
+      if (exp > 0) (out[p] = out[p] || []).push({id: v.id, date: TDS.ymd(v.date), no: v.no || v.ref || "", amount: r2(exp)});
     });
     return out;
   }
@@ -207,12 +210,13 @@ const TDSSep = {
     const R = rule ? RULE_DEFAULTS.find(z => z.id === rule) : null;
     return R && R.old ? TDS.sec(R.old) : "";
   },
-  // the party's bills: entries that credit the party with an expense, by party
+  // the party's bills: entries that credit the party with an expense, by the party's ledger (TDS.led, as the TDS entry's
+  // deductee; next-fix-tds-party: a bill under the name "Kite Estates" crediting "Kite Estates LLP-UP" was missed)
   bills(){
     const out = {}, masters = Audit.mastersIn();
     ((S.books || {}).vouchers || []).forEach(v => {
       if (v.opt || v.cancel || Books.isSale(v)) return;
-      let party = v.party, pe = party && (v.ent || []).find(e => e.l === party && e.a > 0);
+      let party = TDS.led(v), pe = party && (v.ent || []).find(e => e.l === party && e.a > 0);
       if (!pe && masters){ const c = (v.ent || []).filter(e => e.a > 0 && Audit.isCreditor(e.l)); if (c.length === 1){ pe = c[0]; party = pe.l; } }
       if (!pe) return;
       let amount = 0; const leds = [];
@@ -385,7 +389,8 @@ const TDSWatch = {
       const rule = sec === "194J" ? (r.pay === "technical" || r.pay === "director" ? r.pay : "professional") : sec === "194I" ? (r.pay === "rent_machinery" ? r.pay : "rent_building")
         : ((RULE_DEFAULTS.find(z => z.old && TDS.sec(z.old) === sec && z.basis !== "never" && !z.form) || {}).id || "");
       if (!rule || !v) return;
-      v.ent.forEach(e => { if (e.a < 0 && e.l !== v.party && !Books.ledgerOf(e.l).kind && !out[e.l]) out[e.l] = rule; });
+      const p = TDS.led(v);
+      v.ent.forEach(e => { if (e.a < 0 && e.l !== p && !Books.ledgerOf(e.l).kind && !out[e.l]) out[e.l] = rule; });
     });
     return out;
   },
@@ -394,8 +399,9 @@ const TDSWatch = {
     (b.vouchers || []).forEach(v => {
       if (v.opt || v.cancel || Books.isSale(v)) return;
       // round 69: an entry that names no party (a journal "Freight Dr / Sharma Roadways Cr"): the one supplier it credits, as
-      // the audit's own check took it before the audit came to read this list
-      let party = v.party;
+      // the audit's own check took it before the audit came to read this list. The party: its ledger (TDS.led), the name the
+      // deduction rows carry too (next-fix-tds-party: a bill named apart from its ledger was left out of the limits)
+      let party = TDS.led(v);
       if (!party){ const cr = v.ent.filter(e => e.a > 0 && Audit.isCreditor(e.l)); if (cr.length === 1) party = cr[0].l; }
       if (!party) return;
       const d = TDS.ymd(v.date); if (d < start || d > end) return;

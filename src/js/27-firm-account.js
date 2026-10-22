@@ -1096,9 +1096,9 @@ function tdsAlloc(rowId, chId){
   if (!r.ok) toast(r.why);
   render();
 }
-// many deductions at once (Entries: the ticked ones): to a challan, or off their challans
+// many deductions at once (Entries: the ticked ones): to a challan (off their challans: tdsTakeOff, src/js/86; the old
+// tdsUntagMany here, called by nothing since the React screens, taken out with next-fix-tds-party for legacy.js's budget)
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
-function tdsUntagMany(ids){ const r = TDSCH.untag(ids); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
 // a challan taken out (tds-layout): a soft delete with its reason, the one dialog; TDSReg.canDelete says when it cannot be
 // (read from Tally, or anything allocated to it); Undo brings it back
 async function challanDelete(id){

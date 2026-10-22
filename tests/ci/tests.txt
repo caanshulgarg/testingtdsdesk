@@ -439,3 +439,5 @@ run_adv_optin_ui.py                   180  TDSDESK_SITE=../app/dist-test
 run_gst_draftcopy.js                  120
 run_gst_draftcopy_ui.py               180  TDSDESK_SITE=../app/dist-test
 run_adv_line_ui.py                    180  TDSDESK_SITE=../app/dist-test
+# TDS (22-Oct-2026): the deductee is the party's ledger by structure (TDS.led), not the name Tally keeps for the voucher's party
+run_tds_party.js                      120

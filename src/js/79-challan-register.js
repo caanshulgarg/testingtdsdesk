@@ -206,8 +206,7 @@ const TDSReg = {
     try { await Promise.race([BookItems.pullNow(b.cid), new Promise(res => setTimeout(res, 4000))]); return true; } catch (e){ return false; }
   },
   // ---------------- auto-allocation ----------------
-  // a challan of the return's own year: deposited in the year, or (March's TDS, due by 30 April) for Q4 up to 31 May after
-  sameYear(c, fy, q){ const d = TDS.ymd(c.date); return TDS.fyOf(d) === fy || (q === "Q4" && TDS.fyOf(d) > fy && d <= String(num(String(fy).slice(0, 4)) + 1) + "0531"); },
+  // (TDSReg.sameYear, called by nothing, taken out with next-fix-tds-party for legacy.js's budget)
   // the return's deductions on no challan, oldest first (the smaller first on one day)
   openRows(fy, q, form, cx){
     return Object.values(this.byRow(cx)).filter(x => x.form === form && x.r.fy === fy && x.r.q === q && !x.r.challan && x.r.tds > 0).map(x => x.r)

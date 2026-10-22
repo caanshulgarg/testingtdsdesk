@@ -174,7 +174,8 @@ const TDS = {
       L.tcs.forEach(t => {
         // the amount received or debited to the buyer, without the TCS itself
         const recd = r2(L.tcs.length === 1 && L.party ? L.party - tcsAll : (t.rate ? t.amount / (t.rate / 100) : L.total));
-        out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: v.party, pan: TDS.panOf(v.party),
+        const p = this.led(v);
+        out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: p, pan: TDS.panOf(p),
           section: t.section || "206C", code: TCS27EQ.codeOf(t.ledger, t.section), ledger: t.ledger, paid: recd, tds: r2(t.amount),
           rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
       });
@@ -222,6 +223,19 @@ const TDS = {
   // bank or cash (LedMaster: by their groups). Any other line (a party's: under Sundry Creditors or Debtors, with a bill
   // allocation; an expense) keeps the entry a deduction. Said once on the return's Validate as a note (TDSAdj, src/js/89)
   adjOnly(v){ return !v.party && v.ent.every(e => /^(roundoff|bank|tds|tcs|tax_other)/.test(Books.ledgerOf(e.l).kind)); },
+  // next-fix-tds-party (22-Oct-2026): the deductee of an entry is its party's LEDGER, known by its place, not by the name
+  // Tally keeps for the voucher's party (Leads: bills from "Garg Shekhar & Co." credit "Garg Shekhar & Company", whose PAN
+  // is on the ledger; Testing AAD: "Fingate Advisory" credits "Fingate Advisory Services Limited"). The ledger named as the
+  // party where the entry has it; else the party's line by structure (Books.partyEnts, as GSTR-1 finds it); else (an entry
+  // of no side, as a payment or a journal with no tax) the one ledger whose line is under Sundry Creditors or Debtors or
+  // carries a bill allocation; else the name, as before. No party named: "" (TDS.adjOnly and TDS.billParty decide)
+  led(v){
+    const p = v.party;
+    if (!p || v.ent.some(e => e.l === p)) return p;
+    let s = Books.partyEnts(v);
+    if (!s.length) s = v.ent.filter(e => !Books.ledgerOf(e.l).kind && Books.sundry(e));
+    return s.length && s.every(e => e.l === s[0].l) ? s[0].l : p;
+  },
   // every voucher that carries a TDS ledger becomes one deduction row (but a TDS ledger's adjustment: TDS.adjOnly)
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
@@ -242,7 +256,7 @@ const TDS = {
       L.tds.forEach(t => {
         // round 92 (C): a TDS ledger with no section whose name says salary ("TDS on Salary", "Salary TDS") is 192
         if (!t.section && this.salaryLedger(t.ledger)) t = Object.assign({}, t, {section: "192"});
-        const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || v.party || bp;
+        const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || this.led(v) || bp;
         let B = this.baseFor(t, L, v);
         if (sp && B.how !== "section") B = {paid: 0, rate: null, how: "books"};
         const paid = B.paid;

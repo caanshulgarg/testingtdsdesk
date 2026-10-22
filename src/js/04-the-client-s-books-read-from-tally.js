@@ -344,9 +344,11 @@ const Books = {
     // the party's side: -1 debited, 1 credited
     const side = Math.abs(tax) > 0.004 ? -Math.sign(tax) : nm ? (nm.a < 0 ? -1 : 1)
       : /CREDIT NOTE/i.test(v.type) ? 1 : /DEBIT NOTE/i.test(v.type) ? -1 : this.isSale(v) ? -1 : this.isPurchase(v) ? 1 : 0;
-    return ent.filter(e => e.l === v.party || (side && Math.sign(e.a) === side && !k(e)
-      && ((e.b && e.b.length) || ledGroupPath(S.books || {}, e.l).some(g => /^\s*sundry\s+(debtors|creditors)\s*$/i.test(g)))));
+    return ent.filter(e => e.l === v.party || (side && Math.sign(e.a) === side && !k(e) && this.sundry(e)));
   },
+  // a party's line by its place: its ledger under Sundry Debtors or Sundry Creditors, or a bill-wise allocation on it
+  // (partyEnts; TDS.led, src/js/09)
+  sundry(e){ return (e.b && e.b.length) || ledGroupPath(S.books || {}, e.l).some(g => /^\s*sundry\s+(debtors|creditors)\s*$/i.test(g)); },
   linesNow(v){
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     const pe = new Set(this.partyEnts(v));
