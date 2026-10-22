@@ -25,6 +25,9 @@ CLIENT = """(bk) => {
   S.firm.firmName = S.firm.firmName || "Test Firm"; if (typeof closeModal === "function") try { closeModal(); } catch (e){}
   let c = Object.values(S.companies).find(x => x.name === "ZZ Test Client");
   if (!c){ c = newCompany({name: "ZZ Test Client", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; }
+  // the client shows its advances in GST returns, as every client did before 22-Oct-2026 (off unless turned on since;
+  // run_ledger_pending.py compares every return figure with 2.3.3's, advances in 3B 3.1(a) included)
+  if (!((c.choices || {}).advGst)) c.choices = Object.assign(c.choices || {}, {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}});
   if (!Object.values(S.companies).some(x => x.name === "ZZ Other Client")){ const o = newCompany({name: "ZZ Other Client", gstin: ""}); S.companies[o.id] = o; }
   S.data[c.id] = S.data[c.id] || {parties: {}, entries: {}, loaded: true};
   S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
