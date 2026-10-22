@@ -390,7 +390,7 @@ const TDS = {
       let tax = sp ? sp.tax : r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
       // H3: what the bank paid, in whole rupees (a round-off line beside: 07-Aug-2026 ₹32,081.13 in the lines, ₹32,081 paid)
       const paid = r2(bank.reduce((a, e) => a + e.a, 0) - int - fee - (sp ? sp.interest + sp.fee + sp.others : 0));
-      if (!sp && tax && v.ent.every(e => Books.ledgerOf(e.l).kind || ex.includes(e)) && Math.abs(paid - tax) < 2) tax = paid;
+      if (!(sp && (sp.interest || sp.fee || sp.others)) && tax && v.ent.every(e => Books.ledgerOf(e.l).kind || ex.includes(e)) && Math.abs(paid - tax) < 2) tax = paid;
       if (!tax && !int && !fee && !(sp && (sp.interest || sp.fee || sp.others))) return;   // (review 243 N1) a payment of interest or fee alone is listed, its tax 0
       // H3 (Leads, Payment 209 of 06-Jul-2026, ₹2,27,543 for five TDS ledgers): one part a section, whole rupees, adding up
       // to the tax: a challan each (one challan pays one section)
