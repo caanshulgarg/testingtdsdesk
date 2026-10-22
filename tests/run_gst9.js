@@ -2,6 +2,7 @@
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "GST9C", "INR"];
 const {ctx, x} = load(HTML, NAMES);
+ctx.CO = () => ({name: "Test", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}});   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
 (async () => {

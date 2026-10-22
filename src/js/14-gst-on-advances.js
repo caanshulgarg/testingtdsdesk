@@ -3,7 +3,12 @@
 /* ================================================================== */
 const GSTAdv = {
   RATES: [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40],
-  ready(){ const b = S.books; return !!(b && b.meta && b.meta.bills); },
+  // the owner, 22-Oct-2026: "don't treat advance unless we say": 11A/11B (GSTR-1, 3B 3.1(a), GSTR-9, the JSON and Excel,
+  // the checks) only for a client whose "Show advances in GST returns" is on: co.choices.advGst = {value: "on" | "off",
+  // state, by, at, prev} (choiceConfirm, from the Advances page or Client setup → GST: app/src/parts/AdvOptIn.jsx). Off
+  // unless turned on. Every reader of advances asks ready() first (month() gives nothing without it), so off reads as no
+  // advances at all; written inline, as legacy.js is at its size budget (tests/run_stability.py)
+  ready(){ const b = S.books; return !!(b && b.meta && b.meta.bills) && (((CO() || {}).choices || {}).advGst || {}).value == "on"; },
   nearRate(x){ let best = 18, d = 1e9; this.RATES.forEach(r => { if (Math.abs(r - x) < d){ d = Math.abs(r - x); best = r; } }); return d < 0.6 ? best : r2(x); },
   // a ledger is a customer when it sits under Sundry Debtors; without the masters, when it was billed
   isCustomer(name, billed){
@@ -118,11 +123,11 @@ const GSTAdv = {
       pos: p.pos, reg: p.reg, received: amount}, this.taxOf(amount, p.rate, p.pos, p.reg), extra || {});
   },
   // one month: 11A is what came in and was not billed in the same month; 11B is an earlier advance billed now
+  // (without ready(): no pieces, so every list empty and every sum nil; the result's ready is not read by any caller)
   month(ym, reg){
     const zero = {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, received: 0};
-    if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: [], unmatched: [], unmatchedSum: zero};
     const months = ym ? GSTR.expand(ym) : GSTR.months();
-    const {pieces, billed} = this.build();
+    const {pieces, billed} = this.ready() ? this.build() : {pieces: []};
     const at = [], txpd = [], untaxed = [], unmatched = [];
     // review of 02-Oct-2026: an advance is adjusted in 11B only against an invoice to that customer in the same return
     // period (the month, or the quarter for a QRMP filer). One marked as adjusted by hand in a period with no invoice

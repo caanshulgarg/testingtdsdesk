@@ -11,12 +11,16 @@
 //   5. an advance received and invoiced in the same month: nothing in 11A, the invoice in B2B
 //   6. an advance received one month and invoiced the next: 11A (with its IGST) the first month, 11B the next; never in B2B
 //   7. a sale whose party ledger is named as the buyer: as before
+//   8. advances only for a client that turned them on (the owner, 22-Oct-2026: "don't treat advance unless we say"; off by
+//      default, existing clients too): off gives no 11A/11B (GSTR-1, its JSON, 3B 3.1(a)) and no advance check, and the
+//      same B2B; on gives the figures of 6. Sections 1-7 run with advances on
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "normName", "GSTSet", "GSTF", "CustIMS", "ITCT", "Audit"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const {ctx, x} = load(HTML, NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } }));
 const CMP = "09AAACZ9999Z1Z5", reg = "09", BUYER_GSTIN = "07AAACQ1234Q1Z1", SUPPLIER_GSTIN = "09AAACK1111K1Z1";
-ctx.S.companies = {t: {id: "t", name: "Test", gstin: CMP, choices: {}}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t;
+const ADV_ON = {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"};
+ctx.S.companies = {t: {id: "t", name: "Test", gstin: CMP, choices: {advGst: ADV_ON}}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t;
 // [ledger, amount (Tally's sign: debit negative), {h, gr, b: bill allocations [name, type, amount]}]
 const V = (id, type, date, no, party, ent, extra) => Object.assign({id, type, date, no, party, gstin: "", pos: "", cmp: CMP, narr: "", ent: ent.map(([l, a, o]) => Object.assign({l, a}, o || {})), hsn: []}, extra || {});
 const SV = {h: "997161", gr: 18};
@@ -93,6 +97,33 @@ const inv7 = V("s7", "Sales", "20250901", "TEST/2526/0090", "Orbit General Insur
 books([inv7]);
 L = x.Books.lines(inv7); g = G.one("202509", reg);
 ok(L.taxable === 10000 && L.party === 11800 && g.b2b[0].cgst === 900 && g.b2b[0].parts.length === 1, "7. a party ledger named as the buyer: taxable 10,000, CGST 900, as before");
+
+// 8. advances shown only when turned on for the client: the books of 6, and an advance from a customer never invoiced
+// (its rate assumed at 18%, which the checks would list)
+const rc8 = V("r8", "Receipt", "20250725", "", "Orbit General Insurance Ltd", [["Orbit General Insurance Ltd", 11800, {b: [["ADV-1", "New Ref", 11800]]}], ["Bank of Nowhere", -11800]]);
+const co = ctx.S.companies.t;
+const run8 = (choice) => {
+  if (choice) co.choices.advGst = choice; else delete co.choices.advGst;
+  books([inv5, rc6, inv6, rc8]);
+  const jul = A.month("202507", reg), aug = A.month("202508", reg), jj = G.toJson("202507", reg), ja = G.toJson("202508", reg);
+  return {jul, aug, jj, ja, b3: G.threeBm("202507", reg).net.igst, b3a: G.threeBm("202508", reg).net.igst, b2bJul: JSON.stringify(G.one("202507", reg).b2b),
+    b2bAug: JSON.stringify(G.one("202508", reg).b2b), checks: G.checks("202507", reg).map(c => c.what).filter(w => /advance/i.test(w))};
+};
+const off = run8(null), offSaid = run8({value: "off", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}), on = run8(ADV_ON);
+[["off by default (no choice)", off], ["turned off", offSaid]].forEach(([w, r]) => {
+  ok(!r.jul.at.length && !r.jul.txpd.length && !r.aug.at.length && !r.aug.txpd.length && !r.jul.open.length && !r.jul.untaxed.length && !r.jul.unmatched.length,
+    "8. " + w + ": 11A and 11B empty in July and August (got 11A " + r.jul.at.length + ", 11B " + r.aug.txpd.length + ")");
+  ok(!("at" in r.jj) && !("txpd" in r.jj) && !("at" in r.ja) && !("txpd" in r.ja), "8. " + w + ": the GSTR-1 JSON has no at or txpd");
+  ok(r.b3 === 0 && near(r.b3a, 90000), "8. " + w + ": 3B 3.1(a) IGST is the invoices' only: July 0, August 90,000 (got " + r.b3 + ", " + r.b3a + ")");
+  ok(!r.checks.length, "8. " + w + ": no check about advances (got " + JSON.stringify(r.checks) + ")");
+  ok(r.b2bJul === on.b2bJul && r.b2bAug === on.b2bAug && near(tot(G.one("202508", reg)).taxable, 500000), "8. " + w + ": B2B as with advances on (August 5,00,000)");
+});
+const z8 = on.jul.at.find(r => r.party === "Zenith Life Co-DL"), o8 = on.jul.at.find(r => r.party === "Orbit General Insurance Ltd");
+ok(on.jul.at.length === 2 && z8 && near(z8.igst, 90000) && o8 && near(o8.cgst, 900) && on.aug.txpd.length === 1 && near(on.aug.txpd[0].igst, 90000),
+  "8. on: July 11A has Zenith's advance (IGST 90,000) and Orbit's (CGST 900, rate assumed), August 11B the 90,000 (got 11A " + JSON.stringify(on.jul.at.map(r => [r.party, r.igst, r.cgst])) + ")");
+ok(on.jj.at && on.jj.at.length && on.ja.txpd && on.ja.txpd.length, "8. on: the JSON has at (July) and txpd (August)");
+ok(near(on.b3, 90000) && near(on.b3a, 0), "8. on: 3B 3.1(a) IGST July 90,000 (the advance), August nil (the invoice less 11B) (got " + on.b3 + ", " + on.b3a + ")");
+ok(on.checks.includes("Advances where the rate was assumed at 18%"), "8. on: the check on Orbit's advance (rate assumed) is listed (got " + JSON.stringify(on.checks) + ")");
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

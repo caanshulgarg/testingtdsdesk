@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Loading from "../../parts/Loading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import { AdvOptIn } from "../../parts/AdvOptIn.jsx";
 // EINV (src/js/55-einvoice.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/55-einvoice.js";
 
@@ -135,6 +136,8 @@ function ForClient({ b }) {
       <p className="note">Used for the late fee caps, QRMP (₹5 crore or less), e-invoicing and the 30-day IRN limit (₹10 crore and above).</p>
       <H4>Rule 42</H4><label className="note"><input type="checkbox" aria-label="Rule 42 D2" checked={!!GSTRev.settings().d2} onChange={(ev) => gsetSet("d2", ev.target.checked)} /> Some of the common credit is used for non-business purposes, so D2 (5%) applies</label>
       <p className="note">Ledgers carrying common credit are marked “GST, common credit” on the Tally ledgers tab.</p>
+      <H4>Advances received before the invoice</H4><AdvOptIn co={CO()} />
+      <p className="note">Off: GSTR-1 tables 11A and 11B, and the tax on advances in 3B 3.1(a), stay empty for this client. Turn on to work them out from the receipts in Tally (GST page → Advances).</p>
       <H4>Blocked credit, section 17(5)</H4><p className="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43. Which kinds of purchase are blocked for this client is set further down this page.</p>
     </section>
   );

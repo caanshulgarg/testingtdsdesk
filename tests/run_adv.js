@@ -3,6 +3,7 @@ const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, 
 const html = process.argv[2] || HTML;
 const NAMES = ["num", "r2", "MONTHS", "fmtDate", "STATE_CODES", "Books", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "INR"];
 const {ctx, x} = load(html, NAMES);
+ctx.CO = () => ({name: "Test", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}});   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
 
 let fails = 0;
 const ok = (cond, what) => { console.log((cond ? "  ok   " : "  FAIL ") + what); if (!cond) fails++; };

@@ -16,7 +16,7 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, states: ms.states, challans: [], alloc: {}});
   b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.S.coId = "t";
   // the client record, for the per-ledger choices of round 4 (co.choices["flow:<ledger>"])
-  ctx.S.companies = {t: {id: "t", name: "Larkspur Fixture Events Private Limited", gstin: "07AAGCL4827M1Z3", choices: {}}};
+  ctx.S.companies = {t: {id: "t", name: "Larkspur Fixture Events Private Limited", gstin: "07AAGCL4827M1Z3", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}}};   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
   ctx.CO = () => ctx.S.companies.t;
   x.LedMaster.refresh(b);
   const ORCHID = "Orchid Lane Hospitality Pvt Ltd (Noida)", QUILL = "Quillfeather Weddings LLP";

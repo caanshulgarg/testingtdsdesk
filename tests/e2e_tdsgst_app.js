@@ -21,7 +21,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
   const avail = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
   const {ctx, x} = load(HTML, avail);
   const cl = setup.client;
-  ctx.S.companies = {[cl.id]: {id: cl.id, name: cl.name, tallyName: cl.tallyName, gstin: cl.gstin, pan: cl.pan, tan: cl.tan, choices: {}}};
+  ctx.S.companies = {[cl.id]: {id: cl.id, name: cl.name, tallyName: cl.tallyName, gstin: cl.gstin, pan: cl.pan, tan: cl.tan, choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}}};   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
   ctx.S.coId = cl.id; ctx.CO = () => ctx.S.companies[cl.id]; ctx.D = () => ({parties: {}, entries: {}}); ctx.whoAmI = () => "e2e";
   const out = {loaded: avail, phases: {}};
   let keep = {};          // what the person did and FinCom keeps between the phases: filed returns, certificates, challans, allocation, ledger choices

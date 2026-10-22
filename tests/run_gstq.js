@@ -13,6 +13,7 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.05), H = ["igst", "cgst",
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}, twoBs: {}});
   b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; x.LedMaster.refresh(b);
   ctx.S.companies = {c: {id: "c", name: FIXTURE ? "Larkspur Fixture Events Pvt Ltd" : "VMS Events Pvt Ltd", gstin: GSTIN}}; ctx.S.coId = "c";
+  ctx.CO = () => ({name: "Test", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}});   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
   const G = x.GSTR, Q = x.GSTQ, F = x.GSTF, reset = () => { G._carry = null; };
   const monthly = ["202510", "202511", "202512"].map(m => G.threeBm(m, "07"));
   x.GSTSet.store("07").filing = [{type: "qrmp", from: "202510"}]; reset();

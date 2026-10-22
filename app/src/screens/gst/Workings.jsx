@@ -5,6 +5,7 @@
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import { AdvOptIn, AdvOffLine, advOn } from "../../parts/AdvOptIn.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -154,10 +155,13 @@ function LeftOut({ a }) {
 }
 
 export function Advances() {
-  if (!GSTAdv.ready()) return <section className="dash-card"><h3>Advances need the day book read again</h3><p className="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section>;
+  // off unless turned on for the client (the owner, 22-Oct-2026): one quiet line, nothing worked out
+  if (!advOn(CO())) return <AdvOffLine />;
+  if (!GSTAdv.ready()) return <><AdvOptIn /><section className="dash-card"><h3>Advances need the day book read again</h3><p className="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section></>;
   const ym = S.gstYm || "", a = GSTAdv.month(ym, S.gstReg || "");
   const box = (s) => [money(s.received) + " received, " + money(s.igst + s.cgst + s.sgst + s.cess) + " tax"];
   return <>
+    <AdvOptIn />
     <div className="dash-tiles">
       <Tile label="Received, not billed this month (11A)" value={a.atSum.n} small={box(a.atSum)} />
       <Tile label="Billed now, received earlier (11B)" value={a.txpdSum.n} small={box(a.txpdSum)} />

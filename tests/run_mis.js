@@ -8,7 +8,7 @@ const M = v => x.INR.format(Math.round(v || 0));
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, states: ms.states, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});   // as the masters upload keeps them
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}}); ctx.S.coId = "t";
   x.LedMaster.refresh(b);
   const nMsme = FIXTURE ? 1 : 17;   // the fixture: Nightjar Sound & Light Co, a micro enterprise (tests/fixtures/books/EXPECTED.md)
   ok(Object.values(b.ledInfo).filter(i => i.msme).length === nMsme, nMsme + " MSME supplier" + (nMsme === 1 ? "" : "s") + " read from the Udyam details in Tally");
