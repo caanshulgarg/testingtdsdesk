@@ -8,7 +8,7 @@
 // Every figure is a button: its ledger rows open in the detail drawer. A look-only member sees the report read-only.
 //
 // State: S.myMis = {cid, def, sel (the block open in the form), saved (the id it was saved as), msg, unknown, desc}.
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2, Wand2 } from "lucide-react";
 import Button from "../../parts/Button.jsx";
 import More from "../../parts/More.jsx";
@@ -23,6 +23,8 @@ import { TEMPLATES } from "../../lib/misTemplates.js";
 import { Reports, FirmTpl, mayEdit, describeMis } from "../../lib/misStore.js";
 import { normalizeDef, newId, checkNames, ROW_BY, MEASURES_FOR, MEASURE_LABEL, HEADS, PL_LINES, RATIOS, GST_LINES, CHARTS, UNITS, rowKey } from "../../../../server/_shared/misdef.js";
 import "./mymis.css";
+// sending a saved report on a schedule (B6): its own lazy part
+const MisSchedule = lazy(() => import("./MisSchedule.jsx"));
 
 const ROW_LABEL = { head: "MIS heads and profit lines", group: "Tally groups", ledger: "Ledgers", code: "Financial-statement codes", customer: "Customers (sales)", supplier: "Suppliers (purchases)", gst: "GST working", ageing: "Owed, by age", ratio: "Ratios" };
 const TYPE_LABEL = { table: "Table", chart: "Chart", kpi: "KPI tile" };
@@ -304,6 +306,9 @@ export default function MyMis({ b }) {
           <label className="mm-f"><span className="mm-l">Entries with ledger</span><input list="mm-dl-ledger" aria-label="Filter by ledger" value={d.filters.ledger.join(", ")} onChange={(ev) => editDef((x) => { x.filters.ledger = ev.target.value.split(/\s*,\s*/).filter(Boolean); })} /></label>
           <datalist id="mm-dl-party">{(names.party || []).slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist><datalist id="mm-dl-ledger">{(names.ledger || []).slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
         </details>}
+        {saved && <details className="mm-filters mm-sched-box" data-mm-sched-box=""><summary>Send on a schedule</summary>
+          <Suspense fallback={<p className="note">Loading…</p>}><MisSchedule cid={cid} report={saved} ro={ro} /></Suspense></details>}
+        {!saved && !ro && <p className="note mm-sched-hint">Save the report to send it on a schedule.</p>}
       </aside>
       <main className="mm-preview" aria-label="Preview" data-mm-preview="">
         <header className="mm-ph"><b>{(CO() || {}).name || ""}</b><span>{d.name + " · " + (res ? res.periodLabel : "")}</span><i>{"(All amounts in " + (UNITS[d.units.unit] || "Rupees") + ")"}</i></header>

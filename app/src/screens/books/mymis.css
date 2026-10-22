@@ -57,6 +57,8 @@
 .mm-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 .mm-c { font-size: 13px; }
 .mm-ticks { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+.mm-ticks label { display: inline-flex; align-items: center; gap: 6px; }
+.mm-ticks input[type="checkbox"] { width: auto; margin: 0; }
 .mm-names .mm-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
 .mm-names .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 4px 1px 9px; font-size: 12.5px; background: var(--surface-muted); max-width: 100%; }
 .mm-names .chip.bad { border-color: var(--bad, #dc2626); color: var(--bad, #b91c1c); }
@@ -66,6 +68,15 @@
 .mm-filters, .mm-budget { margin-top: 8px; font-size: 13px; }
 .mm-filters summary, .mm-budget summary { cursor: pointer; color: var(--text-secondary); }
 .mm-filters .mm-f { margin-top: 6px; }
+.mm-sched-box[open] { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface); }
+.mm-sched-list, .mm-runs { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mm-sched-list li { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 6px; }
+.mm-sched-list li.off { opacity: .6; }
+.mm-sched-acts { display: inline-flex; gap: 6px; }
+.mm-sched-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.mm-runs li { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; font-size: 12.5px; }
+.mm-runs .linkbtn { margin-right: 8px; }
+.mm-sched-box h4 { margin: 10px 0 2px; font-size: 13px; }
 .mm-bud { width: 92px; text-align: right; }
 
 .mm-preview { min-width: 0; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
