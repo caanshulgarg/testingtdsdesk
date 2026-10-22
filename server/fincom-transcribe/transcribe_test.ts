@@ -84,7 +84,7 @@ function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, by
   const headers: Record<string, string> = { "Content-Type": o.type ?? "audio/webm;codecs=opus", Origin: "https://staging.fincom.live" };
   if (o.tok !== null) headers.Authorization = "Bearer " + (o.tok ?? "tok-me");
   if (o.len) headers["Content-Length"] = o.len;
-  return h(new Request("http://x/?" + qs, { method: "POST", headers, body: o.bytes ?? AUDIO }));
+  return h(new Request("http://x/?" + qs, { method: "POST", headers, body: (o.bytes ?? AUDIO).slice().buffer as ArrayBuffer }));   // a copy as an ArrayBuffer: a BodyInit on every Deno
 }
 const has = (hay: Uint8Array | string | null, needle: Uint8Array) => {
   if (!hay || typeof hay === "string") return false;
