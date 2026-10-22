@@ -64,6 +64,12 @@ CHECK 3b - NIGHT PACE AND PAYROLL (after 20:00 IST, or on a Sunday)
    If the company has payroll in that year: Payroll > the payroll voucher of a month in the period shows in FinCom's
    books with each employee's pay heads; the salary payment shows each employee's amount, and no bank account number.
 
+CHECK 3c - TALLY NEVER HELD BY THE CHANGE LIST (2.4.5 ROUND 104; a company of more than 5,000 vouchers)
+   Leave Tally open on that company overnight with the bridge running (nobody at the computer).
+   You should see: in the log, once, "Tally's list of changed entries is not asked (the company has up to ... vouchers
+   ...)"; no "TDSDeskKeepList took 2.2s" line; FinCom's Tally page shows the nightly check "Not checked ... Upload the
+   Day Book ..." for that company. A small company (under 5,000) is still checked.
+
 CHECK 4 - YOUR WORK GOES FIRST
    While CHECK 3 runs, save a Journal of Rs 1, narration "TRIAL 245 first".
    You should see: it is in FinCom's books in a few seconds, as with 2.4.4; the progress waits while you type and goes

@@ -100,6 +100,27 @@ FinComLedgerIds (MasterIDs only, the rows counted), each EXACTLY as in docs/brid
    PowerShell 5.1-safe), and review/assets/connector/TDSBridge.ps1 is no longer shipped by publish (build.py drops it;
    publish-preview.sh refuses a build that carries it).
 
+6. **ROUND 104 (the real-Tally gate 39647340380, 22-Oct-2026).** No request added or changed; the allow-list and its
+   hash are as they were.
+   - **Tally's list of changed entries only where Tally answers it inside 2 s (g4).** The undated TDSDeskKeepList
+     "AlterID above N" makes Tally look at every voucher of the company: on about 30,000 vouchers it kept Tally busy
+     1.9-5.1 s and its window did not answer for up to 4.8 s on all five releases (2.4.4 sends it too: the nightly
+     self-check, on by default, and the bank-date route, on by default; source B only when the owner chose it). The
+     bridge's own work (source B, the nightly self-check, the bank-date route by day and by night) now sends it only
+     when Tally's voucher counter (ALTVCHID) is at most 5,000 (about 0.9 s at the worst rate measured; a setting may
+     lower it, never raise it), and never again for a company after Tally's window did not answer for 2 s while it
+     listed (sync\keeplist-auto.json). Otherwise one quiet log line; source B leaves the change to the add-on's lines and
+     the gap check, the nightly check is recorded "not checked" with its words, the bank-date route says "upload the
+     Day Book from ...". The tray's read test and the measuring tool keep the list. Code: bridge-go/keepauto.go.
+   - **The older-period fetch faster, no new request (g10; the owner's choice (a) of 22-Oct-2026).** Tally's company
+     list (TDSDeskCompanies, the 2.3.4 guard before an entry request) is asked once for the day being read, and again
+     at once after any error, any wait, any use of the computer or save in Tally for the company since, a new day or 10
+     minutes (and before every entry when the person's use of the computer cannot be known). At night (FinCom's
+     periodNight) the period's requests rest 100 ms before the send instead of 150 ms, and the window look before a step
+     is the probe of the request just answered. The gate measured 160-168 entries a minute; expected about 2.5 times
+     that. A request form that asks several entries at once ((b), measured first and shown to the owner) is 2.4.6's.
+     Code: bridge-go/daypull.go (pullCoListed, pullGentleMs, pullWindowOK), tally.go (TC.gentleMs).
+
 ## The rules kept (plan section 3.2 and 6)
 
 Every Tally request stops at 2 s; one request in flight per Tally; postings first (no day is asked while a posting or an
