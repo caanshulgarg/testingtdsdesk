@@ -40,7 +40,7 @@ export function handler(deps: Deps) {
   const rpc = (fn: string, args: Record<string, unknown>, token = SERVICE) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
   const insert = (table: string, row: Record<string, unknown>) => rest("/rest/v1/" + table, SERVICE, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
   const upload = async (path: string, bytes: Uint8Array, type: string) => {
-    const r = await doFetch(URL_ + "/storage/v1/object/mis-reports/" + path.split("/").map(enc).join("/"), { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": type, "x-upsert": "true" }, body: bytes });
+    const r = await doFetch(URL_ + "/storage/v1/object/mis-reports/" + path.split("/").map(enc).join("/"), { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": type, "x-upsert": "true" }, body: bytes as BodyInit });
     if (!r.ok) throw new Error("the file could not be kept (" + r.status + ")");
   };
   const secret = async (name: string) => { const r = await rest("/rest/v1/platform_secrets?select=value&name=eq." + enc(name)).catch(() => []); return (r && r[0] && r[0].value) || ""; };
