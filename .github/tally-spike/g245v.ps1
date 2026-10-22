@@ -265,14 +265,25 @@ try {
   $px = GProxy
   $pxF = @($px | Where-Object { [int64]$_.t0 -ge $tFetch -and [int64]$_.t0 -le $tFetchEnd })
   $objMids = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' } | ForEach-Object { "$($_.mid)" })
-  $wantAll = @(); $wantMap = Prop $gs 'want'; foreach ($p in @($wantMap.PSObject.Properties)) { $wantAll += @($p.Value | ForEach-Object { "$_" }) }
-  $objTwice = @($objMids | Group-Object | Where-Object { $_.Count -gt 1 }).Count
+  # ROUND 104 (g3): every MasterID FinCom wanted, over all its answers (a day of more than 2,000 is wanted over two:
+  # tally_period_held's limit); 'want' keeps only each day's last answer
+  $wantAll = @(); $wantMap = Prop $gs 'want_all'; if (-not $wantMap) { $wantMap = Prop $gs 'want' }; foreach ($p in @($wantMap.PSObject.Properties)) { $wantAll += @($p.Value | ForEach-Object { "$_" }) }
+  # ROUND 104 (g3, run 39647340380 on 3.0): an entry whose read was cut so FinCom's posting went first ("a background read
+  # was stopped at once so FinCom's request goes first; it resumes afterwards") is asked again by design: a second ask of
+  # a MasterID whose earlier ask was within 5 s of the posting is not counted as asked twice (it is said in the evidence)
+  $objReqs = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' })
+  $script:objCutN = 0
+  $objTwice = @($objReqs | Group-Object mid | Where-Object { $_.Count -gt 1 } | Where-Object {
+      $g = @($_.Group | Sort-Object { [int64]$_.t0 }); $early = @($g | Select-Object -First ($g.Count - 1))
+      $cut = $imp -and @($early | Where-Object { [int64]$_.t0 -ge ($imp.s - 5000) -and [int64]$_.t0 -le ($imp.e + 5000) }).Count -gt 0 -and $g.Count -eq 2
+      if ($cut) { $script:objCutN++ }; -not $cut }).Count
+  $objCut = [int]$script:objCutN
   $objNotWanted = @($objMids | Where-Object { $_ -notin $wantAll }).Count
   $missOk = @($missing | Where-Object { [int](Prop (Prop $gs 'entries_sent') $_) -ge [int]$script:g5Truth[$_] }).Count -eq $missing.Count
   $listed = @((Prop $gs 'period_days_listed') | Where-Object { $_[2] -eq $true } | ForEach-Object { @($_[1]) })
   $outside = @($listed | Where-Object { $_ -notin $part } | Sort-Object -Unique)
   $badDates = @((Prop $gs 'bad_dates')).Count
-  GRes $G3 $(if (-not $gs) { 'HARNESS' } elseif (-not $notHeld.Count -and $x -eq $y -and $missOk -and -not $up5.Count -and $objTwice -eq 0 -and $objNotWanted -eq 0 -and -not $outside.Count -and $badDates -eq 0 -and $objMids.Count -ge $wantTotal) { 'PASS' } else { 'FAIL' }) ("Apr-Sep, {0} days, in {1} min: the progress line ends '{2}'; days not held in full or not as Tally: {3}; FinCom lacked {4} entries on {5}: all sent {6}; FinComVoucherObject asked {7} times ({8} wanted by FinCom; asked twice {9}; not wanted {10}); days listed for the fetch outside the part {11}; entries with another date {12}; days to upload: {13}" -f $part.Count, [math]::Round(($tFetchEnd - $tFetch) / 60000, 1), $words, $(if ($notHeld.Count) { ($notHeld | Select-Object -First 6) -join '; ' } else { 'none' }), $wantTotal, ($missing -join ', '), $missOk, $objMids.Count, $wantAll.Count, $objTwice, $objNotWanted, $(if ($outside.Count) { $outside -join ',' } else { 'none' }), $badDates, $(if ($up5.Count) { $up5 -join ' | ' } else { 'none' }))
+  GRes $G3 $(if (-not $gs) { 'HARNESS' } elseif (-not $notHeld.Count -and $x -eq $y -and $missOk -and -not $up5.Count -and $objTwice -eq 0 -and $objNotWanted -eq 0 -and -not $outside.Count -and $badDates -eq 0 -and $objMids.Count -ge $wantTotal) { 'PASS' } else { 'FAIL' }) ("Apr-Sep, {0} days, in {1} min: the progress line ends '{2}'; days not held in full or not as Tally: {3}; FinCom lacked {4} entries on {5}: all sent {6}; FinComVoucherObject asked {7} times ({8} wanted by FinCom; asked twice {9}, asked again after a cut for the posting {14}; not wanted {10}); days listed for the fetch outside the part {11}; entries with another date {12}; days to upload: {13}" -f $part.Count, [math]::Round(($tFetchEnd - $tFetch) / 60000, 1), $words, $(if ($notHeld.Count) { ($notHeld | Select-Object -First 6) -join '; ' } else { 'none' }), $wantTotal, ($missing -join ', '), $missOk, $objMids.Count, $wantAll.Count, $objTwice, $objNotWanted, $(if ($outside.Count) { $outside -join ',' } else { 'none' }), $badDates, $(if ($up5.Count) { $up5 -join ' | ' } else { 'none' }), $objCut)
 
   # ================================================================ g4 the 2 s rule, one at a time, no freeze
   $pxC = @($px | Where-Object { [int64]$_.t0 -ge $tCount -and [int64]$_.t0 -le $tFetchEnd -and $_.method -eq 'POST' } | Sort-Object { [int64]$_.t0 })
@@ -300,14 +311,18 @@ try {
   $fetchMin = [math]::Round(($tFetchEnd - $tFetch) / 60000.0, 1)
   $eta200k = if ($perMin -gt 0) { [math]::Round(200000 / $perMin / 60.0, 1) } else { -1 }
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ('MEASURE g10 night pace: ' + ("{0} entries sent in {1} min of entry requests ({2} entries a minute; 2,00,000 entries would take about {3} h at this pace); requests at Tally in the fetch: {4}" -f (Nf $nEnt), [math]::Round($spanMin, 1), (Nf $perMin), $eta200k, ($pxF.Count)))
-  GRes $G10 $(if (-not $gs -or -not $objF.Count) { 'HARNESS' } elseif ($maxL -gt 3 -and $nb -gt 0 -and $perMin -ge 1000 -and -not $over.Count -and $overlap -eq 0 -and -not $spBad.Count) { 'PASS' } else { 'FAIL' }) ("periodNight answered {0} time(s); at most {1} days in one answer; {2} beats in {3} min of fetch; {4} entries a minute ({5} entries over {6} min); the rules of g4 kept: over the limit {7}, overlapping {8}, window spells not allowed {9}" -f $nb, $maxL, $beatsF, $fetchMin, (Nf $perMin), (Nf $nEnt), [math]::Round($spanMin, 1), $over.Count, $overlap, $spBad.Count)
+  # ROUND 104: the owner's choice (a) of 22-Oct-2026 (the company list once a day, a lighter night step; no new request):
+  # about 2-3 times the 165 entries a minute of run 39647340380, so at least 330; the faster form (b) waits for 2.4.6
+  GRes $G10 $(if (-not $gs -or -not $objF.Count) { 'HARNESS' } elseif ($maxL -gt 3 -and $nb -gt 0 -and $perMin -ge 330 -and -not $over.Count -and $overlap -eq 0 -and -not $spBad.Count) { 'PASS' } else { 'FAIL' }) ("periodNight answered {0} time(s); at most {1} days in one answer; {2} beats in {3} min of fetch; {4} entries a minute ({5} entries over {6} min); the rules of g4 kept: over the limit {7}, overlapping {8}, window spells not allowed {9}" -f $nb, $maxL, $beatsF, $fetchMin, (Nf $perMin), (Nf $nEnt), [math]::Round($spanMin, 1), $over.Count, $overlap, $spBad.Count)
 
   # ================================================================ g11 the payroll month (ROUND 103, B)
   $pay = @((Prop $gs 'payroll')); $sal = @((Prop $gs 'salpay')); $emps = @((Prop $gs 'employees'))
   $firstPay = @($payReqs | Sort-Object { [int64]$_.t0 }) | Select-Object -First 1
   $empFirst = if ($firstPay -and $emps.Count) { ([double]$emps[0].at * 1000) -lt [int64]$firstPay.t0 } else { $false }
-  $bulk = @($pay | Where-Object { "$($_.no)" -eq 'PE-PAY-BULK500' }) | Select-Object -First 1
-  $aug = @($pay | Where-Object { "$($_.no)" -eq 'PE-PAY-202608' }) | Select-Object -First 1
+  # ROUND 104 (g11): Tally numbers the payroll vouchers itself (the XML's PE-PAY-... numbers are not kept: run 39647340380
+  # sent them as 1 and 2), so each is known by its day: 31-Aug-2026 the payroll of 500, 01-Aug-2026 August's of 7
+  $bulk = @($pay | Where-Object { "$($_.day)" -eq '20260831' } | Sort-Object { [int]$_.employees } -Descending) | Select-Object -First 1
+  $aug = @($pay | Where-Object { "$($_.day)" -eq '20260801' }) | Select-Object -First 1
   $bankAny = @($pay + $sal | Where-Object { @($_.bank).Count -gt 0 })
   $cnt = Prop $gs 'counted'
   $dayOk = @('20260801', '20260802', '20260831' | Where-Object { [int](Prop $cnt $_) -ne [int]$script:g5Truth[$_] })
@@ -333,7 +348,9 @@ try {
   $mK = Mark
   $null = Bridge POST '/keep' @{ company = $co1; now = $true } 60
   $t = Get-Date; while (((Get-Date) - $t).TotalMinutes -lt 15) { Start-Sleep 10; if (@((StubReqs) | Select-Object -Skip $mK | Where-Object { $_.kind -in 'ledger_list', 'ledgers' }).Count) { break } }
-  Start-Sleep 30
+  # ROUND 104 (g6): the bridge reads a company's ledger list at most once every LedgersDebounceMin (3 minutes): the wake
+  # sent 30 s after Update now's own read was too soon (run 39647340380), so it waits the 3 minutes out
+  Start-Sleep 200
   $tL = NowMs
   G5Ctl @{ company = $co1; phase = 'off'; ledgers_at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
   $t = Get-Date; $lp = @()
@@ -380,7 +397,9 @@ try {
   Start-Sleep 90
   G5Ctl @{ company = $co1; phase = 'off' }
   $px = GProxy
-  $sus = @($px | Where-Object { $_.event -eq 'suspend' -and [int64]$_.t -ge $t9 })
+  # ROUND 104 (g9): the proxy's suspend line has no t0 (GProxy keeps request lines only): read from the whole log
+  $pxEv = if (Test-Path $proxyLog) { @(Get-Content $proxyLog -Encoding UTF8 | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } | Where-Object { $_.event }) } else { @() }
+  $sus = @($pxEv | Where-Object { $_.event -eq 'suspend' -and [int64]$_.t -ge $t9 })
   $heads9 = @($px | Where-Object { $_.id -in 'FinComDayHeads', 'FinComVoucherObject' -and [int64]$_.t0 -ge $t9 })
   $after = @($heads9 | Select-Object -Skip 1)
   $resp9 = DbResponding

@@ -186,6 +186,9 @@ class H(BaseHTTPRequestHandler):
                         k = HOLD.setdefault(d, {})
                         want = sorted((mid for mid, (g, a, t) in h.items() if k.get(mid, -1) < a), key=int)[:2000]
                         st['want'][d] = want
+                        # ROUND 104 (g3): tally_period_held gives at most 2,000 a day's answer (migration 98), so a day of
+                        # more is wanted over two answers: every MasterID ever wanted for the day is kept for the check
+                        wa = st.setdefault('want_all', {}); wa[d] = sorted(set(wa.get(d, [])) | set(want), key=int)
                         out['want'] = want
                     refresh()
                 save_state()
