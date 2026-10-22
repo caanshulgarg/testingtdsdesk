@@ -61,7 +61,9 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.05), H = ["igst", "cgst",
   const r1late = Q.r1Q("202512", "07"), inLate = new Set(); (r1late.json.b2b || []).forEach(g => g.inv.forEach(i => inLate.add(Q.key(g.ctin, i.inum))));
   ok(!Q.iffFiled("202510", "07") && f.keys.every(k => inLate.has(k)), "an IFF typed as filed after 13 November does not count: its invoices stay in the quarter's GSTR-1");
   F.rec("202510", "07").iff = "2025-11-12";
-  // amendments later: the IFF copy and the quarter's copy both count as filed, for all three months
+  // amendments later: the IFF copy and the quarter's copy both count as filed, for all three months, once each is marked
+  // filed (a JSON downloaded here is a draft until then: 22-Oct-2026); the IFF is marked filed above
+  F.rec("202512", "07").r1 = "2026-01-13";
   x.GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true});
   x.GSTAmend.keep(JSON.parse(JSON.stringify(r1b.json)), "downloaded", {quarter: "202510-202512"});
   const st = x.GSTAmend.state("07", "202601", false);
@@ -73,7 +75,7 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.05), H = ["igst", "cgst",
   i0.itms[0].itm_det.txval += 1000;
   const a1 = x.GSTAmend.json1a("202512", "07");
   ok(a1.rows.length === 1 && a1.rows[0].P === "202511", "a November invoice changed after the quarter's GSTR-1: GSTR-1A in December picks it up");
-  i0.itms[0].itm_det.txval -= 1000; b.filed = {};
+  i0.itms[0].itm_det.txval -= 1000; b.filed = {}; delete F.rec("202512", "07").r1;
   // interest on what is still unpaid after PMT-06
   F.rec("202512", "07").r3b = "2026-02-03"; reset();
   const tqi = G.threeB("202512", "07"), itq = F.interest("202512", "07", tqi);

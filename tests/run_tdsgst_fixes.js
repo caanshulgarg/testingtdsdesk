@@ -72,7 +72,7 @@ let b = books(may);
 x.GSTAmend.keep(JSON.parse(JSON.stringify(x.GSTR.toJson("202605", reg))), "downloaded");
 const filed = b.filed;
 b = books([V("s2", "Sales", "20260501", "S/2", "Beta", [["Beta", -259600], ["Sales", 220000, G], ["Output IGST", 39600]], {gstin: "27AABCB2222B1ZI", pos: "Maharashtra"}), may[1]]);
-b.filed = filed;
+b.filed = filed; b.gstFiled = {[reg]: {"202605": {r1: "2026-06-11"}}};   // May marked filed: a JSON downloaded here counts as filed only then (22-Oct-2026)
 const jul = x.GSTR.toJson("202607", reg), t7 = x.GSTR.threeB("202607", reg);
 ok((jul.b2ba || []).length === 1, "7. July's GSTR-1 carries the 9A amendment of S/2");
 ok(Math.abs(t7.net.taxable - 30000) < 0.01 && Math.abs(t7.net.igst - 3600) < 0.01 && Math.abs(t7.net.cgst - 900) < 0.01, "7. July's 3.1(a): its own 10,000 and the amendment's 20,000 / IGST 3,600 (" + JSON.stringify(t7.net) + ")");

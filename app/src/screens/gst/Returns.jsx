@@ -9,6 +9,7 @@ import SrcTag from "../../parts/SrcTag.jsx";
 import { Bills, R1Summary, partOf, R1_PARTS, R1_ORDER } from "./R1Bills.jsx";
 import R1Portal from "./R1Portal.jsx";
 import R3bPortal from "./R3bPortal.jsx";
+import { AdvLine } from "../../parts/AdvOptIn.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -80,6 +81,7 @@ export function Gstr1({ b, sub }) {
     <R1Summary amendN={amend.length} />
     <p className="note" data-r1-books="" style={{ margin: "8px 2px 0" }}>In the books this month: {g.total.n} document{g.total.n === 1 ? "" : "s"} · taxable {money(g.total.taxable)} · tax {money(g.total.igst + g.total.cgst + g.total.sgst)}
       {adv && (adv.at.length > 0 || adv.txpd.length > 0) ? <> · advances: <button className="linkbtn" onClick={() => gstPartGo("adv")}>see them</button></> : null}</p>
+    <AdvLine />
     </>}
     {on("details") && <>
     {/* round 72 (the owner: "should match the GSTN schema"): the portal's tables first; t70's one row a bill, and By
@@ -149,7 +151,7 @@ export function Gstr3b({ b, sub }) {
       <span className="note">{t.basis === "2b" ? "This month’s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked."}</span>
     </div>
     {/* round 72: Summary is the return as the portal lays it out; Details how FinCom works it out (the steps, the typing) */}
-    {(!sub || sub === "summary") && <R3bPortal b={b} t={t} />}
+    {(!sub || sub === "summary") && <><R3bPortal b={b} t={t} /><AdvLine /></>}
     {onW && <div className="bk-tablewrap" style={{ marginTop: sub ? 0 : 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>
