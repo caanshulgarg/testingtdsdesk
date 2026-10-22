@@ -1,0 +1,387 @@
+// deno test server/video-calls/handler_test.ts (run by tests/run_video_calls_server.py). The fincom-call function with
+// everything outside it STUBBED by one fake fetch: PostgREST (an in-memory table store that reads the filters the handler
+// sends), Storage's signed addresses, Auth, fincom-transcribe, Anthropic, Resend and Cloudflare Realtime.
+import { handler } from "./handler.ts";
+import * as R from "../../app/src/calls/rules.js";
+
+function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
+const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
+
+const SUPA = "https://stand.test", FIRM = "11111111-1111-4111-8111-111111111111", FIRM2 = "22222222-2222-4222-8222-222222222222";
+const OWNER = "aaaaaaaa-0000-4000-8000-000000000001", STAFF = "aaaaaaaa-0000-4000-8000-000000000002", LOOK = "aaaaaaaa-0000-4000-8000-000000000003",
+  STAFF2 = "aaaaaaaa-0000-4000-8000-000000000004", STAFF3 = "aaaaaaaa-0000-4000-8000-000000000005", OTHER = "aaaaaaaa-0000-4000-8000-000000000009";
+const USERS: Record<string, { id: string, email: string, firm: string, role: string, name: string }> = {
+  "tok-owner": { id: OWNER, email: "owner@a.test", firm: FIRM, role: "owner", name: "Anshul" },
+  "tok-staff": { id: STAFF, email: "staff@a.test", firm: FIRM, role: "staff", name: "Riya" },
+  "tok-look": { id: LOOK, email: "look@a.test", firm: FIRM, role: "readonly", name: "Look" },
+  "tok-staff2": { id: STAFF2, email: "s2@a.test", firm: FIRM, role: "staff", name: "S2" },
+  "tok-staff3": { id: STAFF3, email: "s3@a.test", firm: FIRM, role: "staff", name: "S3" },
+  "tok-other": { id: OTHER, email: "o@b.test", firm: FIRM2, role: "owner", name: "Other" },
+};
+let uuidN = 0;
+const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0");
+type Row = Record<string, any>;
+
+function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean } = {}) {
+  const T: Record<string, Row[]> = {
+    members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
+    firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
+    clients: [{ id: "c1", firm_id: FIRM, name: "Client One", deleted: false }, { id: "c2", firm_id: FIRM2, name: "Client Two", deleted: false }],
+    platform_secrets: [{ name: "claude_api_key", value: o.ai === false ? "" : "sk-test" }, ...(o.mail ? [{ name: "resend_api_key", value: "re-test" }] : []),
+      ...(o.cf ? [{ name: "cf_realtime_app_id", value: "app1" }, { name: "cf_realtime_token", value: "cftok" }] : [])],
+    assistant_settings: o.aiOff ? [{ firm_id: FIRM, enabled: false }] : [],
+    app_settings: [{ name: "rustdesk", value: { id_server: "", relay: "", key: "" } }],
+    call_batches: [], call_batch_members: [], call_rooms: [], call_participants: [], call_invites: [], call_messages: [], call_recordings: [], call_pieces: [],
+    call_transcripts: [], call_consents: [], call_client_settings: [], call_remote_sessions: [], client_due_tasks: [],
+  };
+  const DEF: Record<string, () => Row> = {
+    call_rooms: () => ({ id: uuid(), status: "open", chan_key: R.randomToken(32), chan_epoch: 1, cowork_on: false, cowork_epoch: 1, created_at: new Date().toISOString(), invitees: [], client_id: null, batch_id: null }),
+    call_participants: () => ({ id: uuid(), joined_at: new Date().toISOString(), verified: false, otp_tries: 0, state: "waiting", cf_session: null }),
+    call_invites: () => ({ id: uuid(), uses: 0, max_uses: 10 }), call_messages: () => ({ id: T.call_messages.length + 1, at: new Date().toISOString() }),
+    call_recordings: () => ({ id: uuid(), chunks: 0, bytes: 0, ended_at: null, deleted_at: null, started_at: new Date().toISOString() }),
+    call_pieces: () => ({ id: T.call_pieces.length + 1, status: "new", tries: 0, text: "" }), call_batches: () => ({ id: uuid(), retention_days: 365, archived: false, created_at: new Date().toISOString() }),
+    call_remote_sessions: () => ({ id: uuid(), ended_at: null }), call_transcripts: () => ({ tasks_added: [], summary: null }),
+  };
+  const log = { mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[] };
+  const match = (row: Row, k: string, v: string) => {
+    const [op, ...rest] = v.split("."); const val = rest.join(".");
+    const x = row[k];
+    if (op === "eq") return String(x) === val;
+    if (op === "neq") return String(x) !== val;
+    if (op === "is") return val === "null" ? x == null : val === "true" ? x === true : x === false || x == null;
+    if (op === "in") return val.replace(/^\(|\)$/g, "").split(",").includes(String(x));
+    if (op === "gte") return String(x) >= val;
+    if (op === "lt") return Number(x) < Number(val);
+    throw new Error("filter " + v);
+  };
+  const filter = (rows: Row[], sp: URLSearchParams) => {
+    let out = rows.filter((r) => [...sp.entries()].every(([k, v]) => ["select", "order", "limit", "on_conflict"].includes(k) || match(r, k, v)));
+    const ord = sp.get("order"); if (ord) { const [k, d] = ord.split("."); out = out.slice().sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * (d === "desc" ? -1 : 1)); }
+    const lim = sp.get("limit"); if (lim) out = out.slice(0, Number(lim));
+    return out;
+  };
+  const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
+  const fake = (async (input: string | URL | Request, init: RequestInit = {}) => {
+    const url = new URL(String(input)), method = String(init.method || "GET"), h = new Headers(init.headers || {});
+    const tok = (h.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const body = typeof init.body === "string" ? (init.body ? JSON.parse(init.body) : null) : init.body;
+    if (url.origin === SUPA) {
+      const p = url.pathname;
+      if (p === "/auth/v1/user") return USERS[tok] ? J({ id: USERS[tok].id, email: USERS[tok].email }) : J({ msg: "bad" }, 401);
+      if (p.startsWith("/rest/v1/rpc/")) {
+        const fn = p.slice(13); log.rpc.push(fn);
+        if (fn === "mfa_ok") return J(!!USERS[tok]);
+        if (fn === "asst_cap_take") return J({ ok: true });
+        if (fn === "asst_cost_add") return J({ inr: 1.5 });
+        if (fn === "asst_log_add") return J(null);
+        if (fn === "call_client_setting_set") {
+          const u = USERS[tok]; if (!u || u.role !== "owner") return J({ message: "Only the firm's owner can change a client's recording setting", code: "42501" }, 403);
+          T.call_client_settings = T.call_client_settings.filter((x) => x.client_id !== body.p_client);
+          T.call_client_settings.push({ firm_id: u.firm, client_id: body.p_client, allow_recording: body.p_allow, retention_days: body.p_days });
+          return J({});
+        }
+        return J({ message: "no rpc " + fn }, 404);
+      }
+      if (p.startsWith("/rest/v1/")) {
+        const table = p.slice(9), sp = url.searchParams;
+        if (!T[table]) return J({ message: "no table " + table }, 404);
+        const service = tok === "service-key";
+        // a member's own token: row-level security by firm (reads), the due list's rule (writes: owner or staff)
+        const u = USERS[tok];
+        const visible = (rows: Row[]) => service ? rows : rows.filter((r) => !("firm_id" in r) || r.firm_id === (u && u.firm));
+        if (method === "GET") return J(filter(visible(T[table]), sp));
+        if (method === "POST") {
+          const rows = (Array.isArray(body) ? body : [body]) as Row[];
+          if (!service) {
+            log.userWrites.push({ table, tok, rows });
+            if (!u || !(u.role === "owner" || u.role === "staff") || rows.some((r) => r.firm_id !== u.firm)) return J({ message: "new row violates row-level security policy", code: "42501" }, 403);
+          }
+          const oc = sp.get("on_conflict"), pref = h.get("Prefer") || "", made: Row[] = [];
+          for (const r0 of rows) {
+            const r = { ...(DEF[table] ? DEF[table]() : {}), ...r0 };
+            const clash = oc ? T[table].find((x) => oc.split(",").every((k) => String(x[k]) === String(r[k]))) : null;
+            if (clash) { if (/merge-duplicates/.test(pref)) Object.assign(clash, r0); made.push(clash); continue; }
+            T[table].push(r); made.push(r);
+          }
+          return /return=minimal/.test(pref) ? new Response(null, { status: 201 }) : J(made, 201);
+        }
+        if (method === "PATCH") { const rows = filter(T[table], sp); rows.forEach((r) => Object.assign(r, body)); return J(rows); }
+      }
+      if (p.startsWith("/storage/v1/object/upload/sign/")) return J({ url: "/object/upload/sign/" + p.slice(31) + "?token=t" });
+      if (p.startsWith("/storage/v1/object/sign/")) return J({ signedURL: "/object/sign/" + p.slice(24) + "?token=d" });
+      if (p.startsWith("/storage/v1/object/call-recordings/")) return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+      if (p === "/functions/v1/fincom-transcribe") {
+        log.transcribe.push({ url: String(input), auth: tok, type: h.get("Content-Type") });
+        return o.transcribe ? o.transcribe(log.transcribe.length) : J({ ok: true, text: "words " + log.transcribe.length });
+      }
+    }
+    if (String(input).startsWith("https://api.resend.com/")) { log.mails.push(body); return J({ id: "m1" }); }
+    if (String(input).startsWith("https://api.anthropic.com/")) {
+      log.ai.push(body);
+      return J({ content: [{ type: "text", text: o.aiAnswer ?? JSON.stringify({ summary: "They agreed the GST return.", decisions: ["File GSTR-3B by 20th"], actions: [{ title: "Send purchase bills", who: "Client", due: "2026-10-30" }] }) }], usage: { input_tokens: 100, output_tokens: 50 } });
+    }
+    if (String(input).startsWith("https://rtc.live.cloudflare.com/")) {
+      log.cf.push({ url: String(input), method, body, auth: tok });
+      if (String(input).endsWith("/sessions/new")) return J({ sessionId: "cf-" + log.cf.length });
+      return J({ sessionDescription: { type: "answer", sdp: "v=0" }, tracks: (body && body.tracks) || [], requiresImmediateRenegotiation: false });
+    }
+    return J({ message: "not stubbed " + input }, 599);
+  }) as typeof fetch;
+  let clock = Date.parse("2026-10-23T05:00:00Z");
+  const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, now: () => clock });
+  const call = async (body: unknown, tok?: string) => {
+    const res = await h(new Request("https://fn.test/fincom-call", { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://staging.fincom.live", ...(tok ? { Authorization: "Bearer " + tok } : {}) }, body: JSON.stringify(body) }));
+    return { status: res.status, j: await res.json() as any };
+  };
+  return { T, log, call, tick: (ms: number) => { clock += ms; } };
+}
+
+Deno.test("who may call: no token 401; a guest action without a link; a look-only member cannot host", async () => {
+  const s = stand();
+  eq((await s.call({ action: "start", kind: "client", client_id: "c1" })).status, 401, "no token");
+  eq((await s.call({ action: "start", kind: "client", client_id: "c1" }, "anon-key")).status, 401, "the anon key is not a sign-in");
+  eq((await s.call({ action: "guest_hello", token: "short" })).status, 404, "a made-up link");
+  const look = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-look");
+  eq([look.status, look.j.kind], [403, "role"], "look-only cannot start");
+  eq((await s.call({ action: "start", kind: "client", client_id: "c2" }, "tok-staff")).status, 403, "another firm's client");
+  eq((await s.call({ action: "start", kind: "party" }, "tok-staff")).status, 403, "an unknown kind");
+});
+
+Deno.test("a client call: peer to peer with free STUN, 4 at most; the same open room is joined, not made twice", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  eq([a.status, a.j.mode, a.j.max, a.j.me.role], [200, "p2p", 4, "host"], "the host's session");
+  assert(/^call:[0-9a-f]{40}$/.test(a.j.topic), "a channel name from the key, never the key: " + a.j.topic);
+  assert(!JSON.stringify(a.j).includes(s.T.call_rooms[0].chan_key), "the key itself never leaves");
+  eq(a.j.ice, [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] }], "Cloudflare's STUN only (no TURN keys)");
+  const b = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-owner");
+  eq([b.j.room.id, b.j.topic, b.j.me.role], [a.j.room.id, a.j.topic, "member"], "a second start joins the open room");
+  eq((await s.call({ action: "join", room_id: a.j.room.id }, "tok-look")).j.me.role, "member", "a look-only member joins");
+  eq((await s.call({ action: "join", room_id: a.j.room.id }, "tok-staff2")).status, 200, "the fourth person");
+  const full = await s.call({ action: "join", room_id: a.j.room.id }, "tok-staff3");
+  eq([full.status, full.j.kind], [409, "full"], "the fifth: full while peer to peer");
+  eq((await s.call({ action: "join", room_id: a.j.room.id }, "tok-other")).status, 404, "another firm cannot join");
+});
+
+Deno.test("with Cloudflare's keys: the SFU; the person's own session only; tracks of this call only", async () => {
+  const s = stand({ cf: true });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  eq([a.j.mode, a.j.max], ["sfu", R.SFU_MAX], "the SFU and its limit");
+  const sess = await s.call({ action: "cf", room_id: a.j.room.id, op: "session" }, "tok-staff");
+  eq(sess.j.sessionId, "cf-1", "a session made");
+  assert(s.log.cf[0].auth === "cftok" && s.log.cf[0].url.includes("/apps/app1/"), "the app's key used server-side");
+  assert(!JSON.stringify(sess.j).includes("cftok"), "the key never answered");
+  await s.call({ action: "cf", room_id: a.j.room.id, op: "push", sdp: { type: "offer", sdp: "v=0" }, tracks: [{ mid: "0", trackName: "cam" }] }, "tok-staff");
+  eq(s.log.cf[1].body.tracks, [{ location: "local", mid: "0", trackName: "cam" }], "pushed as local tracks");
+  const b = await s.call({ action: "join", room_id: a.j.room.id }, "tok-owner");
+  await s.call({ action: "cf", room_id: b.j.room.id, op: "session" }, "tok-owner");
+  const pull = await s.call({ action: "cf", room_id: a.j.room.id, op: "pull", tracks: [{ sessionId: "cf-3", trackName: "cam", rid: "h" }, { sessionId: "someone-else", trackName: "cam" }] }, "tok-owner");
+  eq(pull.status, 400, "nothing to pull until the other's session is in this call");
+  const pull2 = await s.call({ action: "cf", room_id: a.j.room.id, op: "pull", tracks: [{ sessionId: "cf-1", trackName: "cam", rid: "h" }, { sessionId: "someone-else", trackName: "cam" }] }, "tok-owner");
+  eq(pull2.status, 200, "pulled");
+  eq(s.log.cf[s.log.cf.length - 1].body.tracks, [{ location: "remote", sessionId: "cf-1", trackName: "cam", simulcast: { preferredRid: "h" } }], "only this call's track, with its layer");
+});
+
+Deno.test("guests: link, name and email, a code by email, the waiting room, admitted by the host; removed: the channel moves on", async () => {
+  const s = stand({ mail: true });
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  const inv = await s.call({ action: "invite", room_id: rid, base: "https://evil.example/x" }, "tok-staff");
+  assert(inv.j.url.startsWith("https://staging.fincom.live/#join="), "a link only on FinCom's own site: " + inv.j.url);
+  eq(s.T.call_invites[0].token_hash, await R.sha256Hex(inv.j.token), "only the token's hash kept");
+  eq((await s.call({ action: "guest_hello", token: inv.j.token })).j.title, "Call with Client One", "the guest sees the call's name");
+  eq((await s.call({ action: "guest_start", token: inv.j.token, name: "X", email: "ram@client.test" })).status, 400, "a name of 2 letters at least");
+  const g = await s.call({ action: "guest_start", token: inv.j.token, name: "Ram Kumar", email: "Ram@Client.test" });
+  eq([g.status, g.j.code_sent], [200, true], "the code emailed");
+  const code = /code: (\d{6})/.exec(s.log.mails[0].subject)![1];
+  eq(s.log.mails[0].to, ["ram@client.test"], "to the guest's address");
+  assert(!s.T.call_participants.some((p) => JSON.stringify(p).includes(code)), "the code itself is never stored");
+  const gt = g.j.gt;
+  const poll = await s.call({ action: "guest_poll", gt });
+  eq([poll.j.state, poll.j.topic], ["waiting", undefined], "waiting, no channel yet");
+  eq((await s.call({ action: "topic", gt })).status, 403, "no channel before being let in");
+  eq((await s.call({ action: "roster", room_id: rid, gt })).status, 403, "a guest cannot read the people list");
+  eq((await s.call({ action: "start", kind: "help", gt })).status, 403, "nor start a call");
+  eq((await s.call({ action: "guest_verify", gt, code: "000000" === code ? "111111" : "000000" })).j.kind, "otp", "a wrong code");
+  eq((await s.call({ action: "guest_verify", gt, code })).j.verified, true, "the right code");
+  const roster = await s.call({ action: "roster", room_id: rid }, "tok-staff");
+  const guestRow = roster.j.people.find((p: any) => p.role === "guest");
+  eq([guestRow.state, guestRow.verified, guestRow.email], ["waiting", true, "ram@client.test"], "the host sees them waiting, email checked");
+  eq((await s.call({ action: "admit", room_id: rid, participant_id: guestRow.id }, "tok-owner")).status, 200, "the firm's owner may admit too");
+  const in1 = await s.call({ action: "guest_poll", gt });
+  eq([in1.j.state, in1.j.topic], ["admitted", a.j.topic], "admitted: the call's channel");
+  const chat = await s.call({ action: "chat", gt, body: "Hello, see https://example.com/bill.pdf" });
+  eq([chat.status, chat.j.message.author], [200, "Ram Kumar"], "the guest's chat line kept with their name");
+  eq((await s.call({ action: "upload", gt, what: "chat", name: "big.pdf", size: R.FILE_MAX + 1 })).status, 413, "a file over 20 MB refused");
+  const up = await s.call({ action: "upload", gt, what: "chat", name: "bill (1).pdf", size: 1000 });
+  assert(up.j.path.startsWith(FIRM + "/client/" + rid + "/chat/") && up.j.url.startsWith("https://stand.test/storage/v1/object/upload/sign/call-files/"), "a signed address in the firm's folder: " + up.j.path);
+  eq((await s.call({ action: "chat", gt, file: { path: FIRM + "/client/other-room/chat/x.pdf", name: "x", size: 10 } })).status, 400, "a file of another call refused");
+  eq((await s.call({ action: "upload", gt, what: "rec", recording_id: "x", size: 10 })).status, 403, "a guest never uploads the recording");
+  const rm = await s.call({ action: "remove", room_id: rid, participant_id: guestRow.id }, "tok-staff");
+  assert(rm.j.rekey && rm.j.topic !== a.j.topic, "removed: a new channel name");
+  eq((await s.call({ action: "topic", gt })).j.kind, "notin", "the removed guest gets no new name");
+  eq((await s.call({ action: "topic", room_id: rid }, "tok-staff")).j.topic, rm.j.topic, "the others get it");
+  eq((await s.call({ action: "remove", room_id: rid, participant_id: guestRow.id }, "tok-look")).status, 403, "only the host removes");
+});
+
+Deno.test("guests without mail set up: no code, the host decides in the waiting room; a run-out pass", async () => {
+  const s = stand({ mail: false });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  const inv = await s.call({ action: "invite", room_id: a.j.room.id }, "tok-staff");
+  const g = await s.call({ action: "guest_start", token: inv.j.token, name: "Sita", email: "sita@x.test" });
+  eq([g.j.code_sent, g.j.mail], [false, false], "no code without mail");
+  eq((await s.call({ action: "guest_verify", gt: g.j.gt, code: "123456" })).j.kind, "nocode", "nothing to verify");
+  s.tick((R.GUEST_SESSION_SECS + 5) * 1000);
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt })).status, 401, "the guest pass runs out");
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt.slice(0, -2) + "xx" })).status, 401, "a changed pass is refused");
+});
+
+Deno.test("a class: a batch member verified by email comes straight in; others wait", async () => {
+  const s = stand({ mail: true });
+  const b = await s.call({ action: "batch_save", name: "GST batch 1", emails: ["Student@x.test"] }, "tok-staff");
+  eq(s.T.call_batch_members[0].email, "student@x.test", "emails kept in lower case");
+  eq((await s.call({ action: "batch_save", name: "x", emails: [] }, "tok-look")).status, 403, "look-only cannot change a batch");
+  const a = await s.call({ action: "start", kind: "class", batch_id: b.j.id }, "tok-staff");
+  eq(a.j.room.kind, "class", "a class room");
+  const inv = await s.call({ action: "invite", room_id: a.j.room.id }, "tok-staff");
+  for (const [email, want] of [["student@x.test", "admitted"], ["visitor@x.test", "waiting"]]) {
+    const g = await s.call({ action: "guest_start", token: inv.j.token, name: "Person", email });
+    const code = /code: (\d{6})/.exec(s.log.mails[s.log.mails.length - 1].subject)![1];
+    await s.call({ action: "guest_verify", gt: g.j.gt, code });
+    eq((await s.call({ action: "guest_poll", gt: g.j.gt })).j.state, want, email);
+  }
+});
+
+Deno.test("recording: off for a client until the owner turns it on; the notice; only the host's pieces", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  eq((await s.call({ action: "rec_start", room_id: rid }, "tok-staff")).j.kind, "recoff", "off by default for a client");
+  eq((await s.call({ action: "settings", client_id: "c1", set: true, allow: true, days: 120 }, "tok-staff")).status, 403, "staff cannot turn it on");
+  eq((await s.call({ action: "settings", client_id: "c1", set: true, allow: true, days: 120 }, "tok-owner")).j.setting.allow_recording, true, "the owner turns it on");
+  const rec = await s.call({ action: "rec_start", room_id: rid }, "tok-staff");
+  eq(rec.j.notice, "This call is being recorded", "the notice everyone sees");
+  eq(s.T.call_recordings[0].retain_until, "2027-02-20", "kept for the client's 120 days");
+  await s.call({ action: "join", room_id: rid }, "tok-look");
+  eq((await s.call({ action: "rec_start", room_id: rid }, "tok-look")).status, 403, "only the host records");
+  const up = await s.call({ action: "upload", room_id: rid, what: "rec", recording_id: rec.j.recording_id, seq: 3, size: 1000 }, "tok-staff");
+  assert(up.j.path === FIRM + "/client/" + rid + "/rec/" + rec.j.recording_id + "/00003.part", "the piece's place: " + up.j.path);
+  eq((await s.call({ action: "consent", room_id: rid, recording_id: rec.j.recording_id, event: "accepted" }, "tok-look")).status, 200, "consent logged");
+  eq(s.T.call_consents.map((c) => c.event), ["accepted"], "the consent log");
+  const poll = await s.call({ action: "join", room_id: rid }, "tok-owner");
+  eq(poll.j.recording.notice, "This call is being recorded", "someone joining is told at once");
+  await s.call({ action: "rec_stop", recording_id: rec.j.recording_id }, "tok-staff");
+  assert(s.T.call_recordings[0].ended_at, "stopped");
+  const cls = stand();
+  const b = await cls.call({ action: "batch_save", name: "B1", emails: [] }, "tok-staff");
+  const c = await cls.call({ action: "start", kind: "class", batch_id: b.j.id }, "tok-staff");
+  await cls.call({ action: "rec_start", room_id: c.j.room.id }, "tok-staff");
+  eq(cls.T.call_recordings[0].retain_until, "2027-10-23", "a class: a year");
+  assert(cls.T.call_recordings[0].prefix.startsWith(FIRM + "/class/" + b.j.id + "/"), "a class's files in its batch's folder");
+});
+
+Deno.test("the transcript: each person's own pieces through fincom-transcribe with the caller's token; merged in order with names", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  const b = await s.call({ action: "join", room_id: rid }, "tok-owner");
+  const mine = (p: any) => FIRM + "/client/" + rid + "/mic/" + p + "/";
+  eq((await s.call({ action: "piece", room_id: rid, seq: 0, start_ms: 0, dur_ms: 9000, path: mine(b.j.me.id) + "00000.webm" }, "tok-staff")).status, 403, "another's piece refused");
+  eq((await s.call({ action: "piece", room_id: rid, seq: 0, start_ms: 0, dur_ms: 61000, path: mine(a.j.me.id) + "00000.webm" }, "tok-staff")).status, 400, "over 60 s refused");
+  await s.call({ action: "piece", room_id: rid, seq: 0, start_ms: 0, dur_ms: 9000, path: mine(a.j.me.id) + "00000.webm" }, "tok-staff");
+  await s.call({ action: "piece", room_id: rid, seq: 0, start_ms: 9500, dur_ms: 12000, path: mine(b.j.me.id) + "00000.webm" }, "tok-owner");
+  await s.call({ action: "piece", room_id: rid, seq: 1, start_ms: 30000, dur_ms: 8000, path: mine(a.j.me.id) + "00001.webm" }, "tok-staff");
+  await s.call({ action: "piece", room_id: rid, seq: 1, start_ms: 30000, dur_ms: 8000, path: mine(a.j.me.id) + "00001.webm" }, "tok-staff");
+  eq(s.T.call_pieces.length, 3, "a piece sent twice kept once");
+  eq((await s.call({ action: "transcribe", room_id: rid }, "tok-look")).status, 403, "look-only cannot make it");
+  const t = await s.call({ action: "transcribe", room_id: rid }, "tok-owner");
+  eq(t.j.lines.map((l: any) => l.who + ":" + l.text), ["Riya:words 1", "Anshul:words 2", "Riya:words 3"], "in the order said, each with their name");
+  assert(s.log.transcribe.every((x) => x.auth === "tok-owner") && s.log.transcribe[0].url.includes("client=c1") && s.log.transcribe[0].url.includes("secs=9"), "fincom-transcribe with the caller's own token, the client and the length");
+  const s2 = stand({ transcribe: () => new Response(JSON.stringify({ ok: false, kind: "limit" }), { status: 429 }) });
+  const a2 = await s2.call({ action: "start", kind: "help" }, "tok-staff");
+  await s2.call({ action: "piece", room_id: a2.j.room.id, seq: 0, start_ms: 0, dur_ms: 9000, path: FIRM + "/help/" + a2.j.room.id + "/mic/" + a2.j.me.id + "/00000.webm" }, "tok-staff");
+  const t2 = await s2.call({ action: "transcribe", room_id: a2.j.room.id }, "tok-staff");
+  eq([t2.j.wait, t2.j.left], [60, 1], "Groq's limit: wait a minute, the piece kept for later");
+});
+
+Deno.test("the summary: one call within the AI switch and cap; checked; action items to the due list as the person", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  eq((await s.call({ action: "summarise", room_id: rid }, "tok-staff")).j.kind, "notranscript", "no transcript yet");
+  await s.call({ action: "piece", room_id: rid, seq: 0, start_ms: 0, dur_ms: 9000, path: FIRM + "/client/" + rid + "/mic/" + a.j.me.id + "/00000.webm" }, "tok-staff");
+  await s.call({ action: "transcribe", room_id: rid }, "tok-staff");
+  const sm = await s.call({ action: "summarise", room_id: rid }, "tok-staff");
+  eq([sm.status, sm.j.summary.actions[0].title], [200, "Send purchase bills"], "the summary");
+  eq(s.log.ai.length, 1, "one AI call");
+  assert(["asst_cap_take", "asst_cost_add", "asst_log_add"].every((f) => s.log.rpc.includes(f)), "the cap, the cost and the log as every AI call");
+  eq((await s.call({ action: "tasks", room_id: rid, items: [{ title: "Send purchase bills", due: "2026-10-30" }] }, "tok-staff")).j.added, 1, "added as tasks");
+  const w = s.log.userWrites.find((x) => x.table === "client_due_tasks");
+  eq([w.tok, w.rows[0].source, w.rows[0].ref, w.rows[0].created_by], ["tok-staff", "call", rid, STAFF], "with the person's own token, marked from the call");
+  await s.call({ action: "join", room_id: rid }, "tok-look");
+  eq((await s.call({ action: "tasks", room_id: rid, items: [{ title: "x" }] }, "tok-look")).j.kind, "role", "a look-only member cannot add tasks");
+  const off = stand({ aiOff: true });
+  const a2 = await off.call({ action: "start", kind: "help" }, "tok-staff");
+  off.T.call_transcripts.push({ room_id: a2.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
+  eq((await off.call({ action: "summarise", room_id: a2.j.room.id }, "tok-staff")).j.kind, "off", "AI switched off by the owner");
+  const bad = stand({ aiAnswer: "Sure! Here is a summary." });
+  const a3 = await bad.call({ action: "start", kind: "help" }, "tok-staff");
+  bad.T.call_transcripts.push({ room_id: a3.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
+  eq((await bad.call({ action: "summarise", room_id: a3.j.room.id }, "tok-staff")).j.kind, "ai", "an answer not in the shape is refused");
+});
+
+Deno.test("working together: only the host starts it; members who can read the client follow; a guest never; ends with the call", async () => {
+  const s = stand({ mail: false });
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  await s.call({ action: "join", room_id: rid }, "tok-look");
+  eq((await s.call({ action: "cowork", room_id: rid, on: true }, "tok-look")).j.kind, "host", "only the host starts it");
+  eq((await s.call({ action: "cowork_join", room_id: rid }, "tok-look")).j.kind, "cowork", "nothing to join before it starts");
+  const on = await s.call({ action: "cowork", room_id: rid, on: true }, "tok-staff");
+  assert(/^cowork:[0-9a-f]{40}$/.test(on.j.topic) && on.j.topic !== a.j.topic, "its own channel");
+  eq((await s.call({ action: "cowork_join", room_id: rid }, "tok-look")).j.topic, on.j.topic, "a look-only member follows (their own rights stay look-only)");
+  const inv = await s.call({ action: "invite", room_id: rid }, "tok-staff");
+  const g = await s.call({ action: "guest_start", token: inv.j.token, name: "Client Person", email: "c@x.test" });
+  const gid = s.T.call_participants.find((p) => p.role === "guest")!.id;
+  await s.call({ action: "admit", room_id: rid, participant_id: gid }, "tok-staff");
+  const gj = await s.call({ action: "cowork_join", room_id: rid, gt: g.j.gt });
+  eq([gj.status, gj.j.kind], [403, "guest"], "a guest gets no working-together channel");
+  assert(!JSON.stringify((await s.call({ action: "guest_poll", gt: g.j.gt })).j).includes(on.j.topic.slice(7)), "nor its name in the guest's session");
+  await s.call({ action: "end", room_id: rid }, "tok-staff");
+  eq([s.T.call_rooms[0].status, s.T.call_rooms[0].cowork_on], ["ended", false], "the call's end ends it");
+  eq((await s.call({ action: "cowork_join", room_id: rid }, "tok-look")).status, 403, "nothing to follow after the end");
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt })).j.state, "ended", "the guest is told");
+});
+
+Deno.test("remote help (stage 2): owner or staff only; the reason logged; ended with the call", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const rid = a.j.room.id;
+  await s.call({ action: "join", room_id: rid }, "tok-look");
+  eq((await s.call({ action: "remote", room_id: rid, op: "start", reason: "fix Tally" }, "tok-look")).j.kind, "role", "look-only refused");
+  eq((await s.call({ action: "remote", room_id: rid, op: "start", reason: "x" }, "tok-staff")).status, 400, "a reason is needed");
+  const st = await s.call({ action: "remote", room_id: rid, op: "start", reason: "Fix the Tally company path", peer_name: "Client" }, "tok-staff");
+  eq(s.T.call_remote_sessions[0].reason, "Fix the Tally company path", "the log row with the reason");
+  eq([s.T.call_remote_sessions[0].client_id, s.T.call_remote_sessions[0].host_user], ["c1", STAFF], "who and which client");
+  eq(st.j.server, { id_server: "", relay: "", key: "" }, "the configurable RustDesk server (empty: RustDesk's public servers)");
+  assert(!JSON.stringify(s.T.call_remote_sessions).toLowerCase().includes("password"), "no password anywhere");
+  eq((await s.call({ action: "remote", room_id: rid, op: "end", id: st.j.id }, "tok-staff")).j.ended, true, "ended");
+  const st2 = await s.call({ action: "remote", room_id: rid, op: "start", reason: "Second look" }, "tok-staff");
+  await s.call({ action: "end", room_id: rid }, "tok-staff");
+  assert(s.T.call_remote_sessions.find((x) => x.id === st2.j.id)!.ended_at, "the call's end closes the log row");
+});
+
+Deno.test("schedule a meeting: the .ics, the invite by email when mail is set up, else the text to copy", async () => {
+  const s = stand({ mail: true });
+  const r = await s.call({ action: "schedule", title: "Year-end review", at: "2026-10-25T05:30:00Z", minutes: 45, emails: ["a@x.test", "B@x.test"], client_id: "c1", base: "https://staging.fincom.live/review/" }, "tok-staff");
+  eq([r.status, r.j.emailed], [200, 2], "emailed to both");
+  assert(r.j.ics.includes("DTSTART:20261025T053000Z") && r.j.ics.includes("DTEND:20261025T061500Z") && r.j.ics.includes("SUMMARY:Year-end review"), "the calendar invite");
+  assert(r.j.url.startsWith("https://staging.fincom.live/review/#join="), "the link on the page it was made from");
+  eq(s.log.mails[0].attachments[0].filename, "invite.ics", "the .ics attached");
+  eq((await s.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["nope"] }, "tok-staff")).status, 400, "a wrong address refused");
+  const m = stand({ mail: false });
+  const r2 = await m.call({ action: "schedule", title: "Review", at: "2026-10-25T05:30:00Z", emails: ["a@x.test"] }, "tok-staff");
+  eq([r2.j.emailed, r2.j.mail, r2.j.text.includes("Join:")], [0, false, true], "no mail: the invite text to copy");
+  const j = await m.call({ action: "join", room_id: r2.j.room_id }, "tok-staff");
+  eq(j.j.room.status, "open", "joining a scheduled meeting opens it");
+});
