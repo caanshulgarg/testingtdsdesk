@@ -486,3 +486,13 @@ India's date (Asia/Kolkata) instead of Rs 150 a day; the 80% warning stays; the 
 four functions replaced with the same signatures and grants), one transaction, `lock_timeout` 10 s, safe twice. Deploy order: 96, then
 fincom-assistant and gst-2b-match (their cap messages), then the app build (Settings shows "This month" and "Monthly limit"). Tested on pg_stand:
 `tests/run_migration96.py`; the assistant's chain (tests/assistant_stand.py) now runs 96 after 88.
+
+Post automatically (23-Oct-2026, branch next-autopost; NOT run on staging): `server/security/migration-101-autopost.sql` runs after 100
+(staging ... -> 99 -> 100 -> 101; a fresh database the same; it needs 19's sync_refused and clients.deleted, my_firm(), members). Add-only,
+one transaction, `lock_timeout` 10 s, safe twice: two new tables (autopost_claims: each entry posted by itself claimed once per client,
+with its IST day, amount, run and where it went; autopost_log: every change of a client's setting with who, role, old and new value,
+refused or not), functions autopost_claim / autopost_mark (members, not anon; the setting, the limit per entry and the daily total read
+on the server under a lock per client) and the trigger sync_guard_autopost on clients (after clients_keep_keys and sync_guard: only the
+owner switches it on or loosens it; anyone else's attempt keeps the old setting and is logged and written to sync_refused). Grants
+explicit. Deploy order: 101, then the app build (until 101 runs, a signed-in browser posts nothing by itself: the claim is refused and
+the setting says why). Tested on pg_stand: `tests/run_migration101.py` (two browsers claiming at once included).

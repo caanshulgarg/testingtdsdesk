@@ -21,6 +21,8 @@ import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 import NoticeLine from "../parts/NoticeLine.jsx";
+import { AutoChip, AutoWhy, AutoUndo, AutoFilter, apRows, apView, isAuto } from "../parts/AutoPost.jsx";
+import { loadAP } from "../lib/autopostBoot.js";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
@@ -49,7 +51,8 @@ function RowLedger({ r }) {
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
     return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
       {matched && <> <span className="tag ok" data-matched="">Matched with Tally</span></>}
-      {canUndo && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span></>;
+      {canUndo && !isAuto(r) && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span>
+      {isAuto(r) && <div><AutoChip x={r} /></div>}</>;
   }
   const held = b.postedTags && String(b.postedTags[fpHash(r.fp || r.id)] || "").startsWith("unconfirmed");
   const rule = r.ruleId && (allRules().find((x) => x.id === r.ruleId) || { name: "gone" });
@@ -65,12 +68,14 @@ function RowLedger({ r }) {
     {/* the rule's name opens it in the old rule editor */}
     {rule && <span className="src" data-legacy=""><button className="linkbtn" data-redit={r.ruleId}>rule: {ruleLabel(rule)}</button></span>}
     {r.tdsAtPay > 0 && <span className="src">TDS {money(r.tdsAtPay)} deducted at payment</span>}
+    {isAuto(r) ? <AutoChip x={r} /> : <AutoWhy x={r} />}
     {(r.splits || []).length > 0 && <span className="src">split: {r.splits.map((sp) => sp.ledger + " " + money(sp.amt)).join(", ")}</span>}
   </>;
 }
 
 function RowActions({ r }) {
   const act = (a) => () => bankRowAct(a, r.id);
+  if (isAuto(r)) return <AutoUndo x={r} />;
   const rule = <button className="linkbtn" title="Make a rule from this line" onClick={act("rule")}>Rule</button>;
   const ignore = <button className="icon" title="Ignore this entry" aria-label="Ignore" onClick={act("ignore")}>✕</button>;
   if (r.state === "suggested") return <><button className="btn small primary" onClick={act("accept")}>Confirm</button>{rule}{ignore}</>;
@@ -100,8 +105,19 @@ function bankCols(b, total, nSel) {
   ];
 }
 
+// the latest automatic run of this statement, with Undo of the whole run (Post to Tally lists every run)
+function RunLine() {
+  const b = B(), auto = b.rows.filter((r) => r.auto && r.auto.run);
+  if (!auto.length) return null;
+  const run = auto.reduce((a, r) => (String(r.auto.at) > String(a.auto.at) ? r : a)).auto.run, n = auto.filter((r) => r.auto.run === run).length;
+  const day = istDay(Date.now()), today = auto.filter((r) => istDay(r.auto.at) === day).length;
+  return <p className="ap-runline" data-ap-runline="">{today} posted automatically today · <button className="linkbtn" data-ap-undo-run={run} onClick={() => askConfirm({ title: "Undo this automatic run?", ok: "Undo the run",
+    body: "<p class='note'>" + n + " entries: queued ones are taken off the queue; ones in Tally are deleted from Tally through the bridge on this computer. They come back as “Waiting for me”, and each party's rule is paused until you approve one again.</p>" })
+    .then((a) => a && loadAP().then((ap) => ap.undoRun(b.cid, run)).then((r) => { toast(r.words || r.why); render(); }))}>Undo this run ({n})</button></p>;
+}
+
 function Table({ tab }) {
-  const b = B(), all = bankVisibleRows(), total = all.length;
+  const b = B(), all = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), total = all.length;
   const nSel = all.filter((r) => b.sel.has(r.id)).length;
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
@@ -301,7 +317,9 @@ export default function Bank() {
       {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
         <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
       {b.q.trim() && <Found key={b.q} />}
-      {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped ? <Groups /> : <Table tab={tab} />}
+      {tab !== "rules" && <AutoFilter kind="bank" all={b.rows} />}
+      {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped && apView("bank") !== "auto" ? <Groups /> : <Table tab={tab} />}
+      {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
     </div>
     {b.showSettings && <BankSettings />}
   </>;

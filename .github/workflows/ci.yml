@@ -198,9 +198,12 @@ jobs:
       - name: Python packages
         timeout-minutes: 10
         run: python -m pip install -r tests/requirements.txt
-      - name: Playwright's version (the Chromium cache's key)
+      - name: Playwright's version and the runner image (the caches' keys)
         id: pw
-        run: echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+        # ImageOS and ImageVersion are the runner's environment, not the expressions' env context: read here
+        run: |
+          echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
       - name: Chromium from the cache
         uses: actions/cache@v4
         with:
@@ -212,7 +215,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/apt-chromium
-          key: apt-chromium-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-${{ steps.pw.outputs.version }}
+          key: apt-chromium-${{ runner.os }}-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}
       - name: Chromium and the system packages it needs (those of `playwright install --with-deps`, only the missing ones)
         timeout-minutes: 15
         run: |
@@ -255,7 +258,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/apt-libreoffice
-          key: apt-libreoffice-calc-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}
+          key: apt-libreoffice-calc-${{ runner.os }}-${{ steps.pw.outputs.image }}
       - name: LibreOffice Calc (this share runs the tests that need it)
         if: steps.lo.outputs.need == 'true'
         timeout-minutes: 15

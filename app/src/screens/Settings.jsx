@@ -15,6 +15,7 @@ const Batches = lazy(() => import("../calls/CallMenu.jsx").then((m) => ({ defaul
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
+import AutoPostSettings from "../parts/AutoPostSettings.jsx";
 import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
@@ -53,7 +54,7 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
 
 // "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
 export function BackTo() {
@@ -126,6 +127,8 @@ function firmGroups() {
       { id: "reading", label: "Reading bills", about: "How bills and statements are read — free reading first, then Google OCR or Claude — and a test of each.",
         status: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only" },
       { id: "ai", label: "AI help", about: "Claude’s suggestions in TDS, GST, audit and notices: on or off.", status: AIH.sub() },
+      { id: "autopost", label: "Post automatically", about: "Bank lines and purchase bills that copy what a person approved before go to Tally by themselves; the rest waits for you. Off unless switched on, client by client.",
+        status: (() => { const all = Object.values(S.companies || {}), n = all.filter((c) => c.choices && c.choices.autopost && c.choices.autopost.value && c.choices.autopost.value.on).length; return n ? "on for " + n + " of " + all.length + " clients" : "off"; })() },
       { id: "moves", label: "Move on by itself", about: "When a piece of work ends, the page opens what comes next. It never approves, posts or sends anything to Tally, never moves while you are typing or have unsaved changes, and says so with Stay here; Back undoes it.",
         status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
@@ -167,6 +170,7 @@ export function FirmSettings() {
     rates: () => <Rates />,
     reading: () => <Reading />,
     ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
+    autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
     platform: () => <Platform />,
   }[cur];

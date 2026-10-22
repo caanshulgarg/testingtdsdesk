@@ -20,6 +20,7 @@
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
+import AutoRuns from "../parts/AutoPostRuns.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -513,7 +514,7 @@ export function PostStep() {
         {steps && <ImportSteps co={co} ledgers={ledgers} />}
       </div>}
       {/* upload-pages: Purchase → In Tally is this list (it was a page of its own, Done.jsx, which counted another way) */}
-      {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><History co={co} canPost={canPost} />
+      {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><AutoRuns co={co} /><History co={co} canPost={canPost} />
         <HomeLink id="sent" text={"Everything sent to Tally for " + co.name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} /></div>}
       {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><Attention co={co} canPost={canPost} /></div>}
     </section>

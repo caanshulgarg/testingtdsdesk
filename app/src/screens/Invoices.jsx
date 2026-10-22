@@ -6,6 +6,7 @@ import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDetail from "./Bill.jsx";
 import { EmptyNext } from "../parts/StateBar.jsx";
 import QueueDone from "../parts/QueueDone.jsx";
+import { AutoChip, AutoWhy, AutoFilter, apRows, apView } from "../parts/AutoPost.jsx";
 
 function Tag({ e }) {
   if (S.reading[e.id]) return <span className="tag no">Reading…</span>;
@@ -27,7 +28,9 @@ const EMPTY = { draft: () => "No bills to review.",
 
 export default function Invoices() {
   const d = D(), co = CO(), all = Object.values(d.entries);
-  const shown = all.filter((e) => e.status === S.filter).sort((a, b) => (S.filter === "draft" ? byDate(a, b) : byDate(b, a)));
+  // Post automatically: "Posted automatically" shows the bills that went by themselves, whatever their state; "Waiting for
+  // me" (the default) the tab as before, less those on their way by themselves (parts/AutoPost.jsx)
+  const shown = (apView("bills") === "auto" ? apRows("bills", all) : apRows("bills", all.filter((e) => e.status === S.filter))).sort((a, b) => (S.filter === "draft" ? byDate(a, b) : byDate(b, a)));
   // the first bill in the list is chosen when none is (as before)
   if (!S.selected || !d.entries[S.selected]) S.selected = shown[0] ? shown[0].id : null;
   const cnt = (st) => all.filter((e) => e.status === st).length, drafts = cnt("draft");
@@ -45,6 +48,7 @@ export default function Invoices() {
         <div className="row" style={{ margin: "8px 0 0", justifyContent: "flex-end" }}>
           <button className="btn small" onClick={() => vrOpen()} title="Reconciliations → Vendors: a vendor’s statement against its ledger">Reconcile a vendor ledger</button>
         </div>
+        <AutoFilter kind="bills" all={all} />
         {/* which bills: the one row of tabs at the top (To review · Post to Tally · In Tally · Duplicates · Deleted) */}
         {shown.length ? (
           <ul className="queue">
@@ -55,6 +59,7 @@ export default function Invoices() {
                   <span className="a">{num(e.x.total) ? money0(e.x.total) : ""}</span>
                   <span className="m"><ReadBadge mode={e.readMode} /> {[e.x.invoiceNo, e.x.invoiceDate ? fmtDate(e.x.invoiceDate) : ""].filter(Boolean).join(", ") || e.fileName}</span>
                   <span className="t"><Tag e={e} /></span>
+                  {(e.auto || e.autoHold || e.autoWhy) && <span className="m"><AutoChip x={e} inert /><AutoWhy x={e} co={co} /></span>}
                 </button>
               </li>
             ))}

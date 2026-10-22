@@ -22,6 +22,8 @@ import { guestLink, startGuest } from "./calls/launch.js";
 import "./lib/tdsEdit.js";
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
+// Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
+import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
@@ -89,6 +91,7 @@ function start() {
     afterFirstPage(() => import("./sentry.js").then((m) => { window.removeEventListener("error", keep); window.removeEventListener("unhandledrejection", keep); m.start(); }).catch(() => {}), 3000);
   }
   adopt();
+  try { installAutopost(); } catch (e) { /* never in the way of the page */ }
   createRoot(document.getElementById("react-root")).render(<Root />);
   watchFresh();
   // the other screens' files (screens/lazy.js), fetched once the first page is up
