@@ -21,10 +21,10 @@ import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale };
+  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
-  settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
+  settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", mymis: "indigo", lookup: "sky", audit: "rose", letters: "amber",
   help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald" };
 
 const RAIL = { Transactions: "Trans\u00ADactions", Reconciliations: "Reconcil\u00ADiations", Integrations: "Integra\u00ADtions", Compliance: "Compli\u00ADance" };
@@ -94,6 +94,8 @@ function tree() {
     ["Books", [
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
+      // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)
+      { icon: "mymis", label: "My MIS", on: bt === "mymis", go: () => goClient("books:mymis"), title: "Build your own MIS: choose the figures, add charts, save and share" },
       { icon: "books", label: "Statements", on: bt === "fs", go: () => { S.fsTab = ""; goClient("books:fs"); }, title: "Financial statements: balance sheet, P&L, cash flow, notes and computation, linked to the trial balance" },
       // the tie-out with Tally is a tab of Audit
       { icon: "audit", label: "Audit", on: bt === "audit" || bt === "tieout", go: () => goClient("books:audit"), title: "Checks over the books, and the tie-out with Tally" },

@@ -91,6 +91,9 @@ run_migration_order.py                180
 # automatic grants, then 97; every privilege equals staging's snapshot and no table is left without service_role
 run_migration_grants.py               120
 run_mis.js                            120
+run_mis_custom.js                     120  # My MIS engine = MIS / FinSt (ROUND 105)
+run_mis_xlsx.py                       300  TDSDESK_SITE=../app/dist-test  # needs LibreOffice: ci.yml installs libreoffice-calc on the share that runs it
+run_my_mis_ui.py                      300  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
 run_mis_sales.py                      120

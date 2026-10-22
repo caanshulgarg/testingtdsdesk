@@ -197,9 +197,9 @@ jobs:
           fi
           /usr/lib/postgresql/16/bin/postgres --version
           id postgres
-      - name: LibreOffice Calc, only on the share that runs run_fin_xlsx.py (it recalculates the statements' Excel)
+      - name: LibreOffice Calc, only on the shares that run run_fin_xlsx.py or run_mis_xlsx.py (they recalculate the Excel files)
         run: |
-          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -q '^run_fin_xlsx.py '; then
+          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -qE '^(run_fin_xlsx|run_mis_xlsx).py '; then
             command -v soffice || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc; }
             soffice --version
           fi

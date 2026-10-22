@@ -204,6 +204,8 @@ function blockRun(block, def, data, C, pr, ly) {
   // each row: a function of a range ({from, to, months, ly}) -> value, its drill (src) and its label
   let rows = [], additive = true, unitKind = "";
   const sumMonths = (m, c) => r2(monthsIn(c).reduce((s, x) => s + N(m[x]), 0));
+  // whether a row's columns add up to its total (movements do; a closing balance or a ratio does not)
+  const colAdd = block.measure !== "close" && by !== "ratio" && by !== "ageing";
   if (by === "head") {
     additive = false;
     const items = block.rows.items.length ? block.rows.items : HEADS.map((h) => h[0]).concat(PL_LINES.map((x) => x[0]));
@@ -247,7 +249,7 @@ function blockRun(block, def, data, C, pr, ly) {
         if (cd.side === "BS") { const B = C.bal(t); if (!B) return null; return RND(cd.sign * -led.reduce((s, l) => s + N(B[l]), 0), 2); }
         const mv = C.moves(f, t); return RND(cd.sign * -led.reduce((s, l) => s + N((mv[l] || {}).t), 0), 2);
       };
-      rows.push({ key: rowKey("code", code), label: code + " " + cd.label, val, src: { ledgers: led } });
+      rows.push({ key: rowKey("code", code), label: code + " " + cd.label, val, src: { ledgers: led }, colAdd: cd.side !== "BS" });
     });
   } else if (by === "customer" || by === "supplier") {
     const sale = by === "customer", amtK = sale ? "sa" : "pa", whoK = sale ? "who" : "pw";
@@ -281,7 +283,9 @@ function blockRun(block, def, data, C, pr, ly) {
     const items = block.rows.items.length ? block.rows.items : RATIOS.map((x) => x[0]);
     items.forEach((k) => {
       const meta = RATIOS.find((x) => x[0] === k) || [k, k, ""];
-      rows.push({ key: rowKey("ratio", k), label: meta[1], unit: meta[2], val: (c) => ratioOf(k, c.pfrom || c.from, c.pto || c.to, data, C), src: { ratio: k } });
+      // each figure with what it is worked out from (parts: the numerator, the denominator, how), for the Excel's formulas
+      const parts = {};
+      rows.push({ key: rowKey("ratio", k), label: meta[1], unit: meta[2], parts, val: (c) => { const q = {}, v = ratioOf(k, c.pfrom || c.from, c.pto || c.to, data, C, q); parts[c.pfrom ? "ly" : c.key] = q; return v; }, src: { ratio: k } });
     });
     unitKind = "ratio";
   }
@@ -293,7 +297,7 @@ function blockRun(block, def, data, C, pr, ly) {
     else periodCols.forEach((c) => { cells[c.key] = R.val(c); });
     if (!R.cellsOf && block.cols.compare === "ly") cells.ly = lyOk ? R.val(Object.assign({}, cols.find((c) => c.kind === "total"), { pfrom: ly.from, pto: ly.to })) : null;
     if (!R.cellsOf && block.cols.compare === "ly" && lyOk && block.cols.by !== "year") periodCols.filter((c) => c.kind === "period").forEach((c) => { const q = lyRange(c); cells["ly:" + c.key] = R.val(Object.assign({}, c, { pfrom: q.from, pto: q.to })); });
-    return { key: R.key, label: R.label, kind: "line", bold: !!R.bold, unit: R.unit || "", cells, src: R.src };
+    return { key: R.key, label: R.label, kind: "line", bold: !!R.bold, unit: R.unit || "", cells, src: R.src, parts: R.parts || null, colAdd: R.colAdd != null ? R.colAdd : colAdd };
   });
   // the budget: typed against this row, else MIS's budget by head
   if (block.cols.compare === "budget") {
@@ -312,9 +316,9 @@ function blockRun(block, def, data, C, pr, ly) {
     const sorted = lines.slice().sort((a, b) => Math.abs(N(b.cells.t)) - Math.abs(N(a.cells.t)) || a.label.localeCompare(b.label));
     lines = sorted.slice(0, block.rows.top);
     const rest = sorted.slice(block.rows.top);
-    if (rest.length && block.rows.others) others = { key: "others", label: "Others (" + rest.length + ")", kind: "others", cells: sumCells(rest), src: mergeSrc(rest) };
+    if (rest.length && block.rows.others) others = { key: "others", label: "Others (" + rest.length + ")", kind: "others", cells: sumCells(rest), src: mergeSrc(rest), colAdd };
   }
-  if (additive) total = { key: "total", label: "Total", kind: "total", cells: sumCells(out), src: mergeSrc(out) };
+  if (additive) total = { key: "total", label: "Total", kind: "total", cells: sumCells(out), src: mergeSrc(out), colAdd };
   if (by === "ageing" && data.ageing && data.ageing[block.rows.side]) {
     const S = data.ageing[block.rows.side].sum;
     total.cells = Object.assign({ t: S.owe, und: S.und }, Object.fromEntries(S.nb.map((v, i) => ["b" + i, v])));
@@ -348,24 +352,26 @@ function mergeSrc(rows) {
 }
 
 // ---------------------------------------------------------------- ratios: MIS.ratios, the same formulas
-function ratioOf(k, from, to, data, C) {
+function ratioOf(k, from, to, data, C, q = {}) {
   const P = C.pl(from, to), rev = (P.heads.rev || { t: 0 }).t, d = days(from, to) + 1, L = data.ledgers || {};
-  if (k === "gross") return pc(P.gross.t, rev);
-  if (k === "op") return pc(P.ebitda.t, rev);
-  if (k === "net") return pc(P.pbt.t, rev);
-  if (k === "emp") return pc((P.heads.emp || { t: 0 }).t, rev);
-  if (k === "exp") return pc((P.heads.exp || { t: 0 }).t, rev);
+  const PC = (a) => { Object.assign(q, { num: a, den: rev, f: "pct", numL: { gross: "Gross profit", op: "Profit before interest and depreciation", net: "Profit before tax", emp: "Employee costs", exp: "Other expenses" }[k], denL: "Revenue from operations" }); return pc(a, rev); };
+  if (k === "gross") return PC(P.gross.t);
+  if (k === "op") return PC(P.ebitda.t);
+  if (k === "net") return PC(P.pbt.t);
+  if (k === "emp") return PC((P.heads.emp || { t: 0 }).t);
+  if (k === "exp") return PC((P.heads.exp || { t: 0 }).t);
   const B = C.bal(to);
   if (k === "dso" || k === "dpo") {
     if (!B) return null;
     const side = k === "dso" ? "r" : "p";
     const owe = r2(Object.keys(B).filter((l) => (L[l] || {}).kind === side).reduce((s, l) => { const v = side === "r" ? -N(B[l]) : N(B[l]); return Math.abs(v) < 0.005 ? s : s + Math.max(0, v); }, 0));
-    if (k === "dso") { const salesT = r2(C.vs(from, to).reduce((s, v) => s + N(v.sa), 0)), revOps = rev || salesT; return owe > 0 && revOps > 0 ? Math.round(owe / (revOps / d)) : null; }
+    if (k === "dso") { const salesT = r2(C.vs(from, to).reduce((s, v) => s + N(v.sa), 0)), revOps = rev || salesT; Object.assign(q, { num: owe, den: revOps, f: "days", d, numL: "Owed to you (customers' balances)", denL: "Revenue from operations" }); return owe > 0 && revOps > 0 ? Math.round(owe / (revOps / d)) : null; }
     const mv = C.moves(from, to), goods = Object.keys(mv).some((l) => (L[l] || {}).pur && Math.abs(N(mv[l].t)) >= 1);
     const purT = r2(C.vs(from, to).reduce((s, v) => s + N(v.pa), 0));
+    Object.assign(q, { num: owe, den: purT, f: "days", d, numL: "You owe (suppliers' balances)", denL: "Purchases", goods });
     return goods && owe > 0 && purT > 0 ? Math.round(owe / (purT / d)) : null;
   }
-  if (k === "icover") return (P.heads.fin || { t: 0 }).t ? Math.round(P.ebitda.t / P.heads.fin.t * 10) / 10 : null;
+  if (k === "icover") { Object.assign(q, { num: P.ebitda.t, den: (P.heads.fin || { t: 0 }).t, f: "x1", numL: "Profit before interest and depreciation", denL: "Finance costs" }); return (P.heads.fin || { t: 0 }).t ? Math.round(P.ebitda.t / P.heads.fin.t * 10) / 10 : null; }
   if (!B) return null;
   const CA = { ci: 1, inv: 1, tr: 1, cash: 1, stla: 1, oca: 1 }, CL = { stb: 1, tp: 1, ocl: 1, stp: 1 }, at = { ca: 0, cl: 0, stock: 0, debt: 0, eq: 0 };
   Object.entries(B).forEach(([l, v]) => {
@@ -378,10 +384,10 @@ function ratioOf(k, from, to, data, C) {
   });
   const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + P.pat.t);
   const times = (a, c) => (!(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100);
-  if (k === "current") return times(ca, cl);
-  if (k === "quick") return times(liquid, cl);
-  if (k === "debtEq") return !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100;
-  if (k === "wc") return r2(ca - cl);
+  if (k === "current") { Object.assign(q, { num: ca, den: cl, f: "x2", numL: "Current assets", denL: "Current liabilities" }); return times(ca, cl); }
+  if (k === "quick") { Object.assign(q, { num: liquid, den: cl, f: "x2", numL: "Current assets without stock", denL: "Current liabilities" }); return times(liquid, cl); }
+  if (k === "debtEq") { Object.assign(q, { num: debt, den: eq, f: "x2", numL: "Borrowings", denL: "Capital and reserves" }); return !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100; }
+  if (k === "wc") { Object.assign(q, { num: ca, den: cl, f: "diff", numL: "Current assets", denL: "Current liabilities" }); return r2(ca - cl); }
   return null;
 }
 
