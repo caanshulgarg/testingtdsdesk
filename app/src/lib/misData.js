@@ -32,7 +32,7 @@ export function buildMisData(G, def, o = {}) {
   };
   // the entries, each with its sales and customer (MIS.sales) and its purchases and supplier (MIS.purchases)
   const vouchers = all.map((v) => {
-    const out = { id: v.id, date: v.date, no: v.no, type: v.type, party: v.party || "", narr: v.narr || "", ent: v.ent.map((e) => ({ l: e.l, a: e.a })) };
+    const out = { id: v.id, date: v.date, no: v.no, type: v.type, party: v.party || "", narr: v.narr || "", ent: v.ent.map((e) => (e.b && e.b.length ? { l: e.l, a: e.a, b: e.b } : { l: e.l, a: e.a })) };
     v.ent.forEach((e) => led(e.l));
     let sa = 0;
     if (masters) { const s = v.ent.filter((e) => memo[e.l].sales); if (s.length) sa = r2(s.reduce((t, e) => t + e.a, 0)); }

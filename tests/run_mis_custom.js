@@ -118,6 +118,37 @@ const APP = path.join(__dirname, "..", "app", "src", "lib");
     eq(B.total.cells.und, A.sum.und, "... not bill-wise"); eq(B.total.cells.t, A.sum.owe, "... owed, " + (side === "r" ? "7,18,200" : "3,22,400") + " (EXPECTED.md)");
   });
 
+  console.log("\nThe cloud's ageing (server/_shared/misageing.js, for the scheduled MIS) = MIS.ageing");
+  const AG = await import(path.join(__dirname, "..", "server", "_shared", "misageing.js"));
+  const balTo = x.Audit.balances(FROM, TO).at(TO), kindOf = (l) => (x.Audit.isDebtor(l) ? "r" : x.Audit.isCreditor(l) ? "p" : "");
+  ["r", "p"].forEach((side) => {
+    const mine = AG.ageing(b.vouchers, kindOf, TO, side, balTo, x.MIS.msme()), his = x.MIS.ageing(TO, side, balTo);
+    ok(JSON.stringify(mine.sum.nb) === JSON.stringify(his.sum.nb) && mine.sum.owe === his.sum.owe && mine.sum.und === his.sum.und && mine.sum.advance === his.sum.advance, (side === "r" ? "receivables" : "payables") + ": every bucket, owed, not bill-wise and advances");
+    ok(JSON.stringify(mine.rows.map((p) => [p.party, p.nb, p.und, p.net])) === JSON.stringify(his.rows.map((p) => [p.party, p.nb, p.und, p.net])), "... party by party");
+  });
+  const dataAg = A.buildMisData(G(), D.normalizeDef({blocks: []}).def, {today: "20260415"});
+  ok(dataAg.vouchers.some((v) => v.ent.some((e) => e.b && e.b.length)), "the engine's entries carry their bill allocations (for the cloud's ageing)");
+
+  console.log("\nThe cloud's input (server/mis-run/data.ts, the scheduled MIS) from the same books in the cloud copy's shape = the app's");
+  {
+    const CD = await import(path.join(__dirname, "..", "server", "mis-run", "data.ts"));
+    const iso = (d) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6);
+    const def = D.normalizeDef({period: {kind: "fy", fy: "2025"}, blocks: [{type: "table", rows: {by: "head", items: ["rev", "dir"]}, cols: {by: "month"}}, {type: "table", rows: {by: "customer"}, cols: {by: "year"}},
+      {type: "table", rows: {by: "ageing", side: "r"}}, {type: "table", rows: {by: "ageing", side: "p"}}, {type: "table", rows: {by: "ledger", under: ["Bank Accounts", "Cash-in-Hand"]}, measure: "close", cols: {by: "month"}}]}).def;
+    const app = A.buildMisData(G(), def, {today: "20260415"});
+    const rows = {book: {from_date: iso(app.open.from), company: "LARKSPUR"},
+      ledgers: Object.keys(app.ledgers).map((l) => ({name: l, chain: x.Audit.path(l), open: (app.open.bal || {})[l] || 0})),
+      vouchers: [], lines: [], bills: []};
+    b.vouchers.filter((v) => !v.opt && !v.cancel).forEach((v) => { rows.vouchers.push({guid: v.id, day: iso(v.date), vtype: v.type, vno: v.no, party: v.party || "", narration: v.narr || ""});
+      v.ent.forEach((e) => { rows.lines.push({guid: v.id, ledger: e.l, amount: e.a}); (e.b || []).forEach(([nm, ty, am, dd]) => rows.bills.push({guid: v.id, ledger: e.l, name: nm, type: ty, amount: am, credit_days: dd || 0})); }); });
+    const cloud = CD.cloudData(rows, def, "20260415"), ra = E.run(def, app, {today: "20260415"}), rc = E.run(def, cloud, {today: "20260415"});
+    const cells = (res, i) => JSON.stringify(res.blocks[i].rows.concat(res.blocks[i].total ? [res.blocks[i].total] : []).map((r) => [r.key, r.cells]));
+    ok(cells(rc, 0) === cells(ra, 0), "revenue and direct expenses, month by month (" + rc.blocks[0].rows[0].cells.t + ")");
+    ok(cells(rc, 1) === cells(ra, 1), "sales by customer");
+    ok(cells(rc, 2) === cells(ra, 2) && cells(rc, 3) === cells(ra, 3), "receivables and payables by age (the cloud's own ageing)");
+    ok(cells(rc, 4) === cells(ra, 4), "cash and bank at each month's end");
+  }
+
   console.log("\nCash and bank at the end (Cash & bank template) = MIS's balances");
   res = run(Object.assign({}, T.TEMPLATES.find((t) => t.key === "cash").def, {period: {kind: "fy", fy: "2025"}}));
   B = res.blocks.find((z) => z.rows.some((y) => y.key.startsWith("ledger:")));
