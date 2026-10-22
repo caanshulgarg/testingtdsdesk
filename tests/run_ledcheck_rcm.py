@@ -39,7 +39,8 @@ BEFORE = {
     "09 SGST OUTPUT": ["gst", "output", "SGST", "", "high"],
     "GST Adjustment Misc": ["gst", "", "", "", "low"],
     "GST Late Fee": ["none", "", "", "", "high"],
-    "Interest on TDS": ["none", "", "", "", "high"],
+    # the TDS check of 22-Oct-2026, N1: interest on TDS is TDS interest (its payments are challans' interest), not "not tax"
+    "Interest on TDS": ["tds_interest", "", "", "", "high"],
     "TDS ON CONTRACT 194C": ["tds_payable", "", "", "194C", "high"],
     "TDS ON INTEREST 194A": ["tds_payable", "", "", "194A", "high"],
     "TDS ON PROFESSIONAL 194J": ["tds_payable", "", "", "194J", "high"],

@@ -105,7 +105,8 @@ const LedCheck = {
     if (ms.none || (notTaxName && !ms.gst)){ Object.assign(S2, {what: "none", conf: "high"}); if (notTaxName && !ms.none) add("name", "the name says it is not GST"); return Object.assign(S2, {ev}); }
     // the TDS check of 22-Oct-2026, N1 (Leads' "Interest on TDS", called not tax, so its payments were no challan): a name
     // that says TDS or TCS and interest, fee, 234E or penalty is TDS interest or fee, whatever group it is in
-    if (!ms.gst && /\b(TDS|TCS)\b/.test(up) && /INTE?REST|\bFEES?\b|234E|PENA?LTY/.test(up)){ Object.assign(S2, {what: "tds_interest", conf: "high"}); add("name", "the name says TDS or TCS interest or fee"); return Object.assign(S2, {ev}); }
+    // (interest ON TDS, not "TDS on interest", which is 194A's TDS payable)
+    if (!ms.gst && /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|\b(TDS|TCS)\s+(LATE\s*)?(INTEREST|FEES?)\b|234E|201\s*\(?1A/.test(up) && !this.section(n)){ Object.assign(S2, {what: "tds_interest", conf: "high"}); add("name", "the name says TDS or TCS interest or fee"); return Object.assign(S2, {ev}); }
     if (!ms.gst && !ms.tds && payish && !this.taxGroup(b, n)){ Object.assign(S2, {what: "none", conf: "high"}); add("name", "a penalty, fee, loan or payment account, not under Duties & Taxes"); return Object.assign(S2, {ev}); }
     const tdsName = /\bTDS\b|\bTCS\b/.test(up) || this.section(n);
     if (ms.tds || (tdsName && !ms.gst)){

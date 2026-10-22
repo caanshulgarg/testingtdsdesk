@@ -85,15 +85,15 @@ const TDS = {
   // paid of its own: none is invented
   baseFor(t, L, v){
     if (!v.party && L.tds.length === 1 && Math.abs(L.taxable - t.amount) < 1) return {paid: 0, rate: null, how: "top-up"};
-    const tb = this.tallyBase(v, t);
-    if (tb > 0) return {paid: tb, rate: r2(t.amount / tb * 100), how: "tally", fit: 1};
+    const tb = this.tallyBase(v, t), std = this.stdOn(t.section, v.date), fits = (c, rate) => Math.abs(c * rate / 100 - t.amount) <= Math.max(1, t.amount * 0.005);
+    // (the rate applied, where the TDS is it rounded to the rupee: 85 on 4,272 is 2%, not 1.99%)
+    if (tb > 0) return {paid: tb, rate: [t.rate].concat(std).find(z => z && fits(tb, z)) || r2(t.amount / tb * 100), how: "tally", fit: 1};
     const cand = [];
     if (L.taxable) cand.push(L.taxable);
     v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (!m.kind && Math.abs(e.a) > 0) cand.push(Math.abs(e.a)); });
-    const std = this.stdOn(t.section, v.date);
     if (t.rate){
       for (const rate of [t.rate].concat(std)){
-        const hit = cand.find(c => Math.abs(c * rate / 100 - t.amount) <= Math.max(1, t.amount * 0.005));
+        const hit = cand.find(c => fits(c, rate));
         if (hit) return Object.assign({paid: r2(hit), rate, how: "books", fit: 1}, rate !== t.rate ? {ledgerRate: t.rate} : {});
       }
       return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
@@ -383,7 +383,7 @@ const TDS = {
       // the TDS check of 22-Oct-2026, N1 (Leads, Payments S87/S88 of 30-Jul-2025, "Interest on TDS" ₹4,729 and ₹2,437 with
       // the bank alone): interest and the late fee paid from the bank are a TDS payment too, by their ledger (TDS interest
       // or fee) or a name that says TDS or TCS and interest, fee or 234E
-      const ex = bank.length ? v.ent.filter(e => e.a < 0 && /tds_interest|tds_fee/.test(Books.ledgerOf(e.l).what || "") || e.a < 0 && !Books.ledgerOf(e.l).kind && /\b(TDS|TCS)\b/i.test(e.l) && /INTEREST|\bFEES?\b|234E/i.test(e.l)) : [];
+      const ex = bank.length ? v.ent.filter(e => e.a < 0 && /tds_interest|tds_fee/.test(Books.ledgerOf(e.l).what || "") || e.a < 0 && !Books.ledgerOf(e.l).kind && /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|\b(TDS|TCS)\s+(LATE\s*)?(INTEREST|FEES?)\b|234E|201\s*\(?1A/i.test(e.l)) : [];
       if (!L.tdsPaid.length && !ex.length) return;
       // bridge 2.4.3: where Tally marks what each line pays (TYPEOFTAXPAYMENT), the tax alone; interest and fee apart
       const sp = typeof TDSTally === "object" ? TDSTally.split(v) : null, fee = r2(ex.filter(e => /FEE|234E/i.test(e.l) || /fee/.test(Books.ledgerOf(e.l).what || "")).reduce((a, e) => a - e.a, 0)), int = r2(ex.reduce((a, e) => a - e.a, 0) - fee);
