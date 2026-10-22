@@ -155,6 +155,7 @@ export const OTHER_TOOLS = [
       lines: { type: "array", items: { type: "object", additionalProperties: false, required: ["ledger", "dr", "cr"], properties: {
         ledger: { type: "string", description: "the ledger's name exactly as in the client's books (find_ledgers); never one made up" },
         dr: { type: "number", description: "debit amount, or 0" }, cr: { type: "number", description: "credit amount, or 0" } } } } } } } } } },
+  BUILD_MIS_TOOL,
   { name: "point_to_screen", description: "Point the user to the FinCom screen that does what you may not do: post bills, change or delete entries, file a return, change settings. You never do these yourself (entries the user asks you to make are drafted with draft_entries instead).",
     input_schema: { type: "object", additionalProperties: false, required: ["screen", "why"], properties: { screen: { type: "string", enum: Object.keys(SCREENS) }, why: STR } } },
 ];
@@ -165,6 +166,7 @@ export const PAID_DOMAINS = ["taxmann.com", "scconline.com", "manupatra.com", "l
 
 import { EXT_TOOLS } from "./tools/index.ts";
 import { VTYPES } from "./entries.ts";
+import { BUILD_MIS_TOOL } from "./mis.ts";
 
 // a book tool's parameters as a strict JSON schema (every object closed, every field required, null where it may be empty)
 function bookSchema(t: BookTool, firmWide: boolean) {
@@ -292,7 +294,7 @@ export function toolLabel(name: string, input: Record<string, unknown>): string 
     cash_payments_40a3: "Checking cash payments (40A(3))", cash_receipts_269st: "Checking cash receipts (269ST)", msme_dues_43bh: "Checking MSME dues (43B(h))", duplicates: "Looking for duplicates",
     round_sums: "Looking for round sums", purchase_register: "Reading the purchase register", payments_list: "Listing bank payments", tds_vs_26as: "Matching 26AS with the books", itc_3way: "Matching ITC: books, 2B and 3B", turnover_3way: "Matching turnover: books, GSTR-1 and 3B", weekend_entries: "Looking for weekend entries", payroll: "Reading payroll", due_list: "Reading the due list", turnover: "Working out turnover",
     daybook_slice: "Reading the Day Book", list_clients: "Finding the client", record_figures: "Checking the figures against the books", record_notice: "Reading the notice", draft: "Drafting",
-    make_file: "Making the file", draft_entries: "Drafting the entries", point_to_screen: "Finding the right screen", web_search: "Searching the web", web_fetch: "Reading a page", record_citation: "Checking the case law", add_documents: "Adding documents", prefiling_check: "Checking the return before filing",
+    make_file: "Making the file", draft_entries: "Drafting the entries", build_mis: "Laying out the MIS", point_to_screen: "Finding the right screen", web_search: "Searching the web", web_fetch: "Reading a page", record_citation: "Checking the case law", add_documents: "Adding documents", prefiling_check: "Checking the return before filing",
   };
   return (L[name] || name) + span;
 }
