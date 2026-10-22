@@ -48,7 +48,9 @@ with sync_playwright() as p:
     j = json.loads(saved[0][1]) if saved else {}
     b2ba = [i for g in j.get("b2ba", []) for i in g["inv"]]
     ok(any(i["oinum"] == nos[0] for i in b2ba) and not any(i["oinum"] == nos[1] for i in b2ba), "b2ba has the amended invoice only")
-    ok(pg.evaluate("Object.keys(S.books.filed).length") == 2, "the August download is kept as a filed copy")
+    ok(pg.evaluate("Object.keys(S.books.filed).length") == 2, "the August download is kept")
+    # a download counts as filed only once the month is marked filed (22-Oct-2026): August filed on 11 September
+    pg.evaluate("GSTF.rec('202508', '07').r1 = '2025-09-11'")
     # GSTR-1 tab tile, then September shows nothing pending for June
     pg.evaluate("S.gstPart = 'r1'; S.gstYm = '202508'; render();"); pg.wait_for_timeout(500)
     ok("Earlier months to amend" in pg.inner_text("#app"), "GSTR-1 screen points to the amendments")

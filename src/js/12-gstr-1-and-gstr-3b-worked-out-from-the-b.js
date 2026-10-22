@@ -239,7 +239,7 @@ const GSTR = {
   // the differences the amendments reported in a month's GSTR-1 make to outward tax (round 43): {out, zero, rows}
   amendDiff(ym, reg){
     const z = () => ({taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}), res = {out: z(), zero: z(), rows: []};
-    if (!reg || typeof GSTAmend !== "object" || !((S.books || {}).filed) || !Object.keys(S.books.filed).length) return res;
+    if (!reg || typeof GSTAmend !== "object" || !GSTAmend.filed(reg).length) return res;
     let p = null; try { p = GSTAmend.pending(ym, reg); } catch (e){ return res; }
     const pick = d => ({taxable: num(d && d.txval), igst: num(d && d.iamt), cgst: num(d && d.camt), sgst: num(d && d.samt), cess: num(d && d.csamt)});
     (p.rows || []).forEach(r => {

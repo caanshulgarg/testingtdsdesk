@@ -154,6 +154,9 @@ def snapshot(site, port=8290, shots=None):
                             pg.wait_for_timeout(200)
                             for f in pg.evaluate("window.__files"):
                                 files["%s/%s" % (key, f["name"])] = {"sha256": hashlib.sha256(f["text"].encode()).hexdigest(), "bytes": len(f["text"].encode())}
+                            # the walk files each month as it goes: until 22-Oct-2026 the download itself counted as filing; now a
+                            # JSON downloaded here counts only once the month is marked filed (on today's date: no late fee changes)
+                            if part == "r1": pg.evaluate("([ym, reg]) => { const r = GSTF.rec(ym, reg); if (!r.r1 && !r.iff) r.r1 = GSTF.today(); }", [ym, reg])
         br.close()
     srv.shutdown()
     return {"files": files, "figures": {k: sorted(v) for k, v in figures.items()}, "errors": errors}
