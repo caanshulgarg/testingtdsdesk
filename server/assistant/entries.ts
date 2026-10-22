@@ -29,7 +29,7 @@ export function entriesAsked(q: string): boolean {
 export type LineIn = { ledger?: unknown, dr?: unknown, cr?: unknown };
 export type VoucherIn = { type?: unknown, date?: unknown, narration?: unknown, lines?: unknown };
 export type Line = { ledger: string, typed: string, known: boolean, choices: string[], dr: number, cr: number };
-export type Voucher = { n: number, type: string, date: string, narration: string, lines: Line[], dr: number, cr: number, problems: string[] };
+export type Voucher = { n: number, type: string, date: string, narration: string, lines: Line[], dr: number, cr: number, problems: string[], notes: string[] };
 export type Pick = { ledger?: string | null, how?: string, ask?: boolean, choices?: string[], none?: boolean };
 export type Checked = { ok: boolean, vouchers: Voucher[], problems: string[], fix: number[], noBooks: boolean, period: { from: string, to: string } | null };
 
@@ -55,8 +55,34 @@ export function booksPeriod(rows: { from?: unknown, to?: unknown }[], today: str
   return { from: starts[0], to: (m >= 4 ? y + 1 : y) + "-03-31" };
 }
 
+// The dates a request states (the owner, 22-Oct-2026: "as person say or today or earlier"): ISO, dd-mm-yyyy or dd/mm/yyyy
+// (India), "31 March 2027", "31st of Mar, 2027", "March 31, 2027", "30th November" (no year: "--11-30"), "today",
+// "tomorrow". A future date the model writes that is not one of these is replaced by today (checkEntries).
+const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const MON_RE = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const iso = (y: number, m: number, d: number) => y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+export function statedDates(text: string, today: string): Set<string> {
+  const s = String(text || ""), out = new Set<string>();
+  const put = (y: number | null, m: number, d: number) => {
+    if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return;
+    if (y == null) { if (realDate(iso(2024, m, d))) out.add("--" + iso(2024, m, d).slice(5)); return; }   // 2024: 29 Feb is a day
+    if (realDate(iso(y, m, d))) out.add(iso(y, m, d));
+  };
+  for (const m of s.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) put(Number(m[1]), Number(m[2]), Number(m[3]));
+  for (const m of s.matchAll(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4}|\d{2})\b/g)) put(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1]));
+  for (const m of s.matchAll(new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s*(?:of\\s+)?" + MON_RE + "\\b\\.?(?:,?\\s*(\\d{4})\\b)?", "gi")))
+    put(m[3] ? Number(m[3]) : null, MONTHS[m[2].slice(0, 3).toLowerCase()], Number(m[1]));
+  for (const m of s.matchAll(new RegExp("\\b" + MON_RE + "\\b\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s*(\\d{4})\\b)?", "gi")))
+    put(m[3] ? Number(m[3]) : null, MONTHS[m[1].slice(0, 3).toLowerCase()], Number(m[2]));
+  if (/\btoday\b|\baaj\b/i.test(s)) out.add(today);
+  if (/\btomorrow\b/i.test(s)) { const d = new Date(today + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); out.add(d.toISOString().slice(0, 10)); }
+  return out;
+}
+
 // FinCom's check of the vouchers the model drafted. pick: the client's ledger for a typed name (asst_ledger_pick)
-export async function checkEntries(input: { vouchers?: unknown }, deps: { pick: (text: string) => Promise<Pick | null>, period: { from: string, to: string } | null }): Promise<Checked> {
+// today/question/history: a date after today is kept only when the person stated it (statedDates); otherwise today, said
+export async function checkEntries(input: { vouchers?: unknown }, deps: { pick: (text: string) => Promise<Pick | null>, period: { from: string, to: string } | null,
+  today?: string, question?: string, history?: string[] }): Promise<Checked> {
   const all = Array.isArray(input?.vouchers) ? input.vouchers as VoucherIn[] : [];
   const problems: string[] = [], fix: number[] = [];
   if (!all.length) problems.push("No voucher was drafted.");
@@ -69,13 +95,18 @@ export async function checkEntries(input: { vouchers?: unknown }, deps: { pick: 
     return cache.get(k) || null;
   };
   const vouchers: Voucher[] = [];
+  const said = deps.today ? statedDates([deps.question || "", ...(deps.history || [])].join("\n"), deps.today) : new Set<string>();
   for (let i = 0; i < Math.min(all.length, MAX_VOUCHERS); i++) {
-    const v = all[i] || {}, pr: string[] = [];
+    const v = all[i] || {}, pr: string[] = [], notes: string[] = [];
     let structural = false;
     const type = String(v.type ?? "").trim();
     const vt = VTYPES.find((t) => t.toLowerCase() === type.toLowerCase());
     if (!vt) pr.push("“" + (type || "(none)") + "” is not a voucher type FinCom drafts (" + VTYPES.join(", ") + ").");
-    const date = String(v.date ?? "").trim();
+    let date = String(v.date ?? "").trim();
+    if (deps.today && realDate(date) && date > deps.today && !said.has(date) && !said.has("--" + date.slice(5))) {
+      notes.push("The date " + dmy(date) + " was not in your request and is after today, so today's date (" + dmy(deps.today) + ") is used. Change it if you meant another date.");
+      date = deps.today;
+    }
     if (!realDate(date)) pr.push("“" + (date || "(none)") + "” is not a date (YYYY-MM-DD).");
     else if (deps.period && date < deps.period.from) pr.push("Dated " + dmy(date) + ", before the books begin (" + dmy(deps.period.from) + ").");
     else if (deps.period && date > deps.period.to) pr.push("Dated " + dmy(date) + ", after the end of this financial year (" + dmy(deps.period.to) + ").");
@@ -104,7 +135,7 @@ export async function checkEntries(input: { vouchers?: unknown }, deps: { pick: 
     const dr = paisa(lines.reduce((a, l) => a + l.dr, 0)), cr = paisa(lines.reduce((a, l) => a + l.cr, 0));
     if (Math.abs(dr - cr) >= 0.005) { pr.push("Dr " + inr(dr) + " is not equal to Cr " + inr(cr) + "."); structural = true; }
     if (structural) fix.push(i + 1);
-    vouchers.push({ n: i + 1, type: vt || type, date, narration, lines, dr, cr, problems: pr });
+    vouchers.push({ n: i + 1, type: vt || type, date, narration, lines, dr, cr, problems: pr, notes });
   }
   if (noBooks) problems.push("FinCom has no Tally ledgers for this client in the cloud, so the ledgers cannot be checked. Link its Tally company first.");
   const ok = !noBooks && !problems.some((p) => /^No voucher/.test(p)) && vouchers.length > 0 && vouchers.every((v) => !v.problems.length);

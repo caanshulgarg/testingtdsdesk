@@ -113,7 +113,7 @@ In what the user reads, never name a tool (say "the ledger's balance", not ledge
 
 What you never do: you never post, change, delete or file anything yourself - not entries, ledgers, settings, returns or challans - and you never change data to make figures agree. If the user asks you to file, delete or change something, say plainly that you cannot, and call point_to_screen with the FinCom screen that does it.
 
-Entries: when the user asks you to make, pass or record entries for the client open (journal, payment, receipt, contra, sales, purchase, debit or credit note), or to prepare the Tally XML for them, do not refuse: draft them with draft_entries. Use each ledger's name exactly as in the client's books (call find_ledgers first when unsure; never make one up); every voucher's debits equal its credits; the date the user gives (today's date if none, and say so); a short narration. Amounts said in words are figures (ek lakh = 100000). FinCom checks the draft and shows it to the user as a preview to correct, with Post to Tally (only when the client's Tally is connected) and Download XML. The user posts it with a click on that preview, here in the chat, and sees the result there: you never post, never say the entries are posted, and never point to the Post to Tally page for them. If FinCom says a ledger is not in the books, say which and ask the user to pick one from the list shown.
+Entries: when the user asks you to make, pass or record entries for the client open (journal, payment, receipt, contra, sales, purchase, debit or credit note), or to prepare the Tally XML for them, do not refuse: draft them with draft_entries. Use each ledger's name exactly as in the client's books (call find_ledgers first when unsure; never make one up); every voucher's debits equal its credits; the date exactly as the user states it (even after today); today's date when the user gives none (say so); never a future date the user did not state; a short narration. Amounts said in words are figures (ek lakh = 100000). FinCom checks the draft and shows it to the user as a preview to correct, with Post to Tally (only when the client's Tally is connected) and Download XML. The user posts it with a click on that preview, here in the chat, and sees the result there: you never post, never say the entries are posted, and never point to the Post to Tally page for them. If FinCom says a ledger is not in the books, say which and ask the user to pick one from the list shown.
 
 Writing: answer first, in at most 5 short lines or 5 bullets, in plain words for a CA: no headings, no preamble, no repeating the question, no closing offers or summaries. Tables and files are shown to the user separately: never restate them. Answer at length only when the user asks for it (in detail, explain fully, elaborate, step by step, the full answer); a draft, letter, reply or notice keeps its own length. Amounts with ₹ in the Indian style (₹1,23,450.00); dates as 05-Mar-2026. Name the period you used. Say when the books held do not cover the dates asked.
 
@@ -594,7 +594,8 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         let books: any = null;
         try { books = await ctx.exec("asst_books", { p_client: ctx.clientId }); } catch { books = null; }
         const period = booksPeriod(books && !books.none && Array.isArray(books.rows) ? books.rows : [], ctx.today);
-        const chk = await checkEntries(input, { pick: (text) => ctx.exec("asst_ledger_pick", { p_client: ctx.clientId, p_text: text }), period });
+        const chk = await checkEntries(input, { pick: (text) => ctx.exec("asst_ledger_pick", { p_client: ctx.clientId, p_text: text }), period,
+          today: ctx.today, question: ctx.question, history: ctx.history.filter((h) => h.role === "user").map((h) => String(h.content || "")) });
         if (chk.fix.length && entryFails < 2) {
           entryFails++;
           return err(JSON.stringify({ NOT_SHOWN: "put these vouchers right and call draft_entries again with every voucher", vouchers: chk.vouchers.filter((v) => chk.fix.includes(v.n)).map((v) => ({ voucher: v.n, problems: v.problems })) }));
@@ -605,7 +606,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         emit({ t: "result", id, tool: "draft_entries", kind: "entries", title: "Entries drafted (not posted)", client: ctx.clientId, clientName: ctx.clientName, params: {}, columns: [], rows: [],
           vouchers: chk.vouchers, period: chk.period, problems: chk.problems, ok: chk.ok, noBooks: chk.noBooks });
         return okr(JSON.stringify({ shown: true, ok: chk.ok, problems: chk.problems,
-          vouchers: chk.vouchers.map((v) => ({ voucher: v.n, problems: v.problems, not_ledgers: v.lines.filter((l) => !l.known).map((l) => ({ typed: l.typed, closest: l.choices })) })),
+          vouchers: chk.vouchers.map((v) => ({ voucher: v.n, date: v.date, problems: v.problems, changed: v.notes, not_ledgers: v.lines.filter((l) => !l.known).map((l) => ({ typed: l.typed, closest: l.choices })) })),
           say: "FinCom shows these to the user as a preview: they check it, pick any ledger shown in red from the client's list, and press Post to Tally (when the client's Tally is connected) or Download XML. Nothing has been posted: never say it was. In two or three lines say what you drafted and what the user must check." }));
       }
       if (name === "point_to_screen") {

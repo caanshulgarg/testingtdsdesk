@@ -334,6 +334,19 @@ Deno.test("entries asked for (Hinglish, as the owner asked): drafted and checked
   const r2 = await ask(c2, { question: "Pass a journal entry: rent 50,000 debit Office Rent credit cash paid on 31 March 2026", client_id: CLIENT });
   eq([ofType(r2.events, "screen").length, c2.routerCalls.length, c2.calls.length], [0, 0, 2], "the model drafts it (no router, no screen)");
   eq(ofType(r2.events, "result").filter((x) => x.kind === "entries").map((x) => x.ok), [true], "a clean draft is ready");
+  // dates (the owner, 22-Oct-2026: "as person say or today or earlier"): a future date the person did not state becomes
+  // today, with one line; a future date the person stated is kept (inside the books' period)
+  const jv = (date: string) => ({ vouchers: [{ type: "Journal", date, narration: "Audit fee provision", lines: [{ ledger: "Legal and Professional Fees", dr: 25000, cr: 0 }, { ledger: "Cash", dr: 0, cr: 25000 }] }] });
+  const c4 = new MockClaude([[tool("draft_entries", jv("2026-12-31"))], [text("Drafted.")]]);
+  const r4 = await ask(c4, { question: "make a journal entry for the audit fee provision of 25,000 " + crypto.randomUUID().slice(0, 4), client_id: CLIENT });
+  const p4 = ofType(r4.events, "result").find((x) => x.kind === "entries");
+  eq([p4.vouchers[0].date, p4.vouchers[0].notes.length, p4.ok], ["2026-10-13", 1, true], "a future date not stated: today, said in one line");
+  assert(/31-Dec-2026 was not in your request/.test(p4.vouchers[0].notes[0]), "the line: " + p4.vouchers[0].notes[0]);
+  assert(/today's date \(13-Oct-2026\) is used/.test(JSON.stringify((c4.calls[1] as any).messages.slice(-1))), "the model is told");
+  const c5 = new MockClaude([[tool("draft_entries", jv("2026-12-31"))], [text("Drafted.")]]);
+  const r5 = await ask(c5, { question: "make a journal entry for the audit fee provision of 25,000 dated 31-12-2026", client_id: CLIENT });
+  const p5 = ofType(r5.events, "result").find((x) => x.kind === "entries");
+  eq([p5.vouchers[0].date, p5.vouchers[0].notes], ["2026-12-31", []], "a future date the person stated: kept");
   // the whole firm open (no client): not drafted
   const c3 = new MockClaude([[tool("draft_entries", { vouchers: [] })], [text("Open the client first.")]]);
   const r3 = await ask(c3, { question: "make a journal entry for rent", client_id: null });

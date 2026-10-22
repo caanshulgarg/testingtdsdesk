@@ -97,6 +97,7 @@ SETUP = """(G) => {
 ANSWER = """(cid) => {
   const vouchers = [
     {n: 1, type: "Payment", date: "2026-10-22", narration: "Paid to Richa Khandelwal", dr: 100000, cr: 100000, problems: [],
+     notes: ["The date 30-Oct-2026 was not in your request and is after today, so today's date (22-Oct-2026) is used. Change it if you meant another date."],
      lines: [{ledger: "RICHA KHANDELWAL", typed: "Richa Khandelwal", known: true, choices: [], dr: 100000, cr: 0}, {ledger: "HDFC BANK LTD", typed: "HDFC Bank", known: true, choices: [], dr: 0, cr: 100000}]},
     {n: 2, type: "Journal", date: "2026-09-30", narration: "Rent for September", dr: 50000, cr: 50000, problems: ["\\u201cRent\\u201d is not a ledger in the client's Tally (closest: Office Rent, Rent Payable)."],
      lines: [{ledger: "Rent", typed: "Rent", known: false, choices: ["Office Rent", "Rent Payable"], dr: 50000, cr: 0}, {ledger: "Rent Payable", typed: "Rent Payable", known: true, choices: [], dr: 0, cr: 50000}]}];
@@ -147,6 +148,9 @@ with sync_playwright() as p:
     items = pg.evaluate("window.__mine()")
     ok(len(items) == 1 and items[0]["k"] == "asstEntries" and items[0]["d"]["log"][0]["what"].startswith("drafted by Ask FinCom") and items[0]["d"]["log"][0]["by"] == "Anshul" and items[0]["d"]["log"][0]["at"],
        "   saved with the client's books, logged: who and when (%s)" % (items[0]["d"]["log"] if items else None))
+    nt = pg.inner_text(CARD + " [data-ent-v='0'] [data-ent-note]") if pg.locator(CARD + " [data-ent-v='0'] [data-ent-note]").count() else ""
+    ok("was not in your request" in nt and "today's date (22-Oct-2026) is used" in nt and pg.locator(CARD + " [data-ent-note]").count() == 1,
+       "   a future date the person did not state was set to today: one line says so (%r)" % nt)
     # ---- 2. an unknown ledger blocks
     ok(pg.locator(CARD + " [data-ent-v='1'] tr.bad [data-ent-unknown]").count() == 1 and pg.get_attribute(CARD, "data-ready") == "no", "2. 'Rent' is not a ledger: red, with the names to pick")
     ok(disabled(pg, CARD + " [data-ent-post]") and disabled(pg, CARD + " [data-ent-xml]"), "   it blocks Post and Download")

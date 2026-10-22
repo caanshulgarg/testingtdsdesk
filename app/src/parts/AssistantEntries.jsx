@@ -23,7 +23,7 @@ function draftFor(r, t) {
   const cid = r.client;
   if (r.did) return Drafts.get(cid, r.did) || r.draft || null;
   const d = { id: newDraftId(), cid, at: new Date().toISOString(), by: me(), q: String((t && t.q) || "").slice(0, 500), period: r.period || null, state: "draft", results: {}, log: [],
-    vouchers: (r.vouchers || []).map((v) => ({ id: newVoucherId(), type: v.type, date: v.date, narration: v.narration || "", lines: (v.lines || []).map((l) => ({ ledger: l.ledger, dr: l.dr || "", cr: l.cr || "", choices: l.choices || [] })) })) };
+    vouchers: (r.vouchers || []).map((v) => ({ id: newVoucherId(), type: v.type, date: v.date, narration: v.narration || "", notes: v.notes || [], lines: (v.lines || []).map((l) => ({ ledger: l.ledger, dr: l.dr || "", cr: l.cr || "", choices: l.choices || [] })) })) };
   r.did = d.id; r.draft = d;
   (Drafts.by[cid] = Drafts.by[cid] || {})[d.id] = d;
   Drafts.save(cid, d, "drafted by Ask FinCom" + (d.q ? " from “" + d.q.slice(0, 200) + "”" : "") + ": " + d.vouchers.length + " voucher" + (d.vouchers.length === 1 ? "" : "s"));
@@ -57,7 +57,7 @@ export function EntriesCard({ co, d, compact }) {
   const now = () => { if (timer.current) { clearTimeout(timer.current); flush(); } };
   const set = (vi, f, val, li) => {
     const v = d.vouchers[vi];
-    if (li == null) { const was = v[f]; v[f] = val; changed("voucher " + (vi + 1) + " " + f + " " + JSON.stringify(was) + " → " + JSON.stringify(val)); return; }
+    if (li == null) { const was = v[f]; v[f] = val; if (f === "date") v.notes = []; changed("voucher " + (vi + 1) + " " + f + " " + JSON.stringify(was) + " → " + JSON.stringify(val)); return; }
     const l = v.lines[li], was = l[f];
     l[f] = val;
     if (f === "ledger") { const hit = idx && idx.get(ledKey(val)); if (hit) l.ledger = hit.name; }
@@ -116,6 +116,7 @@ export function EntriesCard({ co, d, compact }) {
             <td className="n">{money(tt.dr)}</td><td className="n">{money(tt.cr)}</td><td /></tr></tfoot>
         </table></div>
         {!ro && <button type="button" className="linkbtn asst-ent-add" data-ent-addline="" onClick={() => { v.lines.push({ ledger: "", dr: "", cr: "" }); changed("voucher " + (vi + 1) + " line " + v.lines.length + " added"); }}><Plus size={12} aria-hidden="true" /> Line</button>}
+        {(v.notes || []).length > 0 && !done(v) && v.notes.map((n, i) => <p key={"n" + i} className="note" data-ent-note="">{n}</p>)}
         {probs[vi].length > 0 && <ul className="asst-ent-probs" data-ent-problems="">{probs[vi].map((p, i) => <li key={i}>{p}</li>)}</ul>}
         <Status r={(d.results || {})[v.id]} live={busy} />
       </div>;

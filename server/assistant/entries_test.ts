@@ -4,7 +4,7 @@
 // client's Tally ledgers (the cloud copy), Dr equal to Cr on every voucher, the date inside the books' period, the voucher
 // type one Tally knows. The ledger list is stubbed here (asst_ledger_pick's answers); the end-to-end test with the
 // database is in assistant_test.ts.
-import { booksPeriod, checkEntries, entriesAsked, VTYPES } from "./entries.ts";
+import { booksPeriod, checkEntries, entriesAsked, statedDates, VTYPES } from "./entries.ts";
 import { actionAsked } from "./checks.ts";
 import { route } from "./router.ts";
 
@@ -105,4 +105,47 @@ Deno.test("amounts to the paisa; FinCom's tag in a narration the model wrote is 
   // no books in the cloud: nothing to check the ledgers against
   const n = await checkEntries({ vouchers: [many[0]] }, { pick: async () => ({ none: true, ledger: null, choices: [] }), period: null });
   assert(!n.ok && n.noBooks, "no books: not ok, said");
+});
+
+// the owner, 22-Oct-2026 ("as person say or today or earlier"): the date the person states is used as it is, even after
+// today, inside the books' period; none stated: today; a future date the person did not state is never kept: today, said
+// in one line
+const TODAY = "2026-10-22";
+const V = (date: string) => ({ type: "Journal", date, narration: "", lines: [{ ledger: "Office Rent", dr: 5, cr: 0 }, { ledger: "Cash", dr: 0, cr: 5 }] });
+
+Deno.test("the dates a request states: ISO, dd-mm-yyyy, '31 March 2027', 'March 31', '31st Mar', 'today', 'tomorrow'", () => {
+  const s = (q: string) => Array.from(statedDates(q, TODAY)).sort();
+  eq(s("provision dated 2027-03-31"), ["2027-03-31"], "ISO");
+  eq(s("entry on 31-03-2027 and 15/11/2026"), ["2026-11-15", "2027-03-31"], "dd-mm-yyyy and dd/mm/yyyy (India)");
+  eq(s("rent provision on 31 March 2027"), ["2027-03-31"], "day month year");
+  eq(s("on 31st of Mar, 2027"), ["2027-03-31"], "31st of Mar, 2027");
+  eq(s("dated March 31, 2027"), ["2027-03-31"], "Month day, year");
+  eq(s("salary for 30th November"), ["--11-30"], "no year: the day and month");
+  eq(s("pass it today"), ["2026-10-22"], "today");
+  eq(s("tomorrow's payment"), ["2026-10-23"], "tomorrow");
+  eq(s("Richa ko ek lakh ki payment ki entry karni hai"), [], "none stated");
+  eq(s("rent of 50,000 for 12 months"), [], "amounts and counts are not dates");
+});
+
+Deno.test("a date after today: kept when the person stated it (inside the books), else today with one line; earlier dates kept", async () => {
+  const run = (date: string, question: string) => checkEntries({ vouchers: [V(date)] }, { pick, period: PERIOD, today: TODAY, question });
+  let r = await run("2027-03-31", "make a provision for audit fees dated 31 March 2027");
+  eq([r.vouchers[0].date, r.vouchers[0].notes, r.ok], ["2027-03-31", [], true], "stated: kept as the person said");
+  r = await run("2026-11-30", "salary payable entry for 30th November");
+  eq([r.vouchers[0].date, r.vouchers[0].notes], ["2026-11-30", []], "stated without a year: kept");
+  r = await run("2026-11-15", "Richa ko ek lakh ki payment ki entry karni hai");
+  eq(r.vouchers[0].date, TODAY, "not stated: today");
+  eq(r.vouchers[0].notes, ["The date 15-Nov-2026 was not in your request and is after today, so today's date (22-Oct-2026) is used. Change it if you meant another date."], "said in one line");
+  assert(r.ok, "the change itself does not block the draft");
+  r = await run("2026-09-30", "rent entry for September");
+  eq([r.vouchers[0].date, r.vouchers[0].notes], ["2026-09-30", []], "an earlier date is kept");
+  r = await run("2026-10-22", "pass this entry");
+  eq([r.vouchers[0].date, r.vouchers[0].notes], [TODAY, []], "today is kept");
+  // stated, but outside the books' period: still refused (the books' rule)
+  r = await run("2027-05-31", "entry dated 31-05-2027");
+  eq([r.vouchers[0].date, r.ok], ["2027-05-31", false], "stated but after the books' period: kept and refused");
+  assert(r.vouchers[0].problems.some((p) => /after the end of this financial year/.test(p)), "said why");
+  // an earlier question of the conversation states it: kept
+  r = await checkEntries({ vouchers: [V("2027-03-31")] }, { pick, period: PERIOD, today: TODAY, question: "yes, make it", history: ["provision for audit fees as on 31-03-2027"] });
+  eq([r.vouchers[0].date, r.vouchers[0].notes], ["2027-03-31", []], "stated earlier in the conversation");
 });
