@@ -6,7 +6,7 @@
 // read from their boxes (data-sug) by ruleMakeSug, as before.
 
 import LedgerSelect from "./LedgerSelect.jsx";
-import Confirm, { BankLedger } from "./Confirm.jsx";
+import Confirm, { BankLedger, KeptLine } from "./Confirm.jsx";
 import Loading from "./Loading.jsx";
 import Button from "./Button.jsx";
 import { useRef } from "react";
@@ -16,12 +16,13 @@ const Btn = ({ act, className = "btn small", children, disabled }) => <button cl
 
 // over the bank page, the panel is a section of its own (its Save at the foot); in Client setup the page's section holds it
 const BANK_SET_ID = "bank:settings";
-const closeSettings = () => Drafts.guard(BANK_SET_ID, () => bankSettingsShow(false));
+// closing never asks (the owner, 22-Oct-2026): what is not saved stays as a draft, said when it is opened again (KeptLine)
+const closeSettings = () => bankSettingsShow(false);
 function Panel({ inline }) {
   const b = B(), co = CO(), std = Object.keys(BANK_LEDGER_DEFAULTS), pendingNew = b.newLed.filter((l) => !l.sent).length, nh = Object.keys(b.hist.rows).length;
   const body = <PanelBody b={b} co={co} std={std} pendingNew={pendingNew} nh={nh} />;
   return <div className="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div className="bk-panel-head"><h2 id="bkSetT">{"Bank settings — " + co.name}</h2><button className="icon" aria-label="Close" onClick={closeSettings}>✕</button></div>
-    {inline ? body : <Confirm id={BANK_SET_ID} label="Bank settings" stores={["client"]}>{body}</Confirm>}
+    {inline ? body : <Confirm id={BANK_SET_ID} label="Bank settings" stores={["client"]}><KeptLine id={BANK_SET_ID} />{body}</Confirm>}
   </div>;
 }
 function PanelBody({ b, co, std, pendingNew, nh }) {
@@ -52,11 +53,11 @@ export function BankSettings({ inline }) {
   return <OverPanel />;
 }
 
-// over the bank screen: a click outside, Esc or (a phone) Back closes it through closeSettings, which asks "Save your
-// changes?" first when something is not saved (Drafts.guard; app/src/parts/dismiss.js)
+// over the bank screen: ✕, a click outside, Esc and Back close it at once (app/src/parts/dismiss.js); what is not saved
+// stays as a draft
 function OverPanel() {
   const ref = useRef(null);
-  useDismiss(true, ref, () => closeSettings());
+  useDismiss(true, ref, () => closeSettings(), { back: "always" });
   return <div className="bk-overlay"><div ref={ref} style={{ display: "contents" }}><Panel /></div></div>;
 }
 
