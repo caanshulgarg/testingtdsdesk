@@ -35,6 +35,8 @@ const LABELS = {
   certificate: ["neutral", "Certificate figures – source in each row"],
   // a file made from the user's own sheet (server/assistant/filetable.ts): the cells copied from it, not the books
   file: ["neutral", "your file – figures as in it, not checked against the books"],
+  // entries drafted from the person's words (the owner, 22-Oct-2026): a preview to correct, posted only by their click
+  entries: ["warn", "entries drafted by AI from your words – check before posting"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -169,6 +171,8 @@ function Cases({ t }) {
 // one Upload (the owner's request of 14-Oct-2026): the files as FinCom found them, in their own small file
 // (AssistantUploads.jsx), fetched when the panel first shows one, so the app's first file stays within its budget
 const Uploads = lazy(() => import("./AssistantUploads.jsx"));
+// entries drafted (draft_entries): the preview to correct, Post to Tally and Download XML, in their own file
+const Entries = lazy(() => import("./AssistantEntries.jsx"));
 
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null), [src, setSrc] = useState(false);
@@ -202,7 +206,8 @@ function Turn({ t, latest }) {
         {t.prefileRes && <button className="iconbtn" onClick={() => { S.prefile = { open: true, res: t.prefileRes }; ASST.close(); render(); }}>Open the checklist</button>}</header>
       {t.prefileRes ? <PreFileList res={t.prefileRes} compact /> : <p className="note">{t.prefileErr || "Running…"}</p>}
     </section>}
-    {(t.results || []).map((r) => <Table key={r.id} r={r} t={t} many={(t.results || []).length > 1} />)}
+    {(t.results || []).map((r) => r.kind === "entries" ? <Suspense key={r.id} fallback={<p className="note">Loading the entries…</p>}><Entries r={r} t={t} /></Suspense>
+      : <Table key={r.id} r={r} t={t} many={(t.results || []).filter((x) => x.kind !== "entries").length > 1} />)}
     {(t.drafts || []).map((d) => <section key={d.id} className="asst-card draft" data-asst-draft="">
       <header><span className="asst-src warn">DRAFT - for the CA to review</span><b>{d.title}</b>
         <button className="iconbtn" title="Word" onClick={() => asstDraftFile(d, "doc")}>Word</button><button className="iconbtn" title="PDF" onClick={() => asstDraftFile(d, "pdf")}>PDF</button></header>

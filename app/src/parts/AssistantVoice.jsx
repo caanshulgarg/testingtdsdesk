@@ -1,8 +1,14 @@
 // Ask FinCom by voice (the owner, 19-Oct-2026: "voice for Ask FinCom for browser as well as mobile; Hindi, English and
 // Hinglish must; other regional languages would be an advantage"). The browser's own speech recognition (the Web Speech
 // API: Chrome and Edge on a computer and Android, Safari on a Mac, iPhone and iPad) turns what is said into text in the
-// question box, live; it stops on silence or a second tap, and nothing is asked until the person presses Ask (they can
-// correct the words first). Where the browser has none (Firefox), the mic is not shown. The language chosen is kept for the
+// question box, live; nothing is asked until the person presses Ask (they can correct the words first).
+// The owner, 22-Oct-2026: "while I was speaking it took only the first sentence and stopped listening". The recogniser was
+// asked for one phrase (continuous off), so the browser ended it at the first pause. Now it listens until the person stops:
+// continuous, with interim words shown live; when the browser ends a session by itself (after a pause, after about 60 s,
+// or Safari after each phrase, where continuous is not dependable and is not asked for) a new one starts at once while the
+// mic is on, and the pieces are joined. It stops on a second tap, or after a pause of about 3 s following speech
+// (silenceMs: a person may set 1-15 s in this browser, localStorage "tdsdesk:asst-voice-silence"), or when nothing at all
+// is heard for 12 s. The language chosen (English, Hindi, Hinglish, …) is kept for every session. Where the browser has none (Firefox), the mic is not shown. The language chosen is kept for the
 // person in this browser and goes with the question as a hint (ASST.st().lang): the reply comes in the question's language.
 // "Read aloud" on a reply: the browser's speech, in the reply's language when the browser has a voice for it.
 import { useEffect, useRef, useState } from "react";
@@ -37,10 +43,31 @@ function keepLang(c) { try { localStorage.setItem(KEY(), c); } catch (e) { /* st
 const seen = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) { return false; } };
 const see = (k) => { try { localStorage.setItem(k, "1"); } catch (e) { /* storage blocked */ } };
 const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none";
+const NOTE = "Voice is turned into text by your browser (Google/Apple).";
 
-// the one recognition at a time; Ask stops it (a word heard after Ask never lands in the next question)
+// the one listening at a time (all its recogniser sessions); Ask stops it (a word heard after Ask never lands in the next
+// question)
 let live = null;
-export function stopVoice() { const r = live; live = null; if (r) { try { r.abort(); } catch (e) { /* already stopped */ } } }
+export function stopVoice() { const s = live; live = null; if (s) s.finish("abort"); }
+
+// the pause after speech that ends the listening, in ms (3 s; a person may set 1-15 s in this browser)
+export const SILENCE_KEY = "tdsdesk:asst-voice-silence";
+export function silenceMs() {
+  try { const v = Number(localStorage.getItem(SILENCE_KEY)); if (v >= 1 && v <= 15) return Math.round(v * 1000); } catch (e) { /* storage blocked */ }
+  return 3000;
+}
+const NOTHING_MS = 12000;            // nothing heard at all since the mic was tapped: stop, and say so
+const FATAL = new Set(["not-allowed", "service-not-allowed", "audio-capture", "network", "language-not-supported", "bad-grammar"]);
+// Safari (Mac, iPhone, iPad) ends a session after each phrase and its continuous mode is not dependable: one phrase a
+// session there, joined. Chrome and Edge (and Chrome on Android) listen continuously.
+export const isSafari = () => { const u = (typeof navigator === "object" && navigator.userAgent) || ""; return /safari/i.test(u) && !/chrome|chromium|crios|fxios|edg|android/i.test(u); };
+const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+// the final pieces of one session; Chrome on Android repeats them growing ("TDS", "TDS on rent"): the longer one kept
+function finalsOf(list) {
+  const out = [];
+  list.forEach((x) => { const t = norm(x); if (!t) return; const last = out[out.length - 1]; if (last && t.toLowerCase().startsWith(last.toLowerCase())) out[out.length - 1] = t; else out.push(t); });
+  return out;
+}
 
 const ERR = {
   "not-allowed": "The microphone is blocked for FinCom. Allow it in the browser's site settings, then tap the mic again.",
@@ -63,25 +90,62 @@ export function VoiceInput({ a, onText }) {
       <button type="button" className="linkbtn" aria-label="Hide this note" onClick={() => { see(NONE_KEY); setNone(false); }}>×</button></span> : null;
   }
   const start = () => {
-    if (on || live) { stopVoice(); setOn(false); return; }
-    const R = Rec(); let r;
-    try { r = new R(); } catch (e) { setMsg("Voice typing could not start here."); return; }
-    r.lang = byCode(lang).rec; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    if (on || live) { const s = live; live = null; if (s) s.finish("stop"); setOn(false); return; }
+    const R = Rec();
     const base = String(a.q || "").replace(/\s+$/, ""), sep = base ? " " : "";
-    r.onresult = (ev) => {
-      if (live !== r) return;
-      let said = "";
-      for (let i = 0; i < ev.results.length; i++) said += ev.results[i][0].transcript;
-      said = said.replace(/\s+/g, " ").trim();
-      onText(said ? base + sep + said : base);
+    // one listening: the words of the sessions ended (done), the current session's finals (cur) and its interim words
+    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null };
+    const words = () => norm([...sess.done, ...sess.cur, sess.interim].join(" "));
+    const show = () => { const w = words(); onText(w ? base + sep + w : base); };
+    const keep = () => { const w = norm([...sess.cur, sess.interim].join(" ")); if (w) sess.done.push(w); sess.cur = []; sess.interim = ""; };
+    sess.finish = (how) => {
+      if (!sess.on) return;
+      sess.on = false; clearTimeout(sess.timer);
+      const r = sess.rec; sess.rec = null;
+      keep(); show();
+      if (r) { try { if (how === "abort") r.abort(); else r.stop(); } catch (e) { /* already stopped */ } }
+      if (live === sess) live = null;
+      if (mine.current === sess) { setOn(false); setMsg((m) => (m === NOTE ? "" : m)); }   // the browser note goes with the listening it was for
     };
-    r.onerror = (ev) => { if (ev && ev.error !== "aborted") setMsg(ERR[ev && ev.error] || "Voice typing stopped. Tap the mic to try again."); };
-    r.onend = () => { if (live === r) live = null; setOn(false); };
-    stopVoice(); live = r; mine.current = r;
-    if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg("Voice is turned into text by your browser (Google/Apple)."); } else setMsg("");
-    try { r.start(); setOn(true); } catch (e) { live = null; setMsg("Voice typing could not start here."); }
+    // a pause after speech ends it (the timer starts again at every word heard)
+    const arm = () => { clearTimeout(sess.timer); sess.timer = setTimeout(() => sess.finish("stop"), silenceMs()); };
+    const begin = () => {
+      let r;
+      try { r = new R(); } catch (e) { setMsg("Voice typing could not start here."); sess.finish("abort"); return; }
+      r.lang = byCode(lang).rec; r.interimResults = true; r.continuous = !isSafari(); r.maxAlternatives = 1;
+      r.onresult = (ev) => {
+        if (sess.rec !== r || !sess.on) return;
+        const fin = []; let interim = "";
+        for (let i = 0; i < ev.results.length; i++) { const x = ev.results[i]; if (x.isFinal) fin.push(x[0].transcript); else interim += x[0].transcript; }
+        sess.cur = finalsOf(fin); sess.interim = norm(interim);
+        if (sess.cur.length || sess.interim) { sess.heard = true; arm(); }
+        show();
+      };
+      r.onerror = (ev) => {
+        const e = ev && ev.error;
+        if (sess.rec !== r || e === "aborted" || e === "no-speech") return;      // no-speech: the session ends and listening goes on
+        setMsg(ERR[e] || "Voice typing stopped. Tap the mic to try again.");
+        if (FATAL.has(e) || !ERR[e]) sess.finish("abort");
+      };
+      r.onend = () => {
+        if (sess.rec !== r) return;
+        keep(); show();
+        if (!sess.on) return;
+        // ended by the browser, not by the person: listen again (sessions ending at once, again and again, stop it)
+        sess.quick = Date.now() - r.startedAt < 1000 ? sess.quick + 1 : 0;
+        if (sess.quick >= 5) { setMsg("Voice typing keeps stopping in this browser. Tap the mic to try again."); sess.finish("stop"); return; }
+        if (!sess.heard && Date.now() - sess.at > NOTHING_MS) { setMsg(ERR["no-speech"]); sess.finish("stop"); return; }
+        begin();
+      };
+      sess.rec = r; r.startedAt = Date.now();
+      try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
+    };
+    stopVoice(); live = sess; mine.current = sess;
+    if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg(NOTE); } else setMsg("");
+    setOn(true);
+    begin();
   };
-  const pick = (c) => { setLang(c); keepLang(c); a.lang = c; if (live) { stopVoice(); setOn(false); } };
+  const pick = (c) => { setLang(c); keepLang(c); a.lang = c; if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
   return <>
     <span className="asst-voice" data-asst-voice="">
       <button type="button" className={"asst-act asst-mic" + (on ? " on" : "")} data-asst-mic="" aria-pressed={on} onClick={start}
@@ -93,7 +157,7 @@ export function VoiceInput({ a, onText }) {
         {VOICE_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
       </select>
     </span>
-    {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || "Listening… speak now; tap the mic again to stop."}</span>}
+    {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || "Listening… speak; it keeps listening until you pause or tap the mic again."}</span>}
   </>;
 }
 

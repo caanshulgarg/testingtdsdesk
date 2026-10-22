@@ -3,9 +3,11 @@
 // payments, 10,000, September); "194C without TDS" -> tds_missed (194C). The answer is the tool's table with a line FinCom
 // writes from the tool's own summary (describe()), so it is green and costs nothing.
 // A question that asks why or how, or for advice, a draft or anything not plainly one tool, is not routed here.
-// Plain module: no Deno; its one import is the label map (plain JavaScript, shared with the app).
+// Plain module: no Deno; its imports are the label map (plain JavaScript, shared with the app) and entries.ts (plain).
+// A request to make entries (entries.ts) is never routed by its words: the model drafts them.
 
 import { fieldKind, fieldLabel } from "../_shared/assistant-labels.js";
+import { entriesAsked } from "./entries.ts";
 
 export type Route = { tool: string, input: Record<string, unknown>, why: string } | { prefile: { form: string, fy: string | null, quarter: string | null, month: string | null, reg: string | null }, why: string };
 
@@ -79,7 +81,7 @@ export const compound = (q: string) => NOT_MINE.test(String(q || ""));
 
 export function route(question: string, anchor: string): Route | null {
   const q = String(question || "").trim(), s = q.toLowerCase();
-  if (!q || q.length > 240) return null;
+  if (!q || q.length > 240 || entriesAsked(q)) return null;
   // "check my Q2 26Q", "check March GST before filing": FinCom's own checklist (no AI anywhere)
   let m = s.match(/\b(26q|27q|24q)\b/);
   if (/\bcheck\b|\bbefore filing\b|\bready to file\b/.test(s) && (m || /\bgst(r-?3b|r-?1)?\b/.test(s))) {
