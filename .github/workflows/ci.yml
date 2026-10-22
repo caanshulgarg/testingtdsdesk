@@ -142,7 +142,13 @@ jobs:
   tests:
     needs: app
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 22-Oct-2026: 45 minutes (was 30). The longest share's test step alone took 24.7 minutes (share 3 of run 39809609372,
+    # 1,484 s), and setting the machine up takes 1 to 2 minutes when the package mirrors answer; runs 39806847444 and
+    # 39809609372 were cancelled at 30 minutes inside apt-get (`apt-get update` hung on archive.ubuntu.com for 22 and 29
+    # minutes), not in a test. The installs are now bounded and retried (tests/ci/apt_install.sh, the apt timeouts below),
+    # Chromium and LibreOffice are cached, and LibreOffice goes on the one share that needs it; 45 minutes leaves room for
+    # one slow mirror on top of the longest share while a job that truly hangs still ends. No test is skipped
+    timeout-minutes: 45
     env:
       # the tests default to /opt/pw-browsers (the cloud sessions' copy) when this is not set; here Chromium is
       # installed into, and found in, the runner's own folder
@@ -186,23 +192,56 @@ jobs:
         # they print "skipped" and pass, so it is installed
         with:
           deno-version: v2.x
-      - name: Python packages and Chromium
+      - name: apt's own time limits (every apt-get here gives up on a stalled mirror and tries again)
         run: |
-          python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' | sudo tee /etc/apt/apt.conf.d/99fincom-ci
+      - name: Python packages
+        timeout-minutes: 10
+        run: python -m pip install -r tests/requirements.txt
+      - name: Playwright's version (the Chromium cache's key)
+        id: pw
+        run: echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - name: Chromium from the cache
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/pw-browsers
+          key: pw-chromium-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Chromium and the system packages it needs (those of `playwright install --with-deps`, only the missing ones)
+        timeout-minutes: 15
+        run: |
+          python -m playwright install chromium
+          # the packages Playwright's --with-deps would install; the runner image has most of them, and apt-get (bounded and
+          # retried by apt_install.sh) runs only for the missing ones
+          pkgs=$(python -m playwright install-deps --dry-run chromium | sed -n 's/.*--no-install-recommends \([^"]*\).*/\1/p' | tr ' ' '\n' | grep -v '^$' | sort -u)
+          [ -n "$pkgs" ] || { echo "::error::no package list from playwright install-deps --dry-run"; exit 1; }
+          missing=$(for q in $pkgs; do dpkg-query -W -f='${Status}\n' "$q" 2>/dev/null | grep -q '^install ok installed' || echo "$q"; done)
+          if [ -n "$missing" ]; then echo "missing:" $missing; tests/ci/apt_install.sh $missing; else echo "all $(echo "$pkgs" | wc -l) packages Chromium needs are installed"; fi
+          python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); p.chromium.launch().close(); p.stop(); print("Chromium starts")'
       - name: PostgreSQL 16 binaries (tests/pg_stand.py starts its own throwaway server from /usr/lib/postgresql/16/bin)
+        timeout-minutes: 15
         run: |
-          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
-            sudo apt-get update -q && sudo apt-get install -y -q postgresql-16
-          fi
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then tests/ci/apt_install.sh postgresql-16; fi
           /usr/lib/postgresql/16/bin/postgres --version
           id postgres
-      - name: LibreOffice Calc, only on the shares that run run_fin_xlsx.py or run_mis_xlsx.py (they recalculate the Excel files)
+      # LibreOffice Calc (run_fin_xlsx.py and run_mis_xlsx.py recalculate the Excel files with it): tagged @libreoffice in
+      # tests/ci/tests.txt, so run_ci.sh deals both to one share, and only that share installs it, from the cache of its
+      # packages (keyed by the runner image) when there is one
+      - name: Does this share need LibreOffice
+        id: lo
         run: |
-          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -qE '^(run_fin_xlsx|run_mis_xlsx).py '; then
-            command -v soffice || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc; }
-            soffice --version
-          fi
+          if tests/ci/run_ci.sh --shard ${{ matrix.shard }}/10 --dry-run | grep -q '@libreoffice'; then echo "need=true" >> "$GITHUB_OUTPUT"; else echo "need=false" >> "$GITHUB_OUTPUT"; fi
+      - name: LibreOffice's packages from the cache
+        if: steps.lo.outputs.need == 'true'
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/apt-libreoffice
+          key: apt-libreoffice-calc-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}
+      - name: LibreOffice Calc (this share runs the tests that need it)
+        if: steps.lo.outputs.need == 'true'
+        timeout-minutes: 15
+        run: |
+          command -v soffice || tests/ci/apt_install.sh --archives /home/runner/apt-libreoffice libreoffice-calc
+          soffice --version
       - name: Tests (share ${{ matrix.shard }} of 10)
         run: |
           # PowerShell 7 comes with GitHub's Ubuntu machines; the bridge tests (run_keep_*.py, run_bridge_fast.py, ...)

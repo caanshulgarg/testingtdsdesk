@@ -9,7 +9,9 @@
 #
 # A line of the list: the test's file name in tests/, then optionally its time limit in seconds (default
 # CI_TIMEOUT, 300; '-' for the default), then optionally VAR=value settings for that test only (paths relative to
-# tests/). '#' starts a comment. .js/.mjs run with node, .py with python3, from inside tests/.
+# tests/) and @tag: the tests with the same tag go to the same share (@libreoffice: the tests that need LibreOffice, so
+# ci.yml installs it on one share only; the share's lines in --dry-run end with the tag). '#' starts a comment.
+# .js/.mjs run with node, .py with python3, from inside tests/.
 # Needs: site-test/ (python3 build.py) and app/dist-test/ (cd app && npm ci && npm run legacy && npm run build:test).
 # A test that uses pg_stand.py (a throwaway PostgreSQL 16) runs as root (via sudo when this script is not root).
 # Each test's output goes to tests/out/ci-logs/<test>.log; the last lines of a failing test's output are printed.
@@ -34,30 +36,41 @@ LOGS="${TDSDESK_OUT:-$TESTS/out}/ci-logs"
 mkdir -p "$LOGS"
 
 # the tests and their time limits
-declare -a T L E
+declare -a T L E G
 if [ ${#NAMES[@]} -gt 0 ]; then
-  for n in "${NAMES[@]}"; do T+=("$(basename "$n")"); L+=("$DEFAULT_TIMEOUT"); E+=(""); done
+  for n in "${NAMES[@]}"; do T+=("$(basename "$n")"); L+=("$DEFAULT_TIMEOUT"); E+=(""); G+=(""); done
 else
   while read -r name limit envs; do
     case "$name" in ''|'#'*) continue ;; esac
     envs="${envs%%#*}"; [ "$limit" = "-" ] && limit=""
-    T+=("$name"); L+=("${limit:-$DEFAULT_TIMEOUT}"); E+=("$envs")
+    # the @tag (dealing only) apart from the settings (passed to the test)
+    tag=""; rest=""
+    read -r -a ws <<<"$envs"
+    for w in "${ws[@]}"; do case "$w" in @*) tag="$w" ;; *) rest="$rest $w" ;; esac; done
+    T+=("$name"); L+=("${limit:-$DEFAULT_TIMEOUT}"); E+=("${rest# }"); G+=("$tag")
   done < "$LIST"
 fi
 if [ -n "$SHARD" ]; then
   k="${SHARD%/*}"; n="${SHARD#*/}"
-  # the longest first (by time limit), dealt out back and forth (1..n, n..1, ...) so the shares take about as long
-  declare -a T2 L2 E2
+  # the longest first (by time limit), dealt out back and forth (1..n, n..1, ...) so the shares take about as long. A unit
+  # is a test, or the tests sharing a @tag (their limits added up), dealt as one; untagged tests deal exactly as before
+  # (ties in list order)
+  declare -a T2 L2 E2 G2
+  declare -A UL UF UM
+  for i in "${!T[@]}"; do
+    u="${G[$i]:-#$i}"
+    UL[$u]=$(( ${UL[$u]:-0} + L[i] )); [ -n "${UF[$u]:-}" ] || UF[$u]=$i; UM[$u]="${UM[$u]:-} $i"
+  done
   j=0
-  for i in $(for i in "${!T[@]}"; do echo "${L[$i]} $i"; done | sort -s -k1,1nr | awk '{print $2}'); do
+  for u in $(for u in "${!UL[@]}"; do echo "${UL[$u]} ${UF[$u]} $u"; done | sort -k1,1nr -k2,2n | awk '{print $3}'); do
     r=$(( j / n )); p=$(( j % n )); [ $(( r % 2 )) -eq 1 ] && p=$(( n - 1 - p ))
-    if [ $p -eq $(( k - 1 )) ]; then T2+=("${T[$i]}"); L2+=("${L[$i]}"); E2+=("${E[$i]}"); fi
+    if [ $p -eq $(( k - 1 )) ]; then for i in ${UM[$u]}; do T2+=("${T[$i]}"); L2+=("${L[$i]}"); E2+=("${E[$i]}"); G2+=("${G[$i]}"); done; fi
     j=$(( j + 1 ))
   done
-  T=("${T2[@]}"); L=("${L2[@]}"); E=("${E2[@]}")
+  T=("${T2[@]}"); L=("${L2[@]}"); E=("${E2[@]}"); G=("${G2[@]}")
 fi
 [ ${#T[@]} -gt 0 ] || { echo "no tests to run"; exit 1; }
-if [ -n "$DRY" ]; then for i in "${!T[@]}"; do echo "${T[$i]} ${L[$i]} ${E[$i]}"; done; exit 0; fi
+if [ -n "$DRY" ]; then for i in "${!T[@]}"; do echo "${T[$i]} ${L[$i]} ${E[$i]} ${G[$i]}"; done; exit 0; fi
 
 # the made-up books' cache, made once here rather than by several tests at the same moment
 if [ ! -e "$TESTS/data/Master.xml" ] && [ -z "${TDSDESK_DATA:-}" ]; then
