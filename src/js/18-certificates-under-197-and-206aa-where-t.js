@@ -73,7 +73,7 @@ const Certs = {
       // a TDS entry of its own short of its bill (TDSSep, src/js/66) is the audit's "short deducted" (TDSWatch), said once
       if (r.sepShort) return;
       // N7 (Testing AAD, 01-Jul-2026: rent on "TDS 94H" at 10%): the section looks wrong, not the rate (TDSAudit says so)
-      if (TDSRate.secOfPay(r.pay) && TDSRate.secOfPay(r.pay) !== TDS.sec(r.section).slice(0, 4)) return;
+      if (typeof TDSRate === "object" && TDSRate.secOfPay(r.pay) && TDSRate.secOfPay(r.pay) !== TDS.sec(r.section).slice(0, 4)) return;
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
       const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);
