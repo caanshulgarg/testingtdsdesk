@@ -112,8 +112,12 @@ const TDSReg = {
   usedTax(c, cx){ return r2((cx || this.ctx()).use[c.id] || 0); },
   // the interest and fee a return's file carries for a challan: its portion (portions: a person's, else all to the home return)
   portionFor(c, form, fy, q, cx){
-    return Object.assign(this.pp(c, (this.portions(c, cx) || {})[this.key(form, fy, q)] || {}), {set: this.explicit(c)});
+    // the TDS check of 22-Oct-2026, M6: a challan nobody has allocated yet gives the return using it its interest due (and,
+    // its only return, its fee) by default (TDSMatch.defaultPortion, the TDS screens' file), not 0 in the file
+    if (!this.explicit(c) && typeof TDSMatch === "object") return Object.assign(this.pp(c, TDSMatch.defaultPortion(c, form, fy, q, 1)), {set: false});
+    return this.portionSet(c, form, fy, q, cx);
   },
+  portionSet(c, form, fy, q, cx){ return Object.assign(this.pp(c, (this.portions(c, cx) || {})[this.key(form, fy, q)] || {}), {set: this.explicit(c)}); },
   // setPortion, useBalance, undoUse, removeUse, undoRemove: in src/js/86 (the TDS screens' own file; legacy.js's size)
   // ---------------- notes: other form, earlier period (allowed, said) ----------------
   notes(c, form, fy, q){

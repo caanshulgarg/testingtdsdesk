@@ -445,3 +445,7 @@ run_gst_draftcopy_ui.py               180  TDSDESK_SITE=../app/dist-test
 run_adv_line_ui.py                    180  TDSDESK_SITE=../app/dist-test
 # TDS (22-Oct-2026): the deductee is the party's ledger by structure (TDS.led), not the name Tally keeps for the voucher's party
 run_tds_party.js                      120
+# the TDS check of 22-Oct-2026 (H1-H9, M1-M9, L1-L3, N1-N14): rows, challans and the matcher, the checks and the file
+run_tds_audit_rows.js                 120
+run_tds_audit_challans.js             120
+run_tds_audit_checks.js               120

@@ -140,7 +140,8 @@ const selSet = (ids, on) => { const s = { ...(S.tdsSel || {}) }; ids.forEach((id
 // the reason under the rate, in short ("should be 20% (no PAN, 206AA)"); in the row's details and Validate & file in full
 const shortWhy = (w) => String(w || "").replace(/no valid PAN, section /, "no PAN, ").replace(/, section 206AA/, ", 206AA").replace(/\s*\(higher rate\)/, "").replace(/\s*\(PAN's 4th letter \w\)/, "")
   .replace(/:\s*[\d.]+%$/, "").replace(/^(certificate [^ (:]+).*$/, "$1").replace(/^the section's higher rate.*$/, "the section's higher rate");
-const Rate = ({ r, issue }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <span className="rt-dot" data-rate-q="" title={"should be " + issue.expected + "%" + (issue.why ? " (" + shortWhy(issue.why) + ")" : "")} aria-label={"rate question: should be " + issue.expected + "%"}>•</span>}</>;
+// the TDS check of 22-Oct-2026 (H1): a rate deducted that is not the TDS ledger's own, said under the rate
+const Rate = ({ r, issue }) => <>{r.rate != null ? r.rate + "%" : ""}{r.ledgerRate ? <small className="note" data-rate-ledger="" style={{ display: "block" }}>{r.rate}% deducted on a {r.ledgerRate}% ledger</small> : null}{issue && <span className="rt-dot" data-rate-q="" title={"should be " + issue.expected + "%" + (issue.why ? " (" + shortWhy(issue.why) + ")" : "")} aria-label={"rate question: should be " + issue.expected + "%"}>•</span>}</>;
 
 // t70: the corrected Excel brought back: each change, old → new, what is refused and why; nothing applied until Apply.
 // In a drawer beside the table (design §3.6), not a card above it

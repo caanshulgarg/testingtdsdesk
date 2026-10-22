@@ -202,7 +202,11 @@ const vo = [V("o1", "20250610", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("o2", 
 b = books(vo, [CH("chS", "20250807", 3000, "194C", {interest: 90, fee: 200})]);
 x.TDSCH.tag(["o1|TDS 194C"], "chS"); x.TDSCH.tag(["o2|TDS 194C"], "chS");
 const old = (q) => rec(x.TDS26Q.build("2025-26", q, FIRM, "26Q").text, "CD")[0];
-ok(J([old("Q1")[24], old("Q1")[33], old("Q1")[38], old("Q2")[24], old("Q2")[38]]) === J(["0.00", "0.00", "0.00", "0.00", "0.00"]), "B. 26Q 2025-26, nothing allocated: interest and fee 0.00 in both quarters (they once took the whole into one)");
+// (the TDS check of 22-Oct-2026, M6: with nothing allocated by a person, the file takes the interest its late deductions on the
+// challan owe, from the challan's own interest: June's ₹2,000 paid on 07-Aug, three months at 1.5% = ₹90, to Q1; July's,
+// on time, nothing to Q2. Never more than the challan's ₹90 in all (they once took the whole into each); the fee is not
+// taken by default)
+ok(J([old("Q1")[24], old("Q1")[33], old("Q1")[38], old("Q2")[24], old("Q2")[38]]) === J(["90.00", "90.00", "0.00", "0.00", "0.00"]), "B. 26Q 2025-26, nothing allocated: Q1 carries the ₹90 interest its late deduction owes, Q2 nothing; no fee (" + J([old("Q1")[24], old("Q1")[33], old("Q1")[38], old("Q2")[24], old("Q2")[38]]) + ")");
 x.TDSReg.setPortion("chS", "26Q", "2025-26", "Q1", 60, 0); x.TDSReg.setPortion("chS", "26Q", "2025-26", "Q2", 30, 200);
 ok(J([old("Q1")[24], old("Q1")[33], old("Q1")[38], old("Q1")[26]]) === J(["60.00", "60.00", "0.00", "2060.00"]) && J([old("Q2")[24], old("Q2")[38], old("Q2")[26]]) === J(["30.00", "200.00", "1230.00"]), "B. 26Q 2025-26: Q1 writes interest 60, Q2 interest 30 and fee 200: each its portion, the totals add up");
 
@@ -285,7 +289,8 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   const r4 = x.tmReasons([R("o2", "194C", "20260410", 500)], [C("O4", "194C", "20260507", 800, {minor: "400"})], [], {fy: "2026-27", q: "Q1", today: "20260601"});
   ok(r4[0].step === "pay" && /minor head 400/.test(r4[0].words), "R. only a minor head 400 challan: " + r4[0].words);
   const r5 = x.tmReasons([R("o3", "194C", "20260410", 5000)], [C("OS", "194C", "20260507", 3000)], [], {fy: "2026-27", q: "Q1", today: "20261017"});
-  ok(r5[0].step === "pay" && /has ₹3,000 left but this needs ₹5,000: pay ₹2,\d{3} \(the TDS short ₹2,000 \+ interest ₹\d+ to 17-10-2026\), then split/.test(r5[0].words), "R. a challan short: " + r5[0].words);
+  // (the TDS check of 22-Oct-2026, H6: the words start "Short-paid ₹x" and say a later month's challan is not used)
+  ok(r5[0].step === "pay" && /^Short-paid ₹2,000: challan .* has ₹3,000 left but this needs ₹5,000\. Pay ₹2,\d{3} \(the TDS short ₹2,000 \+ interest ₹\d+ to 17-10-2026\), then split/.test(r5[0].words), "R. a challan short: " + r5[0].words);
 }
 // round 86 (19-Oct-2026, the owner: one sentence repeated on 38 rows): the reason of the deductions with no challan is said
 // ONCE per section and month: each row carries its group ({key, sec, ym, n, tds, head, state, words}), the same object for

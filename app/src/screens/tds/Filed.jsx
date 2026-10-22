@@ -54,7 +54,7 @@ export function InterestFee({ fy, q, form, list, fee, filed }) {
     <div className="dash-row"><span>{filed ? "Late filing fee under 234E, filed on " + day(filed) : "Late filing fee under 234E, if filed today"}</span><b>{money(feeNow)}</b></div>
     {fee && fee.days > 0 && <p className="note">{fee.days} day{fee.days === 1 ? "" : "s"} past {day(fee.due)} at 200 a day, capped at the tax of the quarter ({money(fee.cap)}).</p>}
     {fee && (fee.p271h || (!filed && fee.days > 0)) && <p className={"note" + (fee.p271h ? " bad" : "")} data-271h="">{fee.p271h
-      ? (filed ? "Filed more than a year after the due date" : "Not filed by " + day(fee.penaltyBy) + ", a year after the due date") + ": a penalty of ₹10,000 to ₹1,00,000 can be levied under 271H."
+      ? (filed ? "Filed more than " + (fee.penaltyIn || "a year") + " after the due date" : "Not filed by " + day(fee.penaltyBy) + ", " + (fee.penaltyIn || "a year") + " after the due date") + ": a penalty of ₹10,000 to ₹1,00,000 can be levied under 271H."
       : "File by " + day(fee.penaltyBy) + " with the tax, fee and interest paid, and no penalty under 271H can be levied."}</p>}
     {(total > 0 || feeNow > 0) && <div className="dash-row" data-next-challan=""><span>Pay with the next challan{paidInt > 0 ? " (interest already on this quarter's challans: " + money(paidInt) + ")" : ""}</span><b>{money(toPay)}</b></div>}
     {list.length ? <ListTable name="tdsLate" rows={list} rowKey={(x, i) => (x.row.id || "") + ":" + x.kind + ":" + i} unit={["late entry", "late entries"]} limit={100}

@@ -1119,12 +1119,16 @@ function challanFromBooks(vid, bsr, ser){
   const k = TDSCH.cin(bsr);
   if (!k && (!String(bsr || "").trim() || !String(ser || "").trim())){ toast("Fill the BSR code and the challan serial number, or the 20-digit CIN, first."); return false; }
   const secs = (p.sections || []).filter(Boolean);
-  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: num(p.interest), fromVoucher: p.vid,
-    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "books", autoPlace: "pending"}].map(c => {
-      if (k) c.cin = k.cin;
-      if (num(p.fee)) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
-      if (num(p.others)) c.others = num(p.others);
-      return c; }));
+  // the TDS check of 22-Oct-2026, H3: a payment of several sections, a challan a section (whole rupees, adding up to what the
+  // bank paid); the serial given goes on the largest, the others are drafts that ask for their own (Challans)
+  S.books.challans = (S.books.challans || []).concat((p.parts || [{section: secs.length === 1 ? secs[0] : "", tax: p.tax}]).map((x, i) => {
+    const c = {id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: i ? "" : k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: x.tax, interest: i ? 0 : num(p.interest), fromVoucher: p.vid,
+      section: TDS.sec(x.section), minorHead: "200", from: "books", autoPlace: "pending"};
+    if (i) c.draft = "serial";
+    if (k && !i) c.cin = k.cin;
+    if (num(p.fee) && !i) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
+    if (num(p.others) && !i) c.others = num(p.others);
+    return c; }));
   const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.suggested) : [];
   saveBooks(); toast("Challan added from the books." + (pl.length ? " What it pays is suggested on " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + ": confirm it on Challans." : "")); render(); return true;
 }

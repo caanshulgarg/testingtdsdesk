@@ -368,11 +368,15 @@ const Books = {
         if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tdsPaid.push({ledger: e.l, section: "", amount: amt});   // paid from the bank
         return;
       }
-      if (m.kind === "tds_payable"){
+      // the TDS check of 22-Oct-2026, H5: a pay head marked "Not TDS" (payTds false) is none, unless its name says TDS or
+      // income tax (Leads' "TDS 192B" stays the salary TDS; its "ESIC Employee Contribution" does not)
+      if (m.kind === "tds_payable" && !(m.payTds === false && !/\bTDS\b|INCOME[\s-]*TAX/i.test(e.l))){
         // the month-end move of each section's TDS into a clearing account is neither a deduction nor a payment
         if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "tds_clearing" && z.a > 0)) return;
         if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
-        else if (!v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) return;                     // debited without the bank: an adjustment, not a payment
+        // debited without the bank: an adjustment, not a payment; against a party's or an expense's credit, the deduction
+        // undone (H4: TDS.unDo)
+        else if (!v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")){ if (v.ent.some(z => z.a > 0 && !Books.ledgerOf(z.l).kind)) (out.tdsBack = out.tdsBack || []).push({ledger: e.l, section: m.section, amount: amt}); }
         else out.tdsPaid.push({ledger: e.l, section: m.section, amount: amt});                      // debited: tax paid over
         return;
       }

@@ -26,7 +26,7 @@ export function InterestFee({ fy, q, form }) {
   const tcs = form === "27EQ", fee = t.fee, T = t.totals, cols = tcs ? 7 : 8;
   const who = tcs ? "Buyer" : form === "24Q" ? "Employee" : "Deductee";
   const chs = t.perChallan.filter((x) => x.due > 0 || x.allocated > 0);
-  const p271 = fee && (fee.p271h ? (t.filed ? "Filed more than a year after the due date" : "Not filed by " + day(fee.penaltyBy) + ", a year after the due date") + ": a penalty of ₹10,000 to ₹1,00,000 can be levied under 271H."
+  const p271 = fee && (fee.p271h ? (t.filed ? "Filed more than " + (fee.penaltyIn || "a year") + " after the due date" : "Not filed by " + day(fee.penaltyBy) + ", " + (fee.penaltyIn || "a year") + " after the due date") + ": a penalty of ₹10,000 to ₹1,00,000 can be levied under 271H."
     : fee && fee.days > 0 && !t.filed ? "File by " + day(fee.penaltyBy) + " with the tax, fee and interest paid, and no penalty under 271H can be levied." : "");
   return <div className="vf-int" data-int-sec={form}>
     <h4 className="vf-h">Interest &amp; fee</h4>

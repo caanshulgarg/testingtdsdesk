@@ -80,9 +80,13 @@ const TDSPanFix = {
   name(party){ const f = this.of(party); return f && f.name ? f.name : ""; },
   // the deductees of a return: [{key, party, name, pan, status, problems, secs, n, paid, tds, rows, bad}]
   list(form, fy, q){
-    const rows = TDS.formRows(form || "26Q").filter(r => r.fy === fy && r.q === q), by = {};
+    const rows = TDS.formRows(form || "26Q").filter(r => r.fy === fy && r.q === q), by = {}, byPan = {};
+    // the TDS check of 22-Oct-2026, M9 (Leads: "Rent Payable Alok Swarup Gupta" and "ALOK SWAROOP GUPTA", one landlord): one
+    // deductee a PAN, whatever the names its deductions carry (aka: the other names); by name where there is no PAN
     rows.forEach(r => {
-      const k = normName(r.party || r.employee || ""), p = by[k] = by[k] || {key: k, party: r.party || r.employee || "", pan: String(r.pan || "").toUpperCase(), secs: new Set(), n: 0, paid: 0, tds: 0, rows: []};
+      const pan = String(r.pan || "").toUpperCase(), nm = r.party || r.employee || "", k = Certs.validPan(pan) ? (byPan[pan] = byPan[pan] || normName(nm)) : normName(nm);
+      const p = by[k] = by[k] || {key: k, party: nm, pan, secs: new Set(), n: 0, paid: 0, tds: 0, rows: [], aka: []};
+      if (nm && normName(nm) !== normName(p.party) && !p.aka.includes(nm)) p.aka.push(nm);
       p.secs.add(TDS.sec(r.section) || r.section || ""); p.n++; p.paid = r2(p.paid + num(r.paid)); p.tds = r2(p.tds + num(r.tds)); p.rows.push(r);
       if (!p.pan && r.pan) p.pan = String(r.pan).toUpperCase();
     });

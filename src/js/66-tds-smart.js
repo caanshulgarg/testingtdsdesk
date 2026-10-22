@@ -109,6 +109,8 @@ const TDSRate = {
     for (const l of out){ const k = this.kindOf(l); if (k) return k; }
     return this.kindOf((info[t.ledger] || {}).tdsNature) || this.kindOf(t.ledger);
   },
+  // the section a payment type points to (N7: rent booked on a 194H ledger is 194-I), "" when it does not say
+  secOfPay(k){ return {rent_building: "194I", rent_machinery: "194I", contractor: "194C", professional: "194J", technical: "194J", director: "194J"}[k] || ""; },
   // {rate, why} where the deductee and the payment type decide it, else null
   expect(r){
     const sec = TDS.sec(r.section), pk = this.panKind(r.pan), who = this.PAN_KIND[pk] || "";
@@ -368,6 +370,9 @@ const TDSTie = {
 // the expense at risk under section 40(a)(ia). The payment type: AI help's choice, else the ledger's nature of payment in
 // Tally, else its name (Audit.TDS_KEY); the rate: the PAN's 4th letter, 20% with no PAN (206AA).
 const TDSWatch = {
+  // the limits before 1-Apr-2025 where the Finance Act, 2025 changed them (M7): 194J 30,000, 194H 15,000, 194-I 2,40,000 a
+  // year, 194A 5,000 (others than banks), 194D 15,000, 194G 15,000
+  LIMIT_OLD: {"194J": {limit: 30000}, "194H": {limit: 15000}, "194I": {limit: 240000, basis: "annual"}, "194A": {limit: 5000}, "194D": {limit: 15000}, "194G": {limit: 15000}},
   year(fy){ return typeof perRender === "function" ? perRender(this, "y|" + fy, () => this.yearNow(fy)) : this.yearNow(fy); },
   ruleOf(l){
     const ai = typeof AIH === "object" && AIH.tdsRule ? AIH.tdsRule(l) : undefined;
@@ -407,19 +412,25 @@ const TDSWatch = {
       const d = TDS.ymd(v.date); if (d < start || d > end) return;
       const pe = v.ent.find(e => e.l === party); if (!pe || !(pe.a > 0)) return;
       if (/\bBANK\b|GOVERNMENT|MUNICIPAL|\bLIC\b/i.test(party)) return;
+      const bill = {};
       v.ent.forEach(e => {
         if (!(e.a < 0) || e.l === party || Books.ledgerOf(e.l).kind) return;
         if (Audit.mastersIn() && !Audit.isExpense(e.l)) return;
         const rule = this.ruleOf(e.l); if (!rule) return;
         const k = party + "|" + rule, x = agg[k] = agg[k] || {party, rule, credited: 0, max: 0, months: {}, credits: [], ledgers: new Set()};
-        const a = r2(-e.a); x.credited = r2(x.credited + a); x.max = Math.max(x.max, a); x.months[d.slice(0, 6)] = r2((x.months[d.slice(0, 6)] || 0) + a);
+        const a = r2(-e.a); x.credited = r2(x.credited + a); x.months[d.slice(0, 6)] = r2((x.months[d.slice(0, 6)] || 0) + a);
+        // L3: 194C's single-bill limit is the bill's, not a line's (a bill of two expense lines of 20,000 is 40,000)
+        bill[k] = r2((bill[k] || 0) + a);
         x.credits.push({date: d, amount: a, voucher: v.no || v.ref || "", vid: v.id, ledger: e.l}); x.ledgers.add(e.l);
       });
+      Object.keys(bill).forEach(k => { agg[k].max = Math.max(agg[k].max, bill[k]); agg[k].credits.filter(c => c.vid === v.id).forEach(c => { c.bill = bill[k]; }); });
     });
     // a deduction counts for the year of the bill it is for (a TDS entry of its own after the bill: r.credit, TDSSep)
     const rows = TDS.allRows().filter(r => (r.credit ? TDS.fyOf(r.credit) : r.fy) === fy), today = TDSFiled.todayIst(), out = [];
     Object.values(agg).forEach(x => {
       let R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
+      // the TDS check of 22-Oct-2026, M7: FY 2024-25 at that year's limits (the Finance Act, 2025 raised them from 1-Apr-2025)
+      if (fy < "2025-26") R = Object.assign({}, R, this.LIMIT_OLD[TDS.sec(R.old)] || {});
       // bridge 2.4.3: the thresholds of the nature of payment Tally keeps on these ledgers (its TDSRate master), as Tally has them
       const TT = typeof TDSTally === "object" ? TDSTally.threshold(Array.from(x.ledgers), start, R) : null;   // only the same section, a year's or a bill's limit, and only where stricter (review 243 H4)
       if (TT) R = Object.assign({}, R, TT.limit ? {limit: TT.limit} : {}, TT.single ? {single: TT.single} : {}, {fromTally: TT.nature});
@@ -434,7 +445,7 @@ const TDSWatch = {
         : R.basis === "monthly" ? monthsOver.length > 0 : x.credited > R.limit;
       // the amount TDS applies to: the whole year once the year's limit is crossed; else the single bills over the bill limit
       // (194C), the months over the monthly limit (194-I), or what is above the limit (194Q)
-      const counts = c => R.basis === "single_or_annual" ? (x.credited > R.limit || c.amount > R.single) : R.basis === "monthly" ? x.months[c.date.slice(0, 6)] > R.limit : true;
+      const counts = c => R.basis === "single_or_annual" ? (x.credited > R.limit || (c.bill || c.amount) > R.single) : R.basis === "monthly" ? x.months[c.date.slice(0, 6)] > R.limit : true;
       let base = R.basis === "excess" ? Math.max(0, x.credited - R.limit) : r2(x.credits.filter(counts).reduce((a, c) => a + c.amount, 0));
       if (!over) base = 0;
       const pan = TDS.panOf(x.party), pk = TDSRate.panKind(pan);

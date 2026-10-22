@@ -110,6 +110,10 @@ export function checkReturn(fy, q, form) {
   // deductee (a round-off journal) is no deduction (TDS.adjOnly); each such entry said once here, a note, with the entry
   let adj = []; try { adj = TDSAdj.list(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
   adj.forEach((x, i) => out.info.push({ k: "tdsadj" + i, n: 1, words: x.words, adj: x.vid, act: ["Open the entry", () => TDSAdj.open(x)] }));
+  // the TDS check of 22-Oct-2026 (src/js/91: TDSAudit.notes): reversals, top-ups, sections against the expense, payments
+  // against deductions, Tally's old rates, one PAN under two names, the remarks
+  let au = []; try { au = TDSAudit.notes(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  au.forEach((x, i) => (x.level === "warn" ? out.warnings : out.info).push({ k: "au-" + x.k + i, n: 1, words: x.words, step: x.step, act: x.vid ? ["Open the entry", () => TDSAdj.open({ date: x.date, no: x.no || "", ledgers: [x.ledger || ""] })] : undefined }));
   out.drift = dn; out.n = out.errors.length + out.warnings.length;
   return out;
 }

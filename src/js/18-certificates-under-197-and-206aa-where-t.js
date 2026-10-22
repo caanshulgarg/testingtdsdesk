@@ -10,7 +10,8 @@ const Certs = {
       normName(c.party) === normName(r.party) &&
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
-  validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // (the TDS check of 22-Oct-2026, M5: the fourth letter is the holder's status, one of those Protean's FVU takes)
+  validPan(p){ return /^[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
   // PANs marked inoperative (not linked with Aadhaar) for this client's books: S.books.panInoperative = {PAN: date checked}
   inoperative(p){
     const P = String(p || "").toUpperCase();
@@ -50,7 +51,7 @@ const Certs = {
   },
   // the rate without a certificate
   expectedNormal(r){
-    const std = (TDS.STD[TDS.sec(r.section)] || []);
+    const std = TDS.stdOn(r.section, r.date);
     const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
     // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O
     const noPan = !this.validPan(r.pan) ? "no valid PAN" : this.inoperative(r.pan) ? "PAN inoperative" : "";
@@ -71,6 +72,8 @@ const Certs = {
     TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
       // a TDS entry of its own short of its bill (TDSSep, src/js/66) is the audit's "short deducted" (TDSWatch), said once
       if (r.sepShort) return;
+      // N7 (Testing AAD, 01-Jul-2026: rent on "TDS 94H" at 10%): the section looks wrong, not the rate (TDSAudit says so)
+      if (TDSRate.secOfPay(r.pay) && TDSRate.secOfPay(r.pay) !== TDS.sec(r.section).slice(0, 4)) return;
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
       const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);

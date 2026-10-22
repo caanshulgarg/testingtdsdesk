@@ -68,19 +68,40 @@ const TDS = {
     return hit ? hit.rate : null;
   },
   // a deduction from a non-resident goes in 27Q, not 26Q
-  NR: /^(195|194E|194LB|194LBA|194LC|194LD|196[A-D])/,
+  // (the TDS check of 22-Oct-2026, N11: anchored, so 194LBB and 194LBC of a resident stay in 26Q)
+  NR: /^(195|194E|194LBA?|194LC|194LD|196[A-D])$/,
   sec(s){ return String(s || "").replace(/\s.*$/, "").replace(/-/g, "").toUpperCase(); },
-  // what was paid or credited: from the ledger's own rate, else from the section's usual rates, else the voucher's expense
+  // the usual rates on a day (the TDS check of 22-Oct-2026, M7: a return or correction of FY 2024-25 at that year's rates):
+  // before 1-Oct-2024 194H, 194-IB, 194DA and 194G 5%, 194-O 1% (Finance (No. 2) Act, 2024); before 1-Apr-2025 194D 5% for
+  // others than companies
+  STD_OLD: [["20241001", {"194H": [5], "194IB": [5], "194DA": [5], "194G": [5], "194O": [1]}], ["20250401", {"194D": [5, 10]}]],
+  stdOn(section, d){ const s = this.sec(section), t = this.ymd(d), o = this.STD_OLD.find(([to, m]) => t && t < to && m[s]); return o ? o[1][s] : this.STD[s] || []; },
+  // what was paid or credited (the TDS check of 22-Oct-2026, H1 and N4: never worked back from a ledger's rate while the
+  // entry says it): Tally's assessable amount for the TDS (tallyBase); else the entry's expense (net of GST) or another of
+  // its lines that the TDS fits at the ledger's rate, Tally's rounding to the rupee allowed (10% of 85,815 is 8,581.50,
+  // booked 8,582: paid 85,815, not 85,820); else at another usual rate of the section ("10% deducted on a 2% ledger":
+  // ledgerRate, said on the row; the rate check reads the 10%); the ledger's rate only when nothing in the entry fits. A
+  // TDS top-up with no party, booked as an expense of the same amount (M3: Leads, 30-Apr-2026, 3,000.10), has no amount
+  // paid of its own: none is invented
   baseFor(t, L, v){
-    if (t.rate) return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
+    if (!v.party && L.tds.length === 1 && Math.abs(L.taxable - t.amount) < 1) return {paid: 0, rate: null, how: "top-up"};
+    const tb = this.tallyBase(v, t);
+    if (tb > 0) return {paid: tb, rate: r2(t.amount / tb * 100), how: "tally", fit: 1};
     const cand = [];
     if (L.taxable) cand.push(L.taxable);
     v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (!m.kind && Math.abs(e.a) > 0) cand.push(Math.abs(e.a)); });
-    const std = this.STD[this.sec(t.section)] || [];
+    const std = this.stdOn(t.section, v.date);
+    if (t.rate){
+      for (const rate of [t.rate].concat(std)){
+        const hit = cand.find(c => Math.abs(c * rate / 100 - t.amount) <= Math.max(1, t.amount * 0.005));
+        if (hit) return Object.assign({paid: r2(hit), rate, how: "books", fit: 1}, rate !== t.rate ? {ledgerRate: t.rate} : {});
+      }
+      return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
+    }
     for (const rate of std){
       const want = r2(t.amount / (rate / 100));
       const hit = cand.find(c => Math.abs(c - want) <= Math.max(2, want * 0.005));
-      if (hit) return {paid: r2(hit), rate, how: "section"};
+      if (hit) return {paid: r2(hit), rate, how: "section", fit: 1};
       if (!cand.length) continue;
     }
     // round 43: 194Q is deducted only on the purchase value above 50 lakh in the year, so the bill is larger than what the
@@ -168,6 +189,7 @@ const TDS = {
     if (!b || !b.vouchers) return [];
     const out = [];
     b.vouchers.forEach(v => {
+      if (v.opt || v.cancel) return;
       const L = Books.lines(v);
       if (!L.tcs || !L.tcs.length) return;
       const tcsAll = r2(L.tcs.reduce((a, t) => a + t.amount, 0));
@@ -229,21 +251,55 @@ const TDS = {
   // party where the entry has it; else the party's line by structure (Books.partyEnts, as GSTR-1 finds it); else (an entry
   // of no side, as a payment or a journal with no tax) the one ledger whose line is under Sundry Creditors or Debtors or
   // carries a bill allocation; else the name, as before. No party named: "" (TDS.adjOnly and TDS.billParty decide)
+  // (the TDS check of 22-Oct-2026, N3: Tally names a bank payment's bank as its party: never the deductee; the party's line,
+  // else none, so the Deductees step asks)
   led(v){
-    const p = v.party;
-    if (!p || v.ent.some(e => e.l === p)) return p;
-    let s = Books.partyEnts(v);
+    let p = v.party;
+    if (p && Books.ledgerOf(p).kind === "bank") p = "";
+    else if (!p || v.ent.some(e => e.l === p)) return p;
+    let s = Books.partyEnts(v).filter(e => e.l !== v.party);
     if (!s.length) s = v.ent.filter(e => !Books.ledgerOf(e.l).kind && Books.sundry(e));
     return s.length && s.every(e => e.l === s[0].l) ? s[0].l : p;
   },
+  // Tally's assessable amount for an entry's TDS line (tally_tds_details_marked, read by TCloud.tdsLines): the row of the
+  // entry whose tax is the line's, with an amount assessed; 0 when Tally has none (H1)
+  tallyBase(v, t){
+    const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[(S.books || {}).cid], rows = x && x.rows;
+    if (!rows) return 0;
+    if (!this._tb || this._tb.rows !== rows){ const by = {}; rows.forEach(r => { if (r && r.guid) (by[r.guid] = by[r.guid] || []).push(r); }); this._tb = {rows, by}; }
+    const r = (this._tb.by[v.id] || []).find(z => num(z.assessable) > 0 && !z.gone_at && Math.abs(Math.abs(num(z.amount)) - t.amount) < 0.5);
+    return r ? r2(num(r.assessable)) : 0;
+  },
+  // H4: a TDS ledger debited back with no bank line, against the party (or an expense): the deduction undone in part. Taken
+  // off the party's latest deduction of the section on or before it (its amount paid in proportion); where that deduction's
+  // return is marked filed, or there is none, the reversal is listed (TDS.reversals: a correction of that return)
+  unDo(out, back){
+    const list = [];
+    back.forEach(({v, t}) => {
+      const party = this.led(v) || ((v.ent.find(e => e.a > 0 && !Books.ledgerOf(e.l).kind) || {}).l) || "", sec = this.sec(t.section);
+      const r = out.filter(z => z.party === party && this.sec(z.section) === sec && z.tds > 0 && this.ymd(z.date) <= this.ymd(v.date)).pop();
+      const w = {vid: v.id, date: v.date, voucher: v.no || v.ref || "", party, section: t.section, ledger: t.ledger, amount: r2(t.amount), of: r ? r.id : "", fy: r ? r.fy : this.fyOf(v.date), q: r ? r.q : this.qOf(v.date)};
+      if (r && !(typeof TDSFiled === "object" && TDSFiled.get(r.fy, r.q, /^(192|392)/.test(sec) ? "24Q" : this.NR.test(sec) ? "27Q" : "26Q"))){
+        const k = Math.min(1, t.amount / r.tds);
+        r.paid = r2(r.paid * (1 - k)); r.tds = r2(r.tds - t.amount); r.reversed = w;
+      } else list.push(Object.assign(w, {filed: !!r}));
+    });
+    this._rev = list;
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].reversed && out[i].tds < 0.005) out.splice(i, 1);
+  },
+  reversals(){ this.allRows(); return this._rev || []; },
   // every voucher that carries a TDS ledger becomes one deduction row (but a TDS ledger's adjustment: TDS.adjOnly)
   allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
   allRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
+    const back = [];
     b.vouchers.forEach(v => {
+      // the TDS check of 22-Oct-2026, H2: an optional or cancelled entry is no deduction
+      if (v.opt || v.cancel) return;
       const L = Books.lines(v);
+      (L.tdsBack || []).forEach(t => back.push({v, t}));
       if (!L.tds.length || this.adjOnly(v)) return;
       // the owner, 19-Oct-2026: a TDS entry of its own (the party debited, a TDS ledger credited, no expense in it; a journal
       // often names no party in Tally): its deductee is the party debited (TDSSep.partyOf, src/js/66), and what it was
@@ -258,12 +314,12 @@ const TDS = {
         if (!t.section && this.salaryLedger(t.ledger)) t = Object.assign({}, t, {section: "192"});
         const sp = sp0 && !/^192/.test(String(t.section || "")) ? sp0 : "", party = sp || this.led(v) || bp;
         let B = this.baseFor(t, L, v);
-        if (sp && B.how !== "section") B = {paid: 0, rate: null, how: "books"};
+        if (sp && !B.fit) B = {paid: 0, rate: null, how: "books"};
         const paid = B.paid;
         out.push({
           id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
           party, pan: TDS.panOf(party), section: t.section, ledger: t.ledger, ...(sp ? {sep: true} : {}), ...(party && party === bp ? {partyFrom: "ledger"} : {}),
-          paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
+          paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how, ...(B.ledgerRate ? {ledgerRate: B.ledgerRate} : {}), ...(B.how === "top-up" ? {topUp: true} : {}),
           voucher: v.no || v.ref || "", type: v.type, src: v.src === "bridge" ? "bridge" : "daybook", challan: (b.alloc || {})[v.id + "|" + t.ledger] || "",
           // what was paid for (professional or technical, rent of a building or of machinery): decides the rate within a
           // section (TDSRate, src/js/66)
@@ -276,6 +332,7 @@ const TDS = {
     // amount paid or credited and its date (credit); the date of deduction stays the TDS entry's
     // the owner, 19-Oct-2026: a TDS entry of its own is matched to the bills it was deducted on (TDSSep.link: the bill named,
     // else the TDS fitting a bill, else a month's bills together); the others as before
+    this.unDo(out, back);
     if (typeof TDSSep === "object") TDSSep.link(out);
     if (typeof TDSInt === "object") out.forEach(r => {
       if (r.paid > 0 || !(r.tds > 0) || r.sep) return;
@@ -321,20 +378,35 @@ const TDS = {
     if (!b || !b.vouchers) return [];
     const out = [];
     b.vouchers.forEach(v => {
-      const L = Books.lines(v);
-      if (!L.tdsPaid.length) return;
+      if (v.opt || v.cancel) return;
+      const L = Books.lines(v), bank = v.ent.filter(e => Books.ledgerOf(e.l).kind === "bank");
+      // the TDS check of 22-Oct-2026, N1 (Leads, Payments S87/S88 of 30-Jul-2025, "Interest on TDS" ₹4,729 and ₹2,437 with
+      // the bank alone): interest and the late fee paid from the bank are a TDS payment too, by their ledger (TDS interest
+      // or fee) or a name that says TDS or TCS and interest, fee or 234E
+      const ex = bank.length ? v.ent.filter(e => e.a < 0 && /tds_interest|tds_fee/.test(Books.ledgerOf(e.l).what || "") || e.a < 0 && !Books.ledgerOf(e.l).kind && /\b(TDS|TCS)\b/i.test(e.l) && /INTEREST|\bFEES?\b|234E/i.test(e.l)) : [];
+      if (!L.tdsPaid.length && !ex.length) return;
       // bridge 2.4.3: where Tally marks what each line pays (TYPEOFTAXPAYMENT), the tax alone; interest and fee apart
-      const sp = typeof TDSTally === "object" ? TDSTally.split(v) : null;
-      const tax = sp ? sp.tax : r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
-      if (!tax && !(sp && (sp.interest || sp.fee || sp.others))) return;   // (review 243 N1) a payment of interest or fee alone is listed, its tax 0
-      out.push({vid: v.id, date: v.date, tax, ...(sp ? {interest: sp.interest, fee: sp.fee, others: sp.others, fromTally: true} : {}), sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr, src: v.src === "bridge" ? "bridge" : "daybook"});
+      const sp = typeof TDSTally === "object" ? TDSTally.split(v) : null, fee = r2(ex.filter(e => /FEE|234E/i.test(e.l) || /fee/.test(Books.ledgerOf(e.l).what || "")).reduce((a, e) => a - e.a, 0)), int = r2(ex.reduce((a, e) => a - e.a, 0) - fee);
+      let tax = sp ? sp.tax : r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
+      // H3: what the bank paid, in whole rupees (a round-off line beside: 07-Aug-2026 ₹32,081.13 in the lines, ₹32,081 paid)
+      const paid = r2(bank.reduce((a, e) => a + e.a, 0) - int - fee - (sp ? sp.interest + sp.fee + sp.others : 0));
+      if (!sp && tax && v.ent.every(e => Books.ledgerOf(e.l).kind || ex.includes(e)) && Math.abs(paid - tax) < 2) tax = paid;
+      if (!tax && !int && !fee && !(sp && (sp.interest || sp.fee || sp.others))) return;   // (review 243 N1) a payment of interest or fee alone is listed, its tax 0
+      // H3 (Leads, Payment 209 of 06-Jul-2026, ₹2,27,543 for five TDS ledgers): one part a section, whole rupees, adding up
+      // to the tax: a challan each (one challan pays one section)
+      // (by TDS ledger: 194J at 10% and at 2% are two nature-of-payment codes, two challans)
+      const by = {}; L.tdsPaid.forEach(t => { const x = by[t.ledger] = by[t.ledger] || {section: t.section || "", tax: 0}; x.tax = r2(x.tax + t.amount); });
+      const parts = Object.values(by).map(x => ({section: x.section, tax: Math.round(x.tax)})).sort((a, c) => c.tax - a.tax);
+      if (parts.length > 1) parts[0].tax = r2(parts[0].tax + Math.round(tax) - parts.reduce((a, z) => a + z.tax, 0));
+      out.push({vid: v.id, date: v.date, tax, ...(sp ? {interest: sp.interest, fee: sp.fee, others: sp.others, fromTally: true} : int || fee ? {interest: int, fee} : {}), sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), ...(parts.length > 1 ? {parts} : {}),
+        voucher: v.no || v.ref || "", narr: v.narr, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
-  // the 7th of the next month, and 30 April for March
-  dueDate(d){
+  // the 7th of the next month, and 30 April for March TDS (TCS, 27EQ: 7 April, rule 37CA; N5)
+  dueDate(d, form){
     const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6));
-    if (m === 3) return (y) + "0430";
+    if (m === 3 && form !== "27EQ") return (y) + "0430";
     const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
     return String(ny) + String(nm).padStart(2, "0") + "07";
   },
@@ -367,13 +439,13 @@ const TDS = {
       }
       const c = ch[r.challan];
       if (!c){
-        const due = this.dueDate(r.date);
+        const due = this.dueDate(r.date, form);
         if (!(r.tds > 0) || !today || today <= this.ymd(due)) return;
         const months = this.monthsBetween(r.date, today), amount = r2(r.tds * pct / 100 * months);
         if (amount >= 1) out.push({kind: "unpaid", rate: pct, row: r, due, to: today, months, amount});
         return;
       }
-      const due = this.dueDate(r.date);
+      const due = this.dueDate(r.date, form);
       if (this.ymd(c.date) <= this.ymd(due)) return;
       const months = this.monthsBetween(r.date, c.date);
       const amount = r2(r.tds * pct / 100 * months);
@@ -401,12 +473,15 @@ const TDS = {
     if (tax == null){ const rows = this.formRows(form).filter(r => r.fy === fy && r.q === q); if (!rows.length) return null; tax = r2(rows.reduce((a, r) => a + r.tds, 0)); }
     const due = this.returnDue(fy, q, form);
     const filed = this.ymd(filedOn) || this.ymd(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10));
-    const penaltyBy = String(num(due.slice(0, 4)) + 1) + due.slice(4);
-    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: tax, penaltyBy, p271h: false};
+    // the TDS check of 22-Oct-2026, M1: 271H(3) gives a year after the due date, and a month for a statement due on or after
+    // 1 April 2025 (Finance (No. 2) Act, 2024)
+    const m1 = due >= "20250401", nm = num(due.slice(4, 6)) % 12 + 1, ny = num(due.slice(0, 4)) + (nm === 1 ? 1 : 0), last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+    const penaltyBy = m1 ? String(ny) + String(nm).padStart(2, "0") + String(Math.min(num(due.slice(6, 8)), last)).padStart(2, "0") : String(num(due.slice(0, 4)) + 1) + due.slice(4), penaltyIn = m1 ? "a month" : "a year";
+    if (filed <= due) return {due, filed, days: 0, fee: 0, cap: tax, penaltyBy, penaltyIn, p271h: false};
     const d1 = new Date(due.slice(0, 4) + "-" + due.slice(4, 6) + "-" + due.slice(6, 8));
     const d2 = new Date(filed.slice(0, 4) + "-" + filed.slice(4, 6) + "-" + filed.slice(6, 8));
     const days = Math.round((d2 - d1) / 86400000);
-    return {due, filed, days, fee: Math.min(200 * days, tax), cap: tax, penaltyBy, p271h: filed > penaltyBy};
+    return {due, filed, days, fee: Math.min(200 * days, tax), cap: tax, penaltyBy, penaltyIn, p271h: filed > penaltyBy};
   },
   // tds-layout (14-Oct-2026): a challan deleted by hand is kept with its reason (c.deleted, TDSReg.deleteHand) and is in no list
   challans(){ return ((S.books || {}).challans || []).filter(c => !c.deleted).sort((a, b) => String(a.date).localeCompare(String(b.date))); },
@@ -448,36 +523,7 @@ const TDS = {
       if (!r.pan) s.noPan++;
     });
     return Object.values(bySec).sort((a, b) => a.section.localeCompare(b.section));
-  },
-  // the working file: challan table and the deductee annexure under each challan, as in Form 26Q
-  async toExcel(fy, q, form){
-    await ensureXlsx();
-    form = typeof TDS_FORMS === "object" && TDS_FORMS[form] ? form : "26Q";
-    const rows = TDS_FORMS[form].rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
-    // next-challan-match: the quarter's challans and any other this return uses (an earlier one's balance), with what
-    // this return uses of each and the interest and fee allocated to it
-    const usedHere = new Set(rows.map(r => r.challan).filter(Boolean));
-    const ch = this.challans().filter(c => usedHere.has(c.id) || ((!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q)));
-    const use = this.challanUse(), part = (c) => typeof TDSReg === "object" && fy && q ? TDSReg.portionFor(c, form, fy, q) : {interest: 0, fee: 0};
-    const d = s => s ? String(s).slice(6, 8) + "/" + String(s).slice(4, 6) + "/" + String(s).slice(0, 4) : "";
-    const wb = XLSX.utils.book_new();
-    const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left", "Used by this return", "Interest allocated here", "Fee allocated here"]]
-      .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0)),
-        r2(rows.filter(r => r.challan === c.id).reduce((a, r) => a + r.tds, 0)), part(c).interest, part(c).fee]));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
-    const head = ["Sl. No.", "Deductee code", "PAN", "Name of the deductee", "Section", "Date of payment or credit", "Amount paid or credited",
-      "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
-    const body = rows.map((r, i) => {
-      const c = ch.find(x => x.id === r.challan) || {};
-      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, form === "27EQ" ? r.code : TDS26Q.code(r.section),
-        d(r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
-    const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
-      .concat(this.summary(fy, q, form).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
-    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
-    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + form + "-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
+  // the working file (TDS.toExcel): src/js/91, with the TDS screens (L1 of the TDS check of 22-Oct-2026)
 };
 

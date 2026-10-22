@@ -90,7 +90,8 @@ const Payroll = {
   tdsName(name){ const u = String(name || "").toUpperCase(); return /\bINCOME[\s-]*TAX\b/.test(u) || /\b(TDS|I\.?\s?T\.?)\b/.test(u) && /SALAR|\b[13]92/.test(u); },
   tdsHow(name){
     const c = this.tdsChoice(name), h = this.head(name), m = typeof Books === "object" ? Books.ledgerOf(name) : null;
-    const earn = /earning|reimburse|employer|loan|advance|gratuity/i.test(String(h.type || "")), bk = !earn && !!m && m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")) && !m.payTdsSet;
+    // (the TDS check of 22-Oct-2026, H5: a "Not TDS" head whose name is no TDS, as ESIC, is not the books' TDS ledger)
+    const earn = /earning|reimburse|employer|loan|advance|gratuity/i.test(String(h.type || "")), bk = !earn && !!m && m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")) && !m.payTdsSet && !(c === false && !/\bTDS\b|INCOME[\s-]*TAX/i.test(name));
     // next-24q-split (Leads): the books' own salary TDS ledger (not one made so by "This pay head is TDS") stays TDS over a
     // "Not TDS": its employee split is that line
     if (c !== null && (c || !bk)) return c ? "chosen" : "";
@@ -588,6 +589,8 @@ function payTdsHead(name, yes){
   const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
   m.payTds = !!yes; m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = typeof whoAmI === "function" ? whoAmI() : "";
   if (yes && !(m.kind === "tds_payable" && /^(192|392)/.test(String(m.section || "")))){ m.what = "tds_payable"; m.kind = "tds_payable"; m.section = "192"; m.payTdsSet = 1; }
+  // N8: "Not TDS" on a head whose name is no TDS (ESIC) takes it off the TDS ledgers, as Books reads them
+  if (!yes && m.kind === "tds_payable" && !/\bTDS\b|INCOME[\s-]*TAX/i.test(name)){ m.kind = ""; m.what = "none"; }
   b.mapV = (b.mapV || 0) + 1;
   if (typeof toast === "function") toast(yes ? "“" + name + "” is the TDS pay head: each employee's TDS is read from it." : "“" + name + "” is not taken as TDS.");
   saveBooks(); render();

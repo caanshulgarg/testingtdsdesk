@@ -105,6 +105,9 @@ export default function AddDeduction({ form, fy, q }) {
         <label className="ach-f">Deducted on<input type="date" aria-label="Deducted on" value={v.date} disabled={correct} onChange={(ev) => set("date", ev.target.value)} /></label>
         <label className="ach-f">Lower-deduction certificate<select aria-label="Lower-deduction certificate" value={v.cert} onChange={(ev) => set("cert", ev.target.value)}><option value="">None</option>
           {certs.map((c) => <option key={c.id} value={c.certNo || c.id}>{(c.certNo || "certificate") + " · " + num(c.rate) + "%"}</option>)}</select></label>
+        {/* the TDS check of 22-Oct-2026, M4: a payment with no tax deducted is reported with its reason (remark T or Y) */}
+        {form === "26Q" && !correct && !(num(v.tdsTyped ? v.tds : tdsAuto) > 0) && <label className="ach-f">No tax deducted because<select aria-label="No tax deducted because" data-add-nil="" value={/^[TY]$/.test(v.basis || "") ? v.basis : ""} onChange={(ev) => set("basis", ev.target.value)}>
+          <option value="">Not said</option><option value="T">T · a transporter's declaration with PAN (194C(6))</option><option value="Y">Y · below the threshold</option></select></label>}
         {form === "27Q" && !correct && <label className="ach-f">Rate under<select aria-label="Rate under" value={v.basis || (v.party && TDS26Q.nrInfo(v.party).dtaa ? "DTAA" : "IT Act")} onChange={(ev) => set("basis", ev.target.value)}><option>IT Act</option><option>DTAA</option></select></label>}
         {!correct && <label className="ach-f">Challan (optional)<select aria-label="Challan" value={v.challan} onChange={(ev) => set("challan", ev.target.value)}><option value="">None yet</option>
           {chs.map((c) => <option key={c.id} value={c.id}>{TDSCH.label(c)} · {money(TDSReg.balance(c).tax)} left</option>)}</select></label>}
