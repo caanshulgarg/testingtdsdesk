@@ -16,7 +16,7 @@ ARCH=""
 [ $# -gt 0 ] || { echo "apt_install.sh: no packages"; exit 2; }
 SUDO=(); [ "$(id -u)" -eq 0 ] || SUDO=(sudo)
 OPTS=(-q -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120)
-[ -n "$ARCH" ] && { mkdir -p "$ARCH/partial"; OPTS+=(-o "Dir::Cache::archives=$ARCH"); }
+[ -n "$ARCH" ] && { mkdir -p "$ARCH/partial"; OPTS+=(-o "Dir::Cache::archives=$ARCH" -o APT::Keep-Downloaded-Packages=true); }
 export DEBIAN_FRONTEND=noninteractive
 
 if [ -n "$ARCH" ] && compgen -G "$ARCH/*.deb" >/dev/null; then

@@ -206,22 +206,36 @@ jobs:
         with:
           path: /home/runner/pw-browsers
           key: pw-chromium-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      # the system packages Chromium needs (those `playwright install --with-deps` installs; the runner image lacks a few
+      # fonts), kept from one run to the next like LibreOffice's (keyed by the runner image and Playwright's version)
+      - name: Chromium's system packages from the cache
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/apt-chromium
+          key: apt-chromium-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-${{ steps.pw.outputs.version }}
       - name: Chromium and the system packages it needs (those of `playwright install --with-deps`, only the missing ones)
         timeout-minutes: 15
         run: |
           python -m playwright install chromium
-          # the packages Playwright's --with-deps would install (its --dry-run's apt-get line, whatever the wrapping around it);
-          # the runner image has most of them, and apt-get (bounded and retried by apt_install.sh) runs only for the missing
-          # ones. Should the list not be readable, Playwright installs them itself: each try cut at 6 minutes, three tries
+          # Playwright's --dry-run says what is missing: 1.64 lists the missing packages ("Missing system dependencies (9):"
+          # then one per line); 1.56 printed its whole apt-get line (those not installed are picked out here). They are
+          # installed by apt_install.sh (bounded, retried, from the cache above when it has them). Output in neither form:
+          # Playwright installs them itself, each try cut at 6 minutes, three tries
           out=$(python -m playwright install-deps --dry-run chromium 2>&1 || true)
-          pkgs=$(printf '%s\n' "$out" | grep -oE 'apt-get install[^"&;|]*' | sed 's/^apt-get install//' | tr ' ' '\n' | grep -vE '^(-.*)?$' | sort -u)
-          if [ -z "$pkgs" ]; then
-            echo "::warning::no package list read from 'playwright install-deps --dry-run':"; printf '%s\n' "$out" | head -20
-            for try in 1 2 3; do timeout 360 python -m playwright install-deps chromium && break; echo "install-deps try $try failed or timed out"; done
-          else
+          printf '%s\n' "$out" | head -20
+          if printf '%s\n' "$out" | grep -q 'Missing system dependencies'; then
+            missing=$(printf '%s\n' "$out" | sed -n '/Missing system dependencies/,$p' | sed -n 's/^[[:space:]]\{1,\}\([a-z0-9][a-z0-9.+-]*\)[[:space:]]*$/\1/p' | sort -u)
+          elif printf '%s\n' "$out" | grep -q 'apt-get install'; then
+            pkgs=$(printf '%s\n' "$out" | grep -oE 'apt-get install[^"&;|]*' | sed 's/^apt-get install//' | tr ' ' '\n' | grep -vE '^(-.*)?$' | sort -u)
             missing=$(for q in $pkgs; do dpkg-query -W -f='${Status}\n' "$q" 2>/dev/null | grep -q '^install ok installed' || echo "$q"; done)
-            if [ -n "$missing" ]; then echo "missing:" $missing; tests/ci/apt_install.sh $missing; else echo "all $(echo "$pkgs" | wc -l) packages Chromium needs are installed"; fi
+          elif [ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
+            missing=""
+          else
+            echo "::warning::'playwright install-deps --dry-run' said something not understood here: Playwright installs the packages"
+            for try in 1 2 3; do timeout 360 python -m playwright install-deps chromium && break; echo "install-deps try $try failed or timed out"; sudo dpkg --configure -a || true; done
+            missing=""
           fi
+          if [ -n "$missing" ]; then echo "missing:" $missing; tests/ci/apt_install.sh --archives /home/runner/apt-chromium $missing; else echo "no system package missing"; fi
           python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); p.chromium.launch().close(); p.stop(); print("Chromium starts")'
       - name: PostgreSQL 16 binaries (tests/pg_stand.py starts its own throwaway server from /usr/lib/postgresql/16/bin)
         timeout-minutes: 15
