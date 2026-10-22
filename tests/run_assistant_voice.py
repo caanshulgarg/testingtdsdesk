@@ -40,6 +40,9 @@ FAKE_REC = """(() => {
     abort(){ if (this.state !== 'listening') return; this.state = 'aborted'; if (this.onerror) this.onerror({error: 'aborted'}); if (this.onend) this.onend(); }
   }
   window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
+  // the recording for clearer listening (VoiceRecorder.js) is not part of this test: the microphone prompt left unanswered,
+  // as a headless browser may leave it (run_voice_whisper.py tests the recording)
+  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => new Promise(() => {});
   window.__rec = () => window.__recs[window.__recs.length - 1];
   window.__say = (parts) => { const r = window.__rec(); const results = parts.map(([t, fin]) => Object.assign([{transcript: t, confidence: .9}], {isFinal: !!fin}));
     r.onresult({resultIndex: 0, results}); };

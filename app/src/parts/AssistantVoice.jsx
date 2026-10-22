@@ -11,6 +11,11 @@
 // is heard for 12 s. The language chosen (English, Hindi, Hinglish, …) is kept for every session. Where the browser has none (Firefox), the mic is not shown. The language chosen is kept for the
 // person in this browser and goes with the question as a hint (ASST.st().lang): the reply comes in the question's language.
 // "Read aloud" on a reply: the browser's speech, in the reply's language when the browser has a voice for it.
+// Clearer listening (the owner, 22-Oct-2026: "very poor; make it best"): while the browser shows the words live, the same
+// speech is recorded (VoiceRecorder.js, a lazy part loaded with the mic); on stop (a tap, or about 3 s quiet after speech,
+// heard by a level meter as well as by the recogniser) the clip goes to fincom-transcribe (Groq's Whisper, with the
+// firm's words and the client's names as a hint) and its words replace the browser's, unless the box was changed
+// meanwhile. No key, the day's limit, offline or an error: the browser's words stay, with one quiet line.
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Volume2, VolumeX } from "lucide-react";
 
@@ -43,7 +48,11 @@ function keepLang(c) { try { localStorage.setItem(KEY(), c); } catch (e) { /* st
 const seen = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) { return false; } };
 const see = (k) => { try { localStorage.setItem(k, "1"); } catch (e) { /* storage blocked */ } };
 const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none";
-const NOTE = "Voice is turned into text by your browser (Google/Apple).";
+const NOTE = "Voice is turned into text by your browser (Google/Apple); for clearer words the recording also goes to Groq through FinCom, and is not kept.";
+const BUSY = "Making the words clearer…";
+// the recorder (VoiceRecorder.js), loaded when a mic is first shown; until it is there, the browser's words alone
+let VR = null, vrLoad = null;
+export const loadRecorder = () => vrLoad || (vrLoad = import("./VoiceRecorder.js").then((m) => (VR = m), () => { vrLoad = null; return null; }));
 
 // the one listening at a time (all its recogniser sessions); Ask stops it (a word heard after Ask never lands in the next
 // question)
@@ -79,12 +88,13 @@ const ERR = {
 };
 
 // the mic and the language, in the question box's bar; `a` is ASST's state (a.q the box, a.lang the hint)
-export function VoiceInput({ a, onText }) {
+export function VoiceInput({ a, onText, client = null }) {
   const [on, setOn] = useState(false), [msg, setMsg] = useState(""), [lang, setLang] = useState(voiceLang);
   const [none, setNone] = useState(() => !voiceSupported() && !seen(NONE_KEY));
   const mine = useRef(null);
   a.lang = lang;
   useEffect(() => () => { if (live && live === mine.current) stopVoice(); }, []);
+  useEffect(() => { if (voiceSupported()) loadRecorder(); }, []);
   if (!voiceSupported()) {
     return none ? <span className="asst-voice-msg" role="note" data-asst-voice-none="">Voice typing is not available in this browser (use Chrome, Edge or Safari).
       <button type="button" className="linkbtn" aria-label="Hide this note" onClick={() => { see(NONE_KEY); setNone(false); }}>×</button></span> : null;
@@ -94,7 +104,7 @@ export function VoiceInput({ a, onText }) {
     const R = Rec();
     const base = String(a.q || "").replace(/\s+$/, ""), sep = base ? " " : "";
     // one listening: the words of the sessions ended (done), the current session's finals (cur) and its interim words
-    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null };
+    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang };
     const words = () => norm([...sess.done, ...sess.cur, sess.interim].join(" "));
     const show = () => { const w = words(); onText(w ? base + sep + w : base); };
     const keep = () => { const w = norm([...sess.cur, sess.interim].join(" ")); if (w) sess.done.push(w); sess.cur = []; sess.interim = ""; };
@@ -106,6 +116,7 @@ export function VoiceInput({ a, onText }) {
       if (r) { try { if (how === "abort") r.abort(); else r.stop(); } catch (e) { /* already stopped */ } }
       if (live === sess) live = null;
       if (mine.current === sess) { setOn(false); setMsg((m) => (m === NOTE ? "" : m)); }   // the browser note goes with the listening it was for
+      if (sess.mic) { if (how === "abort") sess.mic.abort(); else clearer(sess, words() ? base + sep + words() : base, base); }
     };
     // a pause after speech ends it (the timer starts again at every word heard)
     const arm = () => { clearTimeout(sess.timer); sess.timer = setTimeout(() => sess.finish("stop"), silenceMs()); };
@@ -141,9 +152,24 @@ export function VoiceInput({ a, onText }) {
       try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
     };
     stopVoice(); live = sess; mine.current = sess;
+    if (VR && VR.canRecord()) sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => sess.finish("stop"), onError: (w) => { if (mine.current === sess) setMsg(w); } });
     if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg(NOTE); } else setMsg("");
     setOn(true);
     begin();
+  };
+  // Whisper's words for what was just said; they replace the browser's only while the box still holds what was heard
+  const clearer = (sess, shown, base) => {
+    const sep = base ? " " : "";
+    sess.mic.stop().then((clips) => {
+      if (!clips.length || mine.current !== sess) return null;
+      setMsg(BUSY);
+      return VR.transcribe(clips, { lang: VR.whisperLang(sess.lang), client }).then((r) => {
+        const done = (m) => setMsg((x) => (x === BUSY ? m : x));
+        if (mine.current !== sess || String(a.q || "") !== shown) { done(""); return; }   // a new listening, Ask, or the box changed
+        if (r.ok) { if (r.text) onText(base + sep + r.text); done(""); }
+        else done(VR.KEPT[r.kind] || VR.KEPT.error);
+      });
+    }).catch(() => setMsg((x) => (x === BUSY ? VR.KEPT.error : x)));
   };
   const pick = (c) => { setLang(c); keepLang(c); a.lang = c; if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
   return <>
