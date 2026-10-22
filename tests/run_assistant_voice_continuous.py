@@ -4,7 +4,7 @@ speaking, it took only the first sentence and stopped listening"). The browser's
   1. the recogniser is asked to listen continuously, with interim words, in the language chosen;
   2. the browser ends the session after the first sentence: FinCom starts a new one at once (the mic stays on) and keeps
      the first sentence; the next words show live (interim) after it, then final; the pieces are joined in the box;
-  3. it stops after a pause following speech (1 s here, set in this browser; 3 s by default, checked too), never by
+  3. it stops after a pause following speech (1 s here, set in this browser; 4 s by default, checked too), never by
      itself before; nothing is asked until Ask is pressed;
   4. Chrome on Android repeats a session's finals growing ("TDS", "TDS on rent"): the words are not doubled;
   5. Hindi chosen: every new session listens in hi-IN;
@@ -99,12 +99,12 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__bodies.length") == 0, "   nothing is asked by itself")
     n = n_recs(pg); pg.wait_for_timeout(300)
     ok(n_recs(pg) == n and pg.evaluate("__rec().state") == "stopped", "   and no new session after it stopped")
-    # default: 3 s
+    # default: 4 s (the owner, 22-Oct-2026: voice "still not good"; 3 s cut people off mid-thought)
     pg.evaluate("localStorage.removeItem('tdsdesk:asst-voice-silence')"); pg.fill("#asstQ", "")
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(100)
-    pg.evaluate("__say([['TDS on rent', true]])"); pg.wait_for_timeout(2300)
-    on_at_2s = mic_on(pg); pg.wait_for_timeout(1200)
-    ok(on_at_2s and not mic_on(pg), "3. by default a pause of about 3 s ends it (on at 2.3 s: %s; off at 3.5 s: %s)" % (on_at_2s, not mic_on(pg)))
+    pg.evaluate("__say([['TDS on rent', true]])"); pg.wait_for_timeout(3300)
+    on_at_3s = mic_on(pg); pg.wait_for_timeout(1200)
+    ok(on_at_3s and not mic_on(pg), "3. by default a pause of about 4 s ends it (on at 3.3 s: %s; off at 4.5 s: %s)" % (on_at_3s, not mic_on(pg)))
     # ---- 4. Chrome on Android: a session's finals repeated growing
     pg.evaluate("localStorage.setItem('tdsdesk:asst-voice-silence', '1')"); pg.fill("#asstQ", "")
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(100)

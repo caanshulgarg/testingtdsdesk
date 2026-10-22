@@ -11,6 +11,9 @@ answered by the test (page.route):
   5. a blocked microphone is explained in plain words; Safari records mp4
   6. Settings > Platform > Keys: the Groq key field beside the Claude key, for the platform's administrator only; never
      shown back (only "set on <date>"); the voice minutes used today
+  7. names corrected (22-Oct-2026): the microphone asked for echo cancelling, noise suppression, gain, one channel; opus
+     at about 40 kbps; Hinglish sent with latin=1; the corrected names under the box, underlined, the heard words on a
+     tap, one tap to undo; the pause after speech 4 s by default
 Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_voice_whisper.py"""
 import os, sys, json, threading, functools, http.server, urllib.parse
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -40,14 +43,14 @@ FAKES = """(() => {
   // MediaRecorder: each recorder's file is "clip<n>" (n: the n-th recorder made), handed over when it stops
   window.__mr = []; window.__tracksStopped = 0;
   class FakeMR {
-    constructor(stream, o){ this.mimeType = (o && o.mimeType) || 'audio/webm'; this.state = 'inactive'; this.n = window.__mr.length; window.__mr.push(this); }
+    constructor(stream, o){ this.mimeType = (o && o.mimeType) || 'audio/webm'; this.opts = o || {}; this.state = 'inactive'; this.n = window.__mr.length; window.__mr.push(this); }
     static isTypeSupported(t){ return true; }
     start(){ this.state = 'recording'; }
     stop(){ if (this.state === 'inactive') return; this.state = 'inactive'; setTimeout(() => { if (this.ondataavailable) this.ondataavailable({data: new Blob(['clip' + this.n], {type: this.mimeType})}); if (this.onstop) this.onstop(); }, 20); }
   }
   window.MediaRecorder = FakeMR;
   window.__gumError = '';
-  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = async () => { if (window.__gumError) throw Object.assign(new Error('mic'), {name: window.__gumError}); return {getTracks: () => [{stop(){ window.__tracksStopped++; }}]}; };
+  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = async (c) => { window.__gumArgs = c; if (window.__gumError) throw Object.assign(new Error('mic'), {name: window.__gumError}); return {getTracks: () => [{stop(){ window.__tracksStopped++; }}]}; };
   // the level meter's input: window.__level (0 quiet, 0.1 speech)
   window.__level = 0;
   class FakeAC { createMediaStreamSource(){ return {connect(){}}; } createAnalyser(){ return {fftSize: 1024, getFloatTimeDomainData(a){ a.fill(window.__level); }}; } close(){} }
@@ -85,6 +88,8 @@ def fn(route, request):
     SEEN.append({"qs": qs, "type": request.headers.get("content-type"), "body": body.decode("latin-1"), "auth": request.headers.get("authorization")})
     if MODE[0] == "limit": return route.fulfill(status=429, content_type="application/json", body=json.dumps({"ok": False, "kind": "limit"}), headers=CORS)
     if MODE[0] == "nokey": return route.fulfill(status=503, content_type="application/json", body=json.dumps({"ok": False, "kind": "nokey"}), headers=CORS)
+    if MODE[0] == "names": return route.fulfill(status=200, content_type="application/json", headers=CORS, body=json.dumps({"ok": True, "ms": 300, "model": "whisper-large-v3",
+        "text": "Richa Khandelwal ko 1 lakh ka payment, Tally mein entry", "changes": [{"from": "richa khandelwaal", "to": "Richa Khandelwal"}, {"from": "teddy", "to": "Tally"}]}))
     return route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True, "text": "Whisper heard " + body.decode("latin-1"), "ms": 300}),
                          headers=CORS)
 
@@ -177,6 +182,47 @@ with sync_playwright() as p:
     ctx, pg, cid = page(br, ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15")
     _, sent = speak(pg, "safari words")
     ok(sent and sent[0]["type"] == "audio/mp4" and box(pg) == "Whisper heard clip0", "Safari: recorded and sent as audio/mp4 (%s, %r)" % (sent[0]["type"] if sent else None, box(pg)))
+    ctx.close()
+
+    print("7. clearer sound, and the names corrected: underlined, the heard words on a tap, one tap to undo")
+    ctx, pg, cid = page(br)
+    MODE[0] = "names"; pg.select_option("[data-asst-lang]", "hinglish")
+    pg.fill("#asstQ", "Pehle:"); n = len(SEEN)
+    pg.click("[data-asst-mic]"); pg.wait_for_timeout(250)
+    gum = pg.evaluate("window.__gumArgs") or {}
+    au = gum.get("audio") or {}
+    ok(au.get("echoCancellation") is True and au.get("noiseSuppression") is True and au.get("autoGainControl") is True and au.get("channelCount") == 1 and au.get("sampleRate") in (48000, 16000),
+       "the microphone: echo cancelling, noise suppression, gain, one channel, 48 or 16 kHz (%s)" % au)
+    bits = pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond")
+    ok(bits and 32000 <= bits <= 48000, "opus at 32-48 kbps (%s)" % bits)
+    pg.evaluate("__say([['richa khandelwaal ko 1 lakh ka payment teddy mein entry', true]])"); pg.click("[data-asst-mic]"); pg.wait_for_timeout(700)
+    sent = SEEN[n:]
+    ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1", "Hinglish: lang auto, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
+    ok(box(pg) == "Pehle: Richa Khandelwal ko 1 lakh ka payment, Tally mein entry", "the corrected words in the box (%r)" % box(pg))
+    words = pg.locator("[data-asst-fix-word]")
+    ok(words.count() == 2 and words.nth(0).inner_text() == "Richa Khandelwal" and words.nth(1).inner_text() == "Tally", "the two corrected names shown under the box (%d)" % words.count())
+    deco = pg.evaluate("getComputedStyle(document.querySelector('[data-asst-fix-word]')).textDecorationLine")
+    ok("underline" in deco, "underlined (%s)" % deco)
+    ok(words.nth(0).get_attribute("title") == "Heard “richa khandelwaal”", "the heard words on hover (%r)" % words.nth(0).get_attribute("title"))
+    words.nth(0).click(); pg.wait_for_timeout(150)
+    ok(pg.locator("[data-asst-fix-heard]").count() == 1 and "richa khandelwaal" in pg.inner_text("[data-asst-fix-heard]"), "and on a tap")
+    pg.locator("[data-asst-fix-undo]").nth(1).click(); pg.wait_for_timeout(200)
+    ok(box(pg) == "Pehle: Richa Khandelwal ko 1 lakh ka payment, teddy mein entry", "one tap on undo: the heard word back (%r)" % box(pg))
+    ok(pg.locator("[data-asst-fix-word]").count() == 1, "that name no longer shown as corrected")
+    pg.locator("[data-asst-fix-undo]").first.click(); pg.wait_for_timeout(200)
+    ok(box(pg) == "Pehle: richa khandelwaal ko 1 lakh ka payment, teddy mein entry" and pg.locator("[data-asst-fix-word]").count() == 0, "both undone; the line gone (%r)" % box(pg))
+    MODE[0] = "names"; speak(pg, "richa")
+    pg.fill("#asstQ", "typed anew"); pg.wait_for_timeout(200)
+    ok(pg.locator("[data-asst-fix-word]").count() == 0, "the box changed by hand: the corrections line goes")
+    MODE[0] = "ok"
+    # the pause after speech: 4 s unless the person set another
+    pg.evaluate("localStorage.removeItem('tdsdesk:asst-voice-silence')"); pg.fill("#asstQ", "")
+    pg.click("[data-asst-mic]"); pg.wait_for_timeout(300)
+    pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(400); pg.evaluate("window.__level = 0"); pg.wait_for_timeout(3300)
+    ok(mic_on(pg), "3.3 s quiet after speech: still listening (the default pause is 4 s)")
+    pg.wait_for_timeout(1200)
+    ok(not mic_on(pg), "about 4 s quiet after speech: stopped")
+    ok(not errors, "no page error (%s)" % errors[:2])
     ctx.close()
 
     print("6. the Groq key in Settings > Platform > Keys: the platform's administrator only")

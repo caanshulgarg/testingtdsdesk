@@ -6,7 +6,7 @@
 // asked for one phrase (continuous off), so the browser ended it at the first pause. Now it listens until the person stops:
 // continuous, with interim words shown live; when the browser ends a session by itself (after a pause, after about 60 s,
 // or Safari after each phrase, where continuous is not dependable and is not asked for) a new one starts at once while the
-// mic is on, and the pieces are joined. It stops on a second tap, or after a pause of about 3 s following speech
+// mic is on, and the pieces are joined. It stops on a second tap, or after a pause of about 4 s following speech
 // (silenceMs: a person may set 1-15 s in this browser, localStorage "tdsdesk:asst-voice-silence"), or when nothing at all
 // is heard for 12 s. The language chosen (English, Hindi, Hinglish, …) is kept for every session. Where the browser has none (Firefox), the mic is not shown. The language chosen is kept for the
 // person in this browser and goes with the question as a hint (ASST.st().lang): the reply comes in the question's language.
@@ -16,8 +16,11 @@
 // heard by a level meter as well as by the recogniser) the clip goes to fincom-transcribe (Groq's Whisper, with the
 // firm's words and the client's names as a hint) and its words replace the browser's, unless the box was changed
 // meanwhile. No key, the day's limit, offline or an error: the browser's words stay, with one quiet line.
+// Names corrected (the owner, 22-Oct-2026: voice "still not good", wrong client, ledger and party names): the function
+// matches what Whisper heard against the client's own names and gives back the changes; each corrected name is shown
+// under the box, underlined, with what was heard on hover or a tap, and one tap on its undo puts the heard words back.
 import { useEffect, useRef, useState } from "react";
-import { Mic, Square, Volume2, VolumeX } from "lucide-react";
+import { Mic, Square, Undo2, Volume2, VolumeX } from "lucide-react";
 
 // code: what the browser listens for and what goes to fincom-assistant as the hint (server/assistant/agent.ts, LANGS)
 export const VOICE_LANGS = [
@@ -50,6 +53,7 @@ const see = (k) => { try { localStorage.setItem(k, "1"); } catch (e) { /* storag
 const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none";
 const NOTE = "Voice is turned into text by your browser (Google/Apple); for clearer words the recording also goes to Groq through FinCom, and is not kept.";
 const BUSY = "Making the words clearer…";
+const OPENING = "Starting the microphone…";
 // the recorder (VoiceRecorder.js), loaded when a mic is first shown; until it is there, the browser's words alone
 let VR = null, vrLoad = null;
 export const loadRecorder = () => vrLoad || (vrLoad = import("./VoiceRecorder.js").then((m) => (VR = m), () => { vrLoad = null; return null; }));
@@ -59,11 +63,11 @@ export const loadRecorder = () => vrLoad || (vrLoad = import("./VoiceRecorder.js
 let live = null;
 export function stopVoice() { const s = live; live = null; if (s) s.finish("abort"); }
 
-// the pause after speech that ends the listening, in ms (3 s; a person may set 1-15 s in this browser)
+// the pause after speech that ends the listening, in ms (4 s; a person may set 1-15 s in this browser)
 export const SILENCE_KEY = "tdsdesk:asst-voice-silence";
 export function silenceMs() {
   try { const v = Number(localStorage.getItem(SILENCE_KEY)); if (v >= 1 && v <= 15) return Math.round(v * 1000); } catch (e) { /* storage blocked */ }
-  return 3000;
+  return 4000;
 }
 const NOTHING_MS = 12000;            // nothing heard at all since the mic was tapped: stop, and say so
 const FATAL = new Set(["not-allowed", "service-not-allowed", "audio-capture", "network", "language-not-supported", "bad-grammar"]);
@@ -91,6 +95,8 @@ const ERR = {
 export function VoiceInput({ a, onText, client = null }) {
   const [on, setOn] = useState(false), [msg, setMsg] = useState(""), [lang, setLang] = useState(voiceLang);
   const [none, setNone] = useState(() => !voiceSupported() && !seen(NONE_KEY));
+  // the names corrected in the words last put in the box: [{from, to, open}], and where those words start
+  const [fixes, setFixes] = useState({ list: [], at: 0 });
   const mine = useRef(null);
   a.lang = lang;
   useEffect(() => () => { if (live && live === mine.current) stopVoice(); }, []);
@@ -103,6 +109,7 @@ export function VoiceInput({ a, onText, client = null }) {
     if (on || live) { const s = live; live = null; if (s) s.finish("stop"); setOn(false); return; }
     const R = Rec();
     const base = String(a.q || "").replace(/\s+$/, ""), sep = base ? " " : "";
+    setFixes({ list: [], at: 0 });
     // one listening: the words of the sessions ended (done), the current session's finals (cur) and its interim words
     const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang };
     const words = () => norm([...sess.done, ...sess.cur, sess.interim].join(" "));
@@ -115,7 +122,7 @@ export function VoiceInput({ a, onText, client = null }) {
       keep(); show();
       if (r) { try { if (how === "abort") r.abort(); else r.stop(); } catch (e) { /* already stopped */ } }
       if (live === sess) live = null;
-      if (mine.current === sess) { setOn(false); setMsg((m) => (m === NOTE ? "" : m)); }   // the browser note goes with the listening it was for
+      if (mine.current === sess) { setOn(false); setMsg((m) => (m === NOTE || m === OPENING ? "" : m)); }   // the browser note goes with the listening it was for
       if (sess.mic) { if (how === "abort") sess.mic.abort(); else clearer(sess, words() ? base + sep + words() : base, base); }
     };
     // a pause after speech ends it (the timer starts again at every word heard)
@@ -152,8 +159,12 @@ export function VoiceInput({ a, onText, client = null }) {
       try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
     };
     stopVoice(); live = sess; mine.current = sess;
-    if (VR && VR.canRecord()) sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => sess.finish("stop"), onError: (w) => { if (mine.current === sess) setMsg(w); } });
-    if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg(NOTE); } else setMsg("");
+    if (VR && VR.canRecord()) {
+      sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => sess.finish("stop"), onError: (w) => { if (mine.current === sess) setMsg(w); },
+        onReady: () => { if (mine.current === sess) setMsg((m) => (m === OPENING ? "" : m)); } });
+    }
+    if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg(NOTE); } else setMsg(sess.mic ? OPENING : "");
+    setTimeout(() => setMsg((m) => (m === OPENING ? "" : m)), 3000);     // a microphone that never answers: the browser's words go on
     setOn(true);
     begin();
   };
@@ -163,14 +174,26 @@ export function VoiceInput({ a, onText, client = null }) {
     sess.mic.stop().then((clips) => {
       if (!clips.length || mine.current !== sess) return null;
       setMsg(BUSY);
-      return VR.transcribe(clips, { lang: VR.whisperLang(sess.lang), client }).then((r) => {
+      return VR.transcribe(clips, { lang: VR.whisperLang(sess.lang), client, latin: VR.whisperLatin ? VR.whisperLatin(sess.lang) : false }).then((r) => {
         const done = (m) => setMsg((x) => (x === BUSY ? m : x));
         if (mine.current !== sess || String(a.q || "") !== shown) { done(""); return; }   // a new listening, Ask, or the box changed
-        if (r.ok) { if (r.text) onText(base + sep + r.text); done(""); }
+        if (r.ok) {
+          if (r.text) { onText(base + sep + r.text); setFixes({ list: (r.changes || []).map((c) => ({ from: c.from, to: c.to, open: false })), at: (base + sep).length }); }
+          done("");
+        }
         else done(VR.KEPT[r.kind] || VR.KEPT.error);
       });
     }).catch(() => setMsg((x) => (x === BUSY ? VR.KEPT.error : x)));
   };
+  // one tap: the heard words back in place of the corrected name (the first one at or after where Whisper's words start)
+  const undo = (i) => {
+    const f = fixes.list[i], q = String(a.q || ""), k = q.indexOf(f.to, Math.min(fixes.at, q.length));
+    const at = k >= 0 ? k : q.indexOf(f.to);
+    if (at >= 0) onText(q.slice(0, at) + f.from + q.slice(at + f.to.length));
+    setFixes({ list: fixes.list.filter((_, j) => j !== i), at: fixes.at });
+  };
+  const peek = (i) => setFixes({ list: fixes.list.map((f, j) => (j === i ? Object.assign({}, f, { open: !f.open }) : f)), at: fixes.at });
+  const shownFixes = on ? [] : fixes.list.map((f, i) => [f, i]).filter(([f]) => String(a.q || "").includes(f.to));
   const pick = (c) => { setLang(c); keepLang(c); a.lang = c; if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
   return <>
     <span className="asst-voice" data-asst-voice="">
@@ -184,6 +207,15 @@ export function VoiceInput({ a, onText, client = null }) {
       </select>
     </span>
     {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || "Listening… speak; it keeps listening until you pause or tap the mic again."}</span>}
+    {shownFixes.length > 0 && <span className="asst-voice-msg asst-voice-fixes" data-asst-voice-fixes="">
+      <span>Names matched to the books:</span>
+      {shownFixes.map(([f, i]) => <span key={i + f.to} className="asst-fix" data-asst-fix="">
+        <button type="button" className="asst-fix-word" data-asst-fix-word="" aria-expanded={f.open} title={"Heard “" + f.from + "”"} onClick={() => peek(i)}>{f.to}</button>
+        {f.open && <span className="asst-fix-heard" data-asst-fix-heard="">heard “{f.from}”</span>}
+        <button type="button" className="asst-fix-undo" data-asst-fix-undo="" title={"Undo: put back “" + f.from + "”"} aria-label={"Undo " + f.to + ", put back " + f.from} onClick={() => undo(i)}>
+          <Undo2 size={12} aria-hidden="true" /></button>
+      </span>)}
+    </span>}
   </>;
 }
 
