@@ -1,6 +1,8 @@
 // The top bar: the page title (client header with its status tabs, or the home screen's name), the Tally chip, the
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
+// calls (stage 1): the one button on a client's page (calls/CallButton.jsx; the call screen loads only when used)
+import CallButton from "./calls/CallButton.jsx";
 import TallyPill from "./parts/TallyPill.jsx";
 import TallyLine, { PanelBooks, panelBooksShown } from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
@@ -99,6 +101,7 @@ function ClientHeader() {
     // the client's one Tally chip ("Not linked → Link") beside the page's name (it was in the client's row of pages, gone)
     <Title title={title} sub={crumbs} crumb="client-nav" after={!S.loadingCo ? <TallyChip co={co} where="title" /> : null}>
       <div className="tbar-actions">
+        {S.tab === "dash" && !S.loadingCo && <CallButton co={co} />}
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
       </div>
     </Title>

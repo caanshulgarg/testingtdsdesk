@@ -9,7 +9,9 @@
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import { SheetFormats } from "../parts/SheetPanel.jsx";
 import HowPage from "../parts/HowPage.jsx";
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
+// Academy batches (calls, stage 1): in the calls' own small-windows file, loaded when the section is opened
+const Batches = lazy(() => import("../calls/CallMenu.jsx").then((m) => ({ default: m.Batches })));
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
@@ -104,6 +106,7 @@ function firmGroups() {
       { id: "firm", label: "Firm details", about: "The firm’s name, as it appears on the page and on what you give clients.", status: S.firm.firmName || "no name yet" },
       { id: "account", label: "Sign-in and people", about: "Who is signed in, the people in the firm and what each may do, and keeping work in step across computers.",
         status: Cloud.on() ? (a && a.me ? a.me.email : "signed in") : "not signed in" },
+      ...(Cloud.on() ? [{ id: "batches", label: "Academy batches", about: "Classes by video call: a batch's members and Start class.", status: "" }] : []),
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
         status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
@@ -155,6 +158,7 @@ export function FirmSettings() {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
     plan: () => <><PlanCredit /><RecordsUsed /></>,
+    batches: () => <Suspense fallback={<p className="note">Loading…</p>}><Batches /></Suspense>,
     // clean-up batch 2: one home each, the Tally page; here one line that leads there
     bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (six steps, its status, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
     tcloud: () => <CloudBooks />,

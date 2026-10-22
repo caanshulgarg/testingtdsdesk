@@ -1,0 +1,88 @@
+/* FinCom calls: the call screen, its dock, the guest's page and the small windows. Loaded with the calls' own files only. */
+#fincom-call, #fincom-guest { position: fixed; inset: 0; z-index: 2147483000; font-family: Inter, system-ui, sans-serif; }
+#fincom-call[data-call-min="true"] { inset: auto 12px 12px auto; width: min(360px, calc(100vw - 24px)); height: auto; }
+.call-shell { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0F172A; color: #E2E8F0; }
+.call-shell.min { position: relative; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.35); max-height: 70vh; overflow: auto; }
+.call-shell.min .call-side, .call-shell.min .call-reacts, .call-shell.min .call-stage, .call-shell.min .call-caps { display: none; }
+.call-shell.min .call-grid { grid-template-columns: repeat(2, 1fr) !important; }
+.call-shell.min .call-tile { min-height: 70px; }
+.call-shell.min .call-bar .call-btn:not([data-call-mic]):not([data-call-cam]):not([data-call-leave]):not([data-call-end]):not([data-call-cowork]):not([data-call-follow]) { display: none; }
+.call-top { display: flex; gap: 10px; align-items: center; padding: 8px 14px; flex-wrap: wrap; border-bottom: 1px solid #1E293B; }
+.call-top b { margin-right: auto; }
+.call-rec { color: #FCA5A5; font-weight: 600; }
+.call-warn { color: #FCD34D; }
+.call-note { color: #94A3B8; font-size: 13px; }
+.call-err { color: #FCA5A5; }
+.call-main { flex: 1; display: flex; gap: 10px; padding: 10px; min-height: 0; flex-wrap: wrap; overflow: auto; position: relative; }
+.call-stage { flex: 3 1 480px; min-width: 0; background: #020617; border-radius: 10px; display: flex; }
+.call-stage video { width: 100%; height: 100%; object-fit: contain; }
+.call-grid { flex: 2 1 320px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-content: start; }
+.call-tile { position: relative; background: #1E293B; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; min-height: 110px; }
+.call-tile video { width: 100%; height: 100%; object-fit: cover; }
+.call-tile video.mirror, .call-preview video { transform: scaleX(-1); }
+.call-camoff { position: absolute; inset: 0; display: grid; place-items: center; font-size: 32px; color: #94A3B8; background: #1E293B; }
+.call-name { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 6px; font-size: 13px; }
+.call-float { position: absolute; right: 10px; top: 8px; font-size: 34px; animation: call-up 3s ease-out forwards; }
+@keyframes call-up { from { transform: translateY(10px); opacity: 1; } to { transform: translateY(-30px); opacity: 0; } }
+.call-side { flex: 1 1 280px; max-width: 380px; background: #111827; border-radius: 10px; padding: 10px 12px; overflow: auto; max-height: 100%; }
+.call-side h3, .call-side h4 { margin: 4px 0 8px; }
+.call-person { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid #1F2937; }
+.call-person > span { margin-right: auto; }
+.call-person small { color: #94A3B8; }
+.call-chat { max-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.call-msg small { color: #94A3B8; }
+.call-msg a { color: #93C5FD; word-break: break-all; }
+.call-chatform { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.call-chatform input { flex: 1 1 140px; }
+.call-bar { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 10px; border-top: 1px solid #1E293B; }
+.call-btn, .call-primary, .call-react { border: 1px solid #334155; background: #1E293B; color: #E2E8F0; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; }
+.call-btn.small { padding: 4px 9px; font-size: 13px; }
+.call-btn.off { background: #7F1D1D; border-color: #991B1B; }
+.call-btn.on { background: #312E81; border-color: #4F46E5; }
+.call-btn.rec { background: #991B1B; }
+.call-btn.danger { border-color: #B91C1C; color: #FCA5A5; }
+.call-primary { background: #4F46E5; border-color: #4F46E5; color: #fff; font-weight: 600; }
+.call-primary[disabled], .call-btn[disabled] { opacity: .55; cursor: default; }
+.call-react { padding: 4px 6px; background: transparent; border-color: transparent; font-size: 18px; }
+.call-btn:focus-visible, .call-primary:focus-visible, .call-react:focus-visible { outline: 2px solid #A5B4FC; outline-offset: 2px; }
+.call-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.call-lobby { max-width: 560px; margin: 0 auto; padding: 24px 16px; width: 100%; box-sizing: border-box; overflow: auto; }
+.call-preview { position: relative; background: #1E293B; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+.call-preview video { width: 100%; height: 100%; object-fit: cover; }
+.call-fx { margin: 10px 0; }
+.call-check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.call-modal { position: absolute; inset: 0; background: rgba(2,6,23,.8); display: grid; place-items: center; z-index: 5; padding: 16px; }
+.call-modal > div { background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 20px; max-width: 440px; }
+.call-banner { background: #7C2D12; color: #FFEDD5; padding: 8px 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.call-card { background: #111827; border: 1px solid #4F46E5; border-radius: 10px; margin: 8px 10px 0; padding: 10px 14px; }
+.call-card input { margin: 6px 6px 6px 0; }
+.call-caps { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: rgba(0,0,0,.7); padding: 6px 12px; border-radius: 8px; max-width: 90%; font-size: 15px; }
+.call-invite { margin-top: 12px; border-top: 1px solid #1F2937; padding-top: 8px; }
+.call-invite input { width: 100%; margin: 4px 0; box-sizing: border-box; }
+.call-after { max-width: 760px; margin: 0 auto; padding: 24px 16px; overflow: auto; width: 100%; box-sizing: border-box; }
+.call-transcript { white-space: pre-wrap; background: #111827; padding: 10px; border-radius: 8px; max-height: 40vh; overflow: auto; font-size: 13px; }
+.call-shell input, .call-shell textarea, .call-guest input { background: #0B1220; color: #E2E8F0; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; font: inherit; }
+.call-guest { position: absolute; inset: 0; background: #0F172A; color: #E2E8F0; overflow: auto; }
+.call-guest .f, .call-dialog .f { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.call-dialog-back { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 2147482000; display: grid; place-items: center; padding: 16px; }
+.call-dialog { background: var(--surface, #fff); color: var(--ink, #0F172A); border-radius: 12px; padding: 18px 20px; width: min(560px, 100%); max-height: 90vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.call-dialog .call-btn, .call-batch-form .call-btn { background: transparent; color: inherit; }
+.call-dialog textarea, .call-dialog input { font: inherit; padding: 6px 8px; border: 1px solid #CBD5E1; border-radius: 6px; }
+.call-dialog .call-note { color: #64748B; }
+.call-dialog .call-person { border-color: #E2E8F0; }
+.call-kept { width: 100%; padding: 6px 0 4px 10px; }
+/* working together: other people's pointers and the field they are editing; never in the way of a click */
+.cw-layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147482500; }
+.cw-ptr { position: fixed; transform: translate(-2px, -2px); transition: left .05s linear, top .05s linear; }
+.cw-ptr span { background: var(--c); color: #fff; font: 12px Inter, sans-serif; padding: 1px 6px; border-radius: 4px; margin-left: 4px; white-space: nowrap; }
+.cw-focus { position: fixed; border: 2px solid var(--c); border-radius: 6px; }
+.cw-focus span { position: absolute; top: -20px; left: 0; background: var(--c); color: #fff; font: 11px Inter, sans-serif; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.cw-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 2147482600; background: #312E81; color: #E0E7FF; font: 13px Inter, sans-serif; padding: 6px 12px; border-radius: 999px; box-shadow: 0 6px 16px rgba(0,0,0,.25); max-width: calc(100vw - 32px); }
+.cw-banner button { margin-left: 6px; background: #4F46E5; color: #fff; border: 0; border-radius: 999px; padding: 2px 10px; cursor: pointer; font: inherit; }
+@media (max-width: 640px) {
+  .call-grid { grid-template-columns: 1fr 1fr; }
+  .call-side { max-width: none; }
+  .call-bar { gap: 4px; padding: 6px; }
+  .call-btn { padding: 6px 8px; font-size: 13px; }
+  .call-reacts { display: none; }
+}
