@@ -1,5 +1,5 @@
-"""python3 run_migration101.py - migration-101-video-calls (23-Oct-2026, branch next-video-calls; NOT run on staging) on a
-throwaway PostgreSQL (pg_stand, port 31010 unless PG101_PORT; never a real database), with Storage and pg_cron made plain:
+"""python3 run_migration102.py - migration-102-video-calls (23-Oct-2026, branch next-video-calls; NOT run on staging) on a
+throwaway PostgreSQL (pg_stand, port 31020 unless PG102_PORT; never a real database), with Storage and pg_cron made plain:
   0. the file: one transaction, lock_timeout 10 s; add-only (drops only of the policies it makes again, no "delete from",
      no truncate, no table altered but to turn row-level security on); names no real database; md5 printed
   1. runs, and runs a second time (and a third); the twelve tables, the two private buckets and the daily timer once
@@ -14,12 +14,12 @@ throwaway PostgreSQL (pg_stand, port 31010 unless PG101_PORT; never a real datab
   6. the bucket policy: the firm's folder only; a class's folder only for the batch and the owner
   7. the checks: a kind, a class without a batch, a client call without a client, a chat line too long or empty, a file
      over 20 MB, a batch email not lower case are refused
-RED_WITHOUT_101=1: the same checks without running the file (1 to 7 fail)."""
+RED_WITHOUT_102=1: the same checks without running the file (1 to 7 fail)."""
 import os, re, sys, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
-M = os.path.join(HERE, "..", "server", "video-calls", "migration-101-video-calls.sql")
-RED = os.environ.get("RED_WITHOUT_101") == "1"
+M = os.path.join(HERE, "..", "server", "video-calls", "migration-102-video-calls.sql")
+RED = os.environ.get("RED_WITHOUT_102") == "1"
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -55,7 +55,7 @@ grant usage on schema public to anon, authenticated, service_role;
 F1, F2 = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 OWN, STAFF, LOOK, STUDENT, OTHER = ("aaaaaaaa-aaaa-aaaa-aaaa-%012d" % i for i in range(1, 6))
 EMAIL = {OWN: "owner@a.test", STAFF: "staff@a.test", LOOK: "look@a.test", STUDENT: "student@a.test", OTHER: "o@b.test"}
-db = pg_stand.start(int(os.environ.get("PG101_PORT") or 31010))
+db = pg_stand.start(int(os.environ.get("PG102_PORT") or 31020))
 def as_(uid):
     return "set role authenticated; set request.jwt.claims = '{\"sub\":\"%s\",\"email\":\"%s\"}'; " % (uid, EMAIL[uid])
 def err(s, uid=None):
