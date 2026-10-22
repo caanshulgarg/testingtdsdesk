@@ -29,10 +29,10 @@ const GSTAdv = {
       const L = Books.lines(v), tax = L.tax.CGST + L.tax.SGST + L.tax.IGST;
       const supply = v.supply || ((v.hsn || []).some(h => /^99/.test(h)) ? "Services" : (v.hsn || []).length ? "Goods" : "");
       if (supply) firstSupply[supply]++;
-      const list = billed.get(v.party) || [];
-      list.push({date: v.date, rate: L.taxable ? this.nearRate(tax / L.taxable * 100) : null, reg: GSTR.regOf(v), gstin: (v.gstin || "").toUpperCase(),
-        pos: v.pos || "", supply, cls: Books.supplyClass(v)});
-      billed.set(v.party, list);
+      // by the buyer's name and by the party ledger (the receipt names the ledger; review of 22-Oct-2026: the two differ)
+      const h = {date: v.date, rate: L.taxable ? this.nearRate(tax / L.taxable * 100) : null, reg: GSTR.regOf(v), gstin: (v.gstin || "").toUpperCase(),
+        pos: v.pos || "", supply, cls: Books.supplyClass(v)};
+      new Set([v.party].concat(Books.partyEnts(v).map(e => e.l))).forEach(k => billed.set(k, (billed.get(k) || []).concat([h])));
     });
     const refs = new Map(), pieces = [];
     const take = (r, amount, ym, date, by, how) => {
@@ -49,11 +49,13 @@ const GSTAdv = {
       const sale = Books.isSale(v) && !/CREDIT NOTE/i.test(v.type);
       const refund = /PAYMENT/i.test(v.type) || /CREDIT NOTE/i.test(v.type);
       if (!rcpt && !sale && !refund) return;
-      const ym = GSTR.ym(v.date);
+      const ym = GSTR.ym(v.date), pe = sale ? new Set(Books.partyEnts(v)) : null;
       v.ent.forEach((e, ei) => {
         if (!e.b) return;
         if (rcpt && !this.isCustomer(e.l, billed)) return;
-        if (sale && e.l !== v.party) return;
+        // the invoice's bills are on its party line, whatever the buyer's name on it (review of 22-Oct-2026: an invoice to
+        // "HDFC Life Insurance Company" debits "HDFC Life Insurance Company-DL"; its receipt before it stayed in 11A)
+        if (sale && !pe.has(e)) return;
         e.b.forEach((x, bi) => {
           const name = x[0], type = x[1], amt = x[2];
           const k = e.l + "|" + (type === "On Account" ? "\u0000on-account" : name);

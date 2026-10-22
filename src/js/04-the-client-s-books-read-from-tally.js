@@ -330,8 +330,26 @@ const Books = {
     let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
     return r;
   },
+  // the party's line(s) of an entry: the receivable on a sale, the payable on a bill. The owner's reconciliation of
+  // 22-Oct-2026 (a client's GSTR-1 at 20.52 crore against 8.64 crore filed): Tally keeps the buyer's name (the voucher's
+  // party) apart from the ledger debited ("The Oriental Insurance Co Ltd CG" on the invoice, "The Oriental Insurance
+  // Company Limited-CG" the ledger), so the party line is known by its place, not by that name alone: the ledger named as
+  // the party, and any other line on the party's side (opposite the tax; with no tax, a sale's debit or a bill's credit)
+  // whose ledger sits under Sundry Debtors or Sundry Creditors, or that carries the bill-wise allocation. Never a tax,
+  // TDS, bank or round-off line.
+  partyEnts(v){
+    const ent = v.ent || [], k = e => this.ledgerOf(e.l).kind, nm = ent.find(e => e.l === v.party);
+    let tax = 0;
+    ent.forEach(e => { if (/^(gst|gst_common|ineligible)$/.test(k(e))) tax += e.a; });
+    // the party's side: -1 debited, 1 credited
+    const side = Math.abs(tax) > 0.004 ? -Math.sign(tax) : nm ? (nm.a < 0 ? -1 : 1)
+      : /CREDIT NOTE/i.test(v.type) ? 1 : /DEBIT NOTE/i.test(v.type) ? -1 : this.isSale(v) ? -1 : this.isPurchase(v) ? 1 : 0;
+    return ent.filter(e => e.l === v.party || (side && Math.sign(e.a) === side && !k(e)
+      && ((e.b && e.b.length) || ledGroupPath(S.books || {}, e.l).some(g => /^\s*sundry\s+(debtors|creditors)\s*$/i.test(g)))));
+  },
   linesNow(v){
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
+    const pe = new Set(this.partyEnts(v));
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
@@ -364,7 +382,7 @@ const Books = {
         return;
       }
       if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
-      if (e.l === v.party){ out.party = amt; return; }
+      if (pe.has(e)){ out.party = r2(out.party + amt); return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
       if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
