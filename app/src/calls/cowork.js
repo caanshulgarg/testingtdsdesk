@@ -41,8 +41,10 @@ export function startCowork({ url, key, topic, me, name, hostId, isHost, onState
   function draw() {
     if (stopped) return;
     const others = people.filter((p) => p.id !== me).map((p) => esc(p.name));
-    banner.innerHTML = "<span>Working together with " + (others.join(", ") || "no one yet") + "</span>" + (isHost ? "" : follow
+    // the banner written again only when its words change (a button replaced under a finger misses the tap)
+    const words = "<span>Working together with " + (others.join(", ") || "no one yet") + "</span>" + (isHost ? "" : follow
       ? " · following the host <button type='button' data-cw='unfollow'>Stop following</button>" : " <button type='button' data-cw='follow'>Follow the host</button>");
+    if (banner.innerHTML !== words) banner.innerHTML = words;
     let html = "";
     for (const [id, p] of ptrs) {
       if (Date.now() - p.at > 8000 || p.route !== last) continue;
@@ -55,7 +57,7 @@ export function startCowork({ url, key, topic, me, name, hostId, isHost, onState
       const r = el.getBoundingClientRect();
       html += "<div class='cw-focus' data-cowork-focus='" + esc(f.name) + "' style='left:" + (r.left - 3) + "px;top:" + (r.top - 3) + "px;width:" + (r.width + 6) + "px;height:" + (r.height + 6) + "px;--c:" + colorOf(id) + "'><span>" + esc(f.name) + " is editing</span></div>";
     }
-    layer.innerHTML = html;
+    if (layer.innerHTML !== html) layer.innerHTML = html;
   }
   const redraw = setInterval(draw, 500);
   window.addEventListener("scroll", draw, true);
