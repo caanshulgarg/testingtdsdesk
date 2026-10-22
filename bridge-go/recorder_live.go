@@ -1999,6 +1999,14 @@ func fastCompanyListed(tc *TC, company string, port, sec int) error {
 }
 
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
+	return fetchVouchersByMasterListed(tc, company, port, date, mids, sec, false)
+}
+
+// 2.4.5 ROUND 104 (the owner's choice (a) of 22-Oct-2026): listed true only from the period fetch (daypull.go
+// pullCoListed), when Tally's company list on this port named the company for the day being read and nothing since could
+// have closed it (no error, no wait, nobody at the computer, no save in Tally, under 10 minutes): the list is not asked
+// again before this entry. Every other caller asks it right before each entry, as 2.3.4 does
+func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, mids []string, sec int, listed bool) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
 		x = voucherObjectRequest(company, mids[0]) // next-fastfetch: one voucher by its MasterID; the date is the line's, checked on the answer
@@ -2018,8 +2026,10 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	if err := readStopRefuses(x); err != nil {
 		return nil, err
 	}
-	if err := fastCompanyListed(tc, company, port, sec); err != nil {
-		return nil, err
+	if !listed {
+		if err := fastCompanyListed(tc, company, port, sec); err != nil {
+			return nil, err
+		}
 	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {

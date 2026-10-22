@@ -160,6 +160,11 @@ type pullWork struct {
 	empSince time.Time
 	empNext  time.Time
 	paySkip  int
+	// ROUND 104 (a): Tally's company list named the company for this day at coAt (the bridge's clock) / coReal (the
+	// wall clock), on coPort; zero: to be asked before the next entry
+	coAt   time.Time
+	coReal time.Time
+	coPort int
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -186,6 +191,9 @@ var pull = struct {
 	nightAt time.Time            // when it said so
 	beatAt  time.Time            // the last early beat asked at night
 	empAt   map[string]time.Time // payroll: the employees found read and taken by FinCom (per company and GUID), looked at again after 10 minutes
+	// ROUND 104 (b): the last period request answered with Tally's window watched to its end (wall clock) and its hold
+	lookAt   time.Time
+	lookHold int
 }{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
@@ -374,7 +382,7 @@ func pullMayAsk(it pullItem) (int, string) {
 	if h := keepHold(); h != "" {
 		return 0, h
 	}
-	if !platTallyResponds() {
+	if !pullWindowOK() {
 		return 0, "Tally's window is not answering"
 	}
 	if earlierRefusal(port) != nil {
@@ -564,6 +572,7 @@ func pullStep() (bool, bool) {
 		}
 		port, why := pullMayAsk(w.it)
 		if why != "" {
+			w.coAt = time.Time{} // ROUND 104 (a): after any wait the company list is asked again before the next entry
 			pullSayWait(w.it, why)
 			if len(w.got)+len(w.gone) > 0 {
 				pullFlush(w) // what was read goes now (the cloud only)
@@ -597,12 +606,15 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	// ROUND 103 (1b): Tally's window watched while the request is at Tally (from its send: the wait for the lock not counted)
 	held := windowHoldFn()
 	var took float64
-	raw, err := invokeTally(recorderTC(func(sec float64) { took += sec }), port, x, 5)
+	htc := recorderTC(func(sec float64) { took += sec })
+	htc.gentleMs = pullGentleMs() // ROUND 104 (b): the night's shorter rest before the send
+	raw, err := invokeTally(htc, port, x, 5)
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	if took == 0 {
 		holdMs = 0 // nothing reached Tally
 	}
 	pullNoteWatched(holdMs)
+	pullNoteLook(err == nil && took > 0, holdMs)
 	_ = typ
 	switch {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
@@ -752,17 +764,27 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	var took float64
 	tc.timed = func(sec float64) { took += sec }
 	tc = entryTC(tc, it.Company, w.heads[mid].Type)
+	tc.gentleMs = pullGentleMs() // ROUND 104 (b): the night's shorter rest before the send (entryTC gives a copy or tc)
 	limit := recorderLimitMs()
 	if pay {
 		limit = tc.limitMs
 	}
+	// ROUND 104 (a): Tally's company list asked once for the day (and again after any error, wait, use of the computer,
+	// save in Tally or 10 minutes), not before every entry
+	listed := pullCoListed(w, port)
 	held := windowHoldFn()
-	got, err := fetchVouchersByMasterIn(tc, it.Company, port, it.Day, []string{mid}, liveBodySec())
+	got, err := fetchVouchersByMasterListed(tc, it.Company, port, it.Day, []string{mid}, liveBodySec(), listed)
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	if took == 0 {
 		holdMs = 0
 	}
 	pullNoteWatched(holdMs)
+	pullNoteLook(err == nil && took > 0, holdMs)
+	if err != nil || holdMs >= limit {
+		w.coAt = time.Time{}
+	} else if !listed {
+		w.coAt, w.coReal, w.coPort = nowFn(), time.Now(), port // the list named the company just now (asked in the call)
+	}
 	switch {
 	case errors.Is(err, errRetryWait) || gaveWay(err) || errors.Is(err, errReadStopped):
 		return false, false
@@ -1230,6 +1252,93 @@ func pullStoppedList() []any {
 		out = append(out, v)
 	}
 	return out
+}
+
+// --- ROUND 104 (the owner's choice (a) of 22-Oct-2026: g10 of the real-Tally gate 39647340380, about 165 entries a
+// minute). No request added or changed; one in flight, postings first, the 2 s stop (3 s a payroll entry) and the
+// freeze safety as before
+var (
+	pullIdleFn     = platIdleSec       // seconds since the person last used this computer (the tests replace it)
+	pullRespondsFn = platTallyResponds // a fresh look at Tally's window (the tests replace it)
+	pullSavedFn    = pullLastSave      // the last save in Tally for the company (its recorder file), zero when none
+)
+
+func pullCoListSec() int { return maxI(60, minI(keepNum("DayPullCompanyListSec", 600), 600)) }
+
+func pullLastSave(it pullItem) time.Time {
+	if _, last := recorderHolding(it.Company, it.CGUID); last != "" {
+		if t, err := time.ParseInLocation("2006-01-02T15:04:05", last, time.Local); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+// (a) Tally's company list on this port named the company for the day being read and still stands: asked under 10
+// minutes ago (DayPullCompanyListSec, never more), on the same port, with no error and no wait since (both clear coAt),
+// nobody using the computer since and no save in Tally for the company since. Anything else: asked again before the
+// entry (the crash guard of 2.3.4: an object export naming a company that is not open stops Tally)
+func pullCoListed(w *pullWork, port int) bool {
+	if w == nil || w.coAt.IsZero() || w.coReal.IsZero() || w.coPort != port {
+		return false
+	}
+	lim := time.Duration(pullCoListSec()) * time.Second
+	if d := nowFn().Sub(w.coAt); d < 0 || d >= lim {
+		return false
+	}
+	since := time.Since(w.coReal)
+	if since < 0 || since >= lim {
+		return false
+	}
+	if idle := pullIdleFn(); idle >= 99999 || idle < since.Seconds() {
+		// the keyboard or mouse used since the list was asked (a company may have been closed), or not known here (the
+		// bridge as a service with no tray to tell it): asked again
+		return false
+	}
+	if s := pullSavedFn(w.it); !s.IsZero() && !s.Before(w.coReal.Add(-time.Second)) {
+		return false // a save in Tally for the company since (its file's time is to the second)
+	}
+	return true
+}
+
+// (b) at night (FinCom's periodNight) the period's requests rest DayPullNightGentleMs (100 ms, at least 50) before the
+// send instead of GentleMs; 0 (the setting's) by day or when GentleMs is not longer
+func pullGentleMs() int {
+	if !pullNight() {
+		return 0
+	}
+	g := maxI(50, keepNum("DayPullNightGentleMs", 100))
+	if g >= toInt(cfg("GentleMs")) {
+		return 0
+	}
+	return g
+}
+
+// (b) the window look before a step: at night, the probe of the period request just answered (Tally's window watched to
+// that request's end, never 250 ms without answering) stands for it for 2 s; else a fresh look
+func pullWindowOK() bool {
+	if tallyNotResponding.Load() {
+		return false
+	}
+	if pullNight() {
+		pull.mu.Lock()
+		at, hold := pull.lookAt, pull.lookHold
+		pull.mu.Unlock()
+		if !at.IsZero() && hold >= 0 && hold < 250 && time.Since(at) >= 0 && time.Since(at) < 2*time.Second {
+			return true
+		}
+	}
+	return pullRespondsFn()
+}
+
+func pullNoteLook(ok bool, holdMs int) {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	if ok && holdMs >= 0 && holdMs < 250 {
+		pull.lookAt, pull.lookHold = time.Now(), holdMs
+		return
+	}
+	pull.lookAt, pull.lookHold = time.Time{}, -1
 }
 
 // ROUND 103 (review): Tally's window could not be watched (no window of Tally seen: the bridge as a Windows service, in

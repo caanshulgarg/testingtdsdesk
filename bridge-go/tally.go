@@ -299,6 +299,20 @@ type TC struct {
 	bg bool
 	// the shared retry schedule's try itself (set by invokeTally on its own copy of the TC)
 	isTry bool
+	// 2.4.5 ROUND 104 (the owner's choice (a) of 22-Oct-2026): a shorter rest before the send than GentleMs (the period
+	// fetch at night while nobody is at Tally, daypull.go pullGentleMs); 0: the setting's. Never a longer one
+	gentleMs int
+}
+
+// 2.4.5 ROUND 104: the rest before a send (tallyRaw): GentleMs, or the request's own shorter rest (TC.gentleMs)
+type gentleKey struct{}
+
+func gentleFor(ctx context.Context) int {
+	ms := toInt(cfg("GentleMs"))
+	if v, ok := ctx.Value(gentleKey{}).(int); ok && v > 0 && v < ms {
+		return v
+	}
+	return ms
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
@@ -490,7 +504,7 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	if m := tallyMaxSec(); timeoutSec > m && !isImportRequest(x) {
 		timeoutSec = m // the read cap (2.1.5: 20 s); an import request keeps its own timeout (importTimeoutSec)
 	}
-	if ms := toInt(cfg("GentleMs")); ms > 0 {
+	if ms := gentleFor(ctx); ms > 0 {
 		select {
 		case <-ctx.Done():
 			return "", errPreempted
@@ -987,6 +1001,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	defer cancel()
 	if tc.enc != "" {
 		ctx = context.WithValue(ctx, encKey{}, tc.enc)
+	}
+	if tc.gentleMs > 0 {
+		ctx = context.WithValue(ctx, gentleKey{}, tc.gentleMs)
 	}
 	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
 	if tc.copier && !tc.person {
